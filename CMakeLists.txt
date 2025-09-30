@@ -32,7 +32,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot.git
@@ -47,4 +46,5 @@ find_package(OpenGL REQUIRED)
 add_subdirectory(vendors/imgui)
 add_subdirectory(vendors/implot)
 add_subdirectory(rf-simulator-core)
+add_subdirectory(logging)
 add_subdirectory(src)
