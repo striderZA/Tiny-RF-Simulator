@@ -18,6 +18,5 @@ private:
 	void MainLoop(const std::function<void()>& onGui);
 
 	struct Impl;
-	//std::unique_ptr<Impl> p_impl;
-	Impl* p_impl;
+	std::unique_ptr<Impl> p_impl;
 };

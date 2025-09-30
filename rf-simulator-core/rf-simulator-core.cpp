@@ -15,7 +15,7 @@ struct RfSimulatorCore::Impl {
 };
 
 RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
-RfSimulatorCore::~RfSimulatorCore() { }
+RfSimulatorCore::~RfSimulatorCore() {}
 
 bool RfSimulatorCore::Initialize() {
 	if (!glfwInit()) return false;
@@ -41,8 +41,6 @@ bool RfSimulatorCore::Initialize() {
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Win
 
 	ImGui::StyleColorsDark();
-
-	
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(p_impl->window, true);
