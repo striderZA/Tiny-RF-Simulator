@@ -21,7 +21,7 @@ RfSimulatorCore::~RfSimulatorCore() {}
 bool RfSimulatorCore::Initialize() {
 	if (!glfwInit()) return false;
 
-	p_impl->window = glfwCreateWindow(1280, 800, "RF Simulator GUI", nullptr, nullptr);
+	p_impl->window = glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
 	if (p_impl->window == nullptr) {
 		glfwTerminate();
 		return false;
