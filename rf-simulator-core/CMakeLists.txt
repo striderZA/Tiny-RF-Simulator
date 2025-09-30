@@ -12,4 +12,5 @@ target_link_libraries(rf-simulator-core
         implot
         glfw
         OpenGL::GL
+        app-log
 )
