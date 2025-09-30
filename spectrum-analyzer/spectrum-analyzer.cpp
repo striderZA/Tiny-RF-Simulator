@@ -23,7 +23,7 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 			}
 
 			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
-			ImPlot::SetupAxisLimits(ImAxis_X1, -100, 100);
+			ImPlot::SetupAxisLimits(ImAxis_X1, MIN_FREQ, MAX_FREQ);
 			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, std::max(1.0, *std::max_element(m_current_spectrum.signal.begin(), m_current_spectrum.signal.end()) * 1.5));		ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), total.data(), m_current_spectrum.frequencies.size());
 			ImPlot::PlotLine("Noisy Spectrum", m_current_spectrum.frequencies.data(), total.data(), m_current_spectrum.frequencies.size());
 			ImPlot::EndPlot();
