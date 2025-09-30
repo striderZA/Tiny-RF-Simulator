@@ -42,9 +42,9 @@ void RfSimulatorApp::onGui() {
 		snprintf(label, sizeof(label), "Generator %d", i);
 		if (ImGui::CollapsingHeader(label)) {
 			if (i == m_selected_port) {
-				float freq = gen.m_freq;
-				float amp = gen.m_amp;
-				float noise = gen.m_noise_floor;
+				float freq = gen.freq();
+				float amp = gen.amp();
+				float noise = gen.noise();
 
 				if (ImGui::InputFloat("Frequency", &freq)) {
 					gen.setFrequency(freq);
@@ -71,9 +71,9 @@ void RfSimulatorApp::onGui() {
 				}
 			}
 			else {
-				ImGui::Text("Frequency: %.2f Hz", gen.m_freq);
-				ImGui::Text("Amplitude: %.2f V", gen.m_amp);
-				ImGui::Text("Noise floor: %.2f Hz", gen.m_noise_floor);
+				ImGui::Text("Frequency: %.2f Hz", gen.freq());
+				ImGui::Text("Amplitude: %.2f V", gen.amp());
+				ImGui::Text("Noise floor: %.2f Hz", gen.noise());
 			}
 		}
 	}
