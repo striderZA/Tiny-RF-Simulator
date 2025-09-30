@@ -1,6 +1,10 @@
 #include "rf-simulator-app.h"
 #include "imgui.h"
 #include <implot.h>
+RfSimulatorApp::RfSimulatorApp() : m_siggen() {
+	Spectrum dummy_input;
+	m_siggen.process(dummy_input, m_current_spectrum);
+}
 
 void RfSimulatorApp::onGui() {
 	static bool showDemo = true;
