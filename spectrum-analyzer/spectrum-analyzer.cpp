@@ -19,12 +19,15 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 			std::vector<double> total(m_current_spectrum.signal.size());
 
 			for (size_t i = 0; i < total.size(); ++i) {
-				total[i] = m_current_spectrum.signal[i] + m_current_spectrum.noise[i];
+				double signal_power_watts = m_current_spectrum.signal[i];
+				double noise_power_watts = m_current_spectrum.noise[i];
+				double total_power_watts = signal_power_watts + noise_power_watts;
+				total[i] = 10.0 * std::log10(total_power_watts / 0.001);
 			}
 
 			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
 			ImPlot::SetupAxisLimits(ImAxis_X1, MIN_FREQ, MAX_FREQ);
-			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, std::max(1.0, *std::max_element(m_current_spectrum.signal.begin(), m_current_spectrum.signal.end()) * 1.5));		ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), total.data(), m_current_spectrum.frequencies.size());
+			ImPlot::SetupAxisLimits(ImAxis_Y1, -120, 10);
 			ImPlot::PlotLine("Noisy Spectrum", m_current_spectrum.frequencies.data(), total.data(), m_current_spectrum.frequencies.size());
 			ImPlot::EndPlot();
 		}

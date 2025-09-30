@@ -6,7 +6,7 @@
 
 class SignalGenerator {
 public:
-	SignalGenerator(int id, float freq = 1.0f, float amp = 1.0f, float noise_floor = 0.01f);
+	SignalGenerator(int id, float freq = 1.0f, float amp = -30.0f, float noise_floor = -70.0f);
 
 	void setFrequency(float freq);
 	void setAmplitude(float amp);
