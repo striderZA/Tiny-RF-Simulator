@@ -3,6 +3,8 @@
 #include "imgui.h"
 #include <vector>
 #include <string>
+#include <chrono>
+#include <ctime>
 
 struct AppLog {
 	ImGuiTextBuffer buf;
@@ -26,10 +28,21 @@ struct AppLog {
 		line_offsets.push_back(0);
 	}
 
+	static std::string GetCurrentTimestamp() {
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+		char buffer[32];
+		std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", std::localtime(&now_time));
+		return std::string(buffer);
+	}
+
 	void AddLog(const char* fmt, ...) IM_FMTARGS(2) {
 		int old_size = buf.size();
 		va_list args;
 		va_start(args, fmt);
+		// Prepend timestamp
+		std::string timestamp = GetCurrentTimestamp() + " ";
+		buf.appendf("%s", timestamp.c_str());
 		buf.appendfv(fmt, args);
 		va_end(args);
 
