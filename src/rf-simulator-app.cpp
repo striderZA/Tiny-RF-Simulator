@@ -78,6 +78,21 @@ void RfSimulatorApp::onGui() {
 
 SignalGenerator::SignalGenerator(float freq, float amp, float noise_floor) : m_freq(freq), m_amp(amp), m_noise_floor(noise_floor) {}
 
+void SignalGenerator::setFrequency(float freq) {
+	m_freq = freq;
+	LOG_INFO("Updated frequency: %.2f Hz", m_freq);
+}
+
+void SignalGenerator::setAmplitude(float amp) {
+	m_amp = amp;
+	LOG_INFO("Updated amplitude: %.2f", m_amp);
+}
+
+void SignalGenerator::setNoiseFloor(float noise_floor) {
+	m_noise_floor = noise_floor;
+	LOG_INFO("Updated noise floor: %.2f", m_noise_floor);
+}
+
 void SignalGenerator::process(const Spectrum& input, Spectrum& output)
 {
 	output.frequencies.resize(num_bins);

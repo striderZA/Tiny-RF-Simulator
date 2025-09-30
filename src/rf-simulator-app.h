@@ -12,9 +12,9 @@ class SignalGenerator {
 public:
 	SignalGenerator(float freq = 1.0f, float amp = 1.0f, float noise_floor = 0.01f);
 
-	void setFrequency(float freq) { m_freq = freq; }
-	void setAmplitude(float amp) { m_amp = amp; }
-	void setNoiseFloor(float noise_floor) { m_noise_floor = noise_floor; }
+	void setFrequency(float freq);
+	void setAmplitude(float amp);
+	void setNoiseFloor(float noise_floor);
 
 	void process(const Spectrum& input, Spectrum& output);
 
