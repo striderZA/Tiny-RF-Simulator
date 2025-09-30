@@ -9,7 +9,7 @@ RfSimulatorApp::RfSimulatorApp() : m_siggen() {
 }
 
 void RfSimulatorApp::onGui() {
-	static bool showDemo = true;
+	static bool showDemo = false;
 	ImGui::Begin("ImGui Demo");
 	ImGui::Checkbox("Show ImGui Demo", &showDemo);
 	if (showDemo == true) {
@@ -17,7 +17,7 @@ void RfSimulatorApp::onGui() {
 	}
 	ImGui::End();
 
-	static bool showImPlotDemo = true;
+	static bool showImPlotDemo = false;
 	ImGui::Begin("ImPlot Demo");
 	ImGui::Checkbox("Show ImPlot Demo", &showImPlotDemo);
 	if (showImPlotDemo == true) {
