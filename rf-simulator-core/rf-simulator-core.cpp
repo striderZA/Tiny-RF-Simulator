@@ -7,6 +7,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
 #include <implot.h>
+#include "logging.h"
 
 struct RfSimulatorCore::Impl {
 	GLFWwindow* window = nullptr;
@@ -46,10 +47,13 @@ bool RfSimulatorCore::Initialize() {
 	ImGui_ImplGlfw_InitForOpenGL(p_impl->window, true);
 	ImGui_ImplOpenGL2_Init();
 
+	LOG_INFO("Core initialized!");
+
 	return true;
 }
 
 void RfSimulatorCore::Shutdown() {
+	LOG_INFO("Shutting down...");
 	ImGui_ImplOpenGL2_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
