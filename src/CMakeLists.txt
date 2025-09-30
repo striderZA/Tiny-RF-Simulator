@@ -6,4 +6,5 @@ add_executable(rf-simulator
 target_link_libraries(rf-simulator
     PRIVATE
         rf-simulator-core
+        app-log
 )
