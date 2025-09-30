@@ -80,6 +80,9 @@ void SignalGenerator::process(const Spectrum& input, Spectrum& output)
 		output.frequencies[i] = min_freq + i * bin_bw;
 	}
 
+	output.signal.assign(num_bins, 0.0);
+	output.noise.assign(num_bins, m_noise_floor);
+
 	output.signal.resize(num_bins, 0.0);
 	size_t closest_bin = static_cast<size_t>(std::round((m_freq - min_freq) / bin_bw));
 	if (closest_bin < num_bins) {
