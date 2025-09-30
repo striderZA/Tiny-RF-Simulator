@@ -1,6 +1,8 @@
 #include "rf-simulator-app.h"
 #include "imgui.h"
 #include <implot.h>
+#include <cmath>
+
 RfSimulatorApp::RfSimulatorApp() : m_siggen() {
 	Spectrum dummy_input;
 	m_siggen.process(dummy_input, m_current_spectrum);
@@ -8,15 +10,66 @@ RfSimulatorApp::RfSimulatorApp() : m_siggen() {
 
 void RfSimulatorApp::onGui() {
 	static bool showDemo = true;
+	ImGui::Begin("ImGui Demo");
+	ImGui::Checkbox("Show ImGui Demo", &showDemo);
 	if (showDemo == true) {
 		ImGui::ShowDemoWindow(&showDemo);
 	}
-	
+	ImGui::End();
 
 	static bool showImPlotDemo = true;
-	if (showImPlotDemo == true){
+	ImGui::Begin("ImPlot Demo");
+	ImGui::Checkbox("Show ImPlot Demo", &showImPlotDemo);
+	if (showImPlotDemo == true) {
 		ImPlot::ShowDemoWindow(&showImPlotDemo);
 	}
+	ImGui::End();
+
+	float frequency = m_siggen.getFrequency();  // Default frequency in Hz (or arbitrary units)
+	float amplitude = m_siggen.getAmplitude();  // Default amplitude (arbitrary units)
+	float noise = m_siggen.getNoiseFloor();
+	static bool show_spectrum = true;
+
+	// Signal Generator Window
+	ImGui::Begin("Signal Generator");
+
+	if (ImGui::InputFloat("Frequency", &frequency)) {
+		m_siggen.setFrequency(frequency);
+	}
+
+	if (ImGui::InputFloat("Amplitude", &amplitude)) {
+		m_siggen.setAmplitude(amplitude);
+	}
+
+	if (ImGui::InputFloat("Noise Floor", &noise)) {
+		m_siggen.setNoiseFloor(noise);
+	}
+
+	ImGui::Checkbox("Show Spectrum", &show_spectrum);
+
+	if (show_spectrum) {
+		Spectrum dummy_input;
+		m_siggen.process(dummy_input, m_current_spectrum);
+		ImGui::Begin("Output Spectrum", &show_spectrum);
+
+		if (ImPlot::BeginPlot("Spectrum Plot")) {
+			double freqs[1] = { static_cast<double>(frequency) };
+			double amps[1] = { static_cast<double>(amplitude) };
+
+			ImPlot::SetupAxes("Frequency (Hz)", "Amplitude");
+			ImPlot::SetupAxisLimits(ImAxis_X1, frequency - 10.0, frequency + 10.0);
+			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, amplitude * 1.5);
+
+			ImPlot::PlotStems("Spectrum", freqs, amps, 1);
+			ImPlot::EndPlot();
+		}
+
+		ImGui::End();
+	}
+
+	ImGui::End();
+}
+
 SignalGenerator::SignalGenerator(float freq, float amp, float noise_floor) : m_freq(freq), m_amp(amp), m_noise_floor(noise_floor) {}
 
 void SignalGenerator::process(const Spectrum& input, Spectrum& output)
