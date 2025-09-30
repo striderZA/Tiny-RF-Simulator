@@ -19,12 +19,6 @@ void RfSimulatorApp::onGui() {
 	}
 SignalGenerator::SignalGenerator(float freq, float amp, float noise_floor) : m_freq(freq), m_amp(amp), m_noise_floor(noise_floor) {}
 
-	//if (ImPlot::BeginPlot("Example Plot")) {
-	//	static float x_data[] = { 1.0f, 2.0f, 3.0f, 4.0f };
-	//	static float y_data[] = { 1.0f, 4.0f, 2.0f, 3.0f };
-	//	ImPlot::PlotLine("Line", x_data, y_data, 4);
-	//	ImPlot::EndPlot();
-	//}	
 void SignalGenerator::process(const Spectrum& input, Spectrum& output)
 {
 	output.frequencies.resize(num_bins);
