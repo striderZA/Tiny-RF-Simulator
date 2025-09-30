@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include <implot.h>
 #include <cmath>
+#include <algorithm>
 
 RfSimulatorApp::RfSimulatorApp() : m_siggen() {
 	Spectrum dummy_input;
@@ -53,14 +54,14 @@ void RfSimulatorApp::onGui() {
 		ImGui::Begin("Output Spectrum", &show_spectrum);
 
 		if (ImPlot::BeginPlot("Spectrum Plot")) {
-			double freqs[1] = { static_cast<double>(frequency) };
-			double amps[1] = { static_cast<double>(amplitude) };
-
-			ImPlot::SetupAxes("Frequency (Hz)", "Amplitude");
-			ImPlot::SetupAxisLimits(ImAxis_X1, frequency - 10.0, frequency + 10.0);
-			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, amplitude * 1.5);
-
-			ImPlot::PlotStems("Spectrum", freqs, amps, 1);
+			std::vector<double> combined_spectrum(m_current_spectrum.signal.size());
+			for (size_t i = 0; i < combined_spectrum.size(); ++i) {
+				combined_spectrum[i] = m_current_spectrum.signal[i] + m_current_spectrum.noise[i];
+			}
+			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
+			ImPlot::SetupAxisLimits(ImAxis_X1, SignalGenerator::min_freq, SignalGenerator::max_freq);
+			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, std::max(1.0, m_siggen.m_amp * 1.5));
+			ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), combined_spectrum.data(), m_current_spectrum.frequencies.size());
 			ImPlot::EndPlot();
 		}
 
