@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include "logging.h"
 
 struct Spectrum {
 	std::vector<double> frequencies;
@@ -36,4 +37,5 @@ private:
 	SignalGenerator m_siggen;
 	bool m_show_spectrum = false;
 	Spectrum m_current_spectrum;
+	bool m_show_log = true;
 };

@@ -7,9 +7,14 @@
 RfSimulatorApp::RfSimulatorApp() : m_siggen() {
 	Spectrum dummy_input;
 	m_siggen.process(dummy_input, m_current_spectrum);
+	LOG_INFO("Application initialized!");
 }
 
 void RfSimulatorApp::onGui() {
+	if (m_show_log) {
+		ShowAppLog(&m_show_log);
+	}
+
 	static bool showDemo = false;
 	ImGui::Begin("ImGui Demo");
 	ImGui::Checkbox("Show ImGui Demo", &showDemo);
