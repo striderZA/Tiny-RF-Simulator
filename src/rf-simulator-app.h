@@ -13,7 +13,7 @@ public:
 
 	void setFrequency(float freq) { m_freq = freq; }
 	void setAmplitude(float amp) { m_amp = amp; }
-	void setNoiseFloow(float noise_floor) { m_noise_floor = noise_floor; }
+	void setNoiseFloor(float noise_floor) { m_noise_floor = noise_floor; }
 
 	float getFrequency() const { return m_freq; }
 	float getAmplitude() const { return m_amp; }
