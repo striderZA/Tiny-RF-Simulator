@@ -25,9 +25,9 @@ void RfSimulatorApp::onGui() {
 	}
 	ImGui::End();
 
-	float frequency = m_siggen.getFrequency();  // Default frequency in Hz (or arbitrary units)
-	float amplitude = m_siggen.getAmplitude();  // Default amplitude (arbitrary units)
-	float noise = m_siggen.getNoiseFloor();
+	float frequency = m_siggen.m_freq;  // Default frequency in Hz (or arbitrary units)
+	float amplitude = m_siggen.m_amp;  // Default amplitude (arbitrary units)
+	float noise = m_siggen.m_noise_floor;
 	static bool show_spectrum = true;
 
 	// Signal Generator Window
