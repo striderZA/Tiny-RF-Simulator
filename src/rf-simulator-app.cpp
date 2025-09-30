@@ -4,9 +4,11 @@
 #include <cmath>
 #include <algorithm>
 
-RfSimulatorApp::RfSimulatorApp() : m_siggen() {
-	Spectrum dummy_input;
-	m_siggen.process(dummy_input, m_current_spectrum);
+RfSimulatorApp::RfSimulatorApp() : m_signal_generators() {
+	for (int i = 0; i < NUM_GENERATORS; ++i) {
+		m_signal_generators.emplace_back(i);
+	}
+
 	LOG_INFO("Application initialized!");
 }
 
@@ -31,84 +33,61 @@ void RfSimulatorApp::onGui() {
 	}
 	ImGui::End();
 
-	float frequency = m_siggen.m_freq;  // Default frequency in Hz (or arbitrary units)
-	float amplitude = m_siggen.m_amp;  // Default amplitude (arbitrary units)
-	float noise = m_siggen.m_noise_floor;
-	static bool show_spectrum = true;
-
 	// Signal Generator Window
 	ImGui::Begin("Signal Generator");
 
-	if (ImGui::InputFloat("Frequency", &frequency)) {
-		m_siggen.setFrequency(frequency);
-	}
+	for (int i = 0; i < NUM_GENERATORS; ++i) {
+		auto& gen = m_signal_generators[i];
+		char label[32];
+		snprintf(label, sizeof(label), "Generator %d", i);
+		if (ImGui::CollapsingHeader(label)) {
+			if (i == m_selected_port) {
+				float freq = gen.m_freq;
+				float amp = gen.m_amp;
+				float noise = gen.m_noise_floor;
 
-	if (ImGui::InputFloat("Amplitude", &amplitude)) {
-		m_siggen.setAmplitude(amplitude);
-	}
+				if (ImGui::InputFloat("Frequency", &freq)) {
+					gen.setFrequency(freq);
+					Spectrum output;
+					gen.process(Spectrum(), output);
+					m_spectrum_analyzer.analyze(output);
+					LOG_INFO("Frequency updated to %.2f Hz for Generator %d", freq, i);
+				}
 
-	if (ImGui::InputFloat("Noise Floor", &noise)) {
-		m_siggen.setNoiseFloor(noise);
-	}
+				if (ImGui::InputFloat("Amplitude", &amp)) {
+					gen.setAmplitude(amp);
+					Spectrum output;
+					gen.process(Spectrum(), output);
+					m_spectrum_analyzer.analyze(output);
+					LOG_INFO("Amplitude updated to %.2f V for Generator %d", amp, i);
+				}
 
-	ImGui::Checkbox("Show Spectrum", &show_spectrum);
-
-	if (show_spectrum) {
-		Spectrum dummy_input;
-		m_siggen.process(dummy_input, m_current_spectrum);
-		ImGui::Begin("Output Spectrum", &show_spectrum);
-
-		if (ImPlot::BeginPlot("Spectrum Plot")) {
-			std::vector<double> combined_spectrum(m_current_spectrum.signal.size());
-			for (size_t i = 0; i < combined_spectrum.size(); ++i) {
-				combined_spectrum[i] = m_current_spectrum.signal[i] + m_current_spectrum.noise[i];
+				if (ImGui::InputFloat("Noise", &noise)) {
+					gen.setNoiseFloor(noise);
+					Spectrum output;
+					gen.process(Spectrum(), output);
+					m_spectrum_analyzer.analyze(output);
+					LOG_INFO("Noise updated to %.2f for Generator %d", noise, i);
+				}
 			}
-			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
-			ImPlot::SetupAxisLimits(ImAxis_X1, SignalGenerator::min_freq, SignalGenerator::max_freq);
-			ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, std::max(1.0, m_siggen.m_amp * 1.5));
-			ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), combined_spectrum.data(), m_current_spectrum.frequencies.size());
-			ImPlot::EndPlot();
+			else {
+				ImGui::Text("Frequency: %.2f Hz", gen.m_freq);
+				ImGui::Text("Amplitude: %.2f V", gen.m_amp);
+				ImGui::Text("Noise floor: %.2f Hz", gen.m_noise_floor);
+			}
 		}
-
-		ImGui::End();
 	}
 
+	ImGui::Separator();
+	const char* port_labels[] = { "Generator 0" };
+	ImGui::Combo("Analyze Port", &m_selected_port, port_labels, NUM_GENERATORS);
+	if (ImGui::Button("Update and Analyze Spectrum")) {
+		Spectrum output;
+		m_signal_generators[m_selected_port].process(Spectrum(), output);  // Process selected generator
+		m_spectrum_analyzer.analyze(output);
+		LOG_INFO("Spectrum analyzed for port %d", m_selected_port);
+	}
 	ImGui::End();
-}
 
-SignalGenerator::SignalGenerator(float freq, float amp, float noise_floor) : m_freq(freq), m_amp(amp), m_noise_floor(noise_floor) {}
-
-void SignalGenerator::setFrequency(float freq) {
-	m_freq = freq;
-	LOG_INFO("Updated frequency: %.2f Hz", m_freq);
-}
-
-void SignalGenerator::setAmplitude(float amp) {
-	m_amp = amp;
-	LOG_INFO("Updated amplitude: %.2f", m_amp);
-}
-
-void SignalGenerator::setNoiseFloor(float noise_floor) {
-	m_noise_floor = noise_floor;
-	LOG_INFO("Updated noise floor: %.2f", m_noise_floor);
-}
-
-void SignalGenerator::process(const Spectrum& input, Spectrum& output)
-{
-	output.frequencies.resize(num_bins);
-	double bin_bw = (max_freq - min_freq) / (num_bins - 1);
-	for (size_t i = 0; i < num_bins; ++i) {
-		output.frequencies[i] = min_freq + i * bin_bw;
-	}
-
-	output.signal.assign(num_bins, 0.0);
-	output.noise.assign(num_bins, m_noise_floor);
-
-	output.signal.resize(num_bins, 0.0);
-	size_t closest_bin = static_cast<size_t>(std::round((m_freq - min_freq) / bin_bw));
-	if (closest_bin < num_bins) {
-		output.signal[closest_bin] = m_amp;
-	}
-
-	output.noise.resize(num_bins, m_noise_floor);
+	m_spectrum_analyzer.draw("Spectrum analyzer", nullptr);
 }
