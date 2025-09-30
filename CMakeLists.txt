@@ -32,13 +32,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-# Fetch Glad (for OpenGL3 function loading)
-#FetchContent_Declare(
-#    glad
-#    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-#    GIT_TAG v0.1.36
-#)
-#FetchContent_MakeAvailable(glad)
 
 FetchContent_Declare(
     implot
