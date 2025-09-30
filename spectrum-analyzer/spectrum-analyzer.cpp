@@ -22,7 +22,7 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 				double signal_power_watts = m_current_spectrum.signal[i];
 				double noise_power_watts = m_current_spectrum.noise[i];
 				double total_power_watts = signal_power_watts + noise_power_watts;
-				total[i] = 10.0 * std::log10(total_power_watts / 0.001);
+				total[i] = 10.0 * std::log10(total_power_watts) + 30;
 			}
 
 			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
