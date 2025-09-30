@@ -17,6 +17,7 @@ void RfSimulatorApp::onGui() {
 	if (showImPlotDemo == true){
 		ImPlot::ShowDemoWindow(&showImPlotDemo);
 	}
+SignalGenerator::SignalGenerator(float freq, float amp, float noise_floor) : m_freq(freq), m_amp(amp), m_noise_floor(noise_floor) {}
 
 	//if (ImPlot::BeginPlot("Example Plot")) {
 	//	static float x_data[] = { 1.0f, 2.0f, 3.0f, 4.0f };
