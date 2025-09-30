@@ -32,8 +32,8 @@ void SignalGenerator::process(const Spectrum& input, Spectrum& output)
 	if (output.signal.empty()) output.signal.assign(NUM_BINS, 0.0);
 	if (output.noise.empty()) output.noise.assign(NUM_BINS, 0.0);
 
-	double signal_power_watts = std::pow(10.0, (m_amp - 30.0) / 10.0);  // dBm to watts
-	double noise_power_watts = std::pow(10.0, (m_noise_floor - 30.0) / 10.0);  // dBm to watts
+	double signal_power_watts = std::pow(10.0, (m_amp - 30.0) / 10.0);
+	double noise_power_watts = std::pow(10.0, (m_noise_floor - 30.0) / 10.0);
 
 	size_t closest_bin = static_cast<size_t>(std::round((m_freq - MIN_FREQ) / ((MAX_FREQ - MIN_FREQ) / (NUM_BINS - 1))));
 
