@@ -12,5 +12,5 @@ struct Spectrum {
 constexpr double MIN_FREQ = -100;
 constexpr double MAX_FREQ = 100.0;
 constexpr size_t NUM_BINS = 1024;
-constexpr double MIN_POWER = -178;
+constexpr double MIN_POWER = -174;
 constexpr double MAX_POWER = 10;
