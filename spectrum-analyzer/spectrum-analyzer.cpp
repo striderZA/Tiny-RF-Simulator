@@ -15,6 +15,18 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 	}
 
 	if (ImGui::Begin(title, p_open)) {
+		// Frequency range inputs with validation
+		ImGui::InputDouble("Start Frequency (Hz)", &m_start_freq, 1.0, 10.0, "%.0f");
+		ImGui::InputDouble("Stop Frequency (Hz)", &m_stop_freq, 1.0, 10.0, "%.0f");
+
+		if (m_start_freq < MIN_FREQ) m_start_freq = MIN_FREQ;
+		if (m_stop_freq > MAX_FREQ) m_stop_freq = MAX_FREQ;
+		if (m_start_freq >= m_stop_freq) {
+			double temp = m_start_freq;
+			m_start_freq = m_stop_freq - 1.0;
+			m_stop_freq = temp + 1.0;
+		}
+
 		if (ImPlot::BeginPlot("Spectrum Analyzer")) {
 			std::vector<double> total(m_current_spectrum.signal.size());
 
