@@ -28,19 +28,27 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 		}
 
 		if (ImPlot::BeginPlot("Spectrum Analyzer")) {
-			std::vector<double> total(m_current_spectrum.signal.size());
-
-			for (size_t i = 0; i < total.size(); ++i) {
-				double signal_power_watts = m_current_spectrum.signal[i];
-				double noise_power_watts = m_current_spectrum.noise[i];
-				double total_power_watts = signal_power_watts + noise_power_watts;
-				total[i] = 10.0 * std::log10(total_power_watts) + 30;
+			// Compute total power in dBm, filtered by frequency range if needed
+			std::vector<double> total;
+			std::vector<double> freq_subset;
+			for (size_t i = 0; i < m_current_spectrum.frequencies.size(); ++i) {
+				if (m_current_spectrum.frequencies[i] >= m_start_freq && m_current_spectrum.frequencies[i] <= m_stop_freq) {
+					double signal_power_watts = m_current_spectrum.signal[i];
+					double noise_power_watts = m_current_spectrum.noise[i];
+					double total_power_watts = signal_power_watts + noise_power_watts;
+					total.push_back(10.0 * std::log10(total_power_watts) + 30);  // Correct dBm conversion
+					freq_subset.push_back(m_current_spectrum.frequencies[i]);
+				}
 			}
 
-			ImPlot::SetupAxes("Frequency (Hz)", "Magnitude");
-			ImPlot::SetupAxisLimits(ImAxis_X1, MIN_FREQ, MAX_FREQ);
-			ImPlot::SetupAxisLimits(ImAxis_Y1, -120, 10);
-			ImPlot::PlotLine("Noisy Spectrum", m_current_spectrum.frequencies.data(), total.data(), m_current_spectrum.frequencies.size());
+			ImPlot::SetupAxes("Frequency (Hz)", "Power (dBm)");
+			ImPlot::SetupAxisLimits(ImAxis_X1, m_start_freq, m_stop_freq);
+			ImPlot::SetupAxisLimits(ImAxis_Y1, m_min_power, m_max_power);
+
+			if (!total.empty()) {
+				ImPlot::PlotLine("Noisy Spectrum", freq_subset.data(), total.data(), total.size());
+			}
+
 			ImPlot::EndPlot();
 		}
 		ImGui::End();
