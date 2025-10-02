@@ -1,8 +1,8 @@
 #pragma once
 #include <vector>
 #include "logging.h"
-#include "signal-generator.h"
-#include "spectrum-analyzer.h"
+#include "SignalGenerator.h"
+#include "SpectrumAnalyzer.h"
 
 class RfSimulatorApp {
 public:

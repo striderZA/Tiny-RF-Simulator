@@ -1,5 +1,5 @@
 add_library(signal-generator STATIC
-	signal-generator.cpp
+	"SignalGenerator.cpp"
 )
 
 target_include_directories(signal-generator

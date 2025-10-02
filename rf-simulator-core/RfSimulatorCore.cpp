@@ -1,7 +1,7 @@
 ﻿// rf-simulator-core.cpp : Defines the entry point for the application.
 //
 
-#include "rf-simulator-core.h"
+#include "RfSimulatorCore.h"
 #include <GLFW/glfw3.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"

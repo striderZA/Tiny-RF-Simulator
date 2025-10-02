@@ -1,5 +1,5 @@
-#include "rf-simulator-core.h"
-#include "rf-simulator-app.h"
+#include "RfSimulatorCore.h"
+#include "RfSimulatorApp.h"
 
 int main() {
 	RfSimulatorCore core;

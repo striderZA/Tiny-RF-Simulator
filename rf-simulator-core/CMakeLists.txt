@@ -1,5 +1,5 @@
 ﻿add_library(rf-simulator-core STATIC
-    rf-simulator-core.cpp
+    "RfSimulatorCore.cpp"
 )
 
 target_include_directories(rf-simulator-core

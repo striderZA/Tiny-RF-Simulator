@@ -1,5 +1,5 @@
 #include <cmath>
-#include "spectrum-analyzer.h"
+#include "SpectrumAnalyzer.h"
 #include "imgui.h"
 
 SpectrumAnalyzer::SpectrumAnalyzer() {}

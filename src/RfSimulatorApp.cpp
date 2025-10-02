@@ -1,4 +1,4 @@
-#include "rf-simulator-app.h"
+#include "RfSimulatorApp.h"
 #include "imgui.h"
 #include <implot.h>
 #include <cmath>

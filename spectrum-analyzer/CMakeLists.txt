@@ -1,5 +1,5 @@
 add_library(spectrum-analyzer STATIC
-	spectrum-analyzer.cpp
+	SpectrumAnalyzer.cpp
 )
 
 target_include_directories(spectrum-analyzer

@@ -1,4 +1,4 @@
-#include "signal-generator.h"
+#include "SignalGenerator.h"
 #include <algorithm>
 #include <cmath>
 
