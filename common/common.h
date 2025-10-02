@@ -14,3 +14,5 @@ constexpr double MAX_FREQ = 5000;
 constexpr size_t NUM_BINS = 1024;
 constexpr double MIN_POWER = -174;
 constexpr double MAX_POWER = 10;
+constexpr double DEFAULT_VBW = 10e6;
+constexpr double DEFAULT_RBW = 1e6;

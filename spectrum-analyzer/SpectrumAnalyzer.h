@@ -2,7 +2,6 @@
 
 #include <vector>
 #include "common.h"
-
 #include "implot.h"
 
 class SpectrumAnalyzer {
@@ -15,11 +14,15 @@ public:
 	void setStopFrequency(double stop_freq) { m_stop_freq = stop_freq; }
 	void setMinPower(double min_power) { m_min_power = min_power; }
 	void setMaxPower(double max_power) { m_max_power = max_power; }
+	void setVideoBw(double vbw) { m_vbw = vbw; }
+	void setResBw(double rbw) { m_rbw = rbw; }
 
 	double startFrequency() const { return m_start_freq; }
 	double stopFrequency() const { return m_stop_freq; }
 	double minPower() const { return m_min_power; }
 	double maxPower() const { return m_max_power; }
+	double vbw() const { return m_vbw; }
+	double rbw() const { return m_rbw; }
 
 private:
 	Spectrum m_current_spectrum;
@@ -29,4 +32,7 @@ private:
 	double m_stop_freq = MAX_FREQ;
 	double m_min_power = MIN_POWER;
 	double m_max_power = MAX_POWER;
+
+	double m_vbw = DEFAULT_VBW;
+	double m_rbw = DEFAULT_RBW;
 };
