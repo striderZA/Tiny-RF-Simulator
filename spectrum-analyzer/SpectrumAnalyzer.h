@@ -9,6 +9,7 @@ public:
 	SpectrumAnalyzer();
 	void analyze(const Spectrum& input);
 	void draw(const char* title, bool* p_open);
+	void updateSpectrum();
 
 	void setStartFrequency(double start_freq) { m_start_freq = start_freq; }
 	void setStopFrequency(double stop_freq) { m_stop_freq = stop_freq; }
@@ -24,6 +25,9 @@ public:
 	double vbw() const { return m_vbw; }
 	double rbw() const { return m_rbw; }
 
+	void updateNoiseLevel();
+	double generateNoiseSample();
+	std::vector<double> generateNoiseVector();
 private:
 	Spectrum m_current_spectrum;
 	bool m_show_spectrum = false;
@@ -35,4 +39,5 @@ private:
 
 	double m_vbw = DEFAULT_VBW;
 	double m_rbw = DEFAULT_RBW;
+	double m_noise_level_dBm = MIN_POWER;
 };
