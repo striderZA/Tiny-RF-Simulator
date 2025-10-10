@@ -9,50 +9,54 @@ void SpectrumAnalyzer::analyze(const Spectrum& input) {
 	m_show_spectrum = true;
 }
 
-void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
-	if (!m_show_spectrum || m_current_spectrum.frequencies.empty()) {
-		return;
+static std::vector<double> to_dBm(std::vector<double> input) {
+	std::vector<double> output = std::vector<double>(input.size());
+	for (int i = 0; i < output.size(); ++i) {
+		output[i] = 10 * std::log10(input[i]) + 30;
 	}
+	return output;
+}
 
+double SpectrumAnalyzer::generateNoiseSample() {
+	std::normal_distribution<double> dist(0.0, 1.0);
+	std::random_device rd;
+	std::mt19937 generator(rd());
+	double noise = dist(generator);
+	double scale = std::sqrt(4.0 * k * T * m_rbw * R);
+
+	return noise * scale;
+}
+
+std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
+	size_t length = m_current_spectrum.frequencies.size();
+	std::vector<double> noiseSamples(length);
+	for (int i = 0; i < length; ++i) {
+		noiseSamples[i] = this->generateNoiseSample();
+	}
+	return noiseSamples;
+}
+
+void SpectrumAnalyzer::update(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
-		// Frequency range inputs with validation
-		ImGui::InputDouble("Start Frequency (Hz)", &m_start_freq, 1.0, 10.0, "%.0f");
-		ImGui::InputDouble("Stop Frequency (Hz)", &m_stop_freq, 1.0, 10.0, "%.0f");
-
-		if (m_start_freq < MIN_FREQ) m_start_freq = MIN_FREQ;
-		if (m_stop_freq > MAX_FREQ) m_stop_freq = MAX_FREQ;
-		if (m_start_freq >= m_stop_freq) {
-			double temp = m_start_freq;
-			m_start_freq = m_stop_freq - 1.0;
-			m_stop_freq = temp + 1.0;
-		}
+		ImGui::InputDouble("Start Frequency (Hz)", &m_start_freq, 1e6, 100e6, "%.0f");
+		ImGui::InputDouble("Stop Frequency (Hz)", &m_stop_freq, 1e6, 100e6, "%.0f");
+		ImGui::InputDouble("VBW (Hz)", &m_vbw, 1e6, 10e6, "%.0f");
+		ImGui::InputDouble("RBW (Hz)", &m_rbw, 1e6, 10e6, "%.0f");
+		ImGui::InputDouble("Ref (dBm)", &m_max_power, 5, 10, "%.0f");
+		ImGui::InputDouble("Min level (dBm)", &m_min_power, 5, 10, "%.0f");
+		ImGui::Text("Noise: %.2f dBm", m_noise_level_dBm);
+		ImPlot::SetNextAxesLimits(m_start_freq, m_stop_freq, m_min_power, m_max_power);
 
 		if (ImPlot::BeginPlot("Spectrum Analyzer")) {
-			// Compute total power in dBm, filtered by frequency range if needed
-			std::vector<double> total;
-			std::vector<double> freq_subset;
-			for (size_t i = 0; i < m_current_spectrum.frequencies.size(); ++i) {
-				if (m_current_spectrum.frequencies[i] >= m_start_freq && m_current_spectrum.frequencies[i] <= m_stop_freq) {
-					double signal_power_watts = m_current_spectrum.signal[i];
-					double noise_power_watts = m_current_spectrum.noise[i];
-					double total_power_watts = signal_power_watts + noise_power_watts;
-					total.push_back(10.0 * std::log10(total_power_watts) + 30);  // Correct dBm conversion
-					freq_subset.push_back(m_current_spectrum.frequencies[i]);
-				}
-			}
-
-			ImPlot::SetupAxes("Frequency (Hz)", "Power (dBm)");
-			ImPlot::SetupAxisLimits(ImAxis_X1, m_start_freq, m_stop_freq);
-			ImPlot::SetupAxisLimits(ImAxis_Y1, m_min_power, m_max_power);
-
-			if (!total.empty()) {
-				ImPlot::PlotLine("Noisy Spectrum", freq_subset.data(), total.data(), total.size());
-			}
-
+			this->updateNoiseLevel();
+			this->updateSpectrum();
+			ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), to_dBm(m_current_spectrum.noise_power_W).data(), m_current_spectrum.frequencies.size());
 			ImPlot::EndPlot();
 		}
 		ImGui::End();
 	}
+}
+
 void SpectrumAnalyzer::updateSpectrum() {
 	int num_points = std::round((m_stop_freq - m_start_freq) / m_vbw);
 	m_current_spectrum.frequencies = std::vector<double>(num_points, 0);

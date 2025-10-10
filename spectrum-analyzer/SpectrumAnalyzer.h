@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <random>
+#include "logging.h"
 #include "common.h"
 #include "implot.h"
 
@@ -9,7 +10,7 @@ class SpectrumAnalyzer {
 public:
 	SpectrumAnalyzer();
 	void analyze(const Spectrum& input);
-	void draw(const char* title, bool* p_open);
+	void update(const char* title, bool* p_open);
 	void updateSpectrum();
 
 	void setStartFrequency(double start_freq) { m_start_freq = start_freq; }
@@ -29,6 +30,7 @@ public:
 	void updateNoiseLevel();
 	double generateNoiseSample();
 	std::vector<double> generateNoiseVector();
+
 private:
 	Spectrum m_current_spectrum;
 	bool m_show_spectrum = false;
