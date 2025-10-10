@@ -8,10 +8,13 @@ class SignalGenerator {
 public:
 	SignalGenerator(int id, float freq = 1.0f, float amp = -30.0f, float noise_floor = -70.0f);
 
+	void update(const char* title, bool* p_open);
+	void initialize();
+
 	void setFrequency(float freq);
 	void setAmplitude(float amp);
 	void setNoiseFloor(float noise_floor);
-	void process(const Spectrum& input, Spectrum& output);
+	void update(const Spectrum& input, Spectrum& output);
 
 	int id() const { return m_id; }
 	float freq() const { return m_freq; }
