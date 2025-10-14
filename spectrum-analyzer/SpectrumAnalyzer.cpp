@@ -22,9 +22,9 @@ double SpectrumAnalyzer::generateNoiseSample() {
 	std::random_device rd;
 	std::mt19937 generator(rd());
 	double noise = dist(generator);
-	double scale = std::sqrt(4.0 * k * T * m_rbw * R);
+	double rms_voltage = std::sqrt(4 * k * T * m_rbw * R);
 
-	return noise * scale;
+	return std::pow(noise * rms_voltage, 2) / R;
 }
 
 std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
@@ -45,12 +45,14 @@ void SpectrumAnalyzer::update(const char* title, bool* p_open) {
 		ImGui::InputDouble("Ref (dBm)", &m_max_power, 5, 10, "%.0f");
 		ImGui::InputDouble("Min level (dBm)", &m_min_power, 5, 10, "%.0f");
 		ImGui::Text("Noise: %.2f dBm", m_noise_level_dBm);
-		ImPlot::SetNextAxesLimits(m_start_freq, m_stop_freq, m_min_power, m_max_power);
+		ImPlot::SetNextAxesLimits(m_start_freq, m_stop_freq, m_min_power, m_max_power, 1);
 
 		if (ImPlot::BeginPlot("Spectrum Analyzer")) {
 			this->updateNoiseLevel();
 			this->updateSpectrum();
+			ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
 			ImPlot::PlotLine("Spectrum", m_current_spectrum.frequencies.data(), to_dBm(m_current_spectrum.noise_power_W).data(), m_current_spectrum.frequencies.size());
+			ImPlot::PopStyleVar();
 			ImPlot::EndPlot();
 		}
 		ImGui::End();
