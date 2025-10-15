@@ -17,7 +17,15 @@ static std::vector<double> to_dBm(std::vector<double> input) {
 	return output;
 }
 
-double SpectrumAnalyzer::generateNoiseSample() {
+static std::vector<double> to_W(std::vector<double> input) {
+	std::vector<double> output = std::vector<double>(input.size());
+	for (int i = 0; i < output.size(); ++i) {
+		output[i] = std::pow(10, (input[i]-30)/10)
+	}
+	return output;
+}
+
+double SpectrumAnalyzer::generateNoiseSample() const {
 	std::normal_distribution<double> dist(0.0, 1.0);
 	std::random_device rd;
 	std::mt19937 generator(rd());
