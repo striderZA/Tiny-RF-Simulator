@@ -28,7 +28,7 @@ bool RfSimulatorCore::Initialize() {
 	}
 
 	glfwMakeContextCurrent(p_impl->window);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	IMGUI_CHECKVERSION();
 
