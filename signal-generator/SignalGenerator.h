@@ -9,4 +9,5 @@ public:
 
 private:
 	int m_id;
+	tone m_active_tone;
 };
