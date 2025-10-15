@@ -17,4 +17,5 @@ void RfSimulatorApp::onGui() {
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 	m_spectrum_analyzer.update("Spectrum", nullptr);
+	m_signal_generator.setupTone("Signal Generator", nullptr);
 }
