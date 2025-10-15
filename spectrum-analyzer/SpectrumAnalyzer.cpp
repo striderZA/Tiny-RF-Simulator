@@ -2,8 +2,7 @@
 #include "SpectrumAnalyzer.h"
 #include "imgui.h"
 
-SpectrumAnalyzer::SpectrumAnalyzer() {
-	m_active_tone = std::make_pair<int, double>(1, -20);
+SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum()  {
 }
 
 static std::vector<double> to_dBm(std::vector<double> input) {
@@ -45,19 +44,6 @@ void SpectrumAnalyzer::addTone(tone input_tone){
 	m_current_spectrum.tones.push_back(input_tone);
 	LOG_INFO("Add tone to vector, %d are active", m_current_spectrum.tones.size());
 }
-
-void SpectrumAnalyzer::setupTone(const char* title, bool* p_open){
-	if (ImGui::Begin(title, p_open)) {
-		ImGui::InputInt("Tone index", &m_active_tone.first, 1, 100);
-		ImGui::InputDouble("Tone amplitude (dBm)", &m_active_tone.second, 1, 5, "%.0f");		
-		if (ImGui::Button("Add tone")) {
-			this->addTone(m_active_tone);
-			LOG_INFO("Add tone: Frequency bin = %d, amplitude = %.2f dBm", m_active_tone.first, m_active_tone.second);
-		}
-		ImGui::End();
-	}
-}
-
 
 void SpectrumAnalyzer::update(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
