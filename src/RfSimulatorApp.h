@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include "logging.h"
 #include "SpectrumAnalyzer.h"
 #include "SignalGenerator.h"
@@ -8,9 +9,10 @@ class RfSimulatorApp {
 public:
 	RfSimulatorApp();
 	void onGui();
+	void drawSignalGenerators(const char* title, bool* p_open);
 
 private:
 	SpectrumAnalyzer m_spectrum_analyzer;
-	SignalGenerator m_signal_generator;
+	std::vector<std::unique_ptr<SignalGenerator>> m_signal_generators;
 	bool m_show_log = true;
 };
