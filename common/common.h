@@ -1,10 +1,13 @@
 #pragma once
 
 #include <vector>
+#include <utility>
+
+typedef std::pair<int, double> tone;
 
 struct Spectrum {
 	std::vector<double> frequencies;
-	std::vector<double> signal_power_W;
+	std::vector<tone> tones;
 	std::vector<double> noise_power_W;
 };
 
