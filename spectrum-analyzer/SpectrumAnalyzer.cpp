@@ -22,7 +22,7 @@ static std::vector<double> to_dBm(std::vector<double> input) {
 static std::vector<double> to_W(std::vector<double> input) {
 	std::vector<double> output = std::vector<double>(input.size());
 	for (int i = 0; i < output.size(); ++i) {
-		output[i] = std::pow(10, (input[i]-30)/10)
+		output[i] = std::pow(10, (input[i] - 30) / 10);
 	}
 	return output;
 }
