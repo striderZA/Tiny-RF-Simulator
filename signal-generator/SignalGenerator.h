@@ -1,4 +1,5 @@
 #pragma once
+#include "logging.h"
 
 class SignalGenerator {
 public:
