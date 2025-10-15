@@ -71,7 +71,6 @@ void SpectrumAnalyzer::updateSpectrum() {
 	int num_points = std::round((m_stop_freq - m_start_freq) / m_vbw);
 	m_current_spectrum.frequencies = std::vector<double>(num_points, 0);
 	m_current_spectrum.noise_power_W = std::vector<double>(num_points, 0);
-	m_current_spectrum.signal_power_W = std::vector<double>(num_points, 0);
 
 	for (int i = 0; i < num_points; ++i) {
 		m_current_spectrum.frequencies[i] = (m_start_freq + i * m_vbw);
