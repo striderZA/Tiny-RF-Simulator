@@ -28,7 +28,7 @@ public:
 	double rbw() const { return m_rbw; }
 
 	void updateNoiseLevel();
-	double generateNoiseSample();
+	double generateNoiseSample() const;
 	std::vector<double> generateNoiseVector();
 
 private:
