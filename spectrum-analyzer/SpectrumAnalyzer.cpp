@@ -2,7 +2,9 @@
 #include "SpectrumAnalyzer.h"
 #include "imgui.h"
 
-SpectrumAnalyzer::SpectrumAnalyzer() {}
+SpectrumAnalyzer::SpectrumAnalyzer() {
+	m_active_tone = std::make_pair<int, double>(1, -20);
+}
 
 void SpectrumAnalyzer::analyze(const Spectrum& input) {
 	m_current_spectrum = input;
