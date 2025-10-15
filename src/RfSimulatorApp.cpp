@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-RfSimulatorApp::RfSimulatorApp() : m_spectrum_analyzer(), m_signal_generator() {
+RfSimulatorApp::RfSimulatorApp() : m_spectrum_analyzer(), m_signal_generator(0) {
 	LOG_INFO("Application initialized!");
 }
 
