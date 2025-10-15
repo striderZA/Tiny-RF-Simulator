@@ -56,6 +56,7 @@ void SpectrumAnalyzer::drawTone(const char* title, bool* p_open){
 		ImGui::InputInt("Tone index", &m_active_tone.first, 1, 100);
 		ImGui::InputDouble("Tone amplitude (dBm)", &m_active_tone.second, 1, 5, "%.0f");		
 		if (ImGui::Button("Add tone")) {
+			this->addTone(m_active_tone);
 			LOG_INFO("Add tone: Frequency bin = %d, amplitude = %.2f dBm", m_active_tone.first, m_active_tone.second);
 		}
 		ImGui::End();
