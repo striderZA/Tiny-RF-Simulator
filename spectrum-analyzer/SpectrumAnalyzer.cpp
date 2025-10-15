@@ -46,7 +46,7 @@ void SpectrumAnalyzer::addTone(tone input_tone){
 	LOG_INFO("Add tone to vector, %d are active", m_current_spectrum.tones.size());
 }
 
-void SpectrumAnalyzer::drawTone(const char* title, bool* p_open){
+void SpectrumAnalyzer::setupTone(const char* title, bool* p_open){
 	if (ImGui::Begin(title, p_open)) {
 		ImGui::InputInt("Tone index", &m_active_tone.first, 1, 100);
 		ImGui::InputDouble("Tone amplitude (dBm)", &m_active_tone.second, 1, 5, "%.0f");		

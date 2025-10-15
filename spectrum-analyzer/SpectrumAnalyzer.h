@@ -30,7 +30,7 @@ public:
 	double generateNoiseSample() const;
 	std::vector<double> generateNoiseVector();
 	void addTone(tone input_tone);
-	void drawTone(const char* title, bool* p_open);
+	void setupTone(const char* title, bool* p_open);
 
 private:
 	Spectrum m_current_spectrum;
