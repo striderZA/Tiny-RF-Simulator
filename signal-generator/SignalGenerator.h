@@ -2,7 +2,7 @@
 
 class SignalGenerator {
 public:
-	SignalGenerator();
+	SignalGenerator(int id);
 
 	int id() const { return m_id; }
 
