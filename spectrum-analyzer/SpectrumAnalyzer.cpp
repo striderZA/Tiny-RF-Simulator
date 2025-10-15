@@ -6,11 +6,6 @@ SpectrumAnalyzer::SpectrumAnalyzer() {
 	m_active_tone = std::make_pair<int, double>(1, -20);
 }
 
-void SpectrumAnalyzer::analyze(const Spectrum& input) {
-	m_current_spectrum = input;
-	m_show_spectrum = true;
-}
-
 static std::vector<double> to_dBm(std::vector<double> input) {
 	std::vector<double> output = std::vector<double>(input.size());
 	for (int i = 0; i < output.size(); ++i) {
@@ -95,6 +90,7 @@ void SpectrumAnalyzer::updateSpectrum() {
 	for (int i = 0; i < num_points; ++i) {
 		m_current_spectrum.frequencies[i] = (m_start_freq + i * m_vbw);
 	}
+
 	m_current_spectrum.noise_power_W = this->generateNoiseVector();
 	for (auto& tone_idx : m_current_spectrum.tones) {
 		m_current_spectrum.noise_power_W[tone_idx.first] += std::pow(10, (tone_idx.second - 30) / 10);
