@@ -46,6 +46,22 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 	return noiseSamples;
 }
 
+void SpectrumAnalyzer::addTone(tone input_tone){
+	m_current_spectrum.tones.push_back(input_tone);
+}
+
+void SpectrumAnalyzer::drawTone(const char* title, bool* p_open){
+	if (ImGui::Begin(title, p_open)) {
+		ImGui::InputInt("Tone index", &m_active_tone.first, 1, 100);
+		ImGui::InputDouble("Tone amplitude (dBm)", &m_active_tone.second, 1, 5, "%.0f");		
+		if (ImGui::Button("Add tone")) {
+			LOG_INFO("Add tone: Frequency bin = %d, amplitude = %.2f dBm", m_active_tone.first, m_active_tone.second);
+		}
+		ImGui::End();
+	}
+}
+
+
 void SpectrumAnalyzer::update(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
 		ImGui::InputDouble("Start Frequency (Hz)", &m_start_freq, 1e6, 100e6, "%.0f");
