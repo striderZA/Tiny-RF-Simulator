@@ -6,7 +6,7 @@ class SignalGenerator {
 public:
 	SignalGenerator(int id);
 
-	void setupTone(const char* title, bool* p_open);
+	void setup(const char* title, bool* p_open);
 
 	int id() const { return m_id; }
 	tone activeTone() const { return m_active_tone; }
