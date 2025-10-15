@@ -96,6 +96,9 @@ void SpectrumAnalyzer::updateSpectrum() {
 		m_current_spectrum.frequencies[i] = (m_start_freq + i * m_vbw);
 	}
 	m_current_spectrum.noise_power_W = this->generateNoiseVector();
+	for (auto& tone_idx : m_current_spectrum.tones) {
+		m_current_spectrum.noise_power_W[tone_idx.first] += std::pow(10, (tone_idx.second - 30) / 10);
+	}
 }
 
 void SpectrumAnalyzer::updateNoiseLevel() {
