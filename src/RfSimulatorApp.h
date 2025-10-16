@@ -5,6 +5,13 @@
 #include "SpectrumAnalyzer.h"
 #include "SignalGenerator.h"
 
+enum class InputSignals : int {
+	G0 = 0,
+	G1,
+	G2,
+	G3
+};
+
 class RfSimulatorApp {
 public:
 	RfSimulatorApp();
