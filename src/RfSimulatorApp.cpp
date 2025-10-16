@@ -27,10 +27,4 @@ void RfSimulatorApp::onGui() {
 }
 
 void RfSimulatorApp::drawSignalGenerators(const char* title, bool* p_open) {
-	if (ImGui::Begin("title", nullptr)) {
-		if (ImGui::Button("Add tone")) {
-			m_spectrum_analyzer.addTone(m_signal_generators[0]->activeTone());
-		}
-		ImGui::End();
-	}
 }
