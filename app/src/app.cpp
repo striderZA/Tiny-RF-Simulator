@@ -15,17 +15,17 @@ RfSimulatorApp::RfSimulatorApp()
 
 void RfSimulatorApp::onGui() {
 
-
+	ImGui::Begin("Debug");
 	ImGui::Checkbox("Enable log", &m_enable_log);
-
 	if (m_enable_log) {
 		ShowAppLog();
 	}
-
 	ImGuiIO& io = ImGui::GetIO();
 	(void)io;
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 		1000.0f / io.Framerate, io.Framerate);
+	ImGui::End();
+
 	m_spectrum_analyzer.update("Spectrum", nullptr);
 
 	for (auto& gen : m_signal_generators) {
