@@ -1,8 +1,10 @@
 #include <cmath>
 #include "spectrum_analyzer.h"
 #include "imgui.h"
+#include "logging.h"
 
 SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
+	LOG_INFO("Spectrum analyzer setup complete!");
 }
 
 static std::vector<double> to_dBm(std::vector<double> input) {
