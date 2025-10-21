@@ -21,5 +21,6 @@ target_link_libraries(${PROJECT_NAME}
 		common
 		simulator::signal_generator
 		simulator::spectrum_analyzer
+		simulator::logging
 )
 
