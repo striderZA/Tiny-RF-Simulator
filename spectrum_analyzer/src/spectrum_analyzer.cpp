@@ -1,8 +1,8 @@
 #include <cmath>
-#include "SpectrumAnalyzer.h"
+#include "spectrum_analyzer.h"
 #include "imgui.h"
 
-SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum()  {
+SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
 }
 
 static std::vector<double> to_dBm(std::vector<double> input) {
@@ -40,9 +40,9 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 	return noiseSamples;
 }
 
-void SpectrumAnalyzer::addTone(tone input_tone){
+void SpectrumAnalyzer::addTone(tone input_tone) {
 	m_current_spectrum.tones.push_back(input_tone);
-	LOG_INFO("Add tone to vector, %d are active", m_current_spectrum.tones.size());
+	//LOG_INFO("Add tone to vector, %d are active", m_current_spectrum.tones.size());
 }
 
 void SpectrumAnalyzer::update(const char* title, bool* p_open) {

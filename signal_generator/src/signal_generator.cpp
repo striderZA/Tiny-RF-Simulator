@@ -1,4 +1,4 @@
-#include "SignalGenerator.h"
+#include "signal_generator.h"
 #include "imgui.h"
 
 SignalGenerator::SignalGenerator(int id) : m_id(id), m_active_tone(std::make_pair<int, double>(0, 0)) {}

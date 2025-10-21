@@ -1,6 +1,5 @@
 #pragma once
 #include "common.h"
-#include "logging.h"
 
 class SignalGenerator {
 public:

@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <random>
-#include "logging.h"
 #include "common.h"
 #include "implot.h"
 
