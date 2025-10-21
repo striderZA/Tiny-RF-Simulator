@@ -9,6 +9,8 @@ RfSimulatorApp::RfSimulatorApp()
 	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true) {
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
+	m_signal_generators.push_back(
+		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G1)));
 }
 
 void RfSimulatorApp::onGui() {
