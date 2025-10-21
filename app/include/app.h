@@ -18,7 +18,7 @@ public:
 	void onGui();
 
 private:
-	bool enable_log;
+	bool m_enable_log;
 	SpectrumAnalyzer m_spectrum_analyzer;
 	std::vector<std::unique_ptr<SignalGenerator>> m_signal_generators;
 };

@@ -6,14 +6,17 @@
 #include "logging.h"
 
 RfSimulatorApp::RfSimulatorApp()
-	: m_spectrum_analyzer(), m_signal_generators(), enable_log(true) {
+	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true) {
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
 }
 
 void RfSimulatorApp::onGui() {
 
-	if (enable_log) {
+
+	ImGui::Checkbox("Enable log", &m_enable_log);
+
+	if (m_enable_log) {
 		ShowAppLog();
 	}
 
