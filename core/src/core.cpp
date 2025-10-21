@@ -1,13 +1,9 @@
-﻿// rf-simulator-core.cpp : Defines the entry point for the application.
-//
-
-#include "RfSimulatorCore.h"
+#include "core.h"
 #include <GLFW/glfw3.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
 #include <implot.h>
-#include "logging.h"
 
 struct RfSimulatorCore::Impl {
 	GLFWwindow* window = nullptr;
@@ -15,10 +11,17 @@ struct RfSimulatorCore::Impl {
 	bool done = false;
 };
 
-RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
-RfSimulatorCore::~RfSimulatorCore() {}
+RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()){}
 
-bool RfSimulatorCore::Initialize() {
+RfSimulatorCore::~RfSimulatorCore(){}
+
+void RfSimulatorCore::Run(const std::function<void()>& onGui){
+	if (!Initialize()) return;
+	MainLoop(onGui);
+	Shutdown();
+}
+
+bool RfSimulatorCore::Initialize(){
 	if (!glfwInit()) return false;
 
 	p_impl->window = glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
@@ -47,13 +50,10 @@ bool RfSimulatorCore::Initialize() {
 	ImGui_ImplGlfw_InitForOpenGL(p_impl->window, true);
 	ImGui_ImplOpenGL2_Init();
 
-	LOG_INFO("Core initialized!");
-
 	return true;
 }
 
-void RfSimulatorCore::Shutdown() {
-	LOG_INFO("Shutting down...");
+void RfSimulatorCore::Shutdown(){
 	ImGui_ImplOpenGL2_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
@@ -64,7 +64,7 @@ void RfSimulatorCore::Shutdown() {
 	glfwTerminate();
 }
 
-void RfSimulatorCore::MainLoop(const std::function<void()>& onGui) {
+void RfSimulatorCore::MainLoop(const std::function<void()>& onGui){
 	while (!glfwWindowShouldClose(p_impl->window)) {
 		glfwPollEvents();
 		ImGui_ImplOpenGL2_NewFrame();
@@ -93,10 +93,4 @@ void RfSimulatorCore::MainLoop(const std::function<void()>& onGui) {
 		glfwSwapBuffers(p_impl->window);
 	}
 	p_impl->done = true;
-}
-
-void RfSimulatorCore::Run(const std::function<void()>& onGui) {
-	if (!Initialize()) return;
-	MainLoop(onGui);
-	Shutdown();
 }
