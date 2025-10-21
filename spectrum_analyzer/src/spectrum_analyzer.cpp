@@ -7,10 +7,18 @@ SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
 	LOG_INFO("Spectrum analyzer setup complete!");
 }
 
+static double W_to_dBm(double input) {
+	return 10 * std::log10(input) + 30;
+}
+
+static double dBm_to_W(double input) {
+	return std::pow(10, (input - 30) / 10);
+}
+
 static std::vector<double> to_dBm(std::vector<double> input) {
 	std::vector<double> output = std::vector<double>(input.size());
 	for (int i = 0; i < output.size(); ++i) {
-		output[i] = 10 * std::log10(input[i]) + 30;
+		output[i] = W_to_dBm(input[i]);
 	}
 	return output;
 }
@@ -18,7 +26,7 @@ static std::vector<double> to_dBm(std::vector<double> input) {
 static std::vector<double> to_W(std::vector<double> input) {
 	std::vector<double> output = std::vector<double>(input.size());
 	for (int i = 0; i < output.size(); ++i) {
-		output[i] = std::pow(10, (input[i] - 30) / 10);
+		output[i] = dBm_to_W(input[i]);
 	}
 	return output;
 }
