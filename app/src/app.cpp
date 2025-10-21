@@ -1,9 +1,8 @@
 #include "app.h"
 #include "imgui.h"
-#include <algorithm>
-#include <cmath>
-#include <implot.h>
 #include <string>
+#include <signal_generator.h>
+#include <memory>
 
 RfSimulatorApp::RfSimulatorApp()
     : m_spectrum_analyzer(), m_signal_generators() {
