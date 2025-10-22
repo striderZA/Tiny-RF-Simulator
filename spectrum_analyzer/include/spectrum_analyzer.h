@@ -8,7 +8,7 @@
 class SpectrumAnalyzer {
 public:
 	SpectrumAnalyzer();
-	void update(const char* title, bool* p_open);
+	void draw(const char* title, bool* p_open);
 	void updateSpectrum();
 
 	void setStartFrequency(double start_freq) { m_start_freq = start_freq; }

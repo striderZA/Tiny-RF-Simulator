@@ -62,7 +62,7 @@ void SpectrumAnalyzer::removeToneRef(const tone* tone_ref) {
 	m_connected_tones.erase(std::remove(m_connected_tones.begin(), m_connected_tones.end(), tone_ref), m_connected_tones.end());
 }
 
-void SpectrumAnalyzer::update(const char* title, bool* p_open) {
+void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
 		ImGui::InputDouble("Start Frequency (Hz)", &m_start_freq, 1e6, 100e6, "%.0f");
 		ImGui::InputDouble("Stop Frequency (Hz)", &m_stop_freq, 1e6, 100e6, "%.0f");

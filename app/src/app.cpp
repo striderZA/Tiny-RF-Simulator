@@ -24,13 +24,14 @@ void RfSimulatorApp::onGui() {
 	if (m_enable_log) {
 		ShowAppLog();
 	}
+
 	ImGuiIO& io = ImGui::GetIO();
 	(void)io;
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 		1000.0f / io.Framerate, io.Framerate);
 	ImGui::End();
 
-	m_spectrum_analyzer.update("Spectrum", nullptr);
+	m_spectrum_analyzer.draw("Spectrum", nullptr);
 
 	for (auto& gen : m_signal_generators) {
 		std::string title = "Generator " + std::to_string(gen->id());
