@@ -42,4 +42,5 @@ private:
 	double m_vbw = DEFAULT_VBW;
 	double m_rbw = DEFAULT_RBW;
 	double m_noise_level_dBm = MIN_POWER;
+	std::vector<const tone*> m_connected_tones;	
 };
