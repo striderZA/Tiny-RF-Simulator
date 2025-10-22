@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "logging.h"
 
-SignalGenerator::SignalGenerator(int id) : m_id(id), m_active_tone(std::make_pair<int, double>(0, 0)) {
+SignalGenerator::SignalGenerator(int id) : m_id(id), m_active_tone(std::make_pair<int, double>(0, 0)), m_measurement_active(false) {
 	LOG_INFO("Signal generator setup complete!");
 }
 
