@@ -50,9 +50,8 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 	return noiseSamples;
 }
 
-void SpectrumAnalyzer::addTone(tone input_tone) {
-	m_current_spectrum.tones.push_back(input_tone);
-	//LOG_INFO("Add tone to vector, %d are active", m_current_spectrum.tones.size());
+void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
+
 }
 
 void SpectrumAnalyzer::update(const char* title, bool* p_open) {

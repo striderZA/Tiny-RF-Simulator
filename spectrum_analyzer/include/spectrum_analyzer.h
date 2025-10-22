@@ -28,7 +28,8 @@ public:
 	void updateNoiseLevel();
 	double generateNoiseSample() const;
 	std::vector<double> generateNoiseVector();
-	void addTone(tone input_tone);
+	void addToneRef(const tone* tone_ref);
+	void removeToneRef(const tone* tone_ref);
 
 private:
 	Spectrum m_current_spectrum;
@@ -42,5 +43,6 @@ private:
 	double m_vbw = DEFAULT_VBW;
 	double m_rbw = DEFAULT_RBW;
 	double m_noise_level_dBm = MIN_POWER;
+
 	std::vector<const tone*> m_connected_tones;	
 };
