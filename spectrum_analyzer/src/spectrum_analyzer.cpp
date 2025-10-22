@@ -1,4 +1,5 @@
 #include <cmath>
+#include <algorithm>
 #include "spectrum_analyzer.h"
 #include "imgui.h"
 #include "logging.h"
@@ -51,6 +52,12 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 }
 
 void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
+	if (tone_ref && std::find(m_connected_tones.begin(), m_connected_tones.end(), tone_ref) == m_connected_tones.end()) {
+		m_connected_tones.push_back(tone_ref);
+	}
+}
+
+void SpectrumAnalyzer::removeToneRef(const tone* tone_ref) {
 
 }
 
