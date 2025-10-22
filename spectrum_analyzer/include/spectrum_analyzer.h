@@ -30,6 +30,7 @@ public:
 	std::vector<double> generateNoiseVector();
 	void addToneRef(const tone* tone_ref);
 	void removeToneRef(const tone* tone_ref);
+	void clearTones();
 
 private:
 	Spectrum m_current_spectrum;
