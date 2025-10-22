@@ -18,7 +18,6 @@ RfSimulatorApp::RfSimulatorApp()
 }
 
 void RfSimulatorApp::onGui() {
-
 	ImGui::Begin("Debug");
 	ImGui::Checkbox("Enable log", &m_enable_log);
 	if (m_enable_log) {
@@ -31,10 +30,11 @@ void RfSimulatorApp::onGui() {
 		1000.0f / io.Framerate, io.Framerate);
 	ImGui::End();
 
-	m_spectrum_analyzer.draw("Spectrum", nullptr);
-
 	for (auto& gen : m_signal_generators) {
 		std::string title = "Generator " + std::to_string(gen->id());
 		gen->setup(title.c_str(), nullptr);
+		m_spectrum_analyzer.addToneRef(&gen->m_active_tone);
 	}
+
+	m_spectrum_analyzer.draw("Spectrum", nullptr);
 }

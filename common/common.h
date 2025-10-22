@@ -3,11 +3,11 @@
 #include <vector>
 #include <utility>
 
-typedef std::pair<int, double> tone;
+typedef std::pair<double, double> tone;
 
 struct Spectrum {
 	std::vector<double> frequencies;
-	std::vector<tone> tones;
+	std::vector<const tone*> tones;
 	std::vector<double> noise_power_W;
 };
 

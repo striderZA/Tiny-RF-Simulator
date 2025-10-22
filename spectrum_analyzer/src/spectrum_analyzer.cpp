@@ -6,6 +6,7 @@
 
 SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
 	LOG_INFO("Spectrum analyzer setup complete!");
+	m_current_spectrum.tones.clear();
 }
 
 static double W_to_dBm(double input) {
@@ -52,14 +53,20 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 }
 
 void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
-	if (tone_ref && std::find(m_connected_tones.begin(), m_connected_tones.end(), tone_ref) == m_connected_tones.end()) {
-		m_connected_tones.push_back(tone_ref);
-		LOG_INFO("Added tone reference: bin = %d, amplitude = %.2f", m_connected_tones.back()->first, m_connected_tones.back()->second);
+	if (!tone_ref) return;
+	auto& tones = m_current_spectrum.tones;
+	if (std::find(tones.begin(), tones.end(), tone_ref) == tones.end()) {
+		tones.push_back(tone_ref);
 	}
 }
 
 void SpectrumAnalyzer::removeToneRef(const tone* tone_ref) {
-	m_connected_tones.erase(std::remove(m_connected_tones.begin(), m_connected_tones.end(), tone_ref), m_connected_tones.end());
+	auto& tones = m_current_spectrum.tones;
+	tones.erase(std::remove(tones.begin(), tones.end(), tone_ref), tones.end());
+}
+
+void SpectrumAnalyzer::clearTones() {
+	m_current_spectrum.tones.clear();
 }
 
 void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
@@ -95,8 +102,17 @@ void SpectrumAnalyzer::updateSpectrum() {
 	}
 
 	m_current_spectrum.noise_power_W = this->generateNoiseVector();
-	for (auto& tone_idx : m_current_spectrum.tones) {
-		m_current_spectrum.noise_power_W[tone_idx.first] += std::pow(10, (tone_idx.second - 30) / 10);
+
+	for (const auto* tone_ref : m_current_spectrum.tones) {
+		if (!tone_ref) continue;
+
+		const auto& freq_Hz = tone_ref->first;
+		const auto& power_dBm = tone_ref->second;
+		int bin_idx = static_cast<int>((freq_Hz - m_start_freq) / m_vbw);
+		if (bin_idx >= 0 && bin_idx < num_points) {
+			// Convert dBm to W and add to noise power
+			m_current_spectrum.noise_power_W[bin_idx] += std::pow(10.0, (power_dBm - 30.0) / 10.0);
+		}
 	}
 }
 
