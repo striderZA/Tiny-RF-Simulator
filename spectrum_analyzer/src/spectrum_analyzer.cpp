@@ -58,7 +58,7 @@ void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
 }
 
 void SpectrumAnalyzer::removeToneRef(const tone* tone_ref) {
-
+	m_connected_tones.erase(std::remove(m_connected_tones.begin(), m_connected_tones.end(), tone_ref), m_connected_tones.end());
 }
 
 void SpectrumAnalyzer::update(const char* title, bool* p_open) {
