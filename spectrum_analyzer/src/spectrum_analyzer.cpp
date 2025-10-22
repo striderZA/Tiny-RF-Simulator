@@ -54,6 +54,7 @@ std::vector<double> SpectrumAnalyzer::generateNoiseVector() {
 void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
 	if (tone_ref && std::find(m_connected_tones.begin(), m_connected_tones.end(), tone_ref) == m_connected_tones.end()) {
 		m_connected_tones.push_back(tone_ref);
+		LOG_INFO("Added tone reference: bin = %d, amplitude = %.2f", m_connected_tones.back()->first, m_connected_tones.back()->second);
 	}
 }
 
