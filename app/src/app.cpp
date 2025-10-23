@@ -11,6 +11,10 @@ RfSimulatorApp::RfSimulatorApp()
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G1)));
+	m_signal_generators.push_back(
+		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G2)));
+	m_signal_generators.push_back(
+		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G3)));
 }
 
 void RfSimulatorApp::onGui() {
