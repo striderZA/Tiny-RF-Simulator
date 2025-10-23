@@ -6,7 +6,7 @@
 
 SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
 	LOG_INFO("Spectrum analyzer setup complete!");
-	m_current_spectrum.tones.clear();
+	this->clearTones();
 }
 
 static double W_to_dBm(double input) {
