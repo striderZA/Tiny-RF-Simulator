@@ -1,8 +1,12 @@
 #include <cmath>
-#include <algorithm>
 #include "spectrum_analyzer.h"
 #include "imgui.h"
 #include "logging.h"
+#include <common.h>
+#include <implot.h>
+#include <memory>
+#include <random>
+#include <vector>
 
 SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
 	LOG_INFO("Spectrum analyzer setup complete!");
