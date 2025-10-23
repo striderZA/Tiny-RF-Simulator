@@ -64,6 +64,7 @@ void SpectrumAnalyzer::addToneRef(const tone* tone_ref) {
 void SpectrumAnalyzer::removeToneRef(const tone* tone_ref) {
 	auto& tones = m_current_spectrum.tones;
 	tones.erase(std::remove(tones.begin(), tones.end(), tone_ref), tones.end());
+	LOG_INFO("Removed tone: %.2f / %.2f (%d active)", tone_ref->first, tone_ref->second, tones.empty() ? 0 : tones.size());
 }
 
 void SpectrumAnalyzer::clearTones() {
