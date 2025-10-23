@@ -33,7 +33,12 @@ void RfSimulatorApp::onGui() {
 	for (auto& gen : m_signal_generators) {
 		std::string title = "Generator " + std::to_string(gen->id());
 		gen->setup(title.c_str(), nullptr);
-		m_spectrum_analyzer.addToneRef(&gen->m_active_tone);
+		if (gen->measurementActive()) {
+			m_spectrum_analyzer.addToneRef(&gen->m_active_tone);
+		}
+		else {
+			m_spectrum_analyzer.removeToneRef(&gen->m_active_tone);
+		}
 	}
 
 	m_spectrum_analyzer.draw("Spectrum", nullptr);
