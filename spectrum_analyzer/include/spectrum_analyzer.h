@@ -25,6 +25,9 @@ public:
 	double vbw() const { return m_vbw; }
 	double rbw() const { return m_rbw; }
 
+	Spectrum currentSpectrum() const { return m_current_spectrum; }
+	std::vector<const tone*> connectedTones() const { return m_connected_tones; }
+
 	void updateNoiseLevel();
 	double generateNoiseSample() const;
 	std::vector<double> generateNoiseVector();
@@ -45,5 +48,5 @@ private:
 	double m_rbw = DEFAULT_RBW;
 	double m_noise_level_dBm = MIN_POWER;
 
-	std::vector<const tone*> m_connected_tones;	
+	std::vector<const tone*> m_connected_tones;
 };
