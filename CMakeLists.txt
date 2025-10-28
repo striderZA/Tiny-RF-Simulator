@@ -74,3 +74,17 @@ target_include_directories(implot PUBLIC
 )
 
 target_link_libraries(implot PUBLIC imgui)
+
+FetchContent_Declare(
+    imnodes
+    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+    GIT_TAG master
+)
+FetchContent_Populate(imnodes) 
+
+
+add_library(imnodes STATIC
+    ${imnodes_SOURCE_DIR}/imnodes.cpp
+)
+target_include_directories(imnodes PUBLIC ${imnodes_SOURCE_DIR})
+target_link_libraries(imnodes PUBLIC imgui)
