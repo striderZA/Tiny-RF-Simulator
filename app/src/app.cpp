@@ -3,6 +3,7 @@
 #include <string>
 #include <signal_generator.h>
 #include <memory>
+#include <imnodes.h>
 #include "logging.h"
 
 RfSimulatorApp::RfSimulatorApp()
@@ -42,4 +43,11 @@ void RfSimulatorApp::onGui() {
 	}
 
 	m_spectrum_analyzer.draw("Spectrum", nullptr);
+
+	ImGui::Begin("node editor");
+
+	ImNodes::BeginNodeEditor();
+	ImNodes::EndNodeEditor();
+
+	ImGui::End();
 }
