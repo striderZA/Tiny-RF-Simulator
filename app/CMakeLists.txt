@@ -19,6 +19,7 @@ target_link_libraries(${PROJECT_NAME}
 		glfw
 		OpenGL::GL		
 		common
+		imnodes
 		simulator::signal_generator
 		simulator::spectrum_analyzer
 		simulator::logging
