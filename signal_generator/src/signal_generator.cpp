@@ -6,7 +6,7 @@ SignalGenerator::SignalGenerator(int id) : m_id(id), m_active_tone(std::make_pai
 	LOG_INFO("Signal generator setup complete!");
 }
 
-void SignalGenerator::setup(const char* title, bool* p_open) {
+void SignalGenerator::draw(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
 		ImGui::Checkbox("Measure", &m_measurement_active);
 		ImGui::InputDouble("f (Hz)", &m_active_tone.first, 10e6, 1000e6, "%.0f");
