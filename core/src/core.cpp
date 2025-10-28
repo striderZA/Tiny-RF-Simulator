@@ -4,6 +4,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
 #include <implot.h>
+#include <imnodes.h>
 
 struct RfSimulatorCore::Impl {
 	GLFWwindow* window = nullptr;
@@ -11,17 +12,17 @@ struct RfSimulatorCore::Impl {
 	bool done = false;
 };
 
-RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()){}
+RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
 
-RfSimulatorCore::~RfSimulatorCore(){}
+RfSimulatorCore::~RfSimulatorCore() {}
 
-void RfSimulatorCore::Run(const std::function<void()>& onGui){
+void RfSimulatorCore::Run(const std::function<void()>& onGui) {
 	if (!Initialize()) return;
 	MainLoop(onGui);
 	Shutdown();
 }
 
-bool RfSimulatorCore::Initialize(){
+bool RfSimulatorCore::Initialize() {
 	if (!glfwInit()) return false;
 
 	p_impl->window = glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
@@ -37,6 +38,7 @@ bool RfSimulatorCore::Initialize(){
 
 	ImGui::CreateContext();
 	ImPlot::CreateContext();
+	ImNodes::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
@@ -53,18 +55,19 @@ bool RfSimulatorCore::Initialize(){
 	return true;
 }
 
-void RfSimulatorCore::Shutdown(){
+void RfSimulatorCore::Shutdown() {
 	ImGui_ImplOpenGL2_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 	ImPlot::DestroyContext();
+	ImNodes::DestroyContext();
 
 	if (p_impl->window) glfwDestroyWindow(p_impl->window);
 
 	glfwTerminate();
 }
 
-void RfSimulatorCore::MainLoop(const std::function<void()>& onGui){
+void RfSimulatorCore::MainLoop(const std::function<void()>& onGui) {
 	while (!glfwWindowShouldClose(p_impl->window)) {
 		glfwPollEvents();
 		ImGui_ImplOpenGL2_NewFrame();
