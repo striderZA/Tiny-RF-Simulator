@@ -7,7 +7,7 @@
 #include "logging.h"
 
 RfSimulatorApp::RfSimulatorApp()
-	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true) {
+	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true), m_node_editor() {
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
 	m_signal_generators.push_back(
@@ -16,6 +16,8 @@ RfSimulatorApp::RfSimulatorApp()
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G2)));
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G3)));
+
+	m_node_editor.initialize();
 }
 
 void RfSimulatorApp::onGui() {
@@ -45,9 +47,6 @@ void RfSimulatorApp::onGui() {
 	m_spectrum_analyzer.draw("Spectrum", nullptr);
 
 	ImGui::Begin("node editor");
-
-	ImNodes::BeginNodeEditor();
-	ImNodes::EndNodeEditor();
-
+	m_node_editor.draw();
 	ImGui::End();
 }
