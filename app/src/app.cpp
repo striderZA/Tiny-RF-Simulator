@@ -3,7 +3,6 @@
 #include <string>
 #include <signal_generator.h>
 #include <memory>
-#include <imnodes.h>
 #include "logging.h"
 
 RfSimulatorApp::RfSimulatorApp()
