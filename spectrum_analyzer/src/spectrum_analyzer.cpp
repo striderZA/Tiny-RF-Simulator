@@ -8,7 +8,7 @@
 #include <random>
 #include <vector>
 
-SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum() {
+SpectrumAnalyzer::SpectrumAnalyzer() : m_current_spectrum(), m_span(), m_num_points() {
 	LOG_INFO("Spectrum analyzer setup complete!");
 	this->clearTones();
 }
@@ -83,6 +83,10 @@ void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 		ImGui::InputDouble("RBW (Hz)", &m_rbw, 1e6, 10e6, "%.0f");
 		ImGui::InputDouble("Ref (dBm)", &m_max_power, 5, 10, "%.0f");
 		ImGui::InputDouble("Min level (dBm)", &m_min_power, 5, 10, "%.0f");
+		m_span = m_stop_freq - m_start_freq;
+		ImGui::Text("Span: %.2f MHz", m_span / 1e6);
+		m_num_points = round(m_span / m_vbw);
+		ImGui::Text("Num Points: %d", m_num_points);
 		ImGui::Text("Noise: %.2f dBm", m_noise_level_dBm);
 		ImPlot::SetNextAxesLimits(m_start_freq, m_stop_freq, m_min_power, m_max_power, 1);
 
@@ -116,7 +120,6 @@ void SpectrumAnalyzer::updateSpectrum() {
 		const auto& power_dBm = tone_ref->second;
 		int bin_idx = static_cast<int>((freq_Hz - m_start_freq) / m_vbw);
 		if (bin_idx >= 0 && bin_idx < num_points) {
-			// Convert dBm to W and add to noise power
 			m_current_spectrum.noise_power_W[bin_idx] += std::pow(10.0, (power_dBm - 30.0) / 10.0);
 		}
 	}
