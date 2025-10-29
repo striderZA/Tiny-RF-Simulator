@@ -25,8 +25,6 @@ public:
 	double vbw() const { return m_vbw; }
 	double rbw() const { return m_rbw; }
 
-	Spectrum currentSpectrum() const { return m_current_spectrum; }
-
 	void updateNoiseLevel();
 	double generateNoiseSample() const;
 	std::vector<double> generateNoiseVector();
