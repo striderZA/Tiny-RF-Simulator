@@ -78,7 +78,7 @@ void SpectrumAnalyzer::clearTones() {
 void SpectrumAnalyzer::draw(const char* title, bool* p_open) {
 	if (ImGui::Begin(title, p_open)) {
 		inputDouble("Start Frequency (Hz)", m_start_freq, 1e6, 100e6, "%.0f", MIN_FREQ, MAX_FREQ);
-		ImGui::InputDouble("Stop Frequency (Hz)", &m_stop_freq, 1e6, 100e6, "%.0f");
+		inputDouble("Stop Frequency (Hz)", m_stop_freq, 1e6, 100e6, "%.0f", MIN_FREQ, MAX_FREQ);
 		ImGui::InputDouble("VBW (Hz)", &m_vbw, 1e6, 10e6, "%.0f");
 		ImGui::InputDouble("RBW (Hz)", &m_rbw, 1e6, 10e6, "%.0f");
 		ImGui::InputDouble("Ref (dBm)", &m_max_power, 5, 10, "%.0f");
