@@ -75,10 +75,10 @@ target_include_directories(implot PUBLIC
 target_link_libraries(implot PUBLIC imgui)
 
 # Include sub-projects.
-add_subdirectory("common")
-add_subdirectory("logging")
-add_subdirectory("signal_generator")
-add_subdirectory("spectrum_analyzer")
 add_subdirectory("core")
 add_subdirectory("app")
+add_subdirectory("signal_generator")
+add_subdirectory("spectrum_analyzer")
+add_subdirectory("common")
+add_subdirectory("logging")
 add_subdirectory ("src")
