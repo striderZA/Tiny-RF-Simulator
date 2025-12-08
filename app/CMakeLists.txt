@@ -5,28 +5,24 @@ project(app LANGUAGES CXX)
 # --------------------------------------------------
 # App library
 # --------------------------------------------------
-add_library(app STATIC
-    src/app.cpp
-)
-
+add_library(app STATIC src/app.cpp)
 add_library(simulator::app ALIAS app)
 
 # --------------------------------------------------
 # Include directories
 # --------------------------------------------------
-target_include_directories(app
-    PUBLIC
-        ${PROJECT_SOURCE_DIR}/include   # app.h and other public headers
-)
+target_include_directories(app PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 # --------------------------------------------------
 # Link dependencies
 # --------------------------------------------------
 target_link_libraries(app
     PUBLIC
-        simulator::core                 # UI backend (ImGui/GLFW/OpenGL hidden behind core)
-        simulator::signal_generator
-        simulator::spectrum_analyzer
+        simulator::core
+        simulator::signal_generator_engine
+        simulator::signal_generator_widget
+        simulator::spectrum_analyzer_engine
+        simulator::spectrum_analyzer_widget
         common
 )
 
