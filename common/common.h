@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <utility>
+#include "logging.h"
 
 typedef std::pair<double, double> tone;
 
@@ -11,7 +12,6 @@ struct Spectrum {
 	std::vector<double> noise_power_W;
 };
 
-// Shared constants (optional, can be moved to specific classes if preferred)
 constexpr double MIN_FREQ = -5.12e9;
 constexpr double MAX_FREQ = 5.12e9;
 constexpr size_t NUM_BINS = 1024;

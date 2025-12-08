@@ -6,7 +6,7 @@
 #include "logging.h"
 
 RfSimulatorApp::RfSimulatorApp()
-	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true) {
+	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true), m_node_editor() {
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
 	m_signal_generators.push_back(
@@ -15,6 +15,8 @@ RfSimulatorApp::RfSimulatorApp()
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G2)));
 	m_signal_generators.push_back(
 		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G3)));
+
+	m_node_editor.initialize();
 }
 
 void RfSimulatorApp::onGui() {
@@ -32,7 +34,7 @@ void RfSimulatorApp::onGui() {
 
 	for (auto& gen : m_signal_generators) {
 		std::string title = "Generator " + std::to_string(gen->id());
-		gen->setup(title.c_str(), nullptr);
+		gen->draw(title.c_str(), nullptr);
 		if (gen->measurementActive()) {
 			m_spectrum_analyzer.addToneRef(&gen->m_active_tone);
 		}
@@ -42,4 +44,8 @@ void RfSimulatorApp::onGui() {
 	}
 
 	m_spectrum_analyzer.draw("Spectrum", nullptr);
+
+	ImGui::Begin("node editor");
+	m_node_editor.draw();
+	ImGui::End();
 }
