@@ -1,14 +1,15 @@
-﻿project(main)
+﻿cmake_minimum_required(VERSION 3.20)
 
-add_executable(${PROJECT_NAME} main.cpp)
+project(main LANGUAGES CXX)
 
-target_link_libraries(${PROJECT_NAME}
-	simulator::app
-	simulator::core
-	imgui
-	implot
-	glfw
-	OpenGL::GL
-	simulator::signal_generator
-	simulator::spectrum_analyzer
+add_executable(main
+    main.cpp
 )
+
+target_link_libraries(main
+    PRIVATE
+        simulator::app     # app orchestrates everything
+)
+
+# Optional: organize inside IDE
+set_target_properties(main PROPERTIES FOLDER "Executable")
