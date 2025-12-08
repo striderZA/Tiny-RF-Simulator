@@ -24,7 +24,7 @@ std::vector<double> SpectrumAnalyzerEngine::generateNoiseVector() const {
 }
 
 void SpectrumAnalyzerEngine::addTone(tone t) {
-	m_current_spectrum.tones.push_back(t);
+	//m_current_spectrum.tones.push_back(t);
 }
 
 void SpectrumAnalyzerEngine::updateNoiseLevel() {
@@ -42,8 +42,8 @@ void SpectrumAnalyzerEngine::updateSpectrum() {
 
 	m_current_spectrum.noise_power_W = generateNoiseVector();
 
-	for (auto& tone_idx : m_current_spectrum.tones) {
-		m_current_spectrum.noise_power_W[tone_idx.first] +=
-			std::pow(10, (tone_idx.second - 30) / 10);
-	}
+	//for (auto& tone_idx : m_current_spectrum.tones) {
+	//	m_current_spectrum.noise_power_W[tone_idx.first] +=
+	//		std::pow(10, (tone_idx.second - 30) / 10);
+	//}
 }
