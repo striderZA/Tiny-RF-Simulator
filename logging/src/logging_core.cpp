@@ -20,3 +20,19 @@ void LoggerCore::add(Level level, const std::string &msg) {
 
     m_entries.push_back({getTimestamp(), level, msg});
 }
+
+void LoggerCore::addFormatted(Level level, const char *fmt, ...) {
+    char buffer[1024];
+
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    add(level, std::string(buffer));
+}
+
+void LoggerCore::clear() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_entries.clear();
+}
