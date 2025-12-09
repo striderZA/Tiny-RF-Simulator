@@ -19,6 +19,8 @@ public:
 	double stopFrequency()  const { return m_stop_freq; }
 	double minPower()       const { return m_min_power; }
 	double maxPower()       const { return m_max_power; }
+	double span()			const { return m_span; }
+	int numPoints()			const { return m_num_points; }
 	double vbw()            const { return m_vbw; }
 	double rbw()            const { return m_rbw; }
 
@@ -40,6 +42,8 @@ private:
 	double m_stop_freq = MAX_FREQ;
 	double m_min_power = MIN_POWER;
 	double m_max_power = MAX_POWER;
+	double m_span;
+	int m_num_points;
 	double m_vbw = DEFAULT_VBW;
 	double m_rbw = DEFAULT_RBW;
 
