@@ -24,7 +24,10 @@ target_include_directories(signal_generator_widget
 )
 
 target_link_libraries(signal_generator_widget
-    PUBLIC simulator::signal_generator_engine simulator::core
+    PUBLIC 
+        simulator::signal_generator_engine 
+        simulator::core
+        simulator::logging_widget
 )
 
 add_library(simulator::signal_generator_widget ALIAS signal_generator_widget)
