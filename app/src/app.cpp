@@ -20,7 +20,8 @@ void RfSimulatorApp::update_dsp() {
 
 	// Add tone(s) from each generator
 	for (auto& gen : m_generators) {
-		m_spectrum_engine.addTone(gen->activeTone());
+		std::string title = "Generator " + std::to_string(gen->id());
+		m_spectrum_engine.addToneRef(&gen->activeTone());
 	}
 
 	m_spectrum_engine.updateNoiseLevel();
