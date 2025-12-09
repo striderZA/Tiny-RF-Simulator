@@ -25,8 +25,12 @@ std::vector<double> SpectrumAnalyzerEngine::generateNoiseVector() const {
 	return noiseSamples;
 }
 
-void SpectrumAnalyzerEngine::addTone(tone t) {
-	//m_current_spectrum.tones.push_back(t);
+void SpectrumAnalyzerEngine::addToneRef(const tone* tone_ref) {
+	if (!tone_ref) return;
+	auto& tones = m_current_spectrum.tones;
+	if (std::find(tones.begin(), tones.end(), tone_ref) == tones.end()) {
+		tones.push_back(tone_ref);
+	}
 }
 
 void SpectrumAnalyzerEngine::updateNoiseLevel() {
