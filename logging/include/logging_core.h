@@ -31,6 +31,7 @@ class LoggerCore {
 };
 
 // Convenience macros
-#define LOG_INFO(fmt, ...) LoggerCore::instance().add(Level::Info, fmt)
-#define LOG_WARN(fmt, ...) LoggerCore::instance().add(Level::Warn, fmt)
-#define LOG_ERROR(fmt, ...) LoggerCore::instance().add(Level::Error, fmt)
+
+#define LOG_INFO(fmt, ...) LoggerCore::instance().addFormatted(Level::Info, fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...) LoggerCore::instance().addFormatted(Level::Warn, fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) LoggerCore::instance().addFormatted(Level::Error, fmt, ##__VA_ARGS__)
