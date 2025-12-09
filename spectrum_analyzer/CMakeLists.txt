@@ -15,6 +15,7 @@ target_include_directories(spectrum_analyzer_engine
 target_link_libraries(spectrum_analyzer_engine 
     PUBLIC 
         common
+        simulator::logging_core
 )
 
 add_library(simulator::spectrum_analyzer_engine ALIAS spectrum_analyzer_engine)
