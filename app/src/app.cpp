@@ -1,5 +1,6 @@
 #include "app.h"
 #include "imgui.h"
+#include "logging_widget.h"
 #include <string>
 
 RfSimulatorApp::RfSimulatorApp() {
@@ -35,4 +36,7 @@ void RfSimulatorApp::draw_ui() {
 		std::string title = "Generator " + std::to_string(m_generators[i]->id());
 		m_generator_widgets[i]->draw(title.c_str());
 	}
+
+	if (m_show_log)
+		m_log_widget.draw("Log", &m_show_log);
 }
