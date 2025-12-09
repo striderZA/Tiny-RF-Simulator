@@ -19,8 +19,8 @@ double SpectrumAnalyzerEngine::generateNoiseSample() const {
 std::vector<double> SpectrumAnalyzerEngine::generateNoiseVector() const {
 	size_t length = m_current_spectrum.frequencies.size();
 	std::vector<double> noiseSamples(length);
-	for (size_t i = 0; i < length; ++i) {
-		noiseSamples[i] = generateNoiseSample();
+	for (int i = 0; i < length; ++i) {
+		noiseSamples[i] = this->generateNoiseSample();
 	}
 	return noiseSamples;
 }
