@@ -17,6 +17,8 @@ struct LogEntry {
 class LoggerCore {
   public:
     void add(Level level, const std::string &msg);
+    void addFormatted(Level level, const char *fmt, ...);
+    void clear();
     const std::vector<LogEntry> &entries() const { return m_entries; }
 
     static LoggerCore &instance(); // global singleton
