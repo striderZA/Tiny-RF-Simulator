@@ -35,6 +35,6 @@ private:
 };
 
 // Convenience macros
-#define LOG_INFO(fmt, ...)  simulator::log::LoggerCore::instance().add(simulator::log::Level::Info,  fmt)
-#define LOG_WARN(fmt, ...)  simulator::log::LoggerCore::instance().add(simulator::log::Level::Warn,  fmt)
-#define LOG_ERROR(fmt, ...) simulator::log::LoggerCore::instance().add(simulator::log::Level::Error, fmt)
+#define LOG_INFO(fmt, ...)  LoggerCore::instance().add(Level::Info,  fmt)
+#define LOG_WARN(fmt, ...)  LoggerCore::instance().add(Level::Warn,  fmt)
+#define LOG_ERROR(fmt, ...) LoggerCore::instance().add(Level::Error, fmt)
