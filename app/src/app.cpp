@@ -7,6 +7,10 @@ RfSimulatorApp::RfSimulatorApp() {
 	m_generator_widgets.push_back(
 		std::make_unique<SignalGeneratorWidget>(*m_generators.back())
 	);
+	m_generators.push_back(std::make_unique<SignalGeneratorEngine>(1));
+	m_generator_widgets.push_back(
+		std::make_unique<SignalGeneratorWidget>(*m_generators.back())
+	);
 	m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine);
 }
 
