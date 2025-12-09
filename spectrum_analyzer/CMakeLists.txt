@@ -1,24 +1,40 @@
-# Set project name 
-project(spectrum_analyzer)
+cmake_minimum_required(VERSION 3.20)
+project(spectrum_analyzer LANGUAGES CXX)
 
-# Add library with sources from core project
-add_library(${PROJECT_NAME} src/spectrum_analyzer.cpp)
-add_library(simulator::spectrum_analyzer ALIAS ${PROJECT_NAME})
-target_include_directories(${PROJECT_NAME} 
-	PUBLIC		
-		${PROJECT_SOURCE_DIR}/include
-		${imgui_SOURCE_DIR}
-		${implot_SOURCE_DIR}
-		${glfw_SOURCE_DIR}/include
+# ---- Engine (DSP) ----
+add_library(spectrum_analyzer_engine 
+    STATIC
+        src/spectrum_analyzer_engine.cpp
 )
 
-target_link_libraries(${PROJECT_NAME}
-	PUBLIC
-		imgui
-		implot
-		glfw
-		OpenGL::GL
-		common
-		simulator::logging
+target_include_directories(spectrum_analyzer_engine
+    PUBLIC 
+        ${PROJECT_SOURCE_DIR}/include
 )
 
+target_link_libraries(spectrum_analyzer_engine 
+    PUBLIC 
+        common
+        simulator::logging_core
+)
+
+add_library(simulator::spectrum_analyzer_engine ALIAS spectrum_analyzer_engine)
+
+# ---- UI Widget ----
+add_library(spectrum_analyzer_widget 
+    STATIC
+        src/spectrum_analyzer_widget.cpp
+)
+
+target_include_directories(spectrum_analyzer_widget
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(spectrum_analyzer_widget
+    PUBLIC 
+        simulator::spectrum_analyzer_engine 
+        simulator::core 
+        implot
+)
+
+add_library(simulator::spectrum_analyzer_widget ALIAS spectrum_analyzer_widget)

@@ -1,51 +1,44 @@
 #include "app.h"
 #include "imgui.h"
+#include "logging_widget.h"
 #include <string>
-#include <signal_generator.h>
-#include <memory>
-#include "logging.h"
 
-RfSimulatorApp::RfSimulatorApp()
-	: m_spectrum_analyzer(), m_signal_generators(), m_enable_log(true), m_node_editor() {
-	m_signal_generators.push_back(
-		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G0)));
-	m_signal_generators.push_back(
-		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G1)));
-	m_signal_generators.push_back(
-		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G2)));
-	m_signal_generators.push_back(
-		std::make_unique<SignalGenerator>(static_cast<int>(InputSignals::G3)));
-
-	m_node_editor.initialize();
+RfSimulatorApp::RfSimulatorApp() {
+    m_generators.push_back(std::make_unique<SignalGeneratorEngine>(0));
+    m_generator_widgets.push_back(
+        std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
+    m_generators.push_back(std::make_unique<SignalGeneratorEngine>(1));
+    m_generator_widgets.push_back(
+        std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
+    m_spectrum_widget =
+        std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine);
 }
 
-void RfSimulatorApp::onGui() {
-	ImGui::Begin("Debug");
-	ImGui::Checkbox("Enable log", &m_enable_log);
-	if (m_enable_log) {
-		ShowAppLog();
-	}
+void RfSimulatorApp::update_dsp() {
+    m_spectrum_engine.clearTones();
 
-	ImGuiIO& io = ImGui::GetIO();
-	(void)io;
-	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-		1000.0f / io.Framerate, io.Framerate);
-	ImGui::End();
+    for (auto &gen : m_generators) {
+        std::string title = "Generator " + std::to_string(gen->id());
+        m_spectrum_engine.addToneRef(&gen->activeTone());
+    }
 
-	for (auto& gen : m_signal_generators) {
-		std::string title = "Generator " + std::to_string(gen->id());
-		gen->draw(title.c_str(), nullptr);
-		if (gen->measurementActive()) {
-			m_spectrum_analyzer.addToneRef(&gen->m_active_tone);
-		}
-		else {
-			m_spectrum_analyzer.removeToneRef(&gen->m_active_tone);
-		}
-	}
+    m_spectrum_engine.updateNoiseLevel();
+    m_spectrum_engine.updateSpectrum();
+}
 
-	m_spectrum_analyzer.draw("Spectrum", nullptr);
+void RfSimulatorApp::draw_ui() {
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                1000.0f / io.Framerate, io.Framerate);
+    m_spectrum_widget->draw("Spectrum Analyzer");
 
-	ImGui::Begin("node editor");
-	m_node_editor.draw();
-	ImGui::End();
+    for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
+        std::string title =
+            "Generator " + std::to_string(m_generators[i]->id());
+        m_generator_widgets[i]->draw(title.c_str());
+    }
+
+    if (m_show_log)
+        m_log_widget.draw("Log", &m_show_log);
 }

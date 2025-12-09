@@ -1,24 +1,37 @@
-# Set project name
-project(core)
+cmake_minimum_required(VERSION 3.20)
 
-# Add library with sources from core project
-add_library(${PROJECT_NAME} src/core.cpp)
-add_library(simulator::core ALIAS ${PROJECT_NAME})
+project(core LANGUAGES CXX)
 
-target_include_directories(${PROJECT_NAME} 
-	PUBLIC		
-		${PROJECT_SOURCE_DIR}/include
-		${imgui_SOURCE_DIR}
-		${implot_SOURCE_DIR}
-		${glfw_SOURCE_DIR}/include
+# Core UI subsystem (ImGui + ImPlot + backend)
+add_library(core STATIC
+    src/core.cpp
 )
 
-target_link_libraries(${PROJECT_NAME}
-	PUBLIC
-		imgui
-		implot
-		glfw
-		OpenGL::GL
-		imnodes
+add_library(simulator::core ALIAS core)
+
+# --------------------------------------------------
+# Include directories
+# --------------------------------------------------
+target_include_directories(core
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include       # core public headers
+    PRIVATE
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+        ${implot_SOURCE_DIR}
+        ${glfw_SOURCE_DIR}/include
 )
 
+# --------------------------------------------------
+# Link required UI libraries
+# --------------------------------------------------
+target_link_libraries(core
+    PUBLIC
+        imgui
+        implot
+        glfw
+        OpenGL::GL
+)
+
+# Optional: group UI dependencies into a folder in IDEs
+set_target_properties(core PROPERTIES FOLDER "UI")

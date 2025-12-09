@@ -1,20 +1,25 @@
-# Set project name 
 project(logging)
 
-# Add library with sources from core project
-add_library(${PROJECT_NAME} src/logging.cpp)
-add_library(simulator::logging ALIAS ${PROJECT_NAME})
-target_include_directories(${PROJECT_NAME} 
-	PUBLIC		
-		${PROJECT_SOURCE_DIR}/include
-		${imgui_SOURCE_DIR}
-		${implot_SOURCE_DIR}
-		${glfw_SOURCE_DIR}/include
+# Backend
+add_library(logging_core STATIC
+    src/logging_core.cpp
+)
+target_include_directories(logging_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
+add_library(simulator::logging_core ALIAS logging_core)
+
+# UI widget
+add_library(logging_widget STATIC
+    src/logging_widget.cpp
 )
 
-target_link_libraries(${PROJECT_NAME}
-	PUBLIC
-		simulator::signal_generator
-		simulator::spectrum_analyzer
+target_include_directories(logging_widget 
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
+target_link_libraries(logging_widget 
+    PUBLIC 
+    simulator::logging_core 
+    imgui
+)
+
+add_library(simulator::logging_widget ALIAS logging_widget)

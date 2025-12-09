@@ -1,15 +1,14 @@
 #pragma once
 
-#include <vector>
 #include <utility>
-#include "logging.h"
+#include <vector>
 
 typedef std::pair<double, double> tone;
 
 struct Spectrum {
-	std::vector<double> frequencies;
-	std::vector<const tone*> tones;
-	std::vector<double> noise_power_W;
+    std::vector<double> frequencies;
+    std::vector<const tone *> tones;
+    std::vector<double> noise_power_W;
 };
 
 constexpr double MIN_FREQ = -5.12e9;
