@@ -1,8 +1,10 @@
 #include "spectrum_analyzer_engine.h"
 #include <cmath>
+#include "logging_core.h"
 
 SpectrumAnalyzerEngine::SpectrumAnalyzerEngine()
 	: m_current_spectrum() {
+	LOG_INFO("Constructing spectrum engine...");
 }
 
 double SpectrumAnalyzerEngine::generateNoiseSample() const {
