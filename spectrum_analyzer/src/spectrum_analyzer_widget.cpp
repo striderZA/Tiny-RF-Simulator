@@ -1,6 +1,8 @@
 ﻿#include "spectrum_analyzer_widget.h"
+#include "common.h"
 #include "imgui.h"
 #include "implot.h"
+#include "utils.h"
 #include <cmath>
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine)
@@ -27,8 +29,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     double minp = m_engine.minPower();
     double maxp = m_engine.maxPower();
 
-    if (ImGui::InputDouble("Start Frequency (Hz)", &s))
+    if (utils::inputDouble("Start Frequency (Hz)", s, 1e6, 1e6, "%0.f",
+                           MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
+    }
+
     if (ImGui::InputDouble("Stop Frequency (Hz)", &e))
         m_engine.setStopFrequency(e);
 
