@@ -34,7 +34,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setStartFrequency(s);
     }
 
-    if (ImGui::InputDouble("Stop Frequency (Hz)", &e))
+    if (utils::inputDouble("Stop Frequency (Hz)", e, 1e6, 100e6, "%0.f",
+                           MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
 
     if (ImGui::InputDouble("VBW (Hz)", &vbw))
