@@ -33,20 +33,24 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                            MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
     }
-
     if (utils::inputDouble("Stop Frequency (Hz)", e, 1e6, 100e6, "%0.f",
                            MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
-
-    if (ImGui::InputDouble("VBW (Hz)", &vbw))
+    }
+    if (utils::inputDouble("VBW (Hz)", vbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
         m_engine.setVideoBw(vbw);
-    if (ImGui::InputDouble("RBW (Hz)", &rbw))
+    }
+    if (utils::inputDouble("RBW (Hz)", rbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
         m_engine.setResBw(rbw);
-
-    if (ImGui::InputDouble("Ref (dBm)", &maxp))
+    }
+    if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER,
+                           MAX_POWER)) {
         m_engine.setMaxPower(maxp);
-    if (ImGui::InputDouble("Min level (dBm)", &minp))
+    }
+    if (utils::inputDouble("Min level (dBm)", minp, 5, 10, "%.0f", MIN_POWER,
+                           MAX_POWER)) {
         m_engine.setMinPower(minp);
+    }
 
     m_engine.updateNoiseLevel();
     m_engine.updateSpectrum();
