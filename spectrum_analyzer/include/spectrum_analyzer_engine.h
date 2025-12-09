@@ -27,7 +27,9 @@ public:
 	// DSP operations
 	void updateSpectrum();
 	void updateNoiseLevel();
-	void addTone(tone t);
+
+	void addToneRef(const tone* tone_ref);
+	void removeToneRef(const tone* tone_ref);
 
 	void clearTones() { m_current_spectrum.tones.clear(); }
 
