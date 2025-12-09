@@ -1,7 +1,6 @@
 ﻿#include "spectrum_analyzer_widget.h"
 #include "imgui.h"
 #include "implot.h"
-#include <algorithm>
 #include <cmath>
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine)
