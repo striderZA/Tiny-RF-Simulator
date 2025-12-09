@@ -59,7 +59,7 @@ void LoggingWidget::draw(const char *title, bool *p_open) {
             color = ImVec4(1, 0.4f, 0.4f, 1);
 
         ImGui::PushStyleColor(ImGuiCol_Text, color);
-        ImGui::TextUnformatted(line.c_str());
+        ImGui::TextUnformatted((line + "\n").c_str());
         ImGui::PopStyleColor();
     }
 
