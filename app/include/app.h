@@ -6,6 +6,7 @@
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
+#include "logging_widget.h"
 
 enum class InputSignals : int {
 	G0 = 0,
@@ -19,6 +20,9 @@ public:
 	RfSimulatorApp();
 	void draw_ui();
 	void update_dsp();
+
+	LoggingWidget m_log_widget;
+	bool m_show_log = true;
 
 private:
 	SpectrumAnalyzerEngine m_spectrum_engine;
