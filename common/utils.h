@@ -1,5 +1,7 @@
 #pragma once
 
+#include "logging_core.h"
+
 namespace utils {
 void inputDouble(std::string label, double &ref, double minorStep,
                  double majorStep, const char *format, double lowerLimit,
