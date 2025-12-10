@@ -35,8 +35,7 @@ void RfSimulatorApp::draw_ui() {
     m_spectrum_widget->draw("Spectrum Analyzer");
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
-        std::string title =
-            "Generator " + std::to_string(m_generators[i]->id());
+        std::string title = "Generator " + std::to_string(m_generators[i]->id());
         m_generator_widgets[i]->draw(title.c_str());
     }
 
