@@ -18,8 +18,6 @@ RfSimulatorApp::RfSimulatorApp() {
 void RfSimulatorApp::update_dsp() {
 
     for (auto &gen : m_generators) {
-        std::string title = "Generator " + std::to_string(gen->id());
-        m_spectrum_engine.addToneRef(&gen->activeTone());
     }
 }
 
