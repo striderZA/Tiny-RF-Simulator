@@ -5,6 +5,7 @@
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
+#include "view_manager.h"
 #include <memory>
 #include <vector>
 
@@ -20,6 +21,7 @@ class RfSimulatorApp {
     bool m_show_log = true;
 
   private:
+    ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
