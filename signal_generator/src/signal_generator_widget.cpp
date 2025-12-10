@@ -16,8 +16,7 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
             m_engine.setToneIndex(tone_index);
         }
 
-        if (ImGui::InputDouble("Tone amplitude (dBm)", &amplitude, 1, 5,
-                               "%.0f")) {
+        if (ImGui::InputDouble("Tone amplitude (dBm)", &amplitude, 1, 5, "%.0f")) {
             m_engine.setToneAmplitude(amplitude);
         }
 
