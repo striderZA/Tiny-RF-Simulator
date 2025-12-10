@@ -49,7 +49,6 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     m_engine.updateNoiseLevel();
     m_engine.updateSpectrum();
 
-    ImGui::Text("Noise: %.2f dBm", m_engine.noiseLevel_dBm());
 
     const auto &spec = m_engine.spectrum();
     const auto dBm = to_dBm(spec.noise_power_W);
