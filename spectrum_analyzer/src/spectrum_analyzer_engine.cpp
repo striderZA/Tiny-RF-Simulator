@@ -1,6 +1,8 @@
 #include "spectrum_analyzer_engine.h"
+#include "common.h"
 #include "logging_core.h"
 #include <cmath>
+#include <random>
 
 SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() { LOG_INFO("Constructing spectrum engine..."); }
 
@@ -9,6 +11,16 @@ static double W_to_dBm(double w) {
         return -174;
     }
     return 10.0 * std::log10(w) + 30.0;
+}
+
+double SpectrumAnalyzerEngine::generate_noise_power() {
+    std::normal_distribution<double> dist(0.0, 1.0);
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    double noise = dist(generator);
+    double rms_voltage = std::sqrt(4 * k * T * m_rbw * R);
+
+    return std::pow(noise * rms_voltage, 2) / R;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum &spec) const {
