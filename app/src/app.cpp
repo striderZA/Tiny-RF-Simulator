@@ -30,8 +30,9 @@ void RfSimulatorApp::update_dsp() {
 void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                1000.0f / io.Framerate, io.Framerate);
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate,
+                io.Framerate);
+
     m_spectrum_widget->draw("Spectrum Analyzer");
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
