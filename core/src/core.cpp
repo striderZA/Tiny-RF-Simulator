@@ -26,15 +26,14 @@ bool RfSimulatorCore::Initialize() {
     if (!glfwInit())
         return false;
 
-    p_impl->window =
-        glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
+    p_impl->window = glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
     if (p_impl->window == nullptr) {
         glfwTerminate();
         return false;
     }
 
     glfwMakeContextCurrent(p_impl->window);
-    glfwSwapInterval(0);
+    glfwSwapInterval(1);
 
     IMGUI_CHECKVERSION();
 
@@ -43,13 +42,11 @@ bool RfSimulatorCore::Initialize() {
 
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    io.ConfigFlags |=
-        ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-    io.ConfigFlags |=
-        ImGuiConfigFlags_NavEnableGamepad;            // Enable Gamepad Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport
-                                                        // / Platform Win
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;   // Enable Multi-Viewport
+                                                          // / Platform Win
 
     ImGui::StyleColorsDark();
 
@@ -91,8 +88,7 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
         glViewport(0, 0, display_w, display_h);
         glClearColor(p_impl->clearColor.x * p_impl->clearColor.w,
                      p_impl->clearColor.y * p_impl->clearColor.w,
-                     p_impl->clearColor.z * p_impl->clearColor.w,
-                     p_impl->clearColor.w);
+                     p_impl->clearColor.z * p_impl->clearColor.w, p_impl->clearColor.w);
         glClear(GL_COLOR_BUFFER_BIT);
 
         ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
@@ -100,9 +96,7 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
         if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(
-                p_impl
-                    ->window); // Restore main context after viewport rendering
+            glfwMakeContextCurrent(p_impl->window); // Restore main context after viewport rendering
         }
         glfwSwapBuffers(p_impl->window);
     }
