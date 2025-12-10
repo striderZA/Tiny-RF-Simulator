@@ -17,7 +17,7 @@ struct Spectrum {
     std::vector<double> noise_added_W;
     std::vector<double> noise_total_W;
 
-    double generate_noise_power() {
+    double generateNoisePower() {
         std::normal_distribution<double> dist(0.0, 1.0);
         std::random_device rd;
         std::mt19937 generator(rd());
