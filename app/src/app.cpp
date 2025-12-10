@@ -16,15 +16,11 @@ RfSimulatorApp::RfSimulatorApp() {
 }
 
 void RfSimulatorApp::update_dsp() {
-    m_spectrum_engine.clearTones();
 
     for (auto &gen : m_generators) {
         std::string title = "Generator " + std::to_string(gen->id());
         m_spectrum_engine.addToneRef(&gen->activeTone());
     }
-
-    m_spectrum_engine.updateNoiseLevel();
-    m_spectrum_engine.updateSpectrum();
 }
 
 void RfSimulatorApp::draw_ui() {
