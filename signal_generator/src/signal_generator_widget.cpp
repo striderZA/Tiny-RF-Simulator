@@ -10,7 +10,10 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
         int tone_index = m_engine.activeTone().first;
         double amplitude = m_engine.activeTone().second;
 
-        ImGui::Checkbox("Measure", &m_measurement_active);
+        if (ImGui::Checkbox("Measure", &m_engine.node().view_enabled)) {
+            LOG_INFO("Change measurement active state [gen%d -> %s].", m_engine.id(),
+                     m_engine.node().view_enabled ? "True" : "False");
+        }
 
         if (ImGui::InputInt("Tone index", &tone_index, 1, 100)) {
             m_engine.setToneIndex(tone_index);
