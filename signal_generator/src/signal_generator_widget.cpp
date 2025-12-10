@@ -6,7 +6,7 @@ SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine) : m_
 
 void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
-        int tone_index = m_engine.activeTone().first;
+        double tone_frequency = m_engine.activeTone().first;
         double amplitude = m_engine.activeTone().second;
 
         if (ImGui::Checkbox("Measure", &m_engine.node().view_enabled)) {
@@ -14,12 +14,12 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                      m_engine.node().view_enabled ? "True" : "False");
         }
 
-        if (ImGui::InputInt("Tone index", &tone_index, 1, 100)) {
-            m_engine.setToneIndex(tone_index);
-            LOG_INFO("Update tone index: [gen%d -> %d].", m_engine.id(), tone_index);
+        if (ImGui::InputDouble("Frequency (Hz)", &tone_frequency, 1e6, 100e6)) {
+            m_engine.setToneFrequency(tone_frequency);
+            LOG_INFO("Update tone frequency: [gen%d -> %.0f MHz].", m_engine.id(), tone_frequency/1e6);
         }
 
-        if (ImGui::InputDouble("Tone amplitude (dBm)", &amplitude, 1, 5, "%.0f")) {
+        if (ImGui::InputDouble("Amplitude (dBm)", &amplitude, 1, 5, "%.0f")) {
             m_engine.setToneAmplitude(amplitude);
             LOG_INFO("Update tone amplitude: [gen%d -> %.0f dBm]", m_engine.id(), amplitude);
         }

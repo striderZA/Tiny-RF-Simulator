@@ -9,7 +9,7 @@ class SignalGeneratorEngine {
     int id() const { return m_id; }
     const tone &activeTone() const { return m_active_tone; }
 
-    void setToneIndex(int idx) { m_active_tone.first = idx; }
+    void setToneFrequency(double frequency) { m_active_tone.first = frequency; }
     void setToneAmplitude(double dBm) { m_active_tone.second = dBm; }
 
     SignalNode &node() { return m_node; }
