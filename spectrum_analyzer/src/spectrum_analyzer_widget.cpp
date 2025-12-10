@@ -54,11 +54,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
-    if (ImPlot::BeginPlot("Spectrum Analyzer")) {
-        ImPlot::PlotLine("Spectrum", spec.frequencies.data(), dBm.data(),
-                         (int)spec.frequencies.size());
+    if (ImPlot::BeginPlot("Spectrum")) {
+        const auto &freq = spec.frequencies;
+        if (!freq.empty() == freq.size() == display_dBm.size()) {
+            ImPlot::PlotLine("Spectrum", freq.data(), display_dBm.data(), (int)freq.size());
+        }
         ImPlot::EndPlot();
     }
-
     ImGui::End();
 }
