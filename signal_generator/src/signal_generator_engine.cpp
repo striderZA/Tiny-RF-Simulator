@@ -13,3 +13,9 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id)
     for (int i = 0; i < n; ++i) {
         m_node.output.frequencies[i] = start_Hz + i * step_Hz;
     }
+
+    m_node.output.noise_W.assign(m_node.output.frequencies.size(), 0.0);
+    m_node.output.noise_added_W.assign(m_node.output.frequencies.size(), 0.0);
+    m_node.output.computeTotalNoise();
+}
+
