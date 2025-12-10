@@ -19,3 +19,28 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id)
     m_node.output.computeTotalNoise();
 }
 
+void SignalGeneratorEngine::update(double dt) {
+    auto &out = m_node.output;
+    out.tones.clear();
+    Spectrum::Tone t;
+    t.freq_Hz = static_cast<double>(m_active_tone.first);
+    t.power_dBm = m_active_tone.second;
+    out.tones.push_back(t);
+
+    size_t n = out.frequencies.size();
+    out.noise_added_W.assign(n, 0.0);
+    double noise_dBmHz = -150;
+    double bin_width = 1.0;
+
+    if (n >= 2) {
+        bin_width = out.frequencies[1] - out.frequencies[0];
+    }
+
+    double noise_per_bin_W = std::pow(10.0, (noise_dBmHz - 30) / 10) * bin_width;
+
+    for (size_t i = 0; i < n; ++i) {
+        out.noise_added_W[i] = noise_per_bin_W;
+    }
+
+    out.computeTotalNoise();
+}
