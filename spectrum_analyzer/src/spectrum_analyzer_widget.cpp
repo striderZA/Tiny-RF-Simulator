@@ -46,7 +46,13 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setMinPower(minp);
     }
 
+    SignalNode *node = m_view_manager.getActiveNode();
 
+    if (!node) {
+        ImGui::Text("No signal node selected for display!");
+        ImGui::End();
+        return;
+    }
 
     const Spectrum &spec = node->output;
     std::vector<double> display_dBm = m_engine.renderSpectrum(spec);
