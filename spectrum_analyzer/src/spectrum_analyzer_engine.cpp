@@ -26,6 +26,7 @@ double SpectrumAnalyzerEngine::generate_noise_power() {
 std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum &spec) const {
     size_t n = spec.frequencies.size();
     std::vector<double> power_W(n, 0.0);
+
     if (spec.noise_total_W.size() == n) {
         for (size_t i = 0; i < n; ++i) {
             power_W[i] = spec.noise_total_W[i];
@@ -59,6 +60,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     }
 
     std::vector<double> power_W = this->integratePowerPerBin(spec);
+
     double bin_width = 1.0;
     if (spec.frequencies.size() >= 2) {
         bin_width = spec.frequencies[1] - spec.frequencies[0];

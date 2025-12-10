@@ -14,7 +14,6 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    // UI → Engine parameters
     double s = m_engine.startFrequency();
     double e = m_engine.stopFrequency();
     double vbw = m_engine.vbw();
