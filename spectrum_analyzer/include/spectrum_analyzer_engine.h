@@ -23,8 +23,6 @@ class SpectrumAnalyzerEngine {
     double vbw() const { return m_vbw; }
     double rbw() const { return m_rbw; }
 
-    double generate_noise_power();
-
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
 
   private:
