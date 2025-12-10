@@ -62,7 +62,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     if (ImPlot::BeginPlot("Spectrum")) {
         const auto &freq = spec.frequencies;
-        if (!freq.empty() == freq.size() == display_dBm.size()) {
+        if (!freq.empty() && freq.size() == display_dBm.size()) {
             ImPlot::PlotLine("Spectrum", freq.data(), display_dBm.data(), (int)freq.size());
         }
         ImPlot::EndPlot();
