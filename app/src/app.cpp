@@ -18,6 +18,7 @@ RfSimulatorApp::RfSimulatorApp() {
 void RfSimulatorApp::update_dsp() {
 
     for (auto &gen : m_generators) {
+        gen->update(0.0);
     }
 }
 
