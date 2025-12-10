@@ -46,8 +46,6 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setMinPower(minp);
     }
 
-    m_engine.updateNoiseLevel();
-    m_engine.updateSpectrum();
 
 
     const auto &spec = m_engine.spectrum();
