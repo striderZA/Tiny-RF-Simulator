@@ -2,62 +2,60 @@
 #include "logging_core.h"
 #include <cmath>
 
-SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() : m_current_spectrum() {
-    LOG_INFO("Constructing spectrum engine...");
-}
+SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() { LOG_INFO("Constructing spectrum engine..."); }
 
-double SpectrumAnalyzerEngine::generateNoiseSample() const {
-    std::normal_distribution<double> dist(0.0, 1.0);
-    static thread_local std::mt19937 gen(std::random_device{}());
-
-    double noise = dist(gen);
-    double rms_voltage = std::sqrt(4 * k * T * m_rbw * R);
-    return std::pow(noise * rms_voltage, 2) / R;
-}
-
-std::vector<double> SpectrumAnalyzerEngine::generateNoiseVector() const {
-    size_t length = m_current_spectrum.frequencies.size();
-    std::vector<double> noiseSamples(length);
-    for (int i = 0; i < length; ++i) {
-        noiseSamples[i] = this->generateNoiseSample();
+static double W_to_dBm(double w) {
+    if (w <= 0.0) {
+        return -174;
     }
-    return noiseSamples;
+    return 10.0 * std::log10(w) + 30.0;
 }
 
-void SpectrumAnalyzerEngine::addToneRef(const tone *tone_ref) {
-    if (!tone_ref)
-        return;
-    auto &tones = m_current_spectrum.tones;
-    if (std::find(tones.begin(), tones.end(), tone_ref) == tones.end()) {
-        tones.push_back(tone_ref);
-    }
-}
-
-void SpectrumAnalyzerEngine::updateNoiseLevel() {
-    m_noise_level_dBm = MIN_POWER + 10 * std::log10(m_rbw);
-}
-
-void SpectrumAnalyzerEngine::updateSpectrum() {
-    int num_points = std::round((m_stop_freq - m_start_freq) / m_vbw);
-    m_current_spectrum.frequencies = std::vector<double>(num_points, 0);
-    m_current_spectrum.noise_power_W = std::vector<double>(num_points, 0);
-
-    for (int i = 0; i < num_points; ++i) {
-        m_current_spectrum.frequencies[i] = (m_start_freq + i * m_vbw);
-    }
-
-    m_current_spectrum.noise_power_W = this->generateNoiseVector();
-
-    for (const auto *tone_ref : m_current_spectrum.tones) {
-        if (!tone_ref)
-            continue;
-
-        const auto &freq_Hz = tone_ref->first;
-        const auto &power_dBm = tone_ref->second;
-        int bin_idx = static_cast<int>((freq_Hz - m_start_freq) / m_vbw);
-        if (bin_idx >= 0 && bin_idx < num_points) {
-            m_current_spectrum.noise_power_W[bin_idx] +=
-                std::pow(10.0, (power_dBm - 30.0) / 10.0);
+std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum &spec) const {
+    size_t n = spec.frequencies.size();
+    std::vector<double> power_W(n, 0.0);
+    if (spec.noise_total_W.size() == n) {
+        for (size_t i = 0; i < n; ++i) {
+            power_W[i] = spec.noise_total_W[i];
+        }
+    } else if (!spec.noise_total_W.empty()) {
+        for (size_t i = 0; i < n && i < spec.noise_total_W.size(); ++i) {
+            power_W[i] = spec.noise_total_W[i];
         }
     }
+
+    for (const auto &t : spec.tones) {
+        if (n < 2) {
+            continue;
+        }
+        double bin_width = spec.frequencies[1] - spec.frequencies[0];
+        int bin_idx =
+            static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
+        if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
+            double tone_W = std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
+            power_W[bin_idx] += tone_W;
+        }
+    }
+
+    return power_W;
+}
+
+std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec) const {
+
+    if (spec.frequencies.empty()) {
+        return {};
+    }
+
+    std::vector<double> power_W = this->integratePowerPerBin(spec);
+    double bin_width = 1.0;
+    if (spec.frequencies.size() >= 2) {
+        bin_width = spec.frequencies[1] - spec.frequencies[0];
+    }
+
+    std::vector<double> power_dBm(power_W.size());
+    for (size_t i = 0; i < power_W.size(); ++i) {
+        power_dBm[i] = W_to_dBm(power_W[i]);
+    }
+
+    return power_dBm;
 }
