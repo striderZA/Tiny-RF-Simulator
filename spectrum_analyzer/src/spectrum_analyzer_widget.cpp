@@ -2,6 +2,7 @@
 #include "common.h"
 #include "imgui.h"
 #include "implot.h"
+#include "logging_core.h"
 #include "utils.h"
 #include "view_manager.h"
 
@@ -23,26 +24,32 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     if (utils::inputDouble("Start Frequency (Hz)", s, 1e6, 100e6, "%0.f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
+        LOG_INFO("Update start frequency: %.0f Hz", m_engine.startFrequency());
     }
 
     if (utils::inputDouble("Stop Frequency (Hz)", e, 1e6, 100e6, "%0.f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
+        LOG_INFO("Update stop frequency: %.0f Hz", m_engine.stopFrequency());
     }
 
     if (utils::inputDouble("VBW (Hz)", vbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
         m_engine.setVideoBw(vbw);
+        LOG_INFO("Update VBW: %.0f Hz", m_engine.vbw());
     }
 
     if (utils::inputDouble("RBW (Hz)", rbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
         m_engine.setResBw(rbw);
+        LOG_INFO("Update RBW: %.0f Hz", m_engine.rbw());
     }
 
     if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
         m_engine.setMaxPower(maxp);
+        LOG_INFO("Update ref power: %.0f dBm", m_engine.maxPower());
     }
 
     if (utils::inputDouble("Min level (dBm)", minp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
         m_engine.setMinPower(minp);
+        LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
     SignalNode *node = m_view_manager.getActiveNode();
