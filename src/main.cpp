@@ -4,6 +4,9 @@
 int main() {
     RfSimulatorCore core;
     RfSimulatorApp app;
-    core.Run([&app]() { app.draw_ui(); });
+    core.Run([&app]() {
+        app.draw_ui();
+        app.update_dsp();
+    });
     return 0;
 }
