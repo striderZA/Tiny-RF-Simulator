@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "signal_node.h"
 
 class SignalGeneratorEngine {
   public:
@@ -11,7 +12,11 @@ class SignalGeneratorEngine {
     void setToneIndex(int idx) { m_active_tone.first = idx; }
     void setToneAmplitude(double dBm) { m_active_tone.second = dBm; }
 
+    SignalNode &node() { return m_node; }
+    void update(double dt);
+
   private:
     int m_id;
     tone m_active_tone;
+    SignalNode m_node;
 };
