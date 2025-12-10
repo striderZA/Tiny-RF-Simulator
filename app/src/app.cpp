@@ -5,8 +5,7 @@
 
 RfSimulatorApp::RfSimulatorApp() {
     m_generators.push_back(std::make_unique<SignalGeneratorEngine>(0));
-    m_generator_widgets.push_back(
-        std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
+    m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
     m_generators.push_back(std::make_unique<SignalGeneratorEngine>(1));
     m_generator_widgets.push_back(
         std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
