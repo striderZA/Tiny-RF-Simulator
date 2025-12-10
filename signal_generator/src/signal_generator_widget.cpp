@@ -1,5 +1,6 @@
 #include "signal_generator_widget.h"
 #include "imgui.h"
+#include "logging_core.h"
 
 SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine)
     : m_engine(engine) {}
