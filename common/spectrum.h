@@ -32,9 +32,7 @@ struct Spectrum {
         noise_total_W.assign(n, 0.0);
 
         for (size_t i = 0; i < n; ++i) {
-            double a = (i < noise_W.size()) ? noise_W[i] : 0.0;
-            double b = (i < noise_added_W.size()) ? noise_added_W[i] : 0.0;
-            noise_total_W[i] = a + b;
+            noise_total_W[i] = generateNoisePower();
         }
     }
 };
