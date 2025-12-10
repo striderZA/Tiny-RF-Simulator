@@ -3,9 +3,10 @@
 #include "imgui.h"
 #include "implot.h"
 #include "utils.h"
-#include <cmath>
+#include "view_manager.h"
 
-SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine) : m_engine(engine) {}
+SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
+    : m_engine(engine), m_view_manager(vm) {}
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
