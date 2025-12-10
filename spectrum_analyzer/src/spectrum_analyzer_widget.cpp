@@ -7,13 +7,6 @@
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine) : m_engine(engine) {}
 
-static std::vector<double> to_dBm(const std::vector<double> &input) {
-    std::vector<double> out(input.size());
-    for (size_t i = 0; i < input.size(); ++i)
-        out[i] = 10 * std::log10(input[i]) + 30;
-    return out;
-}
-
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
