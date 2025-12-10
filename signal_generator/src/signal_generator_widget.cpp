@@ -2,8 +2,7 @@
 #include "imgui.h"
 #include "logging_core.h"
 
-SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine)
-    : m_engine(engine) {}
+SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine) : m_engine(engine) {}
 
 void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
