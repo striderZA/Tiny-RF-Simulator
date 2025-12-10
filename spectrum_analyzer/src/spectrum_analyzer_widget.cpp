@@ -48,8 +48,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
 
 
-    const auto &spec = m_engine.spectrum();
-    const auto dBm = to_dBm(spec.noise_power_W);
+    const Spectrum &spec = node->output;
+    std::vector<double> display_dBm = m_engine.renderSpectrum(spec);
 
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
