@@ -22,3 +22,8 @@ inline double calculateNoiseTemp(double nf_dB) {
     double F = dbToLinear(nf_dB);
     return T * (F - 1.0);
 }
+
+inline double addedNoisePerBin_W(double nf_dB, double g, double bin_width) {
+    double Te = calculateNoiseTemp(nf_dB);
+    return k * Te * g * bin_width;
+}
