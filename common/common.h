@@ -17,7 +17,7 @@ constexpr double k = 1.3806e-23;
 constexpr double T = 290.0;
 constexpr double R = 50.0;
 
-inline double dbToLinear(double dB) { return std::pow(10.0, db / 10.0); }
+inline double dbToLinear(double dB) { return std::pow(10.0, dB / 10.0); }
 
 inline double calculateNoiseTemp(double nf_dB) {
     double F = dbToLinear(nf_dB);
