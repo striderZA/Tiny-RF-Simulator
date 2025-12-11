@@ -38,5 +38,29 @@ void SignalGeneratorEngine::update(double dt) {
         return;
     }
 
-    out.computeTotalNoise();
+    double binWidth = out.frequencies[1] - out.frequencies[0];
+
+    double G = std::pow(10.0, m_gain_dB / 10.0);
+
+    out.noise_W.assign(N, 0.0);
+    for (size_t i = 0; i < N; ++i) {
+        double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
+        out.noise_W[i] = G * nin;
+    }
+
+    double F = std::pow(10.0, m_nf_dB / 10.0);
+    double Te = 290.0 * (F - 1.0); // Equivalent noise temperature
+    double added_per_bin = k * Te * G * binWidth;
+
+    out.noise_added_W.assign(N, added_per_bin);
+
+    out.noise_total_W.assign(N, 0.0);
+    for (size_t i = 0; i < N; ++i) {
+
+        double awgn = out.thermalNoisePower_W(binWidth);
+
+        out.noise_total_W[i] = out.noise_W[i] +       // input noise after gain
+                               out.noise_added_W[i] + // added noise from NF
+                               awgn;                  // thermal randomness
+    }
 }
