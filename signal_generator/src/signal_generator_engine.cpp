@@ -30,8 +30,13 @@ void SignalGeneratorEngine::update(double dt) {
     t.power_dBm = m_active_tone.second;
     out.tones.push_back(t);
 
-    size_t n = out.frequencies.size();
-    out.noise_added_W.assign(n, 0.0);
+    const size_t N = out.frequencies.size();
+    if (N < 2) {
+        out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.assign(N, 0.0);
+        return;
+    }
 
     out.computeTotalNoise();
 }
