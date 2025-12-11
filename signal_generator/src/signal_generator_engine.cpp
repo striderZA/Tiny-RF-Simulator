@@ -20,7 +20,10 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id)
 }
 
 void SignalGeneratorEngine::update(double dt) {
+
+    auto &in = m_node.input;
     auto &out = m_node.output;
+
     out.tones.clear();
     Spectrum::Tone t;
     t.freq_Hz = static_cast<double>(m_active_tone.first);
