@@ -17,22 +17,31 @@ struct Spectrum {
     std::vector<double> noise_added_W;
     std::vector<double> noise_total_W;
 
-    double generateNoisePower() {
-        std::normal_distribution<double> dist(0.0, 1.0);
-        std::random_device rd;
-        std::mt19937 generator(rd());
-        double noise = dist(generator);
-        double rms_voltage = std::sqrt(4 * k * T * R);
+    double thermalNoisePower_W(double bin_width) {
+        double mean_noise_power_W = k * T * bin_width;
+        static thread_local std::mt19937 gen(std::random_device{}());
+        std::normal_distribution<double> dist(mean_noise_power_W, 0.5 * mean_noise_power_W);
 
-        return std::pow(noise * rms_voltage, 2) / R;
+        double v = dist(gen);
+        if (v < 0) {
+            v = 0;
+        }
+        return v;
     }
 
     void computeTotalNoise() {
-        size_t n = std::max(noise_W.size(), noise_added_W.size());
+        size_t n = frequencies.size();
         noise_total_W.assign(n, 0.0);
-
+        if (n < 2) {
+            return;
+        }
+        double bin_width = frequencies[1] - frequencies[0];
         for (size_t i = 0; i < n; ++i) {
-            noise_total_W[i] = generateNoisePower();
+            double noise_input = (i < noise_W.size()) ? noise_W[i] : 0.0;
+            double noise_added = (i < noise_added_W.size()) ? noise_added_W[i] : 0.0;
+            double awgn = thermalNoisePower_W(bin_width);
+
+            noise_total_W[i] = noise_input + noise_added + awgn;
         }
     }
 };
