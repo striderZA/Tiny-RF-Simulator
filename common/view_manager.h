@@ -23,6 +23,17 @@ class ViewManager {
         return nullptr;
     }
 
+    std::vector<SignalNode *> getActiveNodes() const {
+        std::vector<SignalNode *> active;
+        active.reserve(m_nodes.size());
+        for (auto *n : m_nodes) {
+            if (n && n->view_enabled) {
+                active.push_back(n);
+            }
+        }
+        return active;
+    }
+
     const std::vector<SignalNode *> &nodes() const { return m_nodes; }
 
   private:
