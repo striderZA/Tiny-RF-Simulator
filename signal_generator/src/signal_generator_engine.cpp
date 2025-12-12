@@ -1,4 +1,5 @@
 #include "signal_generator_engine.h"
+#include "common.h"
 #include <cmath>
 
 SignalGeneratorEngine::SignalGeneratorEngine(int id)
@@ -40,7 +41,8 @@ void SignalGeneratorEngine::update(double dt) {
 
     double binWidth = out.frequencies[1] - out.frequencies[0];
 
-    double G = std::pow(10.0, m_gain_dB / 10.0);
+    double G = dbToLinear(m_gain_dB);
+    double F = dbToLinear(m_nf_dB);
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
@@ -48,7 +50,6 @@ void SignalGeneratorEngine::update(double dt) {
         out.noise_W[i] = G * nin;
     }
 
-    double F = std::pow(10.0, m_nf_dB / 10.0);
     double Te = 290.0 * (F - 1.0); // Equivalent noise temperature
     double added_per_bin = k * Te * G * binWidth;
 
