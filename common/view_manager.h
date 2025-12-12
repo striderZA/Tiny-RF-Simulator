@@ -19,8 +19,8 @@ class ViewManager {
             if (n && n->view_enabled) {
                 return n;
             }
-            return nullptr;
         }
+        return nullptr;
     }
 
     const std::vector<SignalNode *> &nodes() const { return m_nodes; }
