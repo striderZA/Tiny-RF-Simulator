@@ -52,24 +52,33 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
-    SignalNode *node = m_view_manager.getActiveNode();
+    auto active_nodes = m_view_manager.getActiveNodes();
 
-    if (!node) {
+    if (active_nodes.empty()) {
         ImGui::Text("No signal node selected for display!");
         ImGui::End();
         return;
     }
 
-    const Spectrum &spec = node->output;
-    std::vector<double> display_dBm = m_engine.renderSpectrum(spec);
-
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("Spectrum")) {
-        const auto &freq = spec.frequencies;
-        if (!freq.empty() && freq.size() == display_dBm.size()) {
-            ImPlot::PlotLine("Spectrum", freq.data(), display_dBm.data(), (int)freq.size());
+        // Plot each active node's output as a separate line
+        for (size_t i = 0; i < active_nodes.size(); ++i) {
+            SignalNode *node = active_nodes[i];
+            if (!node) {
+                continue;
+            }
+
+            const Spectrum &spec = node->output;
+            std::vector<double> display_dBm = m_engine.renderSpectrum(spec);
+
+            const auto &freq = spec.frequencies;
+            if (!freq.empty() && freq.size() == display_dBm.size()) {
+                std::string label = std::string("Spectrum ") + std::to_string(i);
+                ImPlot::PlotLine(label.c_str(), freq.data(), display_dBm.data(), (int)freq.size());
+            }
         }
         ImPlot::EndPlot();
     }
