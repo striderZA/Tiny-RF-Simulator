@@ -44,14 +44,14 @@ void SignalGeneratorEngine::update(double dt) {
     double G = dbToLinear(m_gain_dB);
     double F = dbToLinear(m_nf_dB);
 
+    double added_per_bin = addedNoisePerBin_W(m_nf_dB, m_nf_dB, binWidth);
+
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
         double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
         out.noise_W[i] = G * nin;
     }
 
-    double Te = 290.0 * (F - 1.0); // Equivalent noise temperature
-    double added_per_bin = k * Te * G * binWidth;
 
     out.noise_added_W.assign(N, added_per_bin);
 
