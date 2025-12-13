@@ -1,7 +1,6 @@
 #include "app.h"
 #include "imgui.h"
 #include "logging_widget.h"
-#include <string>
 
 RfSimulatorApp::RfSimulatorApp() {
     for (int i = static_cast<int>(InputSignals::G0); i < static_cast<int>(InputSignals::COUNT);
