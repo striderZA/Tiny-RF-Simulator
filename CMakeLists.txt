@@ -45,6 +45,13 @@ FetchContent_MakeAvailable(glfw)
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG v3.5.4  # or latest stable
+)
+
+FetchContent_MakeAvailable(Catch2)
 # Define imgui library
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
