@@ -27,7 +27,7 @@ void SignalGeneratorEngine::update(double dt) {
 
     out.tones.clear();
     Spectrum::Tone t;
-    t.freq_Hz = static_cast<double>(m_active_tone.first);
+    t.freq_Hz = m_active_tone.first;
     t.power_dBm = m_active_tone.second;
     out.tones.push_back(t);
 
