@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-enum class InputSignals : int { G0 = 0, G1, G2, G3 };
+enum class InputSignals : int { G0 = 0, G1, G2, G3, COUNT };
 
 class RfSimulatorApp {
   public:
