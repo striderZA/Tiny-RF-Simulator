@@ -11,7 +11,7 @@ RfSimulatorApp::RfSimulatorApp() {
         m_generator_widgets.push_back(
             std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
 
-        m_view_manager.registerNode(&m_generators[i]->node());
+        m_view_manager.registerNode(&m_generators.back()->node());
     }
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
