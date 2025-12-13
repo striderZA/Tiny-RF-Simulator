@@ -60,26 +60,35 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
+    // Build list of Spectrum pointers for combined rendering
+    std::vector<const Spectrum *> specs;
+    specs.reserve(active_nodes.size());
+    const std::vector<double> *freq_axis = nullptr;
+    for (auto *node : active_nodes) {
+        if (!node) {
+            continue;
+        }
+        if (!freq_axis && !node->output.frequencies.empty()) {
+            freq_axis = &node->output.frequencies;
+        }
+        specs.push_back(&node->output);
+    }
+
+    // Render the combined spectrum (power summed across inputs)
+    std::vector<double> display_dBm = m_engine.renderCombinedSpectrum(specs);
+
+    if (!freq_axis || display_dBm.empty() || freq_axis->size() != display_dBm.size()) {
+        ImGui::Text("Unable to display combined spectrum (frequency grid mismatch).");
+        ImGui::End();
+        return;
+    }
+
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("Spectrum")) {
-        // Plot each active node's output as a separate line
-        for (size_t i = 0; i < active_nodes.size(); ++i) {
-            SignalNode *node = active_nodes[i];
-            if (!node) {
-                continue;
-            }
-
-            const Spectrum &spec = node->output;
-            std::vector<double> display_dBm = m_engine.renderSpectrum(spec);
-
-            const auto &freq = spec.frequencies;
-            if (!freq.empty() && freq.size() == display_dBm.size()) {
-                std::string label = std::string("Spectrum ") + std::to_string(i);
-                ImPlot::PlotLine(label.c_str(), freq.data(), display_dBm.data(), (int)freq.size());
-            }
-        }
+        ImPlot::PlotLine("Combined Spectrum", freq_axis->data(), display_dBm.data(),
+                         (int)display_dBm.size());
         ImPlot::EndPlot();
     }
     ImGui::End();
