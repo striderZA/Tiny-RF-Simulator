@@ -6,13 +6,13 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id)
     : m_id(id), m_active_tone(std::make_pair<int, double>(0, -60.0)) {
     const double start_Hz = MIN_FREQ;
     const double stop_Hz = MAX_FREQ;
-    const double step_Hz = 10e6;
-    int n = static_cast<int>((stop_Hz - start_Hz) / step_Hz);
+    const double m_f_step_Hz = 10e6;
+    int n = static_cast<int>((stop_Hz - start_Hz) / m_f_step_Hz);
 
     m_node.output.frequencies.resize(n);
 
     for (int i = 0; i < n; ++i) {
-        m_node.output.frequencies[i] = start_Hz + i * step_Hz;
+        m_node.output.frequencies[i] = start_Hz + i * m_f_step_Hz;
     }
 
     m_node.output.noise_W.assign(m_node.output.frequencies.size(), 0.0);
@@ -51,7 +51,6 @@ void SignalGeneratorEngine::update(double dt) {
         double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
         out.noise_W[i] = G * nin;
     }
-
 
     out.noise_added_W.assign(N, added_per_bin);
 

@@ -27,4 +27,5 @@ class SignalGeneratorEngine {
     SignalNode m_node;
     double m_gain_dB = 0.0;
     double m_nf_dB = 0.0;
+    double m_f_step_Hz = 10e6;
 };
