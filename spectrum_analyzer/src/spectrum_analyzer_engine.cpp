@@ -68,6 +68,56 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     return vbw_out;
 }
 
+std::vector<double>
+SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
+    if (specs.empty()) {
+        return {};
+    }
+
+    // Determine target length (use largest frequency vector among inputs)
+    size_t n = 0;
+    for (const Spectrum *s : specs) {
+        if (s && s->frequencies.size() > n) {
+            n = s->frequencies.size();
+        }
+    }
+    if (n == 0) {
+        return {};
+    }
+
+    // Sum per-bin power (W). Use integratePowerPerBin for each Spectrum and add.
+    std::vector<double> sum_power_W(n, 0.0);
+    for (const Spectrum *s : specs) {
+        if (!s) {
+            continue;
+        }
+        std::vector<double> p = this->integratePowerPerBin(*s);
+        size_t m = std::min(n, p.size());
+        for (size_t i = 0; i < m; ++i) {
+            sum_power_W[i] += p[i];
+        }
+    }
+
+    // Pick a sensible bin width from the first non-empty frequency vector
+    double bin_width = 1.0;
+    for (const Spectrum *s : specs) {
+        if (s && s->frequencies.size() >= 2) {
+            bin_width = s->frequencies[1] - s->frequencies.front();
+            break;
+        }
+    }
+
+    std::vector<double> rbw_power_W = this->applyRBW(sum_power_W, bin_width);
+
+    std::vector<double> power_dBm(rbw_power_W.size());
+    for (size_t i = 0; i < rbw_power_W.size(); ++i) {
+        power_dBm[i] = W_to_dBm(rbw_power_W[i]);
+    }
+
+    std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
+    return vbw_out;
+}
+
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
     size_t n = power_W.size();

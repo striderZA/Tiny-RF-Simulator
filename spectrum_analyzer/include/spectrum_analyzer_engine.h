@@ -26,6 +26,7 @@ class SpectrumAnalyzerEngine {
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
+    std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
 
   private:
     // Config
