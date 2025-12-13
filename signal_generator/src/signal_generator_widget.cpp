@@ -1,4 +1,5 @@
 #include "signal_generator_widget.h"
+#include "common.h"
 #include "imgui.h"
 #include "logging_core.h"
 #include "utils.h"
@@ -16,13 +17,14 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                      m_engine.node().view_enabled ? "True" : "False");
         }
 
-        if (ImGui::InputDouble("Frequency (Hz)", &tone_frequency, 1e6, 100e6)) {
+        if (utils::inputDouble("Frequency (Hz)", tone_frequency, 1e6, 100e6, "%0.f", MIN_FREQ,
+                               MAX_FREQ)) {
             m_engine.setToneFrequency(tone_frequency);
             LOG_INFO("Update tone frequency: [gen%d -> %.0f MHz].", m_engine.id(),
                      tone_frequency / 1e6);
         }
 
-        if (ImGui::InputDouble("Amplitude (dBm)", &amplitude, 1, 5, "%.0f")) {
+        if (utils::inputDouble("Amplitude (dBm)", amplitude, 1, 5, "%.0f", MIN_POWER, MAX_POWER)) {
             m_engine.setToneAmplitude(amplitude);
             LOG_INFO("Update tone amplitude: [gen%d -> %.0f dBm]", m_engine.id(), amplitude);
         }
