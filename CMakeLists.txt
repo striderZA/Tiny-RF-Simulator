@@ -91,3 +91,6 @@ add_subdirectory("spectrum_analyzer")
 add_subdirectory("common")
 add_subdirectory("logging")
 add_subdirectory ("src")
+
+enable_testing()
+add_subdirectory(tests)
