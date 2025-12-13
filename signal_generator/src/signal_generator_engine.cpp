@@ -39,12 +39,12 @@ void SignalGeneratorEngine::update(double dt) {
         return;
     }
 
-    double binWidth = out.frequencies[1] - out.frequencies[0];
+    // double m_f_step_Hz = out.frequencies[1] - out.frequencies[0];
 
     double G = dbToLinear(m_gain_dB);
     double F = dbToLinear(m_nf_dB);
 
-    double added_per_bin = addedNoisePerBin_W(m_nf_dB, m_nf_dB, binWidth);
+    double added_per_bin = addedNoisePerBin_W(m_nf_dB, m_nf_dB, m_f_step_Hz);
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
@@ -57,7 +57,7 @@ void SignalGeneratorEngine::update(double dt) {
     out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
 
-        double awgn = out.thermalNoisePower_W(binWidth);
+        double awgn = out.thermalNoisePower_W(m_f_step_Hz);
 
         out.noise_total_W[i] = out.noise_W[i] +       // input noise after gain
                                out.noise_added_W[i] + // added noise from NF
