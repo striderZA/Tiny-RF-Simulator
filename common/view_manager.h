@@ -2,6 +2,7 @@
 
 #include "logging_core.h"
 #include "signal_node.h"
+#include <span>
 #include <vector>
 
 class ViewManager {
@@ -33,7 +34,7 @@ class ViewManager {
         }
         return active;
     }
-
+    std::span<SignalNode *const> nodes_span() const { return {m_nodes.data(), m_nodes.size()}; }
     const std::vector<SignalNode *> &nodes() const { return m_nodes; }
 
   private:
