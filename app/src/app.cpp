@@ -4,14 +4,15 @@
 #include <string>
 
 RfSimulatorApp::RfSimulatorApp() {
-    m_generators.push_back(std::make_unique<SignalGeneratorEngine>(0));
-    m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
-    m_generators.push_back(std::make_unique<SignalGeneratorEngine>(1));
-    m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
+    for (int i = static_cast<int>(InputSignals::G0); i < static_cast<int>(InputSignals::COUNT);
+         ++i) {
 
-    m_view_manager.registerNode(&m_generators[0]->node());
-    m_view_manager.registerNode(&m_generators[1]->node());
+        m_generators.push_back(std::make_unique<SignalGeneratorEngine>(i));
+        m_generator_widgets.push_back(
+            std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
 
+        m_view_manager.registerNode(&m_generators[i]->node());
+    }
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
 
