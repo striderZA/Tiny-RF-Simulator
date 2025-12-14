@@ -39,8 +39,6 @@ void SignalGeneratorEngine::update(double dt) {
         return;
     }
 
-    // double m_f_step_Hz = out.frequencies[1] - out.frequencies[0];
-
     double G = dbToLinear(m_gain_dB);
     double F = dbToLinear(m_nf_dB);
 
