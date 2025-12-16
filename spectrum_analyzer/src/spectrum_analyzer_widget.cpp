@@ -52,6 +52,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
+    if (ImGui::Checkbox("Peak marker", &m_enable_peak_detect)) {
+        LOG_INFO("%s peak detect", m_enable_peak_detect ? "Enabled" : "Disabled");
+    }
+
     auto active_nodes = m_view_manager.getActiveNodes();
 
     if (active_nodes.empty()) {
