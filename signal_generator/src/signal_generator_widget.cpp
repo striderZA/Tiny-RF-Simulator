@@ -31,7 +31,8 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
 
         if (utils::inputDouble("Bin width (Hz)", bin_width, 1e6, 10e6, "%0.f", 1e6, 100e6)) {
             m_engine.setFreqStep(bin_width);
-            LOG_INFO("Update bin width: [gen%d -> %.0f MHz]", m_engine.id(), bin_width / 1e6);
+            LOG_INFO("Update bin width: [gen%d -> %.0f MHz] (noise=%.2f dBm)", m_engine.id(),
+                     bin_width / 1e6, -174 + 10 * std::log10(bin_width));
         }
 
         ImGui::End();
