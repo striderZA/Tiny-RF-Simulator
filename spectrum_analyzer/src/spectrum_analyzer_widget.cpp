@@ -93,7 +93,19 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (ImPlot::BeginPlot("Spectrum")) {
         ImPlot::PlotLine("Combined Spectrum", freq_axis->data(), display_dBm.data(),
                          (int)display_dBm.size());
+
         ImPlot::EndPlot();
     }
     ImGui::End();
+}
+
+std::vector<int> SpectrumAnalyzerWidget::findPeaks(const std::vector<double> &power_dBm,
+                                                   double threshold_dBm) {
+    std::vector<int> peaks;
+    for (int i = 1; i + 1 < power_dBm.size(); ++i) {
+        if (power_dBm[i] > threshold_dBm && power_dBm[i - 1] && power_dBm[i] > power_dBm[i + 1]) {
+            peaks.push_back(i);
+        }
+    }
+    return peaks;
 }

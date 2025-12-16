@@ -10,6 +10,7 @@ class SpectrumAnalyzerWidget {
     bool peakDetectEnabled() const { return m_enable_peak_detect; }
     void enablePeakDetect(bool isEnabled) { m_enable_peak_detect = isEnabled; }
 
+    std::vector<int> findPeaks(const std::vector<double> &power_dBm, double threshold_dBm);
 
   private:
     SpectrumAnalyzerEngine &m_engine;
