@@ -2,10 +2,8 @@
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.20)
-set(CMAKE_C_COMPILER clang CACHE STRING "" FORCE)
-set(CMAKE_CXX_COMPILER clang++ CACHE STRING "" FORCE)
 
-project (RfSimulator LANGUAGES C CXX)
+project (RfSimulator)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,6 +78,7 @@ target_link_libraries(implot PUBLIC imgui)
 add_subdirectory("core")
 add_subdirectory("app")
 add_subdirectory("signal_generator")
+add_subdirectory("amplifier")
 add_subdirectory("spectrum_analyzer")
 add_subdirectory("common")
 add_subdirectory("logging")

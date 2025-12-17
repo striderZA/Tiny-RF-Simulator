@@ -1,5 +1,7 @@
 #pragma once
 
+#include "amplifier_engine.h"
+#include "amplifier_widget.h"
 #include "logging_widget.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -26,4 +28,6 @@ class RfSimulatorApp {
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
+    std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
+    std::vector<std::unique_ptr<AmplifierWidget>> m_amplifier_widgets;
 };

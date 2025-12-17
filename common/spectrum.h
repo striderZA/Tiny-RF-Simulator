@@ -45,3 +45,9 @@ struct Spectrum {
         }
     }
 };
+
+struct Peak {
+    int index;
+    double freq_Hz;
+    double power_dBm;
+};

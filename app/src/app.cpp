@@ -12,6 +12,11 @@ RfSimulatorApp::RfSimulatorApp() {
 
         m_view_manager.registerNode(&m_generators.back()->node());
     }
+
+    m_amplifiers.push_back(std::make_unique<AmplifierEngine>(static_cast<int>(InputSignals::G0)));
+    m_amplifier_widgets.push_back(std::make_unique<AmplifierWidget>(*m_amplifiers.back()));
+
+    m_view_manager.registerNode(&m_amplifiers.back()->node());
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
 
@@ -19,6 +24,12 @@ void RfSimulatorApp::update_dsp() {
 
     for (auto &gen : m_generators) {
         gen->update(0.0);
+    }
+
+    size_t count = std::min(m_generators.size(), m_amplifiers.size());
+    for (size_t i = 0; i < count; ++i) {
+        m_amplifiers[i]->node().input = m_generators[i]->node().output;
+        m_amplifiers[i]->update(0.0);
     }
 }
 
@@ -35,6 +46,13 @@ void RfSimulatorApp::draw_ui() {
         std::snprintf(title_buffer, sizeof(title_buffer), "Generator %d##gen%zu",
                       m_generators[i]->id(), i);
         m_generator_widgets[i]->draw(title_buffer);
+    }
+
+    for (size_t i = 0; i < m_amplifier_widgets.size(); ++i) {
+        char title_buffer[64];
+        std::snprintf(title_buffer, sizeof(title_buffer), "Amplifier %d##gen%zu",
+                      m_amplifiers[i]->id(), i);
+        m_amplifier_widgets[i]->draw(title_buffer);
     }
 
     if (m_show_log)
