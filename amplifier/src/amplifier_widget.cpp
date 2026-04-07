@@ -9,7 +9,7 @@ void AmplifierWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
 
         if (ImGui::Checkbox("Measure", &m_engine.node().view_enabled)) {
-            LOG_INFO("Change measurement active state [gen%d -> %s].", m_engine.id(),
+            LOG_INFO("Change measurement active state [amp%d -> %s].", m_engine.id(),
                      m_engine.node().view_enabled ? "True" : "False");
         }
         double gain_dB = m_engine.gain_dB();
