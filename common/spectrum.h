@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include <cmath>
+#include <chrono>
 #include <random>
 #include <vector>
 
@@ -19,7 +20,14 @@ struct Spectrum {
 
     double thermalNoisePower_W(double bin_width) {
         double mean_noise_power_W = k * T * bin_width;
-        static thread_local std::mt19937 gen(std::random_device{}());
+        static thread_local std::mt19937 gen = []() {
+            std::random_device rd;
+            try {
+                return std::mt19937(rd());
+            } catch (...) {
+                return std::mt19937(std::chrono::system_clock::now().time_since_epoch().count());
+            }
+        }();
         std::normal_distribution<double> dist(mean_noise_power_W, 0.5 * mean_noise_power_W);
 
         double v = dist(gen);
