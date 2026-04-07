@@ -40,6 +40,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+# Fetch Catch2 for unit testing
+FetchContent_Declare(
+    catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.4.0
+)
+FetchContent_MakeAvailable(catch2)
+
+enable_testing()
+
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -83,3 +93,4 @@ add_subdirectory("spectrum_analyzer")
 add_subdirectory("common")
 add_subdirectory("logging")
 add_subdirectory ("src")
+add_subdirectory("tests")
