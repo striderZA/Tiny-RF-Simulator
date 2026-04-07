@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "common.h"
+#include "spectrum.h"
 
 using Catch::Approx;
 
@@ -28,4 +29,21 @@ TEST_CASE("Added noise per bin", "[common]") {
     double added2 = addedNoisePerBin_W(10.0, dbToLinear(10.0), 1e6);
     double expected2 = k * calculateNoiseTemp(10.0) * dbToLinear(10.0) * 1e6;
     REQUIRE(added2 == Approx(expected2).epsilon(0.001));
+}
+
+TEST_CASE("Spectrum computeTotalNoise", "[common]") {
+    Spectrum spec;
+    // Set up frequencies (uniform grid)
+    const int N = 5;
+    spec.frequencies.resize(N);
+    for (int i = 0; i < N; ++i) {
+        spec.frequencies[i] = i * 1e6; // 1 MHz steps
+    }
+    spec.noise_W = {1e-12, 2e-12, 3e-12, 4e-12, 5e-12};
+    spec.noise_added_W = {0.5e-12, 0.6e-12, 0.7e-12, 0.8e-12, 0.9e-12};
+    spec.computeTotalNoise();
+    REQUIRE(spec.noise_total_W.size() == N);
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(spec.noise_total_W[i] == Approx(spec.noise_W[i] + spec.noise_added_W[i]).epsilon(1e-30));
+    }
 }
