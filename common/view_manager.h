@@ -2,6 +2,7 @@
 
 #include "logging_core.h"
 #include "signal_node.h"
+#include <algorithm>
 #include <span>
 #include <vector>
 
@@ -12,6 +13,14 @@ class ViewManager {
             LOG_INFO("Register new node: %d inputs | %d outputs.", node->input.tones.size(),
                      node->output.tones.size());
             m_nodes.push_back(node);
+        }
+    }
+
+    void unregisterNode(SignalNode *node) {
+        if (!node) return;
+        auto it = std::find(m_nodes.begin(), m_nodes.end(), node);
+        if (it != m_nodes.end()) {
+            m_nodes.erase(it);
         }
     }
 
@@ -36,6 +45,7 @@ class ViewManager {
     }
     std::span<SignalNode *const> nodes_span() const { return {m_nodes.data(), m_nodes.size()}; }
     const std::vector<SignalNode *> &nodes() const { return m_nodes; }
+    void clearNodes() { m_nodes.clear(); }
 
   private:
     std::vector<SignalNode *> m_nodes;

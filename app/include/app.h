@@ -18,6 +18,10 @@ class RfSimulatorApp {
     RfSimulatorApp();
     void draw_ui();
     void update_dsp();
+    void addGenerator();
+    void removeGenerator(size_t index);
+    void addAmplifier();
+    void removeAmplifier(size_t index);
 
     LoggingWidget m_log_widget;
     bool m_show_log = true;
@@ -30,4 +34,5 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
     std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
     std::vector<std::unique_ptr<AmplifierWidget>> m_amplifier_widgets;
+    void draw_signal_chain(const char* title);
 };
