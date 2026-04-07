@@ -1,5 +1,8 @@
-#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "common.h"
+
+using Catch::Approx;
 
 TEST_CASE("dB to linear conversion", "[common]") {
     REQUIRE(dbToLinear(0.0) == Approx(1.0));
