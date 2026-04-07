@@ -1,7 +1,6 @@
 #include "amplifier_engine.h"
 #include "common.h"
-#include <random>
-#include <chrono>
+
 
 AmplifierEngine::AmplifierEngine(int id) : m_id(id) {}
 
@@ -52,21 +51,7 @@ void AmplifierEngine::update(double dt) {
         // no added noise => fill zeros
         out.noise_added_W.assign(N, 0.0);
     } else {
-        static thread_local std::mt19937 gen = []() {
-            std::random_device rd;
-            try {
-                return std::mt19937(rd());
-            } catch (...) {
-                return std::mt19937(std::chrono::system_clock::now().time_since_epoch().count());
-            }
-        }();
-        // choose a reasonable stddev (10% of mean here). Tweak if you want more/less jitter.
-        double jitter_std = 0.1 * added_per_bin_mean;
-        std::normal_distribution<double> add_dist(added_per_bin_mean, jitter_std);
-        for (size_t i = 0; i < N; ++i) {
-            double sample = add_dist(gen);
-            out.noise_added_W[i] = (sample < 0.0) ? 0.0 : sample;
-        }
+        out.noise_added_W.assign(N, added_per_bin_mean);
     }
     out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i) {
