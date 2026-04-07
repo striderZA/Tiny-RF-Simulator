@@ -13,7 +13,7 @@ void AmplifierEngine::update(double dt) {
     } else if (out.frequencies.size() < 2) {
         const double start_Hz = MIN_FREQ;
         const double stop_Hz = MAX_FREQ;
-
+        if (m_f_step_Hz <= 0) m_f_step_Hz = 10e6;
         int n = static_cast<int>((stop_Hz - start_Hz) / m_f_step_Hz);
         if (n < 2) {
             n = 2;
