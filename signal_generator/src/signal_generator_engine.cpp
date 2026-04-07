@@ -16,6 +16,8 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id)
 
     m_node.output.noise_W.assign(m_node.output.frequencies.size(), 0.0);
     m_node.output.noise_added_W.assign(m_node.output.frequencies.size(), 0.0);
+    // Initialize input noise spectral density = k*T (thermal noise) per bin
+    m_node.input.noise_total_W.assign(n, k * T * m_f_step_Hz);
     m_node.output.computeTotalNoise();
 }
 
@@ -39,9 +41,8 @@ void SignalGeneratorEngine::update(double dt) {
     }
 
     double G = dbToLinear(m_gain_dB);
-    double F = dbToLinear(m_nf_dB);
 
-    double added_per_bin = addedNoisePerBin_W(m_nf_dB, m_nf_dB, m_f_step_Hz);
+    double added_per_bin = addedNoisePerBin_W(m_nf_dB, G, m_f_step_Hz);
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
@@ -53,11 +54,6 @@ void SignalGeneratorEngine::update(double dt) {
 
     out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-
-        double awgn = out.thermalNoisePower_W(m_f_step_Hz);
-
-        out.noise_total_W[i] = out.noise_W[i] +       // input noise after gain
-                               out.noise_added_W[i] + // added noise from NF
-                               awgn;                  // thermal randomness
+        out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 }
