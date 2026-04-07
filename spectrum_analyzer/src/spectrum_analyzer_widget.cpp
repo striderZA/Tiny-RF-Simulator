@@ -22,24 +22,24 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     double minp = m_engine.minPower();
     double maxp = m_engine.maxPower();
 
-    if (utils::inputDouble("Start Frequency (Hz)", s, 1e6, 100e6, "%0.f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Start Frequency (MHz)", s, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
-        LOG_INFO("Update start frequency: %.0f Hz", m_engine.startFrequency());
+        LOG_INFO("Update start frequency: %.0f MHz", m_engine.startFrequency() / 1e6);
     }
 
-    if (utils::inputDouble("Stop Frequency (Hz)", e, 1e6, 100e6, "%0.f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Stop Frequency (MHz)", e, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
-        LOG_INFO("Update stop frequency: %.0f Hz", m_engine.stopFrequency());
+        LOG_INFO("Update stop frequency: %.0f MHz", m_engine.stopFrequency() / 1e6);
     }
 
-    if (utils::inputDouble("VBW (Hz)", vbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
+    if (utils::inputFrequency("VBW (MHz)", vbw, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
         m_engine.setVideoBw(vbw);
-        LOG_INFO("Update VBW: %.0f Hz", m_engine.vbw());
+        LOG_INFO("Update VBW: %.0f MHz", m_engine.vbw() / 1e6);
     }
 
-    if (utils::inputDouble("RBW (Hz)", rbw, 1e6, 10e6, "%.0f", 1e6, 100e6)) {
+    if (utils::inputFrequency("RBW (MHz)", rbw, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
         m_engine.setResBw(rbw);
-        LOG_INFO("Update RBW: %.0f Hz", m_engine.rbw());
+        LOG_INFO("Update RBW: %.0f MHz", m_engine.rbw() / 1e6);
     }
 
     if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {

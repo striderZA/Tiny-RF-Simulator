@@ -17,7 +17,7 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                      m_engine.node().view_enabled ? "True" : "False");
         }
 
-        if (utils::inputDouble("Frequency (Hz)", tone_frequency, 1e6, 100e6, "%0.f", MIN_FREQ,
+        if (utils::inputFrequency("Frequency (MHz)", tone_frequency, 1.0, 100.0, "%.0f", MIN_FREQ,
                                MAX_FREQ)) {
             m_engine.setToneFrequency(tone_frequency);
             LOG_INFO("Update tone frequency: [gen%d -> %.0f MHz].", m_engine.id(),
@@ -29,7 +29,7 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
             LOG_INFO("Update tone amplitude: [gen%d -> %.0f dBm]", m_engine.id(), amplitude);
         }
 
-        if (utils::inputDouble("Bin width (Hz)", bin_width, 1e6, 10e6, "%0.f", 1e6, 100e6)) {
+        if (utils::inputFrequency("Bin width (MHz)", bin_width, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
             m_engine.setFreqStep(bin_width);
             LOG_INFO("Update bin width: [gen%d -> %.0f MHz] (noise=%.2f dBm)", m_engine.id(),
                      bin_width / 1e6, -174 + 10 * std::log10(bin_width));

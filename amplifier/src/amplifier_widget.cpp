@@ -26,7 +26,7 @@ void AmplifierWidget::draw(const char *title, bool *p_open) {
             LOG_INFO("Update amplifier NF: [amp%d -> %.1f dB]", m_engine.id(), nf_dB);
         }
 
-        if (utils::inputDouble("Bin width (Hz)", bin_width_Hz, 1e6, 10e6, "%0.f", 1e6, 100e6)) {
+        if (utils::inputFrequency("Bin width (MHz)", bin_width_Hz, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
             m_engine.setFreqStep(bin_width_Hz);
             LOG_INFO("Update amplifier bin width: [amp%d -> %.0f MHz]", m_engine.id(),
                      bin_width_Hz / 1e6);
