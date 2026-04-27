@@ -38,6 +38,4 @@ class SpectrumAnalyzerEngine {
     double m_rbw = DEFAULT_RBW;
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
-    std::vector<double> applyRbw(const std::vector<double> &power_W, double bin_width) const;
-    std::vector<double> applyVbw(const std::vector<double> &power_dBm, double bin_width) const;
 };

@@ -75,7 +75,7 @@ void RfSimulatorApp::draw_ui() {
 
     for (size_t i = 0; i < m_amplifier_widgets.size(); ++i) {
         char title_buffer[64];
-        std::snprintf(title_buffer, sizeof(title_buffer), "Amplifier %d##gen%zu",
+        std::snprintf(title_buffer, sizeof(title_buffer), "Amplifier %d##amp%zu",
                       m_amplifiers[i]->id(), i);
         m_amplifier_widgets[i]->draw(title_buffer);
     }

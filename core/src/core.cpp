@@ -16,8 +16,10 @@ RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
 RfSimulatorCore::~RfSimulatorCore() {}
 
 void RfSimulatorCore::Run(const std::function<void()> &onGui) {
-    if (!Initialize())
+    if (!Initialize()) {
+        Shutdown();
         return;
+    }
     MainLoop(onGui);
     Shutdown();
 }

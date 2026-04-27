@@ -1,45 +1,28 @@
 # RF Simulator - Agent Guide
 
-## Build System
+## Build & Test
 
-- **CMake + Ninja** is the primary build system
-- Build commands (run from repo root):
-  - `cmake -B build -G Ninja` (first time only)
-  - `cmake --build build` (incremental builds)
-- Output binary: `build/bin/main.exe`
-- Dependencies (ImGui, ImPlot, GLFW) are fetched automatically via CMake FetchContent
+- **CMake + Ninja** primary. First time: `cmake -B build -G Ninja`, then `cmake --build build`
+- Output: `build/bin/main.exe`
+- Tests: `cmake --build build && ctest --test-dir build` or run `build/bin/tests.exe` directly
+- Dependencies (ImGui docking, ImPlot, GLFW, Catch2 v3.4.0) auto-fetched via FetchContent
+- `compile_commands.json` generated in `build/`; `.clangd` points there
 
 ## Architecture
 
-- **C++20** project with modular library design
-- Each module follows the pattern: `*_engine` (DSP/logic) + `*_widget` (ImGui UI)
-- Modules: `signal_generator`, `amplifier`, `spectrum_analyzer`, `logging`
-- `core/` - ImGui/ImPlot/GLFW backend setup
-- `common/` - Shared headers (signal_node.h, spectrum.h, utils.h)
-- `app/` - Application orchestrator that wires modules together
-- Entry point: `src/main.cpp`
+- **C++20** modular library design. Entry: `src/main.cpp` → `RfSimulatorCore` (GLFW/ImGui loop) + `RfSimulatorApp` (orchestrator)
+- Each module: `*_engine` (pure DSP, no UI deps) + `*_widget` (ImGui UI, holds `Engine&`). Engine owns a `SignalNode{input, output Spectrum, view_enabled}`.
+- Widgets expose `draw(title, p_open)`. Only widget files `#include <imgui.h>` / `<implot.h>`.
+- CMake targets use `simulator::*` aliases (e.g. `simulator::signal_generator_engine`)
+- `common/` is header-only INTERFACE library; `logging_core` is singleton via `LoggerCore::instance()`; `LOG_INFO`/`LOG_WARN`/`LOG_ERROR` macros
+- `ViewManager` tracks which `SignalNode*`s the spectrum analyzer observes (set `view_enabled=true` to include)
+- Signal chain: `gen.output → amp.input` wired in `app/src/app.cpp`
 
-## Key Directories
+## Code Style & Conventions
 
-```
-core/           - UI subsystem (ImGui + ImPlot + GLFW backend)
-app/            - Application orchestration
-signal_generator/ - Signal generation engine + widget
-amplifier/      - Amplifier engine + widget
-spectrum_analyzer/ - Spectrum analyzer engine + widget
-logging/        - Logging core + widget
-common/         - Shared interfaces
-```
-
-## Code Style
-
-- `.clang-format` enforces LLVM-based style with 4-space indent, 100 column limit
-- Use `clang-format` for formatting: `clang-format -i <file>`
-- clangd is configured to use `build/compile_commands.json`
-
-## Build Configuration
-
-- C++20 required (`CMAKE_CXX_STANDARD 20`)
-- Visual Studio solution files exist in `.vs/` but CMake is primary
-- No CI workflows, no pre-commit hooks
-- No test suite (tests/ directory is empty)
+- `.clang-format`: LLVM-based, 4-space indent, 100 cols, `PointerAlignment: Right`, `AccessModifierOffset: -2`
+- Format: `clang-format -i <file>`
+- `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)` for ImGui inputs (MHz conversion, clamping)
+- `typedef std::pair<double, double> tone` (freq_Hz, power_dBm)
+- `view_enabled` flag on `SignalNode` controls spectrum analyzer visibility
+- Commits: imperative mood, short (<70 char) subject, no body (conventional commit style)

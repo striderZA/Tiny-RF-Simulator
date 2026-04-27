@@ -20,10 +20,9 @@ TEST_CASE("Noise temperature calculation", "[common]") {
 }
 
 TEST_CASE("Added noise per bin", "[common]") {
-    // With gain 1 (0 dB), noise figure 0 dB, bin width 1 Hz => added noise = k*T*1
+    // With noise figure 0 dB => Te = 0 => added noise = 0 regardless of gain
     double added = addedNoisePerBin_W(0.0, 1.0, 1.0);
-    double expected = k * T; // 1.3806e-23 * 290 = 4.00374e-21
-    REQUIRE(added == Approx(expected).epsilon(0.001));
+    REQUIRE(added == Approx(0.0));
     
     // With gain 10 (10 dB), noise figure 10 dB, bin width 1e6 Hz
     double added2 = addedNoisePerBin_W(10.0, dbToLinear(10.0), 1e6);

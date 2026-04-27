@@ -491,3 +491,9 @@ FodyWeavers.xsd
 
 # Cmake/Neovim build outputs
 build/
+
+# Runtime-generated ImGui settings
+imgui.ini
+
+# Visual Studio CMake build output
+out/

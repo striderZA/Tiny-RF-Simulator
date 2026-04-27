@@ -1,4 +1,4 @@
-﻿#include "spectrum_analyzer_widget.h"
+#include "spectrum_analyzer_widget.h"
 #include "common.h"
 #include "imgui.h"
 #include "implot.h"
