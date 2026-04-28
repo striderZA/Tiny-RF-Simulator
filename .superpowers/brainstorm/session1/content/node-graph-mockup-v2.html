@@ -1,0 +1,83 @@
+<h2>Updated Node Graph Layout</h2>
+<p class="subtitle">Spectrum Analyzer is now a separate always-visible panel; node graph only shows DSP components</p>
+
+<div style="display: flex; gap: 20px; margin-bottom: 20px;">
+  <div style="flex: 2;">
+    <div class="mockup">
+      <div class="mockup-header">RF System Node Editor</div>
+      <div class="mockup-body">
+        <div style="display: flex; gap: 60px; align-items: flex-start; padding: 30px; background: #1a1a2e; border-radius: 8px; min-height: 250px;">
+          
+          <!-- Generator Node -->
+          <div style="background: #16213e; border: 2px solid #0f3460; border-radius: 6px; padding: 12px; width: 160px;">
+            <div style="font-weight: bold; color: #e94560; margin-bottom: 8px; text-align: center;">Generator 0</div>
+            <div style="font-size: 0.85em; color: #ccc; margin-bottom: 4px;">100.0 MHz</div>
+            <div style="font-size: 0.85em; color: #ccc; margin-bottom: 8px;">-20.0 dBm</div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #888; font-size: 0.8em;">IN</span>
+              <div style="width: 12px; height: 12px; background: #e94560; border-radius: 50%;"></div>
+              <span style="color: #888; font-size: 0.8em;">OUT</span>
+            </div>
+          </div>
+
+          <!-- Connection -->
+          <div style="display: flex; align-items: center; padding-top: 60px;">
+            <svg width="60" height="20">
+              <line x1="0" y1="10" x2="60" y2="10" stroke="#e94560" stroke-width="2" />
+              <circle cx="60" cy="10" r="4" fill="#e94560" />
+            </svg>
+          </div>
+
+          <!-- Amplifier Node -->
+          <div style="background: #16213e; border: 2px solid #0f3460; border-radius: 6px; padding: 12px; width: 160px;">
+            <div style="font-weight: bold; color: #533483; margin-bottom: 8px; text-align: center;">Amplifier 0</div>
+            <div style="font-size: 0.85em; color: #ccc; margin-bottom: 4px;">Gain: 10.0 dB</div>
+            <div style="font-size: 0.85em; color: #ccc; margin-bottom: 8px;">NF: 3.0 dB</div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #888; font-size: 0.8em;">IN</span>
+              <div style="width: 12px; height: 12px; background: #533483; border-radius: 50%;"></div>
+              <span style="color: #888; font-size: 0.8em;">OUT</span>
+            </div>
+          </div>
+
+        </div>
+        <div style="margin-top: 10px; font-size: 0.85em; color: #888;">
+          Right-click canvas to add nodes • Select node + Delete to remove • Drag pin-to-pin to connect
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1;">
+    <div class="mockup">
+      <div class="mockup-header">Spectrum Analyzer</div>
+      <div class="mockup-body">
+        <div style="background: #1a1a2e; border-radius: 6px; padding: 15px; min-height: 200px;">
+          <div style="font-size: 0.85em; color: #ccc; margin-bottom: 10px;">
+            <span style="color: #16c79a;">●</span> Observing: <strong>Amplifier 0 OUT</strong>
+          </div>
+          <div style="border-left: 3px solid #16c79a; padding-left: 10px; margin-bottom: 8px;">
+            <div style="font-size: 0.8em; color: #888;">Power: -10.0 dBm</div>
+            <div style="font-size: 0.8em; color: #888;">Freq: 100.0 MHz</div>
+          </div>
+          <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+            <div style="font-size: 0.75em; color: #666; margin-bottom: 5px;">Active Node</div>
+            <select style="width: 100%; background: #16213e; color: #ccc; border: 1px solid #0f3460; padding: 4px; border-radius: 3px;">
+              <option>Generator 0 OUT</option>
+              <option selected>Amplifier 0 OUT</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Updated Behaviors</h3>
+  <ul>
+    <li><strong>Node Graph:</strong> Only DSP components (Generator, Amplifier) appear as nodes. No spectrum analyzer node.</li>
+    <li><strong>Spectrum Analyzer:</strong> Always-visible separate panel. Dropdown selects which node's output to observe. Sets that node's <code>view_enabled = true</code>.</li>
+    <li><strong>Deletion:</strong> Removing a node disconnects all its links. Downstream nodes become unconnected and stop receiving input.</li>
+  </ul>
+</div>
