@@ -6,23 +6,20 @@
 void RegisterUiTests(ImGuiTestEngine* e) {
     ImGuiTest* t = nullptr;
 
-    t = IM_REGISTER_TEST(e, "rf_simulator", "signal_chain_exists");
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_editor_exists");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->SetRef("Signal Chain");
-        ctx->ItemExists("Generator: 1");
-        ctx->ItemExists("Add Amplifier");
+        ctx->WindowFocus("Node Editor");
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "single_generator_present");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->SetRef("Signal Chain");
-        ctx->ItemExists("Generator: 1");
+        ctx->SetRef("Generator 0");
+        ctx->ItemExists("Measure");
     };
 
-    t = IM_REGISTER_TEST(e, "rf_simulator", "add_amplifier");
+    t = IM_REGISTER_TEST(e, "rf_simulator", "single_amplifier_present");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->SetRef("Signal Chain");
-        ctx->ItemClick("Add Amplifier");
-        ctx->ItemExists("Amplifier 1");
+        ctx->SetRef("Amplifier 0");
+        ctx->ItemExists("Measure");
     };
 }

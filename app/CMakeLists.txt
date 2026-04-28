@@ -21,10 +21,12 @@ target_link_libraries(app
         simulator::core
         simulator::signal_generator_engine
         simulator::signal_generator_widget
-	simulator::amplifier_engine
-	simulator::amplifier_widget
+        simulator::amplifier_engine
+        simulator::amplifier_widget
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
+        simulator::node_graph_engine
+        simulator::node_graph_widget
         common
 )
 
