@@ -24,7 +24,12 @@ inline double calculateNoiseTemp(double nf_dB) {
     return T * (F - 1.0);
 }
 
-inline double addedNoisePerBin_W(double nf_dB, double g, double bin_width) {
+inline double addedNoiseDensity_W_per_Hz(double nf_dB, double gain_linear) {
     double Te = calculateNoiseTemp(nf_dB);
-    return k * Te * g * bin_width;
+    return k * Te * gain_linear;
+}
+
+// DEPRECATED: use addedNoiseDensity_W_per_Hz for density (W/Hz) model
+inline double addedNoisePerBin_W(double nf_dB, double g, double bin_width) {
+    return addedNoiseDensity_W_per_Hz(nf_dB, g) * bin_width;
 }
