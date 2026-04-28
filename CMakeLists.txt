@@ -116,6 +116,10 @@ target_compile_definitions(imgui_test_engine PRIVATE
 
 target_link_libraries(imgui_test_engine PUBLIC imgui PRIVATE glfw OpenGL::GL)
 
+# Imgui was built with IMGUI_ENABLE_TEST_ENGINE, so link the test engine
+# to satisfy the hook symbol references.
+target_link_libraries(imgui PRIVATE imgui_test_engine)
+
 # Include sub-projects.
 add_subdirectory("core")
 add_subdirectory("app")
