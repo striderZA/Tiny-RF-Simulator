@@ -16,6 +16,7 @@ class SpectrumAnalyzerEngine {
     void setVideoBw(double v) { m_vbw = v; }
     void setResBw(double v) { m_rbw = v; }
     void setNoiseJitterEnabled(bool v) { m_noise_jitter_enabled = v; }
+    void setNoiseJitterSigmaDb(double v) { m_noise_jitter_sigma_dB = v; }
 
     double startFrequency() const { return m_start_freq; }
     double stopFrequency() const { return m_stop_freq; }
@@ -42,4 +43,5 @@ class SpectrumAnalyzerEngine {
 
     mutable std::mt19937 m_rng;
     mutable bool m_noise_jitter_enabled = true;
+    mutable double m_noise_jitter_sigma_dB = 1.5;
 };
