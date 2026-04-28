@@ -130,20 +130,25 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &
     if (n == 0) {
         return {};
     }
-    // kernel width in bins (simple Gaussian approx)
-    int kernel_half = std::max(1, static_cast<int>(std::round((m_rbw / binWidth) / 2.0)));
+    // Gaussian RBW filter. Scale sigma so that the discrete sum of the kernel
+    // approximates RBW / binWidth. For flat noise density D (W/Hz), each bin
+    // holds D * binWidth (W). After convolution: output = D * binWidth * sum(kernel)
+    //                          ≈ D * binWidth * (RBW / binWidth) = D * RBW
+    // This makes the displayed noise floor independent of the internal grid spacing.
+    // For a tone (single-bin impulse), peak power is preserved because kernel[center]=1.
+    double rbw_bins = m_rbw / binWidth;
+    constexpr double sqrt_2pi = 2.5066282746310002; // sqrt(2 * pi)
+    double sigma = rbw_bins / sqrt_2pi;
+    int kernel_half = std::max(1, static_cast<int>(std::ceil(3.0 * sigma)));
     int kernel_size = 2 * kernel_half + 1;
 
     std::vector<double> kernel(kernel_size);
-    double sigma = kernel_half / 2.0 + 0.001;
-
     for (int i = 0; i < kernel_size; ++i) {
         int x = i - kernel_half;
         kernel[i] = std::exp(-0.5 * (x * x) / (sigma * sigma));
     }
-    // Kernel peaks at 1 (center). This preserves tone peak power after convolution.
-    // For noise, the convolution integrates per-bin power over the filter shape,
-    // producing a result proportional to density * RBW (independent of internal grid).
+    // Kernel peaks at 1 (center) — preserves tone peak power.
+    // sum(kernel) ≈ RBW / binWidth — integrates noise over RBW, grid-independent.
 
     std::vector<double> out(n, 0.0);
     for (size_t i = 0; i < n; ++i) {
