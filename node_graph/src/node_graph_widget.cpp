@@ -58,9 +58,19 @@ void NodeGraphWidget::drawLinks() {
 }
 
 void NodeGraphWidget::handleContextMenu() {
-    if (!ImGui::IsMouseClicked(1))
-        return;
-    // TODO(Task 4): implement context menu
+    if (ImGui::IsMouseClicked(1) && ImGui::IsWindowHovered()) {
+        ImGui::OpenPopup("node_context_menu");
+    }
+
+    if (ImGui::BeginPopup("node_context_menu")) {
+        if (ImGui::MenuItem("Add Generator")) {
+            if (onAddGenerator) onAddGenerator();
+        }
+        if (ImGui::MenuItem("Add Amplifier")) {
+            if (onAddAmplifier) onAddAmplifier();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void NodeGraphWidget::handleLinkCreation() {
@@ -78,7 +88,17 @@ void NodeGraphWidget::handleLinkDeletion() {
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
-    // TODO(Task 4): implement node deletion
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        int num_selected = ImNodes::NumSelectedNodes();
+        if (num_selected > 0) {
+            std::vector<int> selected_nodes(num_selected);
+            ImNodes::GetSelectedNodes(selected_nodes.data());
+            for (int node_id : selected_nodes) {
+                if (onRemoveNode) onRemoveNode(node_id);
+            }
+            ImNodes::ClearNodeSelection();
+        }
+    }
 }
 
 void NodeGraphWidget::handleProbeClick() {
