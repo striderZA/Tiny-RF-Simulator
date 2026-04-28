@@ -52,6 +52,13 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
+    if (!m_probe_label.empty()) {
+        ImGui::Text("Probing: %s", m_probe_label.c_str());
+    } else {
+        ImGui::Text("No node probed");
+    }
+    ImGui::Separator();
+
     auto active_nodes = m_view_manager.getActiveNodes();
 
     if (active_nodes.empty()) {
