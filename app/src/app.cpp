@@ -4,11 +4,12 @@
 #include <algorithm>
 
 RfSimulatorApp::RfSimulatorApp() {
-    static const int defaultGeneratorCount = static_cast<int>(InputSignals::COUNT);
+    m_generator = std::make_unique<SignalGeneratorEngine>(0);
+    m_generator_widget = std::make_unique<SignalGeneratorWidget>(*m_generator);
+    m_generator->addTone(100e6, -20.0);
+    m_view_manager.registerNode(&m_generator->node());
+
     static const int defaultAmplifierCount = 1;
-    for (int i = 0; i < defaultGeneratorCount; ++i) {
-        addGenerator();
-    }
     for (int i = 0; i < defaultAmplifierCount; ++i) {
         addAmplifier();
     }
@@ -16,30 +17,12 @@ RfSimulatorApp::RfSimulatorApp() {
 }
 
 void RfSimulatorApp::update_dsp() {
+    m_generator->update(0.0);
 
-    for (auto &gen : m_generators) {
-        gen->update(0.0);
+    if (!m_amplifiers.empty()) {
+        m_amplifiers[0]->node().input = m_generator->node().output;
+        m_amplifiers[0]->update(0.0);
     }
-
-    size_t count = std::min(m_generators.size(), m_amplifiers.size());
-    for (size_t i = 0; i < count; ++i) {
-        m_amplifiers[i]->node().input = m_generators[i]->node().output;
-        m_amplifiers[i]->update(0.0);
-    }
-}
-
-void RfSimulatorApp::addGenerator() {
-    int id = static_cast<int>(m_generators.size());
-    m_generators.push_back(std::make_unique<SignalGeneratorEngine>(id));
-    m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*m_generators.back()));
-    m_view_manager.registerNode(&m_generators.back()->node());
-}
-
-void RfSimulatorApp::removeGenerator(size_t index) {
-    if (index >= m_generators.size()) return;
-    m_view_manager.unregisterNode(&m_generators[index]->node());
-    m_generators.erase(m_generators.begin() + index);
-    m_generator_widgets.erase(m_generator_widgets.begin() + index);
 }
 
 void RfSimulatorApp::addAmplifier() {
@@ -52,8 +35,8 @@ void RfSimulatorApp::addAmplifier() {
 void RfSimulatorApp::removeAmplifier(size_t index) {
     if (index >= m_amplifiers.size()) return;
     m_view_manager.unregisterNode(&m_amplifiers[index]->node());
-    m_amplifiers.erase(m_amplifiers.begin() + index);
-    m_amplifier_widgets.erase(m_amplifier_widgets.begin() + index);
+    m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(index));
+    m_amplifier_widgets.erase(m_amplifier_widgets.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
 void RfSimulatorApp::draw_ui() {
@@ -66,12 +49,7 @@ void RfSimulatorApp::draw_ui() {
 
     m_spectrum_widget->draw("Spectrum Analyzer");
 
-    for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
-        char title_buffer[64];
-        std::snprintf(title_buffer, sizeof(title_buffer), "Generator %d##gen%zu",
-                      m_generators[i]->id(), i);
-        m_generator_widgets[i]->draw(title_buffer);
-    }
+    m_generator_widget->draw("Generator 0##gen0");
 
     for (size_t i = 0; i < m_amplifier_widgets.size(); ++i) {
         char title_buffer[64];
@@ -84,24 +62,9 @@ void RfSimulatorApp::draw_ui() {
         m_log_widget.draw("Log", &m_show_log);
 }
 
-void RfSimulatorApp::draw_signal_chain(const char* title) {
+void RfSimulatorApp::draw_signal_chain(const char *title) {
     if (ImGui::Begin(title)) {
-        ImGui::Text("Generators: %zu", m_generators.size());
-        ImGui::SameLine();
-        if (ImGui::Button("Add Generator")) {
-            addGenerator();
-        }
-        for (size_t i = 0; i < m_generators.size(); ++i) {
-            ImGui::PushID(i);
-            ImGui::Text("Generator %d", m_generators[i]->id());
-            ImGui::SameLine();
-            if (ImGui::Button("Remove")) {
-                removeGenerator(i);
-                ImGui::PopID();
-                break; // vector invalidated
-            }
-            ImGui::PopID();
-        }
+        ImGui::Text("Generator: 1");
         ImGui::Separator();
         ImGui::Text("Amplifiers: %zu", m_amplifiers.size());
         ImGui::SameLine();
@@ -109,7 +72,7 @@ void RfSimulatorApp::draw_signal_chain(const char* title) {
             addAmplifier();
         }
         for (size_t i = 0; i < m_amplifiers.size(); ++i) {
-            ImGui::PushID(i + 1000);
+            ImGui::PushID(static_cast<int>(i + 1000));
             ImGui::Text("Amplifier %d", m_amplifiers[i]->id());
             ImGui::SameLine();
             if (ImGui::Button("Remove")) {

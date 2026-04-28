@@ -9,25 +9,14 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     t = IM_REGISTER_TEST(e, "rf_simulator", "signal_chain_exists");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         ctx->SetRef("Signal Chain");
-        ctx->ItemExists("Generators:");
-        ctx->ItemExists("Add Generator");
+        ctx->ItemExists("Generator: 1");
         ctx->ItemExists("Add Amplifier");
     };
 
-    t = IM_REGISTER_TEST(e, "rf_simulator", "default_generators_present");
+    t = IM_REGISTER_TEST(e, "rf_simulator", "single_generator_present");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         ctx->SetRef("Signal Chain");
-        ctx->ItemExists("Generator 0");
-        ctx->ItemExists("Generator 1");
-        ctx->ItemExists("Generator 2");
-        ctx->ItemExists("Generator 3");
-    };
-
-    t = IM_REGISTER_TEST(e, "rf_simulator", "add_generator");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->SetRef("Signal Chain");
-        ctx->ItemClick("Add Generator");
-        ctx->ItemExists("Generator 4");
+        ctx->ItemExists("Generator: 1");
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "add_amplifier");
