@@ -1,6 +1,6 @@
 #include "app.h"
 #include "imgui.h"
-#include "logging_widget.h">
+#include "logging_widget.h"
 
 RfSimulatorApp::RfSimulatorApp() {
     m_generator = std::make_unique<SignalGeneratorEngine>(0);
