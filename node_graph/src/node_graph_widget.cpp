@@ -1,6 +1,7 @@
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include <cmath>
 
 NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
@@ -19,6 +20,8 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         drawLinks();
 
         ImNodes::EndNodeEditor();
+
+        // Process interactions after EndNodeEditor()
         handleLinkCreation();
         handleLinkDeletion();
         handleProbeClick();
@@ -42,9 +45,18 @@ void NodeGraphWidget::drawNodes() {
         }
 
         if (node.output_pin_id >= 0) {
+            bool is_probed = (node.output_pin_id == m_engine.activeProbePin());
+            if (is_probed) {
+                ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(22, 199, 154, 255));
+                ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(22, 199, 154, 255));
+            }
             ImNodes::BeginOutputAttribute(node.output_pin_id);
             ImGui::Text("OUT");
             ImNodes::EndOutputAttribute();
+            if (is_probed) {
+                ImNodes::PopColorStyle();
+                ImNodes::PopColorStyle();
+            }
         }
 
         ImNodes::EndNode();
@@ -58,11 +70,31 @@ void NodeGraphWidget::drawLinks() {
 }
 
 void NodeGraphWidget::handleContextMenu() {
-    if (ImGui::IsMouseClicked(1) && ImGui::IsWindowHovered()) {
+    bool right_click = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+    bool editor_hovered = ImNodes::IsEditorHovered();
+
+    if (!right_click || !editor_hovered) {
+        return;
+    }
+
+    int hovered_node = -1;
+    bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
+
+    if (node_hovered) {
         ImGui::OpenPopup("node_context_menu");
+        m_context_menu_node = hovered_node;
+    } else {
+        ImGui::OpenPopup("canvas_context_menu");
     }
 
     if (ImGui::BeginPopup("node_context_menu")) {
+        if (ImGui::MenuItem("Remove")) {
+            if (onRemoveNode) onRemoveNode(m_context_menu_node);
+        }
+        ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopup("canvas_context_menu")) {
         if (ImGui::MenuItem("Add Generator")) {
             if (onAddGenerator) onAddGenerator();
         }
@@ -75,7 +107,8 @@ void NodeGraphWidget::handleContextMenu() {
 
 void NodeGraphWidget::handleLinkCreation() {
     int start_pin, end_pin;
-    if (ImNodes::IsLinkCreated(&start_pin, &end_pin)) {
+    m_link_created = ImNodes::IsLinkCreated(&start_pin, &end_pin);
+    if (m_link_created) {
         m_engine.addLink(start_pin, end_pin);
     }
 }
@@ -102,12 +135,55 @@ void NodeGraphWidget::handleNodeDeletion() {
 }
 
 void NodeGraphWidget::handleProbeClick() {
-    int active_attr = -1;
-    if (ImNodes::IsAnyAttributeActive(&active_attr)) {
-        for (const auto &node : m_engine.nodes()) {
-            if (node.output_pin_id == active_attr && ImGui::IsMouseClicked(0)) {
-                m_engine.setActiveProbePin(active_attr);
+    int hovered_pin = -1;
+    int hovered_node = -1;
+
+    // Detect click start on a pin or node
+    if (ImGui::IsMouseClicked(0)) {
+        ImVec2 pos = ImGui::GetMousePos();
+        m_click_mouse_x = pos.x;
+        m_click_mouse_y = pos.y;
+
+        if (ImNodes::IsPinHovered(&hovered_pin)) {
+            m_clicked_pin = hovered_pin;
+        } else if (ImNodes::IsNodeHovered(&hovered_node)) {
+            m_clicked_node = hovered_node;
+        }
+    }
+
+    // On mouse release, if no link was created and we clicked on an output, probe it
+    if (ImGui::IsMouseReleased(0)) {
+        // Only treat as a click (not drag) if mouse didn't move much
+        ImVec2 release_pos = ImGui::GetMousePos();
+        float dx = release_pos.x - m_click_mouse_x;
+        float dy = release_pos.y - m_click_mouse_y;
+        float drag_dist = std::sqrt(dx * dx + dy * dy);
+        bool is_click = drag_dist < 5.0f;
+
+        if (is_click && !m_link_created) {
+            // Pin click takes priority
+            if (m_clicked_pin >= 0) {
+                for (const auto &node : m_engine.nodes()) {
+                    if (node.output_pin_id == m_clicked_pin) {
+                        m_engine.setActiveProbePin(m_clicked_pin);
+                        break;
+                    }
+                }
+            }
+            // Node body click probes the node's output
+            else if (m_clicked_node >= 0) {
+                for (const auto &node : m_engine.nodes()) {
+                    if (node.node_id == m_clicked_node && node.output_pin_id >= 0) {
+                        m_engine.setActiveProbePin(node.output_pin_id);
+                        break;
+                    }
+                }
             }
         }
+
+        // Reset state
+        m_clicked_pin = -1;
+        m_clicked_node = -1;
+        m_link_created = false;
     }
 }

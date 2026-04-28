@@ -21,6 +21,14 @@ class NodeGraphWidget {
     NodeGraphEngine &m_engine;
     ImNodesEditorContext *m_context;
 
+    // Interaction state tracking
+    int m_clicked_pin = -1;
+    int m_clicked_node = -1;
+    int m_context_menu_node = -1;
+    bool m_link_created = false;
+    float m_click_mouse_x = 0.0f;
+    float m_click_mouse_y = 0.0f;
+
     void drawNodes();
     void drawLinks();
     void handleContextMenu();
