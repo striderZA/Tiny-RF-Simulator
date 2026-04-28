@@ -17,21 +17,27 @@ std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum 
     size_t n = spec.frequencies.size();
     std::vector<double> power_W(n, 0.0);
 
+    double bin_width = 1.0;
+    if (spec.frequencies.size() >= 2) {
+        bin_width = spec.frequencies[1] - spec.frequencies[0];
+    }
+
+    // Convert noise density (W/Hz) to per-bin power (W)
     if (spec.noise_total_W.size() == n) {
         for (size_t i = 0; i < n; ++i) {
-            power_W[i] = spec.noise_total_W[i];
+            power_W[i] = spec.noise_total_W[i] * bin_width;
         }
     } else if (!spec.noise_total_W.empty()) {
         for (size_t i = 0; i < n && i < spec.noise_total_W.size(); ++i) {
-            power_W[i] = spec.noise_total_W[i];
+            power_W[i] = spec.noise_total_W[i] * bin_width;
         }
     }
 
+    // Add tones as discrete impulses
     for (const auto &t : spec.tones) {
         if (n < 2) {
             continue;
         }
-        double bin_width = spec.frequencies[1] - spec.frequencies[0];
         int bin_idx =
             static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
@@ -130,16 +136,14 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &
 
     std::vector<double> kernel(kernel_size);
     double sigma = kernel_half / 2.0 + 0.001;
-    double sum = 0.0;
 
     for (int i = 0; i < kernel_size; ++i) {
         int x = i - kernel_half;
         kernel[i] = std::exp(-0.5 * (x * x) / (sigma * sigma));
-        sum += kernel[i];
     }
-    for (auto &k : kernel) {
-        k /= sum;
-    }
+    // Kernel peaks at 1 (center). This preserves tone peak power after convolution.
+    // For noise, the convolution integrates per-bin power over the filter shape,
+    // producing a result proportional to density * RBW (independent of internal grid).
 
     std::vector<double> out(n, 0.0);
     for (size_t i = 0; i < n; ++i) {
