@@ -5,6 +5,7 @@
 #include "signal_generator_engine.h"
 #include "amplifier_engine.h"
 #include "spectrum_analyzer_engine.h"
+#include "node_graph_engine.h"
 
 using Catch::Approx;
 
@@ -53,7 +54,8 @@ TEST_CASE("Spectrum computeTotalNoise", "[common]") {
 }
 
 TEST_CASE("Generator outputs flat thermal noise density", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
     const auto &out = gen.node().output;
@@ -64,14 +66,16 @@ TEST_CASE("Generator outputs flat thermal noise density", "[generator]") {
 }
 
 TEST_CASE("Generator with no tones produces empty tone list", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
     REQUIRE(gen.node().output.tones.empty());
     REQUIRE(gen.toneCount() == 0);
 }
 
 TEST_CASE("Generator with multiple tones outputs all tones", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.addTone(100e6, -20.0);
     gen.addTone(200e6, -10.0);
     gen.addTone(50e6, 0.0);
@@ -89,7 +93,8 @@ TEST_CASE("Generator with multiple tones outputs all tones", "[generator]") {
 }
 
 TEST_CASE("Generator removeTone works correctly", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.addTone(100e6, -20.0);
     gen.addTone(200e6, -10.0);
     gen.removeTone(0);
@@ -101,7 +106,8 @@ TEST_CASE("Generator removeTone works correctly", "[generator]") {
 }
 
 TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.addTone(100e6, -20.0);
     gen.updateTone(0, 150e6, -5.0);
     gen.update(0.0);
@@ -112,7 +118,8 @@ TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
 }
 
 TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     // No tones - just noise
     gen.update(0.0);
     for (double density : gen.node().output.noise_total_W) {
@@ -130,7 +137,8 @@ TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
 }
 
 TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
     AmplifierEngine amp(0);
@@ -152,7 +160,8 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
 }
 
 TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spectrum]") {
-    SignalGeneratorEngine gen(0);
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
     AmplifierEngine amp(0);

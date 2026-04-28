@@ -10,7 +10,7 @@ target_include_directories(signal_generator_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(signal_generator_engine PUBLIC common)
+target_link_libraries(signal_generator_engine PUBLIC common simulator::node_graph_engine)
 
 add_library(simulator::signal_generator_engine ALIAS signal_generator_engine)
 

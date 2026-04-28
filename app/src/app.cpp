@@ -3,7 +3,7 @@
 #include "logging_widget.h"
 
 RfSimulatorApp::RfSimulatorApp() {
-    m_generator = std::make_unique<SignalGeneratorEngine>(0);
+    m_generator = std::make_unique<SignalGeneratorEngine>(0, m_node_graph);
     m_generator_widget = std::make_unique<SignalGeneratorWidget>(*m_generator);
     m_generator->addTone(100e6, -20.0);
     m_view_manager.registerNode(&m_generator->node());

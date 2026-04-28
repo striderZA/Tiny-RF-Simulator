@@ -8,6 +8,7 @@
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
 #include "view_manager.h"
+#include "node_graph_engine.h"
 #include <memory>
 #include <vector>
 
@@ -24,6 +25,7 @@ class RfSimulatorApp {
 
   private:
     ViewManager m_view_manager;
+    NodeGraphEngine m_node_graph;
     SpectrumAnalyzerEngine m_spectrum_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::unique_ptr<SignalGeneratorEngine> m_generator;
