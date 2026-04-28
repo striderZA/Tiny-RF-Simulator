@@ -27,10 +27,7 @@ void SignalGeneratorEngine::rebuildFrequencyGrid() {
 }
 
 void SignalGeneratorEngine::setToneFrequency(double frequency) {
-    // Snap to the fixed 10 MHz grid so the tone always lands on a display point.
-    constexpr double grid_step = 10e6;
-    int bin = static_cast<int>(std::round((frequency - MIN_FREQ) / grid_step));
-    m_active_tone.first = MIN_FREQ + bin * grid_step;
+    m_active_tone.first = frequency;
 }
 
 void SignalGeneratorEngine::update(double dt) {
