@@ -11,15 +11,11 @@
 #include <memory>
 #include <vector>
 
-enum class InputSignals : int { G0 = 0, G1, G2, G3, COUNT };
-
 class RfSimulatorApp {
   public:
     RfSimulatorApp();
     void draw_ui();
     void update_dsp();
-    void addGenerator();
-    void removeGenerator(size_t index);
     void addAmplifier();
     void removeAmplifier(size_t index);
 
@@ -30,9 +26,9 @@ class RfSimulatorApp {
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
-    std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
-    std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
+    std::unique_ptr<SignalGeneratorEngine> m_generator;
+    std::unique_ptr<SignalGeneratorWidget> m_generator_widget;
     std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
     std::vector<std::unique_ptr<AmplifierWidget>> m_amplifier_widgets;
-    void draw_signal_chain(const char* title);
+    void draw_signal_chain(const char *title);
 };
