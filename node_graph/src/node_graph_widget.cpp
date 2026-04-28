@@ -2,20 +2,17 @@
 #include "imgui.h"
 #include "imnodes.h"
 
-NodeGraphWidget::NodeGraphWidget(NodeGraphEngine& engine)
-    : m_engine(engine), m_context(nullptr) {
+NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
-    ImNodes::EditorContextSet(static_cast<ImNodesEditorContext*>(m_context));
+    ImNodes::EditorContextSet(m_context);
 }
 
-NodeGraphWidget::~NodeGraphWidget() {
-    ImNodes::EditorContextFree(static_cast<ImNodesEditorContext*>(m_context));
-}
+NodeGraphWidget::~NodeGraphWidget() { ImNodes::EditorContextFree(m_context); }
 
-void NodeGraphWidget::draw(const char* title) {
-    ImNodes::EditorContextSet(static_cast<ImNodesEditorContext*>(m_context));
+void NodeGraphWidget::draw(const char *title, bool *p_open) {
+    ImNodes::EditorContextSet(m_context);
 
-    if (ImGui::Begin(title)) {
+    if (ImGui::Begin(title, p_open)) {
         ImNodes::BeginNodeEditor();
 
         drawNodes();
@@ -32,8 +29,7 @@ void NodeGraphWidget::draw(const char* title) {
 }
 
 void NodeGraphWidget::drawNodes() {
-    m_hovered_pin = -1;
-    for (const auto& node : m_engine.nodes()) {
+    for (const auto &node : m_engine.nodes()) {
         ImNodes::BeginNode(node.node_id);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
@@ -48,9 +44,6 @@ void NodeGraphWidget::drawNodes() {
         if (node.output_pin_id >= 0) {
             ImNodes::BeginOutputAttribute(node.output_pin_id);
             ImGui::Text("OUT");
-            if (ImGui::IsItemHovered()) {
-                m_hovered_pin = node.output_pin_id;
-            }
             ImNodes::EndOutputAttribute();
         }
 
@@ -59,14 +52,15 @@ void NodeGraphWidget::drawNodes() {
 }
 
 void NodeGraphWidget::drawLinks() {
-    for (const auto& link : m_engine.links()) {
+    for (const auto &link : m_engine.links()) {
         ImNodes::Link(link.link_id, link.start_pin_id, link.end_pin_id);
     }
 }
 
 void NodeGraphWidget::handleContextMenu() {
-    if (!ImGui::IsMouseClicked(1)) return;
-    // Stub - will be implemented in Task 4
+    if (!ImGui::IsMouseClicked(1))
+        return;
+    // TODO(Task 4): implement context menu
 }
 
 void NodeGraphWidget::handleLinkCreation() {
@@ -84,11 +78,16 @@ void NodeGraphWidget::handleLinkDeletion() {
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
-    // Stub - will be implemented in Task 4
+    // TODO(Task 4): implement node deletion
 }
 
 void NodeGraphWidget::handleProbeClick() {
-    if (m_hovered_pin >= 0 && ImGui::IsMouseClicked(0)) {
-        m_engine.setActiveProbePin(m_hovered_pin);
+    int active_attr = -1;
+    if (ImNodes::IsAnyAttributeActive(&active_attr)) {
+        for (const auto &node : m_engine.nodes()) {
+            if (node.output_pin_id == active_attr && ImGui::IsMouseClicked(0)) {
+                m_engine.setActiveProbePin(active_attr);
+            }
+        }
     }
 }
