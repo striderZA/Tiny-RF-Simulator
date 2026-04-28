@@ -49,14 +49,19 @@ struct Spectrum {
             noise_total_W[i] = noise_input + noise_added;
         }
     }
-        double bin_width = frequencies[1] - frequencies[0];
+
+    void computeTotalNoise() {
+        size_t n = frequencies.size();
+        noise_total_W.assign(n, 0.0);
+        if (n < 2) {
+            return;
+        }
         for (size_t i = 0; i < n; ++i) {
             double noise_input = (i < noise_W.size()) ? noise_W[i] : 0.0;
             double noise_added = (i < noise_added_W.size()) ? noise_added_W[i] : 0.0;
-            double awgn = thermalNoisePower_W(bin_width);
-
-            noise_total_W[i] = noise_input + noise_added + awgn;
+            noise_total_W[i] = noise_input + noise_added;
         }
+
     }
 };
 
