@@ -38,7 +38,7 @@ void AmplifierEngine::update(double dt) {
     }
 
     double G = dbToLinear(m_gain_dB);
-    double added_per_bin_mean = addedNoisePerBin_W(m_nf_dB, G, m_f_step_Hz);
+    double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, G);
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
@@ -47,11 +47,10 @@ void AmplifierEngine::update(double dt) {
     }
 
     out.noise_added_W.resize(N);
-    if (added_per_bin_mean <= 0.0) {
-        // no added noise => fill zeros
+    if (added_density <= 0.0) {
         out.noise_added_W.assign(N, 0.0);
     } else {
-        out.noise_added_W.assign(N, added_per_bin_mean);
+        out.noise_added_W.assign(N, added_density);
     }
     out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i) {
