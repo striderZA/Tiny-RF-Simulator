@@ -7,6 +7,9 @@ add_executable(tests test_main.cpp)
 target_link_libraries(tests PRIVATE
     Catch2::Catch2WithMain
     common
+    simulator::signal_generator_engine
+    simulator::amplifier_engine
+    simulator::spectrum_analyzer_engine
 )
 
 include(CTest)
