@@ -20,7 +20,8 @@ void SignalGeneratorEngine::rebuildFrequencyGrid() {
 
     m_node.output.noise_W.assign(n, 0.0);
     m_node.output.noise_added_W.assign(n, 0.0);
-    m_node.input.noise_total_W.assign(n, k * T * m_f_step_Hz);
+    // Generator is an ideal source: flat thermal noise density k*T (W/Hz)
+    m_node.input.noise_total_W.assign(n, k * T);
     m_node.output.computeTotalNoise();
 }
 
@@ -43,17 +44,15 @@ void SignalGeneratorEngine::update(double dt) {
         return;
     }
 
-    double G = dbToLinear(m_gain_dB);
-
-    double added_per_bin = addedNoisePerBin_W(m_nf_dB, G, m_f_step_Hz);
-
+    // Unity gain for noise density (clean source)
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
         double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
-        out.noise_W[i] = G * nin;
+        out.noise_W[i] = nin;
     }
 
-    out.noise_added_W.assign(N, added_per_bin);
+    // Generator adds no noise of its own
+    out.noise_added_W.assign(N, 0.0);
 
     out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
