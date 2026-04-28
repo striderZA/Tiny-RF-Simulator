@@ -141,7 +141,7 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
-    AmplifierEngine amp(0);
+    AmplifierEngine amp(0, graph);
     amp.setGain_dB(10.0);
     amp.setNF_dB(3.0);
     amp.node().input = gen.node().output;
@@ -164,7 +164,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
-    AmplifierEngine amp(0);
+    AmplifierEngine amp(0, graph);
     amp.setGain_dB(20.0);
     amp.setNF_dB(5.0);
     amp.setFreqStep(10e6);

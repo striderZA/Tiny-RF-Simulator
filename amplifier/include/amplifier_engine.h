@@ -1,12 +1,16 @@
 #pragma once
 
 #include "common.h"
+#include "node_graph_engine.h"
 #include "signal_node.h"
 
 class AmplifierEngine {
   public:
-    AmplifierEngine(int id);
+    AmplifierEngine(int id, NodeGraphEngine& graph);
     int id() const { return m_id; }
+    int graphNodeId() const { return m_graph_node_id; }
+    int inputPinId() const;
+    int outputPinId() const;
 
     void setFreqStep(double Hz) { m_f_step_Hz = Hz; }
     void setGain_dB(double g) { m_gain_dB = g; }
@@ -21,6 +25,8 @@ class AmplifierEngine {
 
   private:
     int m_id;
+    int m_graph_node_id = -1;
+    NodeGraphEngine* m_graph = nullptr;
 
     SignalNode m_node;
     double m_gain_dB = 0.0;
