@@ -1,10 +1,19 @@
 #include "signal_generator_engine.h"
-#include "common.h"
-#include <cmath>
 
-SignalGeneratorEngine::SignalGeneratorEngine(int id)
-    : m_id(id) {
+SignalGeneratorEngine::SignalGeneratorEngine(int id, NodeGraphEngine& graph)
+    : m_id(id), m_graph(&graph) {
+    m_graph_node_id = graph.addNode("Generator " + std::to_string(id), &m_node, false, true);
     rebuildFrequencyGrid();
+}
+
+int SignalGeneratorEngine::outputPinId() const {
+    if (!m_graph || m_graph_node_id < 0) return -1;
+    for (const auto& node : m_graph->nodes()) {
+        if (node.node_id == m_graph_node_id) {
+            return node.output_pin_id;
+        }
+    }
+    return -1;
 }
 
 void SignalGeneratorEngine::rebuildFrequencyGrid() {

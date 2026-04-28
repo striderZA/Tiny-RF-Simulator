@@ -1,12 +1,15 @@
 #pragma once
 #include "common.h"
+#include "node_graph_engine.h"
 #include "signal_node.h"
 
 class SignalGeneratorEngine {
   public:
-    SignalGeneratorEngine(int id);
+    SignalGeneratorEngine(int id, NodeGraphEngine& graph);
 
     int id() const { return m_id; }
+    int graphNodeId() const { return m_graph_node_id; }
+    int outputPinId() const;
 
     void addTone(double freq_Hz, double power_dBm);
     void removeTone(size_t index);
@@ -19,6 +22,8 @@ class SignalGeneratorEngine {
 
   private:
     int m_id;
+    int m_graph_node_id = -1;
+    NodeGraphEngine* m_graph = nullptr;
     std::vector<Spectrum::Tone> m_tones;
     SignalNode m_node;
 
