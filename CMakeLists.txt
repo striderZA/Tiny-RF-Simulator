@@ -48,6 +48,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
+# Fetch imgui_test_engine
+FetchContent_Declare(
+    imgui_test_engine
+    GIT_REPOSITORY https://github.com/ocornut/imgui_test_engine.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(imgui_test_engine)
+
 enable_testing()
 
 # Find OpenGL
@@ -70,6 +78,7 @@ target_include_directories(imgui PUBLIC
 )
 
 target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
 
 # Define implot library
 add_library(implot STATIC
@@ -84,6 +93,29 @@ target_include_directories(implot PUBLIC
 
 target_link_libraries(implot PUBLIC imgui)
 
+# Define imgui_test_engine library
+add_library(imgui_test_engine STATIC
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_context.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_engine.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_coroutine.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_exporters.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_ui.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_utils.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_capture_tool.cpp
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/imgui_te_perftool.cpp
+)
+
+target_include_directories(imgui_test_engine PUBLIC
+    ${imgui_test_engine_SOURCE_DIR}
+    ${imgui_test_engine_SOURCE_DIR}/imgui_test_engine/thirdparty
+)
+
+target_compile_definitions(imgui_test_engine PRIVATE
+    IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+)
+
+target_link_libraries(imgui_test_engine PUBLIC imgui PRIVATE glfw OpenGL::GL)
+
 # Include sub-projects.
 add_subdirectory("core")
 add_subdirectory("app")
@@ -94,3 +126,4 @@ add_subdirectory("common")
 add_subdirectory("logging")
 add_subdirectory ("src")
 add_subdirectory("tests")
+add_subdirectory("test_engine")
