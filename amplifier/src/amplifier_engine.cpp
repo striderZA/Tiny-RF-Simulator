@@ -41,17 +41,9 @@ void AmplifierEngine::update(double dt) {
     double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, G);
 
     out.noise_W.assign(N, 0.0);
-    if (in.noise_total_W.size() == 1) {
-        // Uniform noise density from a pure source (e.g. generator with no grid)
-        double nin = in.noise_total_W[0];
-        for (size_t i = 0; i < N; ++i) {
-            out.noise_W[i] = G * nin;
-        }
-    } else {
-        for (size_t i = 0; i < N; ++i) {
-            double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
-            out.noise_W[i] = G * nin;
-        }
+    for (size_t i = 0; i < N; ++i) {
+        double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
+        out.noise_W[i] = G * nin;
     }
 
     out.noise_added_W.resize(N);

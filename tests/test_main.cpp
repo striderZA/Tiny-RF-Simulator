@@ -104,7 +104,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     std::vector<const Spectrum *> specs = {&amp.node().output};
     auto display1 = sa.renderCombinedSpectrum(specs);
 
-    // Change amplifier grid spacing; generator has no grid of its own.
+    // Change amplifier grid spacing; generator grid is fixed at 10 MHz.
     amp.setFreqStep(20e6);
     amp.node().input = gen.node().output;
     amp.update(0.0);
