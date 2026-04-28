@@ -56,6 +56,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui_test_engine)
 
+# Fetch imnodes
+FetchContent_Declare(
+    imnodes
+    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+    GIT_TAG master
+)
+# Using Populate (not MakeAvailable) because imnodes ships its own CMakeLists.txt
+# that defines an 'imnodes' target; we define the target manually below to ensure
+# correct imgui linkage in this FetchContent-based build.
+FetchContent_Populate(imnodes)
+
 enable_testing()
 
 # Find OpenGL
@@ -120,6 +131,14 @@ target_link_libraries(imgui_test_engine PUBLIC imgui PRIVATE glfw OpenGL::GL)
 # to satisfy the hook symbol references.
 target_link_libraries(imgui PRIVATE imgui_test_engine)
 
+# Define imnodes library
+add_library(imnodes STATIC
+    ${imnodes_SOURCE_DIR}/imnodes.cpp
+)
+
+target_include_directories(imnodes PUBLIC ${imnodes_SOURCE_DIR})
+target_link_libraries(imnodes PUBLIC imgui)
+
 # Include sub-projects.
 add_subdirectory("core")
 add_subdirectory("app")
@@ -131,3 +150,4 @@ add_subdirectory("logging")
 add_subdirectory ("src")
 add_subdirectory("tests")
 add_subdirectory("test_engine")
+add_subdirectory("node_graph")
