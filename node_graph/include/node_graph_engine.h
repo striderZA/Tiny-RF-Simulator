@@ -8,7 +8,7 @@ struct GraphNode {
     int node_id;
     int input_pin_id;
     int output_pin_id;
-    SignalNode* signal_node;
+    SignalNode *signal_node;
     std::string label;
 };
 
@@ -20,22 +20,21 @@ struct GraphLink {
 
 class NodeGraphEngine {
   public:
-    int addNode(const std::string& label, SignalNode* signal_node,
-                bool has_input, bool has_output);
+    int addNode(const std::string &label, SignalNode *signal_node, bool has_input, bool has_output);
     void removeNode(int node_id);
 
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);
 
-    SignalNode* getSourceForInput(int input_pin_id) const;
-    std::vector<SignalNode*> getConnectedOutputs(int input_pin_id) const;
+    SignalNode *getSourceForInput(int input_pin_id) const;
+    std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
 
     int activeProbePin() const { return m_active_probe_pin; }
     void setActiveProbePin(int pin_id) { m_active_probe_pin = pin_id; }
-    SignalNode* probedSignalNode() const;
+    SignalNode *probedSignalNode() const;
 
-    const std::vector<GraphNode>& nodes() const { return m_nodes; }
-    const std::vector<GraphLink>& links() const { return m_links; }
+    const std::vector<GraphNode> &nodes() const { return m_nodes; }
+    const std::vector<GraphLink> &links() const { return m_links; }
 
   private:
     int m_next_node_id = 1;
