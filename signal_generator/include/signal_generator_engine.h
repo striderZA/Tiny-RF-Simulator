@@ -19,4 +19,6 @@ class SignalGeneratorEngine {
     int m_id;
     tone m_active_tone;
     SignalNode m_node;
+
+    void rebuildFrequencyGrid();
 };
