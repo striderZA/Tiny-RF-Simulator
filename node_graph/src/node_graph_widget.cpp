@@ -17,13 +17,13 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 
         drawNodes();
         drawLinks();
-        handleLinkCreation();
-        handleLinkDeletion();
-        handleNodeDeletion();
-        handleProbeClick();
 
         ImNodes::EndNodeEditor();
+        handleLinkCreation();
+        handleLinkDeletion();
+        handleProbeClick();
         handleContextMenu();
+        handleNodeDeletion();
     }
     ImGui::End();
 }

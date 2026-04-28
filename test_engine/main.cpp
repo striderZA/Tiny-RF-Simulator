@@ -5,6 +5,7 @@
 #include "imgui_impl_opengl2.h"
 #include <GLFW/glfw3.h>
 #include <implot.h>
+#include <imnodes.h>
 #include "imgui_test_engine/imgui_te_engine.h"
 #include "imgui_test_engine/imgui_te_ui.h"
 #include "imgui_test_engine/imgui_te_exporters.h"
@@ -27,6 +28,7 @@ int main() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
+    ImNodes::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -111,6 +113,7 @@ int main() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     ImPlot::DestroyContext();
+    ImNodes::DestroyContext();
 
     ImGuiTestEngine_DestroyContext(engine);
 
