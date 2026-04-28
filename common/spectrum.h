@@ -2,8 +2,6 @@
 
 #include "common.h"
 #include <cmath>
-#include <chrono>
-#include <random>
 #include <vector>
 
 struct Spectrum {
@@ -14,41 +12,12 @@ struct Spectrum {
 
     std::vector<double> frequencies;
     std::vector<Tone> tones;
-    std::vector<double> noise_W;
-    std::vector<double> noise_added_W;
-    std::vector<double> noise_total_W;
 
-    double thermalNoisePower_W(double bin_width) {
-        double mean_noise_power_W = k * T * bin_width;
-        static thread_local std::mt19937 gen = []() {
-            std::random_device rd;
-            try {
-                return std::mt19937(rd());
-            } catch (...) {
-                return std::mt19937(std::chrono::system_clock::now().time_since_epoch().count());
-            }
-        }();
-        std::normal_distribution<double> dist(mean_noise_power_W, 0.5 * mean_noise_power_W);
-
-        double v = dist(gen);
-        if (v < 0) {
-            v = 0;
-        }
-        return v;
-    }
-
-    void computeTotalNoise() {
-        size_t n = frequencies.size();
-        noise_total_W.assign(n, 0.0);
-        if (n < 2) {
-            return;
-        }
-        for (size_t i = 0; i < n; ++i) {
-            double noise_input = (i < noise_W.size()) ? noise_W[i] : 0.0;
-            double noise_added = (i < noise_added_W.size()) ? noise_added_W[i] : 0.0;
-            noise_total_W[i] = noise_input + noise_added;
-        }
-    }
+    // Noise vectors store POWER SPECTRAL DENSITY in W/Hz.
+    // To get total power in a bin, multiply by bin width.
+    std::vector<double> noise_W;        // input noise density (W/Hz)
+    std::vector<double> noise_added_W;  // added noise density (W/Hz)
+    std::vector<double> noise_total_W;  // total output noise density (W/Hz)
 
     void computeTotalNoise() {
         size_t n = frequencies.size();
