@@ -3,7 +3,7 @@
 #include <cmath>
 
 SignalGeneratorEngine::SignalGeneratorEngine(int id)
-    : m_id(id), m_active_tone(std::make_pair<int, double>(0, -60.0)) {
+    : m_id(id) {
     rebuildFrequencyGrid();
 }
 
@@ -26,19 +26,31 @@ void SignalGeneratorEngine::rebuildFrequencyGrid() {
     m_node.output.computeTotalNoise();
 }
 
-void SignalGeneratorEngine::setToneFrequency(double frequency) {
-    m_active_tone.first = frequency;
+void SignalGeneratorEngine::addTone(double freq_Hz, double power_dBm) {
+    m_tones.push_back({freq_Hz, power_dBm});
 }
 
-void SignalGeneratorEngine::update(double dt) {
+void SignalGeneratorEngine::removeTone(size_t index) {
+    if (index < m_tones.size()) {
+        m_tones.erase(m_tones.begin() + static_cast<std::ptrdiff_t>(index));
+    }
+}
+
+void SignalGeneratorEngine::updateTone(size_t index, double freq_Hz, double power_dBm) {
+    if (index < m_tones.size()) {
+        m_tones[index].freq_Hz = freq_Hz;
+        m_tones[index].power_dBm = power_dBm;
+    }
+}
+
+void SignalGeneratorEngine::update(double) {
     auto &in = m_node.input;
     auto &out = m_node.output;
 
     out.tones.clear();
-    Spectrum::Tone t;
-    t.freq_Hz = m_active_tone.first;
-    t.power_dBm = m_active_tone.second;
-    out.tones.push_back(t);
+    for (const auto &t : m_tones) {
+        out.tones.push_back(t);
+    }
 
     const size_t N = out.frequencies.size();
     if (N < 2) {
