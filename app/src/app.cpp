@@ -26,7 +26,7 @@ void RfSimulatorApp::update_dsp() {
 
 void RfSimulatorApp::addAmplifier() {
     int id = static_cast<int>(m_amplifiers.size());
-    m_amplifiers.push_back(std::make_unique<AmplifierEngine>(id));
+    m_amplifiers.push_back(std::make_unique<AmplifierEngine>(id, m_node_graph));
     m_amplifier_widgets.push_back(std::make_unique<AmplifierWidget>(*m_amplifiers.back()));
     m_view_manager.registerNode(&m_amplifiers.back()->node());
 }
