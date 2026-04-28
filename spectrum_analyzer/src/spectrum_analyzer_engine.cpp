@@ -4,7 +4,9 @@
 #include <cmath>
 #include <random>
 
-SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() { LOG_INFO("Constructing spectrum engine..."); }
+SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() : m_rng(std::random_device{}()) {
+    LOG_INFO("Constructing spectrum engine...");
+}
 
 static double W_to_dBm(double w) {
     if (w <= 0.0) {
@@ -114,6 +116,25 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
     }
 
     std::vector<double> rbw_power_W = this->applyRBW(sum_power_W, bin_width);
+
+    // Add random noise jitter for visual "live" spectrum effect.
+    // Jitter std = median noise power (exponential: sigma = mean).
+    // VBW smooths this to a realistic level; tone peaks are unaffected.
+    if (m_noise_jitter_enabled && !rbw_power_W.empty()) {
+        // Robust noise floor estimate (median is insensitive to tone bins)
+        std::vector<double> sorted = rbw_power_W;
+        std::sort(sorted.begin(), sorted.end());
+        double median = sorted[sorted.size() / 2];
+        double noise_std = median;
+        if (noise_std > 0.0) {
+            std::normal_distribution<double> jitter(0.0, noise_std);
+            for (auto &p : rbw_power_W) {
+                p += jitter(m_rng);
+                if (p < 0.0)
+                    p = 0.0;
+            }
+        }
+    }
 
     std::vector<double> power_dBm(rbw_power_W.size());
     for (size_t i = 0; i < rbw_power_W.size(); ++i) {
