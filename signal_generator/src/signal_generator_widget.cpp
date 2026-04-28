@@ -3,11 +3,9 @@
 #include "imgui.h"
 #include "logging_core.h"
 #include "utils.h"
-#include <algorithm>
 #include <string>
 
-SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine)
-    : m_engine(engine), m_selectedTone(0) {}
+SignalGeneratorWidget::SignalGeneratorWidget(SignalGeneratorEngine &engine) : m_engine(engine) {}
 
 void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
@@ -16,65 +14,67 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                      m_engine.node().view_enabled ? "True" : "False");
         }
 
-        int tone_count = static_cast<int>(m_engine.toneCount());
-        m_selectedTone = std::clamp(m_selectedTone, 0, std::max(0, tone_count - 1));
-
-        // Tone list header
         ImGui::SeparatorText("Tones");
 
-        if (tone_count > 0) {
-            // Build a list of tone labels
-            std::vector<std::string> labels;
-            labels.reserve(static_cast<size_t>(tone_count));
-            const auto &tone_vec = m_engine.tones();
-            for (int i = 0; i < tone_count; ++i) {
-                char buf[64];
-                std::snprintf(buf, sizeof(buf), "Tone %d: %.0f MHz @ %.0f dBm", i,
-                              tone_vec[static_cast<size_t>(i)].freq_Hz / 1e6,
-                              tone_vec[static_cast<size_t>(i)].power_dBm);
-                labels.emplace_back(buf);
+        if (ImGui::BeginTable("tones", 4, ImGuiTableFlags_Borders)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("Frequency (MHz)");
+            ImGui::TableSetupColumn("Amplitude (dBm)");
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+            ImGui::TableHeadersRow();
+
+            int to_delete = -1;
+
+            for (int i = 0; i < static_cast<int>(m_engine.toneCount()); ++i) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", i + 1);
+
+                ImGui::TableNextColumn();
+                double freq = m_engine.tones()[static_cast<size_t>(i)].freq_Hz;
+                ImGui::PushID(("freq" + std::to_string(i)).c_str());
+                bool freq_changed = utils::inputFrequency("##freq", freq, 1.0, 100.0, "%.0f",
+                                                          MIN_FREQ, MAX_FREQ);
+                ImGui::PopID();
+
+                ImGui::TableNextColumn();
+                double amp = m_engine.tones()[static_cast<size_t>(i)].power_dBm;
+                ImGui::PushID(("amp" + std::to_string(i)).c_str());
+                bool amp_changed = utils::inputDouble("##amp", amp, 1, 5, "%.0f",
+                                                      MIN_POWER, MAX_POWER);
+                ImGui::PopID();
+
+                if (freq_changed || amp_changed) {
+                    m_engine.updateTone(static_cast<size_t>(i), freq, amp);
+                    if (freq_changed) {
+                        LOG_INFO("Update tone frequency: [gen%d tone%d -> %.0f MHz].",
+                                 m_engine.id(), i, freq / 1e6);
+                    }
+                    if (amp_changed) {
+                        LOG_INFO("Update tone amplitude: [gen%d tone%d -> %.0f dBm].",
+                                 m_engine.id(), i, amp);
+                    }
+                }
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(("del" + std::to_string(i)).c_str());
+                if (ImGui::SmallButton("X")) {
+                    to_delete = i;
+                }
+                ImGui::PopID();
             }
 
-            // List box to select tone
-            std::vector<const char *> cstrings;
-            cstrings.reserve(labels.size());
-            for (const auto &s : labels) {
-                cstrings.push_back(s.c_str());
-            }
-            ImGui::ListBox("##tone_list", &m_selectedTone, cstrings.data(),
-                           static_cast<int>(cstrings.size()), 4);
+            ImGui::EndTable();
 
-            // Edit selected tone
-            auto &tone = tone_vec[static_cast<size_t>(m_selectedTone)];
-            double freq_Hz = tone.freq_Hz;
-            double power_dBm = tone.power_dBm;
-
-            if (utils::inputFrequency("Frequency (MHz)", freq_Hz, 1.0, 100.0, "%.0f", MIN_FREQ,
-                                      MAX_FREQ)) {
-                m_engine.updateTone(static_cast<size_t>(m_selectedTone), freq_Hz, power_dBm);
-                LOG_INFO("Update tone %d frequency: [gen%d -> %.0f MHz].", m_selectedTone,
-                         m_engine.id(), freq_Hz / 1e6);
+            if (to_delete >= 0) {
+                m_engine.removeTone(static_cast<size_t>(to_delete));
+                LOG_INFO("Remove tone: [gen%d tone%d].", m_engine.id(), to_delete);
             }
-
-            if (utils::inputDouble("Amplitude (dBm)", power_dBm, 1, 5, "%.0f", MIN_POWER,
-                                   MAX_POWER)) {
-                m_engine.updateTone(static_cast<size_t>(m_selectedTone), freq_Hz, power_dBm);
-                LOG_INFO("Update tone %d amplitude: [gen%d -> %.0f dBm]", m_selectedTone,
-                         m_engine.id(), power_dBm);
-            }
-
-            if (ImGui::Button("Remove Selected Tone")) {
-                m_engine.removeTone(static_cast<size_t>(m_selectedTone));
-                LOG_INFO("Remove tone %d: [gen%d].", m_selectedTone, m_engine.id());
-            }
-        } else {
-            ImGui::Text("No tones configured.");
         }
 
-        if (ImGui::Button("Add Tone")) {
-            m_engine.addTone(100e6, -20.0);
-            m_selectedTone = static_cast<int>(m_engine.toneCount()) - 1;
-            LOG_INFO("Add new tone: [gen%d].", m_engine.id());
+        if (ImGui::Button("+ Add Tone")) {
+            m_engine.addTone(100e6, -60.0);
+            LOG_INFO("Add tone: [gen%d -> 100 MHz, -60 dBm].", m_engine.id());
         }
 
         ImGui::End();

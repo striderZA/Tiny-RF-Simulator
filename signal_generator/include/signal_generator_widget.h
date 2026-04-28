@@ -8,5 +8,4 @@ class SignalGeneratorWidget {
 
   private:
     SignalGeneratorEngine &m_engine;
-    int m_selectedTone;
 };
