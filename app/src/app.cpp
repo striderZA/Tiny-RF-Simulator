@@ -72,6 +72,19 @@ void RfSimulatorApp::update_dsp() {
 
     // Update spectrum view based on active probe
     SignalNode* probed = m_graph_engine.probedSignalNode();
+    if (probed) {
+        std::string label;
+        for (const auto& node : m_graph_engine.nodes()) {
+            if (node.signal_node == probed) {
+                label = node.label + " OUT";
+                break;
+            }
+        }
+        m_spectrum_widget->setProbeLabel(label);
+    } else {
+        m_spectrum_widget->setProbeLabel("");
+    }
+
     for (auto* node : m_view_manager.nodes()) {
         if (node) {
             node->view_enabled = (node == probed);
