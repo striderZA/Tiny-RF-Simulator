@@ -63,6 +63,72 @@ TEST_CASE("Generator outputs flat thermal noise density", "[generator]") {
     }
 }
 
+TEST_CASE("Generator with no tones produces empty tone list", "[generator]") {
+    SignalGeneratorEngine gen(0);
+    gen.update(0.0);
+    REQUIRE(gen.node().output.tones.empty());
+    REQUIRE(gen.toneCount() == 0);
+}
+
+TEST_CASE("Generator with multiple tones outputs all tones", "[generator]") {
+    SignalGeneratorEngine gen(0);
+    gen.addTone(100e6, -20.0);
+    gen.addTone(200e6, -10.0);
+    gen.addTone(50e6, 0.0);
+    gen.update(0.0);
+
+    REQUIRE(gen.toneCount() == 3);
+    const auto &tones = gen.node().output.tones;
+    REQUIRE(tones.size() == 3);
+    REQUIRE(tones[0].freq_Hz == 100e6);
+    REQUIRE(tones[0].power_dBm == -20.0);
+    REQUIRE(tones[1].freq_Hz == 200e6);
+    REQUIRE(tones[1].power_dBm == -10.0);
+    REQUIRE(tones[2].freq_Hz == 50e6);
+    REQUIRE(tones[2].power_dBm == 0.0);
+}
+
+TEST_CASE("Generator removeTone works correctly", "[generator]") {
+    SignalGeneratorEngine gen(0);
+    gen.addTone(100e6, -20.0);
+    gen.addTone(200e6, -10.0);
+    gen.removeTone(0);
+    gen.update(0.0);
+
+    REQUIRE(gen.toneCount() == 1);
+    REQUIRE(gen.node().output.tones.size() == 1);
+    REQUIRE(gen.node().output.tones[0].freq_Hz == 200e6);
+}
+
+TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
+    SignalGeneratorEngine gen(0);
+    gen.addTone(100e6, -20.0);
+    gen.updateTone(0, 150e6, -5.0);
+    gen.update(0.0);
+
+    REQUIRE(gen.toneCount() == 1);
+    REQUIRE(gen.node().output.tones[0].freq_Hz == 150e6);
+    REQUIRE(gen.node().output.tones[0].power_dBm == -5.0);
+}
+
+TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
+    SignalGeneratorEngine gen(0);
+    // No tones - just noise
+    gen.update(0.0);
+    for (double density : gen.node().output.noise_total_W) {
+        REQUIRE(density == Catch::Approx(k * T).epsilon(1e-30));
+    }
+
+    // Add multiple tones - noise should still be k*T
+    gen.addTone(100e6, -20.0);
+    gen.addTone(200e6, -10.0);
+    gen.addTone(300e6, 0.0);
+    gen.update(0.0);
+    for (double density : gen.node().output.noise_total_W) {
+        REQUIRE(density == Catch::Approx(k * T).epsilon(1e-30));
+    }
+}
+
 TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
     SignalGeneratorEngine gen(0);
     gen.update(0.0);
