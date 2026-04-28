@@ -87,12 +87,12 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
 
 TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spectrum]") {
     SignalGeneratorEngine gen(0);
-    gen.setFreqStep(10e6);
     gen.update(0.0);
 
     AmplifierEngine amp(0);
     amp.setGain_dB(20.0);
     amp.setNF_dB(5.0);
+    amp.setFreqStep(10e6);
     amp.node().input = gen.node().output;
     amp.update(0.0);
 
@@ -104,8 +104,8 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     std::vector<const Spectrum *> specs = {&amp.node().output};
     auto display1 = sa.renderCombinedSpectrum(specs);
 
-    gen.setFreqStep(20e6);
-    gen.update(0.0);
+    // Change amplifier grid spacing; generator has no grid of its own.
+    amp.setFreqStep(20e6);
     amp.node().input = gen.node().output;
     amp.update(0.0);
 
