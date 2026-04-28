@@ -166,6 +166,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     sa.setStartFrequency(MIN_FREQ);
     sa.setStopFrequency(MAX_FREQ);
     sa.setResBw(50e6);
+    sa.setNoiseJitterEnabled(false);
 
     std::vector<const Spectrum *> specs = {&amp.node().output};
     auto display1 = sa.renderCombinedSpectrum(specs);

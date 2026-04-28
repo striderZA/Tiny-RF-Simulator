@@ -15,6 +15,7 @@ class SpectrumAnalyzerEngine {
     void setMaxPower(double v) { m_max_power = v; }
     void setVideoBw(double v) { m_vbw = v; }
     void setResBw(double v) { m_rbw = v; }
+    void setNoiseJitterEnabled(bool v) { m_noise_jitter_enabled = v; }
 
     double startFrequency() const { return m_start_freq; }
     double stopFrequency() const { return m_stop_freq; }
@@ -38,4 +39,7 @@ class SpectrumAnalyzerEngine {
     double m_rbw = DEFAULT_RBW;
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
+
+    mutable std::mt19937 m_rng;
+    mutable bool m_noise_jitter_enabled = true;
 };
