@@ -12,6 +12,12 @@ struct MarkerState {
     std::vector<Peak> peaks;
 };
 
+struct MarkerInfo {
+    int idx = 0;
+    double freq_Hz = 0.0;
+    double power_dBm = -174.0;
+};
+
 class SpectrumAnalyzerWidget {
   public:
     SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm);
@@ -24,4 +30,10 @@ class SpectrumAnalyzerWidget {
     ViewManager &m_view_manager;
     std::string m_probe_label;
     MarkerState m_marker;
+
+    MarkerInfo resolveMarker(const std::vector<double> &freq_axis,
+                             const std::vector<double> &power_dBm) const;
+    void drawMarkerOnPlot(const MarkerInfo &info);
+    void drawMarkerControls(const std::vector<double> &freq_axis,
+                            const std::vector<double> &display_dBm);
 };
