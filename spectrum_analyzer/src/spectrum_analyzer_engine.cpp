@@ -1,6 +1,7 @@
 #include "spectrum_analyzer_engine.h"
 #include "common.h"
 #include "logging_core.h"
+#include <algorithm>
 #include <cmath>
 #include <random>
 
@@ -182,6 +183,30 @@ double SpectrumAnalyzerEngine::computeAverageNoiseLevel(
         sum_dBm += W_to_dBm(w);
     }
     return sum_dBm / static_cast<double>(rbw_noise_W.size());
+}
+
+std::vector<Peak> SpectrumAnalyzerEngine::findPeaks(const std::vector<double> &power_dBm,
+                                                    const std::vector<double> &freq_axis,
+                                                    size_t max_count) const {
+    std::vector<Peak> peaks;
+    size_t n = power_dBm.size();
+    if (n < 3 || freq_axis.size() != n) {
+        return peaks;
+    }
+
+    for (size_t i = 1; i + 1 < n; ++i) {
+        if (power_dBm[i] > power_dBm[i - 1] && power_dBm[i] > power_dBm[i + 1]) {
+            peaks.push_back(Peak{static_cast<int>(i), freq_axis[i], power_dBm[i]});
+        }
+    }
+
+    std::sort(peaks.begin(), peaks.end(),
+              [](const Peak &a, const Peak &b) { return a.power_dBm > b.power_dBm; });
+
+    if (peaks.size() > max_count) {
+        peaks.resize(max_count);
+    }
+    return peaks;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,

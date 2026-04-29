@@ -31,6 +31,9 @@ class SpectrumAnalyzerEngine {
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
+    std::vector<Peak> findPeaks(const std::vector<double> &power_dBm,
+                                const std::vector<double> &freq_axis,
+                                size_t max_count = 8) const;
 
   private:
     // Config
