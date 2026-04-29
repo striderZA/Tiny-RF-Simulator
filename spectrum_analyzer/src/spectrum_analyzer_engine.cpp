@@ -136,6 +136,54 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
     return vbw_out;
 }
 
+double SpectrumAnalyzerEngine::computeAverageNoiseLevel(
+    const std::vector<const Spectrum *> &specs) const {
+    if (specs.empty()) {
+        return -174.0;
+    }
+
+    size_t n = 0;
+    for (const Spectrum *s : specs) {
+        if (s && s->frequencies.size() > n) {
+            n = s->frequencies.size();
+        }
+    }
+    if (n == 0) {
+        return -174.0;
+    }
+
+    double bin_width = 1.0;
+    for (const Spectrum *s : specs) {
+        if (s && s->frequencies.size() >= 2) {
+            bin_width = s->frequencies[1] - s->frequencies.front();
+            break;
+        }
+    }
+
+    // Sum noise power per bin (W) across all spectra, excluding tones
+    std::vector<double> sum_noise_W(n, 0.0);
+    for (const Spectrum *s : specs) {
+        if (!s) {
+            continue;
+        }
+        size_t m = std::min(n, s->noise_total_W.size());
+        for (size_t i = 0; i < m; ++i) {
+            sum_noise_W[i] += s->noise_total_W[i] * bin_width;
+        }
+    }
+
+    std::vector<double> rbw_noise_W = this->applyRBW(sum_noise_W, bin_width);
+    if (rbw_noise_W.empty()) {
+        return -174.0;
+    }
+
+    double sum_dBm = 0.0;
+    for (double w : rbw_noise_W) {
+        sum_dBm += W_to_dBm(w);
+    }
+    return sum_dBm / static_cast<double>(rbw_noise_W.size());
+}
+
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
     size_t n = power_W.size();
