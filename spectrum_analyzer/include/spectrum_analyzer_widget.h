@@ -7,15 +7,9 @@
 
 struct MarkerState {
     bool enabled = false;
-    int selected_peak_idx = -1;   // -1 = manual, >=0 = snapped to peak
-    int manual_bin = 0;
-    std::vector<Peak> peaks;
-};
-
-struct MarkerInfo {
-    int idx = 0;
-    double freq_Hz = 0.0;
-    double power_dBm = -174.0;
+    double target_freq_Hz = 0.0;   // Frequency the marker aims for
+    bool is_dragging = false;      // True while mouse is held down on plot
+    std::vector<Peak> peaks;       // Cached peaks from last snap
 };
 
 class SpectrumAnalyzerWidget {
@@ -31,9 +25,9 @@ class SpectrumAnalyzerWidget {
     std::string m_probe_label;
     MarkerState m_marker;
 
-    MarkerInfo resolveMarker(const std::vector<double> &freq_axis,
-                             const std::vector<double> &power_dBm) const;
-    void drawMarkerOnPlot(const MarkerInfo &info);
+    int resolveMarkerIdx(const std::vector<double> &freq_axis,
+                         const std::vector<double> &data) const;
+    void drawMarkerOnPlot(double freq_Hz, double power_dBm);
     void drawMarkerControls(const std::vector<double> &freq_axis,
                             const std::vector<double> &display_dBm);
 };

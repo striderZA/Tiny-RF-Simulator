@@ -6,47 +6,62 @@
 #include "utils.h"
 #include "view_manager.h"
 #include <algorithm>
+#include <limits>
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
-MarkerInfo SpectrumAnalyzerWidget::resolveMarker(const std::vector<double> &freq_axis,
-                                                  const std::vector<double> &power_dBm) const {
-    MarkerInfo info;
-    if (!m_marker.enabled || power_dBm.empty()) {
-        return info;
+int SpectrumAnalyzerWidget::resolveMarkerIdx(const std::vector<double> &freq_axis,
+                                              const std::vector<double> &data) const {
+    if (!m_marker.enabled || data.empty() || freq_axis.empty()) {
+        return -1;
     }
 
-    if (m_marker.selected_peak_idx >= 0 &&
-        m_marker.selected_peak_idx < static_cast<int>(m_marker.peaks.size())) {
-        const auto &pk = m_marker.peaks[m_marker.selected_peak_idx];
-        info.idx = pk.index;
-        info.freq_Hz = pk.freq_Hz;
-        info.power_dBm = pk.power_dBm;
-    } else {
-        info.idx = std::clamp(m_marker.manual_bin, 0, static_cast<int>(power_dBm.size()) - 1);
-        info.freq_Hz = freq_axis[static_cast<size_t>(info.idx)];
-        info.power_dBm = power_dBm[static_cast<size_t>(info.idx)];
+    // Try to find nearest cached peak to target_freq_Hz
+    if (!m_marker.peaks.empty()) {
+        int best_idx = -1;
+        double best_dist = std::numeric_limits<double>::max();
+        for (const auto &pk : m_marker.peaks) {
+            double dist = std::abs(pk.freq_Hz - m_marker.target_freq_Hz);
+            if (dist < best_dist) {
+                best_dist = dist;
+                best_idx = pk.index;
+            }
+        }
+        if (best_idx >= 0 && best_idx < static_cast<int>(data.size())) {
+            return best_idx;
+        }
     }
-    return info;
+
+    // Fallback: nearest bin to target_freq_Hz
+    int best_idx = 0;
+    double best_dist = std::numeric_limits<double>::max();
+    for (size_t i = 0; i < freq_axis.size(); ++i) {
+        double dist = std::abs(freq_axis[i] - m_marker.target_freq_Hz);
+        if (dist < best_dist) {
+            best_dist = dist;
+            best_idx = static_cast<int>(i);
+        }
+    }
+    return best_idx;
 }
 
-void SpectrumAnalyzerWidget::drawMarkerOnPlot(const MarkerInfo &info) {
+void SpectrumAnalyzerWidget::drawMarkerOnPlot(double freq_Hz, double power_dBm) {
     ImPlotSpec marker_spec;
     marker_spec.Marker = ImPlotMarker_Down;
     marker_spec.MarkerSize = 8.0f;
     marker_spec.MarkerFillColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
     marker_spec.LineWeight = 1.0f;
     marker_spec.MarkerLineColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-    ImPlot::PlotScatter("Marker", &info.freq_Hz, &info.power_dBm, 1, marker_spec);
+    ImPlot::PlotScatter("Marker", &freq_Hz, &power_dBm, 1, marker_spec);
 }
 
 void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_axis,
                                                 const std::vector<double> &display_dBm) {
     if (ImGui::Checkbox("Enable Marker", &m_marker.enabled)) {
         if (m_marker.enabled) {
-            m_marker.manual_bin = static_cast<int>(display_dBm.size() / 2);
-            m_marker.selected_peak_idx = -1;
+            m_marker.target_freq_Hz =
+                (m_engine.startFrequency() + m_engine.stopFrequency()) / 2.0;
         }
     }
 
@@ -56,36 +71,53 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
 
     if (ImGui::Button("Snap to Peak")) {
         m_marker.peaks = m_engine.findPeaks(display_dBm, freq_axis, 8);
-        m_marker.selected_peak_idx = m_marker.peaks.empty() ? -1 : 0;
+        if (!m_marker.peaks.empty()) {
+            m_marker.target_freq_Hz = m_marker.peaks[0].freq_Hz;
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button("Next Peak")) {
         if (!m_marker.peaks.empty()) {
-            if (m_marker.selected_peak_idx == -1) {
-                m_marker.selected_peak_idx = 0;
-            } else {
-                m_marker.selected_peak_idx =
-                    (m_marker.selected_peak_idx + 1) % static_cast<int>(m_marker.peaks.size());
+            int closest = 0;
+            double best_dist =
+                std::abs(m_marker.peaks[0].freq_Hz - m_marker.target_freq_Hz);
+            for (size_t i = 1; i < m_marker.peaks.size(); ++i) {
+                double d =
+                    std::abs(m_marker.peaks[i].freq_Hz - m_marker.target_freq_Hz);
+                if (d < best_dist) {
+                    best_dist = d;
+                    closest = static_cast<int>(i);
+                }
             }
+            int next = (closest + 1) % static_cast<int>(m_marker.peaks.size());
+            m_marker.target_freq_Hz = m_marker.peaks[next].freq_Hz;
         }
     }
 
+    double bin_step =
+        (freq_axis.size() > 1) ? (freq_axis[1] - freq_axis[0]) : 1e6;
     if (ImGui::Button("<")) {
-        if (m_marker.manual_bin > 0) {
-            --m_marker.manual_bin;
+        m_marker.target_freq_Hz -= bin_step;
+        if (m_marker.target_freq_Hz < freq_axis.front()) {
+            m_marker.target_freq_Hz = freq_axis.front();
         }
-        m_marker.selected_peak_idx = -1;
     }
     ImGui::SameLine();
     if (ImGui::Button(">")) {
-        if (m_marker.manual_bin < static_cast<int>(display_dBm.size()) - 1) {
-            ++m_marker.manual_bin;
+        m_marker.target_freq_Hz += bin_step;
+        if (m_marker.target_freq_Hz > freq_axis.back()) {
+            m_marker.target_freq_Hz = freq_axis.back();
         }
-        m_marker.selected_peak_idx = -1;
     }
 
-    MarkerInfo info = resolveMarker(freq_axis, display_dBm);
-    ImGui::Text("Marker: %.2f MHz, %.2f dBm", info.freq_Hz / 1e6, info.power_dBm);
+    int idx = resolveMarkerIdx(freq_axis, display_dBm);
+    double marker_freq = 0.0;
+    double marker_power = -174.0;
+    if (idx >= 0 && idx < static_cast<int>(display_dBm.size())) {
+        marker_freq = freq_axis[static_cast<size_t>(idx)];
+        marker_power = display_dBm[static_cast<size_t>(idx)];
+    }
+    ImGui::Text("Marker: %.2f MHz, %.2f dBm", marker_freq / 1e6, marker_power);
 }
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
@@ -177,8 +209,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                          (int)display_dBm.size());
 
         if (m_marker.enabled && !display_dBm.empty()) {
-            MarkerInfo info = resolveMarker(*freq_axis, display_dBm);
-            drawMarkerOnPlot(info);
+            int idx = resolveMarkerIdx(*freq_axis, display_dBm);
+            if (idx >= 0 && idx < static_cast<int>(display_dBm.size())) {
+                drawMarkerOnPlot((*freq_axis)[idx], display_dBm[idx]);
+            }
         }
 
         ImPlot::EndPlot();
