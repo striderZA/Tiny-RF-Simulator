@@ -1,4 +1,5 @@
 #include "node_graph_engine.h"
+#include "logging_core.h"
 #include <algorithm>
 
 int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, bool has_input,
@@ -10,6 +11,7 @@ int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, 
     node.signal_node = signal_node;
     node.label = label;
     m_nodes.push_back(node);
+    LOG_INFO("Added node '%s' (id=%d)", label.c_str(), node.node_id);
     return node.node_id;
 }
 
@@ -19,17 +21,19 @@ void NodeGraphEngine::removeNode(int node_id) {
     if (it == m_nodes.end())
         return;
 
+    LOG_INFO("Removed node '%s' (id=%d)", it->label.c_str(), node_id);
+
     // Remove all links connected to this node's pins
     auto &node = *it;
     m_links.erase(std::remove_if(m_links.begin(), m_links.end(),
-                                 [&node](const GraphLink &l) {
-                                     return (node.input_pin_id >= 0 &&
-                                             (l.start_pin_id == node.input_pin_id ||
-                                              l.end_pin_id == node.input_pin_id)) ||
-                                            (node.output_pin_id >= 0 &&
-                                             (l.start_pin_id == node.output_pin_id ||
-                                              l.end_pin_id == node.output_pin_id));
-                                 }),
+                                  [&node](const GraphLink &l) {
+                                      return (node.input_pin_id >= 0 &&
+                                              (l.start_pin_id == node.input_pin_id ||
+                                               l.end_pin_id == node.input_pin_id)) ||
+                                             (node.output_pin_id >= 0 &&
+                                              (l.start_pin_id == node.output_pin_id ||
+                                               l.end_pin_id == node.output_pin_id));
+                                  }),
                   m_links.end());
 
     if (m_active_probe_pin == it->output_pin_id) {
@@ -45,13 +49,15 @@ int NodeGraphEngine::addLink(int start_pin, int end_pin) {
     link.start_pin_id = start_pin;
     link.end_pin_id = end_pin;
     m_links.push_back(link);
+    LOG_INFO("Connected pins: %d -> %d (link id=%d)", start_pin, end_pin, link.link_id);
     return link.link_id;
 }
 
 void NodeGraphEngine::removeLink(int link_id) {
     auto it = std::find_if(m_links.begin(), m_links.end(),
-                           [link_id](const GraphLink &l) { return l.link_id == link_id; });
+                            [link_id](const GraphLink &l) { return l.link_id == link_id; });
     if (it != m_links.end()) {
+        LOG_INFO("Disconnected pins: %d -> %d (link id=%d)", it->start_pin_id, it->end_pin_id, link_id);
         m_links.erase(it);
     }
 }

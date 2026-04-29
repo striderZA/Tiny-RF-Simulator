@@ -10,7 +10,7 @@ target_include_directories(node_graph_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(node_graph_engine PUBLIC common)
+target_link_libraries(node_graph_engine PUBLIC common simulator::logging_core)
 
 add_library(simulator::node_graph_engine ALIAS node_graph_engine)
 

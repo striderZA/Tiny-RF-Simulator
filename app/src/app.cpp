@@ -1,5 +1,6 @@
 #include "app.h"
 #include "imgui.h"
+#include "logging_core.h"
 #include "logging_widget.h"
 
 RfSimulatorApp::RfSimulatorApp() {
@@ -22,6 +23,7 @@ void RfSimulatorApp::addGenerator() {
     m_view_manager.registerNode(&gen->node());
     m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*gen));
     m_generators.push_back(std::move(gen));
+    LOG_INFO("Added generator %d", id);
 }
 
 void RfSimulatorApp::addAmplifier() {
@@ -30,6 +32,7 @@ void RfSimulatorApp::addAmplifier() {
     m_view_manager.registerNode(&amp->node());
     m_amplifier_widgets.push_back(std::make_unique<AmplifierWidget>(*amp));
     m_amplifiers.push_back(std::move(amp));
+    LOG_INFO("Added amplifier %d", id);
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -40,6 +43,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_graph_engine.removeNode(graph_node_id);
             m_generators.erase(m_generators.begin() + static_cast<std::ptrdiff_t>(i));
             m_generator_widgets.erase(m_generator_widgets.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed generator (graph node %d)", graph_node_id);
             return;
         }
     }
@@ -50,6 +54,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_graph_engine.removeNode(graph_node_id);
             m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(i));
             m_amplifier_widgets.erase(m_amplifier_widgets.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed amplifier (graph node %d)", graph_node_id);
             return;
         }
     }
