@@ -193,3 +193,96 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
 
     REQUIRE(display3[mid] > display2[mid]);
 }
+
+TEST_CASE("findPeaks detects single tone peak", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6, 3e6, 4e6};
+    std::vector<double> power = {-80.0, -70.0, -60.0, -70.0, -80.0};
+
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.size() == 1);
+    REQUIRE(peaks[0].index == 2);
+    REQUIRE(peaks[0].freq_Hz == 2e6);
+    REQUIRE(peaks[0].power_dBm == -60.0);
+}
+
+TEST_CASE("findPeaks handles multiple peaks", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6, 3e6, 4e6, 5e6, 6e6};
+    std::vector<double> power = {-90.0, -50.0, -60.0, -30.0, -55.0, -40.0, -90.0};
+
+    SECTION("sorts by descending power") {
+        auto peaks = sa.findPeaks(power, freq);
+        REQUIRE(peaks.size() == 3);
+        REQUIRE(peaks[0].power_dBm == -30.0);
+        REQUIRE(peaks[0].freq_Hz == 3e6);
+        REQUIRE(peaks[0].index == 3);
+        REQUIRE(peaks[1].power_dBm == -40.0);
+        REQUIRE(peaks[1].freq_Hz == 5e6);
+        REQUIRE(peaks[1].index == 5);
+        REQUIRE(peaks[2].power_dBm == -50.0);
+        REQUIRE(peaks[2].freq_Hz == 1e6);
+        REQUIRE(peaks[2].index == 1);
+    }
+
+    SECTION("limits to max_count") {
+        auto peaks = sa.findPeaks(power, freq, 2);
+        REQUIRE(peaks.size() == 2);
+        REQUIRE(peaks[0].power_dBm == -30.0);
+        REQUIRE(peaks[1].power_dBm == -40.0);
+    }
+}
+
+TEST_CASE("findPeaks returns empty for flat spectrum", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6, 3e6};
+    std::vector<double> power = {-80.0, -80.0, -80.0, -80.0};
+
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.empty());
+}
+
+TEST_CASE("findPeaks skips endpoints", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6};
+    std::vector<double> power = {-30.0, -80.0, -30.0};
+
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.empty());
+}
+
+TEST_CASE("findPeaks returns empty for too few points", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6};
+    std::vector<double> power = {-30.0, -80.0};
+
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.empty());
+}
+
+TEST_CASE("findPeaks returns empty for empty input", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq;
+    std::vector<double> power;
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.empty());
+}
+
+TEST_CASE("findPeaks returns empty for size mismatch", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6};
+    std::vector<double> power = {-80.0, -70.0};
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.empty());
+}
+
+TEST_CASE("findPeaks detects peak in minimum 3-point spectrum", "[spectrum]") {
+    SpectrumAnalyzerEngine sa;
+    std::vector<double> freq = {0, 1e6, 2e6};
+    std::vector<double> power = {-80.0, -30.0, -80.0};
+    auto peaks = sa.findPeaks(power, freq);
+    REQUIRE(peaks.size() == 1);
+    REQUIRE(peaks[0].index == 1);
+    REQUIRE(peaks[0].freq_Hz == 1e6);
+    REQUIRE(peaks[0].power_dBm == -30.0);
+}
