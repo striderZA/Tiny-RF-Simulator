@@ -31,7 +31,7 @@ class NodeGraphWidget {
 
     void drawNodes();
     void drawLinks();
-    void handleContextMenu();
+    void handleContextMenu(bool editor_hovered);
     void handleLinkCreation();
     void handleLinkDeletion();
     void handleNodeDeletion();

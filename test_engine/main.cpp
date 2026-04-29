@@ -35,6 +35,7 @@ int main() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.IniFilename = nullptr;
 
     ImGui::StyleColorsDark();
 
@@ -48,6 +49,8 @@ int main() {
     test_io.ConfigVerboseLevel = ImGuiTestVerboseLevel_Info;
     test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
     test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;
+    test_io.ConfigLogToTTY = false;
+    test_io.ConfigSavedSettings = false;
 
     ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
     ImGuiTestEngine_InstallDefaultCrashHandler();
