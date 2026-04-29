@@ -19,13 +19,16 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         drawNodes();
         drawLinks();
 
+        // Cache editor hover state before EndNodeEditor (IsEditorHovered only works inside scope)
+        bool editor_hovered = ImNodes::IsEditorHovered();
+
         ImNodes::EndNodeEditor();
 
-        // Process interactions after EndNodeEditor()
+        // Process interactions after EndNodeEditor (IsNodeHovered requires scope None)
         handleLinkCreation();
         handleLinkDeletion();
         handleProbeClick();
-        handleContextMenu();
+        handleContextMenu(editor_hovered);
         handleNodeDeletion();
     }
     ImGui::End();
@@ -69,24 +72,22 @@ void NodeGraphWidget::drawLinks() {
     }
 }
 
-void NodeGraphWidget::handleContextMenu() {
+void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     bool right_click = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
-    bool editor_hovered = ImNodes::IsEditorHovered();
 
-    if (!right_click || !editor_hovered) {
-        return;
+    if (right_click && editor_hovered) {
+        int hovered_node = -1;
+        bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
+
+        if (node_hovered) {
+            ImGui::OpenPopup("node_context_menu");
+            m_context_menu_node = hovered_node;
+        } else {
+            ImGui::OpenPopup("canvas_context_menu");
+        }
     }
 
-    int hovered_node = -1;
-    bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
-
-    if (node_hovered) {
-        ImGui::OpenPopup("node_context_menu");
-        m_context_menu_node = hovered_node;
-    } else {
-        ImGui::OpenPopup("canvas_context_menu");
-    }
-
+    // Render popups unconditionally so they stay open across frames
     if (ImGui::BeginPopup("node_context_menu")) {
         if (ImGui::MenuItem("Remove")) {
             if (onRemoveNode) onRemoveNode(m_context_menu_node);
