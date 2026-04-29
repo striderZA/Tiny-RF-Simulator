@@ -10,6 +10,84 @@
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
+MarkerInfo SpectrumAnalyzerWidget::resolveMarker(const std::vector<double> &freq_axis,
+                                                  const std::vector<double> &power_dBm) const {
+    MarkerInfo info;
+    if (!m_marker.enabled || power_dBm.empty()) {
+        return info;
+    }
+
+    if (m_marker.selected_peak_idx >= 0 &&
+        m_marker.selected_peak_idx < static_cast<int>(m_marker.peaks.size())) {
+        const auto &pk = m_marker.peaks[m_marker.selected_peak_idx];
+        info.idx = pk.index;
+        info.freq_Hz = pk.freq_Hz;
+        info.power_dBm = pk.power_dBm;
+    } else {
+        info.idx = std::clamp(m_marker.manual_bin, 0, static_cast<int>(power_dBm.size()) - 1);
+        info.freq_Hz = freq_axis[static_cast<size_t>(info.idx)];
+        info.power_dBm = power_dBm[static_cast<size_t>(info.idx)];
+    }
+    return info;
+}
+
+void SpectrumAnalyzerWidget::drawMarkerOnPlot(const MarkerInfo &info) {
+    ImPlotSpec marker_spec;
+    marker_spec.Marker = ImPlotMarker_Down;
+    marker_spec.MarkerSize = 8.0f;
+    marker_spec.MarkerFillColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
+    marker_spec.LineWeight = 1.0f;
+    marker_spec.MarkerLineColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
+    ImPlot::PlotScatter("Marker", &info.freq_Hz, &info.power_dBm, 1, marker_spec);
+}
+
+void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_axis,
+                                                const std::vector<double> &display_dBm) {
+    if (ImGui::Checkbox("Enable Marker", &m_marker.enabled)) {
+        if (m_marker.enabled) {
+            m_marker.manual_bin = static_cast<int>(display_dBm.size() / 2);
+            m_marker.selected_peak_idx = -1;
+        }
+    }
+
+    if (!m_marker.enabled) {
+        return;
+    }
+
+    if (ImGui::Button("Snap to Peak")) {
+        m_marker.peaks = m_engine.findPeaks(display_dBm, freq_axis, 8);
+        m_marker.selected_peak_idx = m_marker.peaks.empty() ? -1 : 0;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Next Peak")) {
+        if (!m_marker.peaks.empty()) {
+            if (m_marker.selected_peak_idx == -1) {
+                m_marker.selected_peak_idx = 0;
+            } else {
+                m_marker.selected_peak_idx =
+                    (m_marker.selected_peak_idx + 1) % static_cast<int>(m_marker.peaks.size());
+            }
+        }
+    }
+
+    if (ImGui::Button("<")) {
+        if (m_marker.manual_bin > 0) {
+            --m_marker.manual_bin;
+        }
+        m_marker.selected_peak_idx = -1;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(">")) {
+        if (m_marker.manual_bin < static_cast<int>(display_dBm.size()) - 1) {
+            ++m_marker.manual_bin;
+        }
+        m_marker.selected_peak_idx = -1;
+    }
+
+    MarkerInfo info = resolveMarker(freq_axis, display_dBm);
+    ImGui::Text("Marker: %.2f MHz, %.2f dBm", info.freq_Hz / 1e6, info.power_dBm);
+}
+
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -98,26 +176,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         ImPlot::PlotLine("Combined Spectrum", freq_axis->data(), display_dBm.data(),
                          (int)display_dBm.size());
 
-        // Render marker on plot
         if (m_marker.enabled && !display_dBm.empty()) {
-            int idx = 0;
-            if (m_marker.selected_peak_idx >= 0 &&
-                m_marker.selected_peak_idx < static_cast<int>(m_marker.peaks.size())) {
-                idx = m_marker.peaks[m_marker.selected_peak_idx].index;
-            } else {
-                idx = std::clamp(m_marker.manual_bin, 0, static_cast<int>(display_dBm.size()) - 1);
-            }
-
-            double mf = (*freq_axis)[static_cast<size_t>(idx)];
-            double mp = display_dBm[static_cast<size_t>(idx)];
-
-            ImPlotSpec spec;
-            spec.Marker = ImPlotMarker_Down;
-            spec.MarkerSize = 8.0f;
-            spec.MarkerFillColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-            spec.LineWeight = 1.0f;
-            spec.MarkerLineColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-            ImPlot::PlotScatter("Marker", &mf, &mp, 1, spec);
+            MarkerInfo info = resolveMarker(*freq_axis, display_dBm);
+            drawMarkerOnPlot(info);
         }
 
         ImPlot::EndPlot();
@@ -126,56 +187,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     double avg_noise = m_engine.computeAverageNoiseLevel(specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
 
-    // --- Marker controls ---
-    if (ImGui::Checkbox("Enable Marker", &m_marker.enabled)) {
-        if (m_marker.enabled) {
-            m_marker.manual_bin = static_cast<int>(display_dBm.size() / 2);
-            m_marker.selected_peak_idx = -1;
-        }
-    }
-
-    if (m_marker.enabled) {
-        if (ImGui::Button("Snap to Peak")) {
-            m_marker.peaks = m_engine.findPeaks(display_dBm, *freq_axis, 8);
-            m_marker.selected_peak_idx = m_marker.peaks.empty() ? -1 : 0;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Next Peak")) {
-            if (!m_marker.peaks.empty()) {
-                m_marker.selected_peak_idx =
-                    (m_marker.selected_peak_idx + 1) % static_cast<int>(m_marker.peaks.size());
-            }
-        }
-
-        if (ImGui::Button("<")) {
-            if (m_marker.manual_bin > 0) {
-                --m_marker.manual_bin;
-            }
-            m_marker.selected_peak_idx = -1;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(">")) {
-            if (m_marker.manual_bin < static_cast<int>(display_dBm.size()) - 1) {
-                ++m_marker.manual_bin;
-            }
-            m_marker.selected_peak_idx = -1;
-        }
-
-        double marker_freq = 0.0;
-        double marker_power = -174.0;
-        if (m_marker.selected_peak_idx >= 0 &&
-            m_marker.selected_peak_idx < static_cast<int>(m_marker.peaks.size())) {
-            const auto &pk = m_marker.peaks[m_marker.selected_peak_idx];
-            marker_freq = pk.freq_Hz;
-            marker_power = pk.power_dBm;
-        } else if (!display_dBm.empty()) {
-            int idx = std::clamp(m_marker.manual_bin, 0, static_cast<int>(display_dBm.size()) - 1);
-            marker_freq = (*freq_axis)[static_cast<size_t>(idx)];
-            marker_power = display_dBm[static_cast<size_t>(idx)];
-        }
-
-        ImGui::Text("Marker: %.2f MHz, %.2f dBm", marker_freq / 1e6, marker_power);
-    }
+    drawMarkerControls(*freq_axis, display_dBm);
 
     ImGui::End();
 }
