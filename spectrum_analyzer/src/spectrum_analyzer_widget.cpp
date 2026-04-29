@@ -59,9 +59,9 @@ void SpectrumAnalyzerWidget::drawMarkerOnPlot(double freq_Hz, double power_dBm) 
 void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_axis,
                                                 const std::vector<double> &display_dBm) {
     if (ImGui::Checkbox("Enable Marker", &m_marker.enabled)) {
-        if (m_marker.enabled) {
-            m_marker.target_freq_Hz =
-                (m_engine.startFrequency() + m_engine.stopFrequency()) / 2.0;
+        if (m_marker.enabled && !freq_axis.empty()) {
+            m_marker.target_freq_Hz = freq_axis[freq_axis.size() / 2];
+            m_marker.peaks.clear();
         }
     }
 
@@ -78,35 +78,18 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
     ImGui::SameLine();
     if (ImGui::Button("Next Peak")) {
         if (!m_marker.peaks.empty()) {
-            int closest = 0;
-            double best_dist =
-                std::abs(m_marker.peaks[0].freq_Hz - m_marker.target_freq_Hz);
-            for (size_t i = 1; i < m_marker.peaks.size(); ++i) {
-                double d =
-                    std::abs(m_marker.peaks[i].freq_Hz - m_marker.target_freq_Hz);
-                if (d < best_dist) {
-                    best_dist = d;
-                    closest = static_cast<int>(i);
+            // Find the currently tracked peak (nearest to target_freq_Hz)
+            int current_rank = 0;
+            double best_dist = std::numeric_limits<double>::max();
+            for (size_t i = 0; i < m_marker.peaks.size(); ++i) {
+                double dist = std::abs(m_marker.peaks[i].freq_Hz - m_marker.target_freq_Hz);
+                if (dist < best_dist) {
+                    best_dist = dist;
+                    current_rank = static_cast<int>(i);
                 }
             }
-            int next = (closest + 1) % static_cast<int>(m_marker.peaks.size());
-            m_marker.target_freq_Hz = m_marker.peaks[next].freq_Hz;
-        }
-    }
-
-    double bin_step =
-        (freq_axis.size() > 1) ? (freq_axis[1] - freq_axis[0]) : 1e6;
-    if (ImGui::Button("<")) {
-        m_marker.target_freq_Hz -= bin_step;
-        if (m_marker.target_freq_Hz < freq_axis.front()) {
-            m_marker.target_freq_Hz = freq_axis.front();
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(">")) {
-        m_marker.target_freq_Hz += bin_step;
-        if (m_marker.target_freq_Hz > freq_axis.back()) {
-            m_marker.target_freq_Hz = freq_axis.back();
+            int next_rank = (current_rank + 1) % static_cast<int>(m_marker.peaks.size());
+            m_marker.target_freq_Hz = m_marker.peaks[next_rank].freq_Hz;
         }
     }
 
@@ -201,6 +184,14 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
+    // Clear drag state if mouse released (even if plot block is skipped)
+    if (m_marker.is_dragging && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        m_marker.is_dragging = false;
+        if (!display_dBm.empty() && freq_axis && !freq_axis->empty()) {
+            m_marker.peaks = m_engine.findPeaks(display_dBm, *freq_axis, 8);
+        }
+    }
+
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
@@ -209,9 +200,17 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                          (int)display_dBm.size());
 
         if (m_marker.enabled && !display_dBm.empty()) {
+            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                m_marker.is_dragging = true;
+                ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+                m_marker.target_freq_Hz = mouse_pos.x;
+            }
+
             int idx = resolveMarkerIdx(*freq_axis, display_dBm);
             if (idx >= 0 && idx < static_cast<int>(display_dBm.size())) {
-                drawMarkerOnPlot((*freq_axis)[idx], display_dBm[idx]);
+                double mf = (*freq_axis)[static_cast<size_t>(idx)];
+                double mp = display_dBm[static_cast<size_t>(idx)];
+                drawMarkerOnPlot(mf, mp);
             }
         }
 
