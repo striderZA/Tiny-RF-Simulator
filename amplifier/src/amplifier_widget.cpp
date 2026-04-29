@@ -2,34 +2,71 @@
 #include "imgui.h"
 #include "logging_core.h"
 #include "utils.h"
+#include <string>
 
-AmplifierWidget::AmplifierWidget(AmplifierEngine &engine) : m_engine(engine) {}
+AmplifierWidget::AmplifierWidget(std::vector<std::unique_ptr<AmplifierEngine>> &engines)
+    : m_engines(engines) {}
 
 void AmplifierWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
+        ImGui::SeparatorText("Amplifiers");
 
-        if (ImGui::Checkbox("Measure", &m_engine.node().view_enabled)) {
-            LOG_INFO("Change measurement active state [amp%d -> %s].", m_engine.id(),
-                     m_engine.node().view_enabled ? "True" : "False");
+        if (ImGui::BeginTable("amps", 4, ImGuiTableFlags_Borders)) {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("Gain (dB)");
+            ImGui::TableSetupColumn("NF (dB)");
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+            ImGui::TableHeadersRow();
+
+            int to_delete = -1;
+
+            for (int i = 0; i < static_cast<int>(m_engines.size()); ++i) {
+                AmplifierEngine &engine = *m_engines[static_cast<size_t>(i)];
+
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", i + 1);
+
+                ImGui::TableNextColumn();
+                double gain = engine.gain_dB();
+                ImGui::PushID(("gain" + std::to_string(i)).c_str());
+                bool gain_changed = utils::inputDouble("##gain", gain, 1, 10, "%.1f", -10.0, 40.0);
+                ImGui::PopID();
+
+                ImGui::TableNextColumn();
+                double nf = engine.nf_dB();
+                ImGui::PushID(("nf" + std::to_string(i)).c_str());
+                bool nf_changed = utils::inputDouble("##nf", nf, 0.1, 10, "%.1f", 0.0, 30.0);
+                ImGui::PopID();
+
+                if (gain_changed) {
+                    engine.setGain_dB(gain);
+                    LOG_INFO("Update amplifier gain: [amp%d -> %.1f dB]", engine.id(), gain);
+                }
+                if (nf_changed) {
+                    engine.setNF_dB(nf);
+                    LOG_INFO("Update amplifier NF: [amp%d -> %.1f dB]", engine.id(), nf);
+                }
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(("del" + std::to_string(i)).c_str());
+                if (ImGui::SmallButton("X")) {
+                    to_delete = i;
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::EndTable();
+
+            if (to_delete >= 0 && onRemoveAmplifier) {
+                onRemoveAmplifier(static_cast<size_t>(to_delete));
+                LOG_INFO("Remove amplifier: [amp%d].", to_delete);
+            }
         }
-        double gain_dB = m_engine.gain_dB();
-        double nf_dB = m_engine.nf_dB();
-        double bin_width_Hz = m_engine.f_step_Hz();
 
-        if (utils::inputDouble("Gain (dB)", gain_dB, 1, 10, "%.1f", -10, 40)) {
-            m_engine.setGain_dB(gain_dB);
-            LOG_INFO("Update amplifier gain: [amp%d -> %.1f dB]", m_engine.id(), gain_dB);
-        }
-
-        if (utils::inputDouble("Noise Figure (dB)", nf_dB, 0.1, 10, "%.1f", 0.0, 30.0)) {
-            m_engine.setNF_dB(nf_dB);
-            LOG_INFO("Update amplifier NF: [amp%d -> %.1f dB]", m_engine.id(), nf_dB);
-        }
-
-        if (utils::inputFrequency("Bin width (MHz)", bin_width_Hz, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
-            m_engine.setFreqStep(bin_width_Hz);
-            LOG_INFO("Update amplifier bin width: [amp%d -> %.0f MHz]", m_engine.id(),
-                     bin_width_Hz / 1e6);
+        if (ImGui::Button("+ Add Amplifier") && onAddAmplifier) {
+            onAddAmplifier();
+            LOG_INFO("Add amplifier.");
         }
 
         ImGui::End();
