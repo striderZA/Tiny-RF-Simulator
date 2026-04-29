@@ -14,6 +14,16 @@ RfSimulatorApp::RfSimulatorApp() {
 
     addAmplifier();
 
+    m_amplifier_widget = std::make_unique<AmplifierWidget>(m_amplifiers);
+    m_amplifier_widget->onAddAmplifier = [this]() { addAmplifier(); };
+    m_amplifier_widget->onRemoveAmplifier = [this](size_t index) {
+        if (index >= m_amplifiers.size()) return;
+        m_view_manager.unregisterNode(&m_amplifiers[index]->node());
+        m_graph_engine.removeNode(m_amplifiers[index]->graphNodeId());
+        m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(index));
+        LOG_INFO("Removed amplifier at index %zu", index);
+    };
+
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
 
@@ -30,7 +40,6 @@ void RfSimulatorApp::addAmplifier() {
     int id = static_cast<int>(m_amplifiers.size());
     auto amp = std::make_unique<AmplifierEngine>(id, m_graph_engine);
     m_view_manager.registerNode(&amp->node());
-    m_amplifier_widgets.push_back(std::make_unique<AmplifierWidget>(*amp));
     m_amplifiers.push_back(std::move(amp));
     LOG_INFO("Added amplifier %d", id);
 }
@@ -53,7 +62,6 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_amplifiers[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(i));
-            m_amplifier_widgets.erase(m_amplifier_widgets.begin() + static_cast<std::ptrdiff_t>(i));
             LOG_INFO("Removed amplifier (graph node %d)", graph_node_id);
             return;
         }
@@ -107,17 +115,11 @@ void RfSimulatorApp::draw_ui() {
     m_spectrum_widget->draw("Spectrum Analyzer");
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
-        char title_buffer[64];
-        std::snprintf(title_buffer, sizeof(title_buffer), "Generator %d##gen%zu",
-                      m_generators[i]->id(), i);
-        m_generator_widgets[i]->draw(title_buffer);
+        m_generator_widgets[i]->draw("Generators");
     }
 
-    for (size_t i = 0; i < m_amplifier_widgets.size(); ++i) {
-        char title_buffer[64];
-        std::snprintf(title_buffer, sizeof(title_buffer), "Amplifier %d##amp%zu",
-                      m_amplifiers[i]->id(), i);
-        m_amplifier_widgets[i]->draw(title_buffer);
+    if (m_amplifier_widget) {
+        m_amplifier_widget->draw("Amplifiers");
     }
 
     if (m_show_log)

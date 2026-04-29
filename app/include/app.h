@@ -32,7 +32,7 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
     std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
-    std::vector<std::unique_ptr<AmplifierWidget>> m_amplifier_widgets;
+    std::unique_ptr<AmplifierWidget> m_amplifier_widget;
 
     void addGenerator();
     void addAmplifier();
