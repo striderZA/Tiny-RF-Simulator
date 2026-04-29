@@ -30,6 +30,8 @@ class SpectrumAnalyzerEngine {
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
 
+    double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
+
   private:
     // Config
     double m_start_freq = MIN_FREQ;

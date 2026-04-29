@@ -98,5 +98,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                          (int)display_dBm.size());
         ImPlot::EndPlot();
     }
+
+    double avg_noise = m_engine.computeAverageNoiseLevel(specs);
+    ImGui::Text("Average noise level: %.2f dBm", avg_noise);
     ImGui::End();
 }
