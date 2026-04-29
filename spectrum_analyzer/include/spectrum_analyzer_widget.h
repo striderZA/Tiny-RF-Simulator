@@ -1,7 +1,16 @@
 #pragma once
 #include "spectrum_analyzer_engine.h"
+#include "spectrum.h"
 #include "view_manager.h"
 #include <string>
+#include <vector>
+
+struct MarkerState {
+    bool enabled = false;
+    int selected_peak_idx = -1;   // -1 = manual, >=0 = snapped to peak
+    int manual_bin = 0;
+    std::vector<Peak> peaks;
+};
 
 class SpectrumAnalyzerWidget {
   public:
@@ -14,4 +23,5 @@ class SpectrumAnalyzerWidget {
     SpectrumAnalyzerEngine &m_engine;
     ViewManager &m_view_manager;
     std::string m_probe_label;
+    MarkerState m_marker;
 };
