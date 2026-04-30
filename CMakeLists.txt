@@ -67,6 +67,17 @@ FetchContent_Declare(
 # correct imgui linkage in this FetchContent-based build.
 FetchContent_Populate(imnodes)
 
+# Fetch portable-file-dialogs (single-header, for native file browser).
+# Use Populate (not MakeAvailable) because PFD ships its own CMakeLists.txt
+# with an older cmake_minimum_required that is incompatible with CMake 4.x.
+# Since PFD is header-only, we only need the source directory for includes.
+FetchContent_Declare(
+    pfd
+    GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs.git
+    GIT_TAG main
+)
+FetchContent_Populate(pfd)
+
 enable_testing()
 
 # Find OpenGL

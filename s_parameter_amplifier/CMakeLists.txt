@@ -23,7 +23,9 @@ add_library(s_parameter_amplifier_widget STATIC
 )
 
 target_include_directories(s_parameter_amplifier_widget
-    PUBLIC ${PROJECT_SOURCE_DIR}/include
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+        ${pfd_SOURCE_DIR}
 )
 
 target_link_libraries(s_parameter_amplifier_widget
