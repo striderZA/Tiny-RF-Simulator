@@ -33,6 +33,7 @@ class NodeGraphWidget {
     float m_click_mouse_y = 0.0f;
 
     void drawNodes();
+    void showPinTooltips();
     void drawLinks();
     void handleContextMenu(bool editor_hovered);
     void handleLinkCreation();

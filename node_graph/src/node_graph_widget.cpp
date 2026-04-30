@@ -2,6 +2,9 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include <cmath>
+#include <cstdio>
+#include <limits>
+#include <string>
 
 NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
@@ -23,6 +26,9 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         bool editor_hovered = ImNodes::IsEditorHovered();
 
         ImNodes::EndNodeEditor();
+
+        // Pin tooltips (after EndNodeEditor per imnodes query pattern)
+        showPinTooltips();
 
         // Process interactions after EndNodeEditor (IsNodeHovered requires scope None)
         handleLinkCreation();
@@ -197,5 +203,112 @@ void NodeGraphWidget::handleProbeClick() {
         m_clicked_pin = -1;
         m_clicked_node = -1;
         m_link_created = false;
+    }
+}
+
+namespace {
+
+void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
+    ImGui::BeginTooltip();
+
+    if (spec.frequencies.empty() && spec.tones.empty()) {
+        ImGui::Text("%s: No signal", direction);
+        ImGui::EndTooltip();
+        return;
+    }
+
+    int num_tones = static_cast<int>(spec.tones.size());
+    if (num_tones > 0) {
+        double strongest_power = -std::numeric_limits<double>::infinity();
+        double strongest_freq = 0.0;
+        for (const auto &t : spec.tones) {
+            if (t.power_dBm > strongest_power) {
+                strongest_power = t.power_dBm;
+                strongest_freq = t.freq_Hz;
+            }
+        }
+        char buf[128];
+        if (strongest_freq >= 1e9)
+            std::snprintf(buf, sizeof(buf),
+                          "Tones: %d  |  Strongest: %.3f GHz @ %.1f dBm",
+                          num_tones, strongest_freq / 1e9, strongest_power);
+        else if (strongest_freq >= 1e6)
+            std::snprintf(buf, sizeof(buf),
+                          "Tones: %d  |  Strongest: %.3f MHz @ %.1f dBm",
+                          num_tones, strongest_freq / 1e6, strongest_power);
+        else
+            std::snprintf(buf, sizeof(buf),
+                          "Tones: %d  |  Strongest: %.3f kHz @ %.1f dBm",
+                          num_tones, strongest_freq / 1e3, strongest_power);
+        ImGui::TextUnformatted(buf);
+    } else {
+        ImGui::Text("Tones: 0");
+    }
+
+    if (!spec.noise_total_W.empty()) {
+        double sum = 0.0;
+        for (double n : spec.noise_total_W)
+            sum += n;
+        double avg_W = sum / static_cast<double>(spec.noise_total_W.size());
+        double avg_dBm_per_Hz = 10.0 * std::log10(avg_W) + 30.0;
+        ImGui::Text("Noise floor: %.1f dBm/Hz", avg_dBm_per_Hz);
+    } else {
+        ImGui::Text("Noise floor: -- dBm/Hz");
+    }
+
+    if (!spec.frequencies.empty()) {
+        double f_min = spec.frequencies.front();
+        double f_max = spec.frequencies.back();
+        double f_center = (f_min + f_max) / 2.0;
+
+        auto fmt_freq = [](double hz) -> std::string {
+            char buf[32];
+            if (hz >= 1e9)
+                std::snprintf(buf, sizeof(buf), "%.3f GHz", hz / 1e9);
+            else if (hz >= 1e6)
+                std::snprintf(buf, sizeof(buf), "%.3f MHz", hz / 1e6);
+            else
+                std::snprintf(buf, sizeof(buf), "%.3f kHz", hz / 1e3);
+            return buf;
+        };
+        ImGui::Text("Freq range: %s - %s (center: %s)",
+                    fmt_freq(f_min).c_str(), fmt_freq(f_max).c_str(),
+                    fmt_freq(f_center).c_str());
+    }
+
+    ImGui::EndTooltip();
+}
+
+} // anonymous namespace
+
+void NodeGraphWidget::showPinTooltips() {
+    int hovered_pin;
+    if (!ImNodes::IsPinHovered(&hovered_pin))
+        return;
+
+    for (const auto &node : m_engine.nodes()) {
+        const auto *signal = node.signal_node;
+        if (!signal)
+            continue;
+
+        for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+            if (node.input_pin_ids[i] != hovered_pin)
+                continue;
+            const Spectrum &spec = (i < signal->inputs.size())
+                                       ? signal->inputs[i]
+                                       : Spectrum();
+            showSpectrumTooltip(spec, "IN");
+            return;
+        }
+
+        for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+            if (node.output_pin_ids[i] != hovered_pin)
+                continue;
+            const Spectrum &spec = (i < signal->outputs.size())
+                                       ? signal->outputs[i]
+                                       : Spectrum();
+            showSpectrumTooltip(spec, "OUT");
+            return;
+        }
     }
 }
