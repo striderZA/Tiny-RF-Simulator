@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(rf_simulator_tests LANGUAGES CXX)
 
-add_executable(tests test_main.cpp test_node_graph_engine.cpp)
+add_executable(tests test_main.cpp test_node_graph_engine.cpp test_touchstone.cpp)
 
 target_link_libraries(tests PRIVATE
     Catch2::Catch2WithMain
@@ -12,8 +12,11 @@ target_link_libraries(tests PRIVATE
     simulator::splitter_engine
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
+    simulator::touchstone_parser
     simulator::node_graph_engine
 )
+
+target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(CTest)
 include(Catch)

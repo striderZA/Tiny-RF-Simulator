@@ -4,7 +4,7 @@
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | **Data-file component descriptions** — describe components with S-parameter / nonlinear data files; built-in utility to plot loaded data file parameters | 📋 Planned | |
+| 1 | **Data-file component descriptions** — describe components with S-parameter / nonlinear data files; built-in utility to plot loaded data file parameters | 🔄 In Progress | Touchstone v1.0 parser implemented: parses option line, DB/MA/RI formats, 1-port and 2-port files; tested with real .s2p (2,650 points, 10 MHz–26.5 GHz) |
 | 2 | **Spectrum analyzer enhancements** — more functionality in the spectrum analyzer view | 📋 Planned | |
 | 3 | **RF-accurate node-graph components** — improved RF representation in the node graph | 📋 Planned | |
 | 4 | **Multi-port components** — support components with >2 ports, multiple signal paths | ✅ Completed | Data structures refactored (SignalNode/GraphNode vectors); Splitter (1→2 ports, −3dB) implemented and tested |
