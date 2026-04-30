@@ -57,6 +57,15 @@ RfSimulatorApp::RfSimulatorApp() {
         LOG_INFO("Removed S-parameter amplifier at index %zu", index);
     };
 
+    m_adc_widget = std::make_unique<AdcWidget>(m_adcs);
+    m_adc_widget->onAddAdc = [this]() { addAdc(); };
+    m_adc_widget->onRemoveAdc = [this](size_t index) {
+        if (index >= m_adcs.size()) return;
+        m_view_manager.unregisterNode(&m_adcs[index]->node());
+        m_graph_engine.removeNode(m_adcs[index]->graphNodeId());
+        m_adcs.erase(m_adcs.begin() + static_cast<std::ptrdiff_t>(index));
+    };
+
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
 
@@ -101,6 +110,14 @@ void RfSimulatorApp::addSParamAmp() {
     m_view_manager.registerNode(&spamp->node());
     m_sparam_amps.push_back(std::move(spamp));
     LOG_INFO("Added S-parameter amplifier %d", id);
+}
+
+void RfSimulatorApp::addAdc() {
+    int id = static_cast<int>(m_adcs.size());
+    auto adc = std::make_unique<AdcEngine>(id, m_graph_engine);
+    m_view_manager.registerNode(&adc->node());
+    m_adcs.push_back(std::move(adc));
+    LOG_INFO("Added ADC %d", id);
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -151,10 +168,20 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_sparam_amps[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(i));
-            LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
+        LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
+        return;
+    }
+    // Find and remove ADC
+    for (size_t i = 0; i < m_adcs.size(); ++i) {
+        if (m_adcs[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_adcs[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_adcs.erase(m_adcs.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed ADC (graph node %d)", graph_node_id);
             return;
         }
     }
+}
 }
 
 void RfSimulatorApp::update_dsp() {
@@ -200,6 +227,15 @@ void RfSimulatorApp::update_dsp() {
             spamp->node().inputs[0] = Spectrum();
         }
         spamp->update(0.0);
+    }
+
+    for (auto& adc : m_adcs) {
+        auto* source = m_graph_engine.getSourceForInput(adc->inputPinId());
+        if (source)
+            adc->node().inputs[0] = source->outputs[0];
+        else
+            adc->node().inputs[0] = Spectrum();
+        adc->update(0.0);
     }
 
     // Update spectrum view based on active probe
@@ -252,6 +288,9 @@ void RfSimulatorApp::draw_ui() {
     if (m_sparam_amp_widget) {
         m_sparam_amp_widget->draw("S-Param Amplifiers");
     }
+
+    if (m_adc_widget)
+        m_adc_widget->draw("RF ADC");
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);
