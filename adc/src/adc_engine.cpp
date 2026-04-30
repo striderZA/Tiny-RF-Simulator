@@ -230,18 +230,19 @@ void AdcEngine::update(double /*dt*/) {
     auto& out = m_node.outputs[0];
     out.frequencies.resize(N_fft);
     out.phase_deg.resize(N_fft);
+    out.noise_W.resize(N_fft);
+    out.noise_added_W.assign(N_fft, 0.0);
+    out.tones.clear();
     double fs_out = m_iq_output.sample_rate_Hz;
     for (size_t i = 0; i < N_fft; ++i) {
         size_t k = (i + N_fft / 2) % N_fft;
         double f = (static_cast<double>(k) / N_fft) * fs_out;
         if (f > fs_out / 2.0) f -= fs_out;
         out.frequencies[i] = f;
-        double mag = std::abs(fft_in[k]) / static_cast<double>(N_fft);
         out.phase_deg[i] = std::arg(fft_in[k]) * 180.0 / std::numbers::pi;
+        // FFT power → PSD (W/Hz): |X[k]|² / (N_fft × fs_out)
+        out.noise_W[i] = std::norm(fft_in[k])
+                         / (static_cast<double>(N_fft) * fs_out);
     }
-    out.tones.clear();
-    out.noise_W.clear();
-    out.noise_added_W.clear();
-    out.noise_total_W.clear();
     out.computeTotalNoise();
 }
