@@ -1,13 +1,24 @@
 #include "s_parameter_amplifier_engine.h"
+#include "common.h"
+#include "touchstone_parser.h"
 #include "logging_core.h"
 #include <cmath>
+#include <numbers>
 
 SParameterAmplifierEngine::SParameterAmplifierEngine(int id, NodeGraphEngine& graph,
-                                                      const std::string& filepath)
+                                                       const std::string& filepath)
     : m_id(id), m_graph(&graph), m_filepath(filepath) {
     m_graph_node_id = graph.addNode("S-Param Amp " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
+    reload(filepath);
+}
+
+void SParameterAmplifierEngine::reload(const std::string& filepath) {
+    m_filepath = filepath;
+    m_loaded = false;
+    m_freqs.clear();
+    m_params.clear();
 
     auto data = TouchstoneParser::parse(filepath);
     if (!data.has_value()) {
@@ -15,24 +26,17 @@ SParameterAmplifierEngine::SParameterAmplifierEngine(int id, NodeGraphEngine& gr
         return;
     }
 
-    if (data->num_ports != 2) {
-        LOG_WARN("S-parameter file must be 2-port, got %d ports: %s", data->num_ports, filepath.c_str());
-        return;
-    }
+    m_num_ports = data->num_ports;
+    m_freqs = data->frequencies;
+    m_params = std::move(data->parameters);
 
-    m_s21_freqs.reserve(data->frequencies.size());
-    m_s21_mag.reserve(data->frequencies.size());
-
-    for (size_t i = 0; i < data->frequencies.size(); ++i) {
-        m_s21_freqs.push_back(data->frequencies[i]);
-        // S21 is the 2nd parameter in the 2-port v1.0 order (N11, N21, N12, N22)
-        const auto& s21 = data->parameters[i][1];
-        m_s21_mag.push_back(std::abs(s21));
-    }
+    int total_params = m_num_ports * m_num_ports;
+    if (m_forward_param_idx >= total_params)
+        m_forward_param_idx = m_num_ports;
 
     m_loaded = true;
-    LOG_INFO("Loaded S-parameter amplifier %d from %s (%zu points)", id, filepath.c_str(),
-             m_s21_freqs.size());
+    LOG_INFO("Loaded S-parameter amplifier %d from %s (%zu points, %d ports)",
+             m_id, filepath.c_str(), m_freqs.size(), m_num_ports);
 }
 
 int SParameterAmplifierEngine::inputPinId() const {
@@ -55,22 +59,27 @@ int SParameterAmplifierEngine::outputPinId() const {
     return -1;
 }
 
-double SParameterAmplifierEngine::interpolateS21Mag(double freq_Hz) const {
-    if (m_s21_freqs.empty()) return 1.0;
-    if (freq_Hz <= m_s21_freqs.front()) return m_s21_mag.front();
-    if (freq_Hz >= m_s21_freqs.back()) return m_s21_mag.back();
+void SParameterAmplifierEngine::setForwardParamIdx(int idx) {
+    int total = m_num_ports * m_num_ports;
+    if (idx >= 0 && idx < total)
+        m_forward_param_idx = idx;
+}
 
-    // Linear interpolation
+std::complex<double> SParameterAmplifierEngine::interpolateParam(double freq_Hz,
+                                                                   int param_idx) const {
+    if (m_freqs.empty() || m_params.empty()) return {1.0, 0.0};
+    if (param_idx < 0 || param_idx >= m_num_ports * m_num_ports) return {1.0, 0.0};
+    if (freq_Hz <= m_freqs.front()) return m_params.front()[param_idx];
+    if (freq_Hz >= m_freqs.back()) return m_params.back()[param_idx];
+
     size_t i = 0;
-    while (i + 1 < m_s21_freqs.size() && m_s21_freqs[i + 1] < freq_Hz) {
+    while (i + 1 < m_freqs.size() && m_freqs[i + 1] < freq_Hz)
         ++i;
-    }
-    double f0 = m_s21_freqs[i];
-    double f1 = m_s21_freqs[i + 1];
-    double m0 = m_s21_mag[i];
-    double m1 = m_s21_mag[i + 1];
+    double f0 = m_freqs[i], f1 = m_freqs[i + 1];
     double t = (freq_Hz - f0) / (f1 - f0);
-    return m0 + t * (m1 - m0);
+    auto p0 = m_params[i][param_idx];
+    auto p1 = m_params[i + 1][param_idx];
+    return p0 + t * (p1 - p0);
 }
 
 void SParameterAmplifierEngine::update(double dt) {
@@ -87,19 +96,18 @@ void SParameterAmplifierEngine::update(double dt) {
         int n = static_cast<int>((stop_Hz - start_Hz) / f_step_Hz);
         if (n < 2) n = 2;
         out.frequencies.resize(n);
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n; ++i)
             out.frequencies[i] = start_Hz + i * f_step_Hz;
-        }
     }
 
     const size_t N = out.frequencies.size();
 
-    // Copy tones and apply frequency-dependent gain
     out.tones = in.tones;
     for (auto& t : out.tones) {
-        double mag = interpolateS21Mag(t.freq_Hz);
-        double gain_dB = 20.0 * std::log10(mag);
+        auto S = interpolateParam(t.freq_Hz, m_forward_param_idx);
+        double gain_dB = 20.0 * std::log10(std::abs(S));
         t.power_dBm += gain_dB;
+        t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
     }
 
     if (!in.phase_deg.empty()) {
@@ -116,18 +124,16 @@ void SParameterAmplifierEngine::update(double dt) {
         return;
     }
 
-    // Noise: scale by |S21|² at each frequency bin
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-        double mag = interpolateS21Mag(out.frequencies[i]);
-        double gain_linear = mag * mag;
+        auto S = interpolateParam(out.frequencies[i], m_forward_param_idx);
+        double gain_linear = std::norm(S);
         double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
         out.noise_W[i] = gain_linear * nin;
     }
 
     out.noise_added_W.assign(N, 0.0);
     out.noise_total_W.resize(N);
-    for (size_t i = 0; i < N; ++i) {
+    for (size_t i = 0; i < N; ++i)
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
-    }
 }
