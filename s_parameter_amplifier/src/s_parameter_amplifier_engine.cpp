@@ -30,9 +30,8 @@ void SParameterAmplifierEngine::reload(const std::string& filepath) {
     m_freqs = data->frequencies;
     m_params = std::move(data->parameters);
 
-    int total_params = m_num_ports * m_num_ports;
-    if (m_forward_param_idx >= total_params)
-        m_forward_param_idx = m_num_ports;
+    // Default forward param to S21 (index = num_ports in row-major order)
+    m_forward_param_idx = m_num_ports;
 
     m_loaded = true;
     LOG_INFO("Loaded S-parameter amplifier %d from %s (%zu points, %d ports)",
@@ -87,6 +86,12 @@ void SParameterAmplifierEngine::update(double dt) {
     auto& in = m_node.inputs[0];
     auto& out = m_node.outputs[0];
 
+    if (!m_loaded) {
+        out.frequencies.clear();
+        out.tones.clear();
+        return;
+    }
+
     if (!in.frequencies.empty()) {
         out.frequencies = in.frequencies;
     } else if (out.frequencies.size() < 2) {
@@ -120,7 +125,6 @@ void SParameterAmplifierEngine::update(double dt) {
         out.noise_W.assign(N, 0.0);
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W.assign(N, 0.0);
-        out.phase_deg.assign(N, 0.0);
         return;
     }
 
