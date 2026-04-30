@@ -17,92 +17,96 @@ void AdcWidget::draw(const char* title, bool* p_open) {
 
     ImGui::SeparatorText("RF ADCs");
 
-    if (ImGui::BeginTable("adcs", 10,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-        ImGui::TableSetupColumn("Fs (MHz)");
-        ImGui::TableSetupColumn("NSD (dBm/Hz)");
-        ImGui::TableSetupColumn("Bits");
-        ImGui::TableSetupColumn("V_FS (V)");
-        ImGui::TableSetupColumn("f_chan (MHz)");
-        ImGui::TableSetupColumn("BW (MHz)");
-        ImGui::TableSetupColumn("D");
-        ImGui::TableSetupColumn("N");
-        ImGui::TableSetupColumn("");
-        ImGui::TableHeadersRow();
+    int to_delete = -1;
+    for (int i = 0; i < static_cast<int>(m_engines.size()); ++i) {
+        auto& adc = m_engines[i];
+        ImGui::PushID(i);
 
-        int to_delete = -1;
-        for (int i = 0; i < static_cast<int>(m_engines.size()); ++i) {
-            auto& adc = m_engines[i];
-            ImGui::PushID(i);
-            ImGui::TableNextRow();
+        auto label = "ADC " + std::to_string(adc->id());
+        if (ImGui::TreeNode(label.c_str())) {
+            ImGui::Columns(2, nullptr, false);
+            ImGui::SetColumnWidth(0, 140.0f);
 
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%d", adc->id());
-
-            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("Fs");
+            ImGui::NextColumn();
             double fs = adc->fs_Hz();
             if (utils::inputFrequency("##fs", fs, 1.0, 100.0, "%.0f", 1e6, 100e9))
                 adc->setFs_Hz(fs);
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("NSD");
+            ImGui::NextColumn();
             double nsd = adc->nsd_dBm_per_Hz();
             if (utils::inputDouble("##nsd", nsd, 1, 10, "%.1f", -200.0, -50.0))
                 adc->setNsd_dBm_per_Hz(nsd);
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("Bits");
+            ImGui::NextColumn();
             int bits = adc->bits();
-            ImGui::SetNextItemWidth(60.0f);
+            ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputInt("##bits", &bits)) {
                 if (bits < 1) bits = 1;
                 if (bits > 24) bits = 24;
                 adc->setBits(bits);
             }
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(4);
+            ImGui::Text("V_FS");
+            ImGui::NextColumn();
             double vfs = adc->v_fs();
-            ImGui::SetNextItemWidth(60.0f);
+            ImGui::SetNextItemWidth(120.0f);
             if (utils::inputDouble("##vfs", vfs, 0.1, 1.0, "%.2f", 0.1, 10.0))
                 adc->setVfs(vfs);
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(5);
+            ImGui::Text("Channel freq");
+            ImGui::NextColumn();
             double fchan = adc->fChannel_Hz();
             if (utils::inputFrequency("##fchan", fchan, 1.0, 100.0, "%.3f", 0.0, 100e9))
                 adc->setFChannel_Hz(fchan);
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(6);
+            ImGui::Text("Bandwidth");
+            ImGui::NextColumn();
             double bw = adc->bw_Hz();
             if (utils::inputFrequency("##bw", bw, 0.1, 10.0, "%.0f", 0.0, 1e9))
                 adc->setBw_Hz(bw);
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(7);
+            ImGui::Text("Decimation");
+            ImGui::NextColumn();
             int decim = adc->decimation();
-            ImGui::SetNextItemWidth(60.0f);
+            ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputInt("##decim", &decim)) {
                 if (decim < 1) decim = 1;
                 adc->setDecimation(decim);
             }
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(8);
+            ImGui::Text("N samples");
+            ImGui::NextColumn();
             int ns = adc->nSamples();
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputInt("##ns", &ns)) {
                 if (ns < adc->decimation()) ns = adc->decimation();
                 adc->setNSamples(ns);
             }
+            ImGui::NextColumn();
 
-            ImGui::TableSetColumnIndex(9);
-            if (ImGui::SmallButton("X"))
+            ImGui::Columns(1);
+            if (ImGui::Button("Delete"))
                 to_delete = i;
 
-            ImGui::PopID();
+            ImGui::TreePop();
         }
-        ImGui::EndTable();
 
-        if (to_delete >= 0) {
-            LOG_INFO("Remove ADC [adc%d].", m_engines[to_delete]->id());
-            onRemoveAdc(static_cast<size_t>(to_delete));
-        }
+        ImGui::PopID();
+    }
+
+    if (to_delete >= 0) {
+        LOG_INFO("Remove ADC [adc%d].", m_engines[to_delete]->id());
+        onRemoveAdc(static_cast<size_t>(to_delete));
     }
 
     if (ImGui::Button("+ Add ADC"))
