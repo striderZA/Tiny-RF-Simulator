@@ -191,7 +191,7 @@ void SParameterAmplifierWidget::draw(const char* title, bool* p_open) {
                         mags_db.reserve(freqs.size());
                         for (size_t fi = 0; fi < freqs.size(); ++fi) {
                             double mag = std::abs(engine.params()[fi][pi]);
-                            mags_db.push_back(20.0 * std::log10(mag));
+                            mags_db.push_back(20.0 * std::log10((std::max)(mag, 1e-30)));
                         }
 
                         std::string label = "Amp" + std::to_string(i + 1) + " " + paramLabel(np, pi);

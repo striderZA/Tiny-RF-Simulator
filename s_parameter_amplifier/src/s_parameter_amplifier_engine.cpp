@@ -31,9 +31,9 @@ void SParameterAmplifierEngine::reload(const std::string& filepath) {
     m_params = std::move(data->parameters);
 
     // Default forward param to S21 (index = num_ports in row-major order)
-    m_forward_param_idx = m_num_ports;
+    m_forward_param_idx = (m_num_ports > 1) ? m_num_ports : 0;
 
-    m_loaded = true;
+    m_loaded = !m_freqs.empty();
     LOG_INFO("Loaded S-parameter amplifier %d from %s (%zu points, %d ports)",
              m_id, filepath.c_str(), m_freqs.size(), m_num_ports);
 }
