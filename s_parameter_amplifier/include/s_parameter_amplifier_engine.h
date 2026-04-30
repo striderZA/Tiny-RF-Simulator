@@ -4,6 +4,7 @@
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include "touchstone_parser.h"
+#include <complex>
 #include <string>
 #include <vector>
 
@@ -16,13 +17,17 @@ class SParameterAmplifierEngine {
     int outputPinId() const;
 
     void update(double dt);
+    void reload(const std::string& filepath);
 
     SignalNode& node() { return m_node; }
     const std::string& filepath() const { return m_filepath; }
     bool loaded() const { return m_loaded; }
 
-    const std::vector<double>& s21Freqs() const { return m_s21_freqs; }
-    const std::vector<double>& s21Mag() const { return m_s21_mag; }
+    int numPorts() const { return m_num_ports; }
+    const std::vector<double>& freqs() const { return m_freqs; }
+    const std::vector<std::vector<std::complex<double>>>& params() const { return m_params; }
+    int forwardParamIdx() const { return m_forward_param_idx; }
+    void setForwardParamIdx(int idx);
 
   private:
     int m_id;
@@ -33,9 +38,10 @@ class SParameterAmplifierEngine {
     std::string m_filepath;
     bool m_loaded = false;
 
-    // S21 data: frequency (Hz) -> linear magnitude
-    std::vector<double> m_s21_freqs;
-    std::vector<double> m_s21_mag;
+    int m_num_ports = 0;
+    std::vector<double> m_freqs;
+    std::vector<std::vector<std::complex<double>>> m_params;
+    int m_forward_param_idx = 0;
 
-    double interpolateS21Mag(double freq_Hz) const;
+    std::complex<double> interpolateParam(double freq_Hz, int param_idx) const;
 };
