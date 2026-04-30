@@ -117,6 +117,56 @@ TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
     REQUIRE(gen.node().output.tones[0].power_dBm == -5.0);
 }
 
+TEST_CASE("Generator addTone with phase", "[generator][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0, 45.0);
+    gen.update(0.0);
+
+    REQUIRE(gen.toneCount() == 1);
+    REQUIRE(gen.node().output.tones[0].freq_Hz == 100e6);
+    REQUIRE(gen.node().output.tones[0].power_dBm == -20.0);
+    REQUIRE(gen.node().output.tones[0].phase_deg == 45.0);
+}
+
+TEST_CASE("Generator updateTone phase", "[generator][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.updateTone(0, 100e6, -20.0, 90.0);
+    gen.update(0.0);
+
+    REQUIRE(gen.node().output.tones[0].phase_deg == 90.0);
+}
+
+TEST_CASE("Generator phase_deg is zeroed per bin", "[generator][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+
+    const auto &out = gen.node().output;
+    REQUIRE(out.phase_deg.size() == out.frequencies.size());
+    for (double p : out.phase_deg) {
+        REQUIRE(p == 0.0);
+    }
+}
+
+TEST_CASE("Amplifier propagates tone phase", "[amplifier][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0, 45.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(10.0);
+    amp.node().input = gen.node().output;
+    amp.update(0.0);
+
+    const auto &out = amp.node().output;
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].phase_deg == 45.0);
+}
+
 TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);

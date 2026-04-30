@@ -8,6 +8,7 @@ struct Spectrum {
     struct Tone {
         double freq_Hz = 0.0;
         double power_dBm = -174;
+        double phase_deg = 0.0;
     };
 
     std::vector<double> frequencies;
@@ -18,6 +19,9 @@ struct Spectrum {
     std::vector<double> noise_W;        // input noise density (W/Hz)
     std::vector<double> noise_added_W;  // added noise density (W/Hz)
     std::vector<double> noise_total_W;  // total output noise density (W/Hz)
+
+    // Phase (degrees) per frequency bin, same size as frequencies.
+    std::vector<double> phase_deg;
 
     void computeTotalNoise() {
         size_t n = frequencies.size();

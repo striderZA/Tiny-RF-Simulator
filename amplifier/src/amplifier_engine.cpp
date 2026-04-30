@@ -51,10 +51,17 @@ void AmplifierEngine::update(double dt) {
     }
 
     const size_t N = out.frequencies.size();
+
+    if (!in.phase_deg.empty()) {
+        out.phase_deg = in.phase_deg;
+    } else {
+        out.phase_deg.assign(N, 0.0);
+    }
     if (N < 2) {
         out.noise_W.assign(N, 0.0);
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W.assign(N, 0.0);
+        out.phase_deg.assign(N, 0.0);
         return;
     }
 

@@ -30,13 +30,15 @@ void SignalGeneratorEngine::rebuildFrequencyGrid() {
 
     m_node.output.noise_W.assign(n, 0.0);
     m_node.output.noise_added_W.assign(n, 0.0);
+    m_node.output.phase_deg.assign(n, 0.0);
     // Generator is an ideal source: flat thermal noise density k*T (W/Hz)
     m_node.input.noise_total_W.assign(n, k * T);
+    m_node.input.phase_deg.assign(n, 0.0);
     m_node.output.computeTotalNoise();
 }
 
-void SignalGeneratorEngine::addTone(double freq_Hz, double power_dBm) {
-    m_tones.push_back({freq_Hz, power_dBm});
+void SignalGeneratorEngine::addTone(double freq_Hz, double power_dBm, double phase_deg) {
+    m_tones.push_back({freq_Hz, power_dBm, phase_deg});
 }
 
 void SignalGeneratorEngine::removeTone(size_t index) {
@@ -45,10 +47,11 @@ void SignalGeneratorEngine::removeTone(size_t index) {
     }
 }
 
-void SignalGeneratorEngine::updateTone(size_t index, double freq_Hz, double power_dBm) {
+void SignalGeneratorEngine::updateTone(size_t index, double freq_Hz, double power_dBm, double phase_deg) {
     if (index < m_tones.size()) {
         m_tones[index].freq_Hz = freq_Hz;
         m_tones[index].power_dBm = power_dBm;
+        m_tones[index].phase_deg = phase_deg;
     }
 }
 
@@ -66,6 +69,7 @@ void SignalGeneratorEngine::update(double) {
         out.noise_W.assign(N, 0.0);
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W.assign(N, 0.0);
+        out.phase_deg.assign(N, 0.0);
         return;
     }
 
@@ -78,6 +82,8 @@ void SignalGeneratorEngine::update(double) {
 
     // Generator adds no noise of its own
     out.noise_added_W.assign(N, 0.0);
+
+    out.phase_deg.assign(N, 0.0);
 
     out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
