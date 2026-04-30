@@ -7,6 +7,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_graph_widget->onAddGenerator = [this]() { addGenerator(); };
     m_graph_widget->onAddAmplifier = [this]() { addAmplifier(); };
+    m_graph_widget->onAddSplitter = [this]() { addSplitter(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
     addGenerator();
@@ -22,6 +23,16 @@ RfSimulatorApp::RfSimulatorApp() {
         m_graph_engine.removeNode(m_amplifiers[index]->graphNodeId());
         m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(index));
         LOG_INFO("Removed amplifier at index %zu", index);
+    };
+
+    m_splitter_widget = std::make_unique<SplitterWidget>(m_splitters);
+    m_splitter_widget->onAddSplitter = [this]() { addSplitter(); };
+    m_splitter_widget->onRemoveSplitter = [this](size_t index) {
+        if (index >= m_splitters.size()) return;
+        m_view_manager.unregisterNode(&m_splitters[index]->node());
+        m_graph_engine.removeNode(m_splitters[index]->graphNodeId());
+        m_splitters.erase(m_splitters.begin() + static_cast<std::ptrdiff_t>(index));
+        LOG_INFO("Removed splitter at index %zu", index);
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
@@ -42,6 +53,14 @@ void RfSimulatorApp::addAmplifier() {
     m_view_manager.registerNode(&amp->node());
     m_amplifiers.push_back(std::move(amp));
     LOG_INFO("Added amplifier %d", id);
+}
+
+void RfSimulatorApp::addSplitter() {
+    int id = static_cast<int>(m_splitters.size());
+    auto split = std::make_unique<SplitterEngine>(id, m_graph_engine);
+    m_view_manager.registerNode(&split->node());
+    m_splitters.push_back(std::move(split));
+    LOG_INFO("Added splitter %d", id);
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -66,6 +85,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
+    // Find and remove splitter
+    for (size_t i = 0; i < m_splitters.size(); ++i) {
+        if (m_splitters[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_splitters[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_splitters.erase(m_splitters.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed splitter (graph node %d)", graph_node_id);
+            return;
+        }
+    }
 }
 
 void RfSimulatorApp::update_dsp() {
@@ -81,6 +110,16 @@ void RfSimulatorApp::update_dsp() {
             amp->node().inputs[0] = Spectrum();
         }
         amp->update(0.0);
+    }
+
+    for (auto& split : m_splitters) {
+        auto* source = m_graph_engine.getSourceForInput(split->inputPinId());
+        if (source) {
+            split->node().inputs[0] = source->outputs[0];
+        } else {
+            split->node().inputs[0] = Spectrum();
+        }
+        split->update(0.0);
     }
 
     // Update spectrum view based on active probe
@@ -120,6 +159,10 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_amplifier_widget) {
         m_amplifier_widget->draw("Amplifiers");
+    }
+
+    if (m_splitter_widget) {
+        m_splitter_widget->draw("Splitters");
     }
 
     if (m_show_log)

@@ -15,6 +15,7 @@ class NodeGraphWidget {
     // Callbacks for app to create/destroy components
     std::function<void()> onAddGenerator;
     std::function<void()> onAddAmplifier;
+    std::function<void()> onAddSplitter;
     std::function<void(int node_id)> onRemoveNode;
 
   private:

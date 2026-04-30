@@ -4,6 +4,7 @@
 #include "spectrum.h"
 #include "signal_generator_engine.h"
 #include "amplifier_engine.h"
+#include "splitter_engine.h"
 #include "spectrum_analyzer_engine.h"
 #include "node_graph_engine.h"
 
@@ -183,6 +184,60 @@ TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
     gen.update(0.0);
     for (double density : gen.node().outputs[0].noise_total_W) {
         REQUIRE(density == Catch::Approx(k * T).epsilon(1e-30));
+    }
+}
+
+TEST_CASE("Splitter produces two outputs with -3dB tones", "[splitter]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    SplitterEngine split(0, graph);
+    split.node().inputs[0] = gen.node().outputs[0];
+    split.update(0.0);
+
+    REQUIRE(split.node().outputs.size() == 2);
+    for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
+        const auto& out = split.node().outputs[out_idx];
+        REQUIRE(out.tones.size() == 1);
+        REQUIRE(out.tones[0].freq_Hz == 100e6);
+        REQUIRE(out.tones[0].power_dBm == Approx(-20.0 - 3.0103).epsilon(0.001));
+    }
+}
+
+TEST_CASE("Splitter preserves phase on both outputs", "[splitter]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0, 45.0);
+    gen.update(0.0);
+
+    SplitterEngine split(0, graph);
+    split.node().inputs[0] = gen.node().outputs[0];
+    split.update(0.0);
+
+    for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
+        const auto& out = split.node().outputs[out_idx];
+        REQUIRE(out.tones[0].phase_deg == 45.0);
+    }
+}
+
+TEST_CASE("Splitter scales noise density by -3dB", "[splitter]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+
+    SplitterEngine split(0, graph);
+    split.node().inputs[0] = gen.node().outputs[0];
+    split.update(0.0);
+
+    double expected_density = (k * T) / 2.0;
+    for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
+        const auto& out = split.node().outputs[out_idx];
+        REQUIRE(!out.noise_total_W.empty());
+        for (double density : out.noise_total_W) {
+            REQUIRE(density == Approx(expected_density).epsilon(1e-30));
+        }
     }
 }
 

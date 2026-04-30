@@ -102,6 +102,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Amplifier")) {
             if (onAddAmplifier) onAddAmplifier();
         }
+        if (ImGui::MenuItem("Add Splitter")) {
+            if (onAddSplitter) onAddSplitter();
+        }
         ImGui::EndPopup();
     }
 }

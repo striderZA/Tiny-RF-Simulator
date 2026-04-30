@@ -23,6 +23,8 @@ target_link_libraries(app
         simulator::signal_generator_widget
         simulator::amplifier_engine
         simulator::amplifier_widget
+        simulator::splitter_engine
+        simulator::splitter_widget
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
         simulator::node_graph_engine

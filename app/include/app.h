@@ -3,6 +3,8 @@
 #include "amplifier_engine.h"
 #include "amplifier_widget.h"
 #include "logging_widget.h"
+#include "splitter_engine.h"
+#include "splitter_widget.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "signal_generator_engine.h"
@@ -34,7 +36,11 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
     std::unique_ptr<AmplifierWidget> m_amplifier_widget;
 
+    std::vector<std::unique_ptr<SplitterEngine>> m_splitters;
+    std::unique_ptr<SplitterWidget> m_splitter_widget;
+
     void addGenerator();
     void addAmplifier();
+    void addSplitter();
     void removeComponent(int graph_node_id);
 };

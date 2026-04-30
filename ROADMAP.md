@@ -7,7 +7,7 @@
 | 1 | **Data-file component descriptions** — describe components with S-parameter / nonlinear data files; built-in utility to plot loaded data file parameters | 📋 Planned | |
 | 2 | **Spectrum analyzer enhancements** — more functionality in the spectrum analyzer view | 📋 Planned | |
 | 3 | **RF-accurate node-graph components** — improved RF representation in the node graph | 📋 Planned | |
-| 4 | **Multi-port components** — support components with >2 ports, multiple signal paths | 🔄 In Progress | Data structures refactored (SignalNode/GraphNode vectors); Phase 2: multi-port components (splitter, mixer) |
+| 4 | **Multi-port components** — support components with >2 ports, multiple signal paths | ✅ Completed | Data structures refactored (SignalNode/GraphNode vectors); Splitter (1→2 ports, −3dB) implemented and tested |
 | 5 | **Digital chain** — polyphase filter bank + digital downconversion | 📋 Planned | |
 | 6 | **Time domain view** — add time-domain visualization | 📋 Planned | |
 | 7 | **Pulsed signal generation** — pulse-generation capability | 📋 Planned | |
