@@ -153,14 +153,23 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
         double freq = raw_values[base];
         data.frequencies.push_back(data.freqToHz(freq));
 
-        std::vector<std::complex<double>> params;
-        params.reserve(pairs_per_freq);
+        // Parse in Touchstone order (column-major)
+        std::vector<std::complex<double>> cm_params;
+        cm_params.reserve(pairs_per_freq);
         for (int p = 0; p < pairs_per_freq; ++p) {
             double a = raw_values[base + 1 + p * 2];
             double b = raw_values[base + 1 + p * 2 + 1];
-            params.push_back(parsePair(a, b, data.format));
+            cm_params.push_back(parsePair(a, b, data.format));
         }
-        data.parameters.push_back(std::move(params));
+
+        // Reorder to row-major: col-major idx = col*N + row -> row-major idx = row*N + col
+        std::vector<std::complex<double>> rm_params(pairs_per_freq);
+        for (int p = 0; p < pairs_per_freq; ++p) {
+            int r = p % data.num_ports;
+            int c = p / data.num_ports;
+            rm_params[r * data.num_ports + c] = cm_params[p];
+        }
+        data.parameters.push_back(std::move(rm_params));
     }
 
     return data;

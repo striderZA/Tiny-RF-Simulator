@@ -108,15 +108,15 @@ TEST_CASE("TouchstoneParser parses synthetic v1.0 2-port DB file", "[touchstone]
     REQUIRE(data.parameters[0][0].real() == Approx(0.1).epsilon(1e-6));
     REQUIRE(data.parameters[0][0].imag() == Approx(0.0).margin(1e-6));
 
-    // S21: 0 dB = 1.0 mag, 90 deg
-    REQUIRE(std::abs(data.parameters[0][1]) == Approx(1.0).epsilon(1e-6));
-    REQUIRE(data.parameters[0][1].real() == Approx(0.0).margin(1e-6));
-    REQUIRE(data.parameters[0][1].imag() == Approx(1.0).epsilon(1e-6));
-
     // S12: -40 dB = 0.01 mag, 180 deg
-    REQUIRE(std::abs(data.parameters[0][2]) == Approx(0.01).epsilon(1e-6));
-    REQUIRE(data.parameters[0][2].real() == Approx(-0.01).epsilon(1e-6));
-    REQUIRE(data.parameters[0][2].imag() == Approx(0.0).margin(1e-6));
+    REQUIRE(std::abs(data.parameters[0][1]) == Approx(0.01).epsilon(1e-6));
+    REQUIRE(data.parameters[0][1].real() == Approx(-0.01).epsilon(1e-6));
+    REQUIRE(data.parameters[0][1].imag() == Approx(0.0).margin(1e-6));
+
+    // S21: 0 dB = 1.0 mag, 90 deg
+    REQUIRE(std::abs(data.parameters[0][2]) == Approx(1.0).epsilon(1e-6));
+    REQUIRE(data.parameters[0][2].real() == Approx(0.0).margin(1e-6));
+    REQUIRE(data.parameters[0][2].imag() == Approx(1.0).epsilon(1e-6));
 
     // S22: -10 dB = 0.3162... mag, -45 deg
     REQUIRE(std::abs(data.parameters[0][3]) == Approx(0.316227766).epsilon(1e-6));

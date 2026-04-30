@@ -70,18 +70,19 @@ void SParameterAmplifierWidget::draw(const char* title, bool* p_open) {
 
                 for (size_t i = 0; i < m_engines.size(); ++i) {
                     const auto& engine = *m_engines[i];
-                    if (!engine.loaded() || engine.s21Freqs().empty()) continue;
+                    if (!engine.loaded() || engine.freqs().empty()) continue;
 
-                    const auto& freqs = engine.s21Freqs();
-                    const auto& mags = engine.s21Mag();
+                    const auto& freqs = engine.freqs();
+                    const auto& params = engine.params();
+                    size_t fwd_idx = static_cast<size_t>(engine.forwardParamIdx());
 
                     std::vector<double> freqs_ghz;
                     std::vector<double> mags_db;
                     freqs_ghz.reserve(freqs.size());
-                    mags_db.reserve(mags.size());
+                    mags_db.reserve(params.size());
                     for (size_t j = 0; j < freqs.size(); ++j) {
                         freqs_ghz.push_back(freqs[j] / 1e9);
-                        mags_db.push_back(20.0 * std::log10(mags[j]));
+                        mags_db.push_back(20.0 * std::log10(std::abs(params[j][fwd_idx])));
                     }
 
                     std::string label = "Amp " + std::to_string(i + 1);

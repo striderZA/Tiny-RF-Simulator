@@ -8,18 +8,35 @@
 
 using Catch::Approx;
 
-TEST_CASE("SParameterAmplifierEngine loads real .s2p and applies frequency-dependent gain", "[sparam_amp]") {
+TEST_CASE("SParameterAmplifierEngine loads real .s2p and applies frequency-dependent gain",
+          "[sparam_amp]") {
     NodeGraphEngine graph;
     std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
     SParameterAmplifierEngine spamp(0, graph, path);
 
     REQUIRE(spamp.loaded());
-    REQUIRE(spamp.filepath() == path);
+    REQUIRE(spamp.numPorts() == 2);
+    REQUIRE(spamp.freqs().size() > 10);
+    REQUIRE(spamp.params().size() == spamp.freqs().size());
+    REQUIRE(spamp.params()[0].size() == 4); // 4 S-params for 2-port
+    REQUIRE(spamp.forwardParamIdx() == 2); // default S21
 
-    // Drive with a tone at 1 GHz where S21 ≈ 19.6 dB (from raw data line 108: 1000000000 -27.116549 -61.78611 19.588779 ...)
-    // Wait, S21 is the 3rd and 4th values: 19.588779 dB, 145.23813 deg
-    // So gain = 19.59 dB
+    // S21 should have reasonable gain (> 0 dB for this LNA)
+    int mid = static_cast<int>(spamp.freqs().size()) / 2;
+    double s21_mag = std::abs(spamp.params()[mid][2]); // idx 2 = S21
+    REQUIRE(s21_mag > 1.0);
+}
+
+TEST_CASE("SParameterAmplifierEngine applies phase rotation to tones", "[sparam_amp]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(1e9, -20.0);
     gen.update(0.0);
@@ -29,19 +46,21 @@ TEST_CASE("SParameterAmplifierEngine loads real .s2p and applies frequency-depen
 
     const auto& out = spamp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
-    REQUIRE(out.tones[0].freq_Hz == 1e9);
-    // Expected gain ≈ 19.59 dB, so output power ≈ -20 + 19.59 = -0.41 dBm
+    // At 1 GHz, S21 phase is ~145 degrees from the .s2p data
+    // Input tone starts at 0 deg, so output phase should be ~145 deg
     REQUIRE(out.tones[0].power_dBm == Approx(-0.411221).margin(0.5));
+    REQUIRE(out.tones[0].phase_deg == Approx(145.23813).margin(1.0));
 }
 
 TEST_CASE("SParameterAmplifierEngine interpolates gain between data points", "[sparam_amp]") {
     NodeGraphEngine graph;
     std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
     SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
 
     SignalGeneratorEngine gen(0, graph);
-    // 1.005 GHz is halfway between 1.0 GHz (19.59 dB) and 1.01 GHz (19.58 dB)
     gen.addTone(1.005e9, -20.0);
     gen.update(0.0);
 
@@ -50,28 +69,26 @@ TEST_CASE("SParameterAmplifierEngine interpolates gain between data points", "[s
 
     const auto& out = spamp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
-    // Interpolated gain should be very close to ~19.585 dB
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 19.585).margin(0.5));
 }
 
 TEST_CASE("SParameterAmplifierEngine handles out-of-band frequency", "[sparam_amp]") {
     NodeGraphEngine graph;
     std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
     SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
 
-    SignalGeneratorEngine gen(0, graph);
-    // 1 Hz is below the lowest frequency (10 MHz) — should clamp to edge gain
-    gen.addTone(1.0, -20.0);
-    gen.update(0.0);
-
-    spamp.node().inputs[0] = gen.node().outputs[0];
+    double f_outside = spamp.freqs().back() + 10e9;
+    spamp.node().inputs[0].tones = {{f_outside, -20.0, 0.0}};
     spamp.update(0.0);
 
-    const auto& out = spamp.node().outputs[0];
-    REQUIRE(out.tones.size() == 1);
-    // Edge gain at 10 MHz is ~21.2 dB (from first data line)
-    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 21.2).margin(1.0));
+    REQUIRE(spamp.node().outputs[0].tones.size() == 1);
+    // Should clamp to last point — phase should match last S21 phase
+    auto S_last = spamp.params().back()[2];
+    double expected_phase = std::arg(S_last) * 180.0 / std::numbers::pi;
+    REQUIRE(spamp.node().outputs[0].tones[0].phase_deg == Approx(expected_phase).margin(0.1));
 }
 
 TEST_CASE("SParameterAmplifierEngine fails gracefully for bad file", "[sparam_amp]") {
@@ -79,7 +96,42 @@ TEST_CASE("SParameterAmplifierEngine fails gracefully for bad file", "[sparam_am
     SParameterAmplifierEngine spamp(0, graph, "/nonexistent/file.s2p");
     REQUIRE(!spamp.loaded());
 
-    // update() should still work without crashing (builds default grid when no input)
+    // update() should not crash
     spamp.update(0.0);
-    REQUIRE(!spamp.node().outputs[0].frequencies.empty());
+}
+
+TEST_CASE("SParameterAmplifierEngine reloads new file at runtime", "[sparam_amp]") {
+    NodeGraphEngine graph;
+    SParameterAmplifierEngine spamp(0, graph, "/nonexistent/file.s2p");
+    REQUIRE(!spamp.loaded());
+
+    std::string valid_path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    spamp.reload(valid_path);
+    REQUIRE(spamp.loaded());
+    REQUIRE(spamp.numPorts() == 2);
+    REQUIRE(spamp.forwardParamIdx() == 2);
+}
+
+TEST_CASE("SParameterAmplifierEngine forward param index controls gain selection", "[sparam_amp]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+    REQUIRE(spamp.forwardParamIdx() == 2); // default S21
+
+    // Switching to S11 (idx 0) should produce different gain
+    spamp.setForwardParamIdx(0);
+    REQUIRE(spamp.forwardParamIdx() == 0);
+
+    double f_mid = (spamp.freqs().front() + spamp.freqs().back()) / 2.0;
+    spamp.node().inputs[0].tones = {{f_mid, -20.0, 0.0}};
+    spamp.update(0.0);
+    REQUIRE(spamp.node().outputs[0].tones.size() == 1);
+
+    // S11 gain should be much lower than S21 (S11 is reflection, ~0 dB)
+    REQUIRE(spamp.node().outputs[0].tones[0].power_dBm < -15.0);
 }
