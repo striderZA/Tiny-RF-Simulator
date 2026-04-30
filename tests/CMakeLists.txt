@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(rf_simulator_tests LANGUAGES CXX)
 
-add_executable(tests test_main.cpp test_node_graph_engine.cpp test_touchstone.cpp test_s_parameter_amplifier.cpp)
+add_executable(tests test_main.cpp test_node_graph_engine.cpp test_touchstone.cpp test_s_parameter_amplifier.cpp test_adc.cpp)
 
 target_link_libraries(tests PRIVATE
     Catch2::Catch2WithMain
@@ -14,6 +14,7 @@ target_link_libraries(tests PRIVATE
     simulator::spectrum_analyzer_engine
     simulator::touchstone_parser
     simulator::s_parameter_amplifier_engine
+    simulator::adc_engine
     simulator::node_graph_engine
 )
 
