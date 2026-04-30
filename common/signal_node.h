@@ -3,7 +3,7 @@
 #include "spectrum.h"
 
 struct SignalNode {
-    Spectrum input;
-    Spectrum output;
+    std::vector<Spectrum> inputs;
+    std::vector<Spectrum> outputs;
     bool view_enabled = false;
 };

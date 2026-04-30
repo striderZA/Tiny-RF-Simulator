@@ -76,9 +76,9 @@ void RfSimulatorApp::update_dsp() {
     for (auto& amp : m_amplifiers) {
         auto* source = m_graph_engine.getSourceForInput(amp->inputPinId());
         if (source) {
-            amp->node().input = source->output;
+            amp->node().inputs[0] = source->outputs[0];
         } else {
-            amp->node().input = Spectrum();
+            amp->node().inputs[0] = Spectrum();
         }
         amp->update(0.0);
     }

@@ -10,8 +10,9 @@ class ViewManager {
   public:
     void registerNode(SignalNode *node) {
         if (node) {
-            LOG_INFO("Register new node: %d inputs | %d outputs.", node->input.tones.size(),
-                     node->output.tones.size());
+            LOG_INFO("Register new node: %d inputs | %d outputs.",
+                     node->inputs.empty() ? 0 : node->inputs[0].tones.size(),
+                     node->outputs.empty() ? 0 : node->outputs[0].tones.size());
             m_nodes.push_back(node);
         }
     }

@@ -2,14 +2,16 @@
 
 AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, true, true);
+    m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, 1, 1);
+    m_node.inputs.resize(1);
+    m_node.outputs.resize(1);
 }
 
 int AmplifierEngine::inputPinId() const {
     if (!m_graph || m_graph_node_id < 0) return -1;
     for (const auto& node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            return node.input_pin_id;
+            return node.input_pin_ids.empty() ? -1 : node.input_pin_ids[0];
         }
     }
     return -1;
@@ -19,15 +21,15 @@ int AmplifierEngine::outputPinId() const {
     if (!m_graph || m_graph_node_id < 0) return -1;
     for (const auto& node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            return node.output_pin_id;
+            return node.output_pin_ids.empty() ? -1 : node.output_pin_ids[0];
         }
     }
     return -1;
 }
 
 void AmplifierEngine::update(double dt) {
-    auto &in = m_node.input;
-    auto &out = m_node.output;
+    auto &in = m_node.inputs[0];
+    auto &out = m_node.outputs[0];
 
     if (!in.frequencies.empty()) {
         out.frequencies = in.frequencies;

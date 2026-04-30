@@ -58,7 +58,7 @@ TEST_CASE("Generator outputs flat thermal noise density", "[generator]") {
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
-    const auto &out = gen.node().output;
+    const auto &out = gen.node().outputs[0];
     REQUIRE(!out.noise_total_W.empty());
     for (double density : out.noise_total_W) {
         REQUIRE(density == Approx(k * T).epsilon(1e-30));
@@ -69,7 +69,7 @@ TEST_CASE("Generator with no tones produces empty tone list", "[generator]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
-    REQUIRE(gen.node().output.tones.empty());
+    REQUIRE(gen.node().outputs[0].tones.empty());
     REQUIRE(gen.toneCount() == 0);
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("Generator with multiple tones outputs all tones", "[generator]") {
     gen.update(0.0);
 
     REQUIRE(gen.toneCount() == 3);
-    const auto &tones = gen.node().output.tones;
+    const auto &tones = gen.node().outputs[0].tones;
     REQUIRE(tones.size() == 3);
     REQUIRE(tones[0].freq_Hz == 100e6);
     REQUIRE(tones[0].power_dBm == -20.0);
@@ -101,8 +101,8 @@ TEST_CASE("Generator removeTone works correctly", "[generator]") {
     gen.update(0.0);
 
     REQUIRE(gen.toneCount() == 1);
-    REQUIRE(gen.node().output.tones.size() == 1);
-    REQUIRE(gen.node().output.tones[0].freq_Hz == 200e6);
+    REQUIRE(gen.node().outputs[0].tones.size() == 1);
+    REQUIRE(gen.node().outputs[0].tones[0].freq_Hz == 200e6);
 }
 
 TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
@@ -113,8 +113,8 @@ TEST_CASE("Generator updateTone modifies existing tone", "[generator]") {
     gen.update(0.0);
 
     REQUIRE(gen.toneCount() == 1);
-    REQUIRE(gen.node().output.tones[0].freq_Hz == 150e6);
-    REQUIRE(gen.node().output.tones[0].power_dBm == -5.0);
+    REQUIRE(gen.node().outputs[0].tones[0].freq_Hz == 150e6);
+    REQUIRE(gen.node().outputs[0].tones[0].power_dBm == -5.0);
 }
 
 TEST_CASE("Generator addTone with phase", "[generator][phase]") {
@@ -124,9 +124,9 @@ TEST_CASE("Generator addTone with phase", "[generator][phase]") {
     gen.update(0.0);
 
     REQUIRE(gen.toneCount() == 1);
-    REQUIRE(gen.node().output.tones[0].freq_Hz == 100e6);
-    REQUIRE(gen.node().output.tones[0].power_dBm == -20.0);
-    REQUIRE(gen.node().output.tones[0].phase_deg == 45.0);
+    REQUIRE(gen.node().outputs[0].tones[0].freq_Hz == 100e6);
+    REQUIRE(gen.node().outputs[0].tones[0].power_dBm == -20.0);
+    REQUIRE(gen.node().outputs[0].tones[0].phase_deg == 45.0);
 }
 
 TEST_CASE("Generator updateTone phase", "[generator][phase]") {
@@ -136,7 +136,7 @@ TEST_CASE("Generator updateTone phase", "[generator][phase]") {
     gen.updateTone(0, 100e6, -20.0, 90.0);
     gen.update(0.0);
 
-    REQUIRE(gen.node().output.tones[0].phase_deg == 90.0);
+    REQUIRE(gen.node().outputs[0].tones[0].phase_deg == 90.0);
 }
 
 TEST_CASE("Generator phase_deg is zeroed per bin", "[generator][phase]") {
@@ -144,7 +144,7 @@ TEST_CASE("Generator phase_deg is zeroed per bin", "[generator][phase]") {
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
-    const auto &out = gen.node().output;
+    const auto &out = gen.node().outputs[0];
     REQUIRE(out.phase_deg.size() == out.frequencies.size());
     for (double p : out.phase_deg) {
         REQUIRE(p == 0.0);
@@ -159,10 +159,10 @@ TEST_CASE("Amplifier propagates tone phase", "[amplifier][phase]") {
 
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(10.0);
-    amp.node().input = gen.node().output;
+    amp.node().inputs[0] = gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto &out = amp.node().output;
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].phase_deg == 45.0);
 }
@@ -172,7 +172,7 @@ TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
     SignalGeneratorEngine gen(0, graph);
     // No tones - just noise
     gen.update(0.0);
-    for (double density : gen.node().output.noise_total_W) {
+    for (double density : gen.node().outputs[0].noise_total_W) {
         REQUIRE(density == Catch::Approx(k * T).epsilon(1e-30));
     }
 
@@ -181,7 +181,7 @@ TEST_CASE("Noise floor remains k*T regardless of tone count", "[generator]") {
     gen.addTone(200e6, -10.0);
     gen.addTone(300e6, 0.0);
     gen.update(0.0);
-    for (double density : gen.node().output.noise_total_W) {
+    for (double density : gen.node().outputs[0].noise_total_W) {
         REQUIRE(density == Catch::Approx(k * T).epsilon(1e-30));
     }
 }
@@ -194,10 +194,10 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(10.0);
     amp.setNF_dB(3.0);
-    amp.node().input = gen.node().output;
+    amp.node().inputs[0] = gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto &out = amp.node().output;
+    const auto &out = amp.node().outputs[0];
     REQUIRE(!out.noise_total_W.empty());
 
     double G = dbToLinear(10.0);
@@ -217,7 +217,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(20.0);
     amp.setNF_dB(5.0);
-    amp.node().input = gen.node().output;
+    amp.node().inputs[0] = gen.node().outputs[0];
     amp.update(0.0);
 
     SpectrumAnalyzerEngine sa;
@@ -226,11 +226,11 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     sa.setResBw(50e6);
     sa.setNoiseJitterEnabled(false);
 
-    std::vector<const Spectrum *> specs = {&amp.node().output};
+    std::vector<const Spectrum *> specs = {&amp.node().outputs[0]};
     auto display1 = sa.renderCombinedSpectrum(specs);
 
     // Re-run with same settings; noise floor should remain consistent
-    amp.node().input = gen.node().output;
+    amp.node().inputs[0] = gen.node().outputs[0];
     amp.update(0.0);
 
     auto display2 = sa.renderCombinedSpectrum(specs);

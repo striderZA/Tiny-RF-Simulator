@@ -41,19 +41,19 @@ void NodeGraphWidget::drawNodes() {
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
 
-        if (node.input_pin_id >= 0) {
-            ImNodes::BeginInputAttribute(node.input_pin_id);
+        for (int pin : node.input_pin_ids) {
+            ImNodes::BeginInputAttribute(pin);
             ImGui::Text("IN");
             ImNodes::EndInputAttribute();
         }
 
-        if (node.output_pin_id >= 0) {
-            bool is_probed = (node.output_pin_id == m_engine.activeProbePin());
+        for (int pin : node.output_pin_ids) {
+            bool is_probed = (pin == m_engine.activeProbePin());
             if (is_probed) {
                 ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(22, 199, 154, 255));
                 ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(22, 199, 154, 255));
             }
-            ImNodes::BeginOutputAttribute(node.output_pin_id);
+            ImNodes::BeginOutputAttribute(pin);
             ImGui::Text("OUT");
             ImNodes::EndOutputAttribute();
             if (is_probed) {
@@ -165,17 +165,19 @@ void NodeGraphWidget::handleProbeClick() {
             // Pin click takes priority
             if (m_clicked_pin >= 0) {
                 for (const auto &node : m_engine.nodes()) {
-                    if (node.output_pin_id == m_clicked_pin) {
-                        m_engine.setActiveProbePin(m_clicked_pin);
-                        break;
+                    for (int pin : node.output_pin_ids) {
+                        if (pin == m_clicked_pin) {
+                            m_engine.setActiveProbePin(m_clicked_pin);
+                            break;
+                        }
                     }
                 }
             }
-            // Node body click probes the node's output
+            // Node body click probes the node's first output
             else if (m_clicked_node >= 0) {
                 for (const auto &node : m_engine.nodes()) {
-                    if (node.node_id == m_clicked_node && node.output_pin_id >= 0) {
-                        m_engine.setActiveProbePin(node.output_pin_id);
+                    if (node.node_id == m_clicked_node && !node.output_pin_ids.empty()) {
+                        m_engine.setActiveProbePin(node.output_pin_ids[0]);
                         break;
                     }
                 }

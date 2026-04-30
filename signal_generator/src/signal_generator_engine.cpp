@@ -2,7 +2,7 @@
 
 SignalGeneratorEngine::SignalGeneratorEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Generator " + std::to_string(id), &m_node, false, true);
+    m_graph_node_id = graph.addNode("Generator " + std::to_string(id), &m_node, 0, 1);
     rebuildFrequencyGrid();
 }
 
@@ -10,7 +10,7 @@ int SignalGeneratorEngine::outputPinId() const {
     if (!m_graph || m_graph_node_id < 0) return -1;
     for (const auto& node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            return node.output_pin_id;
+            return node.output_pin_ids.empty() ? -1 : node.output_pin_ids[0];
         }
     }
     return -1;
@@ -23,18 +23,20 @@ void SignalGeneratorEngine::rebuildFrequencyGrid() {
     int n = static_cast<int>((stop_Hz - start_Hz) / fixed_step);
     if (n < 2) n = 2;
 
-    m_node.output.frequencies.resize(n);
+    m_node.outputs.resize(1);
+    m_node.inputs.resize(1);
+    m_node.outputs[0].frequencies.resize(n);
     for (int i = 0; i < n; ++i) {
-        m_node.output.frequencies[i] = start_Hz + i * fixed_step;
+        m_node.outputs[0].frequencies[i] = start_Hz + i * fixed_step;
     }
 
-    m_node.output.noise_W.assign(n, 0.0);
-    m_node.output.noise_added_W.assign(n, 0.0);
-    m_node.output.phase_deg.assign(n, 0.0);
+    m_node.outputs[0].noise_W.assign(n, 0.0);
+    m_node.outputs[0].noise_added_W.assign(n, 0.0);
+    m_node.outputs[0].phase_deg.assign(n, 0.0);
     // Generator is an ideal source: flat thermal noise density k*T (W/Hz)
-    m_node.input.noise_total_W.assign(n, k * T);
-    m_node.input.phase_deg.assign(n, 0.0);
-    m_node.output.computeTotalNoise();
+    m_node.inputs[0].noise_total_W.assign(n, k * T);
+    m_node.inputs[0].phase_deg.assign(n, 0.0);
+    m_node.outputs[0].computeTotalNoise();
 }
 
 void SignalGeneratorEngine::addTone(double freq_Hz, double power_dBm, double phase_deg) {
@@ -56,8 +58,8 @@ void SignalGeneratorEngine::updateTone(size_t index, double freq_Hz, double powe
 }
 
 void SignalGeneratorEngine::update(double) {
-    auto &in = m_node.input;
-    auto &out = m_node.output;
+    auto &in = m_node.inputs[0];
+    auto &out = m_node.outputs[0];
 
     out.tones.clear();
     for (const auto &t : m_tones) {

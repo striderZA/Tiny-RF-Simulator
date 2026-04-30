@@ -28,10 +28,10 @@ TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {
     auto& gen = engine.nodes()[0];
     auto& amp = engine.nodes()[1];
 
-    engine.addLink(gen.output_pin_id, amp.input_pin_id);
+    engine.addLink(gen.output_pin_ids[0], amp.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
 
-    auto* source = engine.getSourceForInput(amp.input_pin_id);
+    auto* source = engine.getSourceForInput(amp.input_pin_ids[0]);
     REQUIRE(source == &gen_node);
 }
 
@@ -43,14 +43,14 @@ TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") 
     engine.addNode("Generator", &gen_node, false, true);
     engine.addNode("Amplifier", &amp_node, true, true);
 
-    auto& gen = engine.nodes()[0];
-    auto& amp = engine.nodes()[1];
+    int gen_pin = engine.nodes()[0].output_pin_ids[0];
+    int amp_pin = engine.nodes()[1].input_pin_ids[0];
 
-    engine.addLink(gen.output_pin_id, amp.input_pin_id);
-    engine.removeNode(gen.node_id);
+    engine.addLink(gen_pin, amp_pin);
+    engine.removeNode(engine.nodes()[0].node_id);
 
     REQUIRE(engine.links().empty());
-    REQUIRE(engine.getSourceForInput(amp.input_pin_id) == nullptr);
+    REQUIRE(engine.getSourceForInput(amp_pin) == nullptr);
 }
 
 TEST_CASE("NodeGraphEngine probe management", "[node_graph]") {
@@ -63,8 +63,8 @@ TEST_CASE("NodeGraphEngine probe management", "[node_graph]") {
     REQUIRE(engine.activeProbePin() == -1);
     REQUIRE(engine.probedSignalNode() == nullptr);
 
-    engine.setActiveProbePin(n.output_pin_id);
-    REQUIRE(engine.activeProbePin() == n.output_pin_id);
+    engine.setActiveProbePin(n.output_pin_ids[0]);
+    REQUIRE(engine.activeProbePin() == n.output_pin_ids[0]);
     REQUIRE(engine.probedSignalNode() == &node);
 
     engine.removeNode(n.node_id);
@@ -85,10 +85,10 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
     auto& g2 = engine.nodes()[1];
     auto& a = engine.nodes()[2];
 
-    engine.addLink(g1.output_pin_id, a.input_pin_id);
-    engine.addLink(g2.output_pin_id, a.input_pin_id);
+    engine.addLink(g1.output_pin_ids[0], a.input_pin_ids[0]);
+    engine.addLink(g2.output_pin_ids[0], a.input_pin_ids[0]);
 
-    auto sources = engine.getSourcesForInput(a.input_pin_id);
+    auto sources = engine.getSourcesForInput(a.input_pin_ids[0]);
     REQUIRE(sources.size() == 2);
     REQUIRE(sources[0] == &gen1);
     REQUIRE(sources[1] == &gen2);

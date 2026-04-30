@@ -169,10 +169,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         if (!node) {
             continue;
         }
-        if (!freq_axis && !node->output.frequencies.empty()) {
-            freq_axis = &node->output.frequencies;
+        if (!freq_axis && !node->outputs[0].frequencies.empty()) {
+            freq_axis = &node->outputs[0].frequencies;
         }
-        specs.push_back(&node->output);
+        specs.push_back(&node->outputs[0]);
     }
 
     // Render the combined spectrum (power summed across inputs)

@@ -2,12 +2,18 @@
 #include "logging_core.h"
 #include <algorithm>
 
-int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, bool has_input,
-                             bool has_output) {
+int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, int num_inputs,
+                             int num_outputs) {
     GraphNode node;
     node.node_id = m_next_node_id++;
-    node.input_pin_id = has_input ? m_next_pin_id++ : -1;
-    node.output_pin_id = has_output ? m_next_pin_id++ : -1;
+    node.input_pin_ids.reserve(num_inputs);
+    for (int i = 0; i < num_inputs; ++i) {
+        node.input_pin_ids.push_back(m_next_pin_id++);
+    }
+    node.output_pin_ids.reserve(num_outputs);
+    for (int i = 0; i < num_outputs; ++i) {
+        node.output_pin_ids.push_back(m_next_pin_id++);
+    }
     node.signal_node = signal_node;
     node.label = label;
     m_nodes.push_back(node);
@@ -23,20 +29,25 @@ void NodeGraphEngine::removeNode(int node_id) {
 
     LOG_INFO("Removed node '%s' (id=%d)", it->label.c_str(), node_id);
 
-    // Remove all links connected to this node's pins
-    auto &node = *it;
+    // Collect all pin IDs belonging to this node
+    std::vector<int> node_pins;
+    node_pins.reserve(it->input_pin_ids.size() + it->output_pin_ids.size());
+    node_pins.insert(node_pins.end(), it->input_pin_ids.begin(), it->input_pin_ids.end());
+    node_pins.insert(node_pins.end(), it->output_pin_ids.begin(), it->output_pin_ids.end());
+
+    // Remove all links connected to any of this node's pins
     m_links.erase(std::remove_if(m_links.begin(), m_links.end(),
-                                  [&node](const GraphLink &l) {
-                                      return (node.input_pin_id >= 0 &&
-                                              (l.start_pin_id == node.input_pin_id ||
-                                               l.end_pin_id == node.input_pin_id)) ||
-                                             (node.output_pin_id >= 0 &&
-                                              (l.start_pin_id == node.output_pin_id ||
-                                               l.end_pin_id == node.output_pin_id));
+                                  [&node_pins](const GraphLink &l) {
+                                      return std::find(node_pins.begin(), node_pins.end(),
+                                                       l.start_pin_id) != node_pins.end() ||
+                                             std::find(node_pins.begin(), node_pins.end(),
+                                                       l.end_pin_id) != node_pins.end();
                                   }),
                   m_links.end());
 
-    if (m_active_probe_pin == it->output_pin_id) {
+    if (!it->output_pin_ids.empty() &&
+        std::find(it->output_pin_ids.begin(), it->output_pin_ids.end(), m_active_probe_pin) !=
+            it->output_pin_ids.end()) {
         m_active_probe_pin = -1;
     }
 
@@ -67,10 +78,11 @@ SignalNode *NodeGraphEngine::getSourceForInput(int input_pin_id) const {
         return nullptr;
     for (const auto &link : m_links) {
         if (link.end_pin_id == input_pin_id) {
-            // Find the node that owns the start_pin
             for (const auto &node : m_nodes) {
-                if (node.output_pin_id == link.start_pin_id) {
-                    return node.signal_node;
+                for (int pin : node.output_pin_ids) {
+                    if (pin == link.start_pin_id) {
+                        return node.signal_node;
+                    }
                 }
             }
         }
@@ -85,9 +97,11 @@ std::vector<SignalNode *> NodeGraphEngine::getSourcesForInput(int input_pin_id) 
     for (const auto &link : m_links) {
         if (link.end_pin_id == input_pin_id) {
             for (const auto &node : m_nodes) {
-                if (node.output_pin_id == link.start_pin_id) {
-                    result.push_back(node.signal_node);
-                    break;
+                for (int pin : node.output_pin_ids) {
+                    if (pin == link.start_pin_id) {
+                        result.push_back(node.signal_node);
+                        break;
+                    }
                 }
             }
         }
@@ -99,8 +113,10 @@ SignalNode *NodeGraphEngine::probedSignalNode() const {
     if (m_active_probe_pin < 0)
         return nullptr;
     for (const auto &node : m_nodes) {
-        if (node.output_pin_id == m_active_probe_pin) {
-            return node.signal_node;
+        for (int pin : node.output_pin_ids) {
+            if (pin == m_active_probe_pin) {
+                return node.signal_node;
+            }
         }
     }
     return nullptr;

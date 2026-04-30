@@ -6,8 +6,8 @@
 
 struct GraphNode {
     int node_id;
-    int input_pin_id;
-    int output_pin_id;
+    std::vector<int> input_pin_ids;
+    std::vector<int> output_pin_ids;
     SignalNode *signal_node;
     std::string label;
 };
@@ -20,7 +20,7 @@ struct GraphLink {
 
 class NodeGraphEngine {
   public:
-    int addNode(const std::string &label, SignalNode *signal_node, bool has_input, bool has_output);
+    int addNode(const std::string &label, SignalNode *signal_node, int num_inputs, int num_outputs);
     void removeNode(int node_id);
 
     int addLink(int start_pin, int end_pin);
