@@ -22,8 +22,7 @@ void SParameterAmplifierWidget::draw(const char* title, bool* p_open) {
         ImGui::SeparatorText("S-Parameter Amplifiers");
 
         // ---- Table ----
-        const float table_flags = ImGuiTableFlags_Borders;
-        if (ImGui::BeginTable("sparam_amps", 5, table_flags)) {
+        if (ImGui::BeginTable("sparam_amps", 5, ImGuiTableFlags_Borders)) {
             ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 25.0f);
             ImGui::TableSetupColumn("File");
             ImGui::TableSetupColumn("Fwd", ImGuiTableColumnFlags_WidthFixed, 75.0f);
@@ -92,8 +91,19 @@ void SParameterAmplifierWidget::draw(const char* title, bool* p_open) {
             ImGui::EndTable();
 
             if (to_delete >= 0 && onRemoveSParamAmp) {
-                onRemoveSParamAmp(static_cast<size_t>(to_delete));
-                m_param_visible.clear();
+                size_t del = static_cast<size_t>(to_delete);
+                onRemoveSParamAmp(del);
+                LOG_INFO("Remove S-parameter amplifier: [spamp%d].", to_delete);
+                // Remove visibility entry and renumber subsequent ones
+                m_param_visible.erase(del);
+                for (auto it = m_param_visible.begin(); it != m_param_visible.end();) {
+                    if (it->first > del) {
+                        m_param_visible[it->first - 1] = std::move(it->second);
+                        it = m_param_visible.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
             }
         }
 
