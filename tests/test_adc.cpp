@@ -192,7 +192,7 @@ TEST_CASE("ADC produces diagnostic FFT Spectrum output", "[adc]") {
     int N_expected = ns / d; // 512, power of 2 → no FFT padding
     REQUIRE(out.frequencies.size() == N_expected);
     double fs_out = Fs / d;
-    REQUIRE(out.frequencies[0] == Approx(fs_out / 2.0).margin(fs_out / 10.0));
+    REQUIRE(out.frequencies[0] == Approx(-fs_out / 2.0).margin(fs_out / 10.0));
     REQUIRE(out.noise_total_W.size() == out.frequencies.size());
     REQUIRE(out.tones.empty());
 }

@@ -235,10 +235,11 @@ void AdcEngine::update(double /*dt*/) {
     out.tones.clear();
     double fs_out = m_iq_output.sample_rate_Hz;
     for (size_t i = 0; i < N_fft; ++i) {
+        // Ascending frequency axis: -fs_out/2 → +fs_out/2 (exclusive)
+        out.frequencies[i] = -fs_out / 2.0
+                             + (static_cast<double>(i) / N_fft) * fs_out;
+        // FFT bin k at frequency f: k = (i + N_fft/2) % N_fft
         size_t k = (i + N_fft / 2) % N_fft;
-        double f = (static_cast<double>(k) / N_fft) * fs_out;
-        if (f > fs_out / 2.0) f -= fs_out;
-        out.frequencies[i] = f;
         out.phase_deg[i] = std::arg(fft_in[k]) * 180.0 / std::numbers::pi;
         // FFT power → PSD (W/Hz): |X[k]|² / (N_fft × fs_out)
         out.noise_W[i] = std::norm(fft_in[k])
