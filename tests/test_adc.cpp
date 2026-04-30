@@ -11,7 +11,6 @@ using Catch::Approx;
 
 static constexpr double Fs = 1e9;
 static constexpr double FC = 2.4e9;
-static constexpr double BW = 10e6;
 static constexpr int D = 20;
 static constexpr int N_SAMPLES = 10000;
 
@@ -43,7 +42,6 @@ TEST_CASE("ADC tone at channel center shifts to DC via DDC", "[adc]") {
     AdcEngine adc(2, graph);
     adc.setFs_Hz(Fs);
     adc.setFChannel_Hz(FC);
-    adc.setBw_Hz(BW);
     adc.setDecimation(D);
     adc.setNSamples(N_SAMPLES);
     adc.setNsd_dBm_per_Hz(-200.0);
@@ -68,7 +66,6 @@ TEST_CASE("ADC aliases tone correctly for odd and even Nyquist zones", "[adc]") 
         AdcEngine adc(3, graph);
         adc.setFs_Hz(Fs);
         adc.setFChannel_Hz(100e6);
-        adc.setBw_Hz(50e6);
         adc.setDecimation(D);
         adc.setNSamples(N_SAMPLES);
         adc.setNsd_dBm_per_Hz(-200.0);
@@ -85,16 +82,11 @@ TEST_CASE("ADC aliases tone correctly for odd and even Nyquist zones", "[adc]") 
     }
 
     // Even zone: f_RF in zone 4 (even) for Fs=1e9
-    // Zone 4 spans 1.5e9 to 2.0e9. f_RF = 1.6e9.
-    // Alias = Fs - (f_RF - 1.5*Fs) ... actually alias = Fs - f_RF_mod_Fs for upper half.
-    // f_RF_mod_Fs = 1.6e9 % 1e9 = 600e6. 600e6 > Fs/2, so alias = Fs - 600e6 = 400e6.
-    // We set f_channel to the same f_RF so DDC shifts alias to DC
     {
         double f_even = 1.6e9;
         AdcEngine adc(4, graph);
         adc.setFs_Hz(Fs);
         adc.setFChannel_Hz(f_even);
-        adc.setBw_Hz(50e6);
         adc.setDecimation(D);
         adc.setNSamples(N_SAMPLES);
         adc.setNsd_dBm_per_Hz(-200.0);
@@ -141,7 +133,6 @@ TEST_CASE("ADC decimation filter reduces out-of-band signal", "[adc]") {
     AdcEngine adc(6, graph);
     adc.setFs_Hz(Fs);
     adc.setFChannel_Hz(FC);
-    adc.setBw_Hz(BW);
     adc.setDecimation(D);
     adc.setNSamples(N_SAMPLES);
     adc.setNsd_dBm_per_Hz(-200.0);
@@ -176,7 +167,6 @@ TEST_CASE("ADC produces diagnostic FFT Spectrum output", "[adc]") {
     AdcEngine adc(7, graph);
     adc.setFs_Hz(Fs);
     adc.setFChannel_Hz(FC);
-    adc.setBw_Hz(BW);
     int d = 16;
     int ns = 8192;
     adc.setDecimation(d);

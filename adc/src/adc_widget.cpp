@@ -67,13 +67,6 @@ void AdcWidget::draw(const char* title, bool* p_open) {
                 adc->setFChannel_Hz(fchan);
             ImGui::NextColumn();
 
-            ImGui::Text("BW (MHz)");
-            ImGui::NextColumn();
-            double bw = adc->bw_Hz();
-            if (utils::inputFrequency("##bw", bw, 0.1, 10.0, "%.0f", 0.0, 1e12))
-                adc->setBw_Hz(bw);
-            ImGui::NextColumn();
-
             ImGui::Text("Decimation");
             ImGui::NextColumn();
             int decim = adc->decimation();

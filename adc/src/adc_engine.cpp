@@ -197,17 +197,12 @@ void AdcEngine::update(double /*dt*/) {
         iq[n] = x_real[n] * nco;
     }
 
-    // -- Step 3: LPF design (cached) --
-    double cutoff_norm = std::min(m_bw_Hz / (m_fs_Hz / 2.0), 1.0 / m_decim);
+    // -- Step 3: LPF design (cached) — cutoff = Fs_out/2 / (Fs/2) = 1/D
+    double cutoff_norm = 1.0 / m_decim;
     int num_taps = 16 * m_decim + 1;
-    if (m_fs_Hz != m_lpf_cached_fs || m_bw_Hz != m_lpf_cached_bw
-        || m_decim != m_lpf_cached_decim) {
-        if (cutoff_norm > 0.0 && cutoff_norm < 1.0)
-            m_lpf_coeffs = design_lpf(cutoff_norm, num_taps);
-        else
-            m_lpf_coeffs = {1.0};
+    if (m_fs_Hz != m_lpf_cached_fs || m_decim != m_lpf_cached_decim) {
+        m_lpf_coeffs = design_lpf(cutoff_norm, num_taps);
         m_lpf_cached_fs = m_fs_Hz;
-        m_lpf_cached_bw = m_bw_Hz;
         m_lpf_cached_decim = m_decim;
     }
 

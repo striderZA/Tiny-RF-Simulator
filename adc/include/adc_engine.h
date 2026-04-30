@@ -30,8 +30,6 @@ public:
     void setVfs(double v) { m_v_fs = v; m_dirty = true; }
     double fChannel_Hz() const { return m_f_channel_Hz; }
     void setFChannel_Hz(double fc) { m_f_channel_Hz = fc; m_dirty = true; }
-    double bw_Hz() const { return m_bw_Hz; }
-    void setBw_Hz(double bw) { m_bw_Hz = bw; m_dirty = true; }
     int decimation() const { return m_decim; }
     void setDecimation(int d) { m_decim = d > 0 ? d : 1; m_dirty = true; }
     int nSamples() const { return m_n_samples; }
@@ -52,7 +50,6 @@ private:
     int m_bits = 12;
     double m_v_fs = 2.0;
     double m_f_channel_Hz = 2.4e9;
-    double m_bw_Hz = 5e6;
     int m_decim = 50;
     int m_n_samples = 16384;
 
@@ -63,6 +60,5 @@ private:
 
     std::vector<double> m_lpf_coeffs;
     double m_lpf_cached_fs = 0.0;
-    double m_lpf_cached_bw = 0.0;
     int m_lpf_cached_decim = 0;
 };
