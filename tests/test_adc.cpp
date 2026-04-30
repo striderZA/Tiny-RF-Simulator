@@ -177,8 +177,10 @@ TEST_CASE("ADC produces diagnostic FFT Spectrum output", "[adc]") {
     adc.setFs_Hz(Fs);
     adc.setFChannel_Hz(FC);
     adc.setBw_Hz(BW);
-    adc.setDecimation(D);
-    adc.setNSamples(N_SAMPLES);
+    int d = 16;
+    int ns = 8192;
+    adc.setDecimation(d);
+    adc.setNSamples(ns);
     adc.setNsd_dBm_per_Hz(-200.0);
 
     Spectrum spec;
@@ -187,11 +189,10 @@ TEST_CASE("ADC produces diagnostic FFT Spectrum output", "[adc]") {
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
-    REQUIRE(out.frequencies.size() == N_SAMPLES / D);
-    // First frequency should be approximately -Fs_out/2
-    double fs_out = Fs / D;
+    int N_expected = ns / d; // 512, power of 2 → no FFT padding
+    REQUIRE(out.frequencies.size() == N_expected);
+    double fs_out = Fs / d;
     REQUIRE(out.frequencies[0] == Approx(fs_out / 2.0).margin(fs_out / 10.0));
-    // The diagnostic output should have been populated
     REQUIRE(out.noise_total_W.size() == out.frequencies.size());
     REQUIRE(out.tones.empty());
 }

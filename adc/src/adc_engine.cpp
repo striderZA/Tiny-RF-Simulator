@@ -64,21 +64,40 @@ static void apply_fir(const std::vector<double>& coeffs,
     }
 }
 
-// ---- Simple DFT for diagnostic output ----
+// ---- Iterative radix-2 FFT (Cooley-Tukey) for diagnostic output ----
 
-static std::vector<std::complex<double>> compute_dft(
-    const std::vector<std::complex<double>>& signal) {
-    size_t N = signal.size();
-    std::vector<std::complex<double>> result(N);
-    for (size_t k = 0; k < N; ++k) {
-        std::complex<double> sum = 0;
-        for (size_t n = 0; n < N; ++n) {
-            double angle = -2.0 * std::numbers::pi * k * n / N;
-            sum += signal[n] * std::complex<double>(std::cos(angle), std::sin(angle));
-        }
-        result[k] = sum;
+static size_t next_pow2(size_t n) {
+    size_t p = 1;
+    while (p < n) p <<= 1;
+    return p;
+}
+
+static void fft(std::vector<std::complex<double>>& x) {
+    size_t N = x.size();
+    // Bit-reversal permutation
+    for (size_t i = 1, j = 0; i < N; ++i) {
+        size_t bit = N >> 1;
+        for (; j & bit; bit >>= 1)
+            j ^= bit;
+        j ^= bit;
+        if (i < j)
+            std::swap(x[i], x[j]);
     }
-    return result;
+    // Iterative Cooley-Tukey
+    for (size_t len = 2; len <= N; len <<= 1) {
+        double angle = -2.0 * std::numbers::pi / static_cast<double>(len);
+        std::complex<double> wlen(std::cos(angle), std::sin(angle));
+        for (size_t i = 0; i < N; i += len) {
+            std::complex<double> w(1.0, 0.0);
+            for (size_t j = 0; j < len / 2; ++j) {
+                std::complex<double> u = x[i + j];
+                std::complex<double> v = x[i + j + len / 2] * w;
+                x[i + j] = u + v;
+                x[i + j + len / 2] = u - v;
+                w *= wlen;
+            }
+        }
+    }
 }
 
 // ---- Engine methods ----
@@ -113,8 +132,27 @@ int AdcEngine::outputPinId() const {
 void AdcEngine::update(double /*dt*/) {
     if (m_fs_Hz <= 0.0) return;
 
-    int N = std::max(m_n_samples, m_decim);
     const auto& input = m_node.inputs[0];
+
+    // Skip if nothing changed since last frame
+    bool changed = m_dirty;
+    if (!changed && input.tones.size() == m_last_tones.size()) {
+        for (size_t i = 0; i < input.tones.size(); ++i) {
+            if (input.tones[i].freq_Hz != m_last_tones[i].freq_Hz
+                || input.tones[i].power_dBm != m_last_tones[i].power_dBm
+                || input.tones[i].phase_deg != m_last_tones[i].phase_deg) {
+                changed = true;
+                break;
+            }
+        }
+    } else if (!changed) {
+        changed = true;
+    }
+    if (!changed) return;
+    m_dirty = false;
+    m_last_tones = input.tones;
+
+    int N = std::max(m_n_samples, m_decim);
 
     // -- Step 1: Synthesize real time-domain signal from tones + noise --
     std::vector<double> x_real(N, 0.0);
@@ -184,19 +222,22 @@ void AdcEngine::update(double /*dt*/) {
         m_iq_output.samples[n] = filtered[n * m_decim];
 
     // -- Step 5: Diagnostic FFT output (Spectrum) --
-    auto dft = compute_dft(m_iq_output.samples);
+    size_t N_fft = next_pow2(m_iq_output.samples.size());
+    auto fft_in = m_iq_output.samples;
+    fft_in.resize(N_fft, {0.0, 0.0});
+    fft(fft_in);
+
     auto& out = m_node.outputs[0];
-    size_t sz = dft.size();
-    out.frequencies.resize(sz);
-    out.phase_deg.resize(sz);
+    out.frequencies.resize(N_fft);
+    out.phase_deg.resize(N_fft);
     double fs_out = m_iq_output.sample_rate_Hz;
-    for (size_t i = 0; i < sz; ++i) {
-        size_t k = (i + sz / 2) % sz;
-        double f = (static_cast<double>(k) / sz) * fs_out;
+    for (size_t i = 0; i < N_fft; ++i) {
+        size_t k = (i + N_fft / 2) % N_fft;
+        double f = (static_cast<double>(k) / N_fft) * fs_out;
         if (f > fs_out / 2.0) f -= fs_out;
         out.frequencies[i] = f;
-        double mag = std::abs(dft[k]) / static_cast<double>(sz);
-        out.phase_deg[i] = std::arg(dft[k]) * 180.0 / std::numbers::pi;
+        double mag = std::abs(fft_in[k]) / static_cast<double>(N_fft);
+        out.phase_deg[i] = std::arg(fft_in[k]) * 180.0 / std::numbers::pi;
     }
     out.tones.clear();
     out.noise_W.clear();
