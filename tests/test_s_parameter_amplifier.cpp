@@ -23,10 +23,10 @@ TEST_CASE("SParameterAmplifierEngine loads real .s2p and applies frequency-depen
     REQUIRE(spamp.params()[0].size() == 4); // 4 S-params for 2-port
     REQUIRE(spamp.forwardParamIdx() == 2); // default S21
 
-    // S21 should have reasonable gain (> 0 dB for this LNA)
+    // S21 should have > 10 dB gain at mid-band for this LNA
     int mid = static_cast<int>(spamp.freqs().size()) / 2;
     double s21_mag = std::abs(spamp.params()[mid][2]); // idx 2 = S21
-    REQUIRE(s21_mag > 1.0);
+    REQUIRE(s21_mag > 3.0);
 }
 
 TEST_CASE("SParameterAmplifierEngine applies phase rotation to tones", "[sparam_amp]") {
@@ -46,8 +46,8 @@ TEST_CASE("SParameterAmplifierEngine applies phase rotation to tones", "[sparam_
 
     const auto& out = spamp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
-    // At 1 GHz, S21 phase is ~145 degrees from the .s2p data
-    // Input tone starts at 0 deg, so output phase should be ~145 deg
+    // Values from .s2p file line at 1 GHz: S21 = 19.588779 dB, 145.23813 deg
+    // -20 dBm input + 19.588779 dB gain = -0.411221 dBm, phase rotated 145.23813 deg
     REQUIRE(out.tones[0].power_dBm == Approx(-0.411221).margin(0.5));
     REQUIRE(out.tones[0].phase_deg == Approx(145.23813).margin(1.0));
 }
