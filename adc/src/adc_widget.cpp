@@ -27,14 +27,14 @@ void AdcWidget::draw(const char* title, bool* p_open) {
             ImGui::Columns(2, nullptr, false);
             ImGui::SetColumnWidth(0, 140.0f);
 
-            ImGui::Text("Fs");
+            ImGui::Text("Fs (MHz)");
             ImGui::NextColumn();
             double fs = adc->fs_Hz();
             if (utils::inputFrequency("##fs", fs, 1.0, 100.0, "%.0f", 1e6, 100e9))
                 adc->setFs_Hz(fs);
             ImGui::NextColumn();
 
-            ImGui::Text("NSD");
+            ImGui::Text("NSD (dBm/Hz)");
             ImGui::NextColumn();
             double nsd = adc->nsd_dBm_per_Hz();
             if (utils::inputDouble("##nsd", nsd, 1, 10, "%.1f", -200.0, -50.0))
@@ -52,7 +52,7 @@ void AdcWidget::draw(const char* title, bool* p_open) {
             }
             ImGui::NextColumn();
 
-            ImGui::Text("V_FS");
+            ImGui::Text("V_FS (V)");
             ImGui::NextColumn();
             double vfs = adc->v_fs();
             ImGui::SetNextItemWidth(120.0f);
@@ -60,14 +60,14 @@ void AdcWidget::draw(const char* title, bool* p_open) {
                 adc->setVfs(vfs);
             ImGui::NextColumn();
 
-            ImGui::Text("Channel freq");
+            ImGui::Text("f_chan (MHz)");
             ImGui::NextColumn();
             double fchan = adc->fChannel_Hz();
             if (utils::inputFrequency("##fchan", fchan, 1.0, 100.0, "%.3f", 0.0, 100e9))
                 adc->setFChannel_Hz(fchan);
             ImGui::NextColumn();
 
-            ImGui::Text("Bandwidth");
+            ImGui::Text("BW (MHz)");
             ImGui::NextColumn();
             double bw = adc->bw_Hz();
             if (utils::inputFrequency("##bw", bw, 0.1, 10.0, "%.0f", 0.0, 1e9))
