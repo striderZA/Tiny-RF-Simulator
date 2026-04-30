@@ -6,9 +6,9 @@
 #include "splitter_widget.h"
 #include "mixer_engine.h"
 #include "mixer_widget.h"
+#include "s_parameter_amplifier_engine.h"
+#include "s_parameter_amplifier_widget.h"
 #include "logging_widget.h"
-#include "splitter_engine.h"
-#include "splitter_widget.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "signal_generator_engine.h"
@@ -46,9 +46,13 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<MixerEngine>> m_mixers;
     std::unique_ptr<MixerWidget> m_mixer_widget;
 
+    std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
+    std::unique_ptr<SParameterAmplifierWidget> m_sparam_amp_widget;
+
     void addGenerator();
     void addAmplifier();
     void addSplitter();
     void addMixer();
+    void addSParamAmp();
     void removeComponent(int graph_node_id);
 };

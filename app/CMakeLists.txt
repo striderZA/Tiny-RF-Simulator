@@ -27,12 +27,16 @@ target_link_libraries(app
         simulator::splitter_widget
         simulator::mixer_engine
         simulator::mixer_widget
+        simulator::s_parameter_amplifier_engine
+        simulator::s_parameter_amplifier_widget
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
         simulator::node_graph_engine
         simulator::node_graph_widget
         common
 )
+
+target_compile_definitions(app PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # IDE organization
 set_target_properties(app PROPERTIES FOLDER "Application")

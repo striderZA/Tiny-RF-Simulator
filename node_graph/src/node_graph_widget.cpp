@@ -108,6 +108,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Mixer")) {
             if (onAddMixer) onAddMixer();
         }
+        if (ImGui::MenuItem("Add S-Param Amp")) {
+            if (onAddSParamAmp) onAddSParamAmp();
+        }
         ImGui::EndPopup();
     }
 }

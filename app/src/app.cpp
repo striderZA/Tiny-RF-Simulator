@@ -9,6 +9,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddAmplifier = [this]() { addAmplifier(); };
     m_graph_widget->onAddSplitter = [this]() { addSplitter(); };
     m_graph_widget->onAddMixer = [this]() { addMixer(); };
+    m_graph_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
     addGenerator();
@@ -46,6 +47,16 @@ RfSimulatorApp::RfSimulatorApp() {
         LOG_INFO("Removed mixer at index %zu", index);
     };
 
+    m_sparam_amp_widget = std::make_unique<SParameterAmplifierWidget>(m_sparam_amps);
+    m_sparam_amp_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
+    m_sparam_amp_widget->onRemoveSParamAmp = [this](size_t index) {
+        if (index >= m_sparam_amps.size()) return;
+        m_view_manager.unregisterNode(&m_sparam_amps[index]->node());
+        m_graph_engine.removeNode(m_sparam_amps[index]->graphNodeId());
+        m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(index));
+        LOG_INFO("Removed S-parameter amplifier at index %zu", index);
+    };
+
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 }
 
@@ -80,6 +91,16 @@ void RfSimulatorApp::addMixer() {
     m_view_manager.registerNode(&mix->node());
     m_mixers.push_back(std::move(mix));
     LOG_INFO("Added mixer %d", id);
+}
+
+void RfSimulatorApp::addSParamAmp() {
+    int id = static_cast<int>(m_sparam_amps.size());
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    auto spamp = std::make_unique<SParameterAmplifierEngine>(id, m_graph_engine, path);
+    m_view_manager.registerNode(&spamp->node());
+    m_sparam_amps.push_back(std::move(spamp));
+    LOG_INFO("Added S-parameter amplifier %d", id);
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -124,6 +145,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
+    // Find and remove S-parameter amplifier
+    for (size_t i = 0; i < m_sparam_amps.size(); ++i) {
+        if (m_sparam_amps[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_sparam_amps[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
+            return;
+        }
+    }
 }
 
 void RfSimulatorApp::update_dsp() {
@@ -159,6 +190,16 @@ void RfSimulatorApp::update_dsp() {
             mix->node().inputs[0] = Spectrum();
         }
         mix->update(0.0);
+    }
+
+    for (auto& spamp : m_sparam_amps) {
+        auto* source = m_graph_engine.getSourceForInput(spamp->inputPinId());
+        if (source) {
+            spamp->node().inputs[0] = source->outputs[0];
+        } else {
+            spamp->node().inputs[0] = Spectrum();
+        }
+        spamp->update(0.0);
     }
 
     // Update spectrum view based on active probe
@@ -206,6 +247,10 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_mixer_widget) {
         m_mixer_widget->draw("Mixers");
+    }
+
+    if (m_sparam_amp_widget) {
+        m_sparam_amp_widget->draw("S-Param Amplifiers");
     }
 
     if (m_show_log)
