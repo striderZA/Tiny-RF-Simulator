@@ -147,10 +147,60 @@ void AdcEngine::update(double /*dt*/) {
     for (int n = 0; n < N; ++n)
         x_real[n] += sigma * gauss(rng);
 
-    // -- Steps 2-5: DDC, LPF, decimation, diagnostic FFT (Task 5) --
-    // These will be added in the next task.
-    // For now, output empty IQStream and diagnostic Spectrum.
-    m_iq_output.samples.clear();
-    m_iq_output.sample_rate_Hz = 0.0;
-    m_node.outputs[0] = Spectrum();
+    // -- Step 2: DDC (Digital Down-Conversion) --
+    double f_dig_chan = alias_frequency(m_f_channel_Hz, m_fs_Hz);
+    bool inverted = is_inverted(m_f_channel_Hz, m_fs_Hz);
+    double f_nco = inverted ? -f_dig_chan : f_dig_chan;
+
+    std::vector<std::complex<double>> iq(N);
+    for (int n = 0; n < N; ++n) {
+        double angle = -2.0 * std::numbers::pi * f_nco * n / m_fs_Hz;
+        std::complex<double> nco(std::cos(angle), std::sin(angle));
+        iq[n] = x_real[n] * nco;
+    }
+
+    // -- Step 3: LPF design (cached) --
+    double cutoff_norm = std::min(m_bw_Hz / (m_fs_Hz / 2.0), 1.0 / m_decim);
+    int num_taps = 16 * m_decim + 1;
+    if (m_fs_Hz != m_lpf_cached_fs || m_bw_Hz != m_lpf_cached_bw
+        || m_decim != m_lpf_cached_decim) {
+        if (cutoff_norm > 0.0 && cutoff_norm < 1.0)
+            m_lpf_coeffs = design_lpf(cutoff_norm, num_taps);
+        else
+            m_lpf_coeffs = {1.0};
+        m_lpf_cached_fs = m_fs_Hz;
+        m_lpf_cached_bw = m_bw_Hz;
+        m_lpf_cached_decim = m_decim;
+    }
+
+    // -- Step 4: Apply LPF + decimate --
+    std::vector<std::complex<double>> filtered;
+    apply_fir(m_lpf_coeffs, iq, filtered);
+
+    int N_out = N / m_decim;
+    m_iq_output.samples.resize(N_out);
+    m_iq_output.sample_rate_Hz = m_fs_Hz / m_decim;
+    for (int n = 0; n < N_out; ++n)
+        m_iq_output.samples[n] = filtered[n * m_decim];
+
+    // -- Step 5: Diagnostic FFT output (Spectrum) --
+    auto dft = compute_dft(m_iq_output.samples);
+    auto& out = m_node.outputs[0];
+    size_t sz = dft.size();
+    out.frequencies.resize(sz);
+    out.phase_deg.resize(sz);
+    double fs_out = m_iq_output.sample_rate_Hz;
+    for (size_t i = 0; i < sz; ++i) {
+        size_t k = (i + sz / 2) % sz;
+        double f = (static_cast<double>(k) / sz) * fs_out;
+        if (f > fs_out / 2.0) f -= fs_out;
+        out.frequencies[i] = f;
+        double mag = std::abs(dft[k]) / static_cast<double>(sz);
+        out.phase_deg[i] = std::arg(dft[k]) * 180.0 / std::numbers::pi;
+    }
+    out.tones.clear();
+    out.noise_W.clear();
+    out.noise_added_W.clear();
+    out.noise_total_W.clear();
+    out.computeTotalNoise();
 }
