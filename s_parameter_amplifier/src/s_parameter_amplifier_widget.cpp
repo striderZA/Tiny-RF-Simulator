@@ -1,6 +1,8 @@
 #include "s_parameter_amplifier_widget.h"
 #include "imgui.h"
+#include "implot.h"
 #include "logging_core.h"
+#include <cmath>
 #include <string>
 
 SParameterAmplifierWidget::SParameterAmplifierWidget(
@@ -49,6 +51,46 @@ void SParameterAmplifierWidget::draw(const char* title, bool* p_open) {
         if (ImGui::Button("+ Add S-Param Amp") && onAddSParamAmp) {
             onAddSParamAmp();
             LOG_INFO("Add S-parameter amplifier.");
+        }
+
+        // S21 magnitude plot
+        bool any_loaded = false;
+        for (const auto& engine : m_engines) {
+            if (engine->loaded()) {
+                any_loaded = true;
+                break;
+            }
+        }
+
+        if (any_loaded) {
+            ImGui::SeparatorText("|S21| (dB)");
+            if (ImPlot::BeginPlot("S21 Plot", ImVec2(-1, 250))) {
+                ImPlot::SetupAxes("Frequency (GHz)", "|S21| (dB)",
+                                  ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+
+                for (size_t i = 0; i < m_engines.size(); ++i) {
+                    const auto& engine = *m_engines[i];
+                    if (!engine.loaded() || engine.s21Freqs().empty()) continue;
+
+                    const auto& freqs = engine.s21Freqs();
+                    const auto& mags = engine.s21Mag();
+
+                    std::vector<double> freqs_ghz;
+                    std::vector<double> mags_db;
+                    freqs_ghz.reserve(freqs.size());
+                    mags_db.reserve(mags.size());
+                    for (size_t j = 0; j < freqs.size(); ++j) {
+                        freqs_ghz.push_back(freqs[j] / 1e9);
+                        mags_db.push_back(20.0 * std::log10(mags[j]));
+                    }
+
+                    std::string label = "Amp " + std::to_string(i + 1);
+                    ImPlot::PlotLine(label.c_str(), freqs_ghz.data(), mags_db.data(),
+                                     static_cast<int>(freqs_ghz.size()));
+                }
+
+                ImPlot::EndPlot();
+            }
         }
 
         ImGui::End();

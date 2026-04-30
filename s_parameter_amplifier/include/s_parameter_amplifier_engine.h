@@ -21,6 +21,9 @@ class SParameterAmplifierEngine {
     const std::string& filepath() const { return m_filepath; }
     bool loaded() const { return m_loaded; }
 
+    const std::vector<double>& s21Freqs() const { return m_s21_freqs; }
+    const std::vector<double>& s21Mag() const { return m_s21_mag; }
+
   private:
     int m_id;
     int m_graph_node_id = -1;

@@ -31,6 +31,7 @@ target_link_libraries(s_parameter_amplifier_widget
         simulator::s_parameter_amplifier_engine
         simulator::core
         simulator::logging_widget
+        implot
 )
 
 add_library(simulator::s_parameter_amplifier_widget ALIAS s_parameter_amplifier_widget)
