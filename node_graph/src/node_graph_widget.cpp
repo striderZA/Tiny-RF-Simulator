@@ -105,6 +105,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Splitter")) {
             if (onAddSplitter) onAddSplitter();
         }
+        if (ImGui::MenuItem("Add Mixer")) {
+            if (onAddMixer) onAddMixer();
+        }
         ImGui::EndPopup();
     }
 }

@@ -10,6 +10,7 @@ target_link_libraries(tests PRIVATE
     simulator::signal_generator_engine
     simulator::amplifier_engine
     simulator::splitter_engine
+    simulator::mixer_engine
     simulator::spectrum_analyzer_engine
     simulator::node_graph_engine
 )

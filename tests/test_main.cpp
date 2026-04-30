@@ -5,6 +5,7 @@
 #include "signal_generator_engine.h"
 #include "amplifier_engine.h"
 #include "splitter_engine.h"
+#include "mixer_engine.h"
 #include "spectrum_analyzer_engine.h"
 #include "node_graph_engine.h"
 
@@ -239,6 +240,75 @@ TEST_CASE("Splitter scales noise density by -3dB", "[splitter]") {
             REQUIRE(density == Approx(expected_density).epsilon(1e-30));
         }
     }
+}
+
+TEST_CASE("Mixer produces sum and difference tones", "[mixer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(80e6);
+    mix.setConversionGain_dB(-6.0);
+    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto& out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    // Lower sideband: |100 - 80| = 20 MHz
+    REQUIRE(out.tones[0].freq_Hz == 20e6);
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 - 6.0).epsilon(0.001));
+    // Upper sideband: 100 + 80 = 180 MHz
+    REQUIRE(out.tones[1].freq_Hz == 180e6);
+    REQUIRE(out.tones[1].power_dBm == Approx(-20.0 - 6.0).epsilon(0.001));
+}
+
+TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0, 45.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(80e6);
+    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto& out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    REQUIRE(out.tones[0].phase_deg == 45.0);
+    REQUIRE(out.tones[1].phase_deg == 45.0);
+}
+
+TEST_CASE("Mixer scales noise by conversion gain", "[mixer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setConversionGain_dB(-6.0);
+    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.update(0.0);
+
+    double G = dbToLinear(-6.0);
+    double expected_density = k * T * G;
+    const auto& out = mix.node().outputs[0];
+    REQUIRE(!out.noise_total_W.empty());
+    for (double density : out.noise_total_W) {
+        REQUIRE(density == Approx(expected_density).epsilon(1e-30));
+    }
+}
+
+TEST_CASE("Mixer with no input produces no tones", "[mixer]") {
+    NodeGraphEngine graph;
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.setConversionGain_dB(-6.0);
+    mix.update(0.0);
+
+    const auto& out = mix.node().outputs[0];
+    REQUIRE(out.tones.empty());
 }
 
 TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {

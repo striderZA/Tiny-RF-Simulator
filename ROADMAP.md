@@ -13,7 +13,7 @@
 | 7 | **Pulsed signal generation** — pulse-generation capability | 📋 Planned | |
 | 8 | **Spectrum phase** — add phase member to the `Spectrum` class | ✅ Completed | `phase_deg` on `Tone` + per-bin vector, GUI column, propagated through amplifier |
 | 9 | **Node tooltips** — tooltips showing noise level, power level, center frequency, etc. | 📋 Planned | |
-| 10 | **Frequency conversion** — mixer components | 📋 Planned | |
+| 10 | **Frequency conversion** — mixer components | ✅ Completed | Internal LO, sum+difference sidebands, editable LO freq + conv gain, noise scaled, phase preserved |
 
 ## Status Key
 
