@@ -228,18 +228,9 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
             }
         }
         char buf[128];
-        if (strongest_freq >= 1e9)
-            std::snprintf(buf, sizeof(buf),
-                          "Tones: %d  |  Strongest: %.3f GHz @ %.1f dBm",
-                          num_tones, strongest_freq / 1e9, strongest_power);
-        else if (strongest_freq >= 1e6)
-            std::snprintf(buf, sizeof(buf),
-                          "Tones: %d  |  Strongest: %.3f MHz @ %.1f dBm",
-                          num_tones, strongest_freq / 1e6, strongest_power);
-        else
-            std::snprintf(buf, sizeof(buf),
-                          "Tones: %d  |  Strongest: %.3f kHz @ %.1f dBm",
-                          num_tones, strongest_freq / 1e3, strongest_power);
+        std::snprintf(buf, sizeof(buf),
+                      "Tones: %d  |  Strongest: %.3f MHz @ %.1f dBm",
+                      num_tones, strongest_freq / 1e6, strongest_power);
         ImGui::TextUnformatted(buf);
     } else {
         ImGui::Text("Tones: 0");
@@ -263,12 +254,7 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
 
         auto fmt_freq = [](double hz) -> std::string {
             char buf[32];
-            if (hz >= 1e9)
-                std::snprintf(buf, sizeof(buf), "%.3f GHz", hz / 1e9);
-            else if (hz >= 1e6)
-                std::snprintf(buf, sizeof(buf), "%.3f MHz", hz / 1e6);
-            else
-                std::snprintf(buf, sizeof(buf), "%.3f kHz", hz / 1e3);
+            std::snprintf(buf, sizeof(buf), "%.3f MHz", hz / 1e6);
             return buf;
         };
         ImGui::Text("Freq range: %s - %s (center: %s)",
