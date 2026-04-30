@@ -1,9 +1,7 @@
 #pragma once
 
-#include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
-#include "touchstone_parser.h"
 #include <complex>
 #include <string>
 #include <vector>
@@ -40,6 +38,7 @@ class SParameterAmplifierEngine {
 
     int m_num_ports = 0;
     std::vector<double> m_freqs;
+    // [freq_idx][param_idx], param_idx = row*num_ports + col for S(p+1)(q+1)
     std::vector<std::vector<std::complex<double>>> m_params;
     int m_forward_param_idx = 0;
 
