@@ -161,22 +161,10 @@ void NodeGraphWidget::drawLinks() {
 
 void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     bool right_click = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
-    bool ctrl = ImGui::GetIO().KeyCtrl;
 
     if (right_click && editor_hovered) {
         int hovered_node = -1;
         bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
-
-        // Ctrl+right-click on node: remove probe
-        if (ctrl && node_hovered) {
-            for (const auto &node : m_engine.nodes()) {
-                if (node.node_id == hovered_node && !node.output_pin_ids.empty()) {
-                    m_engine.removeProbePin(node.output_pin_ids[0]);
-                    break;
-                }
-            }
-            return;
-        }
 
         if (node_hovered) {
             ImGui::OpenPopup("node_context_menu");
@@ -265,7 +253,8 @@ void NodeGraphWidget::handleProbeClick() {
 
     // On mouse release, if no link was created
     bool ctrl = ImGui::GetIO().KeyCtrl;
-    if (ImGui::IsMouseReleased(0) && ctrl) {
+    bool shift = ImGui::GetIO().KeyShift;
+    if (ImGui::IsMouseReleased(0) && (ctrl || shift)) {
         ImVec2 release_pos = ImGui::GetMousePos();
         float dx = release_pos.x - m_click_mouse_x;
         float dy = release_pos.y - m_click_mouse_y;
@@ -283,8 +272,12 @@ void NodeGraphWidget::handleProbeClick() {
                     }
                 }
             }
-            if (target_pin >= 0 && m_engine.probeSlotForPin(target_pin) < 0)
-                m_engine.addProbePin(target_pin);
+            if (target_pin >= 0) {
+                if (ctrl)
+                    m_engine.addProbePin(target_pin);
+                else if (shift)
+                    m_engine.removeProbePin(target_pin);
+            }
         }
 
         m_clicked_pin = -1;
