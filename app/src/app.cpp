@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "logging_core.h"
 #include "logging_widget.h"
+#include <algorithm>
 
 RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -177,23 +178,22 @@ void RfSimulatorApp::update_dsp() {
 
     // Update spectrum view based on first active probe
     auto probed_nodes = m_graph_engine.probedSignalNodes();
-    SignalNode* primary_probe = probed_nodes.empty() ? nullptr : probed_nodes[0];
-    if (primary_probe) {
+    std::vector<std::string> probe_labels;
+    for (auto* pn : probed_nodes) {
         std::string label;
         for (const auto& node : m_graph_engine.nodes()) {
-            if (node.signal_node == primary_probe) {
+            if (node.signal_node == pn) {
                 label = node.label + " OUT";
                 break;
             }
         }
-        m_spectrum_widget->setProbeLabel(label);
-    } else {
-        m_spectrum_widget->setProbeLabel("");
+        probe_labels.push_back(label);
     }
+    m_spectrum_widget->setProbeLabels(probe_labels);
 
     for (auto* node : m_view_manager.nodes()) {
         if (node) {
-            node->view_enabled = (node == primary_probe);
+            node->view_enabled = std::find(probed_nodes.begin(), probed_nodes.end(), node) != probed_nodes.end();
         }
     }
 }

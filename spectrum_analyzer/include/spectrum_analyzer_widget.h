@@ -17,12 +17,12 @@ class SpectrumAnalyzerWidget {
     SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm);
 
     void draw(const char *title, bool *p_open = nullptr);
-    void setProbeLabel(const std::string& label) { m_probe_label = label; }
+    void setProbeLabels(const std::vector<std::string>& labels) { m_probe_labels = labels; }
 
   private:
     SpectrumAnalyzerEngine &m_engine;
     ViewManager &m_view_manager;
-    std::string m_probe_label;
+    std::vector<std::string> m_probe_labels;
     MarkerState m_marker;
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,

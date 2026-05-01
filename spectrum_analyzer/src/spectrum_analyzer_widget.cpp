@@ -147,10 +147,13 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
-    if (!m_probe_label.empty()) {
-        ImGui::Text("Probing: %s", m_probe_label.c_str());
-    } else {
+    if (m_probe_labels.empty()) {
         ImGui::Text("No node probed");
+    } else {
+        std::string probes = "Probes:";
+        for (size_t i = 0; i < m_probe_labels.size(); ++i)
+            probes += "  [" + std::to_string(i) + "] " + m_probe_labels[i];
+        ImGui::TextUnformatted(probes.c_str());
     }
     ImGui::Separator();
 
@@ -162,55 +165,70 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    // Build list of Spectrum pointers for combined rendering
-    std::vector<const Spectrum *> specs;
-    specs.reserve(active_nodes.size());
-    const std::vector<double> *freq_axis = nullptr;
-    for (auto *node : active_nodes) {
-        if (!node) {
-            continue;
-        }
-        if (!freq_axis && !node->outputs[0].frequencies.empty()) {
+    const std::vector<double>* freq_axis = nullptr;
+    for (auto* node : active_nodes) {
+        if (!node) continue;
+        if (!freq_axis && !node->outputs[0].frequencies.empty())
             freq_axis = &node->outputs[0].frequencies;
-        }
-        specs.push_back(&node->outputs[0]);
     }
 
-    // Render the combined spectrum (power summed across inputs)
-    std::vector<double> display_dBm = m_engine.renderCombinedSpectrum(specs);
-
-    if (!freq_axis || display_dBm.empty() || freq_axis->size() != display_dBm.size()) {
-        ImGui::Text("Unable to display combined spectrum (frequency grid mismatch).");
+    if (!freq_axis) {
+        ImGui::Text("Unable to display spectrum (no frequency grid).");
         ImGui::End();
         return;
     }
 
-    // Clear drag state if mouse released (even if plot block is skipped)
+    // Build combined specs for marker + avg noise
+    std::vector<const Spectrum*> specs;
+    for (auto* node : active_nodes)
+        if (node) specs.push_back(&node->outputs[0]);
+
+    std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(specs);
+    if (combined_dBm.size() != freq_axis->size()) {
+        ImGui::Text("Unable to render combined spectrum.");
+        ImGui::End();
+        return;
+    }
+
+    // Clear drag state if mouse released
     if (m_marker.is_dragging && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         m_marker.is_dragging = false;
-        if (!display_dBm.empty() && freq_axis && !freq_axis->empty()) {
-            m_marker.peaks = m_engine.findPeaks(display_dBm, *freq_axis, 8);
-        }
+        m_marker.peaks = m_engine.findPeaks(combined_dBm, *freq_axis, 8);
     }
+
+    static const ImVec4 trace_colors[4] = {
+        ImVec4(0.09f, 0.78f, 0.60f, 1.0f),  // Teal
+        ImVec4(0.90f, 0.59f, 0.16f, 1.0f),  // Orange
+        ImVec4(0.47f, 0.20f, 0.67f, 1.0f),  // Purple
+        ImVec4(0.24f, 0.55f, 0.86f, 1.0f),  // Blue
+    };
 
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("Spectrum")) {
-        ImPlot::PlotLine("Combined Spectrum", freq_axis->data(), display_dBm.data(),
-                         (int)display_dBm.size());
+        for (size_t i = 0; i < active_nodes.size(); ++i) {
+            std::vector<double> trace = m_engine.renderSpectrum(active_nodes[i]->outputs[0]);
+            if (trace.size() != freq_axis->size()) continue;
+            std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
+                              : ("Probe " + std::to_string(i));
+            ImPlot::PlotLine(label.c_str(), freq_axis->data(), trace.data(),
+                             static_cast<int>(trace.size()),
+                             {ImPlotProp_LineColor, trace_colors[i % 4],
+                              ImPlotProp_LineWeight, 1.5f});
+        }
 
-        if (m_marker.enabled && !display_dBm.empty()) {
+        if (m_marker.enabled && !combined_dBm.empty()) {
             if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 m_marker.is_dragging = true;
                 ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
                 m_marker.target_freq_Hz = mouse_pos.x;
             }
 
-            int idx = resolveMarkerIdx(*freq_axis, display_dBm);
-            if (idx >= 0 && idx < static_cast<int>(display_dBm.size())) {
+            int idx = resolveMarkerIdx(*freq_axis, combined_dBm);
+            if (idx >= 0 && idx < static_cast<int>(combined_dBm.size())) {
                 double mf = (*freq_axis)[static_cast<size_t>(idx)];
-                double mp = display_dBm[static_cast<size_t>(idx)];
+                double mp = combined_dBm[static_cast<size_t>(idx)];
                 drawMarkerOnPlot(mf, mp);
             }
         }
@@ -221,7 +239,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     double avg_noise = m_engine.computeAverageNoiseLevel(specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
 
-    drawMarkerControls(*freq_axis, display_dBm);
+    drawMarkerControls(*freq_axis, combined_dBm);
 
     ImGui::End();
 }
