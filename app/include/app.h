@@ -1,22 +1,18 @@
 #pragma once
 
-#include "amplifier_engine.h"
-#include "amplifier_widget.h"
-#include "splitter_engine.h"
-#include "splitter_widget.h"
-#include "mixer_engine.h"
-#include "mixer_widget.h"
-#include "s_parameter_amplifier_engine.h"
-#include "s_parameter_amplifier_widget.h"
 #include "adc_engine.h"
-#include "adc_widget.h"
+#include "amplifier_engine.h"
+#include "inspector_panel.h"
 #include "logging_widget.h"
+#include "mixer_engine.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
+#include "s_parameter_amplifier_engine.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
+#include "splitter_engine.h"
 #include "view_manager.h"
 #include <memory>
 #include <vector>
@@ -40,19 +36,11 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
     std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
-    std::unique_ptr<AmplifierWidget> m_amplifier_widget;
-
     std::vector<std::unique_ptr<SplitterEngine>> m_splitters;
-    std::unique_ptr<SplitterWidget> m_splitter_widget;
-
     std::vector<std::unique_ptr<MixerEngine>> m_mixers;
-    std::unique_ptr<MixerWidget> m_mixer_widget;
-
     std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
-    std::unique_ptr<SParameterAmplifierWidget> m_sparam_amp_widget;
-
     std::vector<std::unique_ptr<AdcEngine>> m_adcs;
-    std::unique_ptr<AdcWidget> m_adc_widget;
+    std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     void addGenerator();
     void addAmplifier();

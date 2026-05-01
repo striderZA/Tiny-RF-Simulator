@@ -5,7 +5,7 @@ project(app LANGUAGES CXX)
 # --------------------------------------------------
 # App library
 # --------------------------------------------------
-add_library(app STATIC src/app.cpp)
+add_library(app STATIC src/app.cpp src/inspector_panel.cpp)
 add_library(simulator::app ALIAS app)
 
 # --------------------------------------------------
@@ -22,15 +22,10 @@ target_link_libraries(app
         simulator::signal_generator_engine
         simulator::signal_generator_widget
         simulator::amplifier_engine
-        simulator::amplifier_widget
-        simulator::splitter_engine
-        simulator::splitter_widget
         simulator::mixer_engine
-        simulator::mixer_widget
+        simulator::splitter_engine
         simulator::s_parameter_amplifier_engine
-        simulator::s_parameter_amplifier_widget
         simulator::adc_engine
-        simulator::adc_widget
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
         simulator::node_graph_engine

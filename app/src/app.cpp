@@ -17,53 +17,22 @@ RfSimulatorApp::RfSimulatorApp() {
 
     addAmplifier();
 
-    m_amplifier_widget = std::make_unique<AmplifierWidget>(m_amplifiers);
-    m_amplifier_widget->onAddAmplifier = [this]() { addAmplifier(); };
-    m_amplifier_widget->onRemoveAmplifier = [this](size_t index) {
-        if (index >= m_amplifiers.size()) return;
-        m_view_manager.unregisterNode(&m_amplifiers[index]->node());
-        m_graph_engine.removeNode(m_amplifiers[index]->graphNodeId());
-        m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(index));
-        LOG_INFO("Removed amplifier at index %zu", index);
+    m_inspector_panel = std::make_unique<InspectorPanel>(
+        m_graph_engine, m_amplifiers, m_mixers, m_splitters,
+        m_sparam_amps, m_adcs, m_generators
+    );
+    m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
+        removeComponent(graph_node_id);
     };
 
-    m_splitter_widget = std::make_unique<SplitterWidget>(m_splitters);
-    m_splitter_widget->onAddSplitter = [this]() { addSplitter(); };
-    m_splitter_widget->onRemoveSplitter = [this](size_t index) {
-        if (index >= m_splitters.size()) return;
-        m_view_manager.unregisterNode(&m_splitters[index]->node());
-        m_graph_engine.removeNode(m_splitters[index]->graphNodeId());
-        m_splitters.erase(m_splitters.begin() + static_cast<std::ptrdiff_t>(index));
-        LOG_INFO("Removed splitter at index %zu", index);
-    };
-
-    m_mixer_widget = std::make_unique<MixerWidget>(m_mixers);
-    m_mixer_widget->onAddMixer = [this]() { addMixer(); };
-    m_mixer_widget->onRemoveMixer = [this](size_t index) {
-        if (index >= m_mixers.size()) return;
-        m_view_manager.unregisterNode(&m_mixers[index]->node());
-        m_graph_engine.removeNode(m_mixers[index]->graphNodeId());
-        m_mixers.erase(m_mixers.begin() + static_cast<std::ptrdiff_t>(index));
-        LOG_INFO("Removed mixer at index %zu", index);
-    };
-
-    m_sparam_amp_widget = std::make_unique<SParameterAmplifierWidget>(m_sparam_amps);
-    m_sparam_amp_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
-    m_sparam_amp_widget->onRemoveSParamAmp = [this](size_t index) {
-        if (index >= m_sparam_amps.size()) return;
-        m_view_manager.unregisterNode(&m_sparam_amps[index]->node());
-        m_graph_engine.removeNode(m_sparam_amps[index]->graphNodeId());
-        m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(index));
-        LOG_INFO("Removed S-parameter amplifier at index %zu", index);
-    };
-
-    m_adc_widget = std::make_unique<AdcWidget>(m_adcs);
-    m_adc_widget->onAddAdc = [this]() { addAdc(); };
-    m_adc_widget->onRemoveAdc = [this](size_t index) {
-        if (index >= m_adcs.size()) return;
-        m_view_manager.unregisterNode(&m_adcs[index]->node());
-        m_graph_engine.removeNode(m_adcs[index]->graphNodeId());
-        m_adcs.erase(m_adcs.begin() + static_cast<std::ptrdiff_t>(index));
+    m_graph_widget->onNodeHover = [this](int graph_node_id) -> std::string {
+        for (auto& g : m_generators) if (g->graphNodeId() == graph_node_id) return g->hoverSummary();
+        for (auto& a : m_amplifiers) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
+        for (auto& s : m_splitters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
+        for (auto& m : m_mixers) if (m->graphNodeId() == graph_node_id) return m->hoverSummary();
+        for (auto& s : m_sparam_amps) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
+        for (auto& a : m_adcs) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
+        return "";
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
@@ -240,24 +209,7 @@ void RfSimulatorApp::draw_ui() {
         m_generator_widgets[i]->draw("Generators");
     }
 
-    if (m_amplifier_widget) {
-        m_amplifier_widget->draw("Amplifiers");
-    }
-
-    if (m_splitter_widget) {
-        m_splitter_widget->draw("Splitters");
-    }
-
-    if (m_mixer_widget) {
-        m_mixer_widget->draw("Mixers");
-    }
-
-    if (m_sparam_amp_widget) {
-        m_sparam_amp_widget->draw("S-Param Amplifiers");
-    }
-
-    if (m_adc_widget)
-        m_adc_widget->draw("RF ADC");
+    if (m_inspector_panel) m_inspector_panel->draw("Properties");
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);

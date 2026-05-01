@@ -14,26 +14,4 @@ target_include_directories(s_parameter_amplifier_engine
 target_link_libraries(s_parameter_amplifier_engine
     PUBLIC common simulator::node_graph_engine simulator::touchstone_parser
 )
-
 add_library(simulator::s_parameter_amplifier_engine ALIAS s_parameter_amplifier_engine)
-
-# ---- UI Widget ----
-add_library(s_parameter_amplifier_widget STATIC
-    src/s_parameter_amplifier_widget.cpp
-)
-
-target_include_directories(s_parameter_amplifier_widget
-    PUBLIC
-        ${PROJECT_SOURCE_DIR}/include
-        ${pfd_SOURCE_DIR}
-)
-
-target_link_libraries(s_parameter_amplifier_widget
-    PUBLIC
-        simulator::s_parameter_amplifier_engine
-        simulator::core
-        simulator::logging_widget
-        implot
-)
-
-add_library(simulator::s_parameter_amplifier_widget ALIAS s_parameter_amplifier_widget)
