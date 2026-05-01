@@ -500,3 +500,6 @@ imgui.ini
 
 # Visual Studio CMake build output
 out/
+
+# Knowledge graph
+graphify-out/
