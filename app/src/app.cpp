@@ -168,8 +168,9 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_sparam_amps[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(i));
-        LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
-        return;
+            LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
+            return;
+        }
     }
     // Find and remove ADC
     for (size_t i = 0; i < m_adcs.size(); ++i) {
@@ -181,7 +182,6 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
-}
 }
 
 void RfSimulatorApp::update_dsp() {
