@@ -73,6 +73,22 @@ void NodeGraphEngine::removeLink(int link_id) {
     }
 }
 
+int NodeGraphEngine::inputPinId(int node_id) const {
+    for (const auto& n : m_nodes) {
+        if (n.node_id == node_id && !n.input_pin_ids.empty())
+            return n.input_pin_ids[0];
+    }
+    return -1;
+}
+
+int NodeGraphEngine::outputPinId(int node_id) const {
+    for (const auto& n : m_nodes) {
+        if (n.node_id == node_id && !n.output_pin_ids.empty())
+            return n.output_pin_ids[0];
+    }
+    return -1;
+}
+
 SignalNode *NodeGraphEngine::getSourceForInput(int input_pin_id) const {
     if (input_pin_id < 0)
         return nullptr;

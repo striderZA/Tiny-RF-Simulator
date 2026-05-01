@@ -8,13 +8,7 @@ SplitterEngine::SplitterEngine(int id, NodeGraphEngine& graph)
 }
 
 int SplitterEngine::inputPinId() const {
-    if (!m_graph || m_graph_node_id < 0) return -1;
-    for (const auto& node : m_graph->nodes()) {
-        if (node.node_id == m_graph_node_id) {
-            return node.input_pin_ids.empty() ? -1 : node.input_pin_ids[0];
-        }
-    }
-    return -1;
+    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
 }
 
 int SplitterEngine::outputPinId(int index) const {
@@ -38,15 +32,7 @@ void SplitterEngine::update(double dt) {
         if (!in.frequencies.empty()) {
             out.frequencies = in.frequencies;
         } else if (out.frequencies.size() < 2) {
-            const double start_Hz = MIN_FREQ;
-            const double stop_Hz = MAX_FREQ;
-            const double f_step_Hz = 10e6;
-            int n = static_cast<int>((stop_Hz - start_Hz) / f_step_Hz);
-            if (n < 2) n = 2;
-            out.frequencies.resize(n);
-            for (int i = 0; i < n; ++i) {
-                out.frequencies[i] = start_Hz + i * f_step_Hz;
-            }
+            buildDefaultFrequencyGrid(out.frequencies);
         }
 
         const size_t N = out.frequencies.size();

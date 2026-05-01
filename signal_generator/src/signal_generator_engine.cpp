@@ -7,13 +7,7 @@ SignalGeneratorEngine::SignalGeneratorEngine(int id, NodeGraphEngine& graph)
 }
 
 int SignalGeneratorEngine::outputPinId() const {
-    if (!m_graph || m_graph_node_id < 0) return -1;
-    for (const auto& node : m_graph->nodes()) {
-        if (node.node_id == m_graph_node_id) {
-            return node.output_pin_ids.empty() ? -1 : node.output_pin_ids[0];
-        }
-    }
-    return -1;
+    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 void SignalGeneratorEngine::rebuildFrequencyGrid() {

@@ -23,8 +23,6 @@ public:
     double v_fs() const { return m_v_fs; }
     void setVfs(double v) { m_v_fs = v; }
 
-    bool loaded() const { return true; }
-
     SignalNode& node() { return m_node; }
 
 private:

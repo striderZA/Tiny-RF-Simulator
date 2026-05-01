@@ -185,58 +185,25 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
 }
 
 void RfSimulatorApp::update_dsp() {
-    for (auto& gen : m_generators) {
+    auto wireAndUpdate = [&](auto& components) {
+        for (auto& comp : components) {
+            auto* source = m_graph_engine.getSourceForInput(comp->inputPinId());
+            if (source)
+                comp->node().inputs[0] = source->outputs[0];
+            else
+                comp->node().inputs[0] = Spectrum();
+            comp->update(0.0);
+        }
+    };
+
+    for (auto& gen : m_generators)
         gen->update(0.0);
-    }
 
-    for (auto& amp : m_amplifiers) {
-        auto* source = m_graph_engine.getSourceForInput(amp->inputPinId());
-        if (source) {
-            amp->node().inputs[0] = source->outputs[0];
-        } else {
-            amp->node().inputs[0] = Spectrum();
-        }
-        amp->update(0.0);
-    }
-
-    for (auto& split : m_splitters) {
-        auto* source = m_graph_engine.getSourceForInput(split->inputPinId());
-        if (source) {
-            split->node().inputs[0] = source->outputs[0];
-        } else {
-            split->node().inputs[0] = Spectrum();
-        }
-        split->update(0.0);
-    }
-
-    for (auto& mix : m_mixers) {
-        auto* source = m_graph_engine.getSourceForInput(mix->inputPinId());
-        if (source) {
-            mix->node().inputs[0] = source->outputs[0];
-        } else {
-            mix->node().inputs[0] = Spectrum();
-        }
-        mix->update(0.0);
-    }
-
-    for (auto& spamp : m_sparam_amps) {
-        auto* source = m_graph_engine.getSourceForInput(spamp->inputPinId());
-        if (source) {
-            spamp->node().inputs[0] = source->outputs[0];
-        } else {
-            spamp->node().inputs[0] = Spectrum();
-        }
-        spamp->update(0.0);
-    }
-
-    for (auto& adc : m_adcs) {
-        auto* source = m_graph_engine.getSourceForInput(adc->inputPinId());
-        if (source)
-            adc->node().inputs[0] = source->outputs[0];
-        else
-            adc->node().inputs[0] = Spectrum();
-        adc->update(0.0);
-    }
+    wireAndUpdate(m_amplifiers);
+    wireAndUpdate(m_splitters);
+    wireAndUpdate(m_mixers);
+    wireAndUpdate(m_sparam_amps);
+    wireAndUpdate(m_adcs);
 
     // Update spectrum view based on active probe
     SignalNode* probed = m_graph_engine.probedSignalNode();

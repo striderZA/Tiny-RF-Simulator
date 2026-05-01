@@ -26,6 +26,9 @@ class NodeGraphEngine {
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);
 
+    int inputPinId(int node_id) const;
+    int outputPinId(int node_id) const;
+
     SignalNode *getSourceForInput(int input_pin_id) const;
     std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
 

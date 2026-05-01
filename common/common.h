@@ -1,14 +1,10 @@
 #pragma once
 
 #include <cmath>
-#include <utility>
 #include <vector>
-
-typedef std::pair<double, double> tone;
 
 constexpr double MIN_FREQ = -5.12e9;
 constexpr double MAX_FREQ = 5.12e9;
-constexpr size_t NUM_BINS = 1024;
 constexpr double MIN_POWER = -174;
 constexpr double MAX_POWER = 10;
 constexpr double DEFAULT_VBW = 25e6;
@@ -32,4 +28,15 @@ inline double addedNoiseDensity_W_per_Hz(double nf_dB, double gain_linear) {
 // DEPRECATED: use addedNoiseDensity_W_per_Hz for density (W/Hz) model
 inline double addedNoisePerBin_W(double nf_dB, double g, double bin_width) {
     return addedNoiseDensity_W_per_Hz(nf_dB, g) * bin_width;
+}
+
+inline void buildDefaultFrequencyGrid(std::vector<double>& freqs) {
+    constexpr double start_Hz = MIN_FREQ;
+    constexpr double stop_Hz = MAX_FREQ;
+    constexpr double f_step_Hz = 10e6;
+    int n = static_cast<int>((stop_Hz - start_Hz) / f_step_Hz);
+    if (n < 2) n = 2;
+    freqs.resize(n);
+    for (int i = 0; i < n; ++i)
+        freqs[i] = start_Hz + i * f_step_Hz;
 }

@@ -35,19 +35,11 @@ AdcEngine::AdcEngine(int id, NodeGraphEngine& graph)
 }
 
 int AdcEngine::inputPinId() const {
-    for (const auto& n : m_graph->nodes()) {
-        if (n.node_id == m_graph_node_id && !n.input_pin_ids.empty())
-            return n.input_pin_ids[0];
-    }
-    return -1;
+    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
 }
 
 int AdcEngine::outputPinId() const {
-    for (const auto& n : m_graph->nodes()) {
-        if (n.node_id == m_graph_node_id && !n.output_pin_ids.empty())
-            return n.output_pin_ids[0];
-    }
-    return -1;
+    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 void AdcEngine::update(double /*dt*/) {
