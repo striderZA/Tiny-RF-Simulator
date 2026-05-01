@@ -69,3 +69,7 @@ void AdcEngine::update(double /*dt*/) {
 
     out.computeTotalNoise();
 }
+
+std::string AdcEngine::hoverSummary() const {
+    return "Fs: " + std::to_string(m_fs_Hz / 1e6) + " MHz | " + std::to_string(m_bits) + " bit | NSD: " + std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
+}

@@ -11,6 +11,7 @@ class SParameterAmplifierEngine {
     SParameterAmplifierEngine(int id, NodeGraphEngine& graph, const std::string& filepath);
     int id() const { return m_id; }
     int graphNodeId() const { return m_graph_node_id; }
+    std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
 

@@ -122,3 +122,10 @@ void SParameterAmplifierEngine::update(double dt) {
     for (size_t i = 0; i < N; ++i)
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
 }
+
+std::string SParameterAmplifierEngine::hoverSummary() const {
+    if (!m_loaded) return "Not loaded";
+    return std::to_string(m_num_ports) + "-port | Forward: S"
+        + std::to_string((m_forward_param_idx / m_num_ports) + 1)
+        + std::to_string((m_forward_param_idx % m_num_ports) + 1);
+}

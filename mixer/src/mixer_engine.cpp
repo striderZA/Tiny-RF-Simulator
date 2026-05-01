@@ -73,3 +73,7 @@ void MixerEngine::update(double dt) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 }
+
+std::string MixerEngine::hoverSummary() const {
+    return "LO: " + std::to_string(m_lo_freq_Hz / 1e6) + " MHz | Conv Gain: " + std::to_string(m_conv_gain_dB) + " dB";
+}

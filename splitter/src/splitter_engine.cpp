@@ -71,3 +71,7 @@ void SplitterEngine::update(double dt) {
         }
     }
 }
+
+std::string SplitterEngine::hoverSummary() const {
+    return "Split: -3 dB | 1 in, 2 out";
+}

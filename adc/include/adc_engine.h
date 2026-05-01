@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "node_graph_engine.h"
 #include "signal_node.h"
 
@@ -9,6 +11,7 @@ public:
 
     int id() const { return m_id; }
     int graphNodeId() const { return m_graph_node_id; }
+    std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
 

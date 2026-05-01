@@ -86,3 +86,14 @@ void SignalGeneratorEngine::update(double) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 }
+
+std::string SignalGeneratorEngine::hoverSummary() const {
+    if (m_tones.empty()) return "0 tones";
+    std::string s = std::to_string(m_tones.size()) + " tones: ";
+    for (size_t i = 0; i < m_tones.size() && i < 3; ++i) {
+        if (i > 0) s += ", ";
+        s += std::to_string(m_tones[i].freq_Hz / 1e6) + " MHz @ " + std::to_string(m_tones[i].power_dBm) + " dBm";
+    }
+    if (m_tones.size() > 3) s += ", ...";
+    return s;
+}

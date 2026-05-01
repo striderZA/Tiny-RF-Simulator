@@ -65,3 +65,7 @@ void AmplifierEngine::update(double dt) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 }
+
+std::string AmplifierEngine::hoverSummary() const {
+    return "Gain: " + std::to_string(m_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
+}

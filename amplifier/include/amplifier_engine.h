@@ -9,6 +9,7 @@ class AmplifierEngine {
     AmplifierEngine(int id, NodeGraphEngine& graph);
     int id() const { return m_id; }
     int graphNodeId() const { return m_graph_node_id; }
+    std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
 
