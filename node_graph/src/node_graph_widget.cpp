@@ -128,7 +128,7 @@ void NodeGraphWidget::drawNodes() {
         }
 
         for (int pin : node.output_pin_ids) {
-            bool is_probed = (pin == m_engine.activeProbePin());
+            bool is_probed = (m_engine.probeSlotForPin(pin) >= 0);
             if (is_probed) {
                 ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(22, 199, 154, 255));
                 ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(22, 199, 154, 255));
@@ -254,22 +254,22 @@ void NodeGraphWidget::handleProbeClick() {
         bool is_click = drag_dist < 5.0f;
 
         if (is_click && !m_link_created) {
-            // Pin click takes priority
+            // Pin click toggles probe on that pin
             if (m_clicked_pin >= 0) {
-                for (const auto &node : m_engine.nodes()) {
-                    for (int pin : node.output_pin_ids) {
-                        if (pin == m_clicked_pin) {
-                            m_engine.setActiveProbePin(m_clicked_pin);
-                            break;
-                        }
-                    }
-                }
+                if (m_engine.probeSlotForPin(m_clicked_pin) >= 0)
+                    m_engine.removeProbePin(m_clicked_pin);
+                else
+                    m_engine.addProbePin(m_clicked_pin);
             }
-            // Node body click probes the node's first output
+            // Node body click toggles probe on first output
             else if (m_clicked_node >= 0) {
                 for (const auto &node : m_engine.nodes()) {
                     if (node.node_id == m_clicked_node && !node.output_pin_ids.empty()) {
-                        m_engine.setActiveProbePin(node.output_pin_ids[0]);
+                        int pin = node.output_pin_ids[0];
+                        if (m_engine.probeSlotForPin(pin) >= 0)
+                            m_engine.removeProbePin(pin);
+                        else
+                            m_engine.addProbePin(pin);
                         break;
                     }
                 }

@@ -53,22 +53,51 @@ TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") 
     REQUIRE(engine.getSourceForInput(amp_pin) == nullptr);
 }
 
-TEST_CASE("NodeGraphEngine probe management", "[node_graph]") {
+TEST_CASE("NodeGraphEngine multi-probe", "[node_graph]") {
+    NodeGraphEngine engine;
+    SignalNode node1;
+    SignalNode node2;
+
+    engine.addNode("Generator", &node1, false, true);
+    engine.addNode("Amplifier", &node2, true, true);
+
+    auto first_output = engine.nodes()[0].output_pin_ids[0];
+    auto second_output = engine.nodes()[1].output_pin_ids[0];
+
+    // Initially empty
+    REQUIRE(engine.probePins().empty());
+
+    // Add probes
+    REQUIRE(engine.addProbePin(first_output));
+    REQUIRE(engine.probePins().size() == 1);
+    REQUIRE(engine.probeSlotForPin(first_output) == 0);
+
+    REQUIRE(engine.addProbePin(second_output));
+    REQUIRE(engine.probePins().size() == 2);
+    REQUIRE(engine.probeSlotForPin(second_output) == 1);
+
+    // Remove probe
+    REQUIRE(engine.removeProbePin(first_output));
+    REQUIRE(engine.probePins().size() == 1);
+    REQUIRE(engine.probeSlotForPin(first_output) == -1);
+
+    // Cannot re-add same pin
+    REQUIRE_FALSE(engine.removeProbePin(999));
+    REQUIRE_FALSE(engine.addProbePin(second_output)); // already added
+}
+
+TEST_CASE("NodeGraphEngine removeNode clears probes", "[node_graph]") {
     NodeGraphEngine engine;
     SignalNode node;
 
     engine.addNode("Generator", &node, false, true);
     auto& n = engine.nodes()[0];
 
-    REQUIRE(engine.activeProbePin() == -1);
-    REQUIRE(engine.probedSignalNode() == nullptr);
-
-    engine.setActiveProbePin(n.output_pin_ids[0]);
-    REQUIRE(engine.activeProbePin() == n.output_pin_ids[0]);
-    REQUIRE(engine.probedSignalNode() == &node);
+    engine.addProbePin(n.output_pin_ids[0]);
+    REQUIRE(engine.probePins().size() == 1);
 
     engine.removeNode(n.node_id);
-    REQUIRE(engine.activeProbePin() == -1);
+    REQUIRE(engine.probePins().empty());
 }
 
 TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_graph]") {

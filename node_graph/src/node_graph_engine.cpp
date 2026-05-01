@@ -45,10 +45,8 @@ void NodeGraphEngine::removeNode(int node_id) {
                                   }),
                   m_links.end());
 
-    if (!it->output_pin_ids.empty() &&
-        std::find(it->output_pin_ids.begin(), it->output_pin_ids.end(), m_active_probe_pin) !=
-            it->output_pin_ids.end()) {
-        m_active_probe_pin = -1;
+    for (int pin : node_pins) {
+        removeProbePin(pin);
     }
 
     m_nodes.erase(it);
@@ -125,15 +123,50 @@ std::vector<SignalNode *> NodeGraphEngine::getSourcesForInput(int input_pin_id) 
     return result;
 }
 
-SignalNode *NodeGraphEngine::probedSignalNode() const {
-    if (m_active_probe_pin < 0)
-        return nullptr;
-    for (const auto &node : m_nodes) {
-        for (int pin : node.output_pin_ids) {
-            if (pin == m_active_probe_pin) {
-                return node.signal_node;
+bool NodeGraphEngine::addProbePin(int pin_id) {
+    if (pin_id < 0) return false;
+    for (int p : m_probe_pins)
+        if (p == pin_id) return false;
+    if (m_probe_pins.size() >= static_cast<size_t>(MAX_PROBES))
+        return false;
+    m_probe_pins.push_back(pin_id);
+    LOG_INFO("Probe added: pin %d (slot %zu)", pin_id, m_probe_pins.size());
+    return true;
+}
+
+bool NodeGraphEngine::removeProbePin(int pin_id) {
+    for (auto it = m_probe_pins.begin(); it != m_probe_pins.end(); ++it) {
+        if (*it == pin_id) {
+            m_probe_pins.erase(it);
+            LOG_INFO("Probe removed: pin %d", pin_id);
+            return true;
+        }
+    }
+    return false;
+}
+
+void NodeGraphEngine::clearProbes() {
+    m_probe_pins.clear();
+}
+
+int NodeGraphEngine::probeSlotForPin(int pin_id) const {
+    for (size_t i = 0; i < m_probe_pins.size(); ++i)
+        if (m_probe_pins[i] == pin_id) return static_cast<int>(i);
+    return -1;
+}
+
+std::vector<SignalNode*> NodeGraphEngine::probedSignalNodes() const {
+    std::vector<SignalNode*> result;
+    result.reserve(m_probe_pins.size());
+    for (int pin_id : m_probe_pins) {
+        for (const auto& node : m_nodes) {
+            for (int pin : node.output_pin_ids) {
+                if (pin == pin_id) {
+                    result.push_back(node.signal_node);
+                    break;
+                }
             }
         }
     }
-    return nullptr;
+    return result;
 }

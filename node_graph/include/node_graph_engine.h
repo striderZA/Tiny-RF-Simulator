@@ -32,9 +32,14 @@ class NodeGraphEngine {
     SignalNode *getSourceForInput(int input_pin_id) const;
     std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
 
-    int activeProbePin() const { return m_active_probe_pin; }
-    void setActiveProbePin(int pin_id) { m_active_probe_pin = pin_id; }
-    SignalNode *probedSignalNode() const;
+    static constexpr int MAX_PROBES = 4;
+
+    const std::vector<int>& probePins() const { return m_probe_pins; }
+    bool addProbePin(int pin_id);
+    bool removeProbePin(int pin_id);
+    void clearProbes();
+    int probeSlotForPin(int pin_id) const;
+    std::vector<SignalNode*> probedSignalNodes() const;
 
     const std::vector<GraphNode> &nodes() const { return m_nodes; }
     const std::vector<GraphLink> &links() const { return m_links; }
@@ -43,7 +48,7 @@ class NodeGraphEngine {
     int m_next_node_id = 1;
     int m_next_pin_id = 100;
     int m_next_link_id = 1000;
-    int m_active_probe_pin = -1;
+    std::vector<int> m_probe_pins;
     std::vector<GraphNode> m_nodes;
     std::vector<GraphLink> m_links;
 };

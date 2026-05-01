@@ -175,12 +175,13 @@ void RfSimulatorApp::update_dsp() {
     wireAndUpdate(m_sparam_amps);
     wireAndUpdate(m_adcs);
 
-    // Update spectrum view based on active probe
-    SignalNode* probed = m_graph_engine.probedSignalNode();
-    if (probed) {
+    // Update spectrum view based on first active probe
+    auto probed_nodes = m_graph_engine.probedSignalNodes();
+    SignalNode* primary_probe = probed_nodes.empty() ? nullptr : probed_nodes[0];
+    if (primary_probe) {
         std::string label;
         for (const auto& node : m_graph_engine.nodes()) {
-            if (node.signal_node == probed) {
+            if (node.signal_node == primary_probe) {
                 label = node.label + " OUT";
                 break;
             }
@@ -192,7 +193,7 @@ void RfSimulatorApp::update_dsp() {
 
     for (auto* node : m_view_manager.nodes()) {
         if (node) {
-            node->view_enabled = (node == probed);
+            node->view_enabled = (node == primary_probe);
         }
     }
 }
