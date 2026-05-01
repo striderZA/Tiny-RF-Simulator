@@ -55,6 +55,7 @@ bool RfSimulatorCore::Initialize() {
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(p_impl->window, true);
     ImGui_ImplOpenGL2_Init();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 
     return true;
 }

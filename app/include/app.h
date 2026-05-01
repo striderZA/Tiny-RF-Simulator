@@ -8,6 +8,8 @@
 #include "mixer_widget.h"
 #include "s_parameter_amplifier_engine.h"
 #include "s_parameter_amplifier_widget.h"
+#include "adc_engine.h"
+#include "adc_widget.h"
 #include "logging_widget.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
@@ -49,10 +51,14 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
     std::unique_ptr<SParameterAmplifierWidget> m_sparam_amp_widget;
 
+    std::vector<std::unique_ptr<AdcEngine>> m_adcs;
+    std::unique_ptr<AdcWidget> m_adc_widget;
+
     void addGenerator();
     void addAmplifier();
     void addSplitter();
     void addMixer();
     void addSParamAmp();
+    void addAdc();
     void removeComponent(int graph_node_id);
 };
