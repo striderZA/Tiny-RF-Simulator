@@ -127,16 +127,23 @@ void NodeGraphWidget::drawNodes() {
             ImNodes::EndInputAttribute();
         }
 
+        static const ImU32 probe_colors[4] = {
+            IM_COL32(22, 199, 154, 255),  // Teal
+            IM_COL32(230, 150, 40, 255),  // Orange
+            IM_COL32(120, 50, 170, 255),  // Purple
+            IM_COL32(60, 140, 220, 255),  // Blue
+        };
+
         for (int pin : node.output_pin_ids) {
-            bool is_probed = (m_engine.probeSlotForPin(pin) >= 0);
-            if (is_probed) {
-                ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(22, 199, 154, 255));
-                ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(22, 199, 154, 255));
+            int slot = m_engine.probeSlotForPin(pin);
+            if (slot >= 0) {
+                ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
+                ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
             }
             ImNodes::BeginOutputAttribute(pin);
             ImGui::Text("OUT");
             ImNodes::EndOutputAttribute();
-            if (is_probed) {
+            if (slot >= 0) {
                 ImNodes::PopColorStyle();
                 ImNodes::PopColorStyle();
             }
