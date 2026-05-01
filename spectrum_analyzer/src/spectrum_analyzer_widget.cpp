@@ -104,6 +104,7 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
 }
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 300), ImVec2(FLT_MAX, FLT_MAX));
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;

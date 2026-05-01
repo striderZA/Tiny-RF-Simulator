@@ -3,8 +3,8 @@
 #include <cmath>
 #include <vector>
 
-constexpr double MIN_FREQ = -5.12e9;
-constexpr double MAX_FREQ = 5.12e9;
+constexpr double MIN_FREQ = -20e9;
+constexpr double MAX_FREQ = 20e9;
 constexpr double MIN_POWER = -174;
 constexpr double MAX_POWER = 10;
 constexpr double DEFAULT_VBW = 25e6;
