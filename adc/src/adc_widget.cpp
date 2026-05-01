@@ -60,13 +60,6 @@ void AdcWidget::draw(const char* title, bool* p_open) {
                 adc->setVfs(vfs);
             ImGui::NextColumn();
 
-            ImGui::Text("f_chan (MHz)");
-            ImGui::NextColumn();
-            double fchan = adc->fChannel_Hz();
-            if (utils::inputFrequency("##fchan", fchan, 1.0, 100.0, "%.3f", 0.0, 1e12))
-                adc->setFChannel_Hz(fchan);
-            ImGui::NextColumn();
-
             ImGui::Columns(1);
             if (ImGui::Button("Delete"))
                 to_delete = i;

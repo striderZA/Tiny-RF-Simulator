@@ -22,8 +22,6 @@ public:
     void setBits(int b) { m_bits = b > 0 ? b : 1; }
     double v_fs() const { return m_v_fs; }
     void setVfs(double v) { m_v_fs = v; }
-    double fChannel_Hz() const { return m_f_channel_Hz; }
-    void setFChannel_Hz(double fc) { m_f_channel_Hz = fc; }
 
     bool loaded() const { return true; }
 
@@ -39,5 +37,4 @@ private:
     double m_nsd_dBm_per_Hz = -155.0;
     int m_bits = 12;
     double m_v_fs = 2.0;
-    double m_f_channel_Hz = 2.4e9;
 };
