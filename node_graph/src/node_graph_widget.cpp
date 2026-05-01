@@ -161,10 +161,22 @@ void NodeGraphWidget::drawLinks() {
 
 void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     bool right_click = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
+    bool ctrl = ImGui::GetIO().KeyCtrl;
 
     if (right_click && editor_hovered) {
         int hovered_node = -1;
         bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
+
+        // Ctrl+right-click on node: remove probe
+        if (ctrl && node_hovered) {
+            for (const auto &node : m_engine.nodes()) {
+                if (node.node_id == hovered_node && !node.output_pin_ids.empty()) {
+                    m_engine.removeProbePin(node.output_pin_ids[0]);
+                    break;
+                }
+            }
+            return;
+        }
 
         if (node_hovered) {
             ImGui::OpenPopup("node_context_menu");
@@ -251,39 +263,38 @@ void NodeGraphWidget::handleProbeClick() {
         }
     }
 
-    // On mouse release, if no link was created and we clicked on an output, probe it
-    if (ImGui::IsMouseReleased(0)) {
-        // Only treat as a click (not drag) if mouse didn't move much
+    // On mouse release, if no link was created
+    bool ctrl = ImGui::GetIO().KeyCtrl;
+    if (ImGui::IsMouseReleased(0) && ctrl) {
         ImVec2 release_pos = ImGui::GetMousePos();
         float dx = release_pos.x - m_click_mouse_x;
         float dy = release_pos.y - m_click_mouse_y;
-        float drag_dist = std::sqrt(dx * dx + dy * dy);
-        bool is_click = drag_dist < 5.0f;
+        bool is_click = std::sqrt(dx * dx + dy * dy) < 5.0f && !m_link_created;
 
-        if (is_click && !m_link_created) {
-            // Pin click toggles probe on that pin
+        if (is_click) {
+            int target_pin = -1;
             if (m_clicked_pin >= 0) {
-                if (m_engine.probeSlotForPin(m_clicked_pin) >= 0)
-                    m_engine.removeProbePin(m_clicked_pin);
-                else
-                    m_engine.addProbePin(m_clicked_pin);
-            }
-            // Node body click toggles probe on first output
-            else if (m_clicked_node >= 0) {
+                target_pin = m_clicked_pin;
+            } else if (m_clicked_node >= 0) {
                 for (const auto &node : m_engine.nodes()) {
                     if (node.node_id == m_clicked_node && !node.output_pin_ids.empty()) {
-                        int pin = node.output_pin_ids[0];
-                        if (m_engine.probeSlotForPin(pin) >= 0)
-                            m_engine.removeProbePin(pin);
-                        else
-                            m_engine.addProbePin(pin);
+                        target_pin = node.output_pin_ids[0];
                         break;
                     }
                 }
             }
+            if (target_pin >= 0 && m_engine.probeSlotForPin(target_pin) < 0)
+                m_engine.addProbePin(target_pin);
         }
 
-        // Reset state
+        m_clicked_pin = -1;
+        m_clicked_node = -1;
+        m_link_created = false;
+        return;
+    }
+
+    // Non-ctrl click: just reset state (no probe action, imnodes handles selection)
+    if (ImGui::IsMouseReleased(0) || ImGui::IsMouseReleased(1)) {
         m_clicked_pin = -1;
         m_clicked_node = -1;
         m_link_created = false;

@@ -72,6 +72,13 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         power_dBm[i] = W_to_dBm(rbw_power_W[i]);
     }
 
+    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
+        std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
+        for (auto &p : power_dBm) {
+            p += jitter(m_rng);
+        }
+    }
+
     std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
 
     return vbw_out;
