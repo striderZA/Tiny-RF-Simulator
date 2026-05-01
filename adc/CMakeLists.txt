@@ -11,7 +11,7 @@ target_include_directories(adc_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(adc_engine PUBLIC common simulator::node_graph_engine kissfft)
+target_link_libraries(adc_engine PUBLIC common simulator::node_graph_engine)
 
 add_library(simulator::adc_engine ALIAS adc_engine)
 

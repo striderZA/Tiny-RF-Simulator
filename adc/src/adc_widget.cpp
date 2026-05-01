@@ -67,26 +67,6 @@ void AdcWidget::draw(const char* title, bool* p_open) {
                 adc->setFChannel_Hz(fchan);
             ImGui::NextColumn();
 
-            ImGui::Text("Decimation");
-            ImGui::NextColumn();
-            int decim = adc->decimation();
-            ImGui::SetNextItemWidth(120.0f);
-            if (ImGui::InputInt("##decim", &decim)) {
-                if (decim < 1) decim = 1;
-                adc->setDecimation(decim);
-            }
-            ImGui::NextColumn();
-
-            ImGui::Text("N samples");
-            ImGui::NextColumn();
-            int ns = adc->nSamples();
-            ImGui::SetNextItemWidth(120.0f);
-            if (ImGui::InputInt("##ns", &ns)) {
-                if (ns < adc->decimation()) ns = adc->decimation();
-                adc->setNSamples(ns);
-            }
-            ImGui::NextColumn();
-
             ImGui::Columns(1);
             if (ImGui::Button("Delete"))
                 to_delete = i;
