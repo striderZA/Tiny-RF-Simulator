@@ -205,12 +205,36 @@ void AdcEngine::update(double /*dt*/) {
 
     // -- Step 5: Diagnostic FFT output (Spectrum) --
     size_t N_fft = m_iq_output.samples.size();
+
+    if (N_fft == 0) {
+        auto& out = m_node.outputs[0];
+        out.frequencies.clear();
+        out.phase_deg.clear();
+        out.noise_W.clear();
+        out.noise_added_W.clear();
+        out.tones.clear();
+        out.computeTotalNoise();
+        return;
+    }
+
     // Apply Hann window, then compute FFT via KissFFT
     auto windowed = m_iq_output.samples;
     apply_hann(windowed);
     double win_energy = hann_window_energy(N_fft);
 
     auto* fwd = kiss_fft_alloc(static_cast<int>(N_fft), 0, nullptr, nullptr);
+    if (!fwd) {
+        LOG_ERROR("ADC [adc%d]: kiss_fft_alloc failed for N=%zu.", m_id, N_fft);
+        auto& out = m_node.outputs[0];
+        out.frequencies.clear();
+        out.phase_deg.clear();
+        out.noise_W.clear();
+        out.noise_added_W.clear();
+        out.tones.clear();
+        out.computeTotalNoise();
+        return;
+    }
+
     std::vector<kiss_fft_cpx> fft_in(N_fft), fft_out(N_fft);
     for (size_t i = 0; i < N_fft; ++i) {
         fft_in[i].r = static_cast<float>(windowed[i].real());
