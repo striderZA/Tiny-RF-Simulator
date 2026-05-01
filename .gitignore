@@ -495,5 +495,8 @@ build/
 # Runtime-generated ImGui settings
 imgui.ini
 
+# Brainstorming session files
+.superpowers/
+
 # Visual Studio CMake build output
 out/
