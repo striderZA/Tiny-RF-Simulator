@@ -2,6 +2,7 @@
 
 #include "node_graph_engine.h"
 #include <functional>
+#include <string>
 
 struct ImNodesEditorContext;
 
@@ -19,6 +20,7 @@ class NodeGraphWidget {
     std::function<void()> onAddMixer;
     std::function<void()> onAddSParamAmp;
     std::function<void(int node_id)> onRemoveNode;
+    std::function<std::string(int graph_node_id)> onNodeHover;
 
   private:
     NodeGraphEngine &m_engine;
@@ -34,6 +36,7 @@ class NodeGraphWidget {
 
     void drawNodes();
     void showPinTooltips();
+    void showNodeHoverTooltips();
     void drawLinks();
     void handleContextMenu(bool editor_hovered);
     void handleLinkCreation();

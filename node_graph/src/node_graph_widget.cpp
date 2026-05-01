@@ -29,6 +29,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 
         // Pin tooltips (after EndNodeEditor per imnodes query pattern)
         showPinTooltips();
+        showNodeHoverTooltips();
 
         // Process interactions after EndNodeEditor (IsNodeHovered requires scope None)
         handleLinkCreation();
@@ -295,6 +296,25 @@ void NodeGraphWidget::showPinTooltips() {
                                        : Spectrum();
             showSpectrumTooltip(spec, "OUT");
             return;
+        }
+    }
+}
+
+void NodeGraphWidget::showNodeHoverTooltips() {
+    if (!onNodeHover) return;
+
+    for (const auto &node : m_engine.nodes()) {
+        int hovered_node = -1;
+        if (ImNodes::IsNodeHovered(&hovered_node) && hovered_node == node.node_id) {
+            std::string summary = onNodeHover(node.node_id);
+            if (!summary.empty()) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+                ImGui::TextUnformatted(summary.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+            break;
         }
     }
 }
