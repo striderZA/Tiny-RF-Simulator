@@ -65,4 +65,9 @@ void RegisterUiTests(ImGuiTestEngine* e) {
         if (ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup))
             ctx->PopupCloseOne();
     };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "properties_window_exists");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        ctx->WindowFocus("Properties");
+    };
 }

@@ -118,6 +118,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add S-Param Amp")) {
             if (onAddSParamAmp) onAddSParamAmp();
         }
+        if (ImGui::MenuItem("Add RF ADC")) {
+            if (onAddAdc) onAddAdc();
+        }
         ImGui::EndPopup();
     }
 }

@@ -10,6 +10,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddSplitter = [this]() { addSplitter(); };
     m_graph_widget->onAddMixer = [this]() { addMixer(); };
     m_graph_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
+    m_graph_widget->onAddAdc = [this]() { addAdc(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
     addGenerator();
