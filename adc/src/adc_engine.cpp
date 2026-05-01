@@ -8,6 +8,8 @@
 #include "common.h"
 #include "logging_core.h"
 
+#include <kiss_fft.h>
+
 // ---- Nyquist zone utilities ----
 
 static double alias_frequency(double f_RF, double Fs) {
@@ -64,40 +66,25 @@ static void apply_fir(const std::vector<double>& coeffs,
     }
 }
 
-// ---- Iterative radix-2 FFT (Cooley-Tukey) for diagnostic output ----
+// ---- Hann window ----
 
-static size_t next_pow2(size_t n) {
-    size_t p = 1;
-    while (p < n) p <<= 1;
-    return p;
+static void apply_hann(std::vector<std::complex<double>>& signal) {
+    size_t N = signal.size();
+    for (size_t n = 0; n < N; ++n) {
+        double w = 0.5 * (1.0 - std::cos(2.0 * std::numbers::pi * n / (N - 1)));
+        signal[n] *= w;
+    }
 }
 
-static void fft(std::vector<std::complex<double>>& x) {
-    size_t N = x.size();
-    // Bit-reversal permutation
-    for (size_t i = 1, j = 0; i < N; ++i) {
-        size_t bit = N >> 1;
-        for (; j & bit; bit >>= 1)
-            j ^= bit;
-        j ^= bit;
-        if (i < j)
-            std::swap(x[i], x[j]);
+static double hann_window_energy(size_t N) {
+    // sum_{n=0}^{N-1} w[n]^2 for Hann: w[n] = 0.5 - 0.5*cos(2πn/(N-1))
+    // Equivalent to 3N/8 for large N, but compute exactly
+    double sum = 0.0;
+    for (size_t n = 0; n < N; ++n) {
+        double w = 0.5 * (1.0 - std::cos(2.0 * std::numbers::pi * n / (N - 1)));
+        sum += w * w;
     }
-    // Iterative Cooley-Tukey
-    for (size_t len = 2; len <= N; len <<= 1) {
-        double angle = -2.0 * std::numbers::pi / static_cast<double>(len);
-        std::complex<double> wlen(std::cos(angle), std::sin(angle));
-        for (size_t i = 0; i < N; i += len) {
-            std::complex<double> w(1.0, 0.0);
-            for (size_t j = 0; j < len / 2; ++j) {
-                std::complex<double> u = x[i + j];
-                std::complex<double> v = x[i + j + len / 2] * w;
-                x[i + j] = u + v;
-                x[i + j + len / 2] = u - v;
-                w *= wlen;
-            }
-        }
-    }
+    return sum;
 }
 
 // ---- Engine methods ----
@@ -217,10 +204,20 @@ void AdcEngine::update(double /*dt*/) {
         m_iq_output.samples[n] = filtered[n * m_decim];
 
     // -- Step 5: Diagnostic FFT output (Spectrum) --
-    size_t N_fft = next_pow2(m_iq_output.samples.size());
-    auto fft_in = m_iq_output.samples;
-    fft_in.resize(N_fft, {0.0, 0.0});
-    fft(fft_in);
+    size_t N_fft = m_iq_output.samples.size();
+    // Apply Hann window, then compute FFT via KissFFT
+    auto windowed = m_iq_output.samples;
+    apply_hann(windowed);
+    double win_energy = hann_window_energy(N_fft);
+
+    auto* fwd = kiss_fft_alloc(static_cast<int>(N_fft), 0, nullptr, nullptr);
+    std::vector<kiss_fft_cpx> fft_in(N_fft), fft_out(N_fft);
+    for (size_t i = 0; i < N_fft; ++i) {
+        fft_in[i].r = static_cast<float>(windowed[i].real());
+        fft_in[i].i = static_cast<float>(windowed[i].imag());
+    }
+    kiss_fft(fwd, fft_in.data(), fft_out.data());
+    kiss_fft_free(fwd);
 
     auto& out = m_node.outputs[0];
     out.frequencies.resize(N_fft);
@@ -230,15 +227,14 @@ void AdcEngine::update(double /*dt*/) {
     out.tones.clear();
     double fs_out = m_iq_output.sample_rate_Hz;
     for (size_t i = 0; i < N_fft; ++i) {
-        // Ascending frequency axis: -fs_out/2 → +fs_out/2 (exclusive)
         out.frequencies[i] = -fs_out / 2.0
                              + (static_cast<double>(i) / N_fft) * fs_out;
-        // FFT bin k at frequency f: k = (i + N_fft/2) % N_fft
         size_t k = (i + N_fft / 2) % N_fft;
-        out.phase_deg[i] = std::arg(fft_in[k]) * 180.0 / std::numbers::pi;
-        // FFT power → PSD (W/Hz): |X[k]|² / (N_fft × fs_out)
-        out.noise_W[i] = std::norm(fft_in[k])
-                         / (static_cast<double>(N_fft) * fs_out);
+        double re = fft_out[k].r;
+        double im = fft_out[k].i;
+        out.phase_deg[i] = std::atan2(im, re) * 180.0 / std::numbers::pi;
+        // PSD (W/Hz) = |X[k]|² / (win_energy × fs_out)
+        out.noise_W[i] = (re * re + im * im) / (win_energy * fs_out);
     }
     out.computeTotalNoise();
 }

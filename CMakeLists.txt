@@ -78,6 +78,19 @@ FetchContent_Declare(
 )
 FetchContent_Populate(pfd)
 
+# Fetch KissFFT for ADC diagnostic FFT
+FetchContent_Declare(
+    kissfft
+    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+    GIT_TAG v131
+)
+FetchContent_Populate(kissfft)
+
+add_library(kissfft STATIC
+    ${kissfft_SOURCE_DIR}/kiss_fft.c
+)
+target_include_directories(kissfft PUBLIC ${kissfft_SOURCE_DIR})
+
 enable_testing()
 
 # Find OpenGL
