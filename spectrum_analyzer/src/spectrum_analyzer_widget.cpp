@@ -191,12 +191,6 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    // Clear drag state if mouse released
-    if (m_marker.is_dragging && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        m_marker.is_dragging = false;
-        m_marker.peaks = m_engine.findPeaks(combined_dBm, *freq_axis, 8);
-    }
-
     static const ImVec4 trace_colors[4] = {
         ImVec4(0.09f, 0.78f, 0.60f, 1.0f),  // Teal
         ImVec4(0.90f, 0.59f, 0.16f, 1.0f),  // Orange
@@ -219,13 +213,37 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                               ImPlotProp_LineWeight, 1.5f});
         }
 
-        if (m_marker.enabled && !combined_dBm.empty()) {
-            if (ImPlot::IsPlotHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                m_marker.is_dragging = true;
-                ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
-                m_marker.target_freq_Hz = mouse_pos.x;
+        // Drag-to-zoom
+        if (ImPlot::IsPlotHovered()) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                ImPlotPoint p = ImPlot::GetPlotMousePos();
+                m_zoom.active = true;
+                m_zoom.start_freq_Hz = p.x;
+                m_zoom.end_freq_Hz = p.x;
             }
+            if (m_zoom.active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                ImPlotPoint p = ImPlot::GetPlotMousePos();
+                m_zoom.end_freq_Hz = p.x;
+            }
+        }
 
+        // Draw selection rectangle during drag
+        if (m_zoom.active) {
+            double x1 = m_zoom.start_freq_Hz;
+            double x2 = m_zoom.end_freq_Hz;
+            if (std::abs(x2 - x1) > 1.0) {
+                double y1 = m_engine.minPower();
+                double y2 = m_engine.maxPower();
+                ImPlotPoint p1 = ImPlot::PlotToPixels(x1, y1);
+                ImPlotPoint p2 = ImPlot::PlotToPixels(x2, y2);
+                ImPlot::GetPlotDrawList()->AddRectFilled(
+                    ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
+                    IM_COL32(100, 150, 255, 40));
+            }
+        }
+
+        // Marker display (no drag)
+        if (m_marker.enabled && !combined_dBm.empty()) {
             int idx = resolveMarkerIdx(*freq_axis, combined_dBm);
             if (idx >= 0 && idx < static_cast<int>(combined_dBm.size())) {
                 double mf = (*freq_axis)[static_cast<size_t>(idx)];
@@ -237,8 +255,26 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         ImPlot::EndPlot();
     }
 
+    // Apply zoom on release
+    if (m_zoom.active && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        m_zoom.active = false;
+        double f1 = m_zoom.start_freq_Hz;
+        double f2 = m_zoom.end_freq_Hz;
+        double lo = std::min(f1, f2);
+        double hi = std::max(f1, f2);
+        if (hi - lo > 1.0) {
+            m_engine.setStartFrequency(lo);
+            m_engine.setStopFrequency(hi);
+        }
+    }
+
     double avg_noise = m_engine.computeAverageNoiseLevel(specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
+
+    if (ImGui::Button("Reset Zoom")) {
+        m_engine.setStartFrequency(MIN_FREQ);
+        m_engine.setStopFrequency(MAX_FREQ);
+    }
 
     drawMarkerControls(*freq_axis, combined_dBm);
 

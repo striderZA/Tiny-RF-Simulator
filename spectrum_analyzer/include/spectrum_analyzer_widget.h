@@ -7,9 +7,15 @@
 
 struct MarkerState {
     bool enabled = false;
-    double target_freq_Hz = 0.0;   // Frequency the marker aims for
-    bool is_dragging = false;      // True while mouse is held down on plot
-    std::vector<Peak> peaks;       // Cached peaks from last snap
+    double target_freq_Hz = 0.0;
+    bool is_dragging = false;
+    std::vector<Peak> peaks;
+};
+
+struct DragZoomState {
+    bool active = false;
+    double start_freq_Hz = 0.0;
+    double end_freq_Hz = 0.0;
 };
 
 class SpectrumAnalyzerWidget {
@@ -24,6 +30,7 @@ class SpectrumAnalyzerWidget {
     ViewManager &m_view_manager;
     std::vector<std::string> m_probe_labels;
     MarkerState m_marker;
+    DragZoomState m_zoom;
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;
