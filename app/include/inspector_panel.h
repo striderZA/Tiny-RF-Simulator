@@ -13,6 +13,7 @@ class MixerEngine;
 class SignalGeneratorEngine;
 class SplitterEngine;
 class SParameterAmplifierEngine;
+class PFBChannelizerEngine;
 class SParameterFilterEngine;
 
 class InspectorPanel {
@@ -29,6 +30,7 @@ public:
     );
 
     void draw(const char* title, bool* p_open = nullptr);
+    void setPFB(PFBChannelizerEngine* pfb) { m_pfb_ptr = pfb; }
 
     std::function<void(int graph_node_id)> onRemoveNode;
 
@@ -41,8 +43,9 @@ private:
     std::vector<std::unique_ptr<SParameterFilterEngine>>& m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>>& m_adcs;
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& m_generators;
+    PFBChannelizerEngine* m_pfb_ptr = nullptr;
 
-    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc };
+    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc, PFB };
     struct Hit { ComponentType type; int index; };
     Hit findSelected() const;
 
@@ -53,4 +56,5 @@ private:
     void drawSParamFilterProperties(SParameterFilterEngine& engine, int index);
     void drawAdcProperties(AdcEngine& engine, int index);
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
+    void drawPFBProperties(PFBChannelizerEngine& engine);
 };

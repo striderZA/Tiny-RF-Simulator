@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "logging_core.h"
 #include "logging_widget.h"
+#include "pfb_channelizer_engine.h"
 #include <algorithm>
 
 RfSimulatorApp::RfSimulatorApp() {
@@ -13,6 +14,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
     m_graph_widget->onAddSParamFilter = [this]() { addSParamFilter(); };
     m_graph_widget->onAddAdc = [this]() { addAdc(); };
+    m_graph_widget->onAddPFB = [this]() { addPFB(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
     addGenerator();
@@ -36,6 +38,7 @@ RfSimulatorApp::RfSimulatorApp() {
         for (auto& s : m_sparam_amps) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& s : m_sparam_filters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& a : m_adcs) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
+        if (m_pfb && m_pfb->graphNodeId() == graph_node_id) return m_pfb->hoverSummary();
         return "";
     };
 
@@ -101,6 +104,14 @@ void RfSimulatorApp::addAdc() {
     m_view_manager.registerNode(&adc->node());
     m_adcs.push_back(std::move(adc));
     LOG_INFO("Added ADC %d", id);
+}
+
+void RfSimulatorApp::addPFB() {
+    auto pfb = std::make_unique<PFBChannelizerEngine>(0, m_graph_engine);
+    m_view_manager.registerNode(&pfb->node());
+    m_inspector_panel->setPFB(pfb.get());
+    m_pfb = std::move(pfb);
+    LOG_INFO("Added PFB channelizer");
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -175,6 +186,15 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
+    // Find and remove PFB channelizer
+    if (m_pfb && m_pfb->graphNodeId() == graph_node_id) {
+        m_view_manager.unregisterNode(&m_pfb->node());
+        m_graph_engine.removeNode(graph_node_id);
+        m_inspector_panel->setPFB(nullptr);
+        m_pfb.reset();
+        LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
+        return;
+    }
 }
 
 void RfSimulatorApp::update_dsp() {
@@ -198,6 +218,14 @@ void RfSimulatorApp::update_dsp() {
     wireAndUpdate(m_sparam_amps);
     wireAndUpdate(m_sparam_filters);
     wireAndUpdate(m_adcs);
+    if (m_pfb) {
+        auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
+        if (source)
+            m_pfb->node().inputs[0] = source->outputs[0];
+        else
+            m_pfb->node().inputs[0] = Spectrum();
+        m_pfb->update(0.0);
+    }
 
     // Update spectrum view based on first active probe
     auto probed_nodes = m_graph_engine.probedSignalNodes();

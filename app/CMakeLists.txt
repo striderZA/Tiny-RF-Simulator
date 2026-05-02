@@ -26,6 +26,7 @@ target_link_libraries(app
         simulator::signal_generator_widget
         simulator::amplifier_engine
         simulator::mixer_engine
+        simulator::pfb_channelizer_engine
         simulator::splitter_engine
         simulator::s_parameter_amplifier_engine
         simulator::s_parameter_filter_engine

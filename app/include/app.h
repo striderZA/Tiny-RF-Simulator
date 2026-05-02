@@ -7,6 +7,7 @@
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
+#include "pfb_channelizer_engine.h"
 #include "s_parameter_amplifier_engine.h"
 #include "s_parameter_filter_engine.h"
 #include "signal_generator_engine.h"
@@ -42,6 +43,7 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
     std::vector<std::unique_ptr<SParameterFilterEngine>> m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>> m_adcs;
+    std::unique_ptr<PFBChannelizerEngine> m_pfb;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     void addGenerator();
@@ -51,5 +53,6 @@ class RfSimulatorApp {
     void addSParamAmp();
     void addSParamFilter();
     void addAdc();
+    void addPFB();
     void removeComponent(int graph_node_id);
 };
