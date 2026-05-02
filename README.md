@@ -1,3 +1,5 @@
+![RF Simulator Banner](assets/banner.png)
+
 # RF Simulator
 
 Modular RF signal chain simulator with real-time spectrum display using Dear ImGui + ImPlot.
