@@ -201,8 +201,8 @@ void RfSimulatorApp::update_dsp() {
 void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate,
-                io.Framerate);
+    ImGui::Text("RF Simulator %s (%s) | %.3f ms/frame (%.1f FPS)", APP_VERSION,
+                APP_GIT_HASH, 1000.0f / io.Framerate, io.Framerate);
 
     m_graph_widget->draw("Node Editor");
     m_spectrum_widget->draw("Spectrum Analyzer");
