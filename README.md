@@ -1,4 +1,6 @@
-<img src="assets/banner.png" alt="RF Simulator Banner" width="70%">
+<p align="center">
+  <img src="assets/banner.png" alt="RF Simulator Banner" width="70%">
+</p>
 
 # RF Simulator
 
