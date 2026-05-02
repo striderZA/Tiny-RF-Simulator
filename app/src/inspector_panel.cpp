@@ -10,6 +10,8 @@
 #include "imnodes.h"
 #include "utils.h"
 #include "common.h"
+#include "logging_core.h"
+#include <portable-file-dialogs.h>
 
 InspectorPanel::InspectorPanel(
     NodeGraphEngine& graph,
@@ -131,23 +133,34 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, 
     (void)index;
     if (!engine.loaded()) {
         ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load S-parameter file");
-        return;
     }
 
-    int np = engine.numPorts();
-    int fwd_idx = engine.forwardParamIdx();
-    std::string preview = "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
-    if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
-        for (int pi = 0; pi < np * np; ++pi) {
-            std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
-            if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
-                engine.setForwardParamIdx(pi);
+    ImGui::TextWrapped("File: %s", engine.filepath().c_str());
+    if (ImGui::Button("Browse...")) {
+        auto result = pfd::open_file("Select S-parameter file", "",
+            { "S-parameter Files", "*.s2p *.s3p *.s4p *.sNp" }).result();
+        if (!result.empty()) {
+            engine.reload(result[0]);
+            LOG_INFO("S-param amp reloaded: %s", result[0].c_str());
         }
-        ImGui::EndCombo();
     }
 
-    ImGui::Text("Ports: %d | Data points: %zu", np, engine.freqs().size());
-    ImGui::Text("Max freq: %.0f MHz", engine.freqs().back() / 1e6);
+    if (engine.loaded()) {
+        int np = engine.numPorts();
+        int fwd_idx = engine.forwardParamIdx();
+        std::string preview = "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
+        if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
+            for (int pi = 0; pi < np * np; ++pi) {
+                std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
+                if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
+                    engine.setForwardParamIdx(pi);
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::Text("Ports: %d | Data points: %zu", np, engine.freqs().size());
+        ImGui::Text("Max freq: %.0f MHz", engine.freqs().back() / 1e6);
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
@@ -157,12 +170,23 @@ void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine& engine, 
     (void)index;
     if (!engine.loaded()) {
         ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load S-parameter file");
-        return;
     }
 
-    int np = engine.data().numPorts();
-    ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
-    ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
+    ImGui::TextWrapped("File: %s", engine.filepath().c_str());
+    if (ImGui::Button("Browse...")) {
+        auto result = pfd::open_file("Select S-parameter file", "",
+            { "S-parameter Files", "*.s2p *.s3p *.s4p *.sNp" }).result();
+        if (!result.empty()) {
+            engine.reload(result[0]);
+            LOG_INFO("S-param filter reloaded: %s", result[0].c_str());
+        }
+    }
+
+    if (engine.loaded()) {
+        int np = engine.data().numPorts();
+        ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
+        ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

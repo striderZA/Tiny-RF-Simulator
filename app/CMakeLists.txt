@@ -11,7 +11,10 @@ add_library(simulator::app ALIAS app)
 # --------------------------------------------------
 # Include directories
 # --------------------------------------------------
-target_include_directories(app PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(app PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+    ${pfd_SOURCE_DIR}
+)
 
 # --------------------------------------------------
 # Link dependencies
