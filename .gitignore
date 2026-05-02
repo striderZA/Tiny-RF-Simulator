@@ -498,6 +498,12 @@ imgui.ini
 # Brainstorming session files
 .superpowers/
 
+# GitNexus knowledge graph index
+.gitnexus/
+
+# graphify knowledge graph output
+graphify-out/
+
 # Visual Studio CMake build output
 out/
 
