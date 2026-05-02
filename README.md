@@ -1,4 +1,4 @@
-![RF Simulator Banner](assets/banner.png)
+<img src="assets/banner.png" alt="RF Simulator Banner" width="70%">
 
 # RF Simulator
 
