@@ -2,6 +2,7 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "mixer_engine.h"
+#include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "s_parameter_amplifier_engine.h"
@@ -46,6 +47,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
         if (m_sparam_filters[i]->graphNodeId() == selected_id) return {ComponentType::SParamFilter, i};
     for (int i = 0; i < static_cast<int>(m_adcs.size()); ++i)
         if (m_adcs[i]->graphNodeId() == selected_id) return {ComponentType::Adc, i};
+    if (m_pfb_ptr && m_pfb_ptr->graphNodeId() == selected_id) return {ComponentType::PFB, 0};
 
     return {ComponentType::None, -1};
 }
@@ -71,6 +73,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::SParamFilter: node_id = m_sparam_filters[hit.index]->graphNodeId(); label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id()); break;
         case ComponentType::Adc:       node_id = m_adcs[hit.index]->graphNodeId(); label = "ADC " + std::to_string(m_adcs[hit.index]->id()); break;
         case ComponentType::Generator: node_id = m_generators[hit.index]->graphNodeId(); label = "Generator " + std::to_string(m_generators[hit.index]->id()); break;
+        case ComponentType::PFB: if (m_pfb_ptr) { node_id = m_pfb_ptr->graphNodeId(); label = "PFB Channelizer"; } break;
         default: break;
     }
 
@@ -84,6 +87,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::SParamFilter: drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index); break;
         case ComponentType::Adc:       drawAdcProperties(*m_adcs[hit.index], hit.index); break;
         case ComponentType::Generator: drawGeneratorProperties(*m_generators[hit.index], hit.index); break;
+        case ComponentType::PFB: if (m_pfb_ptr) drawPFBProperties(*m_pfb_ptr); break;
         default: break;
     }
 
@@ -260,6 +264,46 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine& engine, int 
 
     if (ImGui::Button("+ Add Tone"))
         engine.addTone(100e6, -60.0);
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawPFBProperties(PFBChannelizerEngine& engine) {
+    int M = engine.channelCount();
+    int K = engine.tapsPerBranch();
+    float beta = static_cast<float>(engine.kaiserBeta());
+    int ch = engine.activeChannel();
+
+    if (ImGui::InputInt("Channels (M)", &M)) {
+        if (M < 2) M = 2;
+        if (M > 1024) M = 1024;
+        engine.setChannelCount(M);
+    }
+
+    if (ImGui::InputInt("Taps/Branch (K)", &K)) {
+        if (K < 1) K = 1;
+        if (K > 64) K = 64;
+        engine.setTapsPerBranch(K);
+    }
+
+    if (ImGui::SliderFloat("Kaiser Beta", &beta, 0.0f, 20.0f, "%.1f"))
+        engine.setKaiserBeta(beta);
+
+    if (ImGui::SliderInt("Active Channel", &ch, 0, engine.channelCount() - 1))
+        engine.setActiveChannel(ch);
+
+    const auto& channels = engine.channels();
+    if (!channels.empty()) {
+        const auto& active = channels[engine.activeChannel()];
+        ImGui::Text("Ch %d: centre %.2f MHz, %.0f kHz BW",
+            active.channel_index,
+            active.center_freq_Hz / 1e6,
+            active.bandwidth_Hz / 1e3);
+        ImGui::Text("Bins in channel: %zu", active.bin_indices.size());
+        ImGui::Text("Tones: %zu", active.tones.size());
+        ImGui::Text("Noise: %.3e W", active.noise_W);
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

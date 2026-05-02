@@ -101,6 +101,15 @@ static void drawNodeSymbol(ImDrawList* dl, ImVec2 center, float size, const std:
             color);
         dl->AddText(ImVec2(center.x - size * 0.2f, center.y - size * 0.35f),
                     IM_COL32(255, 255, 255, 255), "S");
+    } else if (startsWith("PFB")) {
+        ImU32 color = IM_COL32(50, 200, 180, 255);
+        float hs = size * 0.7f;
+        dl->AddRect(ImVec2(center.x - hs, center.y - hs),
+                    ImVec2(center.x + hs, center.y + hs), color, 0.0f, 0, 2.0f);
+        dl->AddLine(ImVec2(center.x - hs, center.y - hs),
+                    ImVec2(center.x + hs, center.y + hs), color, 2.0f);
+        dl->AddLine(ImVec2(center.x + hs, center.y - hs),
+                    ImVec2(center.x - hs, center.y + hs), color, 2.0f);
     }
 }
 
@@ -203,6 +212,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         }
         if (ImGui::MenuItem("Add RF ADC")) {
             if (onAddAdc) onAddAdc();
+        }
+        if (ImGui::MenuItem("Add PFB Channelizer")) {
+            if (onAddPFB) onAddPFB();
         }
         ImGui::EndPopup();
     }
