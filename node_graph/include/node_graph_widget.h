@@ -19,6 +19,7 @@ class NodeGraphWidget {
     std::function<void()> onAddSplitter;
     std::function<void()> onAddMixer;
     std::function<void()> onAddSParamAmp;
+    std::function<void()> onAddSParamFilter;
     std::function<void()> onAddAdc;
     std::function<void(int node_id)> onRemoveNode;
     std::function<std::string(int graph_node_id)> onNodeHover;

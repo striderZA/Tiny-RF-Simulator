@@ -13,6 +13,7 @@ class MixerEngine;
 class SignalGeneratorEngine;
 class SplitterEngine;
 class SParameterAmplifierEngine;
+class SParameterFilterEngine;
 
 class InspectorPanel {
 public:
@@ -22,6 +23,7 @@ public:
         std::vector<std::unique_ptr<MixerEngine>>& mixers,
         std::vector<std::unique_ptr<SplitterEngine>>& splitters,
         std::vector<std::unique_ptr<SParameterAmplifierEngine>>& sparam_amps,
+        std::vector<std::unique_ptr<SParameterFilterEngine>>& sparam_filters,
         std::vector<std::unique_ptr<AdcEngine>>& adcs,
         std::vector<std::unique_ptr<SignalGeneratorEngine>>& generators
     );
@@ -36,10 +38,11 @@ private:
     std::vector<std::unique_ptr<MixerEngine>>& m_mixers;
     std::vector<std::unique_ptr<SplitterEngine>>& m_splitters;
     std::vector<std::unique_ptr<SParameterAmplifierEngine>>& m_sparam_amps;
+    std::vector<std::unique_ptr<SParameterFilterEngine>>& m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>>& m_adcs;
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& m_generators;
 
-    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, Adc };
+    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc };
     struct Hit { ComponentType type; int index; };
     Hit findSelected() const;
 
@@ -47,6 +50,7 @@ private:
     void drawMixerProperties(MixerEngine& engine, int index);
     void drawSplitterProperties(SplitterEngine& engine, int index);
     void drawSParamAmpProperties(SParameterAmplifierEngine& engine, int index);
+    void drawSParamFilterProperties(SParameterFilterEngine& engine, int index);
     void drawAdcProperties(AdcEngine& engine, int index);
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
 };

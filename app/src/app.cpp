@@ -11,6 +11,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddSplitter = [this]() { addSplitter(); };
     m_graph_widget->onAddMixer = [this]() { addMixer(); };
     m_graph_widget->onAddSParamAmp = [this]() { addSParamAmp(); };
+    m_graph_widget->onAddSParamFilter = [this]() { addSParamFilter(); };
     m_graph_widget->onAddAdc = [this]() { addAdc(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
@@ -21,7 +22,7 @@ RfSimulatorApp::RfSimulatorApp() {
 
     m_inspector_panel = std::make_unique<InspectorPanel>(
         m_graph_engine, m_amplifiers, m_mixers, m_splitters,
-        m_sparam_amps, m_adcs, m_generators
+        m_sparam_amps, m_sparam_filters, m_adcs, m_generators
     );
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         removeComponent(graph_node_id);
@@ -33,6 +34,7 @@ RfSimulatorApp::RfSimulatorApp() {
         for (auto& s : m_splitters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& m : m_mixers) if (m->graphNodeId() == graph_node_id) return m->hoverSummary();
         for (auto& s : m_sparam_amps) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
+        for (auto& s : m_sparam_filters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& a : m_adcs) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
         return "";
     };
@@ -81,6 +83,16 @@ void RfSimulatorApp::addSParamAmp() {
     m_view_manager.registerNode(&spamp->node());
     m_sparam_amps.push_back(std::move(spamp));
     LOG_INFO("Added S-parameter amplifier %d", id);
+}
+
+void RfSimulatorApp::addSParamFilter() {
+    int id = static_cast<int>(m_sparam_filters.size());
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    auto spf = std::make_unique<SParameterFilterEngine>(id, m_graph_engine, path);
+    m_view_manager.registerNode(&spf->node());
+    m_sparam_filters.push_back(std::move(spf));
+    LOG_INFO("Added S-parameter filter %d", id);
 }
 
 void RfSimulatorApp::addAdc() {
@@ -143,6 +155,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
+    // Find and remove S-parameter filter
+    for (size_t i = 0; i < m_sparam_filters.size(); ++i) {
+        if (m_sparam_filters[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_sparam_filters[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_sparam_filters.erase(m_sparam_filters.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed S-parameter filter (graph node %d)", graph_node_id);
+            return;
+        }
+    }
     // Find and remove ADC
     for (size_t i = 0; i < m_adcs.size(); ++i) {
         if (m_adcs[i]->graphNodeId() == graph_node_id) {
@@ -174,6 +196,7 @@ void RfSimulatorApp::update_dsp() {
     wireAndUpdate(m_splitters);
     wireAndUpdate(m_mixers);
     wireAndUpdate(m_sparam_amps);
+    wireAndUpdate(m_sparam_filters);
     wireAndUpdate(m_adcs);
 
     // Update spectrum view based on first active probe

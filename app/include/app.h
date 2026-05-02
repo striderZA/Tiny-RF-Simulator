@@ -8,6 +8,7 @@
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "s_parameter_amplifier_engine.h"
+#include "s_parameter_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
@@ -39,6 +40,7 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SplitterEngine>> m_splitters;
     std::vector<std::unique_ptr<MixerEngine>> m_mixers;
     std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
+    std::vector<std::unique_ptr<SParameterFilterEngine>> m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>> m_adcs;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
@@ -47,6 +49,7 @@ class RfSimulatorApp {
     void addSplitter();
     void addMixer();
     void addSParamAmp();
+    void addSParamFilter();
     void addAdc();
     void removeComponent(int graph_node_id);
 };

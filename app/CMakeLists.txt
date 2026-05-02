@@ -25,6 +25,7 @@ target_link_libraries(app
         simulator::mixer_engine
         simulator::splitter_engine
         simulator::s_parameter_amplifier_engine
+        simulator::s_parameter_filter_engine
         simulator::adc_engine
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget

@@ -5,6 +5,7 @@
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "s_parameter_amplifier_engine.h"
+#include "s_parameter_filter_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "utils.h"
@@ -16,10 +17,11 @@ InspectorPanel::InspectorPanel(
     std::vector<std::unique_ptr<MixerEngine>>& mixers,
     std::vector<std::unique_ptr<SplitterEngine>>& splitters,
     std::vector<std::unique_ptr<SParameterAmplifierEngine>>& sparam_amps,
+    std::vector<std::unique_ptr<SParameterFilterEngine>>& sparam_filters,
     std::vector<std::unique_ptr<AdcEngine>>& adcs,
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& generators
 ) : m_graph(graph), m_amplifiers(amps), m_mixers(mixers), m_splitters(splitters),
-    m_sparam_amps(sparam_amps), m_adcs(adcs), m_generators(generators) {}
+    m_sparam_amps(sparam_amps), m_sparam_filters(sparam_filters), m_adcs(adcs), m_generators(generators) {}
 
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
@@ -38,6 +40,8 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
         if (m_mixers[i]->graphNodeId() == selected_id) return {ComponentType::Mixer, i};
     for (int i = 0; i < static_cast<int>(m_sparam_amps.size()); ++i)
         if (m_sparam_amps[i]->graphNodeId() == selected_id) return {ComponentType::SParamAmp, i};
+    for (int i = 0; i < static_cast<int>(m_sparam_filters.size()); ++i)
+        if (m_sparam_filters[i]->graphNodeId() == selected_id) return {ComponentType::SParamFilter, i};
     for (int i = 0; i < static_cast<int>(m_adcs.size()); ++i)
         if (m_adcs[i]->graphNodeId() == selected_id) return {ComponentType::Adc, i};
 
@@ -62,6 +66,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::Mixer:     node_id = m_mixers[hit.index]->graphNodeId(); label = "Mixer " + std::to_string(m_mixers[hit.index]->id()); break;
         case ComponentType::Splitter:  node_id = m_splitters[hit.index]->graphNodeId(); label = "Splitter " + std::to_string(m_splitters[hit.index]->id()); break;
         case ComponentType::SParamAmp: node_id = m_sparam_amps[hit.index]->graphNodeId(); label = "S-Param Amp " + std::to_string(m_sparam_amps[hit.index]->id()); break;
+        case ComponentType::SParamFilter: node_id = m_sparam_filters[hit.index]->graphNodeId(); label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id()); break;
         case ComponentType::Adc:       node_id = m_adcs[hit.index]->graphNodeId(); label = "ADC " + std::to_string(m_adcs[hit.index]->id()); break;
         case ComponentType::Generator: node_id = m_generators[hit.index]->graphNodeId(); label = "Generator " + std::to_string(m_generators[hit.index]->id()); break;
         default: break;
@@ -74,6 +79,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::Mixer:     drawMixerProperties(*m_mixers[hit.index], hit.index); break;
         case ComponentType::Splitter:  drawSplitterProperties(*m_splitters[hit.index], hit.index); break;
         case ComponentType::SParamAmp: drawSParamAmpProperties(*m_sparam_amps[hit.index], hit.index); break;
+        case ComponentType::SParamFilter: drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index); break;
         case ComponentType::Adc:       drawAdcProperties(*m_adcs[hit.index], hit.index); break;
         case ComponentType::Generator: drawGeneratorProperties(*m_generators[hit.index], hit.index); break;
         default: break;
@@ -142,6 +148,21 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, 
 
     ImGui::Text("Ports: %d | Data points: %zu", np, engine.freqs().size());
     ImGui::Text("Max freq: %.0f MHz", engine.freqs().back() / 1e6);
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine& engine, int index) {
+    (void)index;
+    if (!engine.loaded()) {
+        ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load S-parameter file");
+        return;
+    }
+
+    int np = engine.data().numPorts();
+    ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
+    ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

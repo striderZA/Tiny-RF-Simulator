@@ -13,7 +13,8 @@ target_link_libraries(tests PRIVATE
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
     simulator::touchstone_parser
-    simulator::s_parameter_amplifier_engine
+        simulator::s_parameter_amplifier_engine
+        simulator::s_parameter_filter_engine
     simulator::adc_engine
     simulator::node_graph_engine
 )

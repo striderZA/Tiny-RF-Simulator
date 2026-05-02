@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "s_parameter_amplifier_engine.h"
+#include "s_parameter_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "node_graph_engine.h"
 #include <cmath>
@@ -134,4 +135,32 @@ TEST_CASE("SParameterAmplifierEngine forward param index controls gain selection
 
     // S11 gain should be much lower than S21 (S11 is reflection, ~0 dB)
     REQUIRE(spamp.node().outputs[0].tones[0].power_dBm < -15.0);
+}
+
+TEST_CASE("SParameterFilterEngine loads and applies S21 filtering", "[sparam_filter]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterFilterEngine spf(0, graph, path);
+
+    REQUIRE(spf.loaded());
+    REQUIRE(spf.data().numPorts() == 2);
+
+    // Apply a tone at mid-band
+    int mid = static_cast<int>(spf.data().freqs().size()) / 2;
+    double f_mid = spf.data().freqs()[mid];
+    spf.node().inputs[0].tones = {{f_mid, -20.0, 0.0}};
+    spf.update(0.0);
+
+    REQUIRE(spf.node().outputs[0].tones.size() == 1);
+    // Same gain as S-param amp since both use S21
+    REQUIRE(spf.node().outputs[0].tones[0].power_dBm > -15.0);
+
+    // Passive filter: no added noise
+    const auto& out = spf.node().outputs[0];
+    if (!out.noise_added_W.empty()) {
+        for (double n : out.noise_added_W)
+            REQUIRE(n == Approx(0.0));
+    }
 }
