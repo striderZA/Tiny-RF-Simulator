@@ -504,6 +504,9 @@ imgui.ini
 # graphify knowledge graph output
 graphify-out/
 
+# Git worktrees
+.worktrees/
+
 # Visual Studio CMake build output
 out/
 
