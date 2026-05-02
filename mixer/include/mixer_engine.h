@@ -17,9 +17,11 @@ class MixerEngine {
 
     void setLoFreq_Hz(double f) { m_lo_freq_Hz = f; }
     void setConversionGain_dB(double g) { m_conv_gain_dB = g; }
+    void setNF_dB(double nf) { m_nf_dB = nf; }
 
     double loFreq_Hz() const { return m_lo_freq_Hz; }
     double conversionGain_dB() const { return m_conv_gain_dB; }
+    double nf_dB() const { return m_nf_dB; }
 
     void update(double dt);
 
@@ -33,4 +35,5 @@ class MixerEngine {
     SignalNode m_node;
     double m_lo_freq_Hz = 1e9;
     double m_conv_gain_dB = -6.0;
+    double m_nf_dB = 0.0;
 };

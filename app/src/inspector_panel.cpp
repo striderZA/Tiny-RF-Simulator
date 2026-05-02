@@ -106,6 +106,10 @@ void InspectorPanel::drawMixerProperties(MixerEngine& engine, int index) {
     if (utils::inputDouble("Conv. Gain (dB)", gain, 1, 10, "%.1f", -30.0, 30.0))
         engine.setConversionGain_dB(gain);
 
+    double nf = engine.nf_dB();
+    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+        engine.setNF_dB(nf);
+
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }

@@ -60,6 +60,7 @@ void MixerEngine::update(double dt) {
     }
 
     double G = dbToLinear(m_conv_gain_dB);
+    double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, G);
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
@@ -67,7 +68,12 @@ void MixerEngine::update(double dt) {
         out.noise_W[i] = G * nin;
     }
 
-    out.noise_added_W.assign(N, 0.0);
+    out.noise_added_W.resize(N);
+    if (added_density <= 0.0) {
+        out.noise_added_W.assign(N, 0.0);
+    } else {
+        out.noise_added_W.assign(N, added_density);
+    }
     out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
@@ -75,5 +81,5 @@ void MixerEngine::update(double dt) {
 }
 
 std::string MixerEngine::hoverSummary() const {
-    return "LO: " + std::to_string(m_lo_freq_Hz / 1e6) + " MHz | Conv Gain: " + std::to_string(m_conv_gain_dB) + " dB";
+    return "LO: " + std::to_string(m_lo_freq_Hz / 1e6) + " MHz | Conv Gain: " + std::to_string(m_conv_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
 }
