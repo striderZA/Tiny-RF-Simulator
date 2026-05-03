@@ -38,41 +38,86 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
         return;
     }
 
-    // Build plot data from rolling buffer
     size_t n = m_stream_i.size();
-    double t0 = m_time_cursor_s - static_cast<double>(n) * m_time_step_s;
+    double window_us = static_cast<double>(n) * m_time_step_s * 1e6;
 
     std::vector<double> time_us(n);
     std::vector<double> i_vals(m_stream_i.begin(), m_stream_i.end());
     std::vector<double> q_vals(m_stream_q.begin(), m_stream_q.end());
-    for (size_t i = 0; i < n; ++i)
-        time_us[i] = (t0 + static_cast<double>(i) * m_time_step_s) * 1e6;
 
-    ImGui::Text("Ch %d/%d | Samp rate: %.2f ksps | Buffer: %zu samp (%.1f us)",
+    // Time axis: 0 to window_us, oldest samples trimmed from front as buffer fills
+    double total_us = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        time_us[i] = total_us;
+        total_us += m_time_step_s * 1e6;
+    }
+
+    ImGui::Text("Ch %d/%d | dt=%.1f ns | Window: %.1f us (%zu samp)",
         m_pfb.activeChannel(), m_pfb.channelCount(),
-        1e-3 / m_time_step_s, n,
-        static_cast<double>(n) * m_time_step_s * 1e6);
+        m_time_step_s * 1e9, window_us, n);
 
-    // Auto-scale y-axis to data
+    double x_min = m_zoom_locked ? m_zoom_locked_xmin : 0.0;
+    double x_max = m_zoom_locked ? m_zoom_locked_xmax : window_us;
+
     double y_min = *std::min_element(i_vals.begin(), i_vals.end());
     double y_max = *std::max_element(i_vals.begin(), i_vals.end());
     for (double v : q_vals) {
         y_min = std::min(y_min, v);
         y_max = std::max(y_max, v);
     }
-    double y_margin = (y_max - y_min) * 0.1 + 1e-12;
+    double y_margin = (y_max - y_min) * 0.1 + 1e-18;
     y_min -= y_margin;
     y_max += y_margin;
 
-    ImPlot::SetNextAxesLimits(
-        time_us.front(), time_us.back(),
-        y_min, y_max, ImPlotCond_Always);
+    ImPlot::SetNextAxesLimits(x_min, x_max, y_min, y_max, ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("##IQ")) {
         ImPlot::SetupAxes("Time (us)", "Amplitude");
         ImPlot::PlotLine("I", time_us.data(), i_vals.data(), static_cast<int>(n));
         ImPlot::PlotLine("Q", time_us.data(), q_vals.data(), static_cast<int>(n));
+
+        // Drag-to-zoom
+        if (ImPlot::IsPlotHovered()) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                ImPlotPoint p = ImPlot::GetPlotMousePos();
+                m_zoom.active = true;
+                m_zoom.x_min = p.x;
+                m_zoom.x_max = p.x;
+            }
+            if (m_zoom.active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                ImPlotPoint p = ImPlot::GetPlotMousePos();
+                m_zoom.x_max = p.x;
+            }
+        }
+
+        if (m_zoom.active) {
+            double x1 = m_zoom.x_min;
+            double x2 = m_zoom.x_max;
+            if (std::abs(x2 - x1) > 1e-12) {
+                ImPlotPoint p1 = ImPlot::PlotToPixels(x1, y_min);
+                ImPlotPoint p2 = ImPlot::PlotToPixels(x2, y_max);
+                ImPlot::GetPlotDrawList()->AddRectFilled(
+                    ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
+                    IM_COL32(100, 150, 255, 40));
+            }
+        }
+
         ImPlot::EndPlot();
+    }
+
+    if (m_zoom.active && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        m_zoom.active = false;
+        double lo = std::min(m_zoom.x_min, m_zoom.x_max);
+        double hi = std::max(m_zoom.x_min, m_zoom.x_max);
+        if (hi - lo > 1e-12) {
+            m_zoom_locked = true;
+            m_zoom_locked_xmin = lo;
+            m_zoom_locked_xmax = hi;
+        }
+    }
+
+    if (m_zoom_locked && ImGui::Button("Reset Zoom")) {
+        m_zoom_locked = false;
     }
 
     ImGui::End();
@@ -88,7 +133,6 @@ void IQPlotWidget::runIDFT() {
         ? (out.frequencies.back() - out.frequencies.front()) / static_cast<double>(N - 1)
         : 1.0;
 
-    // Build complex spectrum from weighted noise + tones
     std::vector<std::complex<double>> spectrum(N, {0.0, 0.0});
     for (size_t i = 0; i < N; ++i) {
         double psd = (i < out.noise_total_W.size()) ? out.noise_total_W[i] : 0.0;
@@ -114,7 +158,6 @@ void IQPlotWidget::runIDFT() {
         }
     }
 
-    // IDFT via kiss_fft
     std::vector<double> td_i(N), td_q(N);
     {
         std::vector<kiss_fft_cpx> fd(N), td(N);
@@ -133,17 +176,11 @@ void IQPlotWidget::runIDFT() {
         }
     }
 
-    pushSamples(td_i, td_q);
-}
-
-void IQPlotWidget::pushSamples(const std::vector<double>& i, const std::vector<double>& q) {
-    for (size_t j = 0; j < i.size(); ++j) {
-        m_stream_i.push_back(i[j]);
-        m_stream_q.push_back(q[j]);
+    // Append to buffer, trim front
+    for (size_t j = 0; j < N; ++j) {
+        m_stream_i.push_back(td_i[j]);
+        m_stream_q.push_back(td_q[j]);
     }
-    m_time_cursor_s += static_cast<double>(i.size()) * m_time_step_s;
-
-    // Trim to max buffer size
     while (m_stream_i.size() > kMaxSamples) {
         m_stream_i.pop_front();
         m_stream_q.pop_front();

@@ -1,8 +1,15 @@
 #pragma once
 
 #include "pfb_channelizer_engine.h"
+#include <deque>
 #include <vector>
 #include <complex>
+
+struct ZoomState {
+    bool active = false;
+    double x_min = 0.0;
+    double x_max = 0.0;
+};
 
 class IQPlotWidget {
   public:
@@ -12,7 +19,17 @@ class IQPlotWidget {
 
   private:
     PFBChannelizerEngine& m_pfb;
-    std::vector<double> m_time_us;
-    std::vector<double> m_i_samples;
-    std::vector<double> m_q_samples;
+    std::deque<double> m_stream_i;
+    std::deque<double> m_stream_q;
+    double m_time_step_s = 0.0;
+    bool m_time_inited = false;
+
+    ZoomState m_zoom;
+    bool m_zoom_locked = false;
+    double m_zoom_locked_xmin = 0.0;
+    double m_zoom_locked_xmax = 0.0;
+
+    static constexpr size_t kMaxSamples = 4096;
+
+    void runIDFT();
 };
