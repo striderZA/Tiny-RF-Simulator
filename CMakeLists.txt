@@ -78,6 +78,20 @@ FetchContent_Declare(
 )
 FetchContent_Populate(pfd)
 
+# Fetch kissFFT (simple C library, no fancy build deps)
+FetchContent_Declare(
+    kissfft
+    GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+    GIT_TAG 131.1.0
+)
+FetchContent_Populate(kissfft)
+
+# kissFFT builds use pkg-config in tools/; make minimal library target
+add_library(kissfft STATIC
+    ${kissfft_SOURCE_DIR}/kiss_fft.c
+)
+target_include_directories(kissfft PUBLIC ${kissfft_SOURCE_DIR})
+
 enable_testing()
 
 # Find OpenGL
@@ -169,3 +183,4 @@ add_subdirectory("mixer")
 add_subdirectory("adc")
 add_subdirectory("s_parameter_filter")
 add_subdirectory("pfb_channelizer")
+add_subdirectory("iq_plot")

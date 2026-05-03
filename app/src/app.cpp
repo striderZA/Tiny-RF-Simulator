@@ -125,6 +125,7 @@ void RfSimulatorApp::addPFB() {
     m_view_manager.registerNode(&pfb->node());
     m_inspector_panel->setPFB(pfb.get());
     m_pfb = std::move(pfb);
+    m_iq_widget = std::make_unique<IQPlotWidget>(*m_pfb);
     LOG_INFO("Added PFB channelizer (wired to ADC, Fs=%.0f Hz)", m_pfb->fs_Hz());
 }
 
@@ -205,6 +206,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
         m_view_manager.unregisterNode(&m_pfb->node());
         m_graph_engine.removeNode(graph_node_id);
         m_inspector_panel->setPFB(nullptr);
+        m_iq_widget.reset();
         m_pfb.reset();
         LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
         return;
@@ -274,6 +276,8 @@ void RfSimulatorApp::draw_ui() {
 
     m_graph_widget->draw("Node Editor");
     m_spectrum_widget->draw("Spectrum Analyzer");
+
+    if (m_iq_widget && m_pfb) m_iq_widget->draw("IQ Plot");
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");

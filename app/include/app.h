@@ -3,6 +3,7 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "inspector_panel.h"
+#include "iq_plot_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
@@ -44,6 +45,7 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SParameterFilterEngine>> m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>> m_adcs;
     std::unique_ptr<PFBChannelizerEngine> m_pfb;
+    std::unique_ptr<IQPlotWidget> m_iq_widget;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     void addGenerator();
