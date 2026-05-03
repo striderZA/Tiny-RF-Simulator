@@ -107,11 +107,25 @@ void RfSimulatorApp::addAdc() {
 }
 
 void RfSimulatorApp::addPFB() {
+    if (m_adcs.empty()) {
+        LOG_WARN("Cannot add PFB: no ADC in signal chain");
+        return;
+    }
+
     auto pfb = std::make_unique<PFBChannelizerEngine>(0, m_graph_engine);
+
+    // Auto-wire to the first ADC and use its sample rate
+    auto* adc = m_adcs[0].get();
+    pfb->setFs_Hz(adc->fs_Hz());
+    int adc_out = adc->outputPinId();
+    int pfb_in = pfb->inputPinId();
+    if (adc_out >= 0 && pfb_in >= 0)
+        m_graph_engine.addLink(adc_out, pfb_in);
+
     m_view_manager.registerNode(&pfb->node());
     m_inspector_panel->setPFB(pfb.get());
     m_pfb = std::move(pfb);
-    LOG_INFO("Added PFB channelizer");
+    LOG_INFO("Added PFB channelizer (wired to ADC, Fs=%.0f Hz)", m_pfb->fs_Hz());
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -219,12 +233,15 @@ void RfSimulatorApp::update_dsp() {
     wireAndUpdate(m_sparam_filters);
     wireAndUpdate(m_adcs);
     if (m_pfb) {
-        auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
-        if (source)
-            m_pfb->node().inputs[0] = source->outputs[0];
-        else
-            m_pfb->node().inputs[0] = Spectrum();
-        m_pfb->update(0.0);
+        if (!m_adcs.empty()) {
+            m_pfb->setFs_Hz(m_adcs[0]->fs_Hz());
+            auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
+            if (source)
+                m_pfb->node().inputs[0] = source->outputs[0];
+            else
+                m_pfb->node().inputs[0] = Spectrum();
+            m_pfb->update(0.0);
+        }
     }
 
     // Update spectrum view based on first active probe

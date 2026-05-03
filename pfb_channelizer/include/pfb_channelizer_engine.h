@@ -41,11 +41,13 @@ class PFBChannelizerEngine {
     void setTapsPerBranch(int K);
     void setKaiserBeta(double beta);
     void setActiveChannel(int ch);
+    void setFs_Hz(double fs) { m_cfg.Fs_Hz = fs; }
 
     int channelCount() const { return m_cfg.M; }
     int tapsPerBranch() const { return m_cfg.K; }
     double kaiserBeta() const { return m_cfg.beta; }
     int activeChannel() const { return m_active_channel; }
+    double fs_Hz() const { return m_cfg.Fs_Hz; }
     const std::vector<PFBChannel>& channels() const { return m_channels; }
 
     void update(double dt);

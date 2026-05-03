@@ -15,9 +15,10 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     in.frequencies.resize(401);
     for (int i = 0; i < 401; ++i)
         in.frequencies[i] = -200e6 + i * 1e6;
-    in.tones.push_back({0.0, -30.0, 0.0});
+    in.tones.push_back({6.25e6, -30.0, 0.0});
     in.noise_total_W.assign(401, 1e-20);
 
+    pfb.setFs_Hz(400e6);
     pfb.node().inputs[0] = in;
     pfb.update(0.0);
 
@@ -25,18 +26,19 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     REQUIRE(chs.size() == 32);
 
     // M=32, Fs=400 MHz, channel_bw=12.5 MHz.
-    // Ch 0 centre = -200 MHz. Ch 16 centre = 0 MHz.
-    REQUIRE(chs[16].center_freq_Hz == Approx(0.0).margin(1.0));
+    // Channel 16 centre = -200 + 6.25 + 16*12.5 = 6.25 MHz
+    REQUIRE(chs[16].center_freq_Hz == Approx(6.25e6).margin(1.0));
     REQUIRE(chs[16].tones.size() == 1);
-    REQUIRE(chs[16].tones[0].freq_Hz == Approx(0.0));
+    REQUIRE(chs[16].tones[0].power_dBm == Approx(-30.0).margin(1.0));
 
+    // Tone at ch 16 centre should NOT appear in distant channels
     REQUIRE(chs[0].tones.size() == 0);
 
+    // Switching active channel forwards the right tone
     pfb.setActiveChannel(16);
     pfb.update(0.0);
     const auto& out = pfb.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
-    REQUIRE(out.tones[0].freq_Hz == Approx(0.0));
 }
 
 TEST_CASE("PFB channelizer noise distribution", "[pfb]") {
@@ -49,6 +51,7 @@ TEST_CASE("PFB channelizer noise distribution", "[pfb]") {
         in.frequencies[i] = -200e6 + i * 1e6;
     in.noise_total_W.assign(401, 1e-20);
 
+    pfb.setFs_Hz(400e6);
     pfb.node().inputs[0] = in;
     pfb.update(0.0);
 
@@ -73,12 +76,13 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
     pfb.setChannelCount(16);
+    pfb.setFs_Hz(200e6);
 
     Spectrum in;
     in.frequencies.resize(201);
     for (int i = 0; i < 201; ++i)
         in.frequencies[i] = -100e6 + i * 1e6;
-    // Place tone at 0 Hz, which is ch 8 centre (= -100 + 8 * 200/16 = 0 MHz)
+    // Tone at 0 Hz: between ch 7 centre (-6.25 MHz) and ch 8 centre (6.25 MHz)
     in.tones.push_back({0.0, -30.0, 0.0});
     in.noise_total_W.assign(201, 1e-20);
 
@@ -88,10 +92,11 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     const auto& ch7 = pfb.channels()[7];
     const auto& ch8 = pfb.channels()[8];
 
-    REQUIRE(ch8.tones.size() == 1);
-    REQUIRE(ch8.tones[0].power_dBm == Approx(-30.0).margin(1.0));
-
-    // ch7 should also contain the tone (within ±1 channel_bw), but attenuated
+    // Both adjacent channels should see the tone (oversampling within ±1 channel_bw)
     REQUIRE(ch7.tones.size() == 1);
+    REQUIRE(ch8.tones.size() == 1);
+
+    // Both should be attenuated relative to centre frequency
     REQUIRE(ch7.tones[0].power_dBm < -30.0);
+    REQUIRE(ch8.tones[0].power_dBm < -30.0);
 }

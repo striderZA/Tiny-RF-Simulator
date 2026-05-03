@@ -47,18 +47,13 @@ void PFBChannelizerEngine::update(double) {
     auto& in = m_node.inputs[0];
     auto& out = m_node.outputs[0];
 
-    if (in.frequencies.size() < 2) {
+    if (in.frequencies.size() < 2 || m_cfg.Fs_Hz <= 0.0) {
         out.frequencies.clear();
         out.tones.clear();
         out.noise_W.clear();
         out.noise_total_W.clear();
         return;
     }
-
-    double Fs = in.frequencies.back() - in.frequencies.front();
-    if (Fs <= 0.0) return;
-
-    m_cfg.Fs_Hz = Fs;
 
     recomputeChannels(in.frequencies);
 
@@ -114,17 +109,20 @@ void PFBChannelizerEngine::update(double) {
 
 void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
     double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
+    double nyquist = m_cfg.Fs_Hz / 2.0;
     m_channels.resize(m_cfg.M);
 
     for (int k = 0; k < m_cfg.M; ++k) {
         auto& ch = m_channels[k];
         ch.channel_index = k;
-        ch.center_freq_Hz = k * channel_bw + freqs.front();
+        ch.center_freq_Hz = -nyquist + channel_bw / 2.0 + k * channel_bw;
         ch.bandwidth_Hz = channel_bw;
         ch.bin_indices.clear();
         ch.bin_weights.clear();
 
         for (int i = 0; i < static_cast<int>(freqs.size()); ++i) {
+            if (freqs[i] < -nyquist || freqs[i] > nyquist)
+                continue;
             double offset = freqs[i] - ch.center_freq_Hz;
             if (std::abs(offset) <= channel_bw) {
                 ch.bin_indices.push_back(i);
