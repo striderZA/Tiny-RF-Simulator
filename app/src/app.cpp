@@ -218,9 +218,9 @@ void RfSimulatorApp::update_dsp() {
         for (auto& comp : components) {
             auto* source = m_graph_engine.getSourceForInput(comp->inputPinId());
             if (source)
-                comp->node().inputs[0] = source->outputs[0];
+                comp->node().inputs[0] = &source->outputs[0];
             else
-                comp->node().inputs[0] = Spectrum();
+                comp->node().inputs[0] = nullptr;
             comp->update(0.0);
         }
     };
@@ -239,9 +239,9 @@ void RfSimulatorApp::update_dsp() {
             m_pfb->setFs_Hz(m_adcs[0]->fs_Hz());
             auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
             if (source)
-                m_pfb->node().inputs[0] = source->outputs[0];
+                m_pfb->node().inputs[0] = &source->outputs[0];
             else
-                m_pfb->node().inputs[0] = Spectrum();
+                m_pfb->node().inputs[0] = nullptr;
             m_pfb->update(0.0);
         }
     }
