@@ -25,6 +25,8 @@ class SplitterEngine {
     NodeGraphEngine* m_graph = nullptr;
 
     SignalNode m_node;
+    bool m_dirty = true;
+    uint64_t m_cached_input_generation = 0;
 
     static constexpr double SPLIT_LOSS_DB = 3.010299956639812;
 };

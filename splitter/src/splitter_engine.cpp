@@ -24,26 +24,31 @@ int SplitterEngine::outputPinId(int index) const {
 
 void SplitterEngine::update(double dt) {
     (void)dt;
-    auto& in = m_node.inputs[0];
+    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr && in_ptr->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
 
     for (size_t out_idx = 0; out_idx < m_node.outputs.size(); ++out_idx) {
         auto& out = m_node.outputs[out_idx];
 
-        if (!in.frequencies.empty()) {
-            out.frequencies = in.frequencies;
+        if (in_ptr && !in_ptr->frequencies.empty()) {
+            out.frequencies = in_ptr->frequencies;
         } else if (out.frequencies.size() < 2) {
             buildDefaultFrequencyGrid(out.frequencies);
         }
 
         const size_t N = out.frequencies.size();
 
-        out.tones = in.tones;
+        out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
         for (auto& t : out.tones) {
             t.power_dBm -= SPLIT_LOSS_DB;
         }
 
-        if (!in.phase_deg.empty()) {
-            out.phase_deg = in.phase_deg;
+        if (in_ptr && !in_ptr->phase_deg.empty()) {
+            out.phase_deg = in_ptr->phase_deg;
         } else {
             out.phase_deg.assign(N, 0.0);
         }
@@ -60,7 +65,7 @@ void SplitterEngine::update(double dt) {
 
         out.noise_W.assign(N, 0.0);
         for (size_t i = 0; i < N; ++i) {
-            double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
+            double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = loss_linear * nin;
         }
 
@@ -70,6 +75,9 @@ void SplitterEngine::update(double dt) {
             out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
         }
     }
+
+    for (auto& out : m_node.outputs)
+        out.bumpGeneration();
 }
 
 std::string SplitterEngine::hoverSummary() const {
