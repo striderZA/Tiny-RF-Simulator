@@ -7,17 +7,77 @@
 Modular RF signal chain simulator with real-time spectrum display using Dear ImGui + ImPlot.
 Design a cascade of RF components and probe any node to see the spectrum.
 
+## Requirements
+
+| Dependency | Minimum | Notes |
+|------------|---------|-------|
+| **Compiler** | C++20 | MSVC 2022 17.0+, GCC 11+, Clang 14+ |
+| **CMake** | ≥ 3.20 | [cmake.org/download](https://cmake.org/download) |
+| **Ninja** | ≥ 1.10 | [github.com/ninja-build/ninja](https://github.com/ninja-build/ninja) |
+| **OpenGL** | 2.1+ | System-provided on all platforms |
+| **Git** | — | Required for FetchContent to clone dependencies |
+
+All library dependencies are fetched automatically at configure time via CMake FetchContent:
+
+| Library | Purpose |
+|---------|---------|
+| [Dear ImGui](https://github.com/ocornut/imgui) (docking) | UI framework |
+| [ImPlot](https://github.com/epezent/implot) | Spectrum plotting |
+| [GLFW](https://github.com/glfw/glfw) | Window + OpenGL context |
+| [imnodes](https://github.com/Nelarius/imnodes) | Node editor canvas |
+| [Catch2](https://github.com/catchorg/Catch2) v3.4.0 | Unit tests + benchmarks |
+| [imgui_test_engine](https://github.com/ocornut/imgui_test_engine) | UI test engine |
+| [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | Native file browser |
+| [kissfft](https://github.com/mborgerding/kissfft) | FFT for IQ time-domain plot |
+| [stb](https://github.com/nothings/stb) | PNG loading for node icons |
+
 ## Quick Start
 
-**Dependencies:** OpenGL, CMake ≥ 3.20, Ninja build system.
+### Windows (MSVC)
 
-```bash
+```powershell
+# Requires: Visual Studio 2022 with "Desktop development with C++" workload
+# Requires: Ninja (choco install ninja or from ninja-build.org)
+# Requires: CMake ≥ 3.20 (choco install cmake or from cmake.org)
+
+# From a Visual Studio Developer PowerShell or x64 Native Tools prompt:
 cmake -B build -G Ninja
 cmake --build build
 build/bin/main.exe
 ```
 
-Dependencies (ImGui docking, ImPlot, GLFW, imnodes, Catch2, portable-file-dialogs) are auto-fetched via CMake FetchContent.
+### Linux
+
+```bash
+# Install Ninja + build tools
+sudo apt install ninja-build cmake g++ pkg-config
+
+# OpenGL headers (may already be present)
+sudo apt install libgl1-mesa-dev
+
+cmake -B build -G Ninja
+cmake --build build
+./build/bin/main
+```
+
+### macOS
+
+```bash
+# Install Ninja + CMake
+brew install ninja cmake
+
+# OpenGL + GLFW headers (system-provided on macOS)
+cmake -B build -G Ninja
+cmake --build build
+open build/bin/main
+```
+
+### Notes
+
+- **First build** is slow (60-90s) while FetchContent clones and builds all dependencies. Subsequent builds are fast — only your code recompiles.
+- **Working tree:** keep your checkout clean, all generated files go under `build/`.
+- **Compiler flags:** add `-DCMAKE_BUILD_TYPE=Release` for optimized builds.
+- **clangd / LSP:** `build/compile_commands.json` is generated automatically; `.clangd` points to it.
 
 ## Usage
 
