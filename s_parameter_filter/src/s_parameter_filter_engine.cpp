@@ -14,6 +14,7 @@ void SParameterFilterEngine::reload(const std::string& filepath) {
     m_filepath = filepath;
     if (!m_data.load(filepath))
         return;
+    m_dirty = true;
     LOG_INFO("Loaded S-parameter filter %d from %s (%zu points, %d ports)",
              m_id, filepath.c_str(), m_data.freqs().size(), m_data.numPorts());
 }
@@ -28,11 +29,21 @@ int SParameterFilterEngine::outputPinId() const {
 
 void SParameterFilterEngine::update(double dt) {
     (void)dt;
-    auto& in = m_node.inputs[0];
+    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr && in_ptr->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
+
+    Spectrum empty;
+    const Spectrum& in = in_ptr ? *in_ptr : empty;
     auto& out = m_node.outputs[0];
 
     int param_idx = (m_data.numPorts() > 1) ? m_data.numPorts() : 0; // S21 for 2-port
     m_data.applyToSpectrum(in, out, param_idx);
+
+    out.bumpGeneration();
 }
 
 std::string SParameterFilterEngine::hoverSummary() const {
