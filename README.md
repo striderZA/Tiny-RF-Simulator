@@ -65,51 +65,6 @@ ctest --test-dir build
 
 C++20 modular library. Each module has an `*_engine` (pure DSP, no UI deps) and optional `*_widget` (ImGui UI). Widgets are per-type property drawers shown in the Inspector Panel (node-selection-driven). The node graph (`imnodes`) drives signal chain topology. `ViewManager` tracks which `SignalNode`s the spectrum analyzer observes.
 
-## Changelog
-
-### 2026-05-01 — Spectrum Analyzer Improvements
-- Frequency range extended to ±20 GHz
-- Minimum widget height enforced (400×300)
-- Multi-probe: up to 4 simultaneous probe points with colored pin indicators
-- Separate per-probe spectrum traces with matching colors and legend
-- Ctrl+click probes, shift+click removes
-- Noise jitter on individual probe traces for live spectrum feel
-
-### 2026-05-01 — Node Symbols
-- Per-component vector graphics (sine wave, triangle, mixer cross, ADC, splitter, S-param)
-- Drawn via ImDrawList — no external assets
-
-### 2026-05-01 — Inspector Panel
-- Replaced 5 floating widget windows (Amplifier, Mixer, Splitter, S-Param Amp, ADC)
-- Single panel driven by node selection in the graph
-- Hover tooltips on nodes showing key parameters at a glance
-- Context menu removed for probes — cleaner graph interaction
-
-### 2026-04-30 — Architecture Cleanup
-- Deduplicated pin-ID lookups (6 engines → shared helper on NodeGraphEngine)
-- Deduplicated default frequency grid construction (4 engines → `buildDefaultFrequencyGrid()`)
-- Deduplicated signal wiring in `update_dsp()` (5 copies → template lambda)
-- Removed dead code: `tone` typedef, `NUM_BINS` constant, `AdcEngine::loaded()`
-- Fixed hidden `logging_core` dependency in `common` CMake target
-
-### 2026-04-30 — RF ADC Component
-- Sampling with configurable Fs, NSD, bit depth, full-scale voltage
-- Aliasing with proper Nyquist zone handling
-- Pure frequency-domain processing (no time-domain pipeline)
-- Frequency-independent noise coupling
-
-### 2026-04-30 — S-Parameter Amplifier
-- Multi-port Touchstone support (.s2p/.s3p/.s4p)
-- Row-major parameter ordering
-- Forward parameter selector combo
-- Phase rotation via `std::arg(S)`
-- Real-time file reload via portable file dialog
-- Per-parameter visibility toggles with collapsible tree
-
-### 2026-04-30 — Node Tooltips
-- Per-pin hover tooltips showing signal summary
-- Tone count + strongest tone, noise floor, frequency range
-
 ## License
 
 MIT
