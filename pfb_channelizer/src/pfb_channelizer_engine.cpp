@@ -22,43 +22,50 @@ int PFBChannelizerEngine::outputPinId() const {
 void PFBChannelizerEngine::setChannelCount(int M) {
     if (M < 2) M = 2;
     if (M > 1024) M = 1024;
-    m_cfg.M = M;
+    if (M != m_cfg.M) { m_cfg.M = M; m_dirty = true; }
 }
 
 void PFBChannelizerEngine::setTapsPerBranch(int K) {
     if (K < 1) K = 1;
     if (K > 64) K = 64;
-    m_cfg.K = K;
+    if (K != m_cfg.K) { m_cfg.K = K; m_dirty = true; }
 }
 
 void PFBChannelizerEngine::setKaiserBeta(double beta) {
     if (beta < 0.0) beta = 0.0;
     if (beta > 20.0) beta = 20.0;
-    m_cfg.beta = beta;
+    if (beta != m_cfg.beta) { m_cfg.beta = beta; m_dirty = true; }
 }
 
 void PFBChannelizerEngine::setActiveChannel(int ch) {
     if (ch < 0) ch = 0;
     if (ch >= m_cfg.M) ch = m_cfg.M - 1;
-    m_active_channel = ch;
+    if (ch != m_active_channel) { m_active_channel = ch; m_dirty = true; }
 }
 
 void PFBChannelizerEngine::update(double) {
-    auto& in = m_node.inputs[0];
+    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr && in_ptr->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
+
     auto& out = m_node.outputs[0];
 
-    if (in.frequencies.size() < 2 || m_cfg.Fs_Hz <= 0.0) {
+    if (!in_ptr || in_ptr->frequencies.size() < 2 || m_cfg.Fs_Hz <= 0.0) {
         out.frequencies.clear();
         out.tones.clear();
         out.noise_W.clear();
         out.noise_total_W.clear();
+        if (!out.frequencies.empty()) out.bumpGeneration();
         return;
     }
 
-    recomputeChannels(in.frequencies);
+    recomputeChannels(in_ptr->frequencies);
 
-    double bin_width = (in.frequencies.size() > 1)
-        ? in.frequencies[1] - in.frequencies[0] : 1.0;
+    double bin_width = (in_ptr->frequencies.size() > 1)
+        ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
 
     for (auto& ch : m_channels) {
         ch.noise_W = 0.0;
@@ -68,12 +75,12 @@ void PFBChannelizerEngine::update(double) {
             int idx = ch.bin_indices[i];
             double weight = ch.bin_weights[i];
 
-            double psd = (idx < static_cast<int>(in.noise_total_W.size()))
-                ? in.noise_total_W[idx] : 0.0;
+            double psd = (idx < static_cast<int>(in_ptr->noise_total_W.size()))
+                ? in_ptr->noise_total_W[idx] : 0.0;
             ch.noise_W += psd * weight * weight * bin_width;
         }
 
-        for (const auto& tone : in.tones) {
+        for (const auto& tone : in_ptr->tones) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
             if (std::abs(offset) <= ch.bandwidth_Hz) {
                 Spectrum::Tone t = tone;
@@ -96,15 +103,17 @@ void PFBChannelizerEngine::update(double) {
     for (size_t i = 0; i < n; ++i) {
         int src_idx = active.bin_indices[i];
         double weight = active.bin_weights[i];
-        out.frequencies[i] = in.frequencies[src_idx];
-        double psd = (src_idx < static_cast<int>(in.noise_total_W.size()))
-            ? in.noise_total_W[src_idx] : 0.0;
+        out.frequencies[i] = in_ptr->frequencies[src_idx];
+        double psd = (src_idx < static_cast<int>(in_ptr->noise_total_W.size()))
+            ? in_ptr->noise_total_W[src_idx] : 0.0;
         double weighted_psd = psd * weight * weight;
         out.noise_W[i] = weighted_psd;
         out.noise_total_W[i] = weighted_psd;
-        if (src_idx < static_cast<int>(in.phase_deg.size()))
-            out.phase_deg[i] = in.phase_deg[src_idx];
+        if (src_idx < static_cast<int>(in_ptr->phase_deg.size()))
+            out.phase_deg[i] = in_ptr->phase_deg[src_idx];
     }
+
+    out.bumpGeneration();
 }
 
 void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {

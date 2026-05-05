@@ -41,7 +41,9 @@ class PFBChannelizerEngine {
     void setTapsPerBranch(int K);
     void setKaiserBeta(double beta);
     void setActiveChannel(int ch);
-    void setFs_Hz(double fs) { m_cfg.Fs_Hz = fs; }
+    void setFs_Hz(double fs) {
+        if (fs != m_cfg.Fs_Hz) { m_cfg.Fs_Hz = fs; m_dirty = true; }
+    }
 
     int channelCount() const { return m_cfg.M; }
     int tapsPerBranch() const { return m_cfg.K; }
@@ -62,6 +64,8 @@ class PFBChannelizerEngine {
     PFBConfig m_cfg;
     int m_active_channel = 0;
     std::vector<PFBChannel> m_channels;
+    bool m_dirty = true;
+    uint64_t m_cached_input_generation = 0;
 
     void recomputeChannels(const std::vector<double>& freqs);
     double prototypeResponse(double offset_Hz) const;
