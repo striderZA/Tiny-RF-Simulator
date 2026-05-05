@@ -43,14 +43,27 @@ int AdcEngine::outputPinId() const {
 }
 
 void AdcEngine::update(double /*dt*/) {
-    const auto& input = m_node.inputs[0];
+    const Spectrum* input = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && input && input->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (input)
+        m_cached_input_generation = input->generation;
+
     auto& out = m_node.outputs[0];
 
     // Copy input spectrum
-    out.frequencies = input.frequencies;
-    out.phase_deg = input.phase_deg;
-    out.noise_W = input.noise_W;
-    out.noise_added_W = input.noise_added_W;
+    if (input) {
+        out.frequencies = input->frequencies;
+        out.phase_deg = input->phase_deg;
+        out.noise_W = input->noise_W;
+        out.noise_added_W = input->noise_added_W;
+    } else {
+        out.frequencies.clear();
+        out.phase_deg.clear();
+        out.noise_W.clear();
+        out.noise_added_W.clear();
+    }
     out.tones.clear();
 
     // 1. Add ADC NSD noise to each noise bin
@@ -61,13 +74,16 @@ void AdcEngine::update(double /*dt*/) {
     }
 
     // 2. Alias each tone into [0, Fs/2)
-    for (const auto& tone : input.tones) {
-        Spectrum::Tone t = tone;
-        t.freq_Hz = alias_frequency(tone.freq_Hz, m_fs_Hz);
-        out.tones.push_back(t);
+    if (input) {
+        for (const auto& tone : input->tones) {
+            Spectrum::Tone t = tone;
+            t.freq_Hz = alias_frequency(tone.freq_Hz, m_fs_Hz);
+            out.tones.push_back(t);
+        }
     }
 
     out.computeTotalNoise();
+    out.bumpGeneration();
 }
 
 std::string AdcEngine::hoverSummary() const {
