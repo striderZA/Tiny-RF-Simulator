@@ -11,7 +11,7 @@ class ViewManager {
     void registerNode(SignalNode *node) {
         if (node) {
             LOG_INFO("Register new node: %d inputs | %d outputs.",
-                     node->inputs.empty() ? 0 : node->inputs[0].tones.size(),
+                     node->inputs.empty() ? 0 : (node->inputs[0] ? node->inputs[0]->tones.size() : 0),
                      node->outputs.empty() ? 0 : node->outputs[0].tones.size());
             m_nodes.push_back(node);
         }
