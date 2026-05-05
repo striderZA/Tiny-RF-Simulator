@@ -31,6 +31,7 @@ class NodeGraphEngine {
 
     SignalNode *getSourceForInput(int input_pin_id) const;
     std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
+    std::vector<int> topologicalOrder() const;
 
     static constexpr int MAX_PROBES = 4;
 
@@ -43,6 +44,8 @@ class NodeGraphEngine {
 
     const std::vector<GraphNode> &nodes() const { return m_nodes; }
     const std::vector<GraphLink> &links() const { return m_links; }
+
+    int nodeIdForPin(int pin_id) const;
 
   private:
     int m_next_node_id = 1;

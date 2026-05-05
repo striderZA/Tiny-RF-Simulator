@@ -1,6 +1,8 @@
 #include "node_graph_engine.h"
 #include "logging_core.h"
 #include <algorithm>
+#include <queue>
+#include <unordered_map>
 
 int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, int num_inputs,
                              int num_outputs) {
@@ -168,5 +170,76 @@ std::vector<SignalNode*> NodeGraphEngine::probedSignalNodes() const {
             }
         }
     }
+    return result;
+}
+
+int NodeGraphEngine::nodeIdForPin(int pin_id) const {
+    for (const auto& node : m_nodes) {
+        for (int p : node.input_pin_ids)
+            if (p == pin_id) return node.node_id;
+        for (int p : node.output_pin_ids)
+            if (p == pin_id) return node.node_id;
+    }
+    return -1;
+}
+
+std::vector<int> NodeGraphEngine::topologicalOrder() const {
+    std::unordered_map<int, int> in_degree;
+    for (const auto& n : m_nodes)
+        in_degree[n.node_id] = 0;
+
+    std::unordered_map<int, int> pin_owner;
+    for (const auto& n : m_nodes) {
+        for (int p : n.output_pin_ids)
+            pin_owner[p] = n.node_id;
+        for (int p : n.input_pin_ids)
+            pin_owner[p] = n.node_id;
+    }
+
+    for (const auto& link : m_links) {
+        auto it = pin_owner.find(link.end_pin_id);
+        if (it != pin_owner.end())
+            in_degree[it->second]++;
+    }
+
+    std::queue<int> q;
+    for (const auto& [node_id, deg] : in_degree) {
+        if (deg == 0)
+            q.push(node_id);
+    }
+
+    std::vector<int> result;
+    result.reserve(m_nodes.size());
+    while (!q.empty()) {
+        int id = q.front();
+        q.pop();
+        result.push_back(id);
+
+        auto node_it = std::find_if(m_nodes.begin(), m_nodes.end(),
+            [id](const GraphNode& n) { return n.node_id == id; });
+        if (node_it == m_nodes.end()) continue;
+
+        for (int out_pin : node_it->output_pin_ids) {
+            for (const auto& link : m_links) {
+                if (link.start_pin_id == out_pin) {
+                    auto target_it = pin_owner.find(link.end_pin_id);
+                    if (target_it != pin_owner.end()) {
+                        if (--in_degree[target_it->second] == 0)
+                            q.push(target_it->second);
+                    }
+                }
+            }
+        }
+    }
+
+    if (static_cast<int>(result.size()) < static_cast<int>(m_nodes.size())) {
+        LOG_WARN("topologicalOrder: cycle detected, %zu nodes not ordered",
+                 m_nodes.size() - result.size());
+        for (const auto& n : m_nodes) {
+            if (std::find(result.begin(), result.end(), n.node_id) == result.end())
+                result.push_back(n.node_id);
+        }
+    }
+
     return result;
 }

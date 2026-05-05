@@ -4,6 +4,8 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <functional>
+#include <unordered_map>
 
 RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -214,36 +216,42 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
 }
 
 void RfSimulatorApp::update_dsp() {
-    auto wireAndUpdate = [&](auto& components) {
-        for (auto& comp : components) {
-            auto* source = m_graph_engine.getSourceForInput(comp->inputPinId());
-            if (source)
-                comp->node().inputs[0] = &source->outputs[0];
-            else
-                comp->node().inputs[0] = nullptr;
-            comp->update(0.0);
-        }
-    };
+    std::unordered_map<int, std::function<void()>> updates;
 
     for (auto& gen : m_generators)
-        gen->update(0.0);
+        updates[gen->graphNodeId()] = [ptr = gen.get()]() { ptr->update(0.0); };
 
-    wireAndUpdate(m_amplifiers);
-    wireAndUpdate(m_splitters);
-    wireAndUpdate(m_mixers);
-    wireAndUpdate(m_sparam_amps);
-    wireAndUpdate(m_sparam_filters);
-    wireAndUpdate(m_adcs);
+    auto addWiredUpdate = [&](auto& components) {
+        for (auto& comp : components)
+            updates[comp->graphNodeId()] = [this, ptr = comp.get()]() {
+                auto* source = this->m_graph_engine.getSourceForInput(ptr->inputPinId());
+                ptr->node().inputs[0] = source ? &source->outputs[0] : nullptr;
+                ptr->update(0.0);
+            };
+    };
+
+    addWiredUpdate(m_amplifiers);
+    addWiredUpdate(m_splitters);
+    addWiredUpdate(m_mixers);
+    addWiredUpdate(m_sparam_amps);
+    addWiredUpdate(m_sparam_filters);
+    addWiredUpdate(m_adcs);
+
     if (m_pfb) {
-        if (!m_adcs.empty()) {
-            m_pfb->setFs_Hz(m_adcs[0]->fs_Hz());
+        updates[m_pfb->graphNodeId()] = [this]() {
+            if (!m_adcs.empty())
+                m_pfb->setFs_Hz(m_adcs[0]->fs_Hz());
             auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
-            if (source)
-                m_pfb->node().inputs[0] = &source->outputs[0];
-            else
-                m_pfb->node().inputs[0] = nullptr;
+            m_pfb->node().inputs[0] = source ? &source->outputs[0] : nullptr;
             m_pfb->update(0.0);
-        }
+        };
+    }
+
+    auto order = m_graph_engine.topologicalOrder();
+    for (int node_id : order) {
+        auto it = updates.find(node_id);
+        if (it != updates.end())
+            it->second();
     }
 
     // Update spectrum view based on first active probe
