@@ -21,6 +21,7 @@ void SParameterAmplifierEngine::reload(const std::string& filepath) {
 
     int np = m_data.numPorts();
     m_forward_param_idx = (np > 1) ? np : 0;
+    m_dirty = true;
     LOG_INFO("Loaded S-parameter amplifier %d from %s (%zu points, %d ports)",
              m_id, filepath.c_str(), m_data.freqs().size(), np);
 }
@@ -35,29 +36,45 @@ int SParameterAmplifierEngine::outputPinId() const {
 
 void SParameterAmplifierEngine::setForwardParamIdx(int idx) {
     int total = m_data.paramCount();
-    if (idx >= 0 && idx < total)
+    if (idx >= 0 && idx < total && idx != m_forward_param_idx) {
         m_forward_param_idx = idx;
+        m_dirty = true;
+    }
 }
 
 void SParameterAmplifierEngine::update(double dt) {
     (void)dt;
-    auto& in = m_node.inputs[0];
+    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr && in_ptr->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
+
+    Spectrum empty;
+    const Spectrum& in = in_ptr ? *in_ptr : empty;
     auto& out = m_node.outputs[0];
 
     m_data.applyToSpectrum(in, out, m_forward_param_idx);
 
-    if (!m_data.loaded() || out.frequencies.empty())
+    if (!m_data.loaded() || out.frequencies.empty()) {
+        out.bumpGeneration();
         return;
+    }
 
     const size_t N = out.frequencies.size();
-    if (N < 2)
+    if (N < 2) {
+        out.bumpGeneration();
         return;
+    }
 
     // Amplifier adds noise (filter does not)
     out.noise_added_W.assign(N, 0.0);
     out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i)
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
+
+    out.bumpGeneration();
 }
 
 std::string SParameterAmplifierEngine::hoverSummary() const {
