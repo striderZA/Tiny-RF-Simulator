@@ -19,7 +19,7 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     in.noise_total_W.assign(401, 1e-20);
 
     pfb.setFs_Hz(400e6);
-    pfb.node().inputs[0] = in;
+    pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
     const auto& chs = pfb.channels();
@@ -52,7 +52,7 @@ TEST_CASE("PFB channelizer noise distribution", "[pfb]") {
     in.noise_total_W.assign(401, 1e-20);
 
     pfb.setFs_Hz(400e6);
-    pfb.node().inputs[0] = in;
+    pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
     for (const auto& ch : pfb.channels())
@@ -65,7 +65,7 @@ TEST_CASE("PFB channelizer no input produces empty output", "[pfb]") {
 
     Spectrum in;
     in.frequencies = {};
-    pfb.node().inputs[0] = in;
+    pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
     REQUIRE(pfb.node().outputs[0].frequencies.empty());
@@ -86,7 +86,7 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     in.tones.push_back({0.0, -30.0, 0.0});
     in.noise_total_W.assign(201, 1e-20);
 
-    pfb.node().inputs[0] = in;
+    pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
     const auto& ch7 = pfb.channels()[7];

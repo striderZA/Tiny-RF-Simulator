@@ -161,7 +161,7 @@ TEST_CASE("Amplifier propagates tone phase", "[amplifier][phase]") {
 
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(10.0);
-    amp.node().inputs[0] = gen.node().outputs[0];
+    amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
     const auto &out = amp.node().outputs[0];
@@ -195,7 +195,7 @@ TEST_CASE("Splitter produces two outputs with -3dB tones", "[splitter]") {
     gen.update(0.0);
 
     SplitterEngine split(0, graph);
-    split.node().inputs[0] = gen.node().outputs[0];
+    split.node().inputs[0] = &gen.node().outputs[0];
     split.update(0.0);
 
     REQUIRE(split.node().outputs.size() == 2);
@@ -214,7 +214,7 @@ TEST_CASE("Splitter preserves phase on both outputs", "[splitter]") {
     gen.update(0.0);
 
     SplitterEngine split(0, graph);
-    split.node().inputs[0] = gen.node().outputs[0];
+    split.node().inputs[0] = &gen.node().outputs[0];
     split.update(0.0);
 
     for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
@@ -229,7 +229,7 @@ TEST_CASE("Splitter scales noise density by -3dB", "[splitter]") {
     gen.update(0.0);
 
     SplitterEngine split(0, graph);
-    split.node().inputs[0] = gen.node().outputs[0];
+    split.node().inputs[0] = &gen.node().outputs[0];
     split.update(0.0);
 
     double expected_density = (k * T) / 2.0;
@@ -251,7 +251,7 @@ TEST_CASE("Mixer produces sum and difference tones", "[mixer]") {
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(80e6);
     mix.setConversionGain_dB(-6.0);
-    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     const auto& out = mix.node().outputs[0];
@@ -272,7 +272,7 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
 
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(80e6);
-    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     const auto& out = mix.node().outputs[0];
@@ -288,7 +288,7 @@ TEST_CASE("Mixer scales noise by conversion gain", "[mixer]") {
 
     MixerEngine mix(0, graph);
     mix.setConversionGain_dB(-6.0);
-    mix.node().inputs[0] = gen.node().outputs[0];
+    mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     double G = dbToLinear(-6.0);
@@ -319,7 +319,7 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(10.0);
     amp.setNF_dB(3.0);
-    amp.node().inputs[0] = gen.node().outputs[0];
+    amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
     const auto &out = amp.node().outputs[0];
@@ -342,7 +342,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     AmplifierEngine amp(0, graph);
     amp.setGain_dB(20.0);
     amp.setNF_dB(5.0);
-    amp.node().inputs[0] = gen.node().outputs[0];
+    amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
     SpectrumAnalyzerEngine sa;
@@ -355,7 +355,7 @@ TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spe
     auto display1 = sa.renderCombinedSpectrum(specs);
 
     // Re-run with same settings; noise floor should remain consistent
-    amp.node().inputs[0] = gen.node().outputs[0];
+    amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
     auto display2 = sa.renderCombinedSpectrum(specs);

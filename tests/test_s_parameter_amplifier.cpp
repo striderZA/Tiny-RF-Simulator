@@ -42,7 +42,7 @@ TEST_CASE("SParameterAmplifierEngine applies phase rotation to tones", "[sparam_
     gen.addTone(1e9, -20.0);
     gen.update(0.0);
 
-    spamp.node().inputs[0] = gen.node().outputs[0];
+    spamp.node().inputs[0] = &gen.node().outputs[0];
     spamp.update(0.0);
 
     const auto& out = spamp.node().outputs[0];
@@ -65,7 +65,7 @@ TEST_CASE("SParameterAmplifierEngine interpolates gain between data points", "[s
     gen.addTone(1.005e9, -20.0);
     gen.update(0.0);
 
-    spamp.node().inputs[0] = gen.node().outputs[0];
+    spamp.node().inputs[0] = &gen.node().outputs[0];
     spamp.update(0.0);
 
     const auto& out = spamp.node().outputs[0];
@@ -82,7 +82,9 @@ TEST_CASE("SParameterAmplifierEngine handles out-of-band frequency", "[sparam_am
     REQUIRE(spamp.loaded());
 
     double f_outside = spamp.freqs().back() + 10e9;
-    spamp.node().inputs[0].tones = {{f_outside, -20.0, 0.0}};
+    Spectrum in_spec;
+    in_spec.tones = {{f_outside, -20.0, 0.0}};
+    spamp.node().inputs[0] = &in_spec;
     spamp.update(0.0);
 
     REQUIRE(spamp.node().outputs[0].tones.size() == 1);
@@ -129,7 +131,9 @@ TEST_CASE("SParameterAmplifierEngine forward param index controls gain selection
     REQUIRE(spamp.forwardParamIdx() == 0);
 
     double f_mid = (spamp.freqs().front() + spamp.freqs().back()) / 2.0;
-    spamp.node().inputs[0].tones = {{f_mid, -20.0, 0.0}};
+    Spectrum in_spec;
+    in_spec.tones = {{f_mid, -20.0, 0.0}};
+    spamp.node().inputs[0] = &in_spec;
     spamp.update(0.0);
     REQUIRE(spamp.node().outputs[0].tones.size() == 1);
 
@@ -150,7 +154,9 @@ TEST_CASE("SParameterFilterEngine loads and applies S21 filtering", "[sparam_fil
     // Apply a tone at mid-band
     int mid = static_cast<int>(spf.data().freqs().size()) / 2;
     double f_mid = spf.data().freqs()[mid];
-    spf.node().inputs[0].tones = {{f_mid, -20.0, 0.0}};
+    Spectrum in_spec;
+    in_spec.tones = {{f_mid, -20.0, 0.0}};
+    spf.node().inputs[0] = &in_spec;
     spf.update(0.0);
 
     REQUIRE(spf.node().outputs[0].tones.size() == 1);

@@ -17,7 +17,7 @@ TEST_CASE("ADC with empty input produces NSD-based noise", "[adc]") {
     Spectrum spec;
     spec.frequencies = {0.0, 1e6, 2e6};
     spec.noise_W = {1e-20, 1e-20, 1e-20};
-    adc.node().inputs[0] = spec;
+    adc.node().inputs[0] = &spec;
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
@@ -35,7 +35,7 @@ TEST_CASE("ADC aliases tones into Nyquist zone", "[adc]") {
     {
         Spectrum spec;
         spec.tones = {{100e6, -10.0, 0.0}};
-        adc.node().inputs[0] = spec;
+        adc.node().inputs[0] = &spec;
         adc.update(0.0);
 
         const auto& out = adc.node().outputs[0];
@@ -47,7 +47,7 @@ TEST_CASE("ADC aliases tones into Nyquist zone", "[adc]") {
     {
         Spectrum spec;
         spec.tones = {{600e6, -10.0, 0.0}};
-        adc.node().inputs[0] = spec;
+        adc.node().inputs[0] = &spec;
         adc.update(0.0);
 
         const auto& out = adc.node().outputs[0];
@@ -59,7 +59,7 @@ TEST_CASE("ADC aliases tones into Nyquist zone", "[adc]") {
     {
         Spectrum spec;
         spec.tones = {{1.1e9, 0.0, 0.0}};
-        adc.node().inputs[0] = spec;
+        adc.node().inputs[0] = &spec;
         adc.update(0.0);
 
         const auto& out = adc.node().outputs[0];
@@ -75,7 +75,7 @@ TEST_CASE("ADC preserves tone power and phase", "[adc]") {
 
     Spectrum spec;
     spec.tones = {{100e6, -20.0, 45.0}};
-    adc.node().inputs[0] = spec;
+    adc.node().inputs[0] = &spec;
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
@@ -93,7 +93,7 @@ TEST_CASE("ADC preserves frequency grid and noise structure", "[adc]") {
     spec.frequencies = {-10e6, 0.0, 10e6};
     spec.noise_W = {1e-18, 1e-18, 1e-18};
     spec.noise_added_W = {0, 0, 0};
-    adc.node().inputs[0] = spec;
+    adc.node().inputs[0] = &spec;
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
