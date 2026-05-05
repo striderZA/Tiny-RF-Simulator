@@ -23,6 +23,12 @@ struct Spectrum {
     // Phase (degrees) per frequency bin, same size as frequencies.
     std::vector<double> phase_deg;
 
+    // Generation counter for dirty-flag tracking. Producers increment after
+    // recomputation so consumers can detect upstream changes.
+    uint64_t generation = 0;
+
+    void bumpGeneration() { ++generation; }
+
     void computeTotalNoise() {
         size_t n = frequencies.size();
         noise_total_W.assign(n, 0.0);
