@@ -2,7 +2,6 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <string>
@@ -42,77 +41,6 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImGui::End();
 }
 
-static void drawNodeSymbol(ImDrawList* dl, ImVec2 center, float size, const std::string& label) {
-    auto startsWith = [&](const char* prefix) {
-        return label.rfind(prefix, 0) == 0;
-    };
-
-    if (startsWith("Generator")) {
-        ImU32 color = IM_COL32(60, 140, 220, 255);
-        dl->AddCircle(center, size, color, 0, 2.0f);
-        float r = size * 0.7f;
-        int segs = 20;
-        for (int i = 0; i < segs; ++i) {
-            float t0 = (float)i / (float)segs;
-            float t1 = (float)(i + 1) / (float)segs;
-            float x0 = center.x - r + t0 * 2.0f * r;
-            float y0 = center.y + size * 0.6f * std::sin(t0 * 2.0f * 3.14159f * 1.5f);
-            float x1 = center.x - r + t1 * 2.0f * r;
-            float y1 = center.y + size * 0.6f * std::sin(t1 * 2.0f * 3.14159f * 1.5f);
-            dl->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), color, 2.0f);
-        }
-    } else if (startsWith("Amplifier")) {
-        ImU32 color = IM_COL32(220, 80, 80, 255);
-        dl->AddTriangleFilled(
-            ImVec2(center.x + size * 0.6f, center.y),
-            ImVec2(center.x - size * 0.6f, center.y - size * 0.8f),
-            ImVec2(center.x - size * 0.6f, center.y + size * 0.8f),
-            color);
-    } else if (startsWith("Splitter")) {
-        ImU32 color = IM_COL32(60, 180, 75, 255);
-        float hs = size * 0.8f;
-        dl->AddRect(ImVec2(center.x - hs, center.y - hs * 0.6f),
-                    ImVec2(center.x + hs, center.y + hs * 0.6f), color, 0.0f, 0, 2.0f);
-        float mid = center.x - hs * 0.3f;
-        dl->AddLine(ImVec2(center.x - hs + 4, center.y), ImVec2(mid, center.y), color, 2.0f);
-        dl->AddLine(ImVec2(mid, center.y), ImVec2(center.x + hs - 4, center.y - hs * 0.35f), color, 2.0f);
-        dl->AddLine(ImVec2(mid, center.y), ImVec2(center.x + hs - 4, center.y + hs * 0.35f), color, 2.0f);
-    } else if (startsWith("Mixer")) {
-        ImU32 color = IM_COL32(230, 150, 40, 255);
-        dl->AddCircle(center, size, color, 0, 2.0f);
-        float d = size * 0.7f;
-        dl->AddLine(ImVec2(center.x - d, center.y - d), ImVec2(center.x + d, center.y + d), color, 2.0f);
-        dl->AddLine(ImVec2(center.x + d, center.y - d), ImVec2(center.x - d, center.y + d), color, 2.0f);
-    } else if (startsWith("ADC")) {
-        ImU32 color = IM_COL32(120, 50, 170, 255);
-        float hs = size * 0.45f;
-        float hw = size * 0.75f;
-        dl->AddLine(ImVec2(center.x - hw, center.y), ImVec2(center.x - hs, center.y - hs), color, 2.0f);
-        dl->AddLine(ImVec2(center.x - hs, center.y - hs), ImVec2(center.x - hs, center.y + hs), color, 2.0f);
-        dl->AddLine(ImVec2(center.x - hs, center.y + hs), ImVec2(center.x - hw, center.y), color, 2.0f);
-        dl->AddRect(ImVec2(center.x - hs, center.y - hs),
-                    ImVec2(center.x + hw, center.y + hs), color, 0.0f, 0, 2.0f);
-    } else if (startsWith("S-Param")) {
-        ImU32 color = IM_COL32(220, 80, 80, 255);
-        dl->AddTriangleFilled(
-            ImVec2(center.x + size * 0.6f, center.y),
-            ImVec2(center.x - size * 0.6f, center.y - size * 0.8f),
-            ImVec2(center.x - size * 0.6f, center.y + size * 0.8f),
-            color);
-        dl->AddText(ImVec2(center.x - size * 0.2f, center.y - size * 0.35f),
-                    IM_COL32(255, 255, 255, 255), "S");
-    } else if (startsWith("PFB")) {
-        ImU32 color = IM_COL32(50, 200, 180, 255);
-        float hs = size * 0.7f;
-        dl->AddRect(ImVec2(center.x - hs, center.y - hs),
-                    ImVec2(center.x + hs, center.y + hs), color, 0.0f, 0, 2.0f);
-        dl->AddLine(ImVec2(center.x - hs, center.y - hs),
-                    ImVec2(center.x + hs, center.y + hs), color, 2.0f);
-        dl->AddLine(ImVec2(center.x + hs, center.y - hs),
-                    ImVec2(center.x - hs, center.y + hs), color, 2.0f);
-    }
-}
-
 void NodeGraphWidget::drawNodes() {
     for (const auto &node : m_engine.nodes()) {
         ImNodes::BeginNode(node.node_id);
@@ -120,14 +48,12 @@ void NodeGraphWidget::drawNodes() {
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
 
-        // Symbol body
-        ImGui::Dummy(ImVec2(80, 56));
-        {
-            auto* dl = ImGui::GetWindowDrawList();
-            ImVec2 rmin = ImGui::GetItemRectMin();
-            ImVec2 rmax = ImGui::GetItemRectMax();
-            ImVec2 sym_center((rmin.x + rmax.x) * 0.5f, (rmin.y + rmax.y) * 0.5f);
-            drawNodeSymbol(dl, sym_center, 24.0f, node.label);
+        // Icon body (pixel art from registry, or empty area if no icon loaded)
+        ImTextureID tex = m_icons.get(node.label);
+        if (tex) {
+            ImGui::Image(tex, ImVec2(80, 56));
+        } else {
+            ImGui::Dummy(ImVec2(80, 56));
         }
 
         for (int pin : node.input_pin_ids) {

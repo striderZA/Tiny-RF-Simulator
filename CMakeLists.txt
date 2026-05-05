@@ -86,6 +86,14 @@ FetchContent_Declare(
 )
 FetchContent_Populate(kissfft)
 
+# Fetch stb for PNG loading in icon registry (single-header, no build needed)
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
+FetchContent_Populate(stb)
+
 # kissFFT builds use pkg-config in tools/; make minimal library target
 add_library(kissfft STATIC
     ${kissfft_SOURCE_DIR}/kiss_fft.c
@@ -184,3 +192,4 @@ add_subdirectory("adc")
 add_subdirectory("s_parameter_filter")
 add_subdirectory("pfb_channelizer")
 add_subdirectory("iq_plot")
+add_subdirectory("icon_registry")

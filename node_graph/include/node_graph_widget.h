@@ -1,5 +1,6 @@
 #pragma once
 
+#include "icon_registry.h"
 #include "node_graph_engine.h"
 #include <functional>
 #include <string>
@@ -12,6 +13,8 @@ class NodeGraphWidget {
     ~NodeGraphWidget();
 
     void draw(const char *title, bool *p_open = nullptr);
+
+    IconRegistry& iconRegistry() { return m_icons; }
 
     // Callbacks for app to create/destroy components
     std::function<void()> onAddGenerator;
@@ -28,6 +31,7 @@ class NodeGraphWidget {
   private:
     NodeGraphEngine &m_engine;
     ImNodesEditorContext *m_context;
+    IconRegistry m_icons;
 
     // Interaction state tracking
     int m_clicked_pin = -1;

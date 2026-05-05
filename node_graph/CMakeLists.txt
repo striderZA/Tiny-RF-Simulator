@@ -28,6 +28,7 @@ target_link_libraries(node_graph_widget
         simulator::node_graph_engine
         imnodes
         simulator::core
+        simulator::icon_registry
 )
 
 add_library(simulator::node_graph_widget ALIAS node_graph_widget)
