@@ -32,5 +32,6 @@ class SParameterFilterEngine {
     SParameterData m_data;
     std::string m_filepath;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };

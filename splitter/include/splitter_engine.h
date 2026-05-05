@@ -26,6 +26,7 @@ class SplitterEngine {
 
     SignalNode m_node;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 
     static constexpr double SPLIT_LOSS_DB = 3.010299956639812;

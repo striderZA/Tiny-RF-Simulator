@@ -44,9 +44,10 @@ int AdcEngine::outputPinId() const {
 
 void AdcEngine::update(double /*dt*/) {
     const Spectrum* input = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && input && input->generation == m_cached_input_generation)
+    if (!m_dirty && input == m_cached_input_ptr && (!input || input->generation == m_cached_input_generation))
         return;
     m_dirty = false;
+    m_cached_input_ptr = input;
     if (input)
         m_cached_input_generation = input->generation;
 

@@ -65,6 +65,7 @@ class PFBChannelizerEngine {
     int m_active_channel = 0;
     std::vector<PFBChannel> m_channels;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 
     void recomputeChannels(const std::vector<double>& freqs);

@@ -43,5 +43,6 @@ class MixerEngine {
     double m_conv_gain_dB = -6.0;
     double m_nf_dB = 0.0;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };

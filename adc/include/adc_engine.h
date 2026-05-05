@@ -48,5 +48,6 @@ private:
     int m_bits = 12;
     double m_v_fs = 2.0;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };

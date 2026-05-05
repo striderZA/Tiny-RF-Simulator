@@ -383,11 +383,13 @@ void NodeGraphWidget::showPinTooltips() {
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             if (node.input_pin_ids[i] != hovered_pin)
                 continue;
-            const Spectrum &spec = (i < signal->inputs.size())
+            const Spectrum *spec = (i < signal->inputs.size())
                                        ? signal->inputs[i]
-                                       : Spectrum();
-            showSpectrumTooltip(spec, "IN");
-            return;
+                                       : nullptr;
+            if (spec) {
+                showSpectrumTooltip(*spec, "IN");
+                return;
+            }
         }
 
         for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {

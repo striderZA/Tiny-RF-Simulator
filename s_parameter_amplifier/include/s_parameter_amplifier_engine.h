@@ -37,5 +37,6 @@ class SParameterAmplifierEngine {
     std::string m_filepath;
     int m_forward_param_idx = 0;
     bool m_dirty = true;
+    const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };
