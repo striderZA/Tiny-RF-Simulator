@@ -58,14 +58,26 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         return {};
     }
 
-    std::vector<double> power_W = this->integratePowerPerBin(spec);
-
     double bin_width = 1.0;
     if (spec.frequencies.size() >= 2) {
         bin_width = spec.frequencies[1] - spec.frequencies[0];
     }
 
-    std::vector<double> rbw_power_W = this->applyRBW(power_W, bin_width);
+    // Cache the expensive integrate + RBW step. Jitter + VBW still run every
+    // frame so the display keeps its instrument-like live feel.
+    std::vector<double> rbw_power_W;
+    if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen &&
+        m_rbw == m_cache_rbw && bin_width == m_cache_bin_width) {
+        rbw_power_W = m_cache_rbw_power_W;
+    } else {
+        std::vector<double> power_W = this->integratePowerPerBin(spec);
+        rbw_power_W = this->applyRBW(power_W, bin_width);
+        m_cache_spectrum = &spec;
+        m_cache_spec_gen = spec.generation;
+        m_cache_rbw = m_rbw;
+        m_cache_bin_width = bin_width;
+        m_cache_rbw_power_W = rbw_power_W;
+    }
 
     std::vector<double> power_dBm(rbw_power_W.size());
     for (size_t i = 0; i < rbw_power_W.size(); ++i) {

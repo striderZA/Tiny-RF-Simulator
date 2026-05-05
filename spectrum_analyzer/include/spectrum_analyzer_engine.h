@@ -49,6 +49,14 @@ class SpectrumAnalyzerEngine {
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
 
+    // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
+    // but still applies jitter + VBW every frame so the display looks alive.
+    mutable const Spectrum* m_cache_spectrum = nullptr;
+    mutable uint64_t m_cache_spec_gen = 0;
+    mutable double m_cache_rbw = 0;
+    mutable double m_cache_bin_width = 0;
+    mutable std::vector<double> m_cache_rbw_power_W;
+
     mutable std::mt19937 m_rng;
     mutable bool m_noise_jitter_enabled = true;
     mutable double m_noise_jitter_sigma_dB = 1.5;
