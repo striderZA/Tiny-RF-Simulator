@@ -63,7 +63,12 @@ void PFBChannelizerEngine::update(double) {
         return;
     }
 
-    recomputeChannels(in_ptr->frequencies);
+    // Only recompute channels when frequency grid or Fs changes
+    if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz) {
+        recomputeChannels(in_ptr->frequencies);
+        m_cached_freqs = in_ptr->frequencies;
+        m_cached_Fs_Hz = m_cfg.Fs_Hz;
+    }
 
     double bin_width = (in_ptr->frequencies.size() > 1)
         ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;

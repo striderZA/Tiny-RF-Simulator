@@ -67,6 +67,8 @@ class PFBChannelizerEngine {
     bool m_dirty = true;
     const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
+    std::vector<double> m_cached_freqs;
+    double m_cached_Fs_Hz = 0;
 
     void recomputeChannels(const std::vector<double>& freqs);
     double prototypeResponse(double offset_Hz) const;
