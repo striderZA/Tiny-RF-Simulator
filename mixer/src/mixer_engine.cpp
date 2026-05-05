@@ -18,11 +18,17 @@ int MixerEngine::outputPinId() const {
 
 void MixerEngine::update(double dt) {
     (void)dt;
-    auto& in = m_node.inputs[0];
+    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr && in_ptr->generation == m_cached_input_generation)
+        return;
+    m_dirty = false;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
+
     auto& out = m_node.outputs[0];
 
-    if (!in.frequencies.empty()) {
-        out.frequencies = in.frequencies;
+    if (in_ptr && !in_ptr->frequencies.empty()) {
+        out.frequencies = in_ptr->frequencies;
     } else if (out.frequencies.size() < 2) {
         buildDefaultFrequencyGrid(out.frequencies);
     }
@@ -31,22 +37,24 @@ void MixerEngine::update(double dt) {
 
     // Frequency conversion: each input tone produces sum and difference
     out.tones.clear();
-    for (const auto& tone : in.tones) {
-        Spectrum::Tone lower;
-        lower.freq_Hz = std::abs(tone.freq_Hz - m_lo_freq_Hz);
-        lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
-        lower.phase_deg = tone.phase_deg;
-        out.tones.push_back(lower);
+    if (in_ptr) {
+        for (const auto& tone : in_ptr->tones) {
+            Spectrum::Tone lower;
+            lower.freq_Hz = std::abs(tone.freq_Hz - m_lo_freq_Hz);
+            lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
+            lower.phase_deg = tone.phase_deg;
+            out.tones.push_back(lower);
 
-        Spectrum::Tone upper;
-        upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
-        upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
-        upper.phase_deg = tone.phase_deg;
-        out.tones.push_back(upper);
+            Spectrum::Tone upper;
+            upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
+            upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
+            upper.phase_deg = tone.phase_deg;
+            out.tones.push_back(upper);
+        }
     }
 
-    if (!in.phase_deg.empty()) {
-        out.phase_deg = in.phase_deg;
+    if (in_ptr && !in_ptr->phase_deg.empty()) {
+        out.phase_deg = in_ptr->phase_deg;
     } else {
         out.phase_deg.assign(N, 0.0);
     }
@@ -56,6 +64,7 @@ void MixerEngine::update(double dt) {
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W.assign(N, 0.0);
         out.phase_deg.assign(N, 0.0);
+        out.bumpGeneration();
         return;
     }
 
@@ -64,7 +73,7 @@ void MixerEngine::update(double dt) {
 
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-        double nin = (i < in.noise_total_W.size() ? in.noise_total_W[i] : 0.0);
+        double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
         out.noise_W[i] = G * nin;
     }
 
@@ -78,6 +87,8 @@ void MixerEngine::update(double dt) {
     for (size_t i = 0; i < N; ++i) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
+
+    out.bumpGeneration();
 }
 
 std::string MixerEngine::hoverSummary() const {
