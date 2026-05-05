@@ -18,6 +18,9 @@ class SpectrumAnalyzerEngine {
     void setNoiseJitterEnabled(bool v) { m_noise_jitter_enabled = v; }
     void setNoiseJitterSigmaDb(double v) { m_noise_jitter_sigma_dB = v; }
 
+    bool noiseJitterEnabled() const { return m_noise_jitter_enabled; }
+    double noiseJitterSigmaDb() const { return m_noise_jitter_sigma_dB; }
+
     double startFrequency() const { return m_start_freq; }
     double stopFrequency() const { return m_stop_freq; }
     double minPower() const { return m_min_power; }

@@ -11,6 +11,34 @@
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
+bool SpectrumAnalyzerWidget::traceCacheValid(size_t idx, const Spectrum& spec) const {
+    if (idx >= m_trace_cache.size())
+        return false;
+    const auto& e = m_trace_cache[idx];
+    return e.spectrum_ptr == &spec &&
+           e.spectrum_gen == spec.generation &&
+           e.rbw == m_engine.rbw() &&
+           e.vbw == m_engine.vbw() &&
+           e.jitter_enabled == m_engine.noiseJitterEnabled() &&
+           e.jitter_sigma == m_engine.noiseJitterSigmaDb();
+}
+
+bool SpectrumAnalyzerWidget::combinedCacheValid(const std::vector<const Spectrum*>& specs) const {
+    if (m_combined_cache.empty() || specs.size() != m_combined_key.inputs.size())
+        return false;
+    if (m_combined_key.rbw != m_engine.rbw() ||
+        m_combined_key.vbw != m_engine.vbw() ||
+        m_combined_key.jitter_enabled != m_engine.noiseJitterEnabled() ||
+        m_combined_key.jitter_sigma != m_engine.noiseJitterSigmaDb())
+        return false;
+    for (size_t i = 0; i < specs.size(); ++i) {
+        if (specs[i] != m_combined_key.inputs[i].first ||
+            specs[i]->generation != m_combined_key.inputs[i].second)
+            return false;
+    }
+    return true;
+}
+
 int SpectrumAnalyzerWidget::resolveMarkerIdx(const std::vector<double> &freq_axis,
                                               const std::vector<double> &data) const {
     if (!m_marker.enabled || data.empty() || freq_axis.empty()) {
@@ -184,11 +212,43 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     for (auto* node : active_nodes)
         if (node) specs.push_back(&node->outputs[0]);
 
-    std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(specs);
-    if (combined_dBm.size() != freq_axis->size()) {
-        ImGui::Text("Unable to render combined spectrum.");
-        ImGui::End();
-        return;
+    // Render individual traces with caching
+    m_trace_cache.resize(active_nodes.size());
+    std::vector<const std::vector<double>*> traces(active_nodes.size(), nullptr);
+    for (size_t i = 0; i < active_nodes.size(); ++i) {
+        const auto& spec = active_nodes[i]->outputs[0];
+        if (!traceCacheValid(i, spec)) {
+            m_trace_cache[i] = {
+                &spec,
+                spec.generation,
+                m_engine.rbw(),
+                m_engine.vbw(),
+                m_engine.noiseJitterEnabled(),
+                m_engine.noiseJitterSigmaDb(),
+                m_engine.renderSpectrum(spec)
+            };
+        }
+        if (m_trace_cache[i].data.size() == freq_axis->size())
+            traces[i] = &m_trace_cache[i].data;
+    }
+
+    // Render combined spectrum with caching (for marker + noise readout only)
+    std::vector<double> combined_dBm;
+    if (combinedCacheValid(specs)) {
+        combined_dBm = m_combined_cache;
+    } else {
+        combined_dBm = m_engine.renderCombinedSpectrum(specs);
+        if (combined_dBm.size() == freq_axis->size()) {
+            m_combined_cache = combined_dBm;
+            m_combined_key.inputs.clear();
+            m_combined_key.inputs.reserve(specs.size());
+            for (auto* s : specs)
+                m_combined_key.inputs.emplace_back(s, s->generation);
+            m_combined_key.rbw = m_engine.rbw();
+            m_combined_key.vbw = m_engine.vbw();
+            m_combined_key.jitter_enabled = m_engine.noiseJitterEnabled();
+            m_combined_key.jitter_sigma = m_engine.noiseJitterSigmaDb();
+        }
     }
 
     static const ImVec4 trace_colors[4] = {
@@ -202,13 +262,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("Spectrum")) {
-        for (size_t i = 0; i < active_nodes.size(); ++i) {
-            std::vector<double> trace = m_engine.renderSpectrum(active_nodes[i]->outputs[0]);
-            if (trace.size() != freq_axis->size()) continue;
+        for (size_t i = 0; i < traces.size(); ++i) {
+            if (!traces[i]) continue;
             std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
                               : ("Probe " + std::to_string(i));
-            ImPlot::PlotLine(label.c_str(), freq_axis->data(), trace.data(),
-                             static_cast<int>(trace.size()),
+            ImPlot::PlotLine(label.c_str(), freq_axis->data(), traces[i]->data(),
+                             static_cast<int>(traces[i]->size()),
                              {ImPlotProp_LineColor, trace_colors[i % 4],
                               ImPlotProp_LineWeight, 1.5f});
         }
@@ -268,7 +327,14 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
     }
 
-    double avg_noise = m_engine.computeAverageNoiseLevel(specs);
+    // Cache average noise level
+    double avg_noise;
+    if (combinedCacheValid(specs)) {
+        avg_noise = m_avg_noise_cache;
+    } else {
+        avg_noise = m_engine.computeAverageNoiseLevel(specs);
+        m_avg_noise_cache = avg_noise;
+    }
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
 
     if (ImGui::Button("Reset Zoom")) {
@@ -276,7 +342,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setStopFrequency(MAX_FREQ);
     }
 
-    drawMarkerControls(*freq_axis, combined_dBm);
+    if (!combined_dBm.empty())
+        drawMarkerControls(*freq_axis, combined_dBm);
 
     ImGui::End();
 }
