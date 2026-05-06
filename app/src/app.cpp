@@ -45,6 +45,15 @@ RfSimulatorApp::RfSimulatorApp() {
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
+    load_window_states();
+}
+
+void RfSimulatorApp::load_window_states() {
+    m_show_log = m_state.loadBool("WindowState", "Log", true);
+    m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
+    m_show_properties = m_state.loadBool("WindowState", "Properties", true);
+    m_show_iq = m_state.loadBool("WindowState", "IQPlot", true);
+    m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
 }
 
 void RfSimulatorApp::addGenerator() {
@@ -284,17 +293,30 @@ void RfSimulatorApp::draw_ui() {
     ImGui::Text("RF Simulator %s (%s) | %.3f ms/frame (%.1f FPS)", APP_VERSION,
                 APP_GIT_HASH, 1000.0f / io.Framerate, io.Framerate);
 
-    m_graph_widget->draw("Node Editor");
-    m_spectrum_widget->draw("Spectrum Analyzer");
+    if (m_show_node_editor)
+        m_graph_widget->draw("Node Editor", &m_show_node_editor);
 
-    if (m_iq_widget && m_pfb) m_iq_widget->draw("IQ Plot");
+    if (m_show_spectrum)
+        m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
+
+    if (m_iq_widget && m_pfb && m_show_iq)
+        m_iq_widget->draw("IQ Plot", &m_show_iq);
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
     }
 
-    if (m_inspector_panel) m_inspector_panel->draw("Properties");
+    if (m_show_properties && m_inspector_panel)
+        m_inspector_panel->draw("Properties", &m_show_properties);
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);
+}
+
+RfSimulatorApp::~RfSimulatorApp() {
+    m_state.saveBool("WindowState", "Log", m_show_log);
+    m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
+    m_state.saveBool("WindowState", "Properties", m_show_properties);
+    m_state.saveBool("WindowState", "IQPlot", m_show_iq);
+    m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
 }
