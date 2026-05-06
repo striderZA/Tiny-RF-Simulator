@@ -1,10 +1,25 @@
 #include "amplifier_engine.h"
+#include <cmath>
+
+namespace {
+    inline double dbmToW(double dBm) { return std::pow(10.0, dBm / 10.0) * 0.001; }
+    inline double wToDbm(double W) { return 10.0 * std::log10(W / 0.001); }
+    inline double dbmToV(double dBm) { return std::sqrt(dbmToW(dBm) * R); }
+    inline double vToDbm(double V) { return 10.0 * std::log10((V * V / R) / 0.001); }
+}
 
 AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
+}
+
+void AmplifierEngine::recomputeCoefficients() {
+    double V_oip2 = dbmToV(m_oip2_dBm);
+    double V_oip3 = dbmToV(m_oip3_dBm);
+    m_k1 = 1.0 / V_oip2;
+    m_k2 = 4.0 / (3.0 * V_oip3 * V_oip3);
 }
 
 int AmplifierEngine::inputPinId() const {
