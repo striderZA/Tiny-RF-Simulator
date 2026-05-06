@@ -125,12 +125,23 @@ ctest --test-dir build
 
 73 tests (67 unit + 6 benchmarks) covering all DSP engines, node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
 
-Run the DSP benchmarks to see per-operation timing:
+### Benchmarks
+
+Each DSP engine has a dirty/clean benchmark: mean time per `update()` call (dirty = first call after parameter change, clean = cached skip). Run with:
 
 ```bash
 build/bin/tests [bench]       # Linux
 build/bin/tests.exe [bench]   # Windows
 ```
+
+| Benchmark | Measures |
+|-----------|----------|
+| `SignalGeneratorEngine` | Tone generation + noise floor |
+| `AmplifierEngine` | Gain/NF + nonlinear harmonics/IMD/compression |
+| `MixerEngine` | Frequency conversion + sideband generation |
+| `SplitterEngine` | 1-to-2 signal split |
+| `PFBChannelizerEngine` | Per-channel noise + tone routing |
+| `SpectrumAnalyzerEngine` | RBW convolution + jitter + VBW pass |
 
 ## Architecture
 
