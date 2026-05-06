@@ -11,6 +11,7 @@
 #include "pfb_channelizer_engine.h"
 #include "s_parameter_amplifier_engine.h"
 #include "s_parameter_filter_engine.h"
+#include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
@@ -28,8 +29,15 @@ class RfSimulatorApp {
 
     LoggingWidget m_log_widget;
     bool m_show_log = true;
+    bool m_show_spectrum = true;
+    bool m_show_properties = true;
+    bool m_show_iq = true;
+    bool m_show_node_editor = true;
+    SessionState m_state;
+    ~RfSimulatorApp();
 
   private:
+    void load_window_states();
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
