@@ -25,7 +25,7 @@ All library dependencies are fetched automatically at configure time via CMake F
 | [ImPlot](https://github.com/epezent/implot) | Spectrum plotting |
 | [GLFW](https://github.com/glfw/glfw) | Window + OpenGL context |
 | [imnodes](https://github.com/Nelarius/imnodes) | Node editor canvas |
-| [Catch2](https://github.com/catchorg/Catch2) v3.4.0 | Unit tests + benchmarks |
+| [Catch2](https://github.com/catchorg/Catch2) v3 | Unit tests + benchmarks |
 | [imgui_test_engine](https://github.com/ocornut/imgui_test_engine) | UI test engine |
 | [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | Native file browser |
 | [kissfft](https://github.com/mborgerding/kissfft) | FFT for IQ time-domain plot |
@@ -88,9 +88,9 @@ Build your RF chain visually: add components via right-click context menu on the
 | Action | Effect |
 |--------|--------|
 | **Left-click** node | Select — shows properties in Inspector Panel |
-| **Ctrl+left-click** node | Add spectrum probe (up to 4) |
-| **Shift+left-click** node | Remove spectrum probe |
-| **Left-click** output pin | Toggle spectrum probe |
+| **Ctrl+left-click** pin (or node) | Add spectrum probe (up to 4) |
+| **Shift+left-click** pin (or node) | Remove spectrum probe |
+| **Left-click + drag** pin-to-pin | Connect components |
 | **Right-click** canvas | Add component |
 | **Right-click** node | Remove / context menu |
 | **Delete key** | Remove selected node |
@@ -100,13 +100,13 @@ Build your RF chain visually: add components via right-click context menu on the
 ### Components
 
 - **Generator** — tone generator (frequency, amplitude, phase) with flat thermal noise floor
-- **Amplifier** — gain (dB) + noise figure (dB), adds amplified noise
+- **Amplifier** — gain (dB) + noise figure (dB), adds amplified noise. Optional nonlinear mode with OIP2/OIP3 (harmonics, IMD, compression)
 - **Splitter** — 1-in/2-out, -3 dB split loss
 - **Mixer** — frequency conversion with LO, sum/difference tones, conversion gain
 - **S-Parameter Amplifier** — frequency-dependent gain from Touchstone (.s2p/.s3p/.s4p) files, with phase rotation and file browser
 - **S-Parameter Filter** — passive frequency-selective component using Touchstone S-parameter data
 - **RF ADC** — sampler with configurable sample rate, NSD noise floor, bit depth, and full-scale voltage; includes aliasing and Nyquist zone effects
-- **PFB Channelizer** — polyphase filter bank channelizer (M channels, K taps/branch, Kaiser window) with per-channel noise and tone routing
+- **PFB Channelizer** — polyphase filter bank channelizer (M channels, K taps/branch, Kaiser window) with per-channel noise and tone routing. Full-spectrum output with active channel highlighting when probed
 
 ### Spectrum Analyzer
 
@@ -123,12 +123,13 @@ cmake --build build
 ctest --test-dir build
 ```
 
-66 tests (60 unit + 6 benchmarks) covering all DSP engines, node graph, touchstone parser, PFB channelizer, and UI.
+73 tests (67 unit + 6 benchmarks) covering all DSP engines, node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
 
 Run the DSP benchmarks to see per-operation timing:
 
 ```bash
-build/bin/tests.exe [bench]
+build/bin/tests [bench]       # Linux
+build/bin/tests.exe [bench]   # Windows
 ```
 
 ## Architecture
