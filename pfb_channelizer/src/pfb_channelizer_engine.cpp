@@ -126,12 +126,16 @@ void PFBChannelizerEngine::update(double) {
     out_full.frequencies = in_ptr->frequencies;
 
     size_t n_full = in_ptr->frequencies.size();
-    out_full.noise_W = (n_full > 0 && !in_ptr->noise_total_W.empty())
-        ? std::vector<double>(in_ptr->noise_total_W.begin(),
-                              in_ptr->noise_total_W.begin() + std::min(n_full, in_ptr->noise_total_W.size()))
-        : std::vector<double>(n_full, 0.0);
-    out_full.noise_total_W = out_full.noise_W;
+    size_t n_noise = std::min(n_full, in_ptr->noise_total_W.size());
+    out_full.noise_W.assign(n_full, 0.0);
+    out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
+    for (size_t i = 0; i < n_noise; ++i) {
+        double w2 = (i < m_full_spectrum_weight2.size()) ? m_full_spectrum_weight2[i] : 0.0;
+        double psd = in_ptr->noise_total_W[i] * w2;
+        out_full.noise_W[i] = psd;
+        out_full.noise_total_W[i] = psd;
+    }
     out_full.phase_deg = in_ptr->phase_deg;
 
     // Collect tones from all channels (channel-weighted)
@@ -164,6 +168,16 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
                 ch.bin_indices.push_back(i);
                 ch.bin_weights.push_back(prototypeResponse(offset));
             }
+        }
+    }
+
+    // Compute per-bin sum of channel weights squared across all channels
+    m_full_spectrum_weight2.assign(freqs.size(), 0.0);
+    for (const auto& ch : m_channels) {
+        for (size_t j = 0; j < ch.bin_indices.size(); ++j) {
+            int idx = ch.bin_indices[j];
+            if (idx >= 0 && idx < static_cast<int>(m_full_spectrum_weight2.size()))
+                m_full_spectrum_weight2[idx] += ch.bin_weights[j] * ch.bin_weights[j];
         }
     }
 }
