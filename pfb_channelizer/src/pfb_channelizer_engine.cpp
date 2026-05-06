@@ -126,15 +126,21 @@ void PFBChannelizerEngine::update(double) {
     out_full.frequencies = in_ptr->frequencies;
 
     size_t n_full = in_ptr->frequencies.size();
-    size_t n_noise = std::min(n_full, in_ptr->noise_total_W.size());
     out_full.noise_W.assign(n_full, 0.0);
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
-    for (size_t i = 0; i < n_noise; ++i) {
-        double w2 = (i < m_full_spectrum_weight2.size()) ? m_full_spectrum_weight2[i] : 0.0;
-        double psd = in_ptr->noise_total_W[i] * w2;
-        out_full.noise_W[i] = psd;
-        out_full.noise_total_W[i] = psd;
+    for (const auto& ch : m_channels) {
+        double effective_bw = 0.0;
+        for (double w : ch.bin_weights)
+            effective_bw += w * w * bin_width;
+        if (effective_bw <= 0.0) continue;
+        double density = ch.noise_W / effective_bw;
+        for (int bin_idx : ch.bin_indices) {
+            if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
+                out_full.noise_W[bin_idx] = density;
+                out_full.noise_total_W[bin_idx] = density;
+            }
+        }
     }
     out_full.phase_deg = in_ptr->phase_deg;
 
@@ -171,15 +177,6 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
         }
     }
 
-    // Compute per-bin sum of channel weights squared across all channels
-    m_full_spectrum_weight2.assign(freqs.size(), 0.0);
-    for (const auto& ch : m_channels) {
-        for (size_t j = 0; j < ch.bin_indices.size(); ++j) {
-            int idx = ch.bin_indices[j];
-            if (idx >= 0 && idx < static_cast<int>(m_full_spectrum_weight2.size()))
-                m_full_spectrum_weight2[idx] += ch.bin_weights[j] * ch.bin_weights[j];
-        }
-    }
 }
 
 double PFBChannelizerEngine::prototypeResponse(double offset_Hz) const {
