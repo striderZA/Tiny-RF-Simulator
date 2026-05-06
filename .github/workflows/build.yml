@@ -20,7 +20,7 @@ jobs:
             libxcursor-dev libxi-dev libxext-dev
 
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++-14
+        run: cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++-14 -DGLFW_BUILD_WAYLAND=OFF
 
       - name: Build
         run: cmake --build build
