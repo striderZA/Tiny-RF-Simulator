@@ -161,14 +161,33 @@ std::vector<SignalNode*> NodeGraphEngine::probedSignalNodes() const {
     std::vector<SignalNode*> result;
     result.reserve(m_probe_pins.size());
     for (int pin_id : m_probe_pins) {
+        bool found = false;
+        // Check output pins first
         for (const auto& node : m_nodes) {
             for (int pin : node.output_pin_ids) {
                 if (pin == pin_id) {
                     result.push_back(node.signal_node);
+                    found = true;
                     break;
                 }
             }
+            if (found) break;
         }
+        if (found) continue;
+        // Input pin — resolve to the upstream source's output
+        for (const auto& node : m_nodes) {
+            for (int pin : node.input_pin_ids) {
+                if (pin == pin_id) {
+                    auto* src = getSourceForInput(pin_id);
+                    result.push_back(src ? src : nullptr);
+                    found = true;
+                    break;
+                }
+            }
+            if (found) break;
+        }
+        if (!found)
+            result.push_back(nullptr);
     }
     return result;
 }
