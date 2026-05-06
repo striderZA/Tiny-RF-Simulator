@@ -4,6 +4,9 @@
 #include "imgui_impl_opengl2.h"
 #include <GLFW/glfw3.h>
 #include <implot.h>
+#include <string>
+#include <windows.h>
+#include <imgui_internal.h>
 
 struct RfSimulatorCore::Impl {
     GLFWwindow *window = nullptr;
@@ -78,6 +81,40 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
         ImGui_ImplOpenGL2_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        {
+            static bool first_run = []() {
+                char buf[MAX_PATH] = {};
+                if (GetModuleFileNameA(nullptr, buf, sizeof(buf)) == 0)
+                    return false;
+
+                std::string p(buf);
+                auto pos = p.find_last_of('\\');
+                p = p.substr(0, pos + 1) + "app.ini";
+                return GetFileAttributesA(p.c_str()) == INVALID_FILE_ATTRIBUTES;
+            }();
+
+            if (first_run) {
+                first_run = false;
+                ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+                ImGui::DockBuilderRemoveNode(dockspace_id);
+                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+
+                ImGuiID dock_root = dockspace_id;
+                ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down, 0.20f, nullptr, &dock_root);
+                ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Right, 0.30f, nullptr, &dock_root);
+                ImGuiID dock_properties = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down, 0.35f, nullptr, &dock_root);
+                ImGuiID dock_iq = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.40f, nullptr, &dock_right);
+
+                ImGui::DockBuilderDockWindow("Node Editor", dock_root);
+                ImGui::DockBuilderDockWindow("Properties", dock_properties);
+                ImGui::DockBuilderDockWindow("Spectrum Analyzer", dock_right);
+                ImGui::DockBuilderDockWindow("IQ Plot", dock_iq);
+                ImGui::DockBuilderDockWindow("Log", dock_bottom);
+
+                ImGui::DockBuilderFinish(dockspace_id);
+            }
+        }
 
         ImGui::DockSpaceOverViewport(ImGui::GetID("MainDockSpace"), nullptr,
                                      ImGuiDockNodeFlags_PassthruCentralNode);
