@@ -3,10 +3,10 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
 #include <GLFW/glfw3.h>
+#include <imgui_internal.h>
 #include <implot.h>
 #include <string>
 #include <windows.h>
-#include <imgui_internal.h>
 
 struct RfSimulatorCore::Impl {
     GLFWwindow *window = nullptr;
@@ -31,7 +31,7 @@ bool RfSimulatorCore::Initialize() {
     if (!glfwInit())
         return false;
 
-    p_impl->window = glfwCreateWindow(1600, 900, "RF Simulator GUI", nullptr, nullptr);
+    p_impl->window = glfwCreateWindow(1920, 1080, "RF Simulator GUI", nullptr, nullptr);
     if (p_impl->window == nullptr) {
         glfwTerminate();
         return false;
@@ -101,10 +101,14 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
                 ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
 
                 ImGuiID dock_root = dockspace_id;
-                ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down, 0.20f, nullptr, &dock_root);
-                ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Right, 0.30f, nullptr, &dock_root);
-                ImGuiID dock_properties = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down, 0.35f, nullptr, &dock_root);
-                ImGuiID dock_iq = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.40f, nullptr, &dock_right);
+                ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down, 0.20f,
+                                                                  nullptr, &dock_root);
+                ImGuiID dock_right = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Right, 0.30f,
+                                                                 nullptr, &dock_root);
+                ImGuiID dock_properties = ImGui::DockBuilderSplitNode(dock_root, ImGuiDir_Down,
+                                                                      0.35f, nullptr, &dock_root);
+                ImGuiID dock_iq = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.40f,
+                                                              nullptr, &dock_right);
 
                 ImGui::DockBuilderDockWindow("Node Editor", dock_root);
                 ImGui::DockBuilderDockWindow("Properties", dock_properties);
