@@ -122,6 +122,12 @@ void PFBChannelizerEngine::update(double) {
     out.bumpGeneration();
 
     // Build full spectrum into outputs[1]
+    // Note: noise_W and noise_total_W on this output contain the per-channel
+    // noise power distributed across the full input frequency grid as a
+    // constant density (W/Hz) within each channel's passband. This is NOT
+    // the original per-bin noise from the input — it represents the noise
+    // density seen at the PFB output, reconstructed from per-channel noise
+    // powers divided by each channel's effective noise bandwidth.
     auto& out_full = m_node.outputs[1];
     out_full.frequencies = in_ptr->frequencies;
 

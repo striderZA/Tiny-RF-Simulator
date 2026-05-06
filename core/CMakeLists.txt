@@ -31,6 +31,7 @@ target_link_libraries(core
         implot
         glfw
         OpenGL::GL
+        common
 )
 
 # Optional: group UI dependencies into a folder in IDEs

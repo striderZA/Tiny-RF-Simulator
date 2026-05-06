@@ -1,4 +1,5 @@
 #include "core.h"
+#include "session_state.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
@@ -84,14 +85,8 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
 
         {
             static bool first_run = []() {
-                char buf[MAX_PATH] = {};
-                if (GetModuleFileNameA(nullptr, buf, sizeof(buf)) == 0)
-                    return false;
-
-                std::string p(buf);
-                auto pos = p.find_last_of('\\');
-                p = p.substr(0, pos + 1) + "app.ini";
-                return GetFileAttributesA(p.c_str()) == INVALID_FILE_ATTRIBUTES;
+                SessionState s;
+                return !s.fileExists();
             }();
 
             if (first_run) {

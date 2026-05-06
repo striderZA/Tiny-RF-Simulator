@@ -141,6 +141,166 @@ TEST_CASE("SParameterAmplifierEngine forward param index controls gain selection
     REQUIRE(spamp.node().outputs[0].tones[0].power_dBm < -15.0);
 }
 
+TEST_CASE("SParameterAmplifierEngine NF adds noise power correctly", "[sparam_amp][nf]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
+    // No NF — noise_added_W should be zero (or very small)
+    spamp.setNF_dB(0.0);
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+    spamp.node().inputs[0] = &gen.node().outputs[0];
+    spamp.update(0.0);
+
+    const auto& out0 = spamp.node().outputs[0];
+    REQUIRE(!out0.noise_added_W.empty());
+    for (double n : out0.noise_added_W)
+        REQUIRE(n == Approx(0.0).margin(1e-30));
+
+    // NF = 3 dB — noise_added_W should be positive
+    spamp.setNF_dB(3.0);
+    spamp.update(0.0);
+    const auto& out3 = spamp.node().outputs[0];
+    REQUIRE(!out3.noise_added_W.empty());
+    bool any_positive = false;
+    for (double n : out3.noise_added_W) {
+        if (n > 0.0) { any_positive = true; break; }
+    }
+    REQUIRE(any_positive);
+}
+
+TEST_CASE("SParameterAmplifierEngine nonlinear disabled = no harmonics", "[sparam_amp][nonlinear]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    spamp.setEnableNonlinear(false);
+    spamp.node().inputs[0] = &gen.node().outputs[0];
+    spamp.update(0.0);
+
+    // Only the fundamental should be present
+    const auto& out = spamp.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == 100e6);
+}
+
+TEST_CASE("SParameterAmplifierEngine generates harmonics when nonlinear enabled",
+          "[sparam_amp][nonlinear]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -40.0);
+    gen.update(0.0);
+
+    spamp.setOIP2_dBm(40.0);
+    spamp.setOIP3_dBm(30.0);
+    spamp.setEnableNonlinear(true);
+    spamp.node().inputs[0] = &gen.node().outputs[0];
+    spamp.update(0.0);
+
+    const auto& out = spamp.node().outputs[0];
+    // Fundamental + 2nd harmonic + 3rd harmonic = 3
+    REQUIRE(out.tones.size() >= 3);
+
+    bool found_fund = false, found_h2 = false, found_h3 = false;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 100e6) < 1.0) found_fund = true;
+        if (std::abs(t.freq_Hz - 200e6) < 1.0) found_h2 = true;
+        if (std::abs(t.freq_Hz - 300e6) < 1.0) found_h3 = true;
+    }
+    REQUIRE(found_fund);
+    REQUIRE(found_h2);
+    REQUIRE(found_h3);
+
+    // Harmonics should be weaker than fundamental
+    double fund_power = -1e9, h2_power = -1e9;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 100e6) < 1.0) fund_power = t.power_dBm;
+        if (std::abs(t.freq_Hz - 200e6) < 1.0) h2_power = t.power_dBm;
+    }
+    REQUIRE(h2_power < fund_power);
+}
+
+TEST_CASE("SParameterAmplifierEngine generates IMD products for two tones",
+          "[sparam_amp][nonlinear]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -30.0);
+    gen.addTone(101e6, -30.0);
+    gen.update(0.0);
+
+    spamp.setOIP2_dBm(40.0);
+    spamp.setOIP3_dBm(30.0);
+    spamp.setEnableNonlinear(true);
+    spamp.node().inputs[0] = &gen.node().outputs[0];
+    spamp.update(0.0);
+
+    const auto& out = spamp.node().outputs[0];
+    // Should have IMD products including IM3 at 99 MHz and 102 MHz
+    REQUIRE(out.tones.size() > 4);
+
+    bool found_im3_lower = false, found_im3_upper = false;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 99e6) < 1.0) found_im3_lower = true;
+        if (std::abs(t.freq_Hz - 102e6) < 1.0) found_im3_upper = true;
+    }
+    REQUIRE(found_im3_lower);
+    REQUIRE(found_im3_upper);
+}
+
+TEST_CASE("SParameterAmplifierEngine shows compression at high input power",
+          "[sparam_amp][nonlinear]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/amplifier/data_files/adm-8344psm-s_parameters/"
+        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    SParameterAmplifierEngine spamp(0, graph, path);
+    REQUIRE(spamp.loaded());
+
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, 0.0);
+    gen.update(0.0);
+
+    // Low OIP3 to force compression
+    spamp.setOIP2_dBm(30.0);
+    spamp.setOIP3_dBm(10.0);
+    spamp.setEnableNonlinear(true);
+    spamp.node().inputs[0] = &gen.node().outputs[0];
+    spamp.update(0.0);
+
+    const auto& out = spamp.node().outputs[0];
+    REQUIRE(out.tones.size() >= 1);
+
+    // S21 gain at 100 MHz is ~19.6 dB, so Pout should be ~19.6 dBm linear
+    // With OIP3=10 dBm, compression should reduce output below linear expectation
+    // Linear Pout = 0 + 19.6 = 19.6 dBm, but compression kicks in
+    double actual_gain = out.tones[0].power_dBm - 0.0;
+    // Expect compression well below the OIP3 point
+    REQUIRE(out.tones[0].power_dBm < 15.0);
+}
+
 TEST_CASE("SParameterFilterEngine loads and applies S21 filtering", "[sparam_filter]") {
     NodeGraphEngine graph;
     std::string path = std::string(PROJECT_SOURCE_DIR) +

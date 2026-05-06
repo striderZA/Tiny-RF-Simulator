@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <windows.h>
 
 class SessionState {
@@ -24,9 +25,17 @@ class SessionState {
     }
 
     std::string load(const char* section, const char* key, const char* default_val) const {
-        char buf[256];
-        GetPrivateProfileStringA(section, key, default_val, buf, sizeof(buf), m_path.c_str());
-        return buf;
+        std::vector<char> buf(256);
+        DWORD ret;
+        do {
+            ret = GetPrivateProfileStringA(section, key, default_val, buf.data(),
+                                           static_cast<DWORD>(buf.size()), m_path.c_str());
+            if (ret == buf.size() - 1 && buf.size() < 32768)
+                buf.resize(buf.size() * 2);
+            else
+                break;
+        } while (true);
+        return buf.data();
     }
 
     bool loadBool(const char* section, const char* key, bool default_val) const {
