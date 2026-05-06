@@ -185,6 +185,29 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, 
         ImGui::Text("Max freq: %.0f MHz", engine.freqs().back() / 1e6);
     }
 
+    double nf = engine.nf_dB();
+    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+        engine.setNF_dB(nf);
+
+    bool nonlin = engine.enableNonlinear();
+    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin))
+        engine.setEnableNonlinear(nonlin);
+
+    if (nonlin) {
+        double oip2 = engine.oip2_dBm();
+        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0))
+            engine.setOIP2_dBm(oip2);
+
+        double oip3 = engine.oip3_dBm();
+        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0))
+            engine.setOIP3_dBm(oip3);
+
+        double p1dB_est = oip3 - 10.0;
+        ImGui::TextDisabled("P1dB ~ %.1f dBm", p1dB_est);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Estimated 1 dB compression point");
+    }
+
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }
