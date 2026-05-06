@@ -32,6 +32,14 @@ RfSimulatorApp::RfSimulatorApp() {
         removeComponent(graph_node_id);
     };
 
+    m_inspector_panel->setViewToggles({
+        &m_show_log,
+        &m_show_spectrum,
+        &m_show_properties,
+        &m_show_iq,
+        &m_show_node_editor
+    });
+
     m_graph_widget->onNodeHover = [this](int graph_node_id) -> std::string {
         for (auto& g : m_generators) if (g->graphNodeId() == graph_node_id) return g->hoverSummary();
         for (auto& a : m_amplifiers) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();

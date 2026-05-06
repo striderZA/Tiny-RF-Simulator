@@ -58,6 +58,14 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
     auto hit = findSelected();
     if (hit.type == ComponentType::None || hit.index < 0) {
         ImGui::TextDisabled("Select a component in the Node Editor");
+
+        ImGui::SeparatorText("View");
+        if (m_viewToggles.log) ImGui::Checkbox("Log", m_viewToggles.log);
+        if (m_viewToggles.node_editor) ImGui::Checkbox("Node Editor", m_viewToggles.node_editor);
+        if (m_viewToggles.spectrum) ImGui::Checkbox("Spectrum Analyzer", m_viewToggles.spectrum);
+        if (m_viewToggles.properties) ImGui::Checkbox("Properties", m_viewToggles.properties);
+        if (m_viewToggles.iq_plot) ImGui::Checkbox("IQ Plot", m_viewToggles.iq_plot);
+
         ImGui::End();
         return;
     }

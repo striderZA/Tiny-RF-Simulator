@@ -16,6 +16,14 @@ class SParameterAmplifierEngine;
 class PFBChannelizerEngine;
 class SParameterFilterEngine;
 
+struct ViewToggles {
+    bool* log = nullptr;
+    bool* spectrum = nullptr;
+    bool* properties = nullptr;
+    bool* iq_plot = nullptr;
+    bool* node_editor = nullptr;
+};
+
 class InspectorPanel {
 public:
     InspectorPanel(
@@ -33,6 +41,7 @@ public:
     void setPFB(PFBChannelizerEngine* pfb) { m_pfb_ptr = pfb; }
 
     std::function<void(int graph_node_id)> onRemoveNode;
+    void setViewToggles(const ViewToggles& t) { m_viewToggles = t; }
 
 private:
     NodeGraphEngine& m_graph;
@@ -44,6 +53,7 @@ private:
     std::vector<std::unique_ptr<AdcEngine>>& m_adcs;
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& m_generators;
     PFBChannelizerEngine* m_pfb_ptr = nullptr;
+    ViewToggles m_viewToggles;
 
     enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc, PFB };
     struct Hit { ComponentType type; int index; };
