@@ -53,6 +53,75 @@ void AmplifierEngine::update(double dt) {
         t.power_dBm += m_gain_dB;
     }
 
+    // Nonlinear processing
+    if (m_enable_nonlinear && in_ptr && !in_ptr->tones.empty()) {
+        size_t n_fund = out.tones.size();
+        double total_distortion_mW = 0.0;
+
+        // --- Harmonics (from each input tone) ---
+        for (const auto &tone : in_ptr->tones) {
+            double Pout_dBm = tone.power_dBm + m_gain_dB;
+            double Vp1 = dbmToV(Pout_dBm);
+
+            double V_h2 = m_k1 * Vp1 / std::sqrt(2.0);
+            double H2_dBm = vToDbm(V_h2);
+            out.tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
+            total_distortion_mW += dbmToW(H2_dBm);
+
+            double V_h3 = m_k2 * Vp1 * Vp1 * Vp1 / 4.0;
+            double H3_dBm = vToDbm(V_h3);
+            out.tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
+            total_distortion_mW += dbmToW(H3_dBm);
+        }
+
+        // --- IMD (from unique tone pairs, cap at 3 tones) ---
+        int n_tones = std::min(static_cast<int>(in_ptr->tones.size()), 3);
+        for (int i = 0; i < n_tones; ++i) {
+            for (int j = i + 1; j < n_tones; ++j) {
+                double P1 = in_ptr->tones[i].power_dBm + m_gain_dB;
+                double P2 = in_ptr->tones[j].power_dBm + m_gain_dB;
+                double f1 = in_ptr->tones[i].freq_Hz;
+                double f2 = in_ptr->tones[j].freq_Hz;
+                double Vp1 = dbmToV(P1);
+                double Vp2 = dbmToV(P2);
+
+                double V_im2 = m_k1 * Vp1 * Vp2;
+                double IM2_dBm = vToDbm(V_im2);
+                out.tones.push_back({std::abs(f1 - f2), IM2_dBm, 0.0});
+                out.tones.push_back({f1 + f2, IM2_dBm, 0.0});
+                total_distortion_mW += 2.0 * dbmToW(IM2_dBm);
+
+                double V_im3_12 = (3.0 / 4.0) * m_k2 * Vp1 * Vp1 * Vp2;
+                double IM3_12_dBm = vToDbm(V_im3_12);
+                out.tones.push_back({2.0 * f1 + f2, IM3_12_dBm, 0.0});
+                out.tones.push_back({std::abs(2.0 * f1 - f2), IM3_12_dBm, 0.0});
+                total_distortion_mW += 2.0 * dbmToW(IM3_12_dBm);
+
+                double V_im3_21 = (3.0 / 4.0) * m_k2 * Vp1 * Vp2 * Vp2;
+                double IM3_21_dBm = vToDbm(V_im3_21);
+                out.tones.push_back({2.0 * f2 + f1, IM3_21_dBm, 0.0});
+                out.tones.push_back({std::abs(f1 - 2.0 * f2), IM3_21_dBm, 0.0});
+                total_distortion_mW += 2.0 * dbmToW(IM3_21_dBm);
+            }
+        }
+
+        // --- Compression ---
+        double Pfund_mW = 0.0;
+        for (size_t i = 0; i < n_fund; ++i) {
+            Pfund_mW += dbmToW(out.tones[i].power_dBm);
+        }
+
+        if (total_distortion_mW >= Pfund_mW || Pfund_mW <= 0.0) {
+            for (size_t i = 0; i < n_fund; ++i)
+                out.tones[i].power_dBm = MIN_POWER;
+        } else {
+            double ratio = 1.0 - total_distortion_mW / Pfund_mW;
+            double ratio_dB = 10.0 * std::log10(ratio);
+            for (size_t i = 0; i < n_fund; ++i)
+                out.tones[i].power_dBm += ratio_dB;
+        }
+    }
+
     const size_t N = out.frequencies.size();
 
     if (in_ptr && !in_ptr->phase_deg.empty()) {
