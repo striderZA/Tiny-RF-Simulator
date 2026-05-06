@@ -52,6 +52,15 @@ class PFBChannelizerEngine {
     double fs_Hz() const { return m_cfg.Fs_Hz; }
     const std::vector<PFBChannel>& channels() const { return m_channels; }
 
+    double activeChannelCenter_Hz() const {
+        return m_active_channel >= 0 && m_active_channel < static_cast<int>(m_channels.size())
+            ? m_channels[m_active_channel].center_freq_Hz : 0.0;
+    }
+    double activeChannelBandwidth_Hz() const {
+        return m_active_channel >= 0 && m_active_channel < static_cast<int>(m_channels.size())
+            ? m_channels[m_active_channel].bandwidth_Hz : 0.0;
+    }
+
     void update(double dt);
     SignalNode& node() { return m_node; }
 

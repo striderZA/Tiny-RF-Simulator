@@ -6,9 +6,9 @@
 
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("PFB " + std::to_string(id), &m_node, 1, 1);
+    m_graph_node_id = graph.addNode("PFB " + std::to_string(id), &m_node, 1, 2);
     m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
+    m_node.outputs.resize(2);
 }
 
 int PFBChannelizerEngine::inputPinId() const {
@@ -120,6 +120,33 @@ void PFBChannelizerEngine::update(double) {
     }
 
     out.bumpGeneration();
+
+    // Build full spectrum into outputs[1]
+    auto& out_full = m_node.outputs[1];
+    out_full.frequencies = in_ptr->frequencies;
+
+    size_t n_full = in_ptr->frequencies.size();
+    out_full.noise_W.assign(n_full, 0.0);
+    out_full.noise_total_W.assign(n_full, 0.0);
+    out_full.phase_deg = in_ptr->phase_deg;
+
+    for (const auto& ch : m_channels) {
+        double density = (ch.bandwidth_Hz > 0.0) ? ch.noise_W / ch.bandwidth_Hz : 0.0;
+        for (int bin_idx : ch.bin_indices) {
+            if (bin_idx < static_cast<int>(n_full)) {
+                out_full.noise_W[bin_idx] = density;
+                out_full.noise_total_W[bin_idx] = density;
+            }
+        }
+    }
+
+    // Collect tones from all channels
+    out_full.tones.clear();
+    for (const auto& ch : m_channels) {
+        out_full.tones.insert(out_full.tones.end(), ch.tones.begin(), ch.tones.end());
+    }
+
+    out_full.bumpGeneration();
 }
 
 void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
