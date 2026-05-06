@@ -5,6 +5,7 @@
 #include "logging_core.h"
 #include "utils.h"
 #include "view_manager.h"
+#include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <limits>
 
@@ -169,8 +170,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const std::vector<double>* freq_axis = nullptr;
     for (auto* node : active_nodes) {
         if (!node) continue;
-        if (!freq_axis && !node->outputs[0].frequencies.empty())
-            freq_axis = &node->outputs[0].frequencies;
+        const auto& spec = (m_pfb_ptr && node == &m_pfb_ptr->node())
+            ? node->outputs[1] : node->outputs[0];
+        if (!freq_axis && !spec.frequencies.empty())
+            freq_axis = &spec.frequencies;
     }
 
     if (!freq_axis) {
@@ -181,8 +184,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     // Build combined specs for marker + avg noise
     std::vector<const Spectrum*> specs;
-    for (auto* node : active_nodes)
-        if (node) specs.push_back(&node->outputs[0]);
+    for (auto* node : active_nodes) {
+        if (!node) continue;
+        specs.push_back(m_pfb_ptr && node == &m_pfb_ptr->node()
+            ? &node->outputs[1] : &node->outputs[0]);
+    }
 
     // Render combined spectrum (for marker + noise readout)
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(specs);
@@ -204,14 +210,43 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     if (ImPlot::BeginPlot("Spectrum")) {
         for (size_t i = 0; i < active_nodes.size(); ++i) {
-            std::vector<double> trace = m_engine.renderSpectrum(active_nodes[i]->outputs[0]);
+            auto* node = active_nodes[i];
+            if (!node) continue;
+            bool is_pfb = (m_pfb_ptr && node == &m_pfb_ptr->node());
+            const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
+
+            std::vector<double> trace = m_engine.renderSpectrum(spec);
             if (trace.size() != freq_axis->size()) continue;
+
             std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
                               : ("Probe " + std::to_string(i));
             ImPlot::PlotLine(label.c_str(), freq_axis->data(), trace.data(),
                              static_cast<int>(trace.size()),
                              {ImPlotProp_LineColor, trace_colors[i % 4],
                               ImPlotProp_LineWeight, 1.5f});
+
+            // For PFB: overlay active channel highlight trace
+            if (is_pfb) {
+                double ch_center = m_pfb_ptr->activeChannelCenter_Hz();
+                double ch_bw = m_pfb_ptr->activeChannelBandwidth_Hz();
+                double ch_lo = ch_center - ch_bw / 2.0;
+                double ch_hi = ch_center + ch_bw / 2.0;
+
+                std::vector<double> highlight_freqs;
+                std::vector<double> highlight_data;
+                for (size_t j = 0; j < trace.size() && j < freq_axis->size(); ++j) {
+                    if ((*freq_axis)[j] >= ch_lo && (*freq_axis)[j] <= ch_hi) {
+                        highlight_freqs.push_back((*freq_axis)[j]);
+                        highlight_data.push_back(trace[j]);
+                    }
+                }
+                if (!highlight_data.empty()) {
+                    ImPlot::PlotLine("Active Ch", highlight_freqs.data(), highlight_data.data(),
+                                     static_cast<int>(highlight_data.size()),
+                                     {ImPlotProp_LineColor, ImVec4(0.90f, 0.59f, 0.16f, 1.0f),
+                                      ImPlotProp_LineWeight, 2.5f});
+                }
+            }
         }
 
         // Drag-to-zoom

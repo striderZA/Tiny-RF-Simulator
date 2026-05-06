@@ -34,6 +34,7 @@ target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
         simulator::spectrum_analyzer_engine 
         simulator::core 
+        simulator::pfb_channelizer_engine
         implot
 )
 

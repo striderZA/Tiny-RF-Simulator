@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+class PFBChannelizerEngine;
+
 struct MarkerState {
     bool enabled = false;
     double target_freq_Hz = 0.0;
@@ -24,6 +26,7 @@ class SpectrumAnalyzerWidget {
 
     void draw(const char *title, bool *p_open = nullptr);
     void setProbeLabels(const std::vector<std::string>& labels) { m_probe_labels = labels; }
+    void setPFB(PFBChannelizerEngine* pfb) { m_pfb_ptr = pfb; }
 
   private:
     SpectrumAnalyzerEngine &m_engine;
@@ -31,6 +34,7 @@ class SpectrumAnalyzerWidget {
     std::vector<std::string> m_probe_labels;
     MarkerState m_marker;
     DragZoomState m_zoom;
+    PFBChannelizerEngine* m_pfb_ptr = nullptr;
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;
