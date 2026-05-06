@@ -461,3 +461,112 @@ TEST_CASE("findPeaks detects peak in minimum 3-point spectrum", "[spectrum]") {
     REQUIRE(peaks[0].freq_Hz == 1e6);
     REQUIRE(peaks[0].power_dBm == -30.0);
 }
+
+TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(10.0);
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    amp.update(0.0);
+
+    const auto& out = amp.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == 100e6);
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0));
+}
+
+TEST_CASE("Amplifier generates 2nd and 3rd harmonics", "[amplifier][nonlinear]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(0.0);
+    amp.setOIP2_dBm(40.0);
+    amp.setOIP3_dBm(30.0);
+    amp.setEnableNonlinear(true);
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    amp.update(0.0);
+
+    const auto& out = amp.node().outputs[0];
+    REQUIRE(out.tones.size() == 3);
+
+    REQUIRE(out.tones[0].freq_Hz == 100e6);
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0).epsilon(0.001));
+
+    REQUIRE(out.tones[1].freq_Hz == 200e6);
+    REQUIRE(out.tones[1].power_dBm == Approx(-50.0).epsilon(0.01));
+
+    REQUIRE(out.tones[2].freq_Hz == 300e6);
+    REQUIRE(out.tones[2].power_dBm == Approx(-129.5).epsilon(0.1));
+}
+
+TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.addTone(101e6, -20.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(0.0);
+    amp.setOIP2_dBm(40.0);
+    amp.setOIP3_dBm(30.0);
+    amp.setEnableNonlinear(true);
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    amp.update(0.0);
+
+    const auto& out = amp.node().outputs[0];
+    // 2 fundamentals + 4 harmonics + 6 IMD = 12 tones
+    REQUIRE(out.tones.size() == 12);
+
+    bool found_99 = false, found_102 = false;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 99e6) < 1.0) found_99 = true;
+        if (std::abs(t.freq_Hz - 102e6) < 1.0) found_102 = true;
+    }
+    REQUIRE(found_99);
+    REQUIRE(found_102);
+}
+
+TEST_CASE("Amplifier shows compression at high input", "[amplifier][nonlinear]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, 5.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(0.0);
+    amp.setOIP3_dBm(10.0);
+    amp.setOIP2_dBm(20.0);
+    amp.setEnableNonlinear(true);
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    amp.update(0.0);
+
+    double gain_high = amp.node().outputs[0].tones[0].power_dBm - 5.0;
+    REQUIRE(gain_high < 0.0);
+    REQUIRE(gain_high > -3.0);
+}
+
+TEST_CASE("Amplifier single tone produces no IMD products", "[amplifier][nonlinear]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(0.0);
+    amp.setOIP2_dBm(40.0);
+    amp.setOIP3_dBm(30.0);
+    amp.setEnableNonlinear(true);
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    amp.update(0.0);
+
+    const auto& out = amp.node().outputs[0];
+    REQUIRE(out.tones.size() == 3);
+}
