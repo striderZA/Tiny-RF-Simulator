@@ -126,21 +126,15 @@ void PFBChannelizerEngine::update(double) {
     out_full.frequencies = in_ptr->frequencies;
 
     size_t n_full = in_ptr->frequencies.size();
-    out_full.noise_W.assign(n_full, 0.0);
-    out_full.noise_total_W.assign(n_full, 0.0);
+    out_full.noise_W = (n_full > 0 && !in_ptr->noise_total_W.empty())
+        ? std::vector<double>(in_ptr->noise_total_W.begin(),
+                              in_ptr->noise_total_W.begin() + std::min(n_full, in_ptr->noise_total_W.size()))
+        : std::vector<double>(n_full, 0.0);
+    out_full.noise_total_W = out_full.noise_W;
+    out_full.noise_added_W.assign(n_full, 0.0);
     out_full.phase_deg = in_ptr->phase_deg;
 
-    for (const auto& ch : m_channels) {
-        double density = (ch.bandwidth_Hz > 0.0) ? ch.noise_W / ch.bandwidth_Hz : 0.0;
-        for (int bin_idx : ch.bin_indices) {
-            if (bin_idx < static_cast<int>(n_full)) {
-                out_full.noise_W[bin_idx] = density;
-                out_full.noise_total_W[bin_idx] = density;
-            }
-        }
-    }
-
-    // Collect tones from all channels
+    // Collect tones from all channels (channel-weighted)
     out_full.tones.clear();
     for (const auto& ch : m_channels) {
         out_full.tones.insert(out_full.tones.end(), ch.tones.begin(), ch.tones.end());
