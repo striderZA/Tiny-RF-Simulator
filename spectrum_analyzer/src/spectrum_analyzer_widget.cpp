@@ -204,6 +204,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         ImVec4(0.47f, 0.20f, 0.67f, 1.0f),  // Purple
         ImVec4(0.24f, 0.55f, 0.86f, 1.0f),  // Blue
     };
+    static const ImVec4 pfb_full_color(0.60f, 0.80f, 0.95f, 1.0f);   // Light sky blue
+    static const ImVec4 pfb_highlight_color(1.00f, 0.50f, 0.00f, 1.0f); // Bright orange
 
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
@@ -222,8 +224,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                               : ("Probe " + std::to_string(i));
             ImPlot::PlotLine(label.c_str(), freq_axis->data(), trace.data(),
                              static_cast<int>(trace.size()),
-                             {ImPlotProp_LineColor, trace_colors[i % 4],
-                              ImPlotProp_LineWeight, 1.5f});
+                             {ImPlotProp_LineColor, is_pfb ? pfb_full_color : trace_colors[i % 4],
+                              ImPlotProp_LineWeight, is_pfb ? 1.0f : 1.5f});
 
             // For PFB: overlay active channel highlight trace
             if (is_pfb) {
@@ -243,7 +245,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                 if (!highlight_data.empty()) {
                     ImPlot::PlotLine("Active Ch", highlight_freqs.data(), highlight_data.data(),
                                      static_cast<int>(highlight_data.size()),
-                                     {ImPlotProp_LineColor, ImVec4(0.90f, 0.59f, 0.16f, 1.0f),
+                                     {ImPlotProp_LineColor, pfb_highlight_color,
                                       ImPlotProp_LineWeight, 2.5f});
                 }
             }
