@@ -127,9 +127,11 @@ void PFBChannelizerEngine::update(double) {
     out.bumpGeneration();
 
     // Build full spectrum into outputs[1]
-    // Each bin gets noise = input PSD * weight² from its channel.
-    // The prototype filter weight (< 1.0 at channel edges) reduces noise per bin,
-    // making the PFB output noise floor lower than the input — the binning effect.
+    // Each bin gets the average noise density across the channels that
+    // cover it. The per-channel density is total channel noise power
+    // divided by channel bandwidth, giving a noise reduction proportional
+    // to the filter's effective bandwidth. Averaging by overlap count
+    // removes ripple from overlapping channel contributions.
     auto& out_full = m_node.outputs[1];
     out_full.frequencies = in_ptr->frequencies;
 
@@ -137,17 +139,22 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_W.assign(n_full, 0.0);
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
+    std::vector<int> overlap_count(n_full, 0);
+    double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
     for (const auto& ch : m_channels) {
-        for (size_t i = 0; i < ch.bin_indices.size(); ++i) {
-            int bin_idx = ch.bin_indices[i];
-            double weight = ch.bin_weights[i];
+        double density = ch.noise_W / channel_bw;
+        for (int bin_idx : ch.bin_indices) {
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
-                double psd = (bin_idx < static_cast<int>(in_ptr->noise_total_W.size()))
-                    ? in_ptr->noise_total_W[bin_idx] : 0.0;
-                double weighted = psd * weight * weight;
-                out_full.noise_W[bin_idx] += weighted;
-                out_full.noise_total_W[bin_idx] += weighted;
+                out_full.noise_W[bin_idx] += density;
+                out_full.noise_total_W[bin_idx] += density;
+                ++overlap_count[bin_idx];
             }
+        }
+    }
+    for (size_t i = 0; i < n_full; ++i) {
+        if (overlap_count[i] > 1) {
+            out_full.noise_W[i] /= static_cast<double>(overlap_count[i]);
+            out_full.noise_total_W[i] /= static_cast<double>(overlap_count[i]);
         }
     }
     out_full.phase_deg = in_ptr->phase_deg;
