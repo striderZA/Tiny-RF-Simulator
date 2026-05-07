@@ -142,7 +142,7 @@ void RfSimulatorApp::addPFB() {
         m_graph_engine.addLink(adc_out, pfb_in);
 
     m_view_manager.registerNode(&pfb->node());
-    m_inspector_panel->setPFB(pfb.get());
+    m_inspector_panel->setPFBs({pfb.get()});
     m_pfb = std::move(pfb);
     m_spectrum_widget->setPFBs({m_pfb.get()});
     m_iq_widget = std::make_unique<IQPlotWidget>(*m_pfb);
@@ -225,7 +225,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
     if (m_pfb && m_pfb->graphNodeId() == graph_node_id) {
         m_view_manager.unregisterNode(&m_pfb->node());
         m_graph_engine.removeNode(graph_node_id);
-        m_inspector_panel->setPFB(nullptr);
+        m_inspector_panel->setPFBs({});
         m_iq_widget.reset();
         m_spectrum_widget->setPFBs({});
         m_pfb.reset();

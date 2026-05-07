@@ -47,7 +47,8 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
         if (m_sparam_filters[i]->graphNodeId() == selected_id) return {ComponentType::SParamFilter, i};
     for (int i = 0; i < static_cast<int>(m_adcs.size()); ++i)
         if (m_adcs[i]->graphNodeId() == selected_id) return {ComponentType::Adc, i};
-    if (m_pfb_ptr && m_pfb_ptr->graphNodeId() == selected_id) return {ComponentType::PFB, 0};
+    for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i)
+        if (m_pfb_ptrs[i] && m_pfb_ptrs[i]->graphNodeId() == selected_id) return {ComponentType::PFB, i};
 
     return {ComponentType::None, -1};
 }
@@ -81,7 +82,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::SParamFilter: node_id = m_sparam_filters[hit.index]->graphNodeId(); label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id()); break;
         case ComponentType::Adc:       node_id = m_adcs[hit.index]->graphNodeId(); label = "ADC " + std::to_string(m_adcs[hit.index]->id()); break;
         case ComponentType::Generator: node_id = m_generators[hit.index]->graphNodeId(); label = "Generator " + std::to_string(m_generators[hit.index]->id()); break;
-        case ComponentType::PFB: if (m_pfb_ptr) { node_id = m_pfb_ptr->graphNodeId(); label = "PFB Channelizer"; } break;
+        case ComponentType::PFB: if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[hit.index]) { node_id = m_pfb_ptrs[hit.index]->graphNodeId(); label = "PFB " + std::to_string(m_pfb_ptrs[hit.index]->id()); } break;
         default: break;
     }
 
@@ -95,7 +96,25 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::SParamFilter: drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index); break;
         case ComponentType::Adc:       drawAdcProperties(*m_adcs[hit.index], hit.index); break;
         case ComponentType::Generator: drawGeneratorProperties(*m_generators[hit.index], hit.index); break;
-        case ComponentType::PFB: if (m_pfb_ptr) drawPFBProperties(*m_pfb_ptr); break;
+        case ComponentType::PFB:
+            if (!m_pfb_ptrs.empty()) {
+                std::string combo_label = "PFB##selector";
+                std::string preview = "PFB " + std::to_string(m_selected_pfb_index);
+                if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
+                    for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                        bool selected = (i == m_selected_pfb_index);
+                        std::string item = "PFB " + std::to_string(i);
+                        if (ImGui::Selectable(item.c_str(), &selected))
+                            m_selected_pfb_index = i;
+                        if (selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                if (m_pfb_ptrs[m_selected_pfb_index])
+                    drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
+            }
+            break;
         default: break;
     }
 

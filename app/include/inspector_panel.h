@@ -38,7 +38,7 @@ public:
     );
 
     void draw(const char* title, bool* p_open = nullptr);
-    void setPFB(PFBChannelizerEngine* pfb) { m_pfb_ptr = pfb; }
+    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) { m_pfb_ptrs = pfbs; }
 
     std::function<void(int graph_node_id)> onRemoveNode;
     void setViewToggles(const ViewToggles& t) { m_viewToggles = t; }
@@ -52,7 +52,8 @@ private:
     std::vector<std::unique_ptr<SParameterFilterEngine>>& m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>>& m_adcs;
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& m_generators;
-    PFBChannelizerEngine* m_pfb_ptr = nullptr;
+    std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
+    int m_selected_pfb_index = 0;
     ViewToggles m_viewToggles;
 
     enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc, PFB };
