@@ -59,6 +59,7 @@ void AdcEngine::update(double /*dt*/) {
         out.phase_deg = input->phase_deg;
         out.noise_W = input->noise_W;
         out.noise_added_W = input->noise_added_W;
+        out.fs_Hz = m_fs_Hz;
     } else {
         out.frequencies.clear();
         out.phase_deg.clear();

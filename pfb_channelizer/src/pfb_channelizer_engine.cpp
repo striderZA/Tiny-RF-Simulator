@@ -49,8 +49,8 @@ void PFBChannelizerEngine::update(double) {
         return;
     m_dirty = false;
 
-    if (in_ptr && in_ptr->frequencies.size() >= 2) {
-        m_cfg.Fs_Hz = in_ptr->frequencies.back() - in_ptr->frequencies.front();
+    if (in_ptr && in_ptr->fs_Hz > 0.0) {
+        m_cfg.Fs_Hz = in_ptr->fs_Hz;
     }
 
     m_cached_input_ptr = in_ptr;

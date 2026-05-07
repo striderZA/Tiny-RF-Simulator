@@ -23,6 +23,10 @@ struct Spectrum {
     // Phase (degrees) per frequency bin, same size as frequencies.
     std::vector<double> phase_deg;
 
+    // Sample rate of the signal this spectrum represents (Hz).
+    // Set by ADCs, propagated through most components, read by PFB channelizer.
+    double fs_Hz = 0.0;
+
     // Generation counter for dirty-flag tracking. Producers increment after
     // recomputation so consumers can detect upstream changes.
     uint64_t generation = 0;
