@@ -31,7 +31,6 @@ class RfSimulatorApp {
     bool m_show_log = true;
     bool m_show_spectrum = true;
     bool m_show_properties = true;
-    bool m_show_iq = true;
     bool m_show_node_editor = true;
     SessionState m_state;
     ~RfSimulatorApp();
@@ -52,8 +51,9 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
     std::vector<std::unique_ptr<SParameterFilterEngine>> m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>> m_adcs;
-    std::unique_ptr<PFBChannelizerEngine> m_pfb;
-    std::unique_ptr<IQPlotWidget> m_iq_widget;
+    std::vector<std::unique_ptr<PFBChannelizerEngine>> m_pfbs;
+    std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
+    std::vector<bool> m_show_iq_pfbs;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     void addGenerator();

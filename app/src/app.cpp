@@ -36,7 +36,7 @@ RfSimulatorApp::RfSimulatorApp() {
         &m_show_log,
         &m_show_spectrum,
         &m_show_properties,
-        &m_show_iq,
+        nullptr, // iq_plot (per-PFB toggles used instead)
         &m_show_node_editor
     });
 
@@ -48,7 +48,7 @@ RfSimulatorApp::RfSimulatorApp() {
         for (auto& s : m_sparam_amps) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& s : m_sparam_filters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& a : m_adcs) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
-        if (m_pfb && m_pfb->graphNodeId() == graph_node_id) return m_pfb->hoverSummary();
+        for (auto& p : m_pfbs) if (p->graphNodeId() == graph_node_id) return p->hoverSummary();
         return "";
     };
 
@@ -60,7 +60,6 @@ void RfSimulatorApp::load_window_states() {
     m_show_log = m_state.loadBool("WindowState", "Log", true);
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
-    m_show_iq = m_state.loadBool("WindowState", "IQPlot", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
 }
 
@@ -131,7 +130,8 @@ void RfSimulatorApp::addPFB() {
         return;
     }
 
-    auto pfb = std::make_unique<PFBChannelizerEngine>(0, m_graph_engine);
+    int id = static_cast<int>(m_pfbs.size());
+    auto pfb = std::make_unique<PFBChannelizerEngine>(id, m_graph_engine);
 
     // Auto-wire to the first ADC and use its sample rate
     auto* adc = m_adcs[0].get();
@@ -142,11 +142,11 @@ void RfSimulatorApp::addPFB() {
         m_graph_engine.addLink(adc_out, pfb_in);
 
     m_view_manager.registerNode(&pfb->node());
-    m_inspector_panel->setPFBs({pfb.get()});
-    m_pfb = std::move(pfb);
-    m_spectrum_widget->setPFBs({m_pfb.get()});
-    m_iq_widget = std::make_unique<IQPlotWidget>(*m_pfb);
-    LOG_INFO("Added PFB channelizer (wired to ADC, Fs=%.0f Hz)", m_pfb->fs_Hz());
+    m_pfbs.push_back(std::move(pfb));
+    m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*m_pfbs.back()));
+    m_show_iq_pfbs.push_back(
+        m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(id)).c_str(), true));
+    LOG_INFO("Added PFB channelizer %d", id);
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -222,15 +222,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
         }
     }
     // Find and remove PFB channelizer
-    if (m_pfb && m_pfb->graphNodeId() == graph_node_id) {
-        m_view_manager.unregisterNode(&m_pfb->node());
-        m_graph_engine.removeNode(graph_node_id);
-        m_inspector_panel->setPFBs({});
-        m_iq_widget.reset();
-        m_spectrum_widget->setPFBs({});
-        m_pfb.reset();
-        LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
-        return;
+    for (size_t i = 0; i < m_pfbs.size(); ++i) {
+        if (m_pfbs[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_pfbs[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_iq_widgets.erase(m_iq_widgets.begin() + static_cast<std::ptrdiff_t>(i));
+            m_show_iq_pfbs.erase(m_show_iq_pfbs.begin() + static_cast<std::ptrdiff_t>(i));
+            m_pfbs.erase(m_pfbs.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
+            return;
+        }
     }
 }
 
@@ -256,13 +257,11 @@ void RfSimulatorApp::update_dsp() {
     addWiredUpdate(m_sparam_filters);
     addWiredUpdate(m_adcs);
 
-    if (m_pfb) {
-        updates[m_pfb->graphNodeId()] = [this]() {
-            if (!m_adcs.empty())
-                m_pfb->setFs_Hz(m_adcs[0]->fs_Hz());
-            auto* source = m_graph_engine.getSourceForInput(m_pfb->inputPinId());
-            m_pfb->node().inputs[0] = source ? &source->outputs[0] : nullptr;
-            m_pfb->update(0.0);
+    for (auto& pfb : m_pfbs) {
+        updates[pfb->graphNodeId()] = [this, ptr = pfb.get()]() {
+            auto* source = this->m_graph_engine.getSourceForInput(ptr->inputPinId());
+            ptr->node().inputs[0] = source ? &source->outputs[0] : nullptr;
+            ptr->update(0.0);
         };
     }
 
@@ -293,6 +292,13 @@ void RfSimulatorApp::update_dsp() {
             node->view_enabled = std::find(probed_nodes.begin(), probed_nodes.end(), node) != probed_nodes.end();
         }
     }
+
+    // Sync PFB pointers to spectrum analyzer and inspector panel
+    std::vector<PFBChannelizerEngine*> pfb_ptrs;
+    for (auto& pfb : m_pfbs)
+        pfb_ptrs.push_back(pfb.get());
+    m_spectrum_widget->setPFBs(pfb_ptrs);
+    m_inspector_panel->setPFBs(pfb_ptrs);
 }
 
 void RfSimulatorApp::draw_ui() {
@@ -307,8 +313,14 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
-    if (m_iq_widget && m_pfb && m_show_iq)
-        m_iq_widget->draw("IQ Plot", &m_show_iq);
+    for (size_t i = 0; i < m_pfbs.size(); ++i) {
+        if (m_show_iq_pfbs[i]) {
+            std::string label = "IQ Plot - PFB " + std::to_string(i);
+            bool show = m_show_iq_pfbs[i];
+            m_iq_widgets[i]->draw(label.c_str(), &show);
+            m_show_iq_pfbs[i] = show;
+        }
+    }
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
@@ -325,6 +337,9 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Log", m_show_log);
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
-    m_state.saveBool("WindowState", "IQPlot", m_show_iq);
+    for (size_t i = 0; i < m_show_iq_pfbs.size(); ++i) {
+        std::string key = "IQPlot_" + std::to_string(i);
+        m_state.saveBool("WindowState", key.c_str(), m_show_iq_pfbs[i]);
+    }
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
 }
