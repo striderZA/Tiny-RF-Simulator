@@ -127,12 +127,9 @@ void PFBChannelizerEngine::update(double) {
     out.bumpGeneration();
 
     // Build full spectrum into outputs[1]
-    // Note: noise_W and noise_total_W on this output contain the per-channel
-    // noise power distributed across the full input frequency grid as a
-    // constant density (W/Hz) within each channel's passband. This is NOT
-    // the original per-bin noise from the input — it represents the noise
-    // density seen at the PFB output, reconstructed from per-channel noise
-    // powers divided by each channel's effective noise bandwidth.
+    // Each bin gets noise = input PSD * weight² from its channel.
+    // The prototype filter weight (< 1.0 at channel edges) reduces noise per bin,
+    // making the PFB output noise floor lower than the input — the binning effect.
     auto& out_full = m_node.outputs[1];
     out_full.frequencies = in_ptr->frequencies;
 
@@ -141,15 +138,15 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
     for (const auto& ch : m_channels) {
-        double effective_bw = 0.0;
-        for (double w : ch.bin_weights)
-            effective_bw += w * w * bin_width;
-        if (effective_bw <= 0.0) continue;
-        double density = ch.noise_W / effective_bw;
-        for (int bin_idx : ch.bin_indices) {
+        for (size_t i = 0; i < ch.bin_indices.size(); ++i) {
+            int bin_idx = ch.bin_indices[i];
+            double weight = ch.bin_weights[i];
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
-                out_full.noise_W[bin_idx] = density;
-                out_full.noise_total_W[bin_idx] = density;
+                double psd = (bin_idx < static_cast<int>(in_ptr->noise_total_W.size()))
+                    ? in_ptr->noise_total_W[bin_idx] : 0.0;
+                double weighted = psd * weight * weight;
+                out_full.noise_W[bin_idx] = weighted;
+                out_full.noise_total_W[bin_idx] = weighted;
             }
         }
     }

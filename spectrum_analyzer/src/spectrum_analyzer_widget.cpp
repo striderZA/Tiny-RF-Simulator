@@ -172,7 +172,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         if (!node) continue;
         auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
             [node](auto* pfb) { return pfb && node == &pfb->node(); });
-        const auto& spec = pfbIter != m_pfb_ptrs.end() ? node->outputs[0] : node->outputs[0];
+        const auto& spec = pfbIter != m_pfb_ptrs.end() ? node->outputs[1] : node->outputs[0];
         if (!freq_axis && !spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
@@ -190,7 +190,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
             [node](auto* pfb) { return pfb && node == &pfb->node(); });
         specs.push_back(pfbIter != m_pfb_ptrs.end()
-            ? &node->outputs[0] : &node->outputs[0]);
+            ? &node->outputs[1] : &node->outputs[0]);
     }
 
     // Render combined spectrum (for marker + noise readout)
@@ -220,7 +220,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
                 [node](auto* pfb) { return pfb && node == &pfb->node(); });
             bool is_pfb = pfbIter != m_pfb_ptrs.end();
-            const auto& spec = node->outputs[0];
+            const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
             if (trace.size() != freq_axis->size()) continue;
