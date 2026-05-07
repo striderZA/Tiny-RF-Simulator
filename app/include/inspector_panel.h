@@ -38,7 +38,11 @@ public:
     );
 
     void draw(const char* title, bool* p_open = nullptr);
-    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) { m_pfb_ptrs = pfbs; }
+    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) {
+        m_pfb_ptrs = pfbs;
+        if (m_selected_pfb_index >= static_cast<int>(m_pfb_ptrs.size()))
+            m_selected_pfb_index = std::max(0, static_cast<int>(m_pfb_ptrs.size()) - 1);
+    }
 
     std::function<void(int graph_node_id)> onRemoveNode;
     void setViewToggles(const ViewToggles& t) { m_viewToggles = t; }

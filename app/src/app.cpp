@@ -125,22 +125,8 @@ void RfSimulatorApp::addAdc() {
 }
 
 void RfSimulatorApp::addPFB() {
-    if (m_adcs.empty()) {
-        LOG_WARN("Cannot add PFB: no ADC in signal chain");
-        return;
-    }
-
     int id = static_cast<int>(m_pfbs.size());
     auto pfb = std::make_unique<PFBChannelizerEngine>(id, m_graph_engine);
-
-    // Auto-wire to the first ADC and use its sample rate
-    auto* adc = m_adcs[0].get();
-    pfb->setFs_Hz(adc->fs_Hz());
-    int adc_out = adc->outputPinId();
-    int pfb_in = pfb->inputPinId();
-    if (adc_out >= 0 && pfb_in >= 0)
-        m_graph_engine.addLink(adc_out, pfb_in);
-
     m_view_manager.registerNode(&pfb->node());
     m_pfbs.push_back(std::move(pfb));
     m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*m_pfbs.back()));

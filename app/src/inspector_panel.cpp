@@ -97,13 +97,18 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
         case ComponentType::Adc:       drawAdcProperties(*m_adcs[hit.index], hit.index); break;
         case ComponentType::Generator: drawGeneratorProperties(*m_generators[hit.index], hit.index); break;
         case ComponentType::PFB:
+            if (hit.type == ComponentType::PFB && hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()))
+                m_selected_pfb_index = hit.index;
             if (!m_pfb_ptrs.empty()) {
+                int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[m_selected_pfb_index])
+                    ? m_pfb_ptrs[m_selected_pfb_index]->id() : m_selected_pfb_index;
                 std::string combo_label = "PFB##selector";
-                std::string preview = "PFB " + std::to_string(m_selected_pfb_index);
+                std::string preview = "PFB " + std::to_string(display_id);
                 if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
                     for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                        if (!m_pfb_ptrs[i]) continue;
                         bool selected = (i == m_selected_pfb_index);
-                        std::string item = "PFB " + std::to_string(i);
+                        std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
                         if (ImGui::Selectable(item.c_str(), &selected))
                             m_selected_pfb_index = i;
                         if (selected)
@@ -111,7 +116,7 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
                     }
                     ImGui::EndCombo();
                 }
-                if (m_pfb_ptrs[m_selected_pfb_index])
+                if (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[m_selected_pfb_index])
                     drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
             }
             break;
