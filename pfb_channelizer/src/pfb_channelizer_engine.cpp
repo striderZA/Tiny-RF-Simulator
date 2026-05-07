@@ -145,8 +145,8 @@ void PFBChannelizerEngine::update(double) {
                 double psd = (bin_idx < static_cast<int>(in_ptr->noise_total_W.size()))
                     ? in_ptr->noise_total_W[bin_idx] : 0.0;
                 double weighted = psd * weight * weight;
-                out_full.noise_W[bin_idx] = weighted;
-                out_full.noise_total_W[bin_idx] = weighted;
+                out_full.noise_W[bin_idx] += weighted;
+                out_full.noise_total_W[bin_idx] += weighted;
             }
         }
     }
