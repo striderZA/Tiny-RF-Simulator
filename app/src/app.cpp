@@ -144,7 +144,7 @@ void RfSimulatorApp::addPFB() {
     m_view_manager.registerNode(&pfb->node());
     m_inspector_panel->setPFB(pfb.get());
     m_pfb = std::move(pfb);
-    m_spectrum_widget->setPFB(m_pfb.get());
+    m_spectrum_widget->setPFBs({m_pfb.get()});
     m_iq_widget = std::make_unique<IQPlotWidget>(*m_pfb);
     LOG_INFO("Added PFB channelizer (wired to ADC, Fs=%.0f Hz)", m_pfb->fs_Hz());
 }
@@ -227,7 +227,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
         m_graph_engine.removeNode(graph_node_id);
         m_inspector_panel->setPFB(nullptr);
         m_iq_widget.reset();
-        m_spectrum_widget->setPFB(nullptr);
+        m_spectrum_widget->setPFBs({});
         m_pfb.reset();
         LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
         return;

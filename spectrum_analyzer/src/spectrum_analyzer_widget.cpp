@@ -170,8 +170,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const std::vector<double>* freq_axis = nullptr;
     for (auto* node : active_nodes) {
         if (!node) continue;
-        const auto& spec = (m_pfb_ptr && node == &m_pfb_ptr->node())
-            ? node->outputs[1] : node->outputs[0];
+        auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
+            [node](auto* pfb) { return pfb && node == &pfb->node(); });
+        const auto& spec = pfbIter != m_pfb_ptrs.end() ? node->outputs[1] : node->outputs[0];
         if (!freq_axis && !spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
@@ -186,7 +187,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     std::vector<const Spectrum*> specs;
     for (auto* node : active_nodes) {
         if (!node) continue;
-        specs.push_back(m_pfb_ptr && node == &m_pfb_ptr->node()
+        auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
+            [node](auto* pfb) { return pfb && node == &pfb->node(); });
+        specs.push_back(pfbIter != m_pfb_ptrs.end()
             ? &node->outputs[1] : &node->outputs[0]);
     }
 
@@ -214,7 +217,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         for (size_t i = 0; i < active_nodes.size(); ++i) {
             auto* node = active_nodes[i];
             if (!node) continue;
-            bool is_pfb = (m_pfb_ptr && node == &m_pfb_ptr->node());
+            auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
+                [node](auto* pfb) { return pfb && node == &pfb->node(); });
+            bool is_pfb = pfbIter != m_pfb_ptrs.end();
             const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
@@ -229,8 +234,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
             // For PFB: overlay active channel highlight trace
             if (is_pfb) {
-                double ch_center = m_pfb_ptr->activeChannelCenter_Hz();
-                double ch_bw = m_pfb_ptr->activeChannelBandwidth_Hz();
+                const auto* pfb_ptr = *pfbIter;
+                double ch_center = pfb_ptr->activeChannelCenter_Hz();
+                double ch_bw = pfb_ptr->activeChannelBandwidth_Hz();
                 double ch_lo = ch_center - ch_bw / 2.0;
                 double ch_hi = ch_center + ch_bw / 2.0;
 

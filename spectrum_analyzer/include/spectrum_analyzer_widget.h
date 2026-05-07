@@ -26,7 +26,7 @@ class SpectrumAnalyzerWidget {
 
     void draw(const char *title, bool *p_open = nullptr);
     void setProbeLabels(const std::vector<std::string>& labels) { m_probe_labels = labels; }
-    void setPFB(PFBChannelizerEngine* pfb) { m_pfb_ptr = pfb; }
+    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) { m_pfb_ptrs = pfbs; }
 
   private:
     SpectrumAnalyzerEngine &m_engine;
@@ -34,7 +34,7 @@ class SpectrumAnalyzerWidget {
     std::vector<std::string> m_probe_labels;
     MarkerState m_marker;
     DragZoomState m_zoom;
-    PFBChannelizerEngine* m_pfb_ptr = nullptr;
+    std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;
