@@ -1,9 +1,9 @@
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-#include "pfb_channelizer_engine.h"
-#include "node_graph_engine.h"
 #include "common.h"
+#include "node_graph_engine.h"
+#include "pfb_channelizer_engine.h"
 
 using Catch::Approx;
 
@@ -22,7 +22,7 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
-    const auto& chs = pfb.channels();
+    const auto &chs = pfb.channels();
     REQUIRE(chs.size() == 32);
 
     // M=32, Fs=400 MHz, channel_bw=12.5 MHz.
@@ -37,7 +37,7 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     // Switching active channel forwards the right tone
     pfb.setActiveChannel(16);
     pfb.update(0.0);
-    const auto& out = pfb.node().outputs[0];
+    const auto &out = pfb.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
 }
 
@@ -55,7 +55,7 @@ TEST_CASE("PFB channelizer noise distribution", "[pfb]") {
     pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
-    for (const auto& ch : pfb.channels())
+    for (const auto &ch : pfb.channels())
         REQUIRE(ch.noise_W > 0.0);
 }
 
@@ -89,8 +89,8 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
-    const auto& ch7 = pfb.channels()[7];
-    const auto& ch8 = pfb.channels()[8];
+    const auto &ch7 = pfb.channels()[7];
+    const auto &ch8 = pfb.channels()[8];
 
     // Both adjacent channels should see the tone (oversampling within ±1 channel_bw)
     REQUIRE(ch7.tones.size() == 1);
@@ -119,12 +119,12 @@ TEST_CASE("PFB has two outputs with correct sizes", "[pfb]") {
     pfb.node().inputs[0] = &in;
     pfb.update(0.0);
 
-    const auto& out_active = pfb.node().outputs[0];
+    const auto &out_active = pfb.node().outputs[0];
     REQUIRE(!out_active.frequencies.empty());
     REQUIRE(out_active.frequencies.size() < in.frequencies.size());
     REQUIRE(out_active.tones.size() == 1);
 
-    const auto& out_full = pfb.node().outputs[1];
+    const auto &out_full = pfb.node().outputs[1];
     REQUIRE(out_full.frequencies.size() == in.frequencies.size());
     REQUIRE(out_full.tones.size() >= 1);
 }
@@ -152,4 +152,42 @@ TEST_CASE("PFB active channel query methods", "[pfb]") {
     pfb.update(0.0);
     double center16 = pfb.activeChannelCenter_Hz();
     REQUIRE(center16 == Approx(6.25e6).margin(1.0));
+}
+
+TEST_CASE("PFB outputs[1] noise floor flatness at overlap boundaries", "[pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+    pfb.setChannelCount(8);
+    pfb.setFs_Hz(200e6);
+
+    Spectrum in;
+    const size_t n_bins = 401;
+    in.frequencies.resize(n_bins);
+    for (size_t i = 0; i < n_bins; ++i)
+        in.frequencies[i] = -100e6 + static_cast<double>(i) * 0.5e6;
+    in.noise_total_W.assign(n_bins, 1e-20);
+    in.fs_Hz = 200e6;
+
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &out = pfb.node().outputs[1];
+    REQUIRE(out.noise_W.size() == n_bins);
+
+    double sum = 0.0;
+    double min_val = out.noise_W[0];
+    double max_val = out.noise_W[0];
+    for (size_t i = 0; i < n_bins; ++i) {
+        double v = out.noise_W[i];
+        REQUIRE(v > 0.0);
+        sum += v;
+        if (v < min_val)
+            min_val = v;
+        if (v > max_val)
+            max_val = v;
+    }
+    double mean = sum / static_cast<double>(n_bins);
+    double ripple_pct = 100.0 * (max_val - min_val) / mean;
+
+    REQUIRE(ripple_pct < 1.0);
 }
