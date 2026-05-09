@@ -5,104 +5,155 @@
 #include "node_graph_engine.h"
 
 using Catch::Approx;
-
 static constexpr double Fs = 1e9;
 
-TEST_CASE("ADC with empty input produces NSD-based noise", "[adc]") {
-    NodeGraphEngine graph;
-    AdcEngine adc(1, graph);
-    adc.setFs_Hz(Fs);
-    adc.setNsd_dBm_per_Hz(-155.0);
+// ---- helpers ----
 
-    Spectrum spec;
-    spec.frequencies = {0.0, 1e6, 2e6};
-    spec.noise_W = {1e-20, 1e-20, 1e-20};
-    adc.node().inputs[0] = &spec;
+static Spectrum makeInput(int n_bins, double f_start, double f_stop) {
+    Spectrum s;
+    s.frequencies.resize(n_bins);
+    double df = (f_stop - f_start) / (n_bins - 1);
+    for (int i = 0; i < n_bins; ++i)
+        s.frequencies[i] = f_start + i * df;
+    s.noise_W.assign(n_bins, 1e-20);
+    s.noise_added_W.assign(n_bins, 0.0);
+    s.noise_total_W.assign(n_bins, 1e-20);
+    return s;
+}
+
+// ---- tests ----
+
+TEST_CASE("ADC DDC tone at Fs/4 maps to DC", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({Fs / 4.0, -10.0, 0.0});   // 250 MHz
+
+    adc.node().inputs[0] = &in;
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
-    REQUIRE(out.noise_total_W.size() == 3);
-    for (size_t i = 0; i < 3; ++i)
-        REQUIRE(out.noise_total_W[i] > 1e-20);
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
 }
 
-TEST_CASE("ADC aliases tones into Nyquist zone", "[adc]") {
+TEST_CASE("ADC DDC tone at 3Fs/4 aliases to DC", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(1, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({3.0 * Fs / 4.0, -10.0, 0.0}); // 750 MHz → alias=250 → NCO→0
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto& out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
+}
+
+TEST_CASE("ADC DDC tone at 0 Hz maps to -Fs/4", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(2, graph);
     adc.setFs_Hz(Fs);
 
-    // Tone within [0, Fs/2) — not aliased
-    {
-        Spectrum spec;
-        spec.tones = {{100e6, -10.0, 0.0}};
-        adc.node().inputs[0] = &spec;
-        adc.update(0.0);
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({0.0, -20.0, 0.0});
 
-        const auto& out = adc.node().outputs[0];
-        REQUIRE(out.tones.size() == 1);
-        REQUIRE(out.tones[0].freq_Hz == Approx(100e6));
-    }
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
 
-    // Tone in upper half of zone: f_RF = 600e6 → alias = Fs - 600e6 = 400e6
-    {
-        Spectrum spec;
-        spec.tones = {{600e6, -10.0, 0.0}};
-        adc.node().inputs[0] = &spec;
-        adc.update(0.0);
-
-        const auto& out = adc.node().outputs[0];
-        REQUIRE(out.tones.size() == 1);
-        REQUIRE(out.tones[0].freq_Hz == Approx(400e6));
-    }
-
-    // Tone in zone 2: f_RF = 1.1e9 → alias = 1.1e9 % 1e9 = 100e6
-    {
-        Spectrum spec;
-        spec.tones = {{1.1e9, 0.0, 0.0}};
-        adc.node().inputs[0] = &spec;
-        adc.update(0.0);
-
-        const auto& out = adc.node().outputs[0];
-        REQUIRE(out.tones.size() == 1);
-        REQUIRE(out.tones[0].freq_Hz == Approx(100e6));
-    }
+    const auto& out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(-Fs / 4.0).margin(1.0));
 }
 
-TEST_CASE("ADC preserves tone power and phase", "[adc]") {
+TEST_CASE("ADC DDC output grid spans [-Fs/4, Fs/4)", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(3, graph);
     adc.setFs_Hz(Fs);
 
-    Spectrum spec;
-    spec.tones = {{100e6, -20.0, 45.0}};
-    adc.node().inputs[0] = &spec;
+    Spectrum in = makeInput(101, 0.0, 500e6);
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto& out = adc.node().outputs[0];
+    REQUIRE(out.frequencies.size() >= 2);
+    REQUIRE(out.frequencies.front() == Approx(-Fs / 4.0).margin(1e-6));
+    REQUIRE(out.frequencies.back() < Fs / 4.0 + 1.0);
+    REQUIRE(out.frequencies.back() > -Fs / 4.0);
+
+    // uniform spacing
+    double df = out.frequencies[1] - out.frequencies[0];
+    REQUIRE(df > 0.0);
+    for (size_t i = 2; i < out.frequencies.size(); ++i) {
+        double d = out.frequencies[i] - out.frequencies[i - 1];
+        REQUIRE(d == Approx(df).margin(1e-6));
+    }
+}
+
+TEST_CASE("ADC DDC output fs_Hz is Fs/2", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(4, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    REQUIRE(adc.node().outputs[0].fs_Hz == Approx(Fs / 2.0));
+}
+
+TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(5, graph);
+    adc.setFs_Hz(Fs);
+    adc.setNsd_dBm_per_Hz(-150.0);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto& out = adc.node().outputs[0];
+    REQUIRE(out.noise_total_W.size() == out.frequencies.size());
+    const double in_noise = 1e-20;
+    for (size_t i = 0; i < out.noise_total_W.size(); ++i)
+        REQUIRE(out.noise_total_W[i] > in_noise);
+}
+
+TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(6, graph);
+    adc.setFs_Hz(Fs);
+
+    adc.node().inputs[0] = nullptr;
+    adc.update(0.0);
+
+    const auto& out = adc.node().outputs[0];
+    REQUIRE(out.frequencies.empty());
+    REQUIRE(out.tones.empty());
+    REQUIRE(out.noise_total_W.empty());
+}
+
+TEST_CASE("ADC DDC preserves tone power and phase", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(7, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({Fs / 4.0, -20.0, 45.0});
+
+    adc.node().inputs[0] = &in;
     adc.update(0.0);
 
     const auto& out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
     REQUIRE(out.tones[0].phase_deg == Approx(45.0));
-}
-
-TEST_CASE("ADC preserves frequency grid and noise structure", "[adc]") {
-    NodeGraphEngine graph;
-    AdcEngine adc(4, graph);
-    adc.setFs_Hz(Fs);
-
-    Spectrum spec;
-    spec.frequencies = {-10e6, 0.0, 10e6};
-    spec.noise_W = {1e-18, 1e-18, 1e-18};
-    spec.noise_added_W = {0, 0, 0};
-    adc.node().inputs[0] = &spec;
-    adc.update(0.0);
-
-    const auto& out = adc.node().outputs[0];
-    // Frequency grid unchanged
-    REQUIRE(out.frequencies.size() == 3);
-    REQUIRE(out.frequencies[0] == Approx(-10e6));
-    REQUIRE(out.frequencies[1] == Approx(0.0));
-    REQUIRE(out.frequencies[2] == Approx(10e6));
-    // Noise should be increased by NSD
-    for (size_t i = 0; i < 3; ++i)
-        REQUIRE(out.noise_total_W[i] > 1e-18);
 }
