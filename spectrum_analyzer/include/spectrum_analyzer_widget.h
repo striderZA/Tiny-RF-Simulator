@@ -3,6 +3,7 @@
 #include "spectrum.h"
 #include "view_manager.h"
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class PFBChannelizerEngine;
@@ -26,7 +27,7 @@ class SpectrumAnalyzerWidget {
 
     void draw(const char *title, bool *p_open = nullptr);
     void setProbeLabels(const std::vector<std::string>& labels) { m_probe_labels = labels; }
-    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) { m_pfb_ptrs = pfbs; }
+    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs);
 
   private:
     SpectrumAnalyzerEngine &m_engine;
@@ -35,6 +36,7 @@ class SpectrumAnalyzerWidget {
     MarkerState m_marker;
     DragZoomState m_zoom;
     std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
+    std::unordered_map<SignalNode*, PFBChannelizerEngine*> m_pfb_map;
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;

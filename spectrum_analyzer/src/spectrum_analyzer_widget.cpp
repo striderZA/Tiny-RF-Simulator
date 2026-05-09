@@ -12,6 +12,13 @@
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
+void SpectrumAnalyzerWidget::setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) {
+    m_pfb_ptrs = pfbs;
+    m_pfb_map.clear();
+    for (auto* pfb : m_pfb_ptrs)
+        if (pfb) m_pfb_map[&pfb->node()] = pfb;
+}
+
 int SpectrumAnalyzerWidget::resolveMarkerIdx(const std::vector<double> &freq_axis,
                                               const std::vector<double> &data) const {
     if (!m_marker.enabled || data.empty() || freq_axis.empty()) {
@@ -170,9 +177,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const std::vector<double>* freq_axis = nullptr;
     for (auto* node : active_nodes) {
         if (!node) continue;
-        auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
-            [node](auto* pfb) { return pfb && node == &pfb->node(); });
-        const auto& spec = pfbIter != m_pfb_ptrs.end() ? node->outputs[1] : node->outputs[0];
+        auto pfbIter = m_pfb_map.find(node);
+        const auto& spec = pfbIter != m_pfb_map.end() ? node->outputs[1] : node->outputs[0];
         if (!freq_axis && !spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
@@ -187,9 +193,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     std::vector<const Spectrum*> specs;
     for (auto* node : active_nodes) {
         if (!node) continue;
-        auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
-            [node](auto* pfb) { return pfb && node == &pfb->node(); });
-        specs.push_back(pfbIter != m_pfb_ptrs.end()
+        auto pfbIter = m_pfb_map.find(node);
+        specs.push_back(pfbIter != m_pfb_map.end()
             ? &node->outputs[1] : &node->outputs[0]);
     }
 
@@ -217,9 +222,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         for (size_t i = 0; i < active_nodes.size(); ++i) {
             auto* node = active_nodes[i];
             if (!node) continue;
-            auto pfbIter = std::find_if(m_pfb_ptrs.begin(), m_pfb_ptrs.end(),
-                [node](auto* pfb) { return pfb && node == &pfb->node(); });
-            bool is_pfb = pfbIter != m_pfb_ptrs.end();
+            auto pfbIter = m_pfb_map.find(node);
+            bool is_pfb = pfbIter != m_pfb_map.end();
             const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
@@ -234,7 +238,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
             // For PFB: overlay active channel highlight trace
             if (is_pfb) {
-                const auto* pfb_ptr = *pfbIter;
+                const auto* pfb_ptr = pfbIter->second;
                 double ch_center = pfb_ptr->activeChannelCenter_Hz();
                 double ch_bw = pfb_ptr->activeChannelBandwidth_Hz();
                 double ch_lo = ch_center - ch_bw / 2.0;
