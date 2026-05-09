@@ -3,6 +3,7 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include <nlohmann/json.hpp>
 
 class AmplifierEngine {
   public:
@@ -12,6 +13,9 @@ class AmplifierEngine {
     std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
+    void serialize(nlohmann::json& j) const;
+    void deserialize(const nlohmann::json& j);
+    bool isDirty() const { return m_dirty; }
 
     void setGain_dB(double g) {
         if (g != m_gain_dB) {

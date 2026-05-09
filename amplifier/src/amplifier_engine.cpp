@@ -161,6 +161,24 @@ void AmplifierEngine::update(double dt) {
     out.bumpGeneration();
 }
 
+void AmplifierEngine::serialize(nlohmann::json& j) const {
+    j["gain_dB"] = m_gain_dB;
+    j["nf_dB"] = m_nf_dB;
+    j["enable_nonlinear"] = m_enable_nonlinear;
+    j["oip2_dBm"] = m_oip2_dBm;
+    j["oip3_dBm"] = m_oip3_dBm;
+}
+
+void AmplifierEngine::deserialize(const nlohmann::json& j) {
+    m_gain_dB = j.value("gain_dB", 0.0);
+    m_nf_dB = j.value("nf_dB", 0.0);
+    m_enable_nonlinear = j.value("enable_nonlinear", false);
+    m_oip2_dBm = j.value("oip2_dBm", 100.0);
+    m_oip3_dBm = j.value("oip3_dBm", 100.0);
+    if (m_enable_nonlinear) recomputeCoefficients();
+    m_dirty = true;
+}
+
 std::string AmplifierEngine::hoverSummary() const {
     return "Gain: " + std::to_string(m_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
 }

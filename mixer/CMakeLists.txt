@@ -11,5 +11,5 @@ target_include_directories(mixer_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(mixer_engine PUBLIC common simulator::node_graph_engine)
+target_link_libraries(mixer_engine PUBLIC common simulator::node_graph_engine nlohmann_json::nlohmann_json)
 add_library(simulator::mixer_engine ALIAS mixer_engine)

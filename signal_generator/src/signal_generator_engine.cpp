@@ -70,6 +70,26 @@ void SignalGeneratorEngine::update(double) {
     out.bumpGeneration();
 }
 
+void SignalGeneratorEngine::serialize(nlohmann::json& j) const {
+    j = nlohmann::json::array();
+    for (const auto& t : m_tones) {
+        j.push_back({{"freq_Hz", t.freq_Hz}, {"power_dBm", t.power_dBm}, {"phase_deg", t.phase_deg}});
+    }
+}
+
+void SignalGeneratorEngine::deserialize(const nlohmann::json& j) {
+    m_tones.clear();
+    if (j.is_array()) {
+        for (const auto& tj : j) {
+            double freq = tj.value("freq_Hz", 100e6);
+            double power = tj.value("power_dBm", -20.0);
+            double phase = tj.value("phase_deg", 0.0);
+            m_tones.push_back({freq, power, phase});
+        }
+    }
+    m_dirty = true;
+}
+
 std::string SignalGeneratorEngine::hoverSummary() const {
     if (m_tones.empty()) return "0 tones";
     std::string s = std::to_string(m_tones.size()) + " tones: ";

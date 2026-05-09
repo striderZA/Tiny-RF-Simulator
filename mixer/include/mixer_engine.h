@@ -5,6 +5,7 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include <nlohmann/json.hpp>
 
 class MixerEngine {
   public:
@@ -12,6 +13,9 @@ class MixerEngine {
     int id() const { return m_id; }
     int graphNodeId() const { return m_graph_node_id; }
     std::string hoverSummary() const;
+    void serialize(nlohmann::json& j) const;
+    void deserialize(const nlohmann::json& j);
+    bool isDirty() const { return m_dirty; }
     int inputPinId() const;
     int outputPinId() const;
 

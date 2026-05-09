@@ -92,6 +92,19 @@ void MixerEngine::update(double dt) {
     out.bumpGeneration();
 }
 
+void MixerEngine::serialize(nlohmann::json& j) const {
+    j["lo_freq_Hz"] = m_lo_freq_Hz;
+    j["conv_gain_dB"] = m_conv_gain_dB;
+    j["nf_dB"] = m_nf_dB;
+}
+
+void MixerEngine::deserialize(const nlohmann::json& j) {
+    m_lo_freq_Hz = j.value("lo_freq_Hz", 1e9);
+    m_conv_gain_dB = j.value("conv_gain_dB", -6.0);
+    m_nf_dB = j.value("nf_dB", 0.0);
+    m_dirty = true;
+}
+
 std::string MixerEngine::hoverSummary() const {
     return "LO: " + std::to_string(m_lo_freq_Hz / 1e6) + " MHz | Conv Gain: " + std::to_string(m_conv_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
 }
