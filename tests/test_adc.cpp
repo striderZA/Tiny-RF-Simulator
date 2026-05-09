@@ -10,6 +10,14 @@ static constexpr double Fs = 1e9;
 // ---- helpers ----
 
 static Spectrum makeInput(int n_bins, double f_start, double f_stop) {
+    if (n_bins < 2) {
+        Spectrum s;
+        s.frequencies = {f_start, f_stop};
+        s.noise_W = {1e-20, 1e-20};
+        s.noise_added_W = {0.0, 0.0};
+        s.noise_total_W = {1e-20, 1e-20};
+        return s;
+    }
     Spectrum s;
     s.frequencies.resize(n_bins);
     double df = (f_stop - f_start) / (n_bins - 1);
@@ -84,11 +92,12 @@ TEST_CASE("ADC DDC output grid spans [-Fs/4, Fs/4)", "[adc]") {
     const auto& out = adc.node().outputs[0];
     REQUIRE(out.frequencies.size() >= 2);
     REQUIRE(out.frequencies.front() == Approx(-Fs / 4.0).margin(1e-6));
-    REQUIRE(out.frequencies.back() < Fs / 4.0 + 1.0);
+    double df = out.frequencies[1] - out.frequencies[0];
+    double expected_last = -Fs / 4.0 + (out.frequencies.size() - 1) * df;
+    REQUIRE(out.frequencies.back() == Approx(expected_last).margin(df / 2.0));
     REQUIRE(out.frequencies.back() > -Fs / 4.0);
 
     // uniform spacing
-    double df = out.frequencies[1] - out.frequencies[0];
     REQUIRE(df > 0.0);
     for (size_t i = 2; i < out.frequencies.size(); ++i) {
         double d = out.frequencies[i] - out.frequencies[i - 1];
@@ -123,8 +132,12 @@ TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
     const auto& out = adc.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == out.frequencies.size());
     const double in_noise = 1e-20;
-    for (size_t i = 0; i < out.noise_total_W.size(); ++i)
+    double nsd_W_per_Hz = 0.001 * std::pow(10.0, -150.0 / 10.0); // matches setNsd_dBm_per_Hz(-150.0)
+    double expected_noise_per_bin = in_noise + nsd_W_per_Hz;
+    for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
         REQUIRE(out.noise_total_W[i] > in_noise);
+        REQUIRE(out.noise_total_W[i] == Approx(expected_noise_per_bin).margin(expected_noise_per_bin * 0.1));
+    }
 }
 
 TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
