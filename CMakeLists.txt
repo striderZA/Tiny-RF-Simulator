@@ -94,6 +94,14 @@ FetchContent_Declare(
 )
 FetchContent_Populate(stb)
 
+# Fetch nlohmann/json
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 # kissFFT builds use pkg-config in tools/; make minimal library target
 add_library(kissfft STATIC
     ${kissfft_SOURCE_DIR}/kiss_fft.c
