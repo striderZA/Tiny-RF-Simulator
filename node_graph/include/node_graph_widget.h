@@ -27,6 +27,7 @@ class NodeGraphWidget {
     std::function<void()> onAddPFB;
     std::function<void(int node_id)> onRemoveNode;
     std::function<std::string(int graph_node_id)> onNodeHover;
+    std::function<void()> onTopologyChange;
 
   private:
     NodeGraphEngine &m_engine;

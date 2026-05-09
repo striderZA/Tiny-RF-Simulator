@@ -147,6 +147,12 @@ bool NodeGraphEngine::removeProbePin(int pin_id) {
     return false;
 }
 
+void NodeGraphEngine::setNextIds(int next_node_id, int next_pin_id, int next_link_id) {
+    m_next_node_id = std::max(m_next_node_id, next_node_id);
+    m_next_pin_id = std::max(m_next_pin_id, next_pin_id);
+    m_next_link_id = std::max(m_next_link_id, next_link_id);
+}
+
 void NodeGraphEngine::clearProbes() {
     m_probe_pins.clear();
 }

@@ -39,6 +39,7 @@ class NodeGraphEngine {
     bool addProbePin(int pin_id);
     bool removeProbePin(int pin_id);
     void clearProbes();
+    void setNextIds(int next_node_id, int next_pin_id, int next_link_id);
     int probeSlotForPin(int pin_id) const;
     std::vector<SignalNode*> probedSignalNodes() const;
 

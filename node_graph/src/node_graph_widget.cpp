@@ -151,6 +151,7 @@ void NodeGraphWidget::handleLinkCreation() {
     m_link_created = ImNodes::IsLinkCreated(&start_pin, &end_pin);
     if (m_link_created) {
         m_engine.addLink(start_pin, end_pin);
+        if (onTopologyChange) onTopologyChange();
     }
 }
 
@@ -158,6 +159,7 @@ void NodeGraphWidget::handleLinkDeletion() {
     int link_id;
     if (ImNodes::IsLinkDestroyed(&link_id)) {
         m_engine.removeLink(link_id);
+        if (onTopologyChange) onTopologyChange();
     }
 }
 

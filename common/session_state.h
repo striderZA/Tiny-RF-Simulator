@@ -51,6 +51,35 @@ class SessionState {
         return GetFileAttributesA(m_path.c_str()) != INVALID_FILE_ATTRIBUTES;
     }
 
+    void setLastProject(const std::string& path) {
+        save("Session", "LastProject", path.c_str());
+    }
+    std::string lastProject() const {
+        return load("Session", "LastProject", "");
+    }
+
+    void addRecentFile(const std::string& path) {
+        std::vector<std::string> files;
+        for (int i = 1; i <= 5; ++i) {
+            std::string key = "File" + std::to_string(i);
+            auto f = load("RecentFiles", key.c_str(), "");
+            if (!f.empty() && f != path) files.push_back(f);
+        }
+        files.insert(files.begin(), path);
+        for (int i = 0; i < 5 && i < static_cast<int>(files.size()); ++i) {
+            save("RecentFiles", ("File" + std::to_string(i + 1)).c_str(), files[i].c_str());
+        }
+    }
+
+    std::vector<std::string> recentFiles() const {
+        std::vector<std::string> files;
+        for (int i = 1; i <= 5; ++i) {
+            auto f = load("RecentFiles", ("File" + std::to_string(i)).c_str(), "");
+            if (!f.empty()) files.push_back(f);
+        }
+        return files;
+    }
+
 private:
     std::string m_path;
 };
