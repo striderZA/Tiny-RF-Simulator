@@ -1,11 +1,16 @@
 #include "app.h"
 #include "imgui.h"
+#include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <commdlg.h>
+#include <fstream>
 #include <functional>
+#include <nlohmann/json.hpp>
 #include <unordered_map>
+#include <windows.h>
 
 RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -18,6 +23,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddAdc = [this]() { addAdc(); };
     m_graph_widget->onAddPFB = [this]() { addPFB(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
+    m_graph_widget->onTopologyChange = [this]() { markDirty(); };
 
     addGenerator();
     m_generators[0]->addTone(100e6, -20.0);
@@ -57,10 +63,11 @@ RfSimulatorApp::RfSimulatorApp() {
 }
 
 void RfSimulatorApp::load_window_states() {
-    m_show_log = m_state.loadBool("WindowState", "Log", true);
-    m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
-    m_show_properties = m_state.loadBool("WindowState", "Properties", true);
-    m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
+    // Window state loaded from project file; use defaults for fresh start
+    m_show_log = true;
+    m_show_spectrum = true;
+    m_show_properties = true;
+    m_show_node_editor = true;
 }
 
 void RfSimulatorApp::addGenerator() {
@@ -70,6 +77,7 @@ void RfSimulatorApp::addGenerator() {
     m_generator_widgets.push_back(std::make_unique<SignalGeneratorWidget>(*gen));
     m_generators.push_back(std::move(gen));
     LOG_INFO("Added generator %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addAmplifier() {
@@ -78,6 +86,7 @@ void RfSimulatorApp::addAmplifier() {
     m_view_manager.registerNode(&amp->node());
     m_amplifiers.push_back(std::move(amp));
     LOG_INFO("Added amplifier %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addSplitter() {
@@ -86,6 +95,7 @@ void RfSimulatorApp::addSplitter() {
     m_view_manager.registerNode(&split->node());
     m_splitters.push_back(std::move(split));
     LOG_INFO("Added splitter %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addMixer() {
@@ -94,6 +104,7 @@ void RfSimulatorApp::addMixer() {
     m_view_manager.registerNode(&mix->node());
     m_mixers.push_back(std::move(mix));
     LOG_INFO("Added mixer %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addSParamAmp() {
@@ -104,6 +115,7 @@ void RfSimulatorApp::addSParamAmp() {
     m_view_manager.registerNode(&spamp->node());
     m_sparam_amps.push_back(std::move(spamp));
     LOG_INFO("Added S-parameter amplifier %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addSParamFilter() {
@@ -114,6 +126,7 @@ void RfSimulatorApp::addSParamFilter() {
     m_view_manager.registerNode(&spf->node());
     m_sparam_filters.push_back(std::move(spf));
     LOG_INFO("Added S-parameter filter %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addAdc() {
@@ -122,6 +135,7 @@ void RfSimulatorApp::addAdc() {
     m_view_manager.registerNode(&adc->node());
     m_adcs.push_back(std::move(adc));
     LOG_INFO("Added ADC %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::addPFB() {
@@ -133,6 +147,7 @@ void RfSimulatorApp::addPFB() {
     m_show_iq_pfbs.push_back(
         m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(m_pfbs.back()->id())).c_str(), true));
     LOG_INFO("Added PFB channelizer %d", id);
+    markDirty();
 }
 
 void RfSimulatorApp::removeComponent(int graph_node_id) {
@@ -143,6 +158,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_graph_engine.removeNode(graph_node_id);
             m_generators.erase(m_generators.begin() + static_cast<std::ptrdiff_t>(i));
             m_generator_widgets.erase(m_generator_widgets.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed generator (graph node %d)", graph_node_id);
             return;
         }
@@ -153,6 +169,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_amplifiers[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_amplifiers.erase(m_amplifiers.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed amplifier (graph node %d)", graph_node_id);
             return;
         }
@@ -163,6 +180,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_splitters[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_splitters.erase(m_splitters.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed splitter (graph node %d)", graph_node_id);
             return;
         }
@@ -173,6 +191,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_mixers[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_mixers.erase(m_mixers.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed mixer (graph node %d)", graph_node_id);
             return;
         }
@@ -183,6 +202,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_sparam_amps[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_sparam_amps.erase(m_sparam_amps.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed S-parameter amplifier (graph node %d)", graph_node_id);
             return;
         }
@@ -193,6 +213,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_sparam_filters[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_sparam_filters.erase(m_sparam_filters.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed S-parameter filter (graph node %d)", graph_node_id);
             return;
         }
@@ -203,6 +224,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_view_manager.unregisterNode(&m_adcs[i]->node());
             m_graph_engine.removeNode(graph_node_id);
             m_adcs.erase(m_adcs.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed ADC (graph node %d)", graph_node_id);
             return;
         }
@@ -215,6 +237,7 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             m_iq_widgets.erase(m_iq_widgets.begin() + static_cast<std::ptrdiff_t>(i));
             m_show_iq_pfbs.erase(m_show_iq_pfbs.begin() + static_cast<std::ptrdiff_t>(i));
             m_pfbs.erase(m_pfbs.begin() + static_cast<std::ptrdiff_t>(i));
+            markDirty();
             LOG_INFO("Removed PFB channelizer (graph node %d)", graph_node_id);
             return;
         }
@@ -222,6 +245,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
 }
 
 void RfSimulatorApp::update_dsp() {
+    // Propagate engine-level dirty flags to app-level dirty
+    for (auto& gen : m_generators) if (gen->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& amp : m_amplifiers) if (amp->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& s : m_splitters) if (s->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& m : m_mixers) if (m->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& s : m_sparam_amps) if (s->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& s : m_sparam_filters) if (s->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& a : m_adcs) if (a->isDirty()) { m_dirty = true; break; }
+    if (!m_dirty) for (auto& p : m_pfbs) if (p->isDirty()) { m_dirty = true; break; }
+
     std::unordered_map<int, std::function<void()>> updates;
 
     for (auto& gen : m_generators)
@@ -313,12 +346,251 @@ void RfSimulatorApp::draw_ui() {
 }
 
 RfSimulatorApp::~RfSimulatorApp() {
-    m_state.saveBool("WindowState", "Log", m_show_log);
-    m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
-    m_state.saveBool("WindowState", "Properties", m_show_properties);
-    for (size_t i = 0; i < m_show_iq_pfbs.size(); ++i) {
-        std::string key = "IQPlot_" + std::to_string(m_pfbs[i]->id());
-        m_state.saveBool("WindowState", key.c_str(), m_show_iq_pfbs[i]);
+    // Window state now persisted in project file
+}
+
+void RfSimulatorApp::newProject() {
+    // Clear all component vectors
+    m_generator_widgets.clear();
+    m_view_manager.clearNodes();
+    m_generators.clear();
+    m_amplifiers.clear();
+    m_splitters.clear();
+    m_mixers.clear();
+    m_sparam_amps.clear();
+    m_sparam_filters.clear();
+    m_adcs.clear();
+    m_pfbs.clear();
+    m_iq_widgets.clear();
+    m_show_iq_pfbs.clear();
+
+    // Clear graph engine
+    while (!m_graph_engine.nodes().empty())
+        m_graph_engine.removeNode(m_graph_engine.nodes().back().node_id);
+
+    // Reset graph engine ID counters
+    m_graph_engine.setNextIds(1, 100, 1000);
+
+    // Clear spectrum probes
+    m_graph_engine.clearProbes();
+    m_spectrum_widget->setProbeLabels({});
+
+    m_current_project_path.clear();
+    m_dirty = false;
+}
+
+void RfSimulatorApp::saveProject(const std::string& path) {
+    nlohmann::json root;
+    root["version"] = 1;
+
+    auto pos = path.find_last_of("\\/");
+    std::string fname = (pos != std::string::npos) ? path.substr(pos + 1) : path;
+    auto dot = fname.find_last_of('.');
+    root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
+
+    nlohmann::json nodes_arr = nlohmann::json::array();
+    nlohmann::json links_arr = nlohmann::json::array();
+    nlohmann::json probe_arr = nlohmann::json::array();
+
+    auto serializeVec = [&](auto& vec, const std::string& type) {
+        for (auto& comp : vec) {
+            nlohmann::json node;
+            int nid = comp->graphNodeId();
+            node["node_id"] = nid;
+            node["type"] = type;
+            for (const auto& gn : m_graph_engine.nodes()) {
+                if (gn.node_id == nid) {
+                    node["label"] = gn.label;
+                    break;
+                }
+            }
+            ImNodes::EditorContextSet(m_graph_widget->context());
+            ImVec2 pos = ImNodes::GetNodeEditorSpacePos(nid);
+            node["x"] = pos.x;
+            node["y"] = pos.y;
+            comp->serialize(node["params"]);
+            nodes_arr.push_back(node);
+        }
+    };
+
+    serializeVec(m_generators, "SignalGenerator");
+    serializeVec(m_amplifiers, "Amplifier");
+    serializeVec(m_splitters, "Splitter");
+    serializeVec(m_mixers, "Mixer");
+    serializeVec(m_sparam_amps, "SParameterAmplifier");
+    serializeVec(m_sparam_filters, "SParameterFilter");
+    serializeVec(m_adcs, "ADC");
+    serializeVec(m_pfbs, "PFBChannelizer");
+
+    for (const auto& link : m_graph_engine.links()) {
+        nlohmann::json l;
+        l["link_id"] = link.link_id;
+        l["start_pin_id"] = link.start_pin_id;
+        l["end_pin_id"] = link.end_pin_id;
+        links_arr.push_back(l);
     }
-    m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
+
+    for (int pin : m_graph_engine.probePins())
+        probe_arr.push_back(pin);
+
+    root["graph"]["nodes"] = nodes_arr;
+    root["graph"]["links"] = links_arr;
+    root["graph"]["probe_pins"] = probe_arr;
+
+    root["window_state"]["log"] = m_show_log;
+    root["window_state"]["spectrum_analyzer"] = m_show_spectrum;
+    root["window_state"]["properties"] = m_show_properties;
+    root["window_state"]["node_editor"] = m_show_node_editor;
+    nlohmann::json iq_arr = nlohmann::json::array();
+    for (size_t i = 0; i < m_show_iq_pfbs.size(); ++i)
+        iq_arr.push_back(m_show_iq_pfbs[i]);
+    root["window_state"]["iq_plots"] = iq_arr;
+
+    std::ofstream out(path);
+    if (!out) {
+        LOG_ERROR("Failed to open project file for writing: %s", path.c_str());
+        return;
+    }
+    out << root.dump(2);
+    out.close();
+
+    m_current_project_path = path;
+    m_dirty = false;
+    LOG_INFO("Saved project to %s", path.c_str());
+}
+
+void RfSimulatorApp::loadProject(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        LOG_ERROR("Failed to open project file: %s", path.c_str());
+        return;
+    }
+    nlohmann::json root;
+    try {
+        in >> root;
+    } catch (const nlohmann::json::exception& e) {
+        LOG_ERROR("Invalid project file: %s", e.what());
+        return;
+    }
+
+    newProject();
+
+    auto& nodes = root["graph"]["nodes"];
+    for (const auto& nj : nodes) {
+        std::string type = nj.value("type", "");
+        auto params = nj.value("params", nlohmann::json::object());
+        int node_id = nj.value("node_id", -1);
+        float x = nj.value("x", 0.0f);
+        float y = nj.value("y", 0.0f);
+
+        if (type == "SignalGenerator") {
+            addGenerator();
+            m_generators.back()->deserialize(params);
+        } else if (type == "Amplifier") {
+            addAmplifier();
+            m_amplifiers.back()->deserialize(params);
+        } else if (type == "Splitter") {
+            addSplitter();
+            m_splitters.back()->deserialize(params);
+        } else if (type == "Mixer") {
+            addMixer();
+            m_mixers.back()->deserialize(params);
+        } else if (type == "SParameterAmplifier") {
+            addSParamAmp();
+            m_sparam_amps.back()->deserialize(params);
+        } else if (type == "SParameterFilter") {
+            addSParamFilter();
+            m_sparam_filters.back()->deserialize(params);
+        } else if (type == "ADC") {
+            addAdc();
+            m_adcs.back()->deserialize(params);
+        } else if (type == "PFBChannelizer") {
+            addPFB();
+            m_pfbs.back()->deserialize(params);
+        } else {
+            LOG_WARN("Unknown component type in project file: %s", type.c_str());
+            continue;
+        }
+        ImNodes::EditorContextSet(m_graph_widget->context());
+        ImNodes::SetNodeEditorSpacePos(node_id, ImVec2(x, y));
+    }
+
+    auto& links = root["graph"]["links"];
+    for (const auto& lj : links) {
+        int start = lj.value("start_pin_id", -1);
+        int end = lj.value("end_pin_id", -1);
+        if (start >= 0 && end >= 0)
+            m_graph_engine.addLink(start, end);
+    }
+
+    auto& probes = root["graph"]["probe_pins"];
+    for (const auto& pj : probes) {
+        if (pj.is_number_integer())
+            m_graph_engine.addProbePin(pj.get<int>());
+    }
+
+    auto& ws = root["window_state"];
+    if (!ws.is_null()) {
+        m_show_log = ws.value("log", true);
+        m_show_spectrum = ws.value("spectrum_analyzer", true);
+        m_show_properties = ws.value("properties", true);
+        m_show_node_editor = ws.value("node_editor", true);
+        auto& iq = ws["iq_plots"];
+        if (iq.is_array()) {
+            for (size_t i = 0; i < iq.size() && i < m_show_iq_pfbs.size(); ++i)
+                m_show_iq_pfbs[i] = iq[i].get<bool>();
+        }
+    }
+
+    int max_node_id = 0, max_pin_id = 0, max_link_id = 0;
+    for (const auto& gn : m_graph_engine.nodes()) {
+        max_node_id = (std::max)(max_node_id, gn.node_id);
+        for (int p : gn.input_pin_ids) max_pin_id = (std::max)(max_pin_id, p);
+        for (int p : gn.output_pin_ids) max_pin_id = (std::max)(max_pin_id, p);
+    }
+    for (const auto& link : m_graph_engine.links())
+        max_link_id = (std::max)(max_link_id, link.link_id);
+    m_graph_engine.setNextIds(max_node_id + 1, max_pin_id + 1, max_link_id + 1);
+
+    m_current_project_path = path;
+    m_dirty = false;
+    m_state.addRecentFile(path);
+    m_state.setLastProject(path);
+    LOG_INFO("Loaded project from %s", path.c_str());
+}
+
+void RfSimulatorApp::openFileDialog() {
+    OPENFILENAMEA ofn = {};
+    char buf[MAX_PATH] = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = buf;
+    ofn.nMaxFile = sizeof(buf);
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    if (GetOpenFileNameA(&ofn))
+        loadProject(buf);
+}
+
+void RfSimulatorApp::saveFileDialog() {
+    OPENFILENAMEA ofn = {};
+    char buf[MAX_PATH] = {};
+    if (!m_current_project_path.empty())
+        strncpy_s(buf, m_current_project_path.c_str(), sizeof(buf));
+    else
+        strncpy_s(buf, "untitled.rfsim", sizeof(buf));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0";
+    ofn.lpstrFile = buf;
+    ofn.nMaxFile = sizeof(buf);
+    ofn.Flags = OFN_OVERWRITEPROMPT;
+    ofn.lpstrDefExt = "rfsim";
+    if (GetSaveFileNameA(&ofn))
+        saveProject(buf);
+}
+
+void RfSimulatorApp::promptUnsaved(PendingAction action, const std::string& path) {
+    m_pending_action = action;
+    m_pending_path = path;
+    ImGui::OpenPopup("Unsaved Changes");
 }

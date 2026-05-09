@@ -20,6 +20,7 @@
 #include "view_manager.h"
 #include <memory>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 class RfSimulatorApp {
   public:
@@ -33,6 +34,11 @@ class RfSimulatorApp {
     bool m_show_properties = true;
     bool m_show_node_editor = true;
     SessionState m_state;
+    void saveProject(const std::string& path);
+    void loadProject(const std::string& path);
+    void newProject();
+    bool isDirty() const { return m_dirty; }
+    std::string m_current_project_path;
     ~RfSimulatorApp();
 
   private:
@@ -65,4 +71,15 @@ class RfSimulatorApp {
     void addAdc();
     void addPFB();
     void removeComponent(int graph_node_id);
+
+    bool m_dirty = false;
+    void markDirty() { m_dirty = true; }
+
+    enum class PendingAction { None, New, Open, OpenRecent, Exit };
+    PendingAction m_pending_action = PendingAction::None;
+    std::string m_pending_path;
+
+    void openFileDialog();
+    void saveFileDialog();
+    void promptUnsaved(PendingAction action, const std::string& path = "");
 };

@@ -21,6 +21,7 @@ target_include_directories(app PUBLIC
 # --------------------------------------------------
 target_link_libraries(app
     PUBLIC
+        nlohmann_json::nlohmann_json
         simulator::core
         simulator::signal_generator_engine
         simulator::signal_generator_widget

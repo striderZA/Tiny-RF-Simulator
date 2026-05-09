@@ -15,6 +15,7 @@ class NodeGraphWidget {
     void draw(const char *title, bool *p_open = nullptr);
 
     IconRegistry& iconRegistry() { return m_icons; }
+    ImNodesEditorContext* context() const { return m_context; }
 
     // Callbacks for app to create/destroy components
     std::function<void()> onAddGenerator;
