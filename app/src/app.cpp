@@ -242,14 +242,7 @@ void RfSimulatorApp::update_dsp() {
     addWiredUpdate(m_sparam_amps);
     addWiredUpdate(m_sparam_filters);
     addWiredUpdate(m_adcs);
-
-    for (auto& pfb : m_pfbs) {
-        updates[pfb->graphNodeId()] = [this, ptr = pfb.get()]() {
-            auto* source = this->m_graph_engine.getSourceForInput(ptr->inputPinId());
-            ptr->node().inputs[0] = source ? &source->outputs[0] : nullptr;
-            ptr->update(0.0);
-        };
-    }
+    addWiredUpdate(m_pfbs);
 
     auto order = m_graph_engine.topologicalOrder();
     for (int node_id : order) {
