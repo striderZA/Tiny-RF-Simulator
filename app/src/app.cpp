@@ -60,6 +60,18 @@ RfSimulatorApp::RfSimulatorApp() {
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
     load_window_states();
+
+    // Auto-load last project on startup
+    auto last = m_state.lastProject();
+    if (!last.empty()) {
+        std::ifstream test(last);
+        if (test.good()) {
+            test.close();
+            loadProject(last);
+        } else {
+            m_state.setLastProject("");
+        }
+    }
 }
 
 void RfSimulatorApp::load_window_states() {
@@ -314,10 +326,137 @@ void RfSimulatorApp::update_dsp() {
 }
 
 void RfSimulatorApp::draw_ui() {
-    ImGuiIO &io = ImGui::GetIO();
-    (void)io;
-    ImGui::Text("RF Simulator %s (%s) | %.3f ms/frame (%.1f FPS)", APP_VERSION,
-                APP_GIT_HASH, 1000.0f / io.Framerate, io.Framerate);
+    // Menu bar
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("New")) {
+                if (m_dirty) promptUnsaved(PendingAction::New);
+                else newProject();
+            }
+            if (ImGui::MenuItem("Open...", "Ctrl+O")) {
+                if (m_dirty) promptUnsaved(PendingAction::Open);
+                else openFileDialog();
+            }
+            if (ImGui::MenuItem("Save", "Ctrl+S")) {
+                if (!m_current_project_path.empty())
+                    saveProject(m_current_project_path);
+                else
+                    saveFileDialog();
+            }
+            if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S")) {
+                saveFileDialog();
+            }
+            ImGui::Separator();
+            auto recents = m_state.recentFiles();
+            for (const auto& f : recents) {
+                if (ImGui::MenuItem(f.c_str())) {
+                    if (m_dirty) promptUnsaved(PendingAction::OpenRecent, f);
+                    else loadProject(f);
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit")) {
+                if (m_dirty) promptUnsaved(PendingAction::Exit);
+                else exit(0);
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Log", nullptr, &m_show_log);
+            ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
+            ImGui::MenuItem("Properties", nullptr, &m_show_properties);
+            ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("About")) {
+                ImGui::OpenPopup("About");
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+
+    // About popup
+    if (ImGui::BeginPopupModal("About", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("RF Simulator %s", APP_VERSION);
+        ImGui::Text("Git: %s", APP_GIT_HASH);
+        if (ImGui::Button("OK", ImVec2(120, 0)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
+    // Keyboard shortcuts
+    auto& io = ImGui::GetIO();
+    if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
+        if (!m_current_project_path.empty())
+            saveProject(m_current_project_path);
+        else
+            saveFileDialog();
+    }
+    if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
+        if (m_dirty) promptUnsaved(PendingAction::Open);
+        else openFileDialog();
+    }
+    if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
+        saveFileDialog();
+    }
+
+    // Unsaved changes popup
+    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("You have unsaved changes. Save before continuing?");
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            if (!m_current_project_path.empty()) {
+                saveProject(m_current_project_path);
+            } else {
+                saveFileDialog();
+            }
+            if (!m_dirty) {
+                switch (m_pending_action) {
+                    case PendingAction::New: newProject(); break;
+                    case PendingAction::Open: openFileDialog(); break;
+                    case PendingAction::OpenRecent: loadProject(m_pending_path); break;
+                    case PendingAction::Exit: exit(0); break;
+                    default: break;
+                }
+                m_pending_action = PendingAction::None;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(120, 0))) {
+            switch (m_pending_action) {
+                case PendingAction::New: newProject(); break;
+                case PendingAction::Open: openFileDialog(); break;
+                case PendingAction::OpenRecent: loadProject(m_pending_path); break;
+                case PendingAction::Exit: exit(0); break;
+                default: break;
+            }
+            m_pending_action = PendingAction::None;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_pending_action = PendingAction::None;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Title bar showing project name
+    std::string title = "RF Simulator";
+    if (!m_current_project_path.empty()) {
+        auto pos = m_current_project_path.find_last_of("\\/");
+        title = (pos != std::string::npos) ? m_current_project_path.substr(pos + 1) : m_current_project_path;
+        title = (m_dirty ? "*" : "") + title + " - RF Simulator";
+    } else if (m_dirty) {
+        title = "*Untitled - RF Simulator";
+    }
+
+    ImGuiIO &imgui_io = ImGui::GetIO();
+    (void)imgui_io;
+    ImGui::Text("%s %s (%s) | %.3f ms/frame (%.1f FPS)", title.c_str(), APP_VERSION,
+                APP_GIT_HASH, 1000.0f / imgui_io.Framerate, imgui_io.Framerate);
 
     if (m_show_node_editor)
         m_graph_widget->draw("Node Editor", &m_show_node_editor);
