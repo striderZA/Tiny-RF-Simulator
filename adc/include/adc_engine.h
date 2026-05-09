@@ -4,6 +4,7 @@
 
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include <nlohmann/json.hpp>
 
 class AdcEngine {
 public:
@@ -14,6 +15,9 @@ public:
     std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
+    void serialize(nlohmann::json& j) const;
+    void deserialize(const nlohmann::json& j);
+    bool isDirty() const { return m_dirty; }
 
     void update(double dt);
 

@@ -4,6 +4,7 @@
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include "s_parameter_data.h"
+#include <nlohmann/json.hpp>
 #include <string>
 
 class SParameterFilterEngine {
@@ -14,6 +15,9 @@ class SParameterFilterEngine {
     std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
+    void serialize(nlohmann::json& j) const;
+    void deserialize(const nlohmann::json& j);
+    bool isDirty() const { return m_dirty; }
 
     void update(double dt);
     void reload(const std::string& filepath);

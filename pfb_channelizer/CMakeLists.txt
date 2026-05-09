@@ -12,6 +12,7 @@ target_link_libraries(pfb_channelizer_engine
         simulator::core
         simulator::node_graph_engine
         common
+        nlohmann_json::nlohmann_json
 )
 
 set_target_properties(pfb_channelizer_engine PROPERTIES FOLDER "Library")

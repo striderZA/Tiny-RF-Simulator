@@ -6,6 +6,7 @@
 #include "spectrum.h"
 #include <cmath>
 #include <complex>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,9 @@ class PFBChannelizerEngine {
     std::string hoverSummary() const;
     int inputPinId() const;
     int outputPinId() const;
+    void serialize(nlohmann::json& j) const;
+    void deserialize(const nlohmann::json& j);
+    bool isDirty() const { return m_dirty; }
 
     void setChannelCount(int M);
     void setTapsPerBranch(int K);

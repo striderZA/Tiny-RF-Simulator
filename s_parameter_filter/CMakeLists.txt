@@ -10,7 +10,7 @@ target_include_directories(s_parameter_filter_engine
 )
 
 target_link_libraries(s_parameter_filter_engine
-    PUBLIC common simulator::node_graph_engine simulator::touchstone_parser
+    PUBLIC common simulator::node_graph_engine simulator::touchstone_parser nlohmann_json::nlohmann_json
 )
 
 add_library(simulator::s_parameter_filter_engine ALIAS s_parameter_filter_engine)

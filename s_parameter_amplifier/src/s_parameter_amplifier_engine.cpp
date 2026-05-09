@@ -170,6 +170,29 @@ void SParameterAmplifierEngine::update(double dt) {
     out.bumpGeneration();
 }
 
+void SParameterAmplifierEngine::serialize(nlohmann::json& j) const {
+    j["filepath"] = m_filepath;
+    j["forward_param_idx"] = m_forward_param_idx;
+    j["nf_dB"] = m_nf_dB;
+    j["enable_nonlinear"] = m_enable_nonlinear;
+    j["oip2_dBm"] = m_oip2_dBm;
+    j["oip3_dBm"] = m_oip3_dBm;
+}
+
+void SParameterAmplifierEngine::deserialize(const nlohmann::json& j) {
+    m_filepath = j.value("filepath", "");
+    m_forward_param_idx = j.value("forward_param_idx", 0);
+    m_nf_dB = j.value("nf_dB", 0.0);
+    m_enable_nonlinear = j.value("enable_nonlinear", false);
+    m_oip2_dBm = j.value("oip2_dBm", 100.0);
+    m_oip3_dBm = j.value("oip3_dBm", 100.0);
+    if (!m_filepath.empty())
+        m_data.load(m_filepath);
+    if (m_enable_nonlinear)
+        recomputeCoefficients();
+    m_dirty = true;
+}
+
 std::string SParameterAmplifierEngine::hoverSummary() const {
     if (!m_data.loaded()) return "Not loaded";
     int np = m_data.numPorts();

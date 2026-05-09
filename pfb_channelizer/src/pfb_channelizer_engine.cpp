@@ -214,6 +214,23 @@ double PFBChannelizerEngine::kaiserWindow(double x) const {
          / std::cyl_bessel_i(0, m_cfg.beta);
 }
 
+void PFBChannelizerEngine::serialize(nlohmann::json& j) const {
+    j["M"] = m_cfg.M;
+    j["K"] = m_cfg.K;
+    j["beta"] = m_cfg.beta;
+    j["fs_Hz"] = m_cfg.Fs_Hz;
+    j["active_channel"] = m_active_channel;
+}
+
+void PFBChannelizerEngine::deserialize(const nlohmann::json& j) {
+    m_cfg.M = j.value("M", 32);
+    m_cfg.K = j.value("K", 8);
+    m_cfg.beta = j.value("beta", 8.0);
+    m_cfg.Fs_Hz = j.value("fs_Hz", 0.0);
+    m_active_channel = j.value("active_channel", 0);
+    m_dirty = true;
+}
+
 std::string PFBChannelizerEngine::hoverSummary() const {
     return "PFB M=" + std::to_string(m_cfg.M) + " K=" + std::to_string(m_cfg.K)
         + " Ch=" + std::to_string(m_active_channel);

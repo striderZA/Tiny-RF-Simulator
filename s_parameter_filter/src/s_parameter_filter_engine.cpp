@@ -47,6 +47,17 @@ void SParameterFilterEngine::update(double dt) {
     out.bumpGeneration();
 }
 
+void SParameterFilterEngine::serialize(nlohmann::json& j) const {
+    j["filepath"] = m_filepath;
+}
+
+void SParameterFilterEngine::deserialize(const nlohmann::json& j) {
+    m_filepath = j.value("filepath", "");
+    if (!m_filepath.empty())
+        m_data.load(m_filepath);
+    m_dirty = true;
+}
+
 std::string SParameterFilterEngine::hoverSummary() const {
     if (!m_data.loaded()) return "Not loaded";
     return std::to_string(m_data.numPorts()) + "-port | "

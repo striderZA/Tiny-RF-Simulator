@@ -113,6 +113,21 @@ void AdcEngine::update(double /*dt*/) {
     out.bumpGeneration();
 }
 
+void AdcEngine::serialize(nlohmann::json& j) const {
+    j["fs_Hz"] = m_fs_Hz;
+    j["nsd_dBm_per_Hz"] = m_nsd_dBm_per_Hz;
+    j["bits"] = m_bits;
+    j["v_fs"] = m_v_fs;
+}
+
+void AdcEngine::deserialize(const nlohmann::json& j) {
+    m_fs_Hz = j.value("fs_Hz", 1e9);
+    m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
+    m_bits = j.value("bits", 12);
+    m_v_fs = j.value("v_fs", 2.0);
+    m_dirty = true;
+}
+
 std::string AdcEngine::hoverSummary() const {
     return "Fs: " + std::to_string(m_fs_Hz / 1e6) + " MHz | " + std::to_string(m_bits) +
            " bit | NSD: " + std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
