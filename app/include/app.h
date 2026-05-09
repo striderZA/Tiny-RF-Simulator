@@ -41,8 +41,6 @@ class RfSimulatorApp {
     std::string m_current_project_path;
     ~RfSimulatorApp();
 
-  private:
-    void load_window_states();
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
@@ -79,6 +77,8 @@ class RfSimulatorApp {
     PendingAction m_pending_action = PendingAction::None;
     std::string m_pending_path;
 
+  private:
+    void load_window_states();
     void openFileDialog();
     void saveFileDialog();
     void promptUnsaved(PendingAction action, const std::string& path = "");
