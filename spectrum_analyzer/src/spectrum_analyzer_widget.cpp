@@ -200,7 +200,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     // Render combined spectrum (for marker + noise readout)
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(specs);
-    if (combined_dBm.size() != freq_axis->size()) {
+    if (combined_dBm.empty()) {
         ImGui::Text("Unable to render combined spectrum.");
         ImGui::End();
         return;
@@ -227,11 +227,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
-            if (trace.size() != freq_axis->size()) continue;
+            if (trace.size() != spec.frequencies.size()) continue;
 
             std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
                               : ("Probe " + std::to_string(i));
-            ImPlot::PlotLine(label.c_str(), freq_axis->data(), trace.data(),
+            ImPlot::PlotLine(label.c_str(), spec.frequencies.data(), trace.data(),
                              static_cast<int>(trace.size()),
                              {ImPlotProp_LineColor, is_pfb ? pfb_full_color : trace_colors[i % 4],
                               ImPlotProp_LineWeight, is_pfb ? 1.0f : 1.5f});
@@ -246,9 +246,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
                 std::vector<double> highlight_freqs;
                 std::vector<double> highlight_data;
-                for (size_t j = 0; j < trace.size() && j < freq_axis->size(); ++j) {
-                    if ((*freq_axis)[j] >= ch_lo && (*freq_axis)[j] <= ch_hi) {
-                        highlight_freqs.push_back((*freq_axis)[j]);
+                for (size_t j = 0; j < trace.size() && j < spec.frequencies.size(); ++j) {
+                    if (spec.frequencies[j] >= ch_lo && spec.frequencies[j] <= ch_hi) {
+                        highlight_freqs.push_back(spec.frequencies[j]);
                         highlight_data.push_back(trace[j]);
                     }
                 }
