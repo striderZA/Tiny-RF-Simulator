@@ -1,71 +1,88 @@
 #include "inspector_panel.h"
 #include "adc_engine.h"
 #include "amplifier_engine.h"
-#include "mixer_engine.h"
-#include "pfb_channelizer_engine.h"
-#include "signal_generator_engine.h"
-#include "splitter_engine.h"
-#include "s_parameter_amplifier_engine.h"
-#include "s_parameter_filter_engine.h"
+#include "common.h"
 #include "imgui.h"
 #include "imnodes.h"
-#include "utils.h"
-#include "common.h"
 #include "logging_core.h"
+#include "mixer_engine.h"
+#include "pfb_channelizer_engine.h"
+#include "s_parameter_amplifier_engine.h"
+#include "s_parameter_filter_engine.h"
+#include "signal_generator_engine.h"
+#include "splitter_engine.h"
+#include "utils.h"
 #include <portable-file-dialogs.h>
 
-InspectorPanel::InspectorPanel(
-    NodeGraphEngine& graph,
-    std::vector<std::unique_ptr<AmplifierEngine>>& amps,
-    std::vector<std::unique_ptr<MixerEngine>>& mixers,
-    std::vector<std::unique_ptr<SplitterEngine>>& splitters,
-    std::vector<std::unique_ptr<SParameterAmplifierEngine>>& sparam_amps,
-    std::vector<std::unique_ptr<SParameterFilterEngine>>& sparam_filters,
-    std::vector<std::unique_ptr<AdcEngine>>& adcs,
-    std::vector<std::unique_ptr<SignalGeneratorEngine>>& generators
-) : m_graph(graph), m_amplifiers(amps), m_mixers(mixers), m_splitters(splitters),
-    m_sparam_amps(sparam_amps), m_sparam_filters(sparam_filters), m_adcs(adcs), m_generators(generators) {}
+InspectorPanel::InspectorPanel(NodeGraphEngine &graph,
+                               std::vector<std::unique_ptr<AmplifierEngine>> &amps,
+                               std::vector<std::unique_ptr<MixerEngine>> &mixers,
+                               std::vector<std::unique_ptr<SplitterEngine>> &splitters,
+                               std::vector<std::unique_ptr<SParameterAmplifierEngine>> &sparam_amps,
+                               std::vector<std::unique_ptr<SParameterFilterEngine>> &sparam_filters,
+                               std::vector<std::unique_ptr<AdcEngine>> &adcs,
+                               std::vector<std::unique_ptr<SignalGeneratorEngine>> &generators)
+    : m_graph(graph), m_amplifiers(amps), m_mixers(mixers), m_splitters(splitters),
+      m_sparam_amps(sparam_amps), m_sparam_filters(sparam_filters), m_adcs(adcs),
+      m_generators(generators) {}
 
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
-    if (n != 1) return {ComponentType::None, -1};
+    if (n != 1)
+        return {ComponentType::None, -1};
 
     int selected_id = -1;
     ImNodes::GetSelectedNodes(&selected_id);
 
     for (int i = 0; i < static_cast<int>(m_generators.size()); ++i)
-        if (m_generators[i]->graphNodeId() == selected_id) return {ComponentType::Generator, i};
+        if (m_generators[i]->graphNodeId() == selected_id)
+            return {ComponentType::Generator, i};
     for (int i = 0; i < static_cast<int>(m_amplifiers.size()); ++i)
-        if (m_amplifiers[i]->graphNodeId() == selected_id) return {ComponentType::Amplifier, i};
+        if (m_amplifiers[i]->graphNodeId() == selected_id)
+            return {ComponentType::Amplifier, i};
     for (int i = 0; i < static_cast<int>(m_splitters.size()); ++i)
-        if (m_splitters[i]->graphNodeId() == selected_id) return {ComponentType::Splitter, i};
+        if (m_splitters[i]->graphNodeId() == selected_id)
+            return {ComponentType::Splitter, i};
     for (int i = 0; i < static_cast<int>(m_mixers.size()); ++i)
-        if (m_mixers[i]->graphNodeId() == selected_id) return {ComponentType::Mixer, i};
+        if (m_mixers[i]->graphNodeId() == selected_id)
+            return {ComponentType::Mixer, i};
     for (int i = 0; i < static_cast<int>(m_sparam_amps.size()); ++i)
-        if (m_sparam_amps[i]->graphNodeId() == selected_id) return {ComponentType::SParamAmp, i};
+        if (m_sparam_amps[i]->graphNodeId() == selected_id)
+            return {ComponentType::SParamAmp, i};
     for (int i = 0; i < static_cast<int>(m_sparam_filters.size()); ++i)
-        if (m_sparam_filters[i]->graphNodeId() == selected_id) return {ComponentType::SParamFilter, i};
+        if (m_sparam_filters[i]->graphNodeId() == selected_id)
+            return {ComponentType::SParamFilter, i};
     for (int i = 0; i < static_cast<int>(m_adcs.size()); ++i)
-        if (m_adcs[i]->graphNodeId() == selected_id) return {ComponentType::Adc, i};
+        if (m_adcs[i]->graphNodeId() == selected_id)
+            return {ComponentType::Adc, i};
     for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i)
-        if (m_pfb_ptrs[i] && m_pfb_ptrs[i]->graphNodeId() == selected_id) return {ComponentType::PFB, i};
+        if (m_pfb_ptrs[i] && m_pfb_ptrs[i]->graphNodeId() == selected_id)
+            return {ComponentType::PFB, i};
 
     return {ComponentType::None, -1};
 }
 
-void InspectorPanel::draw(const char* title, bool* p_open) {
-    if (!ImGui::Begin(title, p_open)) { ImGui::End(); return; }
+void InspectorPanel::draw(const char *title, bool *p_open) {
+    if (!ImGui::Begin(title, p_open)) {
+        ImGui::End();
+        return;
+    }
 
     auto hit = findSelected();
     if (hit.type == ComponentType::None || hit.index < 0) {
         ImGui::TextDisabled("Select a component in the Node Editor");
 
         ImGui::SeparatorText("View");
-        if (m_viewToggles.log) ImGui::Checkbox("Log", m_viewToggles.log);
-        if (m_viewToggles.node_editor) ImGui::Checkbox("Node Editor", m_viewToggles.node_editor);
-        if (m_viewToggles.spectrum) ImGui::Checkbox("Spectrum Analyzer", m_viewToggles.spectrum);
-        if (m_viewToggles.properties) ImGui::Checkbox("Properties", m_viewToggles.properties);
-        if (m_viewToggles.iq_plot) ImGui::Checkbox("IQ Plot", m_viewToggles.iq_plot);
+        if (m_viewToggles.log)
+            ImGui::Checkbox("Log", m_viewToggles.log);
+        if (m_viewToggles.node_editor)
+            ImGui::Checkbox("Node Editor", m_viewToggles.node_editor);
+        if (m_viewToggles.spectrum)
+            ImGui::Checkbox("Spectrum Analyzer", m_viewToggles.spectrum);
+        if (m_viewToggles.properties)
+            ImGui::Checkbox("Properties", m_viewToggles.properties);
+        if (m_viewToggles.iq_plot)
+            ImGui::Checkbox("IQ Plot", m_viewToggles.iq_plot);
 
         ImGui::End();
         return;
@@ -75,58 +92,105 @@ void InspectorPanel::draw(const char* title, bool* p_open) {
     std::string label;
     int node_id = -1;
     switch (hit.type) {
-        case ComponentType::Amplifier: node_id = m_amplifiers[hit.index]->graphNodeId(); label = "Amplifier " + std::to_string(m_amplifiers[hit.index]->id()); break;
-        case ComponentType::Mixer:     node_id = m_mixers[hit.index]->graphNodeId(); label = "Mixer " + std::to_string(m_mixers[hit.index]->id()); break;
-        case ComponentType::Splitter:  node_id = m_splitters[hit.index]->graphNodeId(); label = "Splitter " + std::to_string(m_splitters[hit.index]->id()); break;
-        case ComponentType::SParamAmp: node_id = m_sparam_amps[hit.index]->graphNodeId(); label = "S-Param Amp " + std::to_string(m_sparam_amps[hit.index]->id()); break;
-        case ComponentType::SParamFilter: node_id = m_sparam_filters[hit.index]->graphNodeId(); label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id()); break;
-        case ComponentType::Adc:       node_id = m_adcs[hit.index]->graphNodeId(); label = "ADC " + std::to_string(m_adcs[hit.index]->id()); break;
-        case ComponentType::Generator: node_id = m_generators[hit.index]->graphNodeId(); label = "Generator " + std::to_string(m_generators[hit.index]->id()); break;
-        case ComponentType::PFB: if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[hit.index]) { node_id = m_pfb_ptrs[hit.index]->graphNodeId(); label = "PFB " + std::to_string(m_pfb_ptrs[hit.index]->id()); } break;
-        default: break;
+    case ComponentType::Amplifier:
+        node_id = m_amplifiers[hit.index]->graphNodeId();
+        label = "Amplifier " + std::to_string(m_amplifiers[hit.index]->id());
+        break;
+    case ComponentType::Mixer:
+        node_id = m_mixers[hit.index]->graphNodeId();
+        label = "Mixer " + std::to_string(m_mixers[hit.index]->id());
+        break;
+    case ComponentType::Splitter:
+        node_id = m_splitters[hit.index]->graphNodeId();
+        label = "Splitter " + std::to_string(m_splitters[hit.index]->id());
+        break;
+    case ComponentType::SParamAmp:
+        node_id = m_sparam_amps[hit.index]->graphNodeId();
+        label = "S-Param Amp " + std::to_string(m_sparam_amps[hit.index]->id());
+        break;
+    case ComponentType::SParamFilter:
+        node_id = m_sparam_filters[hit.index]->graphNodeId();
+        label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id());
+        break;
+    case ComponentType::Adc:
+        node_id = m_adcs[hit.index]->graphNodeId();
+        label = "ADC " + std::to_string(m_adcs[hit.index]->id());
+        break;
+    case ComponentType::Generator:
+        node_id = m_generators[hit.index]->graphNodeId();
+        label = "Generator " + std::to_string(m_generators[hit.index]->id());
+        break;
+    case ComponentType::PFB:
+        if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()) &&
+            m_pfb_ptrs[hit.index]) {
+            node_id = m_pfb_ptrs[hit.index]->graphNodeId();
+            label = "PFB " + std::to_string(m_pfb_ptrs[hit.index]->id());
+        }
+        break;
+    default:
+        break;
     }
 
     ImGui::SeparatorText(label.c_str());
 
     switch (hit.type) {
-        case ComponentType::Amplifier: drawAmplifierProperties(*m_amplifiers[hit.index], hit.index); break;
-        case ComponentType::Mixer:     drawMixerProperties(*m_mixers[hit.index], hit.index); break;
-        case ComponentType::Splitter:  drawSplitterProperties(*m_splitters[hit.index], hit.index); break;
-        case ComponentType::SParamAmp: drawSParamAmpProperties(*m_sparam_amps[hit.index], hit.index); break;
-        case ComponentType::SParamFilter: drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index); break;
-        case ComponentType::Adc:       drawAdcProperties(*m_adcs[hit.index], hit.index); break;
-        case ComponentType::Generator: drawGeneratorProperties(*m_generators[hit.index], hit.index); break;
-        case ComponentType::PFB:
-            if (hit.type == ComponentType::PFB && hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()))
-                m_selected_pfb_index = hit.index;
-            if (!m_pfb_ptrs.empty()) {
-                int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[m_selected_pfb_index])
-                    ? m_pfb_ptrs[m_selected_pfb_index]->id() : m_selected_pfb_index;
-                std::string combo_label = "PFB##selector";
-                std::string preview = "PFB " + std::to_string(display_id);
-                if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
-                    for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
-                        if (!m_pfb_ptrs[i]) continue;
-                        bool selected = (i == m_selected_pfb_index);
-                        std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
-                        if (ImGui::Selectable(item.c_str(), &selected))
-                            m_selected_pfb_index = i;
-                        if (selected)
-                            ImGui::SetItemDefaultFocus();
-                    }
-                    ImGui::EndCombo();
+    case ComponentType::Amplifier:
+        drawAmplifierProperties(*m_amplifiers[hit.index], hit.index);
+        break;
+    case ComponentType::Mixer:
+        drawMixerProperties(*m_mixers[hit.index], hit.index);
+        break;
+    case ComponentType::Splitter:
+        drawSplitterProperties(*m_splitters[hit.index], hit.index);
+        break;
+    case ComponentType::SParamAmp:
+        drawSParamAmpProperties(*m_sparam_amps[hit.index], hit.index);
+        break;
+    case ComponentType::SParamFilter:
+        drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index);
+        break;
+    case ComponentType::Adc:
+        drawAdcProperties(*m_adcs[hit.index], hit.index);
+        break;
+    case ComponentType::Generator:
+        drawGeneratorProperties(*m_generators[hit.index], hit.index);
+        break;
+    case ComponentType::PFB:
+        if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()))
+            m_selected_pfb_index = hit.index;
+        if (!m_pfb_ptrs.empty()) {
+            int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+                              m_pfb_ptrs[m_selected_pfb_index])
+                                 ? m_pfb_ptrs[m_selected_pfb_index]->id()
+                                 : m_selected_pfb_index;
+            std::string combo_label = "PFB##selector";
+            std::string preview = "PFB " + std::to_string(display_id);
+            if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
+                for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                    if (!m_pfb_ptrs[i])
+                        continue;
+                    bool selected = (i == m_selected_pfb_index);
+                    std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
+                    if (ImGui::Selectable(item.c_str(), &selected))
+                        m_selected_pfb_index = i;
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
                 }
-                if (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) && m_pfb_ptrs[m_selected_pfb_index])
-                    drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
+                ImGui::EndCombo();
             }
-            break;
-        default: break;
+            if (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+                m_pfb_ptrs[m_selected_pfb_index])
+                drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
+        }
+        break;
+    default:
+        break;
     }
 
     ImGui::End();
 }
 
-void InspectorPanel::drawAmplifierProperties(AmplifierEngine& engine, int index) {
+void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index) {
     (void)index;
     double gain = engine.gain_dB();
     if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
@@ -159,7 +223,7 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine& engine, int index)
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawMixerProperties(MixerEngine& engine, int index) {
+void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
     (void)index;
     double lo = engine.loFreq_Hz();
     if (utils::inputFrequency("LO Frequency (MHz)", lo, 1.0, 100.0, "%.0f", 0.0, 100e9))
@@ -177,23 +241,24 @@ void InspectorPanel::drawMixerProperties(MixerEngine& engine, int index) {
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawSplitterProperties(SplitterEngine& engine, int index) {
+void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
     (void)index;
     ImGui::TextDisabled("Splitter: 1 input, 2 outputs, -3 dB split loss");
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, int index) {
+void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine &engine, int index) {
     (void)index;
     if (!engine.loaded()) {
-        ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load S-parameter file");
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load S-parameter file");
     }
 
     ImGui::TextWrapped("File: %s", engine.filepath().c_str());
     if (ImGui::Button("Browse...")) {
         auto result = pfd::open_file("Select S-parameter file", "",
-            { "S-parameter Files", "*.s2p *.s3p *.s4p *.sNp" }).result();
+                                     {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                          .result();
         if (!result.empty()) {
             engine.reload(result[0]);
             LOG_INFO("S-param amp reloaded: %s", result[0].c_str());
@@ -203,10 +268,12 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, 
     if (engine.loaded()) {
         int np = engine.numPorts();
         int fwd_idx = engine.forwardParamIdx();
-        std::string preview = "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
+        std::string preview =
+            "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
         if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
             for (int pi = 0; pi < np * np; ++pi) {
-                std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
+                std::string lbl =
+                    "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
                 if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
                     engine.setForwardParamIdx(pi);
             }
@@ -244,16 +311,17 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine& engine, 
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine& engine, int index) {
+void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine &engine, int index) {
     (void)index;
     if (!engine.loaded()) {
-        ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load S-parameter file");
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load S-parameter file");
     }
 
     ImGui::TextWrapped("File: %s", engine.filepath().c_str());
     if (ImGui::Button("Browse...")) {
         auto result = pfd::open_file("Select S-parameter file", "",
-            { "S-parameter Files", "*.s2p *.s3p *.s4p *.sNp" }).result();
+                                     {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                          .result();
         if (!result.empty()) {
             engine.reload(result[0]);
             LOG_INFO("S-param filter reloaded: %s", result[0].c_str());
@@ -270,7 +338,7 @@ void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine& engine, 
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawAdcProperties(AdcEngine& engine, int index) {
+void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
     (void)index;
     double fs = engine.fs_Hz();
     if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 1e3, 1e12))
@@ -283,8 +351,10 @@ void InspectorPanel::drawAdcProperties(AdcEngine& engine, int index) {
     int bits = engine.bits();
     ImGui::SetNextItemWidth(120.0f);
     if (ImGui::InputInt("Bits", &bits)) {
-        if (bits < 1) bits = 1;
-        if (bits > 24) bits = 24;
+        if (bits < 1)
+            bits = 1;
+        if (bits > 24)
+            bits = 24;
         engine.setBits(bits);
     }
 
@@ -297,7 +367,7 @@ void InspectorPanel::drawAdcProperties(AdcEngine& engine, int index) {
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine& engine, int index) {
+void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int index) {
     (void)index;
     ImGui::Checkbox("Measure", &engine.node().view_enabled);
 
@@ -312,11 +382,13 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine& engine, int 
         int to_delete = -1;
         for (int i = 0; i < static_cast<int>(engine.toneCount()); ++i) {
             ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::Text("%d", i + 1);
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", i + 1);
 
             double freq = engine.tones()[i].freq_Hz;
             ImGui::TableNextColumn();
-            bool f_ch = utils::inputFrequency("##freq", freq, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ);
+            bool f_ch =
+                utils::inputFrequency("##freq", freq, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ);
 
             double amp = engine.tones()[i].power_dBm;
             ImGui::TableNextColumn();
@@ -330,10 +402,12 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine& engine, int 
                 engine.updateTone(i, freq, amp, phase);
 
             ImGui::TableNextColumn();
-            if (ImGui::SmallButton("X")) to_delete = i;
+            if (ImGui::SmallButton("X"))
+                to_delete = i;
         }
         ImGui::EndTable();
-        if (to_delete >= 0) engine.removeTone(to_delete);
+        if (to_delete >= 0)
+            engine.removeTone(to_delete);
     }
 
     if (ImGui::Button("+ Add Tone"))
@@ -343,21 +417,25 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine& engine, int 
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawPFBProperties(PFBChannelizerEngine& engine) {
+void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
     int M = engine.channelCount();
     int K = engine.tapsPerBranch();
     float beta = static_cast<float>(engine.kaiserBeta());
     int ch = engine.activeChannel();
 
     if (ImGui::InputInt("Channels (M)", &M)) {
-        if (M < 2) M = 2;
-        if (M > 1024) M = 1024;
+        if (M < 2)
+            M = 2;
+        if (M > 1024)
+            M = 1024;
         engine.setChannelCount(M);
     }
 
     if (ImGui::InputInt("Taps/Branch (K)", &K)) {
-        if (K < 1) K = 1;
-        if (K > 64) K = 64;
+        if (K < 1)
+            K = 1;
+        if (K > 64)
+            K = 64;
         engine.setTapsPerBranch(K);
     }
 
@@ -367,13 +445,11 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine& engine) {
     if (ImGui::SliderInt("Active Channel", &ch, 0, engine.channelCount() - 1))
         engine.setActiveChannel(ch);
 
-    const auto& channels = engine.channels();
+    const auto &channels = engine.channels();
     if (!channels.empty()) {
-        const auto& active = channels[engine.activeChannel()];
-        ImGui::Text("Ch %d: centre %.2f MHz, %.0f kHz BW",
-            active.channel_index,
-            active.center_freq_Hz / 1e6,
-            active.bandwidth_Hz / 1e3);
+        const auto &active = channels[engine.activeChannel()];
+        ImGui::Text("Ch %d: centre %.2f MHz, %.0f kHz BW", active.channel_index,
+                    active.center_freq_Hz / 1e6, active.bandwidth_Hz / 1e3);
         ImGui::Text("Bins in channel: %zu", active.bin_indices.size());
         ImGui::Text("Tones: %zu", active.tones.size());
         ImGui::Text("Noise: %.3e W", active.noise_W);
