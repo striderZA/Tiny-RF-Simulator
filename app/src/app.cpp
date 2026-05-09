@@ -131,7 +131,7 @@ void RfSimulatorApp::addPFB() {
     m_pfbs.push_back(std::move(pfb));
     m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*m_pfbs.back()));
     m_show_iq_pfbs.push_back(
-        m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(id)).c_str(), true));
+        m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(m_pfbs.back()->id())).c_str(), true));
     LOG_INFO("Added PFB channelizer %d", id);
 }
 
@@ -324,7 +324,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     for (size_t i = 0; i < m_show_iq_pfbs.size(); ++i) {
-        std::string key = "IQPlot_" + std::to_string(i);
+        std::string key = "IQPlot_" + std::to_string(m_pfbs[i]->id());
         m_state.saveBool("WindowState", key.c_str(), m_show_iq_pfbs[i]);
     }
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
