@@ -70,8 +70,8 @@ void AdcEngine::update(double /*dt*/) {
 
     // -- Noise mapping + NSD --
     double nsd_W_per_Hz = 0.001 * std::pow(10.0, m_nsd_dBm_per_Hz / 10.0);
-    out.noise_W.resize(N, nsd_W_per_Hz);
-    out.noise_added_W.assign(N, 0.0);
+    out.noise_W.assign(N, 0.0);
+    out.noise_added_W.assign(N, nsd_W_per_Hz);
     out.noise_total_W.resize(N, 0.0);
     out.phase_deg.assign(N, 0.0);
 
@@ -103,7 +103,7 @@ void AdcEngine::update(double /*dt*/) {
     for (const auto &tone : input->tones) {
         double f_a = alias_frequency(tone.freq_Hz, m_fs_Hz);
         double f_complex = f_a - m_fs_Hz / 4.0;
-        if (std::abs(f_complex) <= m_fs_Hz / 4.0) {
+        if (f_complex < m_fs_Hz / 4.0) {
             Spectrum::Tone t = tone;
             t.freq_Hz = f_complex;
             out.tones.push_back(t);
