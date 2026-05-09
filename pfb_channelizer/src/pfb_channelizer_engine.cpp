@@ -21,7 +21,7 @@ int PFBChannelizerEngine::outputPinId() const {
 
 void PFBChannelizerEngine::setChannelCount(int M) {
     if (M < 2) M = 2;
-    if (M > 1024) M = 1024;
+    if (M > 2048) M = 2048;
     if (M != m_cfg.M) {
         m_cfg.M = M;
         m_dirty = true;
@@ -72,8 +72,9 @@ void PFBChannelizerEngine::update(double) {
         return;
     }
 
-    // Only recompute channels when frequency grid or Fs changes
-    if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz) {
+    // Only recompute channels when frequency grid, Fs, or M changes
+    if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz
+        || m_channels.size() != static_cast<size_t>(m_cfg.M)) {
         recomputeChannels(in_ptr->frequencies);
         m_cached_freqs = in_ptr->frequencies;
         m_cached_Fs_Hz = m_cfg.Fs_Hz;

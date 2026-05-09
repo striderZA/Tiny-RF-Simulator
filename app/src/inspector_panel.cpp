@@ -426,8 +426,8 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
     if (ImGui::InputInt("Channels (M)", &M)) {
         if (M < 2)
             M = 2;
-        if (M > 1024)
-            M = 1024;
+        if (M > 2048)
+            M = 2048;
         engine.setChannelCount(M);
     }
 

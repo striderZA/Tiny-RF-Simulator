@@ -191,3 +191,35 @@ TEST_CASE("PFB outputs[1] noise floor flatness at overlap boundaries", "[pfb]") 
 
     REQUIRE(ripple_pct < 1.0);
 }
+
+TEST_CASE("PFB channelizer recomputes channels when M increases", "[pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+
+    // Start with M=32
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+    REQUIRE(pfb.channels().size() == 32);
+
+    // Increase to M=128
+    pfb.setChannelCount(128);
+    pfb.setActiveChannel(100);
+    pfb.update(0.0);
+
+    // After fix: channels should be resized to 128
+    REQUIRE(pfb.channels().size() == 128);
+    // Channel 100 should have valid geometry
+    REQUIRE(pfb.channels()[100].center_freq_Hz != 0.0);
+    REQUIRE(pfb.channels()[100].bandwidth_Hz > 0.0);
+    // Output should also be valid
+    const auto& out = pfb.node().outputs[0];
+    REQUIRE(out.tones.size() <= 1);
+    REQUIRE(out.frequencies.size() > 0);
+}
