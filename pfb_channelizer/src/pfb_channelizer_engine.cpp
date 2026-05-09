@@ -22,7 +22,11 @@ int PFBChannelizerEngine::outputPinId() const {
 void PFBChannelizerEngine::setChannelCount(int M) {
     if (M < 2) M = 2;
     if (M > 1024) M = 1024;
-    if (M != m_cfg.M) { m_cfg.M = M; m_dirty = true; }
+    if (M != m_cfg.M) {
+        m_cfg.M = M;
+        m_dirty = true;
+        if (m_active_channel >= M) m_active_channel = M - 1;
+    }
 }
 
 void PFBChannelizerEngine::setTapsPerBranch(int K) {
