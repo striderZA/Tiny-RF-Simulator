@@ -1,11 +1,11 @@
 #include "app.h"
 #include "imgui.h"
+#include <portable-file-dialogs.h>
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
-#include <commdlg.h>
 #include <fstream>
 #include <functional>
 #include <nlohmann/json.hpp>
@@ -699,34 +699,19 @@ void RfSimulatorApp::loadProject(const std::string& path) {
 }
 
 void RfSimulatorApp::openFileDialog() {
-    OPENFILENAMEA ofn = {};
-    char buf[MAX_PATH] = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = GetActiveWindow();
-    ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0All Files (*.*)\0*.*\0";
-    ofn.lpstrFile = buf;
-    ofn.nMaxFile = sizeof(buf);
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
-    if (GetOpenFileNameA(&ofn))
-        loadProject(buf);
+    auto result = pfd::open_file("Open Project", ".",
+        {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"})
+        .result();
+    if (!result.empty())
+        loadProject(result[0]);
 }
 
 void RfSimulatorApp::saveFileDialog() {
-    OPENFILENAMEA ofn = {};
-    char buf[MAX_PATH] = {};
-    if (!m_current_project_path.empty())
-        strncpy_s(buf, m_current_project_path.c_str(), sizeof(buf));
-    else
-        strncpy_s(buf, "untitled.rfsim", sizeof(buf));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = GetActiveWindow();
-    ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0";
-    ofn.lpstrFile = buf;
-    ofn.nMaxFile = sizeof(buf);
-    ofn.Flags = OFN_OVERWRITEPROMPT;
-    ofn.lpstrDefExt = "rfsim";
-    if (GetSaveFileNameA(&ofn))
-        saveProject(buf);
+    auto result = pfd::save_file("Save Project As", ".",
+        {"RF Simulator Project (*.rfsim)", "*.rfsim"})
+        .result();
+    if (!result.empty())
+        saveProject(result);
 }
 
 void RfSimulatorApp::promptUnsaved(PendingAction action, const std::string& path) {
