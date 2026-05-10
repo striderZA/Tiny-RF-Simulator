@@ -702,7 +702,7 @@ void RfSimulatorApp::openFileDialog() {
     OPENFILENAMEA ofn = {};
     char buf[MAX_PATH] = {};
     ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = nullptr;
+    ofn.hwndOwner = GetActiveWindow();
     ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0All Files (*.*)\0*.*\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
@@ -719,6 +719,7 @@ void RfSimulatorApp::saveFileDialog() {
     else
         strncpy_s(buf, "untitled.rfsim", sizeof(buf));
     ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = GetActiveWindow();
     ofn.lpstrFilter = "RF Simulator Project (*.rfsim)\0*.rfsim\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
