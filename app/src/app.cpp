@@ -64,12 +64,11 @@ RfSimulatorApp::RfSimulatorApp() {
     // Auto-load last project on startup
     auto last = m_state.lastProject();
     if (!last.empty()) {
+        m_state.setLastProject("");  // Clear first to prevent crash loop
         std::ifstream test(last);
         if (test.good()) {
             test.close();
-            loadProject(last);
-        } else {
-            m_state.setLastProject("");
+            loadProject(last);  // Re-sets lastProject on success
         }
     }
 }
@@ -406,32 +405,21 @@ void RfSimulatorApp::draw_ui() {
     if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("You have unsaved changes. Save before continuing?");
         if (ImGui::Button("Save", ImVec2(120, 0))) {
-            if (!m_current_project_path.empty()) {
+            if (!m_current_project_path.empty())
                 saveProject(m_current_project_path);
-            } else {
+            else
                 saveFileDialog();
-            }
             if (!m_dirty) {
-                switch (m_pending_action) {
-                    case PendingAction::New: newProject(); break;
-                    case PendingAction::Open: openFileDialog(); break;
-                    case PendingAction::OpenRecent: loadProject(m_pending_path); break;
-                    case PendingAction::Exit: exit(0); break;
-                    default: break;
-                }
+                m_deferred_action = m_pending_action;
+                m_deferred_path = m_pending_path;
                 m_pending_action = PendingAction::None;
                 ImGui::CloseCurrentPopup();
             }
         }
         ImGui::SameLine();
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
-            switch (m_pending_action) {
-                case PendingAction::New: newProject(); break;
-                case PendingAction::Open: openFileDialog(); break;
-                case PendingAction::OpenRecent: loadProject(m_pending_path); break;
-                case PendingAction::Exit: exit(0); break;
-                default: break;
-            }
+            m_deferred_action = m_pending_action;
+            m_deferred_path = m_pending_path;
             m_pending_action = PendingAction::None;
             ImGui::CloseCurrentPopup();
         }
@@ -441,6 +429,19 @@ void RfSimulatorApp::draw_ui() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
+    }
+
+    // Execute deferred action (outside the popup to avoid ImGui state issues with blocking dialogs)
+    if (m_deferred_action != PendingAction::None) {
+        PendingAction action = m_deferred_action;
+        m_deferred_action = PendingAction::None;
+        switch (action) {
+            case PendingAction::New: newProject(); break;
+            case PendingAction::Open: openFileDialog(); break;
+            case PendingAction::OpenRecent: loadProject(m_deferred_path); break;
+            case PendingAction::Exit: exit(0); break;
+            default: break;
+        }
     }
 
     // Title bar showing project name

@@ -82,4 +82,7 @@ class RfSimulatorApp {
     void openFileDialog();
     void saveFileDialog();
     void promptUnsaved(PendingAction action, const std::string& path = "");
+
+    PendingAction m_deferred_action = PendingAction::None;
+    std::string m_deferred_path;
 };
