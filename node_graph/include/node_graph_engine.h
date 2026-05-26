@@ -2,6 +2,7 @@
 
 #include "signal_node.h"
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct GraphNode {
@@ -31,6 +32,7 @@ class NodeGraphEngine {
 
     SignalNode *getSourceForInput(int input_pin_id) const;
     std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
+    void rebuildPinMap();
     std::vector<int> topologicalOrder() const;
 
     static constexpr int MAX_PROBES = 4;
@@ -54,4 +56,5 @@ class NodeGraphEngine {
     std::vector<int> m_probe_pins;
     std::vector<GraphNode> m_nodes;
     std::vector<GraphLink> m_links;
+    mutable std::unordered_map<int, SignalNode*> m_pin_to_source;
 };
