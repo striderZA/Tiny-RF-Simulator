@@ -31,6 +31,8 @@ TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {
     engine.addLink(gen.output_pin_ids[0], amp.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
 
+    engine.rebuildPinMap();
+
     auto* source = engine.getSourceForInput(amp.input_pin_ids[0]);
     REQUIRE(source == &gen_node);
 }
@@ -50,6 +52,7 @@ TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") 
     engine.removeNode(engine.nodes()[0].node_id);
 
     REQUIRE(engine.links().empty());
+    engine.rebuildPinMap();
     REQUIRE(engine.getSourceForInput(amp_pin) == nullptr);
 }
 
