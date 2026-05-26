@@ -73,6 +73,20 @@ void NodeGraphEngine::removeLink(int link_id) {
     }
 }
 
+void NodeGraphEngine::rebuildPinMap() {
+    std::unordered_map<int, SignalNode*> out_pin_map;
+    for (const auto& node : m_nodes)
+        for (int pin : node.output_pin_ids)
+            out_pin_map[pin] = node.signal_node;
+
+    m_pin_to_source.clear();
+    for (const auto& link : m_links) {
+        auto it = out_pin_map.find(link.start_pin_id);
+        if (it != out_pin_map.end())
+            m_pin_to_source[link.end_pin_id] = it->second;
+    }
+}
+
 int NodeGraphEngine::inputPinId(int node_id) const {
     for (const auto& n : m_nodes) {
         if (n.node_id == node_id && !n.input_pin_ids.empty())
@@ -92,18 +106,8 @@ int NodeGraphEngine::outputPinId(int node_id) const {
 SignalNode *NodeGraphEngine::getSourceForInput(int input_pin_id) const {
     if (input_pin_id < 0)
         return nullptr;
-    for (const auto &link : m_links) {
-        if (link.end_pin_id == input_pin_id) {
-            for (const auto &node : m_nodes) {
-                for (int pin : node.output_pin_ids) {
-                    if (pin == link.start_pin_id) {
-                        return node.signal_node;
-                    }
-                }
-            }
-        }
-    }
-    return nullptr;
+    auto it = m_pin_to_source.find(input_pin_id);
+    return it != m_pin_to_source.end() ? it->second : nullptr;
 }
 
 std::vector<SignalNode *> NodeGraphEngine::getSourcesForInput(int input_pin_id) const {
