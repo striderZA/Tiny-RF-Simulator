@@ -3,12 +3,29 @@
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
+#include "utils.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
 
 RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
+
+    {
+        constexpr int sprite_w = 32;
+        constexpr int sprite_h = 32;
+        constexpr int padding  = 4;
+        std::string sheet_path = utils::assetPath("/assets/symbols_spritesheet.png");
+        m_graph_widget->loadNodeIconSpritesheet(sheet_path.c_str(), sprite_w, sprite_h, padding);
+        m_graph_widget->mapNodeIcon("Generator", 4, 1);
+        m_graph_widget->mapNodeIcon("Amplifier", 4, 0);
+        m_graph_widget->mapNodeIcon("Splitter", 1, 0);
+        m_graph_widget->mapNodeIcon("Mixer", 3, 1);
+        m_graph_widget->mapNodeIcon("ADC", 2, 0);
+        m_graph_widget->mapNodeIcon("S-Param Amp", 4, 0);
+        m_graph_widget->mapNodeIcon("S-Param Filter", 0, 1);
+    }
+
     m_graph_widget->onAddGenerator = [this]() { addGenerator(); };
     m_graph_widget->onAddAmplifier = [this]() { addAmplifier(); };
     m_graph_widget->onAddSplitter = [this]() { addSplitter(); };
@@ -98,8 +115,7 @@ void RfSimulatorApp::addMixer() {
 
 void RfSimulatorApp::addSParamAmp() {
     int id = static_cast<int>(m_sparam_amps.size());
-    std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    std::string path = utils::assetPath("/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
     auto spamp = std::make_unique<SParameterAmplifierEngine>(id, m_graph_engine, path);
     m_view_manager.registerNode(&spamp->node());
     m_sparam_amps.push_back(std::move(spamp));
@@ -108,8 +124,7 @@ void RfSimulatorApp::addSParamAmp() {
 
 void RfSimulatorApp::addSParamFilter() {
     int id = static_cast<int>(m_sparam_filters.size());
-    std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    std::string path = utils::assetPath("/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
     auto spf = std::make_unique<SParameterFilterEngine>(id, m_graph_engine, path);
     m_view_manager.registerNode(&spf->node());
     m_sparam_filters.push_back(std::move(spf));
@@ -243,6 +258,8 @@ void RfSimulatorApp::update_dsp() {
     addWiredUpdate(m_sparam_filters);
     addWiredUpdate(m_adcs);
     addWiredUpdate(m_pfbs);
+
+    m_graph_engine.rebuildPinMap();
 
     auto order = m_graph_engine.topologicalOrder();
     for (int node_id : order) {
