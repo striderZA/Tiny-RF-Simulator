@@ -142,6 +142,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add PFB Channelizer")) {
             if (onAddPFB) onAddPFB();
         }
+        if (ImGui::MenuItem("Add Ideal Filter")) {
+            if (onAddIdealFilter) onAddIdealFilter();
+        }
         ImGui::EndPopup();
     }
 }

@@ -25,6 +25,7 @@ class NodeGraphWidget {
     std::function<void()> onAddSParamFilter;
     std::function<void()> onAddAdc;
     std::function<void()> onAddPFB;
+    std::function<void()> onAddIdealFilter;
     std::function<void(int node_id)> onRemoveNode;
     std::function<std::string(int graph_node_id)> onNodeHover;
 
