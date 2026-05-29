@@ -9,6 +9,10 @@
 #include <complex>
 #include <limits>
 
+IQPlotWidget::~IQPlotWidget() {
+    if (m_ifft) kiss_fft_free(m_ifft);
+}
+
 void IQPlotWidget::draw(const char* title, bool* p_open) {
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title, p_open)) {
@@ -59,12 +63,23 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
     double x_min = m_zoom_locked ? m_zoom_locked_xmin : 0.0;
     double x_max = m_zoom_locked ? m_zoom_locked_xmax : window_us;
 
-    double y_min = *std::min_element(i_vals.begin(), i_vals.end());
-    double y_max = *std::max_element(i_vals.begin(), i_vals.end());
+    double raw_min = *std::min_element(i_vals.begin(), i_vals.end());
+    double raw_max = *std::max_element(i_vals.begin(), i_vals.end());
     for (double v : q_vals) {
-        y_min = std::min(y_min, v);
-        y_max = std::max(y_max, v);
+        raw_min = std::min(raw_min, v);
+        raw_max = std::max(raw_max, v);
     }
+
+    if (!m_y_inited) {
+        m_smooth_y_min = raw_min;
+        m_smooth_y_max = raw_max;
+        m_y_inited = true;
+    } else {
+        m_smooth_y_min += kYAlpha * (raw_min - m_smooth_y_min);
+        m_smooth_y_max += kYAlpha * (raw_max - m_smooth_y_max);
+    }
+    double y_min = m_smooth_y_min;
+    double y_max = m_smooth_y_max;
     double y_margin = (y_max - y_min) * 0.1 + 1e-18;
     y_min -= y_margin;
     y_max += y_margin;
@@ -119,6 +134,10 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
     if (m_zoom_locked && ImGui::Button("Reset Zoom")) {
         m_zoom_locked = false;
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Auto Scale")) {
+        m_y_inited = false;
+    }
 
     ImGui::End();
 }
@@ -166,9 +185,12 @@ void IQPlotWidget::runIDFT() {
             fd[i].i = static_cast<float>(spectrum[i].imag());
         }
 
-        kiss_fft_cfg ifft = kiss_fft_alloc(static_cast<int>(N), 1, nullptr, nullptr);
-        kiss_fft(ifft, fd.data(), td.data());
-        kiss_fft_free(ifft);
+        if (N != m_ifft_N) {
+            if (m_ifft) kiss_fft_free(m_ifft);
+            m_ifft = kiss_fft_alloc(static_cast<int>(N), 1, nullptr, nullptr);
+            m_ifft_N = N;
+        }
+        kiss_fft(m_ifft, fd.data(), td.data());
 
         for (size_t i = 0; i < N; ++i) {
             td_i[i] = static_cast<double>(td[i].r) / static_cast<double>(N);
