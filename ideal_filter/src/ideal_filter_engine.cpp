@@ -19,7 +19,7 @@ int IdealFilterEngine::outputPinId() const {
 bool IdealFilterEngine::isInPassband(double freq_Hz) const {
     switch (m_type) {
         case FilterType::LPF: return freq_Hz <= m_fc_low_Hz;
-        case FilterType::HPF: return freq_Hz >= m_fc_low_Hz;
+        case FilterType::HPF: return freq_Hz > m_fc_low_Hz;
         case FilterType::BPF: return freq_Hz >= m_fc_low_Hz && freq_Hz <= m_fc_high_Hz;
         case FilterType::BSF: return freq_Hz < m_fc_low_Hz || freq_Hz > m_fc_high_Hz;
     }

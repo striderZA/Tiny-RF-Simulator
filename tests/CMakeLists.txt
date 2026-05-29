@@ -10,6 +10,7 @@ set(TEST_SOURCES
     test_adc.cpp
     test_pfb.cpp
     test_bench_dsp.cpp
+    test_ideal_filter.cpp
 )
 
 if(WIN32)
@@ -23,6 +24,7 @@ target_link_libraries(tests PRIVATE
     common
     simulator::signal_generator_engine
     simulator::amplifier_engine
+    simulator::ideal_filter_engine
     simulator::splitter_engine
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
