@@ -33,6 +33,9 @@ class SignalGeneratorEngine {
     const std::vector<Spectrum::Tone> &tones() const { return m_tones; }
     size_t toneCount() const { return m_tones.size(); }
 
+    double fs_Hz() const { return m_fs_Hz; }
+    void setFs_Hz(double fs) { m_fs_Hz = fs; }
+
     SignalNode &node() { return m_node; }
     void update(double dt);
 
@@ -43,6 +46,7 @@ class SignalGeneratorEngine {
     std::vector<Spectrum::Tone> m_tones;
     SignalNode m_node;
     bool m_dirty = true;
+    double m_fs_Hz = 0.0;
 
     void rebuildFrequencyGrid();
 };

@@ -371,6 +371,11 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
     (void)index;
     ImGui::Checkbox("Measure", &engine.node().view_enabled);
 
+    ImGui::TextDisabled("Output Sample Rate (for PFB chain):");
+    double fs = engine.fs_Hz();
+    if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 0.0, 100e9))
+        engine.setFs_Hz(fs);
+
     if (ImGui::BeginTable("gen_tones", 5, ImGuiTableFlags_Borders)) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 30.0f);
         ImGui::TableSetupColumn("Frequency (MHz)");
