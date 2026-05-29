@@ -1,4 +1,5 @@
 #include "ideal_filter_engine.h"
+#include <cstdio>
 
 IdealFilterEngine::IdealFilterEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
@@ -12,13 +13,7 @@ int IdealFilterEngine::inputPinId() const {
 }
 
 int IdealFilterEngine::outputPinId() const {
-    if (!m_graph || m_graph_node_id < 0) return -1;
-    for (const auto& node : m_graph->nodes()) {
-        if (node.node_id == m_graph_node_id) {
-            if (!node.output_pin_ids.empty()) return node.output_pin_ids[0];
-        }
-    }
-    return -1;
+    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 bool IdealFilterEngine::isInPassband(double freq_Hz) const {
