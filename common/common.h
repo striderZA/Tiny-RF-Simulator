@@ -34,9 +34,9 @@ inline void buildDefaultFrequencyGrid(std::vector<double>& freqs) {
     constexpr double start_Hz = MIN_FREQ;
     constexpr double stop_Hz = MAX_FREQ;
     constexpr double f_step_Hz = 10e6;
-    int n = static_cast<int>((stop_Hz - start_Hz) / f_step_Hz);
+    size_t n = static_cast<size_t>((stop_Hz - start_Hz) / f_step_Hz);
     if (n < 2) n = 2;
     freqs.resize(n);
-    for (int i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i)
         freqs[i] = start_Hz + i * f_step_Hz;
 }
