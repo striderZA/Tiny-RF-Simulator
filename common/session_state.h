@@ -2,11 +2,15 @@
 
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 class SessionState {
   public:
     SessionState() {
+#ifdef _WIN32
         char buf[MAX_PATH] = {};
         if (GetModuleFileNameA(nullptr, buf, sizeof(buf)) == 0) {
             m_path = "app.ini";
@@ -18,13 +22,19 @@ class SessionState {
             m_path = m_path.substr(0, pos + 1) + "app.ini";
         else
             m_path = "app.ini";
+#else
+        m_path = "app.ini";
+#endif
     }
 
     void save(const char* section, const char* key, const char* value) {
+#ifdef _WIN32
         WritePrivateProfileStringA(section, key, value, m_path.c_str());
+#endif
     }
 
     std::string load(const char* section, const char* key, const char* default_val) const {
+#ifdef _WIN32
         std::vector<char> buf(256);
         DWORD ret;
         do {
@@ -36,6 +46,11 @@ class SessionState {
                 break;
         } while (true);
         return buf.data();
+#else
+        (void)section;
+        (void)key;
+        return std::string(default_val);
+#endif
     }
 
     bool loadBool(const char* section, const char* key, bool default_val) const {
@@ -48,7 +63,11 @@ class SessionState {
     }
 
     bool fileExists() const {
+#ifdef _WIN32
         return GetFileAttributesA(m_path.c_str()) != INVALID_FILE_ATTRIBUTES;
+#else
+        return false;
+#endif
     }
 
     void setLastProject(const std::string& path) {
@@ -80,6 +99,6 @@ class SessionState {
         return files;
     }
 
-private:
+  private:
     std::string m_path;
 };

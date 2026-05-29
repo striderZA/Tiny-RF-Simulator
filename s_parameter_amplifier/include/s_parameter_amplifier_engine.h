@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "node_graph_engine.h"
+#include "nonlinear_model.h"
 #include "signal_node.h"
 #include "s_parameter_data.h"
 #include <nlohmann/json.hpp>
@@ -37,22 +38,23 @@ class SParameterAmplifierEngine {
         if (nf != m_nf_dB) { m_nf_dB = nf; m_dirty = true; }
     }
 
-    bool enableNonlinear() const { return m_enable_nonlinear; }
-    double oip2_dBm() const { return m_oip2_dBm; }
-    double oip3_dBm() const { return m_oip3_dBm; }
+    bool enableNonlinear() const { return m_nonlinear.enabled(); }
+    double oip2_dBm() const { return m_nonlinear.oip2_dBm(); }
+    double oip3_dBm() const { return m_nonlinear.oip3_dBm(); }
 
     void setEnableNonlinear(bool en) {
-        if (en != m_enable_nonlinear) {
-            m_enable_nonlinear = en;
+        if (en != m_nonlinear.enabled()) {
+            m_nonlinear.setEnabled(en);
             m_dirty = true;
-            if (en) recomputeCoefficients();
         }
     }
     void setOIP2_dBm(double oip2) {
-        if (oip2 != m_oip2_dBm) { m_oip2_dBm = oip2; if (m_enable_nonlinear) { recomputeCoefficients(); m_dirty = true; } }
+        m_nonlinear.setOIP2_dBm(oip2);
+        if (m_nonlinear.enabled()) m_dirty = true;
     }
     void setOIP3_dBm(double oip3) {
-        if (oip3 != m_oip3_dBm) { m_oip3_dBm = oip3; if (m_enable_nonlinear) { recomputeCoefficients(); m_dirty = true; } }
+        m_nonlinear.setOIP3_dBm(oip3);
+        if (m_nonlinear.enabled()) m_dirty = true;
     }
 
   private:
@@ -69,11 +71,5 @@ class SParameterAmplifierEngine {
     uint64_t m_cached_input_generation = 0;
 
     double m_nf_dB = 0.0;
-    bool m_enable_nonlinear = false;
-    double m_oip2_dBm = 100.0;
-    double m_oip3_dBm = 100.0;
-    double m_k1 = 0.0;
-    double m_k2 = 0.0;
-
-    void recomputeCoefficients();
+    NonlinearModel m_nonlinear;
 };

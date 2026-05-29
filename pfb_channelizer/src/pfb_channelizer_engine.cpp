@@ -146,6 +146,9 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_added_W.assign(n_full, 0.0);
     std::vector<int> overlap_count(n_full, 0);
     double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
+    // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
+    // is total channel noise power divided by the channel bandwidth, then
+    // averaged across overlapping channels to produce a flat combined band.
     for (const auto& ch : m_channels) {
         double density = ch.noise_W / channel_bw;
         for (int bin_idx : ch.bin_indices) {

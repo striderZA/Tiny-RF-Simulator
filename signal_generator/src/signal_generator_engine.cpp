@@ -67,6 +67,7 @@ void SignalGeneratorEngine::update(double) {
         out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 
+    out.fs_Hz = m_fs_Hz;
     out.bumpGeneration();
 }
 

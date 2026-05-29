@@ -131,8 +131,7 @@ void RfSimulatorApp::addSParamAmp() {
 
 void RfSimulatorApp::addSParamFilter() {
     int id = static_cast<int>(m_sparam_filters.size());
-    std::string path = std::string(PROJECT_SOURCE_DIR) +
-                       "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    std::string path = "";
     auto spf = std::make_unique<SParameterFilterEngine>(id, m_graph_engine, path);
     m_view_manager.registerNode(&spf->node());
     m_sparam_filters.push_back(std::move(spf));

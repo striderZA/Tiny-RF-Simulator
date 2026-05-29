@@ -4,13 +4,6 @@
 #include <algorithm>
 #include <cmath>
 
-namespace {
-    inline double dbmToW(double dBm) { return std::pow(10.0, dBm / 10.0) * 0.001; }
-    inline double wToDbm(double W) { return 10.0 * std::log10(W / 0.001); }
-    inline double dbmToV(double dBm) { return std::sqrt(dbmToW(dBm) * R); }
-    inline double vToDbm(double V) { return 10.0 * std::log10((V * V / R) / 0.001); }
-}
-
 SParameterAmplifierEngine::SParameterAmplifierEngine(int id, NodeGraphEngine& graph,
                                                        const std::string& filepath)
     : m_id(id), m_graph(&graph), m_filepath(filepath) {
@@ -18,13 +11,6 @@ SParameterAmplifierEngine::SParameterAmplifierEngine(int id, NodeGraphEngine& gr
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
     reload(filepath);
-}
-
-void SParameterAmplifierEngine::recomputeCoefficients() {
-    double V_oip2 = dbmToV(m_oip2_dBm);
-    double V_oip3 = dbmToV(m_oip3_dBm);
-    m_k1 = 1.0 / V_oip2;
-    m_k2 = 4.0 / (3.0 * V_oip3 * V_oip3);
 }
 
 void SParameterAmplifierEngine::reload(const std::string& filepath) {
@@ -95,75 +81,23 @@ void SParameterAmplifierEngine::update(double dt) {
     }
 
     // Nonlinear processing
-    if (m_enable_nonlinear && in_ptr && !in_ptr->tones.empty()) {
+    if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
         size_t n_fund = out.tones.size();
-        double total_distortion_mW = 0.0;
+        auto result = m_nonlinear.process(in_ptr->tones,
+            [this](double freq) {
+                auto S = this->m_data.interpolate(freq, m_forward_param_idx);
+                return std::abs(S);
+            });
 
-        // Harmonics
-        for (const auto& tone : in_ptr->tones) {
-            // Use S-param gain at the tone's frequency to find output power
-            auto S_tone = m_data.interpolate(tone.freq_Hz, m_forward_param_idx);
-            double tone_gain_dB = 20.0 * std::log10(std::abs(S_tone));
-            double Pout_dBm = tone.power_dBm + tone_gain_dB;
-            double Vp1 = dbmToV(Pout_dBm);
+        for (const auto& t : result.extra_tones)
+            out.tones.push_back(t);
 
-            double V_h2 = m_k1 * Vp1 / std::sqrt(2.0);
-            double H2_dBm = vToDbm(V_h2);
-            out.tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
-            total_distortion_mW += dbmToW(H2_dBm);
-
-            double V_h3 = m_k2 * Vp1 * Vp1 * Vp1 / 4.0;
-            double H3_dBm = vToDbm(V_h3);
-            out.tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
-            total_distortion_mW += dbmToW(H3_dBm);
-        }
-
-        // IMD (cap at 3 tones)
-        int n_tones = std::min(static_cast<int>(in_ptr->tones.size()), 3);
-        for (int i = 0; i < n_tones; ++i) {
-            for (int j = i + 1; j < n_tones; ++j) {
-                auto S1 = m_data.interpolate(in_ptr->tones[i].freq_Hz, m_forward_param_idx);
-                auto S2 = m_data.interpolate(in_ptr->tones[j].freq_Hz, m_forward_param_idx);
-                double P1 = in_ptr->tones[i].power_dBm + 20.0 * std::log10(std::abs(S1));
-                double P2 = in_ptr->tones[j].power_dBm + 20.0 * std::log10(std::abs(S2));
-                double f1 = in_ptr->tones[i].freq_Hz;
-                double f2 = in_ptr->tones[j].freq_Hz;
-                double Vp1 = dbmToV(P1);
-                double Vp2 = dbmToV(P2);
-
-                double V_im2 = m_k1 * Vp1 * Vp2;
-                double IM2_dBm = vToDbm(V_im2);
-                out.tones.push_back({std::abs(f1 - f2), IM2_dBm, 0.0});
-                out.tones.push_back({f1 + f2, IM2_dBm, 0.0});
-                total_distortion_mW += 2.0 * dbmToW(IM2_dBm);
-
-                double V_im3_12 = (3.0 / 4.0) * m_k2 * Vp1 * Vp1 * Vp2;
-                double IM3_12_dBm = vToDbm(V_im3_12);
-                out.tones.push_back({2.0 * f1 + f2, IM3_12_dBm, 0.0});
-                out.tones.push_back({std::abs(2.0 * f1 - f2), IM3_12_dBm, 0.0});
-                total_distortion_mW += 2.0 * dbmToW(IM3_12_dBm);
-
-                double V_im3_21 = (3.0 / 4.0) * m_k2 * Vp1 * Vp2 * Vp2;
-                double IM3_21_dBm = vToDbm(V_im3_21);
-                out.tones.push_back({2.0 * f2 + f1, IM3_21_dBm, 0.0});
-                out.tones.push_back({std::abs(f1 - 2.0 * f2), IM3_21_dBm, 0.0});
-                total_distortion_mW += 2.0 * dbmToW(IM3_21_dBm);
-            }
-        }
-
-        // Compression
-        double Pfund_mW = 0.0;
-        for (size_t k = 0; k < n_fund; ++k)
-            Pfund_mW += dbmToW(out.tones[k].power_dBm);
-
-        if (total_distortion_mW >= Pfund_mW || Pfund_mW <= 0.0) {
+        if (result.compression_dB < -1e8) {
             for (size_t k = 0; k < n_fund; ++k)
                 out.tones[k].power_dBm = MIN_POWER;
         } else {
-            double ratio = 1.0 - total_distortion_mW / Pfund_mW;
-            double ratio_dB = 10.0 * std::log10(ratio);
             for (size_t k = 0; k < n_fund; ++k)
-                out.tones[k].power_dBm += ratio_dB;
+                out.tones[k].power_dBm += result.compression_dB;
         }
     }
 
@@ -200,7 +134,7 @@ std::string SParameterAmplifierEngine::hoverSummary() const {
         + std::to_string((m_forward_param_idx / np) + 1)
         + std::to_string((m_forward_param_idx % np) + 1)
         + " | NF: " + std::to_string(m_nf_dB) + " dB";
-    if (m_enable_nonlinear)
-        s += " | OIP2: " + std::to_string(m_oip2_dBm) + " OIP3: " + std::to_string(m_oip3_dBm);
+    if (m_nonlinear.enabled())
+        s += " | OIP2: " + std::to_string(m_nonlinear.oip2_dBm()) + " OIP3: " + std::to_string(m_nonlinear.oip3_dBm());
     return s;
 }
