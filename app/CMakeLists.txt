@@ -34,6 +34,7 @@ target_link_libraries(app
         simulator::adc_engine
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
+        simulator::ideal_filter_engine
         simulator::node_graph_engine
         simulator::node_graph_widget
         common

@@ -3,6 +3,7 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "inspector_panel.h"
+#include "ideal_filter_engine.h"
 #include "iq_plot_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
@@ -54,6 +55,7 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<PFBChannelizerEngine>> m_pfbs;
     std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
     std::vector<bool> m_show_iq_pfbs;
+    std::vector<std::unique_ptr<IdealFilterEngine>> m_ideal_filters;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     void addGenerator();
@@ -64,5 +66,6 @@ class RfSimulatorApp {
     void addSParamFilter();
     void addAdc();
     void addPFB();
+    void addIdealFilter();
     void removeComponent(int graph_node_id);
 };

@@ -17,6 +17,7 @@ RfSimulatorApp::RfSimulatorApp() {
     m_graph_widget->onAddSParamFilter = [this]() { addSParamFilter(); };
     m_graph_widget->onAddAdc = [this]() { addAdc(); };
     m_graph_widget->onAddPFB = [this]() { addPFB(); };
+    m_graph_widget->onAddIdealFilter = [this]() { addIdealFilter(); };
     m_graph_widget->onRemoveNode = [this](int id) { removeComponent(id); };
 
     addGenerator();
@@ -49,6 +50,7 @@ RfSimulatorApp::RfSimulatorApp() {
         for (auto& s : m_sparam_filters) if (s->graphNodeId() == graph_node_id) return s->hoverSummary();
         for (auto& a : m_adcs) if (a->graphNodeId() == graph_node_id) return a->hoverSummary();
         for (auto& p : m_pfbs) if (p->graphNodeId() == graph_node_id) return p->hoverSummary();
+        for (auto& f : m_ideal_filters) if (f->graphNodeId() == graph_node_id) return f->hoverSummary();
         return "";
     };
 
@@ -134,6 +136,14 @@ void RfSimulatorApp::addPFB() {
     LOG_INFO("Added PFB channelizer %d", id);
 }
 
+void RfSimulatorApp::addIdealFilter() {
+    int id = static_cast<int>(m_ideal_filters.size());
+    auto filt = std::make_unique<IdealFilterEngine>(id, m_graph_engine);
+    m_view_manager.registerNode(&filt->node());
+    m_ideal_filters.push_back(std::move(filt));
+    LOG_INFO("Added ideal filter %d", id);
+}
+
 void RfSimulatorApp::removeComponent(int graph_node_id) {
     // Find and remove generator
     for (size_t i = 0; i < m_generators.size(); ++i) {
@@ -206,6 +216,16 @@ void RfSimulatorApp::removeComponent(int graph_node_id) {
             return;
         }
     }
+    // Find and remove ideal filter
+    for (size_t i = 0; i < m_ideal_filters.size(); ++i) {
+        if (m_ideal_filters[i]->graphNodeId() == graph_node_id) {
+            m_view_manager.unregisterNode(&m_ideal_filters[i]->node());
+            m_graph_engine.removeNode(graph_node_id);
+            m_ideal_filters.erase(m_ideal_filters.begin() + static_cast<std::ptrdiff_t>(i));
+            LOG_INFO("Removed ideal filter (graph node %d)", graph_node_id);
+            return;
+        }
+    }
     // Find and remove PFB channelizer
     for (size_t i = 0; i < m_pfbs.size(); ++i) {
         if (m_pfbs[i]->graphNodeId() == graph_node_id) {
@@ -242,6 +262,7 @@ void RfSimulatorApp::update_dsp() {
     addWiredUpdate(m_sparam_filters);
     addWiredUpdate(m_adcs);
     addWiredUpdate(m_pfbs);
+    addWiredUpdate(m_ideal_filters);
 
     auto order = m_graph_engine.topologicalOrder();
     for (int node_id : order) {
