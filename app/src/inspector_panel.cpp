@@ -9,6 +9,7 @@
 #include "pfb_channelizer_engine.h"
 #include "s_parameter_amplifier_engine.h"
 #include "s_parameter_filter_engine.h"
+#include "ideal_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "utils.h"
@@ -21,10 +22,11 @@ InspectorPanel::InspectorPanel(NodeGraphEngine &graph,
                                std::vector<std::unique_ptr<SParameterAmplifierEngine>> &sparam_amps,
                                std::vector<std::unique_ptr<SParameterFilterEngine>> &sparam_filters,
                                std::vector<std::unique_ptr<AdcEngine>> &adcs,
-                               std::vector<std::unique_ptr<SignalGeneratorEngine>> &generators)
+                               std::vector<std::unique_ptr<SignalGeneratorEngine>> &generators,
+                               std::vector<std::unique_ptr<IdealFilterEngine>> &ideal_filters)
     : m_graph(graph), m_amplifiers(amps), m_mixers(mixers), m_splitters(splitters),
       m_sparam_amps(sparam_amps), m_sparam_filters(sparam_filters), m_adcs(adcs),
-      m_generators(generators) {}
+      m_generators(generators), m_ideal_filters(ideal_filters) {}
 
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
@@ -58,6 +60,10 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i)
         if (m_pfb_ptrs[i] && m_pfb_ptrs[i]->graphNodeId() == selected_id)
             return {ComponentType::PFB, i};
+
+    for (int i = 0; i < static_cast<int>(m_ideal_filters.size()); ++i)
+        if (m_ideal_filters[i]->graphNodeId() == selected_id)
+            return {ComponentType::IdealFilter, i};
 
     return {ComponentType::None, -1};
 }
@@ -127,6 +133,10 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
             label = "PFB " + std::to_string(m_pfb_ptrs[hit.index]->id());
         }
         break;
+    case ComponentType::IdealFilter:
+        node_id = m_ideal_filters[hit.index]->graphNodeId();
+        label = "IdealFilter " + std::to_string(m_ideal_filters[hit.index]->id());
+        break;
     default:
         break;
     }
@@ -182,6 +192,10 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
                 m_pfb_ptrs[m_selected_pfb_index])
                 drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
         }
+        break;
+    case ComponentType::IdealFilter:
+        if (hit.index >= 0 && static_cast<size_t>(hit.index) < m_ideal_filters.size())
+            drawIdealFilterProperties(*m_ideal_filters[static_cast<size_t>(hit.index)], hit.index);
         break;
     default:
         break;
@@ -417,6 +431,47 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
 
     if (ImGui::Button("+ Add Tone"))
         engine.addTone(100e6, -60.0);
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int index) {
+    (void)index;
+    ImGui::Text("Ideal Filter");
+    ImGui::Separator();
+
+    bool view = engine.node().view_enabled;
+    if (ImGui::Checkbox("Measure", &view)) {
+        engine.node().view_enabled = view;
+    }
+
+    const char* type_names[] = {"LPF", "HPF", "BPF", "BSF"};
+    int current = static_cast<int>(engine.filterType());
+    if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
+        engine.setFilterType(static_cast<FilterType>(current));
+    }
+
+    FilterType ft = engine.filterType();
+    if (ft == FilterType::LPF || ft == FilterType::HPF) {
+        double fc = engine.fcLow_Hz();
+        if (utils::inputFrequency("Cutoff", fc, 0.0, 2000.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+            engine.setCutoff_Hz(fc);
+        }
+    } else {
+        double low = engine.fcLow_Hz();
+        double high = engine.fcHigh_Hz();
+        bool changed = false;
+        if (utils::inputFrequency("Low Cutoff", low, 0.0, 2000.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+            changed = true;
+        }
+        if (utils::inputFrequency("High Cutoff", high, 0.0, 2000.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+            changed = true;
+        }
+        if (changed) {
+            engine.setCutoffs_Hz(low, high);
+        }
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

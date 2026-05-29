@@ -12,6 +12,7 @@ class AmplifierEngine;
 class MixerEngine;
 class SignalGeneratorEngine;
 class SplitterEngine;
+class IdealFilterEngine;
 class SParameterAmplifierEngine;
 class PFBChannelizerEngine;
 class SParameterFilterEngine;
@@ -34,7 +35,8 @@ public:
         std::vector<std::unique_ptr<SParameterAmplifierEngine>>& sparam_amps,
         std::vector<std::unique_ptr<SParameterFilterEngine>>& sparam_filters,
         std::vector<std::unique_ptr<AdcEngine>>& adcs,
-        std::vector<std::unique_ptr<SignalGeneratorEngine>>& generators
+        std::vector<std::unique_ptr<SignalGeneratorEngine>>& generators,
+        std::vector<std::unique_ptr<IdealFilterEngine>>& ideal_filters
     );
 
     void draw(const char* title, bool* p_open = nullptr);
@@ -56,11 +58,12 @@ private:
     std::vector<std::unique_ptr<SParameterFilterEngine>>& m_sparam_filters;
     std::vector<std::unique_ptr<AdcEngine>>& m_adcs;
     std::vector<std::unique_ptr<SignalGeneratorEngine>>& m_generators;
+    std::vector<std::unique_ptr<IdealFilterEngine>>& m_ideal_filters;
     std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
     int m_selected_pfb_index = 0;
     ViewToggles m_viewToggles;
 
-    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc, PFB };
+    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParamAmp, SParamFilter, Adc, PFB, IdealFilter };
     struct Hit { ComponentType type; int index; };
     Hit findSelected() const;
 
@@ -72,4 +75,5 @@ private:
     void drawAdcProperties(AdcEngine& engine, int index);
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
     void drawPFBProperties(PFBChannelizerEngine& engine);
+    void drawIdealFilterProperties(IdealFilterEngine& engine, int index);
 };

@@ -27,7 +27,8 @@ RfSimulatorApp::RfSimulatorApp() {
 
     m_inspector_panel = std::make_unique<InspectorPanel>(
         m_graph_engine, m_amplifiers, m_mixers, m_splitters,
-        m_sparam_amps, m_sparam_filters, m_adcs, m_generators
+        m_sparam_amps, m_sparam_filters, m_adcs, m_generators,
+        m_ideal_filters
     );
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         removeComponent(graph_node_id);
