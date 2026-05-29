@@ -7,8 +7,8 @@ int main() {
     ImNodes::CreateContext();
     RfSimulatorApp app;
     core.Run([&app]() {
-        app.draw_ui();
         app.update_dsp();
+        app.draw_ui();
     });
     ImNodes::DestroyContext();
     return 0;
