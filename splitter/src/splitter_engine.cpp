@@ -59,6 +59,7 @@ void SplitterEngine::update(double dt) {
             out.noise_added_W.assign(N, 0.0);
             out.noise_total_W.assign(N, 0.0);
             out.phase_deg.assign(N, 0.0);
+            out.bumpGeneration();
             continue;
         }
 
