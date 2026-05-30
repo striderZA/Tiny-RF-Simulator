@@ -4,15 +4,16 @@
 #include "node_graph_engine.h"
 #include "nonlinear_model.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
-class AmplifierEngine {
+class AmplifierEngine : public IComponentEngine {
   public:
     AmplifierEngine(int id, NodeGraphEngine& graph);
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
+    int outputPinId() const override;
 
     void setGain_dB(double g) {
         if (g != m_gain_dB) {
@@ -26,9 +27,10 @@ class AmplifierEngine {
             m_dirty = true;
         }
     }
-    void update(double dt);
+    void update(double dt) override;
 
-    SignalNode &node() { return m_node; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
 
     double gain_dB() const { return m_gain_dB; }
     double nf_dB() const { return m_nf_dB; }

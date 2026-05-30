@@ -5,15 +5,16 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
-class MixerEngine {
+class MixerEngine : public IComponentEngine {
   public:
     MixerEngine(int id, NodeGraphEngine& graph);
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
+    int outputPinId() const override;
 
     void setLoFreq_Hz(double f) {
         if (f != m_lo_freq_Hz) { m_lo_freq_Hz = f; m_dirty = true; }
@@ -29,9 +30,10 @@ class MixerEngine {
     double conversionGain_dB() const { return m_conv_gain_dB; }
     double nf_dB() const { return m_nf_dB; }
 
-    void update(double dt);
+    void update(double dt) override;
 
-    SignalNode& node() { return m_node; }
+    SignalNode& node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
 
   private:
     int m_id;

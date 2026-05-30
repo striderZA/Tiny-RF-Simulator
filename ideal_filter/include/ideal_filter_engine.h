@@ -2,18 +2,19 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
 enum class FilterType { LPF, HPF, BPF, BSF };
 
-class IdealFilterEngine {
+class IdealFilterEngine : public IComponentEngine {
   public:
     IdealFilterEngine(int id, NodeGraphEngine& graph);
 
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
+    int outputPinId() const override;
 
     void setFilterType(FilterType type) { m_type = type; m_dirty = true; }
     FilterType filterType() const { return m_type; }
@@ -23,8 +24,9 @@ class IdealFilterEngine {
     double fcLow_Hz() const { return m_fc_low_Hz; }
     double fcHigh_Hz() const { return m_fc_high_Hz; }
 
-    SignalNode& node() { return m_node; }
-    void update(double dt);
+    SignalNode& node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
+    void update(double dt) override;
 
   private:
     int m_id;

@@ -5,19 +5,22 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
-class SplitterEngine {
+class SplitterEngine : public IComponentEngine {
   public:
     SplitterEngine(int id, NodeGraphEngine& graph);
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
     int outputPinId(int index) const;
+    int outputPinId() const override { return outputPinId(0); }
 
-    void update(double dt);
+    void update(double dt) override;
 
-    SignalNode& node() { return m_node; }
+    SignalNode& node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
 
   private:
     int m_id;

@@ -2,15 +2,16 @@
 #include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
-class SignalGeneratorEngine {
+class SignalGeneratorEngine : public IComponentEngine {
   public:
     SignalGeneratorEngine(int id, NodeGraphEngine& graph);
 
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int outputPinId() const override;
 
     void addTone(double freq_Hz, double power_dBm, double phase_deg = 0.0) {
         m_tones.push_back({freq_Hz, power_dBm, phase_deg});
@@ -36,8 +37,9 @@ class SignalGeneratorEngine {
     double fs_Hz() const { return m_fs_Hz; }
     void setFs_Hz(double fs) { m_fs_Hz = fs; }
 
-    SignalNode &node() { return m_node; }
-    void update(double dt);
+    SignalNode &node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
+    void update(double dt) override;
 
   private:
     int m_id;

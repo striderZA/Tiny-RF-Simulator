@@ -4,18 +4,19 @@
 
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "component_interface.h"
 
-class AdcEngine {
+class AdcEngine : public IComponentEngine {
 public:
     AdcEngine(int id, NodeGraphEngine& graph);
 
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
+    int outputPinId() const override;
 
-    void update(double dt);
+    void update(double dt) override;
 
     double fs_Hz() const { return m_fs_Hz; }
     void setFs_Hz(double fs) {
@@ -35,7 +36,8 @@ public:
         if (v != m_v_fs) { m_v_fs = v; m_dirty = true; }
     }
 
-    SignalNode& node() { return m_node; }
+    SignalNode& node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
 
 private:
     int m_id;

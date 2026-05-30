@@ -6,20 +6,22 @@
 #include "signal_node.h"
 #include "s_parameter_data.h"
 #include <string>
+#include "component_interface.h"
 
-class SParameterAmplifierEngine {
+class SParameterAmplifierEngine : public IComponentEngine {
   public:
     SParameterAmplifierEngine(int id, NodeGraphEngine& graph, const std::string& filepath);
-    int id() const { return m_id; }
-    int graphNodeId() const { return m_graph_node_id; }
-    std::string hoverSummary() const;
-    int inputPinId() const;
-    int outputPinId() const;
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    std::string hoverSummary() const override;
+    int inputPinId() const override;
+    int outputPinId() const override;
 
-    void update(double dt);
+    void update(double dt) override;
     void reload(const std::string& filepath);
 
-    SignalNode& node() { return m_node; }
+    SignalNode& node() override { return m_node; }
+    const SignalNode& node() const override { return m_node; }
     const std::string& filepath() const { return m_filepath; }
     bool loaded() const { return m_data.loaded(); }
 
