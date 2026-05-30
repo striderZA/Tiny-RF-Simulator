@@ -11,6 +11,7 @@ set(TEST_SOURCES
     test_pfb.cpp
     test_bench_dsp.cpp
     test_ideal_filter.cpp
+    test_component_registry.cpp
 )
 
 if(WIN32)
@@ -34,6 +35,7 @@ target_link_libraries(tests PRIVATE
     simulator::adc_engine
     simulator::node_graph_engine
     simulator::pfb_channelizer_engine
+    simulator::app
 )
 
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
