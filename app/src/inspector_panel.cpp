@@ -15,57 +15,52 @@
 #include "utils.h"
 #include <portable-file-dialogs.h>
 
-InspectorPanel::InspectorPanel(NodeGraphEngine &graph,
-                               std::vector<std::unique_ptr<AmplifierEngine>> &amps,
-                               std::vector<std::unique_ptr<MixerEngine>> &mixers,
-                               std::vector<std::unique_ptr<SplitterEngine>> &splitters,
-                               std::vector<std::unique_ptr<SParameterAmplifierEngine>> &sparam_amps,
-                               std::vector<std::unique_ptr<SParameterFilterEngine>> &sparam_filters,
-                               std::vector<std::unique_ptr<AdcEngine>> &adcs,
-                               std::vector<std::unique_ptr<SignalGeneratorEngine>> &generators,
-                               std::vector<std::unique_ptr<IdealFilterEngine>> &ideal_filters)
-    : m_graph(graph), m_amplifiers(amps), m_mixers(mixers), m_splitters(splitters),
-      m_sparam_amps(sparam_amps), m_sparam_filters(sparam_filters), m_adcs(adcs),
-      m_generators(generators), m_ideal_filters(ideal_filters) {}
+#include "component_registry.h"
+
+InspectorPanel::InspectorPanel(NodeGraphEngine &graph, ComponentRegistry &components)
+    : m_graph(graph), m_components(&components) {}
 
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
     if (n != 1)
-        return {ComponentType::None, -1};
+        return {ComponentType::None, nullptr};
 
     int selected_id = -1;
     ImNodes::GetSelectedNodes(&selected_id);
 
-    for (int i = 0; i < static_cast<int>(m_generators.size()); ++i)
-        if (m_generators[i]->graphNodeId() == selected_id)
-            return {ComponentType::Generator, i};
-    for (int i = 0; i < static_cast<int>(m_amplifiers.size()); ++i)
-        if (m_amplifiers[i]->graphNodeId() == selected_id)
-            return {ComponentType::Amplifier, i};
-    for (int i = 0; i < static_cast<int>(m_splitters.size()); ++i)
-        if (m_splitters[i]->graphNodeId() == selected_id)
-            return {ComponentType::Splitter, i};
-    for (int i = 0; i < static_cast<int>(m_mixers.size()); ++i)
-        if (m_mixers[i]->graphNodeId() == selected_id)
-            return {ComponentType::Mixer, i};
-    for (int i = 0; i < static_cast<int>(m_sparam_amps.size()); ++i)
-        if (m_sparam_amps[i]->graphNodeId() == selected_id)
-            return {ComponentType::SParamAmp, i};
-    for (int i = 0; i < static_cast<int>(m_sparam_filters.size()); ++i)
-        if (m_sparam_filters[i]->graphNodeId() == selected_id)
-            return {ComponentType::SParamFilter, i};
-    for (int i = 0; i < static_cast<int>(m_adcs.size()); ++i)
-        if (m_adcs[i]->graphNodeId() == selected_id)
-            return {ComponentType::Adc, i};
-    for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i)
-        if (m_pfb_ptrs[i] && m_pfb_ptrs[i]->graphNodeId() == selected_id)
-            return {ComponentType::PFB, i};
+    auto* engine = m_components->find(selected_id);
+    if (!engine)
+        return {ComponentType::None, nullptr};
 
-    for (int i = 0; i < static_cast<int>(m_ideal_filters.size()); ++i)
-        if (m_ideal_filters[i]->graphNodeId() == selected_id)
-            return {ComponentType::IdealFilter, i};
+         if (dynamic_cast<SignalGeneratorEngine*>(engine))       return {ComponentType::Generator, engine};
+    else if (dynamic_cast<AmplifierEngine*>(engine))             return {ComponentType::Amplifier, engine};
+    else if (dynamic_cast<SplitterEngine*>(engine))              return {ComponentType::Splitter, engine};
+    else if (dynamic_cast<MixerEngine*>(engine))                 return {ComponentType::Mixer, engine};
+    else if (dynamic_cast<SParameterAmplifierEngine*>(engine))   return {ComponentType::SParamAmp, engine};
+    else if (dynamic_cast<SParameterFilterEngine*>(engine))      return {ComponentType::SParamFilter, engine};
+    else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
+    else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
+    else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
 
-    return {ComponentType::None, -1};
+    return {ComponentType::None, nullptr};
+}
+
+std::string InspectorPanel::labelForHit(const Hit& hit) const {
+    if (hit.type == ComponentType::None || !hit.engine)
+        return "";
+    if (hit.type == ComponentType::PFB)
+        return "PFB " + std::to_string(hit.engine->id());
+    switch (hit.type) {
+    case ComponentType::Amplifier:     return "Amplifier " + std::to_string(hit.engine->id());
+    case ComponentType::Mixer:         return "Mixer " + std::to_string(hit.engine->id());
+    case ComponentType::Splitter:      return "Splitter " + std::to_string(hit.engine->id());
+    case ComponentType::SParamAmp:     return "S-Param Amp " + std::to_string(hit.engine->id());
+    case ComponentType::SParamFilter:  return "S-Param Filter " + std::to_string(hit.engine->id());
+    case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
+    case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
+    case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
+    default:                           return "";
+    }
 }
 
 void InspectorPanel::draw(const char *title, bool *p_open) {
@@ -75,7 +70,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
 
     auto hit = findSelected();
-    if (hit.type == ComponentType::None || hit.index < 0) {
+    if (hit.type == ComponentType::None || !hit.engine) {
         ImGui::TextDisabled("Select a component in the Node Editor");
 
         ImGui::SeparatorText("View");
@@ -95,79 +90,40 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
 
     // Build label from graph node
-    std::string label;
-    int node_id = -1;
+    int node_id = hit.engine->graphNodeId();
+
+    ImGui::SeparatorText(labelForHit(hit).c_str());
+
     switch (hit.type) {
     case ComponentType::Amplifier:
-        node_id = m_amplifiers[hit.index]->graphNodeId();
-        label = "Amplifier " + std::to_string(m_amplifiers[hit.index]->id());
+        drawAmplifierProperties(*static_cast<AmplifierEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Mixer:
-        node_id = m_mixers[hit.index]->graphNodeId();
-        label = "Mixer " + std::to_string(m_mixers[hit.index]->id());
+        drawMixerProperties(*static_cast<MixerEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Splitter:
-        node_id = m_splitters[hit.index]->graphNodeId();
-        label = "Splitter " + std::to_string(m_splitters[hit.index]->id());
+        drawSplitterProperties(*static_cast<SplitterEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::SParamAmp:
-        node_id = m_sparam_amps[hit.index]->graphNodeId();
-        label = "S-Param Amp " + std::to_string(m_sparam_amps[hit.index]->id());
+        drawSParamAmpProperties(*static_cast<SParameterAmplifierEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::SParamFilter:
-        node_id = m_sparam_filters[hit.index]->graphNodeId();
-        label = "S-Param Filter " + std::to_string(m_sparam_filters[hit.index]->id());
+        drawSParamFilterProperties(*static_cast<SParameterFilterEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Adc:
-        node_id = m_adcs[hit.index]->graphNodeId();
-        label = "ADC " + std::to_string(m_adcs[hit.index]->id());
+        drawAdcProperties(*static_cast<AdcEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Generator:
-        node_id = m_generators[hit.index]->graphNodeId();
-        label = "Generator " + std::to_string(m_generators[hit.index]->id());
+        drawGeneratorProperties(*static_cast<SignalGeneratorEngine*>(hit.engine), hit.engine->id());
         break;
-    case ComponentType::PFB:
-        if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()) &&
-            m_pfb_ptrs[hit.index]) {
-            node_id = m_pfb_ptrs[hit.index]->graphNodeId();
-            label = "PFB " + std::to_string(m_pfb_ptrs[hit.index]->id());
+    case ComponentType::PFB: {
+        auto* pfb = static_cast<PFBChannelizerEngine*>(hit.engine);
+        for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+            if (m_pfb_ptrs[i] == pfb) {
+                m_selected_pfb_index = i;
+                break;
+            }
         }
-        break;
-    case ComponentType::IdealFilter:
-        node_id = m_ideal_filters[hit.index]->graphNodeId();
-        label = "IdealFilter " + std::to_string(m_ideal_filters[hit.index]->id());
-        break;
-    default:
-        break;
-    }
-
-    ImGui::SeparatorText(label.c_str());
-
-    switch (hit.type) {
-    case ComponentType::Amplifier:
-        drawAmplifierProperties(*m_amplifiers[hit.index], hit.index);
-        break;
-    case ComponentType::Mixer:
-        drawMixerProperties(*m_mixers[hit.index], hit.index);
-        break;
-    case ComponentType::Splitter:
-        drawSplitterProperties(*m_splitters[hit.index], hit.index);
-        break;
-    case ComponentType::SParamAmp:
-        drawSParamAmpProperties(*m_sparam_amps[hit.index], hit.index);
-        break;
-    case ComponentType::SParamFilter:
-        drawSParamFilterProperties(*m_sparam_filters[hit.index], hit.index);
-        break;
-    case ComponentType::Adc:
-        drawAdcProperties(*m_adcs[hit.index], hit.index);
-        break;
-    case ComponentType::Generator:
-        drawGeneratorProperties(*m_generators[hit.index], hit.index);
-        break;
-    case ComponentType::PFB:
-        if (hit.index >= 0 && hit.index < static_cast<int>(m_pfb_ptrs.size()))
-            m_selected_pfb_index = hit.index;
         if (!m_pfb_ptrs.empty()) {
             int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
                               m_pfb_ptrs[m_selected_pfb_index])
@@ -193,9 +149,9 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
                 drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
         }
         break;
+    }
     case ComponentType::IdealFilter:
-        if (hit.index >= 0 && static_cast<size_t>(hit.index) < m_ideal_filters.size())
-            drawIdealFilterProperties(*m_ideal_filters[static_cast<size_t>(hit.index)], hit.index);
+        drawIdealFilterProperties(*static_cast<IdealFilterEngine*>(hit.engine), hit.engine->id());
         break;
     default:
         break;

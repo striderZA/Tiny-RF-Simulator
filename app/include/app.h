@@ -21,6 +21,7 @@
 #include "view_manager.h"
 #include <memory>
 #include <vector>
+#include "component_registry.h"
 
 class RfSimulatorApp {
   public:
@@ -44,28 +45,11 @@ class RfSimulatorApp {
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
-    std::vector<std::unique_ptr<SignalGeneratorEngine>> m_generators;
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
-    std::vector<std::unique_ptr<AmplifierEngine>> m_amplifiers;
-    std::vector<std::unique_ptr<SplitterEngine>> m_splitters;
-    std::vector<std::unique_ptr<MixerEngine>> m_mixers;
-    std::vector<std::unique_ptr<SParameterAmplifierEngine>> m_sparam_amps;
-    std::vector<std::unique_ptr<SParameterFilterEngine>> m_sparam_filters;
-    std::vector<std::unique_ptr<AdcEngine>> m_adcs;
-    std::vector<std::unique_ptr<PFBChannelizerEngine>> m_pfbs;
     std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
     std::vector<bool> m_show_iq_pfbs;
-    std::vector<std::unique_ptr<IdealFilterEngine>> m_ideal_filters;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
-    void addGenerator();
-    void addAmplifier();
-    void addSplitter();
-    void addMixer();
-    void addSParamAmp();
-    void addSParamFilter();
-    void addAdc();
-    void addPFB();
-    void addIdealFilter();
-    void removeComponent(int graph_node_id);
+    ComponentRegistry m_components;
+    int m_next_component_id = 100;
 };
