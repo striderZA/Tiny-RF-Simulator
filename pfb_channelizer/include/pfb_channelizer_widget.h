@@ -23,6 +23,8 @@ class PFBChannelizerWidget {
         std::vector<Spectrum::Tone> tones;
     };
     std::vector<CellCache> m_cells;
+    double m_y_min = -120.0;
+    double m_y_max = 20.0;
 
     void rebuildCache();
     void drawCell(ImDrawList* dl, const ImRect& rect, int ch_idx);
