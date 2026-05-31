@@ -15,3 +15,15 @@ target_link_libraries(pfb_channelizer_engine
 )
 
 set_target_properties(pfb_channelizer_engine PROPERTIES FOLDER "Library")
+
+add_library(pfb_channelizer_widget STATIC src/pfb_channelizer_widget.cpp)
+add_library(simulator::pfb_channelizer_widget ALIAS pfb_channelizer_widget)
+
+target_include_directories(pfb_channelizer_widget PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+target_link_libraries(pfb_channelizer_widget
+    PUBLIC
+        simulator::pfb_channelizer_engine
+    PRIVATE
+        imgui
+)
