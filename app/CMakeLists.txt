@@ -27,6 +27,7 @@ target_link_libraries(app
         simulator::amplifier_engine
         simulator::mixer_engine
         simulator::pfb_channelizer_engine
+        simulator::pfb_channelizer_widget
         simulator::iq_plot_widget
         simulator::splitter_engine
         simulator::s_parameter_amplifier_engine

@@ -10,6 +10,7 @@
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
+#include "pfb_channelizer_widget.h"
 #include "s_parameter_amplifier_engine.h"
 #include "s_parameter_filter_engine.h"
 #include "session_state.h"
@@ -48,6 +49,8 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
     std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
     std::vector<bool> m_show_iq_pfbs;
+    std::vector<std::unique_ptr<PFBChannelizerWidget>> m_pfb_grid_widgets;
+    std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     ComponentRegistry m_components;

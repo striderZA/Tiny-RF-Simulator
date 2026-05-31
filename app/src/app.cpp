@@ -37,12 +37,28 @@ RfSimulatorApp::RfSimulatorApp()
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(pfb));
         m_show_iq_pfbs.push_back(
             m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb.id())).c_str(), true));
+        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(pfb));
+        m_show_pfb_grids.push_back(
+            m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb.id())).c_str(), true));
     };
     m_graph_widget->onAddIdealFilter = [this]() {
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
     };
     m_graph_widget->onRemoveNode = [this](int id) {
         m_components.remove(id);
+        auto pfb_vec = m_components.byType<PFBChannelizerEngine>();
+        m_iq_widgets.clear();
+        m_show_iq_pfbs.clear();
+        m_pfb_grid_widgets.clear();
+        m_show_pfb_grids.clear();
+        for (auto* pfb : pfb_vec) {
+            m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
+            m_show_iq_pfbs.push_back(
+                m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
+            m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
+            m_show_pfb_grids.push_back(
+                m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
+        }
     };
     m_graph_widget->onNodeHover = [this](int id) {
         return m_components.hoverSummary(id);
@@ -53,7 +69,8 @@ RfSimulatorApp::RfSimulatorApp()
 
     m_inspector_panel = std::make_unique<InspectorPanel>(m_graph_engine, m_components);
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
-        m_components.remove(graph_node_id);
+        if (m_graph_widget->onRemoveNode)
+            m_graph_widget->onRemoveNode(graph_node_id);
     };
 
     m_inspector_panel->setViewToggles({
@@ -143,6 +160,15 @@ void RfSimulatorApp::draw_ui() {
         }
     }
 
+    for (size_t i = 0; i < m_pfb_grid_widgets.size(); ++i) {
+        if (m_show_pfb_grids[i]) {
+            std::string label = "Channelizer Grid - PFB " + std::to_string(i);
+            bool show = m_show_pfb_grids[i];
+            m_pfb_grid_widgets[i]->draw(label.c_str(), &show);
+            m_show_pfb_grids[i] = show;
+        }
+    }
+
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
     }
@@ -162,6 +188,11 @@ RfSimulatorApp::~RfSimulatorApp() {
     for (size_t i = 0; i < m_show_iq_pfbs.size() && i < pfb_vec.size(); ++i) {
         std::string key = "IQPlot_" + std::to_string(pfb_vec[i]->id());
         m_state.saveBool("WindowState", key.c_str(), m_show_iq_pfbs[i]);
+    }
+    auto pfb_vec_save = m_components.byType<PFBChannelizerEngine>();
+    for (size_t i = 0; i < m_show_pfb_grids.size() && i < pfb_vec_save.size(); ++i) {
+        std::string key = "PFBGrid_" + std::to_string(pfb_vec_save[i]->id());
+        m_state.saveBool("WindowState", key.c_str(), m_show_pfb_grids[i]);
     }
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
 }
