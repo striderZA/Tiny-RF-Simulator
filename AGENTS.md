@@ -2,12 +2,17 @@
 
 ## Build & Test
 
-- **CMake + Ninja** primary. First time: `cmake -B build -G Ninja`, then `cmake --build build`
+- **CMake + Ninja + MinGW-w64 g++** primary.
+  - First configure: `cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc`
+  - Then build: `cmake --build build`
+  - Or reconfigure from scratch: `rm -rf build && cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc`
 - Output: `build/bin/main` (Linux) or `build/bin/main.exe` (Windows)
 - Tests: `cmake --build build && ctest --test-dir build` or run `build/bin/tests` / `build/bin/tests.exe` directly
 - CI: `.github/workflows/build.yml` runs on `ubuntu-latest` with GCC 14
 - Dependencies (ImGui docking, ImPlot, GLFW, Catch2 v3.4.0) auto-fetched via FetchContent
 - `compile_commands.json` generated in `build/`; `.clangd` points there
+- **Note**: MSVC (cl.exe) is not supported. The project uses MinGW-w64 g++ on Windows. If switching compilers, always delete `build/` first to clear cached compiler detection.
+- **Portability note**: `uint64_t` requires explicit `#include <cstdint>`. MSVC headers may provide it transitively; g++ does not — always include `<cstdint>` when using fixed-width integer types.
 
 ## Architecture
 
