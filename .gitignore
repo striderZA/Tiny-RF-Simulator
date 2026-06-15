@@ -507,6 +507,9 @@ graphify-out/
 # Git worktrees
 .worktrees/
 
+# act (nektos/act) local config — machine-specific Docker socket etc.
+.actrc
+
 # Visual Studio CMake build output
 out/
 
