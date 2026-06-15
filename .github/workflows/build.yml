@@ -49,7 +49,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build g++-14 libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libxext-dev
+            libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
 
       - name: Install Windows dependencies (MSYS2 + MinGW-w64)
         if: runner.os == 'Windows'
