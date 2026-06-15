@@ -3,7 +3,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <GL/gl.h>
 
 ImTextureID loadTextureFromFile(const char* png_path) {

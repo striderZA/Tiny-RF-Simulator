@@ -7,7 +7,9 @@
 #include <imgui_internal.h>
 #include <implot.h>
 #include <string>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 struct RfSimulatorCore::Impl {
     GLFWwindow *window = nullptr;
