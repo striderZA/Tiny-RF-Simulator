@@ -11,7 +11,7 @@ Design a cascade of RF components and probe any node to see the spectrum.
 
 | Dependency | Minimum | Notes |
 |------------|---------|-------|
-| **Compiler** | C++20 | MSVC 2022 17.0+, GCC 11+, Clang 14+ |
+| **Compiler** | C++20 | GCC 11+ (MinGW-w64 on Windows), Clang 14+ |
 | **CMake** | ≥ 3.20 | [cmake.org/download](https://cmake.org/download) |
 | **Ninja** | ≥ 1.10 | [github.com/ninja-build/ninja](https://github.com/ninja-build/ninja) |
 | **OpenGL** | 2.1+ | System-provided on all platforms |
@@ -33,15 +33,14 @@ All library dependencies are fetched automatically at configure time via CMake F
 
 ## Quick Start
 
-### Windows (MSVC)
+### Windows (MinGW-w64)
 
 ```powershell
-# Requires: Visual Studio 2022 with "Desktop development with C++" workload
-# Requires: Ninja (choco install ninja or from ninja-build.org)
 # Requires: CMake ≥ 3.20 (choco install cmake or from cmake.org)
+# Requires: Ninja (choco install ninja or from ninja-build.org)
+# Requires: MinGW-w64 (winlibs.com or via msys2.org)
 
-# From a Visual Studio Developer PowerShell or x64 Native Tools prompt:
-cmake -B build -G Ninja
+cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
 cmake --build build
 build/bin/main.exe
 ```
@@ -123,6 +122,8 @@ cmake --build build
 ctest --test-dir build
 ```
 
+[![Build & Test](https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/build.yml/badge.svg)](https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/build.yml)
+
 73 tests (67 unit + 6 benchmarks) covering all DSP engines, node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
 
 ### Benchmarks
@@ -156,4 +157,4 @@ C++20 modular library. Each module has an `*_engine` (pure DSP, no UI deps) and 
 
 ## License
 
-MIT
+[MIT](LICENSE)
