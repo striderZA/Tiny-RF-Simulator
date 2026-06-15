@@ -4,32 +4,75 @@ on:
   push:
     branches: [master]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
+      - "**.md"
+      - "docs/**"
   pull_request:
     branches: [master]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
+      - "**.md"
+      - "docs/**"
 
 jobs:
+  # CI matrix: Linux (apt + GCC 14) and Windows (MSYS2 + MinGW-w64).
+  # The project requires MinGW-w64 on Windows; MSVC is not supported.
   build:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: Linux (GCC 14)
+            shell: bash
+            cxx_compiler: g++-14
+            c_compiler: gcc-14
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
+          - os: windows-latest
+            label: Windows (MinGW-w64)
+            shell: msys2 - {0}
+            cxx_compiler: g++
+            c_compiler: gcc
+            cmake_flags: ""
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build libxrandr-dev libxinerama-dev \
+          sudo apt-get install -y -qq ninja-build g++-14 libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libxext-dev
 
+      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++-14 -DGLFW_BUILD_WAYLAND=OFF
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          ${{ matrix.cmake_flags }}
 
       - name: Build
         run: cmake --build build
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure -E Benchmark
+        # Exclude benchmarks (-E Benchmark) and UI tests (-E test_ui) because
+        # the latter need an X display (Xvfb) which is not set up in this job.
+        run: ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
