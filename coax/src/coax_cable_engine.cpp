@@ -80,6 +80,9 @@ void CoaxCableEngine::update(double dt) {
             (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m
             + m_connectors_loss_dB;
         t.power_dBm -= loss_dB;
+        const double phase_shift_deg =
+            -360.0 * (f_Hz / 1e9) * m_length_m * p.delay_ns_per_m * 1e-3;
+        t.phase_deg += phase_shift_deg;
     }
 
     const size_t N = out.frequencies.size();
@@ -87,6 +90,13 @@ void CoaxCableEngine::update(double dt) {
         out.phase_deg = in_ptr->phase_deg;
     } else {
         out.phase_deg.assign(N, 0.0);
+    }
+    for (size_t i = 0; i < N; ++i) {
+        const double f_Hz = std::abs(out.frequencies[i]);
+        const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
+        const double phase_shift_deg =
+            -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m * 1e-3;
+        out.phase_deg[i] += phase_shift_deg;
     }
 
     out.noise_W.assign(N, 0.0);

@@ -84,3 +84,44 @@ TEST_CASE("Coax cable does not add thermal noise (fidelity B)", "[coax][noise]")
         REQUIRE(d == Approx(0.0));
     }
 }
+
+TEST_CASE("Coax cable applies per-tone phase shift", "[coax][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, 0.0, 30.0);  // 1 GHz, 0 dBm, 30° initial phase
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);  // MT 340, delay 0.4 ns/m
+    cable.setLengthM(1.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const auto& out = cable.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    // Expected shift: -360 * 1 * 1 * 0.4 * 1e-3 = -0.144 deg
+    REQUIRE(out.tones[0].phase_deg == Approx(30.0 - 0.144).epsilon(1e-9));
+}
+
+TEST_CASE("Coax cable applies per-bin phase shift", "[coax][phase]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+    // Initialise input per-bin phase to a known constant
+    Spectrum* in = const_cast<Spectrum*>(&gen.node().outputs[0]);
+    std::fill(in->phase_deg.begin(), in->phase_deg.end(), 0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);
+    cable.setLengthM(2.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const auto& out = cable.node().outputs[0];
+    REQUIRE(out.phase_deg.size() == out.frequencies.size());
+    for (size_t i = 0; i < out.frequencies.size(); ++i) {
+        const double f_Hz_c = std::clamp(std::abs(out.frequencies[i]), 1.0, 18.5e9);
+        const double expected_shift = -360.0 * (f_Hz_c / 1e9) * 2.0 * 0.4 * 1e-3;
+        REQUIRE(out.phase_deg[i] == Approx(expected_shift).epsilon(1e-9));
+    }
+}
