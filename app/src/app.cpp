@@ -3,6 +3,7 @@
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
+#include "coax_cable_engine.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
@@ -40,6 +41,9 @@ RfSimulatorApp::RfSimulatorApp()
         m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(pfb));
         m_show_pfb_grids.push_back(
             m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb.id())).c_str(), true));
+    };
+    m_graph_widget->onAddCoaxCable = [this]() {
+        m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
     };
     m_graph_widget->onAddIdealFilter = [this]() {
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
