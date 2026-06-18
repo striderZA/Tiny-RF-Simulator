@@ -12,6 +12,7 @@ set(TEST_SOURCES
     test_bench_dsp.cpp
     test_ideal_filter.cpp
     test_component_registry.cpp
+    test_coax_cable_presets.cpp
 )
 
 if(WIN32)
@@ -38,6 +39,7 @@ target_link_libraries(tests PRIVATE
     simulator::app
 )
 
+target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/coax/include)
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(CTest)
