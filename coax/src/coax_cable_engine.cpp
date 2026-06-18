@@ -119,6 +119,20 @@ void CoaxCableEngine::update(double dt) {
 }
 
 std::string CoaxCableEngine::hoverSummary() const {
-    return std::string("Coax Cable: ") + preset().name +
-           " | L=" + std::to_string(m_length_m) + " m";
+    std::string summary = "Coax Cable: " + std::string(preset().name) +
+                          " | L=" + std::to_string(m_length_m) + " m";
+
+    if (!m_node.inputs.empty() && m_node.inputs[0] &&
+        !m_node.inputs[0]->frequencies.empty()) {
+        const auto& freqs = m_node.inputs[0]->frequencies;
+        const double fc = std::abs((freqs.front() + freqs.back()) / 2.0);
+        const double fc_clamped = std::clamp(fc, 1.0, preset().max_freq_GHz * 1e9);
+        const double fc_MHz = fc_clamped / 1e6;
+        const double loss_dB =
+            (preset().K1_dB_per_m * std::sqrt(fc_MHz) + preset().K2_dB_per_m * fc_MHz)
+            * m_length_m + m_connectors_loss_dB;
+        summary += " | Loss@fc=" + std::to_string(loss_dB) + " dB";
+    }
+
+    return summary;
 }
