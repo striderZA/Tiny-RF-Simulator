@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cstddef>
 
 struct CableSpec {
     const char* name;          // e.g. "MT 340"

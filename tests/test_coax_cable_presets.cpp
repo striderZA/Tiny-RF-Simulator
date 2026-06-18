@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <string>
 #include "coax_presets.h"
 
 using Catch::Approx;
