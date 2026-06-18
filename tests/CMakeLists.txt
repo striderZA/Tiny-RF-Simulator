@@ -35,11 +35,10 @@ target_link_libraries(tests PRIVATE
         simulator::s_parameter_filter_engine
     simulator::adc_engine
     simulator::node_graph_engine
+    simulator::coax_cable_engine
     simulator::pfb_channelizer_engine
     simulator::app
 )
-
-target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/coax/include)
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(CTest)
