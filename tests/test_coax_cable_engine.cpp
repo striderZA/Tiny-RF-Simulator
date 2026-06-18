@@ -125,3 +125,42 @@ TEST_CASE("Coax cable applies per-bin phase shift", "[coax][phase]") {
         REQUIRE(out.phase_deg[i] == Approx(expected_shift).epsilon(1e-9));
     }
 }
+
+TEST_CASE("Coax cable connector loss adds flat 0.5 dB", "[coax][connectors]") {
+    const double baseline = runOneTone(2e9, 0.0, 2.0, 4, 0.0);
+    const double with_conn = runOneTone(2e9, 0.0, 2.0, 4, 0.5);
+    REQUIRE(with_conn == Approx(baseline - 0.5).margin(0.001));
+}
+
+TEST_CASE("Coax cable length 0 leaves only connector loss", "[coax][edge]") {
+    const double with_zero_len = runOneTone(2e9, 0.0, 0.0, 4, 1.0);
+    REQUIRE(with_zero_len == Approx(-1.0).margin(0.001));
+}
+
+TEST_CASE("Coax cable clamps negative length to 0", "[coax][edge]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine cable(0, graph);
+    cable.setLengthM(-5.0);
+    REQUIRE(cable.lengthM() == 0.0);
+}
+
+TEST_CASE("Coax cable clamps length to 1000 m", "[coax][edge]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine cable(0, graph);
+    cable.setLengthM(5000.0);
+    REQUIRE(cable.lengthM() == 1000.0);
+}
+
+TEST_CASE("Coax cable tone above max_freq clamps loss", "[coax][edge]") {
+    // 25 GHz exceeds MT 340's 18.5 GHz max
+    const double at_max = runOneTone(18.5e9, 0.0, 1.0, 4, 0.0);
+    const double above_max = runOneTone(25e9, 0.0, 1.0, 4, 0.0);
+    // Both should compute loss at clamped f=18.5 GHz, so equal
+    REQUIRE(above_max == Approx(at_max).margin(0.01));
+}
+
+TEST_CASE("Coax cable zero-K preset produces no loss", "[coax][edge]") {
+    // Index 0 = MT 210, K1=K2=0 (stub)
+    const double out_power = runOneTone(2e9, -10.0, 5.0, 0, 0.0);
+    REQUIRE(out_power == Approx(-10.0).margin(0.001));
+}
