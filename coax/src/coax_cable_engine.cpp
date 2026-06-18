@@ -90,14 +90,19 @@ void CoaxCableEngine::update(double dt) {
     }
 
     out.noise_W.assign(N, 0.0);
-    for (size_t i = 0; i < N; ++i) {
-        double nin = (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
-        out.noise_W[i] = nin;  // pass-through; scaling added in Task 4
-    }
     out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W.resize(N);
+    out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-        out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
+        const double f_Hz = std::abs(out.frequencies[i]);
+        const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
+        const double f_MHz = f_Hz_c / 1e6;
+        const double loss_dB =
+            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m
+            + m_connectors_loss_dB;
+        const double L_lin = dbToLinear(loss_dB);
+        const double nin = (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
+        out.noise_W[i] = nin / L_lin;
+        out.noise_total_W[i] = out.noise_W[i];  // noise_added_W is 0
     }
 
     out.bumpGeneration();
