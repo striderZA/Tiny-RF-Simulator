@@ -164,3 +164,65 @@ TEST_CASE("Coax cable zero-K preset produces no loss", "[coax][edge]") {
     const double out_power = runOneTone(2e9, -10.0, 5.0, 0, 0.0);
     REQUIRE(out_power == Approx(-10.0).margin(0.001));
 }
+
+TEST_CASE("Coax cable with no input produces empty tones and bumps generation", "[coax][edge]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine cable(0, graph);
+    cable.update(0.0);
+    REQUIRE(cable.node().outputs[0].tones.empty());
+    REQUIRE(cable.node().outputs[0].frequencies.size() >= 2);
+}
+
+TEST_CASE("Coax cable dirty flag skips when input unchanged", "[coax][caching]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, -20.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);
+    cable.setLengthM(1.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const uint64_t gen_after_first = cable.node().outputs[0].generation;
+    cable.update(0.0);  // no setters, no input change → no recompute
+    REQUIRE(cable.node().outputs[0].generation == gen_after_first);
+}
+
+TEST_CASE("Coax cable dirty flag triggers when length changes", "[coax][caching]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, -20.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);
+    cable.setLengthM(1.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const uint64_t gen_after_first = cable.node().outputs[0].generation;
+    cable.setLengthM(2.0);
+    cable.update(0.0);
+    REQUIRE(cable.node().outputs[0].generation != gen_after_first);
+}
+
+TEST_CASE("Coax cable dirty flag triggers when input generation changes", "[coax][caching]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, -20.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);
+    cable.setLengthM(1.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const uint64_t gen_after_first = cable.node().outputs[0].generation;
+    gen.updateTone(0, 1e9, -25.0);  // change input
+    gen.update(0.0);
+    cable.update(0.0);
+    REQUIRE(cable.node().outputs[0].generation != gen_after_first);
+}
