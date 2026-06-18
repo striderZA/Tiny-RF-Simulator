@@ -65,6 +65,23 @@ void CoaxCableEngine::update(double dt) {
 
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
 
+    const CableSpec& p = preset();
+    const double max_f_Hz = p.max_freq_GHz * 1e9;
+    for (auto& t : out.tones) {
+        const double f_Hz_raw = std::abs(t.freq_Hz);
+        const double f_Hz = std::clamp(f_Hz_raw, 1.0, max_f_Hz);
+        if (f_Hz_raw > max_f_Hz && !m_warned_above_max) {
+            LOG_WARN("Coax cable %d: tone at %.3e Hz exceeds preset %s max freq (%.3e Hz); clamping.",
+                     m_id, f_Hz_raw, p.name, max_f_Hz);
+            m_warned_above_max = true;
+        }
+        const double f_MHz = f_Hz / 1e6;
+        const double loss_dB =
+            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m
+            + m_connectors_loss_dB;
+        t.power_dBm -= loss_dB;
+    }
+
     const size_t N = out.frequencies.size();
     if (in_ptr && !in_ptr->phase_deg.empty()) {
         out.phase_deg = in_ptr->phase_deg;
