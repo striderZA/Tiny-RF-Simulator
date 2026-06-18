@@ -2,6 +2,7 @@
 #include <catch2/catch_approx.hpp>
 #include "coax_cable_engine.h"
 #include "signal_generator_engine.h"
+#include "amplifier_engine.h"
 #include "node_graph_engine.h"
 
 using Catch::Approx;
@@ -206,6 +207,30 @@ TEST_CASE("Coax cable dirty flag triggers when length changes", "[coax][caching]
     cable.setLengthM(2.0);
     cable.update(0.0);
     REQUIRE(cable.node().outputs[0].generation != gen_after_first);
+}
+
+TEST_CASE("Coax cable integrates in generator → cable → amplifier chain", "[coax][integration]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(2e9, -40.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4);   // MT 340
+    cable.setLengthM(2.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(10.0);
+    amp.setNF_dB(0.0);  // disable added noise for a clean power check
+    amp.node().inputs[0] = &cable.node().outputs[0];
+    amp.update(0.0);
+
+    // Cable loss at 2 GHz, 2 m: (0.004710*sqrt(2000) + 0.000004*2000) * 2 = 0.437 dB
+    // Chain: -40 - 0.437 + 10 = -30.437 dBm
+    REQUIRE(amp.node().outputs[0].tones[0].freq_Hz == 2e9);
+    REQUIRE(amp.node().outputs[0].tones[0].power_dBm == Approx(-30.437).margin(0.05));
 }
 
 TEST_CASE("Coax cable dirty flag triggers when input generation changes", "[coax][caching]") {
