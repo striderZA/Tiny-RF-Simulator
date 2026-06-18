@@ -12,6 +12,7 @@
 #include "ideal_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
+#include "coax_cable_engine.h"
 #include "utils.h"
 #include <portable-file-dialogs.h>
 
@@ -41,6 +42,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
     else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
     else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
+    else if (dynamic_cast<CoaxCableEngine*>(engine))            return {ComponentType::CoaxCable, engine};
 
     return {ComponentType::None, nullptr};
 }
@@ -58,7 +60,8 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::SParamFilter:  return "S-Param Filter " + std::to_string(hit.engine->id());
     case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
-    case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
+        case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
+        case ComponentType::CoaxCable:     return "Coax Cable " + std::to_string(hit.engine->id());
     default:                           return "";
     }
 }
@@ -152,6 +155,9 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
     case ComponentType::IdealFilter:
         drawIdealFilterProperties(*static_cast<IdealFilterEngine*>(hit.engine), hit.engine->id());
+        break;
+    case ComponentType::CoaxCable:
+        drawCoaxCableProperties(*static_cast<CoaxCableEngine*>(hit.engine), hit.engine->id());
         break;
     default:
         break;
@@ -387,6 +393,69 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
 
     if (ImGui::Button("+ Add Tone"))
         engine.addTone(100e6, -60.0);
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index) {
+    (void)index;
+    const CableSpec& p = engine.preset();
+
+    // Preset combo
+    {
+        const char* preview = p.name;
+        if (ImGui::BeginCombo("Model", preview)) {
+            for (int i = 0; i < static_cast<int>(kCoaxCablePresets.size()); ++i) {
+                bool selected = (i == engine.presetIndex());
+                if (ImGui::Selectable(kCoaxCablePresets[i].name, selected))
+                    engine.setPresetIndex(i);
+                if (selected) ImGui::SetItemDefaultFocus();
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("%s", kCoaxCablePresets[i].name);
+                    ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
+                    ImGui::Text("K2 = %.6f dB/m", kCoaxCablePresets[i].K2_dB_per_m);
+                    ImGui::Text("Max freq: %.2f GHz", kCoaxCablePresets[i].max_freq_GHz);
+                    ImGui::Text("Delay: %.3f ns/m", kCoaxCablePresets[i].delay_ns_per_m);
+                    ImGui::EndTooltip();
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    // Length
+    double L = engine.lengthM();
+    if (utils::inputDouble("Length (m)", L, 0.01, 1.0, "%.3f", 0.0, 1000.0))
+        engine.setLengthM(L);
+
+    // Connector loss
+    double conn = engine.connectorsLossDB();
+        if (utils::inputDouble("Connector Loss (dB)", conn, 0.1, 1.0, "%.2f", -100.0, 100.0))
+        engine.setConnectorsLossDB(conn);
+
+    // Read-out at input centre frequency
+    if (!engine.node().inputs.empty() && engine.node().inputs[0] &&
+        !engine.node().inputs[0]->frequencies.empty()) {
+        const auto& fin = engine.node().inputs[0]->frequencies;
+        const double fc = (fin.front() + fin.back()) / 2.0;
+        const double fc_clamped = std::clamp(std::abs(fc), 1.0, p.max_freq_GHz * 1e9);
+        const double fc_MHz = fc_clamped / 1e6;
+        const double loss_dB =
+            (p.K1_dB_per_m * std::sqrt(fc_MHz) + p.K2_dB_per_m * fc_MHz) * engine.lengthM()
+            + engine.connectorsLossDB();
+        const double phase_shift =
+            -360.0 * (fc_clamped / 1e9) * engine.lengthM() * p.delay_ns_per_m * 1e-3;
+        ImGui::TextDisabled("Loss @ fc: %.3f dB", loss_dB);
+        ImGui::TextDisabled("Phase shift @ fc: %.3f deg", phase_shift);
+    } else {
+        ImGui::TextDisabled("Loss @ fc: --");
+        ImGui::TextDisabled("Phase shift @ fc: --");
+    }
+
+    ImGui::TextDisabled("Max freq: %.2f GHz  |  Delay: %.3f ns/m  |  Diameter: %.1f mm",
+                        p.max_freq_GHz, p.delay_ns_per_m, p.diameter_mm);
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
