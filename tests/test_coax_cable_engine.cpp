@@ -209,7 +209,7 @@ TEST_CASE("Coax cable dirty flag triggers when length changes", "[coax][caching]
     REQUIRE(cable.node().outputs[0].generation != gen_after_first);
 }
 
-TEST_CASE("Coax cable integrates in generator → cable → amplifier chain", "[coax][integration]") {
+TEST_CASE("Coax cable integrates in generator -> cable -> amplifier chain", "[coax][integration]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(2e9, -40.0);
