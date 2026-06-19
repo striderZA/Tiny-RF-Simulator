@@ -97,13 +97,16 @@ void RfSimulatorApp::update_dsp() {
 
     for (auto* comp : m_components.all()) {
         // Determine number of input pins (default 1 for legacy engines)
-        int num_inputs = 1;
-        if (auto* sp = dynamic_cast<SParamEngine*>(comp)) {
-            num_inputs = sp->numPorts();
-        }
+        SParamEngine* sp = dynamic_cast<SParamEngine*>(comp);
+        int num_inputs = sp ? sp->numPorts() : 1;
 
         for (int k = 0; k < num_inputs; ++k) {
-            int pid = comp->inputPinId(k);
+            int pid;
+            if (sp) {
+                pid = sp->inputPinId(k);
+            } else {
+                pid = (k == 0) ? comp->inputPinId() : -1;
+            }
             if (pid >= 0) {
                 auto* source = m_graph_engine.getSourceForInput(pid);
                 comp->node().inputs[k] = source ? &source->outputs[0] : nullptr;
