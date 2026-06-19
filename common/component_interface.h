@@ -19,4 +19,8 @@ public:
     // Multi-pin accessors (default: return -1 for single-pin engines)
     virtual int inputPinId(int /*port*/) const { return -1; }
     virtual int outputPinId(int /*port*/) const { return -1; }
+
+    // Pin count (default: 1/1 for legacy single-pin engines)
+    virtual int numInputPins() const { return 1; }
+    virtual int numOutputPins() const { return 1; }
 };
