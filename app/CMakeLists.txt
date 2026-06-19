@@ -30,8 +30,7 @@ target_link_libraries(app
         simulator::pfb_channelizer_widget
         simulator::iq_plot_widget
         simulator::splitter_engine
-        simulator::s_parameter_amplifier_engine
-        simulator::s_parameter_filter_engine
+        simulator::s_param_engine
         simulator::adc_engine
         simulator::coax_cable_engine
         simulator::spectrum_analyzer_engine

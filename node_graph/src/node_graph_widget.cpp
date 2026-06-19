@@ -133,11 +133,8 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Mixer")) {
             if (onAddMixer) onAddMixer();
         }
-        if (ImGui::MenuItem("Add S-Param Amp")) {
-            if (onAddSParamAmp) onAddSParamAmp();
-        }
-        if (ImGui::MenuItem("Add S-Param Filter")) {
-            if (onAddSParamFilter) onAddSParamFilter();
+        if (ImGui::MenuItem("Add S-Param Component")) {
+            if (onAddSParamComponent) onAddSParamComponent();
         }
         if (ImGui::MenuItem("Add RF ADC")) {
             if (onAddAdc) onAddAdc();

@@ -7,8 +7,7 @@
 #include "logging_core.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
-#include "s_parameter_amplifier_engine.h"
-#include "s_parameter_filter_engine.h"
+#include "s_param_engine.h"
 #include "ideal_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -37,8 +36,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<AmplifierEngine*>(engine))             return {ComponentType::Amplifier, engine};
     else if (dynamic_cast<SplitterEngine*>(engine))              return {ComponentType::Splitter, engine};
     else if (dynamic_cast<MixerEngine*>(engine))                 return {ComponentType::Mixer, engine};
-    else if (dynamic_cast<SParameterAmplifierEngine*>(engine))   return {ComponentType::SParamAmp, engine};
-    else if (dynamic_cast<SParameterFilterEngine*>(engine))      return {ComponentType::SParamFilter, engine};
+    else if (dynamic_cast<SParamEngine*>(engine))                return {ComponentType::SParam, engine};
     else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
     else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
     else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
@@ -56,8 +54,7 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::Amplifier:     return "Amplifier " + std::to_string(hit.engine->id());
     case ComponentType::Mixer:         return "Mixer " + std::to_string(hit.engine->id());
     case ComponentType::Splitter:      return "Splitter " + std::to_string(hit.engine->id());
-    case ComponentType::SParamAmp:     return "S-Param Amp " + std::to_string(hit.engine->id());
-    case ComponentType::SParamFilter:  return "S-Param Filter " + std::to_string(hit.engine->id());
+    case ComponentType::SParam:        return "S-Param " + std::to_string(hit.engine->id());
     case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
         case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
@@ -107,11 +104,8 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     case ComponentType::Splitter:
         drawSplitterProperties(*static_cast<SplitterEngine*>(hit.engine), hit.engine->id());
         break;
-    case ComponentType::SParamAmp:
-        drawSParamAmpProperties(*static_cast<SParameterAmplifierEngine*>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::SParamFilter:
-        drawSParamFilterProperties(*static_cast<SParameterFilterEngine*>(hit.engine), hit.engine->id());
+    case ComponentType::SParam:
+        drawSParamProperties(*static_cast<SParamEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Adc:
         drawAdcProperties(*static_cast<AdcEngine*>(hit.engine), hit.engine->id());
@@ -224,7 +218,7 @@ void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine &engine, int index) {
+void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
     (void)index;
     if (!engine.loaded()) {
         ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load S-parameter file");
@@ -237,12 +231,12 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine &engine, 
                           .result();
         if (!result.empty()) {
             engine.reload(result[0]);
-            LOG_INFO("S-param amp reloaded: %s", result[0].c_str());
+            LOG_INFO("S-param component reloaded: %s", result[0].c_str());
         }
     }
 
     if (engine.loaded()) {
-        int np = engine.numPorts();
+        int np = engine.data().numPorts();
         int fwd_idx = engine.forwardParamIdx();
         std::string preview =
             "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
@@ -256,14 +250,22 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine &engine, 
             ImGui::EndCombo();
         }
 
-        ImGui::Text("Ports: %d | Data points: %zu", np, engine.freqs().size());
-        ImGui::Text("Max freq: %.0f MHz", engine.freqs().back() / 1e6);
+        ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
+        ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
     }
 
-    double nf = engine.nf_dB();
-    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
-        engine.setNF_dB(nf);
+    // Optional: Noise Figure
+    bool has_nf = (engine.nf_dB() > 0.0);
+    if (ImGui::Checkbox("Noise Figure", &has_nf)) {
+        engine.setNF_dB(has_nf ? 3.0 : 0.0);
+    }
+    if (has_nf) {
+        double nf = engine.nf_dB();
+        if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+            engine.setNF_dB(nf);
+    }
 
+    // Optional: Nonlinearity
     bool nonlin = engine.enableNonlinear();
     if (ImGui::Checkbox("Enable Nonlinearity", &nonlin))
         engine.setEnableNonlinear(nonlin);
@@ -281,33 +283,6 @@ void InspectorPanel::drawSParamAmpProperties(SParameterAmplifierEngine &engine, 
         ImGui::TextDisabled("P1dB ~ %.1f dBm", p1dB_est);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Estimated 1 dB compression point");
-    }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
-}
-
-void InspectorPanel::drawSParamFilterProperties(SParameterFilterEngine &engine, int index) {
-    (void)index;
-    if (!engine.loaded()) {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load S-parameter file");
-    }
-
-    ImGui::TextWrapped("File: %s", engine.filepath().c_str());
-    if (ImGui::Button("Browse...")) {
-        auto result = pfd::open_file("Select S-parameter file", "",
-                                     {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
-                          .result();
-        if (!result.empty()) {
-            engine.reload(result[0]);
-            LOG_INFO("S-param filter reloaded: %s", result[0].c_str());
-        }
-    }
-
-    if (engine.loaded()) {
-        int np = engine.data().numPorts();
-        ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
-        ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
     }
 
     if (ImGui::Button("Delete") && onRemoveNode)

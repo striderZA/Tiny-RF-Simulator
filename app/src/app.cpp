@@ -23,12 +23,8 @@ RfSimulatorApp::RfSimulatorApp()
     m_graph_widget->onAddMixer = [this]() {
         m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
     };
-    m_graph_widget->onAddSParamAmp = [this]() {
-        m_components.add<SParameterAmplifierEngine>(m_next_component_id++, m_graph_engine,
-            std::string(PROJECT_SOURCE_DIR) + "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
-    };
-    m_graph_widget->onAddSParamFilter = [this]() {
-        m_components.add<SParameterFilterEngine>(m_next_component_id++, m_graph_engine, "");
+    m_graph_widget->onAddSParamComponent = [this]() {
+        m_components.add<SParamEngine>(m_next_component_id++, m_graph_engine, "");
     };
     m_graph_widget->onAddAdc = [this]() {
         m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
