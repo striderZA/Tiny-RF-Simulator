@@ -10,6 +10,10 @@ struct GraphNode {
     std::vector<int> output_pin_ids;
     SignalNode *signal_node;
     std::string label;
+
+    // Per-pin labels for rendering (empty → default "IN"/"OUT")
+    std::vector<std::string> input_labels;
+    std::vector<std::string> output_labels;
 };
 
 struct GraphLink {
