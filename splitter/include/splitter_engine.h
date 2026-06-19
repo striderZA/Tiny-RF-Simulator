@@ -14,7 +14,7 @@ class SplitterEngine : public IComponentEngine {
     int graphNodeId() const override { return m_graph_node_id; }
     std::string hoverSummary() const override;
     int inputPinId() const override;
-    int outputPinId(int index) const;
+    int outputPinId(int index) const override;
     int outputPinId() const override { return outputPinId(0); }
 
     void update(double dt) override;
