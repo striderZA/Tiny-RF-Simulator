@@ -298,3 +298,187 @@ TEST_CASE("SParamEngine default is passive (no NF, no nonlinear)", "[sparam]") {
             REQUIRE(n == Approx(0.0));
     }
 }
+
+TEST_CASE("SParamEngine loads 3-port .s3p file correctly", "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+
+    REQUIRE(sp.loaded());
+    REQUIRE(sp.data().numPorts() == 3);
+    REQUIRE(sp.numPorts() == 3);
+    REQUIRE(sp.data().params()[0].size() == 9); // 3x3 = 9 S-params
+
+    // Default mode is full matrix
+    REQUIRE(sp.fullMatrixMode());
+}
+
+TEST_CASE("SParamEngine 3-port splitter: single input produces two outputs",
+          "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+    REQUIRE(sp.numPorts() == 3);
+
+    // Wire generator to Port 2 input (COMMON port on this splitter)
+    Spectrum in_spec;
+    in_spec.tones = {{2e9, -10.0, 0.0}};  // 2 GHz, -10 dBm, 0° phase
+    in_spec.frequencies = {2e9};
+    in_spec.noise_W = {1e-12};
+    in_spec.noise_added_W = {0.0};
+    in_spec.noise_total_W = {1e-12};
+
+    // Wire only Port 2
+    sp.node().inputs[0] = nullptr;  // Port 1: Z₀
+    sp.node().inputs[1] = &in_spec; // Port 2: generator
+    sp.node().inputs[2] = nullptr;  // Port 3: Z₀
+
+    sp.update(0.0);
+
+    // Port 1 output should have a tone (from S₁₂ × input₂)
+    const auto& out1 = sp.node().outputs[0];
+    REQUIRE(out1.tones.size() == 1);
+    REQUIRE(out1.tones[0].freq_Hz == Approx(2e9));
+
+    // Port 2 output should also have a tone (from S₂₂ × input₂)
+    const auto& out2 = sp.node().outputs[1];
+    REQUIRE(out2.tones.size() >= 1);
+
+    // Port 3 output should have a tone (from S₃₂ × input₂)
+    const auto& out3 = sp.node().outputs[2];
+    REQUIRE(out3.tones.size() == 1);
+    REQUIRE(out3.tones[0].freq_Hz == Approx(2e9));
+
+    // For a 3-way splitter, all outputs should be at roughly the same level
+    // (within a few dB — the datasheet shows ~-3.6 dB coupling)
+    REQUIRE(out1.tones[0].power_dBm == Approx(-10.0 - 3.63).margin(0.5));
+    REQUIRE(out3.tones[0].power_dBm == Approx(-10.0 - 3.95).margin(0.5));
+}
+
+TEST_CASE("SParamEngine 3-port combiner: two inputs sum at common port",
+          "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    // Wire two generators at different frequencies into Port 1 and Port 3
+    Spectrum in_a, in_b;
+    in_a.tones = {{2e9, -10.0, 0.0}};
+    in_a.frequencies = {2e9};
+    in_a.noise_W = {1e-12};
+    in_a.noise_added_W = {0.0};
+    in_a.noise_total_W = {1e-12};
+
+    in_b.tones = {{2.001e9, -10.0, 0.0}};
+    in_b.frequencies = {2.001e9};
+    in_b.noise_W = {1e-12};
+    in_b.noise_added_W = {0.0};
+    in_b.noise_total_W = {1e-12};
+
+    sp.node().inputs[0] = &in_a; // Port 1: gen A
+    sp.node().inputs[1] = nullptr; // Port 2: Z₀
+    sp.node().inputs[2] = &in_b; // Port 3: gen B
+
+    sp.update(0.0);
+
+    // Port 2 output should have both tones (S₂₁ × input₁ + S₂₃ × input₃)
+    const auto& out = sp.node().outputs[1]; // Port 2 output
+    REQUIRE(out.tones.size() >= 2);
+
+    bool found_2g = false, found_2001 = false;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 2e9) < 1.0) found_2g = true;
+        if (std::abs(t.freq_Hz - 2.001e9) < 1.0) found_2001 = true;
+    }
+    REQUIRE(found_2g);
+    REQUIRE(found_2001);
+}
+
+TEST_CASE("SParamEngine disconnected input ports produce no contribution",
+          "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    // No inputs connected at all
+    sp.node().inputs[0] = nullptr;
+    sp.node().inputs[1] = nullptr;
+    sp.node().inputs[2] = nullptr;
+
+    sp.update(0.0);
+
+    // All outputs should be empty (no tones)
+    for (int j = 0; j < 3; ++j) {
+        REQUIRE(sp.node().outputs[j].tones.empty());
+    }
+}
+
+TEST_CASE("SParamEngine multi-port cache invalidates correctly",
+          "[sparam][multiport][cache]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    // Wire two inputs
+    Spectrum in_a, in_b;
+    in_a.tones = {{2e9, -10.0, 0.0}};
+    in_a.frequencies = {2e9};
+    in_a.noise_W = {1e-12};
+    in_a.noise_added_W = {0.0};
+    in_a.noise_total_W = {1e-12};
+    in_a.generation = 1;
+
+    in_b.tones = {{3e9, -20.0, 0.0}};
+    in_b.frequencies = {3e9};
+    in_b.noise_W = {1e-12};
+    in_b.noise_added_W = {0.0};
+    in_b.noise_total_W = {1e-12};
+    in_b.generation = 1;
+
+    sp.node().inputs[0] = &in_a;
+    sp.node().inputs[2] = &in_b;
+
+    sp.update(0.0);
+
+    auto tone_count = sp.node().outputs[1].tones.size();
+    REQUIRE(tone_count > 0);
+
+    // Second update with unchanged inputs should hit cache (same generation)
+    sp.update(0.0);
+    REQUIRE(sp.node().outputs[1].tones.size() == tone_count);
+
+    // Bump one input's generation — cache should miss
+    in_a.generation = 2;
+    sp.update(0.0);
+    REQUIRE(sp.node().outputs[1].tones.size() == tone_count); // same tone count but should re-evaluate
+
+    // Swap input[0] to new pointer, input[2] still has in_b — cache should miss
+    Spectrum in_c;
+    in_c.tones = {{4e9, -5.0, 0.0}};
+    in_c.frequencies = {4e9};
+    in_c.generation = 1;
+    sp.node().inputs[0] = &in_c;
+    sp.update(0.0);
+    REQUIRE(sp.node().outputs[1].tones.size() == 2);
+
+    bool found_new = false;
+    for (const auto& t : sp.node().outputs[1].tones) {
+        if (std::abs(t.freq_Hz - 4e9) < 1.0) found_new = true;
+    }
+    REQUIRE(found_new);
+
+    // Remove in_b — now only in_c (4 GHz) on port 1
+    sp.node().inputs[2] = nullptr;
+    sp.update(0.0);
+    REQUIRE(sp.node().outputs[1].tones.size() == 1);
+    REQUIRE(sp.node().outputs[1].tones[0].freq_Hz == Approx(4e9));
+}
