@@ -238,19 +238,38 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
     if (engine.loaded()) {
         int np = engine.data().numPorts();
         int fwd_idx = engine.forwardParamIdx();
-        std::string preview =
-            "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
-        if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
-            for (int pi = 0; pi < np * np; ++pi) {
-                std::string lbl =
-                    "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
-                if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
-                    engine.setForwardParamIdx(pi);
+
+        if (np <= 2) {
+            // Legacy combo for 1/2-port: show specific S-params
+            std::string preview = (fwd_idx < 0)
+                ? "Full Matrix"
+                : "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
+            if (ImGui::BeginCombo("Mode", preview.c_str())) {
+                bool is_full = (fwd_idx < 0);
+                if (ImGui::Selectable("Full Matrix", is_full))
+                    engine.setFullMatrixMode(true);
+                for (int pi = 0; pi < np * np; ++pi) {
+                    std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
+                    if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
+                        engine.setForwardParamIdx(pi);
+                }
+                ImGui::EndCombo();
             }
-            ImGui::EndCombo();
+        } else {
+            // Multi-port: show port count info, full matrix mode by default
+            ImGui::Text("Ports: %d", np);
+            bool is_full = (fwd_idx < 0);
+            if (ImGui::Checkbox("Full Matrix Mode", &is_full)) {
+                engine.setFullMatrixMode(is_full);
+            }
+            if (!is_full) {
+                std::string lbl = "S" + std::to_string((fwd_idx / np) + 1)
+                                + std::to_string((fwd_idx % np) + 1);
+                ImGui::Text("Forward Param: %s", lbl.c_str());
+            }
         }
 
-        ImGui::Text("Ports: %d | Data points: %zu", np, engine.data().freqs().size());
+        ImGui::Text("Data points: %zu", engine.data().freqs().size());
         ImGui::Text("Max freq: %.0f MHz", engine.data().freqs().back() / 1e6);
     }
 
