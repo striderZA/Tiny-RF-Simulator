@@ -51,6 +51,11 @@ class NodeGraphEngine {
 
     int nodeIdForPin(int pin_id) const;
 
+    // Set pin labels for a node (for rendering in the node graph widget)
+    void setNodePinLabels(int node_id,
+                          const std::vector<std::string>& input_labels,
+                          const std::vector<std::string>& output_labels);
+
   private:
     int m_next_node_id = 1;
     int m_next_pin_id = 100;

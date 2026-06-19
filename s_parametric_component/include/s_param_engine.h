@@ -16,11 +16,24 @@ public:
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_node_id; }
     std::string hoverSummary() const override;
-    int inputPinId() const override;
-    int outputPinId() const override;
+    int inputPinId() const override { return inputPinId(0); }
+    int outputPinId() const override { return outputPinId(0); }
     SignalNode& node() override { return m_node; }
     const SignalNode& node() const override { return m_node; }
     void update(double dt) override;
+
+    // Multi-port API
+    int numPorts() const { return m_data.numPorts(); }
+    int inputPinId(int port) const override;
+    int outputPinId(int port) const override;
+    bool fullMatrixMode() const { return m_forward_param_idx < 0; }
+    void setFullMatrixMode(bool full) {
+        int new_idx = full ? -1 : (m_data.numPorts() > 1 ? m_data.numPorts() : 0);
+        if (new_idx != m_forward_param_idx) {
+            m_forward_param_idx = new_idx;
+            m_dirty = true;
+        }
+    }
 
     void reload(const std::string& filepath);
 
@@ -57,6 +70,8 @@ public:
     }
 
 private:
+    void rebuildNode();
+
     int m_id;
     int m_graph_node_id = -1;
     NodeGraphEngine* m_graph = nullptr;
@@ -65,8 +80,9 @@ private:
     std::string m_filepath;
     int m_forward_param_idx = 0;
     bool m_dirty = true;
-    const Spectrum* m_cached_input_ptr = nullptr;
-    uint64_t m_cached_input_generation = 0;
+    bool m_cache_valid = false;
+    std::vector<const Spectrum*> m_cached_input_ptrs;
+    std::vector<uint64_t> m_cached_input_generations;
 
     double m_nf_dB = 0.0;
     NonlinearModel m_nonlinear;

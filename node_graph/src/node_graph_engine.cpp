@@ -202,6 +202,18 @@ int NodeGraphEngine::nodeIdForPin(int pin_id) const {
     return -1;
 }
 
+void NodeGraphEngine::setNodePinLabels(int node_id,
+                                        const std::vector<std::string>& input_labels,
+                                        const std::vector<std::string>& output_labels) {
+    for (auto& node : m_nodes) {
+        if (node.node_id == node_id) {
+            node.input_labels = input_labels;
+            node.output_labels = output_labels;
+            return;
+        }
+    }
+}
+
 std::vector<int> NodeGraphEngine::topologicalOrder() const {
     std::unordered_map<int, int> in_degree;
     for (const auto& n : m_nodes)
