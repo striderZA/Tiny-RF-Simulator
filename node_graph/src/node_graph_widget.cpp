@@ -56,9 +56,11 @@ void NodeGraphWidget::drawNodes() {
             ImGui::Dummy(ImVec2(80, 56));
         }
 
-        for (int pin : node.input_pin_ids) {
-            ImNodes::BeginInputAttribute(pin);
-            ImGui::Text("IN");
+        for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+            ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
+            const char* label = (i < node.input_labels.size() && !node.input_labels[i].empty())
+                ? node.input_labels[i].c_str() : "IN";
+            ImGui::Text("%s", label);
             ImNodes::EndInputAttribute();
         }
 
@@ -69,14 +71,17 @@ void NodeGraphWidget::drawNodes() {
             IM_COL32(60, 140, 220, 255),  // Blue
         };
 
-        for (int pin : node.output_pin_ids) {
+        for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+            int pin = node.output_pin_ids[i];
             int slot = m_engine.probeSlotForPin(pin);
             if (slot >= 0) {
                 ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
                 ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
             }
             ImNodes::BeginOutputAttribute(pin);
-            ImGui::Text("OUT");
+            const char* label = (i < node.output_labels.size() && !node.output_labels[i].empty())
+                ? node.output_labels[i].c_str() : "OUT";
+            ImGui::Text("%s", label);
             ImNodes::EndOutputAttribute();
             if (slot >= 0) {
                 ImNodes::PopColorStyle();
