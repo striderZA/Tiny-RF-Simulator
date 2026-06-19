@@ -96,17 +96,9 @@ void RfSimulatorApp::update_dsp() {
     std::unordered_map<int, std::function<void()>> updates;
 
     for (auto* comp : m_components.all()) {
-        // Determine number of input pins (default 1 for legacy engines)
-        SParamEngine* sp = dynamic_cast<SParamEngine*>(comp);
-        int num_inputs = sp ? sp->numPorts() : 1;
-
-        for (int k = 0; k < num_inputs; ++k) {
-            int pid;
-            if (sp) {
-                pid = sp->inputPinId(k);
-            } else {
-                pid = (k == 0) ? comp->inputPinId() : -1;
-            }
+        int N = comp->numInputPins();
+        for (int k = 0; k < N; ++k) {
+            int pid = comp->inputPinId(k);
             if (pid >= 0) {
                 auto* source = m_graph_engine.getSourceForInput(pid);
                 comp->node().inputs[k] = source ? &source->outputs[0] : nullptr;
