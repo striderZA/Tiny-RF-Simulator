@@ -18,28 +18,21 @@ void SParamEngine::rebuildNode() {
     int np = m_data.numPorts();
     if (np < 1) return;
 
-    // Remove old graph node if it exists
-    if (m_graph_node_id >= 0) {
+    if (m_graph_node_id >= 0)
         m_graph->removeNode(m_graph_node_id);
-    }
 
-    // Create new node with np inputs and np outputs
-    m_graph_node_id = m_graph->addNode("S-Param " + std::to_string(m_id), &m_node, np, np);
-    m_node.inputs.resize(np);
-    m_node.outputs.resize(np);
+    int n_in = numInputPins();
+    int n_out = numOutputPins();
 
-    // Set pin labels
-    {
-        std::vector<std::string> in_labels(np), out_labels(np);
-        for (int p = 0; p < np; ++p) {
-            in_labels[p] = "Port " + std::to_string(p + 1);
-            out_labels[p] = "Port " + std::to_string(p + 1);
-        }
-        m_graph->setNodePinLabels(m_graph_node_id, in_labels, out_labels);
-    }
+    m_graph_node_id = m_graph->addNode("S-Param " + std::to_string(m_id), &m_node, n_in, n_out);
+    m_node.inputs.resize(n_in);
+    m_node.outputs.resize(n_out);
+
+    m_graph->setNodePinLabels(m_graph_node_id, computeInputLabels(), computeOutputLabels());
 
     m_cache_valid = false;
-    LOG_INFO("Rebuilt S-param node %d with %d ports", m_id, np);
+    LOG_INFO("Rebuilt S-param node %d as %s (%d in, %d out)",
+             m_id, modeName(m_mode), n_in, n_out);
 }
 
 void SParamEngine::reload(const std::string& filepath) {
@@ -63,6 +56,88 @@ void SParamEngine::reload(const std::string& filepath) {
 
     LOG_INFO("Loaded S-parameter component %d from %s (%zu points, %d ports)",
              m_id, filepath.c_str(), m_data.freqs().size(), np);
+}
+
+int SParamEngine::numInputPins() const {
+    if (!m_data.loaded()) return 1;
+    int np = m_data.numPorts();
+    switch (m_mode) {
+        case Mode::Splitter:   return 1;
+        case Mode::Combiner:   return (np > 1) ? np - 1 : 1;
+        case Mode::FullMatrix: return np;
+    }
+    return 1;
+}
+
+int SParamEngine::numOutputPins() const {
+    if (!m_data.loaded()) return 1;
+    int np = m_data.numPorts();
+    switch (m_mode) {
+        case Mode::Splitter:   return (np > 1) ? np - 1 : 1;
+        case Mode::Combiner:   return 1;
+        case Mode::FullMatrix: return np;
+    }
+    return 1;
+}
+
+void SParamEngine::setMode(Mode mode) {
+    if (mode != m_mode) {
+        m_mode = mode;
+        m_forward_param_idx = -1; // mode switch forces full-matrix param behavior
+        rebuildNode();
+        m_dirty = true;
+    }
+}
+
+void SParamEngine::setCommonPort(int port) {
+    int np = m_data.numPorts();
+    if (port >= 0 && port < np && port != m_common_port) {
+        m_common_port = port;
+        rebuildNode();
+        m_dirty = true;
+    }
+}
+
+std::vector<std::string> SParamEngine::computeInputLabels() const {
+    int np = m_data.numPorts();
+    std::vector<std::string> labels;
+    switch (m_mode) {
+        case Mode::Splitter:
+            labels.push_back("Common (Port " + std::to_string(m_common_port + 1) + ")");
+            break;
+        case Mode::Combiner:
+            for (int p = 0; p < np; ++p) {
+                if (p == m_common_port) continue;
+                labels.push_back("Port " + std::to_string(p + 1));
+            }
+            break;
+        case Mode::FullMatrix:
+            for (int p = 0; p < np; ++p)
+                labels.push_back("Port " + std::to_string(p + 1));
+            break;
+    }
+    return labels;
+}
+
+std::vector<std::string> SParamEngine::computeOutputLabels() const {
+    int np = m_data.numPorts();
+    std::vector<std::string> labels;
+    switch (m_mode) {
+        case Mode::Splitter:
+            for (int p = 0; p < np; ++p) {
+                if (p == m_common_port) continue;
+                labels.push_back("Port " + std::to_string(p + 1));
+            }
+            break;
+        case Mode::Combiner:
+            labels.push_back("Common (Port " + std::to_string(m_common_port + 1) + ")");
+            break;
+        case Mode::FullMatrix:
+            for (int p = 0; p < np; ++p)
+                labels.push_back("Port " + std::to_string(p + 1));
+            break;
+    }
+    return labels;
 }
 
 int SParamEngine::inputPinId(int port) const {
@@ -197,6 +272,130 @@ void SParamEngine::update(double dt) {
         }
 
         m_node.outputs[0].bumpGeneration();
+        return;
+    }
+
+    // --- Mode-specific paths (Splitter / Combiner) ---
+    if (m_mode != Mode::FullMatrix) {
+        if (m_mode == Mode::Splitter) {
+            const Spectrum* in = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+            if (!in) {
+                for (auto& o : m_node.outputs) o.bumpGeneration();
+                return;
+            }
+            int out_idx = 0;
+            for (int p = 0; p < N; ++p) {
+                if (p == m_common_port) continue;
+                int param_idx = p * N + m_common_port; // S_p,common
+                m_data.applyToSpectrum(*in, m_node.outputs[out_idx], param_idx);
+                ++out_idx;
+            }
+        } else { // Combiner
+            auto& out = m_node.outputs[0];
+            const Spectrum* first = nullptr;
+            for (auto* in_k : m_node.inputs) { if (in_k) { first = in_k; break; } }
+            if (!first) { out.bumpGeneration(); return; }
+
+            out.frequencies = first->frequencies;
+            out.tones.clear();
+            const size_t n_bins = out.frequencies.size();
+            out.noise_W.assign(n_bins, 0.0);
+            out.noise_added_W.assign(n_bins, 0.0);
+            out.phase_deg = first->phase_deg;
+
+            int in_idx = 0;
+            for (int p = 0; p < N; ++p) {
+                if (p == m_common_port) continue; // no input pin for common port
+                const Spectrum* in_k = m_node.inputs[in_idx];
+                if (!in_k) { ++in_idx; continue; }
+
+                int param_idx = m_common_port * N + p; // S_common,p
+
+                // Tones: apply S_common,p and accumulate
+                for (const auto& tone : in_k->tones) {
+                    auto S = m_data.interpolate(tone.freq_Hz, param_idx);
+                    double mag = std::abs(S);
+                    double phase_shift = std::arg(S) * 180.0 / std::numbers::pi;
+
+                    Spectrum::Tone t_out;
+                    t_out.freq_Hz = tone.freq_Hz;
+                    t_out.power_dBm = tone.power_dBm + 20.0 * std::log10(mag);
+                    t_out.phase_deg = tone.phase_deg + phase_shift;
+
+                    // Coherent merge with same-frequency tone
+                    bool merged = false;
+                    for (auto& existing : out.tones) {
+                        if (std::abs(existing.freq_Hz - t_out.freq_Hz) < 1.0) {
+                            double a1 = std::pow(10.0, existing.power_dBm / 20.0);
+                            double p1 = existing.phase_deg * std::numbers::pi / 180.0;
+                            double a2 = std::pow(10.0, t_out.power_dBm / 20.0);
+                            double p2 = t_out.phase_deg * std::numbers::pi / 180.0;
+                            double re = a1 * std::cos(p1) + a2 * std::cos(p2);
+                            double im = a1 * std::sin(p1) + a2 * std::sin(p2);
+                            existing.power_dBm = 20.0 * std::log10(std::sqrt(re*re + im*im));
+                            existing.phase_deg = std::atan2(im, re) * 180.0 / std::numbers::pi;
+                            merged = true;
+                            break;
+                        }
+                    }
+                    if (!merged) out.tones.push_back(t_out);
+                }
+
+                // Noise: uncorrelated -> add power
+                if (in_k->noise_total_W.empty()) continue;
+                for (size_t i = 0; i < n_bins && i < in_k->noise_total_W.size(); ++i) {
+                    auto S = m_data.interpolate(out.frequencies[i], param_idx);
+                    out.noise_W[i] += std::norm(S) * in_k->noise_total_W[i];
+                }
+            }
+
+            // Noise figure on the single combiner output
+            if (m_nf_dB > 0.0 && n_bins >= 2) {
+                double Te = calculateNoiseTemp(m_nf_dB);
+                for (size_t i = 0; i < n_bins; ++i) {
+                    double sum_gain = 0.0;
+                    for (int p = 0; p < N; ++p) {
+                        if (p == m_common_port) continue;
+                        auto S = m_data.interpolate(out.frequencies[i], m_common_port * N + p);
+                        sum_gain += std::norm(S);
+                    }
+                    out.noise_added_W[i] = k * Te * sum_gain;
+                }
+            } else if (n_bins >= 2) {
+                out.noise_added_W.assign(n_bins, 0.0);
+            }
+
+            if (n_bins >= 2) {
+                out.noise_total_W.resize(n_bins);
+                for (size_t i = 0; i < n_bins; ++i)
+                    out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
+            }
+        }
+
+        // NL on first output only
+        if (m_nonlinear.enabled() && !m_node.inputs.empty()) {
+            const Spectrum* in_ptr = m_node.inputs[0];
+            if (in_ptr && !in_ptr->tones.empty()) {
+                size_t n_fund = m_node.outputs[0].tones.size();
+                auto result = m_nonlinear.process(in_ptr->tones,
+                    [this](double freq) {
+                        auto S = this->m_data.interpolate(freq, 0);
+                        return std::abs(S);
+                    });
+                for (const auto& t : result.extra_tones)
+                    m_node.outputs[0].tones.push_back(t);
+                if (result.compression_dB < -1e8) {
+                    for (size_t kk = 0; kk < n_fund; ++kk)
+                        m_node.outputs[0].tones[kk].power_dBm = MIN_POWER;
+                } else {
+                    for (size_t kk = 0; kk < n_fund; ++kk)
+                        m_node.outputs[0].tones[kk].power_dBm += result.compression_dB;
+                }
+            }
+        }
+
+        for (auto& o : m_node.outputs)
+            o.bumpGeneration();
         return;
     }
 
@@ -341,14 +540,13 @@ void SParamEngine::update(double dt) {
 std::string SParamEngine::hoverSummary() const {
     if (!m_data.loaded()) return "Not loaded";
     int np = m_data.numPorts();
-    std::string s = std::to_string(np) + "-port";
-    if (m_forward_param_idx < 0) {
-        s += " | Full Matrix";
-    } else {
-        s += " | S"
-            + std::to_string((m_forward_param_idx / np) + 1)
-            + std::to_string((m_forward_param_idx % np) + 1);
-    }
+    std::string s = modeName(m_mode);
+    s += " | " + std::to_string(np) + "-port";
+    if (m_mode != Mode::FullMatrix && m_forward_param_idx < 0)
+        s += " | Common: " + std::to_string(m_common_port + 1);
+    else if (m_forward_param_idx >= 0)
+        s += " | S" + std::to_string((m_forward_param_idx / np) + 1)
+           + std::to_string((m_forward_param_idx % np) + 1);
     if (m_nf_dB > 0.0)
         s += " | NF: " + std::to_string(m_nf_dB) + " dB";
     if (m_nonlinear.enabled())

@@ -26,6 +26,26 @@ public:
     int numPorts() const { return m_data.numPorts(); }
     int inputPinId(int port) const override;
     int outputPinId(int port) const override;
+
+    // Mode selection (Splitter/Combiner/FullMatrix)
+    enum class Mode { Splitter, Combiner, FullMatrix };
+
+    Mode mode() const { return m_mode; }
+    void setMode(Mode mode);
+    int commonPort() const { return m_common_port; }
+    void setCommonPort(int port);
+    static const char* modeName(Mode m) {
+        switch (m) {
+            case Mode::Splitter: return "Splitter";
+            case Mode::Combiner: return "Combiner";
+            case Mode::FullMatrix: return "Full Matrix";
+        }
+        return "Unknown";
+    }
+
+    int numInputPins() const override;
+    int numOutputPins() const override;
+
     bool fullMatrixMode() const { return m_forward_param_idx < 0; }
     void setFullMatrixMode(bool full) {
         int new_idx = full ? -1 : (m_data.numPorts() > 1 ? m_data.numPorts() : 0);
@@ -71,6 +91,8 @@ public:
 
 private:
     void rebuildNode();
+    std::vector<std::string> computeInputLabels() const;
+    std::vector<std::string> computeOutputLabels() const;
 
     int m_id;
     int m_graph_node_id = -1;
@@ -81,6 +103,8 @@ private:
     int m_forward_param_idx = 0;
     bool m_dirty = true;
     bool m_cache_valid = false;
+    Mode m_mode = Mode::FullMatrix;
+    int m_common_port = 0; // 0-based common port index
     std::vector<const Spectrum*> m_cached_input_ptrs;
     std::vector<uint64_t> m_cached_input_generations;
 
