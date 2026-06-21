@@ -204,4 +204,32 @@ void RegisterUiTests(ImGuiTestEngine* e) {
         }
         // Accept either outcome - the important test is the first one above
     };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "subcircuit_expand_and_collapse");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        // After the previous test created a group, the generator+amplifier+splitter
+        // are inside a collapsed subcircuit. Try to expand and re-collapse it to
+        // exercise the rendering path and catch any crash on the transition.
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(2);
+
+        auto info = ctx->WindowInfo("Node Editor");
+        ImVec2 center = info.RectFull.GetCenter();
+        ctx->MouseMoveToPos(center);
+        ctx->Yield(1);
+
+        ctx->SetRef("Node Editor");
+        if (ctx->ItemExists("Expand")) {
+            ctx->ItemClick("Expand");
+            ctx->Yield(2);
+            // Render a few more frames to make sure nothing crashes after expansion
+            ctx->Yield(5);
+
+            // Try to find the ▼ collapse button on the expanded title bar by hovering
+            // over the group's top-left area and clicking
+            ctx->MouseMoveToPos(center + ImVec2(120, -40));
+            ctx->MouseClick(ImGuiMouseButton_Left);
+            ctx->Yield(2);
+        }
+    };
 }

@@ -41,7 +41,7 @@ TEST_CASE("NodeGraphEngine::addGroup with 2 members succeeds", "[group]") {
     const auto& g = engine.groups().front();
     REQUIRE(g.member_node_ids.size() == 2);
     REQUIRE(g.name == "Sub");
-    REQUIRE(g.collapsed == false);
+    REQUIRE(g.collapsed == true);
 }
 
 TEST_CASE("NodeGraphEngine::addGroup rejects overlapping members", "[group]") {
@@ -128,11 +128,11 @@ TEST_CASE("NodeGraphEngine::setGroupCollapsed flips flag", "[group]") {
     int id_a = engine.addNode("A", &a, 1, 1);
     int id_b = engine.addNode("B", &b, 1, 1);
     int gid = engine.addGroup("Sub", {id_a, id_b});
-    REQUIRE_FALSE(engine.isGroupCollapsed(gid));
-    engine.setGroupCollapsed(gid, true);
     REQUIRE(engine.isGroupCollapsed(gid));
     engine.setGroupCollapsed(gid, false);
     REQUIRE_FALSE(engine.isGroupCollapsed(gid));
+    engine.setGroupCollapsed(gid, true);
+    REQUIRE(engine.isGroupCollapsed(gid));
 }
 
 TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins with no cross-boundary links", "[group]") {
