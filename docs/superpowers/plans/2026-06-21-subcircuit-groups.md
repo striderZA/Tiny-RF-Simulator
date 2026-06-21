@@ -1293,7 +1293,7 @@ void NodeGraphWidget::drawGroupBackgrounds() {
 void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 tl_screen = top_left_grid - ImVec2(16, 16) + ImNodes::EditorContextGetPanning();
-    ImVec2 br_screen = top_left_grid + ImVec2(180, -16) + ImNodes::EditorContextGetPanning();
+    ImVec2 br_screen = top_left_grid + ImVec2(180, 8) + ImNodes::EditorContextGetPanning();
 
     // Background of the title bar
     dl->AddRectFilled(tl_screen, br_screen, IM_COL32(60, 60, 100, 200));
