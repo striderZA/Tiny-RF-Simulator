@@ -331,6 +331,27 @@ void NodeGraphWidget::handleProbeClick() {
                     }
                 }
             }
+            if (target_pin < 0 && m_clicked_node >= 50000 && m_clicked_node < 100000) {
+                // Group-block click; probe the first output boundary pin
+                const Group* g = m_engine.groupById(m_clicked_node);
+                if (g) {
+                    for (const auto& bp : g->boundary_pins) {
+                        if (bp.is_output) {
+                            target_pin = bp.internal_pin_id;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (target_pin >= 100000) {
+                // Synthesized boundary pin id; translate to real internal pin id
+                auto it = m_synth_pin_to_real_pin.find(target_pin);
+                if (it != m_synth_pin_to_real_pin.end()) {
+                    target_pin = it->second;
+                } else {
+                    target_pin = -1;  // stale pin id
+                }
+            }
             if (target_pin >= 0) {
                 if (ctrl)
                     m_engine.addProbePin(target_pin);
