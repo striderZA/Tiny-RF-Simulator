@@ -227,6 +227,46 @@ TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins unique IDs", "[group]") {
     REQUIRE(bp[2].id >= 100000);
 }
 
+TEST_CASE("NodeGraphEngine::removeNode auto-removes group when last member removed", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+    (void)gid;
+
+    engine.removeNode(id_a);
+    REQUIRE(engine.numGroups() == 0);
+}
+
+TEST_CASE("NodeGraphEngine::removeNode auto-removes group when count drops below 2", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    int gid = engine.addGroup("Sub", {id_a, id_b, id_c});
+    (void)gid;
+
+    engine.removeNode(id_a);
+    engine.removeNode(id_b);
+    REQUIRE(engine.numGroups() == 0);
+}
+
+TEST_CASE("NodeGraphEngine::removeNode leaves group intact when >= 2 members remain", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    int gid = engine.addGroup("Sub", {id_a, id_b, id_c});
+
+    engine.removeNode(id_a);
+    REQUIRE(engine.numGroups() == 1);
+    REQUIRE(engine.groupIdForNode(id_b) == gid);
+    REQUIRE(engine.groupIdForNode(id_c) == gid);
+}
+
 TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins uses per-pin label", "[group]") {
     NodeGraphEngine engine;
     SignalNode a, b, c;

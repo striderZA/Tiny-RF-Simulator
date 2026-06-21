@@ -53,6 +53,23 @@ void NodeGraphEngine::removeNode(int node_id) {
     }
 
     m_nodes.erase(it);
+
+    // NEW: cascade group cleanup — remove node_id from any groups, drop groups with < 2 members
+    for (auto& g : m_groups) {
+        auto member_it = std::find(g.member_node_ids.begin(), g.member_node_ids.end(), node_id);
+        if (member_it != g.member_node_ids.end()) {
+            g.member_node_ids.erase(member_it);
+        }
+    }
+    std::vector<int> groups_to_remove;
+    for (const auto& g : m_groups) {
+        if (g.member_node_ids.size() < 2) {
+            groups_to_remove.push_back(g.id);
+        }
+    }
+    for (int gid : groups_to_remove) {
+        removeGroup(gid);
+    }
 }
 
 int NodeGraphEngine::addLink(int start_pin, int end_pin) {
