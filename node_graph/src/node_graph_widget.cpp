@@ -4,6 +4,7 @@
 #include "imnodes.h"
 #include <algorithm>
 #include <cstdio>
+#include <unordered_set>
 #include <limits>
 #include <string>
 
@@ -50,7 +51,16 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 }
 
 void NodeGraphWidget::drawNodes() {
+    std::unordered_set<int> hidden_nodes;
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) {
+            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+        }
+    }
+
     for (const auto &node : m_engine.nodes()) {
+        if (hidden_nodes.count(node.node_id)) continue;
+
         ImNodes::BeginNode(node.node_id);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
@@ -102,7 +112,30 @@ void NodeGraphWidget::drawNodes() {
 }
 
 void NodeGraphWidget::drawLinks() {
+    std::unordered_set<int> hidden_nodes;
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) {
+            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+        }
+    }
+
+    auto pin_owner_node = [this](int pin_id) -> int {
+        for (const auto& n : m_engine.nodes()) {
+            for (int p : n.input_pin_ids) if (p == pin_id) return n.node_id;
+            for (int p : n.output_pin_ids) if (p == pin_id) return n.node_id;
+        }
+        return -1;
+    };
+
     for (const auto &link : m_engine.links()) {
+        int start_node = pin_owner_node(link.start_pin_id);
+        int end_node = pin_owner_node(link.end_pin_id);
+        if (start_node < 0 || end_node < 0) continue;
+
+        bool start_hidden = hidden_nodes.count(start_node) > 0;
+        bool end_hidden = hidden_nodes.count(end_node) > 0;
+        if (start_hidden && end_hidden) continue;  // internal link in collapsed group
+
         ImNodes::Link(link.link_id, link.start_pin_id, link.end_pin_id);
     }
 }
