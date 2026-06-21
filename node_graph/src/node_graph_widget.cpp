@@ -49,6 +49,47 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         handleProbeClick();
         handleContextMenu(editor_hovered);
         handleNodeDeletion();
+
+        // "Create Subcircuit" popup after rubber-band selection
+        if (m_show_create_popup) {
+            if (ImGui::BeginPopupModal("CreateSubcircuit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                static char name_buf[128];
+                static int last_member_count = -1;
+                if (last_member_count != static_cast<int>(m_rubber_band_members.size())) {
+                    std::snprintf(name_buf, sizeof(name_buf), "Subcircuit %d",
+                                  m_engine.numGroups() + 1);
+                    last_member_count = static_cast<int>(m_rubber_band_members.size());
+                }
+
+                ImGui::Text("Members (%zu):", m_rubber_band_members.size());
+                ImGui::Indent();
+                for (int nid : m_rubber_band_members) {
+                    for (const auto& n : m_engine.nodes()) {
+                        if (n.node_id == nid) {
+                            ImGui::TextUnformatted(n.label.c_str());
+                            break;
+                        }
+                    }
+                }
+                ImGui::Unindent();
+
+                ImGui::InputText("Name", name_buf, sizeof(name_buf));
+
+                if (ImGui::Button("Create")) {
+                    m_engine.addGroup(name_buf, m_rubber_band_members);
+                    m_show_create_popup = false;
+                    last_member_count = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    m_show_create_popup = false;
+                    last_member_count = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+        }
     }
     ImGui::End();
 }
