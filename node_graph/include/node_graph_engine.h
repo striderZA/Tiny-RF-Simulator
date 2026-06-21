@@ -60,6 +60,7 @@ class NodeGraphEngine {
 
     // Group operations
     int addGroup(std::string name, std::vector<int> member_node_ids);
+    void removeGroup(int group_id);
 
     // Group collection + accessors
     const std::vector<Group>& groups() const { return m_groups; }

@@ -310,6 +310,18 @@ int NodeGraphEngine::addGroup(std::string name, std::vector<int> member_node_ids
     return m_groups.back().id;
 }
 
+void NodeGraphEngine::removeGroup(int group_id) {
+    auto it = std::find_if(m_groups.begin(), m_groups.end(),
+        [group_id](const Group& g) { return g.id == group_id; });
+    if (it == m_groups.end()) return;
+
+    if (m_selected_group_id == group_id) {
+        m_selected_group_id = -1;
+    }
+    m_groups.erase(it);
+    rebuildNodeToGroupCache();
+}
+
 void NodeGraphEngine::setSelectedGroupId(int id) {
     m_selected_group_id = id;
 }
