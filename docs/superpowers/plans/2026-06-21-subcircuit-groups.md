@@ -809,7 +809,7 @@ Expected: Tests fail to compile.
 
 ```cpp
 void NodeGraphEngine::rebuildGroupBoundaryPins(int group_id) {
-    auto* g = groupById(group_id);
+    auto* g = const_cast<Group*>(groupById(group_id));
     if (!g) return;
 
     // Build a set of member node ids for O(1) lookup
@@ -973,23 +973,18 @@ void NodeGraphEngine::removeNode(int node_id) {
     // ... existing logic: collect node_pins, remove links, remove probes, erase from m_nodes ...
 
     // NEW: cascade group cleanup
-    std::vector<int> groups_to_remove;
-    for (const auto& g : m_groups) {
-        if (std::find(g.member_node_ids.begin(), g.member_node_ids.end(), node_id)
-            != g.member_node_ids.end()) {
-            groups_to_remove.push_back(g.id);
+    // First, remove the removed node from every group's member list.
+    for (auto& g : m_groups) {
+        auto it = std::find(g.member_node_ids.begin(), g.member_node_ids.end(), node_id);
+        if (it != g.member_node_ids.end()) {
+            g.member_node_ids.erase(it);
         }
     }
-    // Also drop groups that have dropped below 2 members (e.g., from prior cascading)
+    // Then remove groups that dropped below 2 members.
+    std::vector<int> groups_to_remove;
     for (const auto& g : m_groups) {
-        if (g.member_node_ids.size() < 2 &&
-            std::find(groups_to_remove.begin(), groups_to_remove.end(), g.id) == groups_to_remove.end()) {
-            // Check none of its members are in groups_to_remove (then it's already going)
-            bool already = false;
-            for (int gid : groups_to_remove) {
-                if (gid == g.id) { already = true; break; }
-            }
-            if (!already) groups_to_remove.push_back(g.id);
+        if (g.member_node_ids.size() < 2) {
+            groups_to_remove.push_back(g.id);
         }
     }
     for (int gid : groups_to_remove) {
