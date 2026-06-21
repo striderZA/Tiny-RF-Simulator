@@ -268,7 +268,32 @@ void NodeGraphWidget::handleLinkCreation() {
     int start_pin, end_pin;
     m_link_created = ImNodes::IsLinkCreated(&start_pin, &end_pin);
     if (m_link_created) {
-        m_engine.addLink(start_pin, end_pin);
+        // Translate synthesized boundary pin ids to real internal pin ids
+        if (start_pin >= 100000) {
+            auto it = m_synth_pin_to_real_pin.find(start_pin);
+            if (it != m_synth_pin_to_real_pin.end()) start_pin = it->second;
+        }
+        if (end_pin >= 100000) {
+            auto it = m_synth_pin_to_real_pin.find(end_pin);
+            if (it != m_synth_pin_to_real_pin.end()) end_pin = it->second;
+        }
+        if (start_pin < 100000 && end_pin < 100000) {
+            m_engine.addLink(start_pin, end_pin);
+
+            // Find which node owns each pin
+            int start_node = m_engine.nodeIdForPin(start_pin);
+            int end_node = m_engine.nodeIdForPin(end_pin);
+
+            // Rebuild boundary pins for any affected group
+            for (const auto& g : m_engine.groups()) {
+                for (int nid : g.member_node_ids) {
+                    if (nid == start_node || nid == end_node) {
+                        m_engine.rebuildGroupBoundaryPins(g.id);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
