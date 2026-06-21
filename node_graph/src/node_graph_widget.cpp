@@ -733,6 +733,34 @@ void NodeGraphWidget::showPinTooltips() {
             return;
         }
     }
+
+    // Boundary pin tooltips (synthesized pins with ids >= 100000)
+    if (hovered_pin >= 100000) {
+        auto it = m_synth_pin_to_real_pin.find(hovered_pin);
+        if (it != m_synth_pin_to_real_pin.end()) {
+            int real_pin = it->second;
+            for (const auto& node : m_engine.nodes()) {
+                for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+                    if (node.output_pin_ids[i] == real_pin && node.signal_node) {
+                        if (i < node.signal_node->outputs.size()) {
+                            showSpectrumTooltip(node.signal_node->outputs[i], "OUT");
+                            return;
+                        }
+                    }
+                }
+                for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+                    if (node.input_pin_ids[i] == real_pin && node.signal_node) {
+                        const Spectrum* spec = (i < node.signal_node->inputs.size())
+                            ? node.signal_node->inputs[i] : nullptr;
+                        if (spec) {
+                            showSpectrumTooltip(*spec, "IN");
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 void NodeGraphWidget::showNodeHoverTooltips() {

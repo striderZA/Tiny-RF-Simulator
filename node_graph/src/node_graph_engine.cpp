@@ -68,7 +68,13 @@ void NodeGraphEngine::removeNode(int node_id) {
         }
     }
     for (int gid : groups_to_remove) {
-        removeGroup(gid);
+        removeGroup(gid, false);
+    }
+    rebuildNodeToGroupCache();
+
+    // Rebuild boundary pins for all surviving groups
+    for (const auto& g : m_groups) {
+        rebuildGroupBoundaryPins(g.id);
     }
 }
 
@@ -328,7 +334,7 @@ int NodeGraphEngine::addGroup(std::string name, std::vector<int> member_node_ids
     return m_groups.back().id;
 }
 
-void NodeGraphEngine::removeGroup(int group_id) {
+void NodeGraphEngine::removeGroup(int group_id, bool rebuild_cache) {
     auto it = std::find_if(m_groups.begin(), m_groups.end(),
         [group_id](const Group& g) { return g.id == group_id; });
     if (it == m_groups.end()) return;
@@ -337,7 +343,9 @@ void NodeGraphEngine::removeGroup(int group_id) {
         m_selected_group_id = -1;
     }
     m_groups.erase(it);
-    rebuildNodeToGroupCache();
+    if (rebuild_cache) {
+        rebuildNodeToGroupCache();
+    }
 }
 
 void NodeGraphEngine::setSelectedGroupId(int id) {
