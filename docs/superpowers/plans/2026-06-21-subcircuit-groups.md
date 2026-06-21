@@ -747,28 +747,29 @@ TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins ignores internal links", "[
 
 TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins unique IDs", "[group]") {
     NodeGraphEngine engine;
-    SignalNode a, b, c, d;
+    SignalNode a, b, c, e1, e2, e3;
     int id_a = engine.addNode("A", &a, 1, 1);
     int id_b = engine.addNode("B", &b, 1, 1);
     int id_c = engine.addNode("C", &c, 1, 1);
-    int id_d = engine.addNode("D", &d, 1, 1);
-    int gid = engine.addGroup("Sub", {id_a, id_b});
+    int id_e1 = engine.addNode("E1", &e1, 1, 1);
+    int id_e2 = engine.addNode("E2", &e2, 1, 1);
+    int id_e3 = engine.addNode("E3", &e3, 1, 1);
+    int gid = engine.addGroup("Sub", {id_a, id_b, id_c});
 
-    // Three cross-boundary links (one input, two outputs from B)
-    engine.addLink(engine.nodes()[2].output_pin_ids[0], engine.nodes()[0].input_pin_ids[0]);
-    engine.addLink(engine.nodes()[1].output_pin_ids[0], engine.nodes()[2].input_pin_ids[0]);
-    // To make a 3rd cross-boundary link we need another link; the simplest is to add a 4th node
-    // and link B.out to D.in. But B has only one output pin. We can instead add another group member
-    // — but the rule is one boundary pin per link, so for testing unique IDs we'll just check
-    // the two we have are unique.
+    // Three cross-boundary input links: E1 -> A, E2 -> B, E3 -> C
+    engine.addLink(engine.nodes()[3].output_pin_ids[0], engine.nodes()[0].input_pin_ids[0]);
+    engine.addLink(engine.nodes()[4].output_pin_ids[0], engine.nodes()[1].input_pin_ids[0]);
+    engine.addLink(engine.nodes()[5].output_pin_ids[0], engine.nodes()[2].input_pin_ids[0]);
 
     engine.rebuildGroupBoundaryPins(gid);
     const auto& bp = engine.groups().front().boundary_pins;
-    if (bp.size() >= 2) {
-        REQUIRE(bp[0].id != bp[1].id);
-    }
-    // (id_d is unused but kept to keep the test variable set; we can remove it if desired)
-    (void)id_d;
+    REQUIRE(bp.size() == 3);
+    REQUIRE(bp[0].id != bp[1].id);
+    REQUIRE(bp[1].id != bp[2].id);
+    REQUIRE(bp[0].id != bp[2].id);
+    REQUIRE(bp[0].id >= 100000);
+    REQUIRE(bp[1].id >= 100000);
+    REQUIRE(bp[2].id >= 100000);
 }
 
 TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins uses per-pin label", "[group]") {
