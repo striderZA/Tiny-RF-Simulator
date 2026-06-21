@@ -261,7 +261,10 @@ int NodeGraphEngine::groupIdForNode(int node_id) const {
 }
 
 const std::vector<int>& NodeGraphEngine::groupsContainingNode(int node_id) const {
-    return m_node_to_group_cache[node_id];
+    static const std::vector<int> empty;
+    auto it = m_node_to_group_cache.find(node_id);
+    if (it != m_node_to_group_cache.end()) return it->second;
+    return empty;
 }
 ```
 
