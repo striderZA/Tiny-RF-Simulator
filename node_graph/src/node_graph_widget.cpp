@@ -301,6 +301,10 @@ void NodeGraphWidget::handleLinkDeletion() {
     int link_id;
     if (ImNodes::IsLinkDestroyed(&link_id)) {
         m_engine.removeLink(link_id);
+        // Rebuild boundary pins for all groups to reflect the removed link
+        for (const auto& g : m_engine.groups()) {
+            m_engine.rebuildGroupBoundaryPins(g.id);
+        }
     }
 }
 
