@@ -326,6 +326,31 @@ void NodeGraphEngine::setSelectedGroupId(int id) {
     m_selected_group_id = id;
 }
 
+void NodeGraphEngine::renameGroup(int group_id, std::string name) {
+    for (auto& g : m_groups) {
+        if (g.id == group_id) {
+            g.name = std::move(name);
+            return;
+        }
+    }
+}
+
+void NodeGraphEngine::setGroupCollapsed(int group_id, bool collapsed) {
+    for (auto& g : m_groups) {
+        if (g.id == group_id) {
+            g.collapsed = collapsed;
+            return;
+        }
+    }
+}
+
+bool NodeGraphEngine::isGroupCollapsed(int group_id) const {
+    for (const auto& g : m_groups) {
+        if (g.id == group_id) return g.collapsed;
+    }
+    return false;
+}
+
 int NodeGraphEngine::groupIdForNode(int node_id) const {
     auto it = m_node_to_group_cache.find(node_id);
     if (it == m_node_to_group_cache.end()) return -1;

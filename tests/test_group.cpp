@@ -106,3 +106,26 @@ TEST_CASE("NodeGraphEngine::removeGroup is no-op for unknown id", "[group]") {
     REQUIRE(engine.numGroups() == 1);
     (void)gid;
 }
+
+TEST_CASE("NodeGraphEngine::renameGroup updates name", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int gid = engine.addGroup("Original", {id_a, id_b});
+    engine.renameGroup(gid, "Renamed");
+    REQUIRE(engine.groups().front().name == "Renamed");
+}
+
+TEST_CASE("NodeGraphEngine::setGroupCollapsed flips flag", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+    REQUIRE_FALSE(engine.isGroupCollapsed(gid));
+    engine.setGroupCollapsed(gid, true);
+    REQUIRE(engine.isGroupCollapsed(gid));
+    engine.setGroupCollapsed(gid, false);
+    REQUIRE_FALSE(engine.isGroupCollapsed(gid));
+}

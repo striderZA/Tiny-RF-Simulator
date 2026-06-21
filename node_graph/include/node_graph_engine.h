@@ -68,6 +68,9 @@ class NodeGraphEngine {
     int numGroups() const { return static_cast<int>(m_groups.size()); }
     int selectedGroupId() const { return m_selected_group_id; }
     void setSelectedGroupId(int id);
+    void renameGroup(int group_id, std::string name);
+    void setGroupCollapsed(int group_id, bool collapsed);
+    bool isGroupCollapsed(int group_id) const;
     int groupIdForNode(int node_id) const;
     const std::vector<int>& groupsContainingNode(int node_id) const;
 
