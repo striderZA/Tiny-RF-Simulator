@@ -370,7 +370,72 @@ void NodeGraphWidget::drawPhantomNodes() {
 }
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
-    // Real implementation is added in Task 12.
+    for (const auto& g : m_engine.groups()) {
+        if (!g.collapsed) continue;
+
+        // Compute centroid in grid space
+        if (g.member_node_ids.empty()) continue;
+        ImVec2 sum(0, 0);
+        int count = 0;
+        for (int nid : g.member_node_ids) {
+            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+            sum.x += pos.x;
+            sum.y += pos.y;
+            ++count;
+        }
+        if (count == 0) continue;
+        ImVec2 centroid(sum.x / count, sum.y / count);
+        ImVec2 node_pos = centroid - ImVec2(60, 40);  // center the 120x80 block
+
+        // Render the block as an imnodes node
+        ImNodes::BeginNode(g.id);
+        ImNodes::BeginNodeTitleBar();
+        ImGui::TextUnformatted(g.name.c_str());
+
+        // Expand button (▶) in the title bar
+        ImGui::SameLine();
+        if (ImGui::SmallButton("\xE2\x96\xB6")) {  // ▶
+            m_engine.setGroupCollapsed(g.id, false);
+        }
+        ImNodes::EndNodeTitleBar();
+
+        // Body
+        ImGui::Dummy(ImVec2(120, 60));
+
+        // Boundary pins
+        int input_idx = 0, output_idx = 0;
+        for (const auto& bp : g.boundary_pins) {
+            int slot = m_engine.probeSlotForPin(bp.internal_pin_id);
+            if (slot >= 0) {
+                static const ImU32 probe_colors[4] = {
+                    IM_COL32(22, 199, 154, 255),
+                    IM_COL32(230, 150, 40, 255),
+                    IM_COL32(120, 50, 170, 255),
+                    IM_COL32(60, 140, 220, 255),
+                };
+                ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
+                ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
+            }
+            if (bp.is_output) {
+                ImNodes::BeginOutputAttribute(bp.id);
+                ImGui::TextUnformatted(bp.label.c_str());
+                ImNodes::EndOutputAttribute();
+                (void)output_idx++;
+            } else {
+                ImNodes::BeginInputAttribute(bp.id);
+                ImGui::TextUnformatted(bp.label.c_str());
+                ImNodes::EndInputAttribute();
+                (void)input_idx++;
+            }
+            if (slot >= 0) {
+                ImNodes::PopColorStyle();
+                ImNodes::PopColorStyle();
+            }
+        }
+
+        ImNodes::EndNode();
+        (void)node_pos;  // imnodes uses GetNodeGridSpacePos for layout; explicit pos is read-only
+    }
 }
 
 void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
