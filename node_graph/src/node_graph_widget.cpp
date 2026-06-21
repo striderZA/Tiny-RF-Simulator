@@ -47,6 +47,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         handleLinkCreation();
         handleLinkDeletion();
         handleProbeClick();
+        handleGroupSelection();
         handleContextMenu(editor_hovered);
         handleNodeDeletion();
 
@@ -597,7 +598,27 @@ void NodeGraphWidget::handleRubberBand() {
 }
 
 void NodeGraphWidget::handleGroupSelection() {
-    // Real implementation is added in a later task.
+    int hovered_node = -1;
+    if (ImGui::IsMouseClicked(0) && ImNodes::IsNodeHovered(&hovered_node)) {
+        if (hovered_node >= 50000 && hovered_node < 100000) {
+            // It's a group
+            m_engine.setSelectedGroupId(hovered_node);
+            ImNodes::ClearNodeSelection();
+        } else {
+            // It's a regular node; deselect any group
+            m_engine.setSelectedGroupId(-1);
+        }
+    }
+    if (ImGui::IsMouseClicked(0)) {
+        bool editor_hovered = ImNodes::IsEditorHovered();
+        int hovered_node = -1;
+        bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
+        int link_id = -1;
+        bool link_hovered = ImNodes::IsLinkHovered(&link_id);
+        if (editor_hovered && !node_hovered && !link_hovered) {
+            m_engine.setSelectedGroupId(-1);
+        }
+    }
 }
 
 size_t NodeGraphWidget::findNodeIndex(int node_id) const {
