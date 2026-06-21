@@ -36,6 +36,9 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 
         ImNodes::EndNodeEditor();
 
+        // Rubber-band selection (Shift+drag on empty space)
+        handleRubberBand();
+
         // Pin tooltips (after EndNodeEditor per imnodes query pattern)
         showPinTooltips();
         showNodeHoverTooltips();
@@ -499,7 +502,57 @@ void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
 }
 
 void NodeGraphWidget::handleRubberBand() {
-    // Real implementation is added in a later task.
+    bool editor_hovered = ImNodes::IsEditorHovered();
+    bool shift = ImGui::IsKeyDown(ImGuiKey_LeftShift);
+    bool left_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool left_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+
+    // Start rubber-band on Shift + left-click down on empty space
+    if (left_down && shift && editor_hovered && !m_rubber_band_active) {
+        m_rubber_band_active = true;
+        m_rubber_band_start = ImGui::GetMousePos();
+        m_rubber_band_end = m_rubber_band_start;
+    }
+
+    // Update end position while dragging, draw the selection rectangle
+    if (m_rubber_band_active && left_down) {
+        m_rubber_band_end = ImGui::GetMousePos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 a(std::min(m_rubber_band_start.x, m_rubber_band_end.x),
+                 std::min(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 b(std::max(m_rubber_band_start.x, m_rubber_band_end.x),
+                 std::max(m_rubber_band_start.y, m_rubber_band_end.y));
+        dl->AddRectFilled(a, b, IM_COL32(100, 200, 255, 32));
+        dl->AddRect(a, b, IM_COL32(100, 200, 255, 200));
+    }
+
+    // On release, collect enclosed nodes
+    if (m_rubber_band_active && left_released) {
+        m_rubber_band_active = false;
+        m_rubber_band_members.clear();
+
+        ImVec2 screen_a(
+            std::min(m_rubber_band_start.x, m_rubber_band_end.x),
+            std::min(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 screen_b(
+            std::max(m_rubber_band_start.x, m_rubber_band_end.x),
+            std::max(m_rubber_band_start.y, m_rubber_band_end.y));
+
+        for (const auto& node : m_engine.nodes()) {
+            if (m_engine.groupIdForNode(node.node_id) != -1) continue;  // skip grouped
+            ImVec2 pos = ImNodes::GetNodeScreenSpacePos(node.node_id);
+            ImVec2 center = pos + ImVec2(60, 40);  // approximate node center
+            if (center.x >= screen_a.x && center.x <= screen_b.x &&
+                center.y >= screen_a.y && center.y <= screen_b.y) {
+                m_rubber_band_members.push_back(node.node_id);
+            }
+        }
+
+        if (m_rubber_band_members.size() >= 2) {
+            m_show_create_popup = true;
+            ImGui::OpenPopup("CreateSubcircuit");
+        }
+    }
 }
 
 void NodeGraphWidget::handleGroupSelection() {
