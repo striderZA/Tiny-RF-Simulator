@@ -14,6 +14,7 @@ set(TEST_SOURCES
     test_component_registry.cpp
     test_coax_cable_presets.cpp
     test_coax_cable_engine.cpp
+    test_group.cpp
 )
 
 if(WIN32)

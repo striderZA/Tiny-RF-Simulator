@@ -58,6 +58,9 @@ class NodeGraphEngine {
                           const std::vector<std::string>& input_labels,
                           const std::vector<std::string>& output_labels);
 
+    // Group operations
+    int addGroup(std::string name, std::vector<int> member_node_ids);
+
     // Group collection + accessors
     const std::vector<Group>& groups() const { return m_groups; }
     const Group* groupById(int group_id) const;

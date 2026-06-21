@@ -282,6 +282,34 @@ const Group* NodeGraphEngine::groupById(int group_id) const {
     return nullptr;
 }
 
+int NodeGraphEngine::addGroup(std::string name, std::vector<int> member_node_ids) {
+    if (member_node_ids.size() < 2) return -1;
+
+    // Validate: no unknown nodes, no node already in a group
+    auto find_node = [this](int nid) {
+        return std::find_if(m_nodes.begin(), m_nodes.end(),
+            [nid](const GraphNode& n) { return n.node_id == nid; });
+    };
+    for (int nid : member_node_ids) {
+        if (find_node(nid) == m_nodes.end()) return -1;
+        if (groupIdForNode(nid) != -1) return -1;
+    }
+
+    // Reject duplicates
+    std::vector<int> sorted = member_node_ids;
+    std::sort(sorted.begin(), sorted.end());
+    if (std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end()) return -1;
+
+    Group g;
+    g.id = m_next_group_id++;
+    g.name = std::move(name);
+    g.member_node_ids = std::move(member_node_ids);
+    g.collapsed = false;
+    m_groups.push_back(std::move(g));
+    rebuildNodeToGroupCache();
+    return m_groups.back().id;
+}
+
 void NodeGraphEngine::setSelectedGroupId(int id) {
     m_selected_group_id = id;
 }
