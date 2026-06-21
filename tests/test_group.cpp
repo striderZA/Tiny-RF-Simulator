@@ -129,3 +129,121 @@ TEST_CASE("NodeGraphEngine::setGroupCollapsed flips flag", "[group]") {
     engine.setGroupCollapsed(gid, false);
     REQUIRE_FALSE(engine.isGroupCollapsed(gid));
 }
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins with no cross-boundary links", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    (void)id_a; (void)id_b;
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+    engine.rebuildGroupBoundaryPins(gid);
+    REQUIRE(engine.groups().front().boundary_pins.empty());
+}
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins synthesizes one pin per cross-boundary link", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    (void)id_a; (void)id_b; (void)id_c;
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+
+    // Internal link: A.out -> B.in (both inside the group)
+    engine.addLink(engine.nodes()[0].output_pin_ids[0], engine.nodes()[1].input_pin_ids[0]);
+    // Cross-boundary link: B.out -> C.in (B is inside, C is outside)
+    engine.addLink(engine.nodes()[1].output_pin_ids[0], engine.nodes()[2].input_pin_ids[0]);
+
+    engine.rebuildGroupBoundaryPins(gid);
+    const auto& bp = engine.groups().front().boundary_pins;
+    REQUIRE(bp.size() == 1);
+    REQUIRE(bp[0].is_output == true);
+    REQUIRE(bp[0].internal_node_id == id_b);
+    REQUIRE(bp[0].internal_pin_id == engine.nodes()[1].output_pin_ids[0]);
+    REQUIRE(bp[0].id >= 100000);
+    REQUIRE(bp[0].label == "B OUT");
+}
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins with input cross-boundary", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    (void)id_a; (void)id_b; (void)id_c;
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+
+    // Cross-boundary: C.out -> A.in (C is outside, A is inside)
+    engine.addLink(engine.nodes()[2].output_pin_ids[0], engine.nodes()[0].input_pin_ids[0]);
+
+    engine.rebuildGroupBoundaryPins(gid);
+    const auto& bp = engine.groups().front().boundary_pins;
+    REQUIRE(bp.size() == 1);
+    REQUIRE(bp[0].is_output == false);
+    REQUIRE(bp[0].internal_node_id == id_a);
+    REQUIRE(bp[0].internal_pin_id == engine.nodes()[0].input_pin_ids[0]);
+    REQUIRE(bp[0].label == "A IN");
+}
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins ignores internal links", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    (void)id_a; (void)id_b;
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+    engine.addLink(engine.nodes()[0].output_pin_ids[0], engine.nodes()[1].input_pin_ids[0]);
+
+    engine.rebuildGroupBoundaryPins(gid);
+    REQUIRE(engine.groups().front().boundary_pins.empty());
+}
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins unique IDs", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c, e1, e2, e3;
+    int id_a = engine.addNode("A", &a, 1, 1);
+    int id_b = engine.addNode("B", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    int id_e1 = engine.addNode("E1", &e1, 1, 1);
+    int id_e2 = engine.addNode("E2", &e2, 1, 1);
+    int id_e3 = engine.addNode("E3", &e3, 1, 1);
+    (void)id_a; (void)id_b; (void)id_c; (void)id_e1; (void)id_e2; (void)id_e3;
+    int gid = engine.addGroup("Sub", {id_a, id_b, id_c});
+
+    // Three cross-boundary input links: E1 -> A, E2 -> B, E3 -> C
+    engine.addLink(engine.nodes()[3].output_pin_ids[0], engine.nodes()[0].input_pin_ids[0]);
+    engine.addLink(engine.nodes()[4].output_pin_ids[0], engine.nodes()[1].input_pin_ids[0]);
+    engine.addLink(engine.nodes()[5].output_pin_ids[0], engine.nodes()[2].input_pin_ids[0]);
+
+    engine.rebuildGroupBoundaryPins(gid);
+    const auto& bp = engine.groups().front().boundary_pins;
+    REQUIRE(bp.size() == 3);
+    REQUIRE(bp[0].id != bp[1].id);
+    REQUIRE(bp[1].id != bp[2].id);
+    REQUIRE(bp[0].id != bp[2].id);
+    REQUIRE(bp[0].id >= 100000);
+    REQUIRE(bp[1].id >= 100000);
+    REQUIRE(bp[2].id >= 100000);
+}
+
+TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins uses per-pin label", "[group]") {
+    NodeGraphEngine engine;
+    SignalNode a, b, c;
+    int id_a = engine.addNode("Amp", &a, 1, 1);
+    int id_b = engine.addNode("Splitter", &b, 1, 1);
+    int id_c = engine.addNode("C", &c, 1, 1);
+    (void)id_a; (void)id_b; (void)id_c;
+    int gid = engine.addGroup("Sub", {id_a, id_b});
+
+    // Set per-pin label on the splitter's input
+    engine.setNodePinLabels(id_b, {"RF IN"}, {"OUT 1", "OUT 2"});
+
+    // Cross-boundary: C.out -> Splitter.in
+    engine.addLink(engine.nodes()[2].output_pin_ids[0], engine.nodes()[1].input_pin_ids[0]);
+
+    engine.rebuildGroupBoundaryPins(gid);
+    const auto& bp = engine.groups().front().boundary_pins;
+    REQUIRE(bp.size() == 1);
+    REQUIRE(bp[0].label == "Splitter RF IN");
+}

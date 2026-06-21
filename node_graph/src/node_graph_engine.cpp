@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 
 int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, int num_inputs,
                              int num_outputs) {
@@ -373,3 +374,81 @@ void NodeGraphEngine::rebuildNodeToGroupCache() {
         }
     }
 }
+void NodeGraphEngine::rebuildGroupBoundaryPins(int group_id) {
+    auto* g = const_cast<Group*>(groupById(group_id));
+    if (!g) return;
+
+    // Build a set of member node ids for O(1) lookup
+    std::unordered_set<int> members(g->member_node_ids.begin(), g->member_node_ids.end());
+
+    // Helper: find the node id that owns a pin
+    auto node_for_pin = [this](int pin_id) -> int {
+        for (const auto& n : m_nodes) {
+            for (int p : n.input_pin_ids) if (p == pin_id) return n.node_id;
+            for (int p : n.output_pin_ids) if (p == pin_id) return n.node_id;
+        }
+        return -1;
+    };
+
+    // Helper: get label for a node
+    auto node_label = [this](int nid) -> std::string {
+        for (const auto& n : m_nodes) {
+            if (n.node_id == nid) return n.label;
+        }
+        return "";
+    };
+
+    // Helper: get pin label for a node's input or output
+    auto pin_label = [](const GraphNode& n, int pin_id, bool is_output) -> std::string {
+        const auto& labels = is_output ? n.output_labels : n.input_labels;
+        const auto& pins = is_output ? n.output_pin_ids : n.input_pin_ids;
+        for (size_t i = 0; i < pins.size(); ++i) {
+            if (pins[i] == pin_id) {
+                if (i < labels.size() && !labels[i].empty()) return labels[i];
+                return is_output ? "OUT" : "IN";
+            }
+        }
+        return is_output ? "OUT" : "IN";
+    };
+
+    std::vector<GroupBoundaryPin> new_pins;
+    for (const auto& link : m_links) {
+        int start_node = node_for_pin(link.start_pin_id);
+        int end_node = node_for_pin(link.end_pin_id);
+        if (start_node < 0 || end_node < 0) continue;
+
+        bool start_in = members.count(start_node) > 0;
+        bool end_in = members.count(end_node) > 0;
+        if (start_in && end_in) continue;            // internal link
+        if (!start_in && !end_in) continue;          // external link
+
+        GroupBoundaryPin bp;
+        bp.id = m_next_boundary_pin_id++;
+        if (start_in) {
+            // source is in-group; boundary pin is an output
+            bp.is_output = true;
+            bp.internal_node_id = start_node;
+            bp.internal_pin_id = link.start_pin_id;
+            for (const auto& n : m_nodes) {
+                if (n.node_id == start_node) {
+                    bp.label = node_label(start_node) + " " + pin_label(n, link.start_pin_id, true);
+                    break;
+                }
+            }
+        } else {
+            // target is in-group; boundary pin is an input
+            bp.is_output = false;
+            bp.internal_node_id = end_node;
+            bp.internal_pin_id = link.end_pin_id;
+            for (const auto& n : m_nodes) {
+                if (n.node_id == end_node) {
+                    bp.label = node_label(end_node) + " " + pin_label(n, link.end_pin_id, false);
+                    break;
+                }
+            }
+        }
+        new_pins.push_back(std::move(bp));
+    }
+    g->boundary_pins = std::move(new_pins);
+}
+

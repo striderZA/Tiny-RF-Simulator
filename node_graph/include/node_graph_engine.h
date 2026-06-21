@@ -71,6 +71,7 @@ class NodeGraphEngine {
     void renameGroup(int group_id, std::string name);
     void setGroupCollapsed(int group_id, bool collapsed);
     bool isGroupCollapsed(int group_id) const;
+    void rebuildGroupBoundaryPins(int group_id);
     int groupIdForNode(int node_id) const;
     const std::vector<int>& groupsContainingNode(int node_id) const;
 
