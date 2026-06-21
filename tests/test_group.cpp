@@ -1,5 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
+#include "amplifier_engine.h"
+#include "splitter_engine.h"
+using Catch::Approx;
 
 TEST_CASE("NodeGraphEngine::addGroup rejects 0 members", "[group]") {
     NodeGraphEngine engine;
@@ -286,4 +291,63 @@ TEST_CASE("NodeGraphEngine::rebuildGroupBoundaryPins uses per-pin label", "[grou
     const auto& bp = engine.groups().front().boundary_pins;
     REQUIRE(bp.size() == 1);
     REQUIRE(bp[0].label == "Splitter RF IN");
+}
+
+TEST_CASE("Group preserves signal flow when collapsed", "[group][integration]") {
+    NodeGraphEngine engine;
+    SignalGeneratorEngine gen(1, engine);
+    AmplifierEngine amp(2, engine);
+    SplitterEngine splitter(3, engine);
+
+    // Wire: gen -> amp -> splitter
+    int gen_out = gen.outputPinId();
+    int amp_in = amp.inputPinId();
+    int amp_out = amp.outputPinId();
+    int split_in = splitter.inputPinId();
+    int split_out_0 = splitter.outputPinId(0);
+    int split_out_1 = splitter.outputPinId(1);
+    (void)split_out_0;
+    (void)split_out_1;
+
+    engine.addLink(gen_out, amp_in);
+    engine.addLink(amp_out, split_in);
+
+    // Group the amp + splitter
+    int gid = engine.addGroup("IF Stage", {amp.graphNodeId(), splitter.graphNodeId()});
+    REQUIRE(gid >= 0);
+
+    // Set the generator's tone
+    gen.addTone(100e6, -20.0);
+
+    // Wire inputs manually (app::update_dsp does this, but in tests we do it explicitly)
+    amp.node().inputs[0] = &gen.node().outputs[0];
+    splitter.node().inputs[0] = &amp.node().outputs[0];
+
+    // Run the update loop
+    gen.update(0.0);
+    amp.update(0.0);
+    splitter.update(0.0);
+
+    // The splitter's outputs should match what the amplifier sent in
+    REQUIRE(splitter.node().outputs[0].tones.size() == 1);
+    REQUIRE(splitter.node().outputs[1].tones.size() == 1);
+    REQUIRE(splitter.node().outputs[0].tones[0].freq_Hz == Approx(100e6));
+    REQUIRE(splitter.node().outputs[1].tones[0].freq_Hz == Approx(100e6));
+}
+
+TEST_CASE("Group preserves topological order", "[group][integration]") {
+    NodeGraphEngine engine;
+    SignalGeneratorEngine gen(1, engine);
+    AmplifierEngine amp(2, engine);
+    SplitterEngine splitter(3, engine);
+
+    engine.addLink(gen.outputPinId(), amp.inputPinId());
+    engine.addLink(amp.outputPinId(), splitter.inputPinId());
+
+    auto order_before = engine.topologicalOrder();
+    int gid = engine.addGroup("IF", {amp.graphNodeId(), splitter.graphNodeId()});
+    (void)gid;
+    auto order_after = engine.topologicalOrder();
+
+    REQUIRE(order_before == order_after);
 }
