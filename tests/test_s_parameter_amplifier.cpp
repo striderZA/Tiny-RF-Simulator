@@ -482,3 +482,109 @@ TEST_CASE("SParamEngine multi-port cache invalidates correctly",
     REQUIRE(sp.node().outputs[1].tones.size() == 1);
     REQUIRE(sp.node().outputs[1].tones[0].freq_Hz == Approx(4e9));
 }
+
+TEST_CASE("SParamEngine splitter mode produces N-1 outputs", "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+    REQUIRE(sp.numPorts() == 3);
+
+    sp.setCommonPort(1); // Port 2 is COMMON (0-based = 1)
+    sp.setMode(SParamEngine::Mode::Splitter);
+
+    REQUIRE(sp.numInputPins() == 1);
+    REQUIRE(sp.numOutputPins() == 2);
+
+    Spectrum in_spec;
+    in_spec.tones = {{2e9, -10.0, 0.0}};
+    in_spec.frequencies = {2e9};
+    sp.node().inputs[0] = &in_spec;
+
+    sp.update(0.0);
+
+    REQUIRE(sp.node().outputs[0].tones.size() == 1);
+    REQUIRE(sp.node().outputs[1].tones.size() == 1);
+}
+
+TEST_CASE("SParamEngine combiner mode sums inputs onto common port",
+          "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    sp.setCommonPort(1);
+    sp.setMode(SParamEngine::Mode::Combiner);
+
+    REQUIRE(sp.numInputPins() == 2);
+    REQUIRE(sp.numOutputPins() == 1);
+
+    Spectrum in_a, in_b;
+    in_a.tones = {{2e9, -10.0, 0.0}};
+    in_a.frequencies = {2e9};
+    in_a.noise_W = {1e-12};
+    in_a.noise_total_W = {1e-12};
+    in_b.tones = {{2.001e9, -10.0, 0.0}};
+    in_b.frequencies = {2.001e9};
+    in_b.noise_W = {1e-12};
+    in_b.noise_total_W = {1e-12};
+
+    sp.node().inputs[0] = &in_a;
+    sp.node().inputs[1] = &in_b;
+
+    sp.update(0.0);
+
+    const auto& out = sp.node().outputs[0];
+    REQUIRE(out.tones.size() >= 2);
+
+    bool found_a = false, found_b = false;
+    for (const auto& t : out.tones) {
+        if (std::abs(t.freq_Hz - 2e9) < 1.0) found_a = true;
+        if (std::abs(t.freq_Hz - 2.001e9) < 1.0) found_b = true;
+    }
+    REQUIRE(found_a);
+    REQUIRE(found_b);
+}
+
+TEST_CASE("SParamEngine mode switch rebuilds pin layout", "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    REQUIRE(sp.numInputPins() == 3);
+    REQUIRE(sp.numOutputPins() == 3);
+
+    sp.setMode(SParamEngine::Mode::Splitter);
+    REQUIRE(sp.numInputPins() == 1);
+    REQUIRE(sp.numOutputPins() == 2);
+
+    sp.setMode(SParamEngine::Mode::Combiner);
+    REQUIRE(sp.numInputPins() == 2);
+    REQUIRE(sp.numOutputPins() == 1);
+
+    sp.setMode(SParamEngine::Mode::FullMatrix);
+    REQUIRE(sp.numInputPins() == 3);
+    REQUIRE(sp.numOutputPins() == 3);
+}
+
+TEST_CASE("SParamEngine common port change rebuilds pin layout", "[sparam][multiport]") {
+    NodeGraphEngine graph;
+    std::string path = std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    SParamEngine sp(0, graph, path);
+    REQUIRE(sp.loaded());
+
+    sp.setMode(SParamEngine::Mode::Splitter);
+    sp.setCommonPort(0);
+    REQUIRE(sp.numInputPins() == 1);
+    REQUIRE(sp.numOutputPins() == 2);
+
+    sp.setCommonPort(2);
+    REQUIRE(sp.numInputPins() == 1);
+    REQUIRE(sp.numOutputPins() == 2);
+}
