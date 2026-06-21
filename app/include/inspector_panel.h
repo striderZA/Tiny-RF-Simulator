@@ -62,4 +62,5 @@ private:
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
     void drawPFBProperties(PFBChannelizerEngine& engine);
     void drawIdealFilterProperties(IdealFilterEngine& engine, int index);
+    void drawGroupPanel(int group_id);
 };

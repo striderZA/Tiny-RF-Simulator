@@ -95,6 +95,12 @@ Build your RF chain visually: add components via right-click context menu on the
 | **Delete key** | Remove selected node |
 | **Hover** node | Tooltip with key parameters |
 | **Hover** pin | Tooltip with signal summary |
+| **Shift+left-click + drag** empty canvas | Rubber-band select components |
+| **Shift+left-click + drag** ≥ 2 components | Open "Create Subcircuit" popup |
+| **Click ▶ on group block** | Expand subcircuit (show internals) |
+| **Click ▼ on group title bar** | Collapse subcircuit (show as block) |
+| **Right-click** group block | Ungroup / Rename / Collapse / Expand |
+| **Click** group block | Select subcircuit (group panel in Inspector) |
 
 ### Components
 

@@ -44,6 +44,41 @@ The design enforces a strict separation between signal processing and UI: only w
 - Supports probing: one output pin can be marked as the "active probe", and the engine can resolve which `SignalNode` is currently probed.
 - **`NodeGraphWidget`** — imnodes-based node editor. Users can add/remove components, wire links, and click pins/nodes to set the active probe.
 
+### 6.1. Subcircuit Groups
+
+The node editor supports user-defined **subcircuit groups**: a named set of `GraphNode`s that can be expanded to show internals or collapsed to display as a single block with synthesized input/output pins. The DSP graph is unchanged — groups are a visual layer only.
+
+**Data model** lives in `common/include/group.h`:
+
+- `Group` — `{id, name, member_node_ids, boundary_pins, collapsed}`. `member_node_ids` is frozen after creation (snapshot editing model).
+- `GroupBoundaryPin` — synthesized pin on a collapsed group block, representing one cross-boundary link. `{id (>= 100000), internal_node_id, internal_pin_id, is_output, label}`.
+
+**Engine API** in `NodeGraphEngine`:
+
+- `addGroup(name, member_node_ids)` / `removeGroup(group_id)` / `renameGroup(...)` — snapshot lifecycle.
+- `setGroupCollapsed(...)` / `isGroupCollapsed(...)` — view state.
+- `rebuildGroupBoundaryPins(group_id)` — recomputes the `boundary_pins` vector based on cross-boundary links in `m_links`.
+- `selectedGroupId()` / `setSelectedGroupId(id)` — group-level selection (separate from imnodes' node selection).
+- `groupIdForNode(node_id)` / `groupsContainingNode(node_id)` — membership lookups.
+
+`removeNode` cascades: if the removed node is a member of a group, or if removing it drops the group below 2 members, the group is auto-removed.
+
+**Widget rendering** in `NodeGraphWidget`:
+
+- Expanded: a subtle background rectangle drawn via `GetWindowDrawList()` behind the internals, with a `▼ Collapse` button in the title bar.
+- Collapsed: a single imnodes-rendered node (id = `group.id` in the `50000+` range) with synthesized boundary pins (`100000+` range) drawn via `BeginInputAttribute` / `BeginOutputAttribute`. Internals are skipped from the `BeginNode/EndNode` cycle. Internal links are skipped. Cross-boundary links are drawn from the real internal pin id (imnodes positions the endpoint from the owning node — if a "phantom node" workaround is needed for the imnodes version pinned in the project, it is documented in the imnodes spike report).
+- Rubber-band selection: Shift + left-click drag on empty editor space, with a "Create Subcircuit" popup for naming.
+- Probing: synthesized boundary pin ids are translated to real internal pin ids before calling `m_engine.addProbePin` / `removeProbePin`. Probes on internal pins continue to drive the spectrum analyzer when the group is collapsed; the boundary pin shows the corresponding probe color.
+
+**ID space allocation** to keep the four integer ID spaces disjoint:
+
+| Concept | Range |
+|---|---|
+| `GraphNode::node_id` | `1..49999` |
+| `Group::id` | `50000..99999` |
+| `GroupBoundaryPin::id` | `100000+` |
+| Phantom node ids (if used) | `200000+` |
+
 ### 7. Common (`common/`)
 - **`Spectrum`** — Core data structure: frequency grid, discrete tones, and noise power spectral density vectors (`noise_W`, `noise_added_W`, `noise_total_W`).
 - **`SignalNode`** — `{ Spectrum input, Spectrum output, bool view_enabled }`. The universal interface between engines.

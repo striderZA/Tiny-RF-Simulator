@@ -13,6 +13,7 @@
 #include "splitter_engine.h"
 #include "coax_cable_engine.h"
 #include "utils.h"
+#include <cstring>
 #include <portable-file-dialogs.h>
 
 #include "component_registry.h"
@@ -65,6 +66,13 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
 
 void InspectorPanel::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
+        ImGui::End();
+        return;
+    }
+
+    int gid = m_graph.selectedGroupId();
+    if (gid >= 0) {
+        drawGroupPanel(gid);
         ImGui::End();
         return;
     }
@@ -503,6 +511,57 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawGroupPanel(int group_id) {
+    const Group* g = m_graph.groupById(group_id);
+    if (!g) {
+        m_graph.setSelectedGroupId(-1);
+        return;
+    }
+
+    static char name_buf[128];
+    static int last_gid = -1;
+    if (last_gid != group_id) {
+        std::strncpy(name_buf, g->name.c_str(), sizeof(name_buf) - 1);
+        name_buf[sizeof(name_buf) - 1] = '\0';
+        last_gid = group_id;
+    }
+
+    ImGui::InputText("Name", name_buf, sizeof(name_buf));
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        m_graph.renameGroup(group_id, name_buf);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Members (%zu):", g->member_node_ids.size());
+    ImGui::Indent();
+    for (int nid : g->member_node_ids) {
+        for (const auto& n : m_graph.nodes()) {
+            if (n.node_id == nid) {
+                ImGui::TextUnformatted(n.label.c_str());
+                break;
+            }
+        }
+    }
+    ImGui::Unindent();
+
+    if (!g->boundary_pins.empty()) {
+        ImGui::Separator();
+        ImGui::Text("Boundary pins:");
+        ImGui::Indent();
+        for (const auto& bp : g->boundary_pins) {
+            const char* dir = bp.is_output ? "OUT" : "IN";
+            ImGui::Text("%s -> \"%s\"", dir, bp.label.c_str());
+        }
+        ImGui::Unindent();
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button("Ungroup")) {
+        m_graph.removeGroup(group_id);
+        last_gid = -1;
+    }
 }
 
 void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {

@@ -1,8 +1,11 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <unordered_set>
 #include <limits>
 #include <string>
 
@@ -17,15 +20,25 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
     if (ImGui::Begin(title, p_open)) {
+        ImNodes::ClearNodeSelection();
+        rebuildSynthMaps();
+
+        drawGroupBackgrounds();
+        drawPhantomNodes();
+
         ImNodes::BeginNodeEditor();
 
         drawNodes();
+        drawGroupCollapsedBlocks();
         drawLinks();
 
         // Cache editor hover state before EndNodeEditor (IsEditorHovered only works inside scope)
         bool editor_hovered = ImNodes::IsEditorHovered();
 
         ImNodes::EndNodeEditor();
+
+        // Rubber-band selection (Shift+drag on empty space)
+        handleRubberBand();
 
         // Pin tooltips (after EndNodeEditor per imnodes query pattern)
         showPinTooltips();
@@ -35,14 +48,65 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         handleLinkCreation();
         handleLinkDeletion();
         handleProbeClick();
+        handleGroupSelection();
         handleContextMenu(editor_hovered);
         handleNodeDeletion();
+
+        // "Create Subcircuit" popup after rubber-band selection
+        if (m_show_create_popup) {
+            if (ImGui::BeginPopupModal("CreateSubcircuit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                static char name_buf[128];
+                static int last_member_count = -1;
+                if (last_member_count != static_cast<int>(m_rubber_band_members.size())) {
+                    std::snprintf(name_buf, sizeof(name_buf), "Subcircuit %d",
+                                  m_engine.numGroups() + 1);
+                    last_member_count = static_cast<int>(m_rubber_band_members.size());
+                }
+
+                ImGui::Text("Members (%zu):", m_rubber_band_members.size());
+                ImGui::Indent();
+                for (int nid : m_rubber_band_members) {
+                    for (const auto& n : m_engine.nodes()) {
+                        if (n.node_id == nid) {
+                            ImGui::TextUnformatted(n.label.c_str());
+                            break;
+                        }
+                    }
+                }
+                ImGui::Unindent();
+
+                ImGui::InputText("Name", name_buf, sizeof(name_buf));
+
+                if (ImGui::Button("Create")) {
+                    m_engine.addGroup(name_buf, m_rubber_band_members);
+                    m_show_create_popup = false;
+                    last_member_count = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    m_show_create_popup = false;
+                    last_member_count = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+        }
     }
     ImGui::End();
 }
 
 void NodeGraphWidget::drawNodes() {
+    std::unordered_set<int> hidden_nodes;
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) {
+            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+        }
+    }
+
     for (const auto &node : m_engine.nodes()) {
+        if (hidden_nodes.count(node.node_id)) continue;
+
         ImNodes::BeginNode(node.node_id);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
@@ -94,7 +158,30 @@ void NodeGraphWidget::drawNodes() {
 }
 
 void NodeGraphWidget::drawLinks() {
+    std::unordered_set<int> hidden_nodes;
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) {
+            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+        }
+    }
+
+    auto pin_owner_node = [this](int pin_id) -> int {
+        for (const auto& n : m_engine.nodes()) {
+            for (int p : n.input_pin_ids) if (p == pin_id) return n.node_id;
+            for (int p : n.output_pin_ids) if (p == pin_id) return n.node_id;
+        }
+        return -1;
+    };
+
     for (const auto &link : m_engine.links()) {
+        int start_node = pin_owner_node(link.start_pin_id);
+        int end_node = pin_owner_node(link.end_pin_id);
+        if (start_node < 0 || end_node < 0) continue;
+
+        bool start_hidden = hidden_nodes.count(start_node) > 0;
+        bool end_hidden = hidden_nodes.count(end_node) > 0;
+        if (start_hidden && end_hidden) continue;  // internal link in collapsed group
+
         ImNodes::Link(link.link_id, link.start_pin_id, link.end_pin_id);
     }
 }
@@ -107,14 +194,37 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
 
         if (node_hovered) {
-            ImGui::OpenPopup("node_context_menu");
-            m_context_menu_node = hovered_node;
+            if (hovered_node >= 50000 && hovered_node < 100000) {
+                ImGui::OpenPopup("group_context_menu");
+                m_context_menu_group_id = hovered_node;
+            } else {
+                ImGui::OpenPopup("node_context_menu");
+                m_context_menu_node = hovered_node;
+            }
         } else {
             ImGui::OpenPopup("canvas_context_menu");
         }
     }
 
     // Render popups unconditionally so they stay open across frames
+    if (ImGui::BeginPopup("group_context_menu")) {
+        const Group* g = m_engine.groupById(m_context_menu_group_id);
+        if (g) {
+            if (ImGui::MenuItem(g->collapsed ? "Expand" : "Collapse")) {
+                m_engine.setGroupCollapsed(m_context_menu_group_id, !g->collapsed);
+            }
+            if (ImGui::MenuItem("Rename")) {
+                m_pending_rename_group_id = m_context_menu_group_id;
+                std::strncpy(m_rename_buffer, g->name.c_str(), sizeof(m_rename_buffer) - 1);
+                m_rename_buffer[sizeof(m_rename_buffer) - 1] = '\0';
+            }
+            if (ImGui::MenuItem("Ungroup")) {
+                m_engine.removeGroup(m_context_menu_group_id);
+            }
+        }
+        ImGui::EndPopup();
+    }
+
     if (ImGui::BeginPopup("node_context_menu")) {
         if (ImGui::MenuItem("Remove")) {
             if (onRemoveNode) onRemoveNode(m_context_menu_node);
@@ -158,7 +268,32 @@ void NodeGraphWidget::handleLinkCreation() {
     int start_pin, end_pin;
     m_link_created = ImNodes::IsLinkCreated(&start_pin, &end_pin);
     if (m_link_created) {
-        m_engine.addLink(start_pin, end_pin);
+        // Translate synthesized boundary pin ids to real internal pin ids
+        if (start_pin >= 100000) {
+            auto it = m_synth_pin_to_real_pin.find(start_pin);
+            if (it != m_synth_pin_to_real_pin.end()) start_pin = it->second;
+        }
+        if (end_pin >= 100000) {
+            auto it = m_synth_pin_to_real_pin.find(end_pin);
+            if (it != m_synth_pin_to_real_pin.end()) end_pin = it->second;
+        }
+        if (start_pin < 100000 && end_pin < 100000) {
+            m_engine.addLink(start_pin, end_pin);
+
+            // Find which node owns each pin
+            int start_node = m_engine.nodeIdForPin(start_pin);
+            int end_node = m_engine.nodeIdForPin(end_pin);
+
+            // Rebuild boundary pins for any affected group
+            for (const auto& g : m_engine.groups()) {
+                for (int nid : g.member_node_ids) {
+                    if (nid == start_node || nid == end_node) {
+                        m_engine.rebuildGroupBoundaryPins(g.id);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -166,6 +301,10 @@ void NodeGraphWidget::handleLinkDeletion() {
     int link_id;
     if (ImNodes::IsLinkDestroyed(&link_id)) {
         m_engine.removeLink(link_id);
+        // Rebuild boundary pins for all groups to reflect the removed link
+        for (const auto& g : m_engine.groups()) {
+            m_engine.rebuildGroupBoundaryPins(g.id);
+        }
     }
 }
 
@@ -219,6 +358,27 @@ void NodeGraphWidget::handleProbeClick() {
                         target_pin = node.output_pin_ids[0];
                         break;
                     }
+                }
+            }
+            if (target_pin < 0 && m_clicked_node >= 50000 && m_clicked_node < 100000) {
+                // Group-block click; probe the first output boundary pin
+                const Group* g = m_engine.groupById(m_clicked_node);
+                if (g) {
+                    for (const auto& bp : g->boundary_pins) {
+                        if (bp.is_output) {
+                            target_pin = bp.internal_pin_id;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (target_pin >= 100000) {
+                // Synthesized boundary pin id; translate to real internal pin id
+                auto it = m_synth_pin_to_real_pin.find(target_pin);
+                if (it != m_synth_pin_to_real_pin.end()) {
+                    target_pin = it->second;
+                } else {
+                    target_pin = -1;  // stale pin id
                 }
             }
             if (target_pin >= 0) {
@@ -302,7 +462,244 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
     ImGui::EndTooltip();
 }
 
-} // anonymous namespace
+}
+
+void NodeGraphWidget::rebuildSynthMaps() {
+    m_synth_pin_to_real_pin.clear();
+    m_phantom_id_for_node.clear();
+    int phantom_counter = 200000;
+    for (const auto& g : m_engine.groups()) {
+        for (const auto& bp : g.boundary_pins) {
+            m_synth_pin_to_real_pin[bp.id] = bp.internal_pin_id;
+        }
+        if (m_use_phantom_nodes) {
+            for (int nid : g.member_node_ids) {
+                m_phantom_id_for_node[nid] = phantom_counter++;
+            }
+        }
+    }
+}
+
+void NodeGraphWidget::drawGroupBackgrounds() {
+    // Phantoms are not used in v1 (spike confirmed). Group background is drawn here;
+    // internals (when expanded) are drawn by drawNodes() afterward, on top of this background.
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) continue;
+        if (g.member_node_ids.empty()) continue;
+
+        // Compute bounding box in grid space
+        ImVec2 top_left(std::numeric_limits<float>::max(),
+                         std::numeric_limits<float>::max());
+        ImVec2 bottom_right(std::numeric_limits<float>::lowest(),
+                            std::numeric_limits<float>::lowest());
+        const float NODE_W = 120.0f, NODE_H = 80.0f;  // approximate; refined in spike
+        for (int nid : g.member_node_ids) {
+            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+            top_left.x = std::min(top_left.x, pos.x);
+            top_left.y = std::min(top_left.y, pos.y);
+            bottom_right.x = std::max(bottom_right.x, pos.x + NODE_W);
+            bottom_right.y = std::max(bottom_right.y, pos.y + NODE_H);
+        }
+        if (top_left.x > bottom_right.x) continue;  // no valid members
+
+        // Convert grid space to screen space
+        ImVec2 pad(16, 16);
+        ImVec2 tl_screen = top_left - pad + ImNodes::EditorContextGetPanning();
+        ImVec2 br_screen = bottom_right + pad + ImNodes::EditorContextGetPanning();
+
+        dl->AddRectFilled(tl_screen, br_screen, IM_COL32(80, 80, 120, 24));
+        dl->AddRect(tl_screen, br_screen, IM_COL32(120, 120, 180, 96));
+
+        // Title bar at the top of the rectangle
+        drawGroupTitleBar(const_cast<Group&>(g), top_left);
+    }
+}
+
+void NodeGraphWidget::drawPhantomNodes() {
+    // Real implementation is added in Task 14 only if the spike report
+    // says the phantom workaround is needed.
+}
+
+void NodeGraphWidget::drawGroupCollapsedBlocks() {
+    for (const auto& g : m_engine.groups()) {
+        if (!g.collapsed) continue;
+
+        // Compute centroid in grid space
+        if (g.member_node_ids.empty()) continue;
+        ImVec2 sum(0, 0);
+        int count = 0;
+        for (int nid : g.member_node_ids) {
+            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+            sum.x += pos.x;
+            sum.y += pos.y;
+            ++count;
+        }
+        if (count == 0) continue;
+        ImVec2 centroid(sum.x / count, sum.y / count);
+        ImVec2 node_pos = centroid - ImVec2(60, 40);  // center the 120x80 block
+
+        // Render the block as an imnodes node
+        ImNodes::BeginNode(g.id);
+        ImNodes::BeginNodeTitleBar();
+        ImGui::TextUnformatted(g.name.c_str());
+
+        // Expand button (▶) in the title bar
+        ImGui::SameLine();
+        if (ImGui::SmallButton("\xE2\x96\xB6")) {  // ▶
+            m_engine.setGroupCollapsed(g.id, false);
+        }
+        ImNodes::EndNodeTitleBar();
+
+        // Body
+        ImGui::Dummy(ImVec2(120, 60));
+
+        // Boundary pins
+        int input_idx = 0, output_idx = 0;
+        for (const auto& bp : g.boundary_pins) {
+            int slot = m_engine.probeSlotForPin(bp.internal_pin_id);
+            if (slot >= 0) {
+                static const ImU32 probe_colors[4] = {
+                    IM_COL32(22, 199, 154, 255),
+                    IM_COL32(230, 150, 40, 255),
+                    IM_COL32(120, 50, 170, 255),
+                    IM_COL32(60, 140, 220, 255),
+                };
+                ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
+                ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
+            }
+            if (bp.is_output) {
+                ImNodes::BeginOutputAttribute(bp.id);
+                ImGui::TextUnformatted(bp.label.c_str());
+                ImNodes::EndOutputAttribute();
+                (void)output_idx++;
+            } else {
+                ImNodes::BeginInputAttribute(bp.id);
+                ImGui::TextUnformatted(bp.label.c_str());
+                ImNodes::EndInputAttribute();
+                (void)input_idx++;
+            }
+            if (slot >= 0) {
+                ImNodes::PopColorStyle();
+                ImNodes::PopColorStyle();
+            }
+        }
+
+        ImNodes::EndNode();
+        (void)node_pos;  // imnodes uses GetNodeGridSpacePos for layout; explicit pos is read-only
+    }
+}
+
+void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 tl_screen = top_left_grid - ImVec2(16, 16) + ImNodes::EditorContextGetPanning();
+    ImVec2 br_screen = top_left_grid + ImVec2(180, 8) + ImNodes::EditorContextGetPanning();
+
+    // Background of the title bar
+    dl->AddRectFilled(tl_screen, br_screen, IM_COL32(60, 60, 100, 200));
+
+    // Group name
+    dl->AddText(tl_screen + ImVec2(8, 4), IM_COL32(255, 255, 255, 255), g.name.c_str());
+
+    // Collapse button (▼)
+    ImVec2 btn_min = br_screen - ImVec2(24, 0);
+    ImVec2 btn_max = br_screen;
+    dl->AddRectFilled(btn_min, btn_max, IM_COL32(100, 100, 140, 255));
+    dl->AddText(btn_min + ImVec2(6, 2), IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC");  // ▼
+
+    // Hit-test the button
+    if (ImGui::IsMouseClicked(0)) {
+        ImVec2 mouse = ImGui::GetMousePos();
+        if (mouse.x >= btn_min.x && mouse.x <= btn_max.x &&
+            mouse.y >= btn_min.y && mouse.y <= btn_max.y) {
+            m_engine.setGroupCollapsed(g.id, true);
+        }
+    }
+}
+
+void NodeGraphWidget::handleRubberBand() {
+    bool editor_hovered = ImNodes::IsEditorHovered();
+    bool shift = ImGui::IsKeyDown(ImGuiKey_LeftShift);
+    bool left_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool left_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+
+    // Start rubber-band on Shift + left-click down on empty space
+    if (left_down && shift && editor_hovered && !m_rubber_band_active) {
+        m_rubber_band_active = true;
+        m_rubber_band_start = ImGui::GetMousePos();
+        m_rubber_band_end = m_rubber_band_start;
+    }
+
+    // Update end position while dragging, draw the selection rectangle
+    if (m_rubber_band_active && left_down) {
+        m_rubber_band_end = ImGui::GetMousePos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 a(std::min(m_rubber_band_start.x, m_rubber_band_end.x),
+                 std::min(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 b(std::max(m_rubber_band_start.x, m_rubber_band_end.x),
+                 std::max(m_rubber_band_start.y, m_rubber_band_end.y));
+        dl->AddRectFilled(a, b, IM_COL32(100, 200, 255, 32));
+        dl->AddRect(a, b, IM_COL32(100, 200, 255, 200));
+    }
+
+    // On release, collect enclosed nodes
+    if (m_rubber_band_active && left_released) {
+        m_rubber_band_active = false;
+        m_rubber_band_members.clear();
+
+        ImVec2 screen_a(
+            std::min(m_rubber_band_start.x, m_rubber_band_end.x),
+            std::min(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 screen_b(
+            std::max(m_rubber_band_start.x, m_rubber_band_end.x),
+            std::max(m_rubber_band_start.y, m_rubber_band_end.y));
+
+        for (const auto& node : m_engine.nodes()) {
+            if (m_engine.groupIdForNode(node.node_id) != -1) continue;  // skip grouped
+            ImVec2 pos = ImNodes::GetNodeScreenSpacePos(node.node_id);
+            ImVec2 center = pos + ImVec2(60, 40);  // approximate node center
+            if (center.x >= screen_a.x && center.x <= screen_b.x &&
+                center.y >= screen_a.y && center.y <= screen_b.y) {
+                m_rubber_band_members.push_back(node.node_id);
+            }
+        }
+
+        if (m_rubber_band_members.size() >= 2) {
+            m_show_create_popup = true;
+            ImGui::OpenPopup("CreateSubcircuit");
+        }
+    }
+}
+
+void NodeGraphWidget::handleGroupSelection() {
+    int hovered_node = -1;
+    if (ImGui::IsMouseClicked(0) && ImNodes::IsNodeHovered(&hovered_node)) {
+        if (hovered_node >= 50000 && hovered_node < 100000) {
+            // It's a group
+            m_engine.setSelectedGroupId(hovered_node);
+            ImNodes::ClearNodeSelection();
+        } else {
+            // It's a regular node; deselect any group
+            m_engine.setSelectedGroupId(-1);
+        }
+    }
+    if (ImGui::IsMouseClicked(0)) {
+        bool editor_hovered = ImNodes::IsEditorHovered();
+        int hovered_node = -1;
+        bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
+        int link_id = -1;
+        bool link_hovered = ImNodes::IsLinkHovered(&link_id);
+        if (editor_hovered && !node_hovered && !link_hovered) {
+            m_engine.setSelectedGroupId(-1);
+        }
+    }
+}
+
+size_t NodeGraphWidget::findNodeIndex(int node_id) const {
+    (void)node_id;
+    // Real implementation is added in a later task.
+    return size_t(-1);
+}
 
 void NodeGraphWidget::showPinTooltips() {
     int hovered_pin;
@@ -334,6 +731,34 @@ void NodeGraphWidget::showPinTooltips() {
                                        : Spectrum();
             showSpectrumTooltip(spec, "OUT");
             return;
+        }
+    }
+
+    // Boundary pin tooltips (synthesized pins with ids >= 100000)
+    if (hovered_pin >= 100000) {
+        auto it = m_synth_pin_to_real_pin.find(hovered_pin);
+        if (it != m_synth_pin_to_real_pin.end()) {
+            int real_pin = it->second;
+            for (const auto& node : m_engine.nodes()) {
+                for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+                    if (node.output_pin_ids[i] == real_pin && node.signal_node) {
+                        if (i < node.signal_node->outputs.size()) {
+                            showSpectrumTooltip(node.signal_node->outputs[i], "OUT");
+                            return;
+                        }
+                    }
+                }
+                for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+                    if (node.input_pin_ids[i] == real_pin && node.signal_node) {
+                        const Spectrum* spec = (i < node.signal_node->inputs.size())
+                            ? node.signal_node->inputs[i] : nullptr;
+                        if (spec) {
+                            showSpectrumTooltip(*spec, "IN");
+                            return;
+                        }
+                    }
+                }
+            }
         }
     }
 }
