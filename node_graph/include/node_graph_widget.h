@@ -62,6 +62,8 @@ class NodeGraphWidget {
     std::unordered_map<int, int> m_phantom_id_for_node;    // rebuilt every frame if needed
     bool m_use_phantom_nodes = false;
     int m_context_menu_group_id = -1;
+    int m_pending_rename_group_id = -1;
+    char m_rename_buffer[128] = {};
 
     // Rubber-band state
     bool m_rubber_band_active = false;

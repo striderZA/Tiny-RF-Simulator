@@ -4,6 +4,7 @@
 #include "imnodes.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <unordered_set>
 #include <limits>
 #include <string>
@@ -193,14 +194,37 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         bool node_hovered = ImNodes::IsNodeHovered(&hovered_node);
 
         if (node_hovered) {
-            ImGui::OpenPopup("node_context_menu");
-            m_context_menu_node = hovered_node;
+            if (hovered_node >= 50000 && hovered_node < 100000) {
+                ImGui::OpenPopup("group_context_menu");
+                m_context_menu_group_id = hovered_node;
+            } else {
+                ImGui::OpenPopup("node_context_menu");
+                m_context_menu_node = hovered_node;
+            }
         } else {
             ImGui::OpenPopup("canvas_context_menu");
         }
     }
 
     // Render popups unconditionally so they stay open across frames
+    if (ImGui::BeginPopup("group_context_menu")) {
+        const Group* g = m_engine.groupById(m_context_menu_group_id);
+        if (g) {
+            if (ImGui::MenuItem(g->collapsed ? "Expand" : "Collapse")) {
+                m_engine.setGroupCollapsed(m_context_menu_group_id, !g->collapsed);
+            }
+            if (ImGui::MenuItem("Rename")) {
+                m_pending_rename_group_id = m_context_menu_group_id;
+                std::strncpy(m_rename_buffer, g->name.c_str(), sizeof(m_rename_buffer) - 1);
+                m_rename_buffer[sizeof(m_rename_buffer) - 1] = '\0';
+            }
+            if (ImGui::MenuItem("Ungroup")) {
+                m_engine.removeGroup(m_context_menu_group_id);
+            }
+        }
+        ImGui::EndPopup();
+    }
+
     if (ImGui::BeginPopup("node_context_menu")) {
         if (ImGui::MenuItem("Remove")) {
             if (onRemoveNode) onRemoveNode(m_context_menu_node);
