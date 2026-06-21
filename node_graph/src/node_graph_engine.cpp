@@ -274,3 +274,37 @@ std::vector<int> NodeGraphEngine::topologicalOrder() const {
 
     return result;
 }
+
+const Group* NodeGraphEngine::groupById(int group_id) const {
+    for (const auto& g : m_groups) {
+        if (g.id == group_id) return &g;
+    }
+    return nullptr;
+}
+
+void NodeGraphEngine::setSelectedGroupId(int id) {
+    m_selected_group_id = id;
+}
+
+int NodeGraphEngine::groupIdForNode(int node_id) const {
+    auto it = m_node_to_group_cache.find(node_id);
+    if (it == m_node_to_group_cache.end()) return -1;
+    if (it->second.empty()) return -1;
+    return it->second.front();
+}
+
+const std::vector<int>& NodeGraphEngine::groupsContainingNode(int node_id) const {
+    auto it = m_node_to_group_cache.find(node_id);
+    if (it != m_node_to_group_cache.end()) return it->second;
+    static const std::vector<int> empty;
+    return empty;
+}
+
+void NodeGraphEngine::rebuildNodeToGroupCache() {
+    m_node_to_group_cache.clear();
+    for (const auto& g : m_groups) {
+        for (int nid : g.member_node_ids) {
+            m_node_to_group_cache[nid].push_back(g.id);
+        }
+    }
+}
