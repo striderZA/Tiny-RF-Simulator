@@ -20,11 +20,9 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
     if (ImGui::Begin(title, p_open)) {
-        ImNodes::ClearNodeSelection();
         rebuildSynthMaps();
 
         drawGroupBackgrounds();
-        drawPhantomNodes();
 
         ImNodes::BeginNodeEditor();
 
@@ -38,7 +36,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         ImNodes::EndNodeEditor();
 
         // Rubber-band selection (Shift+drag on empty space)
-        handleRubberBand();
+        handleRubberBand(editor_hovered);
 
         // Pin tooltips (after EndNodeEditor per imnodes query pattern)
         showPinTooltips();
@@ -104,10 +102,25 @@ void NodeGraphWidget::drawNodes() {
         }
     }
 
+    bool first_visible = true;
     for (const auto &node : m_engine.nodes()) {
         if (hidden_nodes.count(node.node_id)) continue;
 
         ImNodes::BeginNode(node.node_id);
+
+        // Cache screen-space positions after BeginNode registers the node in the imnodes
+        // pool, so GetNodeScreenSpacePos/GetNodeGridSpacePos don't assert on first frame.
+        // drawGroupBackgrounds and drawGroupCollapsedBlocks use this cache because hidden
+        // nodes get removed from the pool by ObjectPoolUpdate in EndNodeEditor.
+        ImVec2 screen_pos = ImNodes::GetNodeScreenSpacePos(node.node_id);
+        m_node_screen_positions[node.node_id] = screen_pos;
+        if (first_visible) {
+            // Refresh the grid-to-screen offset from the first visible node every frame
+            // so it's always current with panning changes.
+            ImVec2 grid_pos = ImNodes::GetNodeGridSpacePos(node.node_id);
+            m_grid_to_screen_offset = screen_pos - grid_pos;
+            first_visible = false;
+        }
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
@@ -182,7 +195,30 @@ void NodeGraphWidget::drawLinks() {
         bool end_hidden = hidden_nodes.count(end_node) > 0;
         if (start_hidden && end_hidden) continue;  // internal link in collapsed group
 
-        ImNodes::Link(link.link_id, link.start_pin_id, link.end_pin_id);
+        // When a link endpoint is on a hidden (grouped) node, redirect the link to the
+        // group's synthesized boundary pin so it visually attaches to the collapsed block.
+        // See spec: "links that exit the group are drawn from the boundary pin (collapsed)
+        // or from the internal pin (expanded)".
+        int draw_start_pin = link.start_pin_id;
+        int draw_end_pin = link.end_pin_id;
+        if (start_hidden) {
+            auto it = m_real_to_synth_pin.find(link.start_pin_id);
+            if (it != m_real_to_synth_pin.end()) {
+                draw_start_pin = it->second;
+            } else {
+                continue;  // no boundary pin for this internal pin; skip
+            }
+        }
+        if (end_hidden) {
+            auto it = m_real_to_synth_pin.find(link.end_pin_id);
+            if (it != m_real_to_synth_pin.end()) {
+                draw_end_pin = it->second;
+            } else {
+                continue;
+            }
+        }
+
+        ImNodes::Link(link.link_id, draw_start_pin, draw_end_pin);
     }
 }
 
@@ -316,6 +352,8 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::GetSelectedNodes(selected_nodes.data());
             for (int node_id : selected_nodes) {
                 if (onRemoveNode) onRemoveNode(node_id);
+                // Remove from position cache so it doesn't accumulate stale entries
+                m_node_screen_positions.erase(node_id);
             }
             ImNodes::ClearNodeSelection();
         }
@@ -466,36 +504,41 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
 
 void NodeGraphWidget::rebuildSynthMaps() {
     m_synth_pin_to_real_pin.clear();
-    m_phantom_id_for_node.clear();
-    int phantom_counter = 200000;
+    m_real_to_synth_pin.clear();
     for (const auto& g : m_engine.groups()) {
+        // Only COLLAPSED groups have registered synthetic pins; expanded groups'
+        // boundary pins are cleared (by setGroupCollapsed), but guard anyway.
+        if (!g.collapsed) continue;
         for (const auto& bp : g.boundary_pins) {
             m_synth_pin_to_real_pin[bp.id] = bp.internal_pin_id;
-        }
-        if (m_use_phantom_nodes) {
-            for (int nid : g.member_node_ids) {
-                m_phantom_id_for_node[nid] = phantom_counter++;
+            // Only one synthetic pin per internal pin (the first wins; if the same
+            // internal pin appears in multiple boundary pins due to multiple outgoing
+            // links, the link rendering can still find the synth pin)
+            if (m_real_to_synth_pin.find(bp.internal_pin_id) == m_real_to_synth_pin.end()) {
+                m_real_to_synth_pin[bp.internal_pin_id] = bp.id;
             }
         }
     }
 }
 
 void NodeGraphWidget::drawGroupBackgrounds() {
-    // Phantoms are not used in v1 (spike confirmed). Group background is drawn here;
-    // internals (when expanded) are drawn by drawNodes() afterward, on top of this background.
+    // Group background is drawn here; internals (when expanded) are drawn by
+    // drawNodes() afterward, on top of this background.
     ImDrawList* dl = ImGui::GetWindowDrawList();
     for (const auto& g : m_engine.groups()) {
         if (g.collapsed) continue;
         if (g.member_node_ids.empty()) continue;
 
-        // Compute bounding box in grid space
+        // Compute bounding box in screen space from cached screen-space positions
         ImVec2 top_left(std::numeric_limits<float>::max(),
                          std::numeric_limits<float>::max());
         ImVec2 bottom_right(std::numeric_limits<float>::lowest(),
                             std::numeric_limits<float>::lowest());
         const float NODE_W = 120.0f, NODE_H = 80.0f;  // approximate; refined in spike
         for (int nid : g.member_node_ids) {
-            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+            auto pos_it = m_node_screen_positions.find(nid);
+            if (pos_it == m_node_screen_positions.end()) continue;
+            ImVec2 pos = pos_it->second;
             top_left.x = std::min(top_left.x, pos.x);
             top_left.y = std::min(top_left.y, pos.y);
             bottom_right.x = std::max(bottom_right.x, pos.x + NODE_W);
@@ -503,97 +546,103 @@ void NodeGraphWidget::drawGroupBackgrounds() {
         }
         if (top_left.x > bottom_right.x) continue;  // no valid members
 
-        // Convert grid space to screen space
         ImVec2 pad(16, 16);
-        ImVec2 tl_screen = top_left - pad + ImNodes::EditorContextGetPanning();
-        ImVec2 br_screen = bottom_right + pad + ImNodes::EditorContextGetPanning();
+        ImVec2 tl_screen = top_left - pad;
+        ImVec2 br_screen = bottom_right + pad;
 
         dl->AddRectFilled(tl_screen, br_screen, IM_COL32(80, 80, 120, 24));
         dl->AddRect(tl_screen, br_screen, IM_COL32(120, 120, 180, 96));
 
-        // Title bar at the top of the rectangle
+        // Title bar at the top of the rectangle (in screen space)
         drawGroupTitleBar(const_cast<Group&>(g), top_left);
     }
-}
-
-void NodeGraphWidget::drawPhantomNodes() {
-    // Real implementation is added in Task 14 only if the spike report
-    // says the phantom workaround is needed.
 }
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
     for (const auto& g : m_engine.groups()) {
         if (!g.collapsed) continue;
 
-        // Compute centroid in grid space
+        // Compute centroid in screen space using cached positions (member nodes may have been
+        // removed from the imnodes pool since hidden nodes aren't rendered each frame)
         if (g.member_node_ids.empty()) continue;
         ImVec2 sum(0, 0);
         int count = 0;
         for (int nid : g.member_node_ids) {
-            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
-            sum.x += pos.x;
-            sum.y += pos.y;
+            auto pos_it = m_node_screen_positions.find(nid);
+            if (pos_it == m_node_screen_positions.end()) continue;
+            sum.x += pos_it->second.x;
+            sum.y += pos_it->second.y;
             ++count;
         }
         if (count == 0) continue;
-        ImVec2 centroid(sum.x / count, sum.y / count);
-        ImVec2 node_pos = centroid - ImVec2(60, 40);  // center the 120x80 block
+        ImVec2 centroid_screen(sum.x / count, sum.y / count);
+        // Convert to grid space and position the collapsed block at the centroid
+        ImVec2 centroid_grid = centroid_screen - m_grid_to_screen_offset;
+        ImNodes::SetNodeGridSpacePos(g.id, centroid_grid - ImVec2(60, 40));
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(g.name.c_str());
-
-        // Expand button (▶) in the title bar
-        ImGui::SameLine();
-        if (ImGui::SmallButton("\xE2\x96\xB6")) {  // ▶
-            m_engine.setGroupCollapsed(g.id, false);
-        }
         ImNodes::EndNodeTitleBar();
 
-        // Body
-        ImGui::Dummy(ImVec2(120, 60));
+        // Render boundary pins inside the body. In imnodes, the pin circle is drawn at the
+        // left/right edge of the node and the ImGui text content you put between
+        // Begin{Input,Output}Attribute/End{Input,Output}Attribute becomes the pin's label.
+        // Layout: inputs on the left (vertically stacked), outputs on the right.
+        if (g.boundary_pins.empty()) {
+            // Fallback indicator so the collapsed block doesn't look broken when the
+            // group has no cross-boundary links
+            ImGui::Dummy(ImVec2(120, 30));
+            ImGui::Indent(8);
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 180, 200, 180));
+            ImGui::TextUnformatted("(no external connections)");
+            ImGui::PopStyleColor();
+            ImGui::Unindent(8);
+        } else {
+            for (const auto& bp : g.boundary_pins) {
+                int slot = m_engine.probeSlotForPin(bp.internal_pin_id);
+                if (slot >= 0) {
+                    static const ImU32 probe_colors[4] = {
+                        IM_COL32(22, 199, 154, 255),
+                        IM_COL32(230, 150, 40, 255),
+                        IM_COL32(120, 50, 170, 255),
+                        IM_COL32(60, 140, 220, 255),
+                    };
+                    ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
+                    ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
+                }
+                if (bp.is_output) {
+                    ImNodes::BeginOutputAttribute(bp.id);
+                    ImGui::TextUnformatted(bp.label.c_str());
+                    ImNodes::EndOutputAttribute();
+                } else {
+                    ImNodes::BeginInputAttribute(bp.id);
+                    ImGui::TextUnformatted(bp.label.c_str());
+                    ImNodes::EndInputAttribute();
+                }
+                if (slot >= 0) {
+                    ImNodes::PopColorStyle();
+                    ImNodes::PopColorStyle();
+                }
+            }
+        }
 
-        // Boundary pins
-        int input_idx = 0, output_idx = 0;
-        for (const auto& bp : g.boundary_pins) {
-            int slot = m_engine.probeSlotForPin(bp.internal_pin_id);
-            if (slot >= 0) {
-                static const ImU32 probe_colors[4] = {
-                    IM_COL32(22, 199, 154, 255),
-                    IM_COL32(230, 150, 40, 255),
-                    IM_COL32(120, 50, 170, 255),
-                    IM_COL32(60, 140, 220, 255),
-                };
-                ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
-                ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
-            }
-            if (bp.is_output) {
-                ImNodes::BeginOutputAttribute(bp.id);
-                ImGui::TextUnformatted(bp.label.c_str());
-                ImNodes::EndOutputAttribute();
-                (void)output_idx++;
-            } else {
-                ImNodes::BeginInputAttribute(bp.id);
-                ImGui::TextUnformatted(bp.label.c_str());
-                ImNodes::EndInputAttribute();
-                (void)input_idx++;
-            }
-            if (slot >= 0) {
-                ImNodes::PopColorStyle();
-                ImNodes::PopColorStyle();
-            }
+        // Expand button in the body. Placing it in the title bar would conflict with
+        // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
+        ImGui::Dummy(ImVec2(0, 4));  // small vertical spacer
+        if (ImGui::Button("Expand", ImVec2(120, 0))) {
+            m_engine.setGroupCollapsed(g.id, false);
         }
 
         ImNodes::EndNode();
-        (void)node_pos;  // imnodes uses GetNodeGridSpacePos for layout; explicit pos is read-only
     }
 }
 
-void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
+void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_screen) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 tl_screen = top_left_grid - ImVec2(16, 16) + ImNodes::EditorContextGetPanning();
-    ImVec2 br_screen = top_left_grid + ImVec2(180, 8) + ImNodes::EditorContextGetPanning();
+    ImVec2 tl_screen = top_left_screen - ImVec2(16, 16);
+    ImVec2 br_screen = top_left_screen + ImVec2(180, 8);
 
     // Background of the title bar
     dl->AddRectFilled(tl_screen, br_screen, IM_COL32(60, 60, 100, 200));
@@ -601,24 +650,25 @@ void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
     // Group name
     dl->AddText(tl_screen + ImVec2(8, 4), IM_COL32(255, 255, 255, 255), g.name.c_str());
 
-    // Collapse button (▼)
-    ImVec2 btn_min = br_screen - ImVec2(24, 0);
+    // Collapse button (▼) — full-height clickable area on the right side of the title bar
+    ImVec2 btn_min = ImVec2(br_screen.x - 24, tl_screen.y);
     ImVec2 btn_max = br_screen;
-    dl->AddRectFilled(btn_min, btn_max, IM_COL32(100, 100, 140, 255));
-    dl->AddText(btn_min + ImVec2(6, 2), IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC");  // ▼
+    ImVec2 mouse = ImGui::GetMousePos();
+    bool btn_hovered = mouse.x >= btn_min.x && mouse.x <= btn_max.x &&
+                       mouse.y >= btn_min.y && mouse.y <= btn_max.y;
+    ImU32 btn_color = btn_hovered ? IM_COL32(130, 130, 180, 255) : IM_COL32(100, 100, 140, 255);
+    dl->AddRectFilled(btn_min, btn_max, btn_color);
+    // Center the glyph in the 24x24 button
+    ImVec2 text_pos(btn_min.x + 8, btn_min.y + 4);
+    dl->AddText(text_pos, IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC");  // ▼
 
     // Hit-test the button
-    if (ImGui::IsMouseClicked(0)) {
-        ImVec2 mouse = ImGui::GetMousePos();
-        if (mouse.x >= btn_min.x && mouse.x <= btn_max.x &&
-            mouse.y >= btn_min.y && mouse.y <= btn_max.y) {
-            m_engine.setGroupCollapsed(g.id, true);
-        }
+    if (ImGui::IsMouseClicked(0) && btn_hovered) {
+        m_engine.setGroupCollapsed(g.id, true);
     }
 }
 
-void NodeGraphWidget::handleRubberBand() {
-    bool editor_hovered = ImNodes::IsEditorHovered();
+void NodeGraphWidget::handleRubberBand(bool editor_hovered) {
     bool shift = ImGui::IsKeyDown(ImGuiKey_LeftShift);
     bool left_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool left_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
@@ -656,7 +706,9 @@ void NodeGraphWidget::handleRubberBand() {
 
         for (const auto& node : m_engine.nodes()) {
             if (m_engine.groupIdForNode(node.node_id) != -1) continue;  // skip grouped
-            ImVec2 pos = ImNodes::GetNodeScreenSpacePos(node.node_id);
+            auto pos_it = m_node_screen_positions.find(node.node_id);
+            if (pos_it == m_node_screen_positions.end()) continue;
+            ImVec2 pos = pos_it->second;
             ImVec2 center = pos + ImVec2(60, 40);  // approximate node center
             if (center.x >= screen_a.x && center.x <= screen_b.x &&
                 center.y >= screen_a.y && center.y <= screen_b.y) {

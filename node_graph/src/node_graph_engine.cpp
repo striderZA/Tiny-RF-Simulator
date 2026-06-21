@@ -328,9 +328,10 @@ int NodeGraphEngine::addGroup(std::string name, std::vector<int> member_node_ids
     g.id = m_next_group_id++;
     g.name = std::move(name);
     g.member_node_ids = std::move(member_node_ids);
-    g.collapsed = false;
+    g.collapsed = true;
     m_groups.push_back(std::move(g));
     rebuildNodeToGroupCache();
+    rebuildGroupBoundaryPins(m_groups.back().id);
     return m_groups.back().id;
 }
 
@@ -365,6 +366,13 @@ void NodeGraphEngine::setGroupCollapsed(int group_id, bool collapsed) {
     for (auto& g : m_groups) {
         if (g.id == group_id) {
             g.collapsed = collapsed;
+            if (collapsed) {
+                rebuildGroupBoundaryPins(group_id);
+            } else {
+                // On expand, clear boundary pins so rebuildSynthMaps does not
+                // register stale synthetic pins that lack imnodes attribute registration.
+                g.boundary_pins.clear();
+            }
             return;
         }
     }
