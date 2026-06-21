@@ -1,3 +1,4 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
@@ -328,7 +329,39 @@ void NodeGraphWidget::rebuildSynthMaps() {
 }
 
 void NodeGraphWidget::drawGroupBackgrounds() {
-    // Real implementation is added in Task 11.
+    // Phantoms are not used in v1 (spike confirmed). Group background is drawn here;
+    // internals (when expanded) are drawn by drawNodes() afterward, on top of this background.
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    for (const auto& g : m_engine.groups()) {
+        if (g.collapsed) continue;
+        if (g.member_node_ids.empty()) continue;
+
+        // Compute bounding box in grid space
+        ImVec2 top_left(std::numeric_limits<float>::max(),
+                         std::numeric_limits<float>::max());
+        ImVec2 bottom_right(std::numeric_limits<float>::lowest(),
+                            std::numeric_limits<float>::lowest());
+        const float NODE_W = 120.0f, NODE_H = 80.0f;  // approximate; refined in spike
+        for (int nid : g.member_node_ids) {
+            ImVec2 pos = ImNodes::GetNodeGridSpacePos(nid);
+            top_left.x = std::min(top_left.x, pos.x);
+            top_left.y = std::min(top_left.y, pos.y);
+            bottom_right.x = std::max(bottom_right.x, pos.x + NODE_W);
+            bottom_right.y = std::max(bottom_right.y, pos.y + NODE_H);
+        }
+        if (top_left.x > bottom_right.x) continue;  // no valid members
+
+        // Convert grid space to screen space
+        ImVec2 pad(16, 16);
+        ImVec2 tl_screen = top_left - pad + ImNodes::EditorContextGetPanning();
+        ImVec2 br_screen = bottom_right + pad + ImNodes::EditorContextGetPanning();
+
+        dl->AddRectFilled(tl_screen, br_screen, IM_COL32(80, 80, 120, 24));
+        dl->AddRect(tl_screen, br_screen, IM_COL32(120, 120, 180, 96));
+
+        // Title bar at the top of the rectangle
+        drawGroupTitleBar(const_cast<Group&>(g), top_left);
+    }
 }
 
 void NodeGraphWidget::drawPhantomNodes() {
@@ -340,9 +373,31 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
     // Real implementation is added in Task 12.
 }
 
-void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left) {
-    (void)g; (void)top_left;
-    // Real implementation is added in Task 11.
+void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_grid) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 tl_screen = top_left_grid - ImVec2(16, 16) + ImNodes::EditorContextGetPanning();
+    ImVec2 br_screen = top_left_grid + ImVec2(180, -16) + ImNodes::EditorContextGetPanning();
+
+    // Background of the title bar
+    dl->AddRectFilled(tl_screen, br_screen, IM_COL32(60, 60, 100, 200));
+
+    // Group name
+    dl->AddText(tl_screen + ImVec2(8, 4), IM_COL32(255, 255, 255, 255), g.name.c_str());
+
+    // Collapse button (▼)
+    ImVec2 btn_min = br_screen - ImVec2(24, 0);
+    ImVec2 btn_max = br_screen;
+    dl->AddRectFilled(btn_min, btn_max, IM_COL32(100, 100, 140, 255));
+    dl->AddText(btn_min + ImVec2(6, 2), IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC");  // ▼
+
+    // Hit-test the button
+    if (ImGui::IsMouseClicked(0)) {
+        ImVec2 mouse = ImGui::GetMousePos();
+        if (mouse.x >= btn_min.x && mouse.x <= btn_max.x &&
+            mouse.y >= btn_min.y && mouse.y <= btn_max.y) {
+            m_engine.setGroupCollapsed(g.id, true);
+        }
+    }
 }
 
 void NodeGraphWidget::handleRubberBand() {
