@@ -17,9 +17,16 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
     if (ImGui::Begin(title, p_open)) {
+        ImNodes::ClearNodeSelection();
+        rebuildSynthMaps();
+
+        drawGroupBackgrounds();
+        drawPhantomNodes();
+
         ImNodes::BeginNodeEditor();
 
         drawNodes();
+        drawGroupCollapsedBlocks();
         drawLinks();
 
         // Cache editor hover state before EndNodeEditor (IsEditorHovered only works inside scope)
@@ -302,7 +309,55 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
     ImGui::EndTooltip();
 }
 
-} // anonymous namespace
+}
+
+void NodeGraphWidget::rebuildSynthMaps() {
+    m_synth_pin_to_real_pin.clear();
+    m_phantom_id_for_node.clear();
+    int phantom_counter = 200000;
+    for (const auto& g : m_engine.groups()) {
+        for (const auto& bp : g.boundary_pins) {
+            m_synth_pin_to_real_pin[bp.id] = bp.internal_pin_id;
+        }
+        if (m_use_phantom_nodes) {
+            for (int nid : g.member_node_ids) {
+                m_phantom_id_for_node[nid] = phantom_counter++;
+            }
+        }
+    }
+}
+
+void NodeGraphWidget::drawGroupBackgrounds() {
+    // Real implementation is added in Task 11.
+}
+
+void NodeGraphWidget::drawPhantomNodes() {
+    // Real implementation is added in Task 14 only if the spike report
+    // says the phantom workaround is needed.
+}
+
+void NodeGraphWidget::drawGroupCollapsedBlocks() {
+    // Real implementation is added in Task 12.
+}
+
+void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left) {
+    (void)g; (void)top_left;
+    // Real implementation is added in Task 11.
+}
+
+void NodeGraphWidget::handleRubberBand() {
+    // Real implementation is added in a later task.
+}
+
+void NodeGraphWidget::handleGroupSelection() {
+    // Real implementation is added in a later task.
+}
+
+size_t NodeGraphWidget::findNodeIndex(int node_id) const {
+    (void)node_id;
+    // Real implementation is added in a later task.
+    return size_t(-1);
+}
 
 void NodeGraphWidget::showPinTooltips() {
     int hovered_pin;
