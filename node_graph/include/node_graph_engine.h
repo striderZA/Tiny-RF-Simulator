@@ -31,6 +31,10 @@ class NodeGraphEngine {
 
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);
+    void removeAllLinks();
+
+    // Set internal ID counters for project save/load
+    void setNextIds(int node_id, int pin_id, int link_id);
 
     int inputPinId(int node_id) const;
     int outputPinId(int node_id) const;
@@ -57,6 +61,12 @@ class NodeGraphEngine {
     void setNodePinLabels(int node_id,
                           const std::vector<std::string>& input_labels,
                           const std::vector<std::string>& output_labels);
+
+    // Group counter accessors for project save/load
+    int nextGroupId() const { return m_next_group_id; }
+    int nextBoundaryPinId() const { return m_next_boundary_pin_id; }
+    void setNextGroupId(int id) { m_next_group_id = id; }
+    void setNextBoundaryPinId(int id) { m_next_boundary_pin_id = id; }
 
     // Group operations
     int addGroup(std::string name, std::vector<int> member_node_ids);

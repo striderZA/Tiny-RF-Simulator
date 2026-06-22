@@ -122,3 +122,59 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
     REQUIRE(sources[0] == &gen1);
     REQUIRE(sources[1] == &gen2);
 }
+
+TEST_CASE("NodeGraphEngine setNextIds controls subsequent IDs", "[node_graph]") {
+    NodeGraphEngine engine;
+    SignalNode node;
+
+    engine.setNextIds(42, 142, 1042);
+    int id = engine.addNode("Test", &node, 1, 1);
+    REQUIRE(id == 42);
+
+    const auto& n = engine.nodes()[0];
+    REQUIRE(n.input_pin_ids[0] == 142);
+    REQUIRE(n.output_pin_ids[0] == 143);
+
+    int link_id = engine.addLink(n.input_pin_ids[0], n.output_pin_ids[0]);
+    REQUIRE(link_id == 1042);
+}
+
+TEST_CASE("NodeGraphEngine removeAllLinks clears all links", "[node_graph]") {
+    NodeGraphEngine engine;
+    SignalNode src, dst;
+
+    engine.addNode("Src", &src, false, true);
+    engine.addNode("Dst", &dst, true, true);
+    auto& g = engine.nodes()[0];
+    auto& a = engine.nodes()[1];
+
+    engine.addLink(g.output_pin_ids[0], a.input_pin_ids[0]);
+    REQUIRE(engine.links().size() == 1);
+
+    engine.removeAllLinks();
+    REQUIRE(engine.links().empty());
+}
+
+TEST_CASE("NodeGraphEngine group counter accessors", "[node_graph]") {
+    NodeGraphEngine engine;
+    SignalNode n1, n2;
+
+    engine.addNode("A", &n1, false, true);
+    engine.addNode("B", &n2, true, true);
+
+    // Check default starting values
+    REQUIRE(engine.nextGroupId() == 50000);
+    REQUIRE(engine.nextBoundaryPinId() == 100000);
+
+    // After adding a group, the counter advances
+    int gid = engine.addGroup("g1", {engine.nodes()[0].node_id, engine.nodes()[1].node_id});
+    REQUIRE(gid == 50000);
+    REQUIRE(engine.nextGroupId() == 50001);
+
+    // setNextGroupId / setNextBoundaryPinId
+    engine.setNextGroupId(999);
+    REQUIRE(engine.nextGroupId() == 999);
+
+    engine.setNextBoundaryPinId(1999);
+    REQUIRE(engine.nextBoundaryPinId() == 1999);
+}

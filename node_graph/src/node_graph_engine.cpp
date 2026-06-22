@@ -97,6 +97,17 @@ void NodeGraphEngine::removeLink(int link_id) {
     }
 }
 
+void NodeGraphEngine::removeAllLinks() {
+    m_links.clear();
+    LOG_INFO("Removed all links");
+}
+
+void NodeGraphEngine::setNextIds(int node_id, int pin_id, int link_id) {
+    m_next_node_id = node_id;
+    m_next_pin_id = pin_id;
+    m_next_link_id = link_id;
+}
+
 int NodeGraphEngine::inputPinId(int node_id) const {
     for (const auto& n : m_nodes) {
         if (n.node_id == node_id && !n.input_pin_ids.empty())
