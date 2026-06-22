@@ -94,12 +94,15 @@ void MixerEngine::update(double dt) {
 }
 
 nlohmann::json MixerEngine::serialize() const {
-    return {{"lo_freq_Hz", m_lo_freq_Hz}, {"conv_gain_dB", m_conv_gain_dB}};
+    return {{"lo_freq_Hz", m_lo_freq_Hz},
+            {"conv_gain_dB", m_conv_gain_dB},
+            {"nf_dB", m_nf_dB}};
 }
 
 void MixerEngine::deserialize(const nlohmann::json& j) {
     m_lo_freq_Hz = j.value("lo_freq_Hz", 1e9);
     m_conv_gain_dB = j.value("conv_gain_dB", 0.0);
+    m_nf_dB = j.value("nf_dB", 0.0);
     m_dirty = true;
 }
 

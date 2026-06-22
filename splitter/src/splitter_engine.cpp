@@ -88,7 +88,7 @@ nlohmann::json SplitterEngine::serialize() const {
 }
 
 void SplitterEngine::deserialize(const nlohmann::json&) {
-    // nothing to restore
+    m_dirty = true;
 }
 
 std::string SplitterEngine::hoverSummary() const {
