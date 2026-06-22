@@ -1,4 +1,5 @@
 #include "s_param_engine.h"
+#include <nlohmann/json.hpp>
 #include "common.h"
 #include "logging_core.h"
 #include <algorithm>
@@ -533,6 +534,35 @@ void SParamEngine::update(double dt) {
                 for (size_t kk = 0; kk < n_fund; ++kk)
                     m_node.outputs[0].tones[kk].power_dBm += result.compression_dB;
             }
+        }
+    }
+}
+
+nlohmann::json SParamEngine::serialize() const {
+    return {{"filepath", m_filepath},
+            {"mode", static_cast<int>(m_mode)},
+            {"common_port", m_common_port},
+            {"forward_param_idx", m_forward_param_idx},
+            {"nf_dB", m_nf_dB},
+            {"enable_nonlinear", m_nonlinear.enabled()},
+            {"oip2_dBm", m_nonlinear.oip2_dBm()},
+            {"oip3_dBm", m_nonlinear.oip3_dBm()}};
+}
+
+void SParamEngine::deserialize(const nlohmann::json& j) {
+    std::string fp = j.value("filepath", "");
+    if (!fp.empty()) {
+        m_mode = static_cast<Mode>(j.value("mode", static_cast<int>(Mode::FullMatrix)));
+        m_common_port = j.value("common_port", 0);
+        m_forward_param_idx = j.value("forward_param_idx", -1);
+        m_nf_dB = j.value("nf_dB", 0.0);
+        m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
+        m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
+        m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
+        if (fp != m_filepath) {
+            reload(fp);
+        } else {
+            m_dirty = true;
         }
     }
 }

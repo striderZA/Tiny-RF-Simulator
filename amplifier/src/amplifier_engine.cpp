@@ -1,4 +1,5 @@
 #include "amplifier_engine.h"
+#include <nlohmann/json.hpp>
 #include <cmath>
 
 AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
@@ -95,6 +96,25 @@ void AmplifierEngine::update(double dt) {
     }
 
     out.bumpGeneration();
+}
+
+nlohmann::json AmplifierEngine::serialize() const {
+    return {
+        {"gain_dB", m_gain_dB},
+        {"nf_dB", m_nf_dB},
+        {"enable_nonlinear", m_nonlinear.enabled()},
+        {"oip2_dBm", m_nonlinear.oip2_dBm()},
+        {"oip3_dBm", m_nonlinear.oip3_dBm()}
+    };
+}
+
+void AmplifierEngine::deserialize(const nlohmann::json& j) {
+    m_gain_dB = j.value("gain_dB", 0.0);
+    m_nf_dB = j.value("nf_dB", 0.0);
+    m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
+    m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
+    m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
+    m_dirty = true;
 }
 
 std::string AmplifierEngine::hoverSummary() const {

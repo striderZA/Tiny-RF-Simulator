@@ -1,4 +1,5 @@
 #include "coax_cable_engine.h"
+#include <nlohmann/json.hpp>
 #include "logging_core.h"
 #include <algorithm>
 #include <cmath>
@@ -116,6 +117,19 @@ void CoaxCableEngine::update(double dt) {
     }
 
     out.bumpGeneration();
+}
+
+nlohmann::json CoaxCableEngine::serialize() const {
+    return {{"preset_index", m_preset_index},
+            {"length_m", m_length_m},
+            {"connectors_loss_dB", m_connectors_loss_dB}};
+}
+
+void CoaxCableEngine::deserialize(const nlohmann::json& j) {
+    m_preset_index = j.value("preset_index", 4);
+    m_length_m = j.value("length_m", 1.0);
+    m_connectors_loss_dB = j.value("connectors_loss_dB", 0.0);
+    m_dirty = true;
 }
 
 std::string CoaxCableEngine::hoverSummary() const {

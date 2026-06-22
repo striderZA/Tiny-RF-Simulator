@@ -31,6 +31,8 @@ class MixerEngine : public IComponentEngine {
     double nf_dB() const { return m_nf_dB; }
 
     void update(double dt) override;
+    nlohmann::json serialize() const override;
+    void deserialize(const nlohmann::json&) override;
 
     SignalNode& node() override { return m_node; }
     const SignalNode& node() const override { return m_node; }

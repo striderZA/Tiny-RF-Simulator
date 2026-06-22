@@ -1,4 +1,5 @@
 #include "signal_generator_engine.h"
+#include <nlohmann/json.hpp>
 
 SignalGeneratorEngine::SignalGeneratorEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
@@ -69,6 +70,29 @@ void SignalGeneratorEngine::update(double) {
 
     out.fs_Hz = m_fs_Hz;
     out.bumpGeneration();
+}
+
+nlohmann::json SignalGeneratorEngine::serialize() const {
+    nlohmann::json j = nlohmann::json::array();
+    for (const auto& t : m_tones) {
+        j.push_back({{"freq_Hz", t.freq_Hz},
+                     {"power_dBm", t.power_dBm},
+                     {"phase_deg", t.phase_deg}});
+    }
+    return j;
+}
+
+void SignalGeneratorEngine::deserialize(const nlohmann::json& j) {
+    m_tones.clear();
+    if (!j.is_array()) return;
+    for (const auto& tj : j) {
+        m_tones.push_back({
+            tj.value("freq_Hz", 100e6),
+            tj.value("power_dBm", -20.0),
+            tj.value("phase_deg", 0.0)
+        });
+    }
+    m_dirty = true;
 }
 
 std::string SignalGeneratorEngine::hoverSummary() const {

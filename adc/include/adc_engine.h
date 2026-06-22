@@ -17,6 +17,8 @@ public:
     int outputPinId() const override;
 
     void update(double dt) override;
+    nlohmann::json serialize() const override;
+    void deserialize(const nlohmann::json&) override;
 
     double fs_Hz() const { return m_fs_Hz; }
     void setFs_Hz(double fs) {

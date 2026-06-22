@@ -1,5 +1,6 @@
 #define _USE_MATH_DEFINES
 #include "pfb_channelizer_engine.h"
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -215,6 +216,19 @@ double PFBChannelizerEngine::kaiserWindow(double x) const {
     double arg = 1.0 - r * r;
     return std::cyl_bessel_i(0, m_cfg.beta * std::sqrt(arg))
          / std::cyl_bessel_i(0, m_cfg.beta);
+}
+
+nlohmann::json PFBChannelizerEngine::serialize() const {
+    return {{"channel_count", m_cfg.M},
+            {"taps_per_branch", m_cfg.K},
+            {"kaiser_beta", m_cfg.beta}};
+}
+
+void PFBChannelizerEngine::deserialize(const nlohmann::json& j) {
+    m_cfg.M = j.value("channel_count", 16);
+    m_cfg.K = j.value("taps_per_branch", 8);
+    m_cfg.beta = j.value("kaiser_beta", 6.0);
+    m_dirty = true;
 }
 
 std::string PFBChannelizerEngine::hoverSummary() const {

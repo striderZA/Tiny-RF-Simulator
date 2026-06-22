@@ -21,6 +21,8 @@ public:
     SignalNode& node() override { return m_node; }
     const SignalNode& node() const override { return m_node; }
     void update(double dt) override;
+    nlohmann::json serialize() const override;
+    void deserialize(const nlohmann::json&) override;
 
     // Multi-port API
     int numPorts() const { return m_data.numPorts(); }

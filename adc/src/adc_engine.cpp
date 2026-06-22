@@ -1,4 +1,5 @@
 #include "adc_engine.h"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -111,6 +112,21 @@ void AdcEngine::update(double /*dt*/) {
     }
 
     out.bumpGeneration();
+}
+
+nlohmann::json AdcEngine::serialize() const {
+    return {{"sample_rate_Hz", m_fs_Hz},
+            {"bits", m_bits},
+            {"full_scale_V", m_v_fs},
+            {"nsd_dBm_per_Hz", m_nsd_dBm_per_Hz}};
+}
+
+void AdcEngine::deserialize(const nlohmann::json& j) {
+    m_fs_Hz = j.value("sample_rate_Hz", 100e6);
+    m_bits = j.value("bits", 12);
+    m_v_fs = j.value("full_scale_V", 1.0);
+    m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -150.0);
+    m_dirty = true;
 }
 
 std::string AdcEngine::hoverSummary() const {

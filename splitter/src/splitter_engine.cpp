@@ -1,4 +1,5 @@
 #include "splitter_engine.h"
+#include <nlohmann/json.hpp>
 
 SplitterEngine::SplitterEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
@@ -80,6 +81,14 @@ void SplitterEngine::update(double dt) {
 
     for (auto& out : m_node.outputs)
         out.bumpGeneration();
+}
+
+nlohmann::json SplitterEngine::serialize() const {
+    return nlohmann::json::object();
+}
+
+void SplitterEngine::deserialize(const nlohmann::json&) {
+    // nothing to restore
 }
 
 std::string SplitterEngine::hoverSummary() const {

@@ -1,4 +1,5 @@
 #include "ideal_filter_engine.h"
+#include <nlohmann/json.hpp>
 #include <cstdio>
 
 IdealFilterEngine::IdealFilterEngine(int id, NodeGraphEngine& graph)
@@ -82,6 +83,19 @@ void IdealFilterEngine::update(double dt) {
 
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     out.bumpGeneration();
+}
+
+nlohmann::json IdealFilterEngine::serialize() const {
+    return {{"filter_type", static_cast<int>(m_type)},
+            {"fc_low_Hz", m_fc_low_Hz},
+            {"fc_high_Hz", m_fc_high_Hz}};
+}
+
+void IdealFilterEngine::deserialize(const nlohmann::json& j) {
+    m_type = static_cast<FilterType>(j.value("filter_type", 0));
+    m_fc_low_Hz = j.value("fc_low_Hz", 100e6);
+    m_fc_high_Hz = j.value("fc_high_Hz", 200e6);
+    m_dirty = true;
 }
 
 std::string IdealFilterEngine::hoverSummary() const {
