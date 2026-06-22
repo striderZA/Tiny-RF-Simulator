@@ -98,6 +98,12 @@ RfSimulatorApp::RfSimulatorApp()
     m_inspector_panel->onParamChange = [this]() { markDirty(); };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
+
+    // Ensure all engine nodes are registered with the widget's imnodes context
+    // so saveProject() can read node positions (GetNodeEditorSpacePos) without
+    // crashing even before the first render frame.
+    m_graph_widget->syncNodesFromEngine();
+
     load_window_states();
 }
 

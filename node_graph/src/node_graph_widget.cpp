@@ -16,6 +16,17 @@ NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_
 
 NodeGraphWidget::~NodeGraphWidget() { ImNodes::EditorContextFree(m_context); }
 
+void NodeGraphWidget::syncNodesFromEngine() {
+    ImNodes::EditorContextSet(m_context);
+    for (const auto& node : m_engine.nodes()) {
+        // Register node with the imnodes pool if not already present.
+        // SetNodeGridSpacePos uses ObjectPoolFindOrCreateObject internally,
+        // so it creates the node if it doesn't exist (e.g. before first render frame)
+        // and is a no-op for already-registered nodes beyond updating their Origin.
+        ImNodes::SetNodeGridSpacePos(node.node_id, ImVec2(0, 0));
+    }
+}
+
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 

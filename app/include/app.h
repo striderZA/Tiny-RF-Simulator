@@ -44,6 +44,7 @@ class RfSimulatorApp {
     void loadProject(const std::string& path);
     void newProject();
     bool isDirty() const { return m_dirty; }
+    size_t componentCount() const { return m_components.size(); }
     std::string m_current_project_path;
     void markDirty() { m_dirty = true; }
     bool m_dirty = false;

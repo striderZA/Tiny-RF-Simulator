@@ -36,6 +36,7 @@ class NodeGraphWidget {
     std::function<std::string(int graph_node_id)> onNodeHover;
 
     ImNodesEditorContext* context() { return m_context; }
+    void syncNodesFromEngine();
 
   private:
     NodeGraphEngine &m_engine;
