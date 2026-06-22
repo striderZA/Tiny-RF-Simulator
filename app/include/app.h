@@ -23,6 +23,8 @@
 #include <vector>
 #include "component_registry.h"
 
+enum class PendingAction { None, New, Open, Exit };
+
 class RfSimulatorApp {
   public:
     RfSimulatorApp();
@@ -45,6 +47,8 @@ class RfSimulatorApp {
     std::string m_current_project_path;
     void markDirty() { m_dirty = true; }
     bool m_dirty = false;
+    void openFileDialog();
+    void saveFileDialog();
 
   private:
     void load_window_states();
@@ -63,4 +67,5 @@ class RfSimulatorApp {
 
     ComponentRegistry m_components;
     int m_next_component_id = 100;
+    PendingAction m_pending_action = PendingAction::None;
 };

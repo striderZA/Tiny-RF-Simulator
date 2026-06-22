@@ -5,6 +5,7 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "coax_cable_engine.h"
+#include <portable-file-dialogs.h>
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -94,6 +95,7 @@ RfSimulatorApp::RfSimulatorApp()
         nullptr, // iq_plot (per-PFB toggles used instead)
         &m_show_node_editor
     });
+    m_inspector_panel->onParamChange = [this]() { markDirty(); };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
     load_window_states();
@@ -429,6 +431,20 @@ void RfSimulatorApp::loadProject(const std::string& path) {
     LOG_INFO("Loaded project from %s", path.c_str());
 }
 
+void RfSimulatorApp::openFileDialog() {
+    auto result = pfd::open_file("Open Project", ".",
+        {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"}).result();
+    if (!result.empty())
+        loadProject(result[0]);
+}
+
+void RfSimulatorApp::saveFileDialog() {
+    auto result = pfd::save_file("Save Project As", ".",
+        {"RF Simulator Project (*.rfsim)", "*.rfsim"}).result();
+    if (!result.empty())
+        saveProject(result);
+}
+
 void RfSimulatorApp::update_dsp() {
     std::unordered_map<int, std::function<void()>> updates;
 
@@ -484,8 +500,114 @@ void RfSimulatorApp::update_dsp() {
 void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
-    ImGui::Text("RF Simulator %s (%s) | %.3f ms/frame (%.1f FPS)", APP_VERSION,
-                APP_GIT_HASH, 1000.0f / io.Framerate, io.Framerate);
+
+    // Execute pending action deferred from Unsaved Changes popup
+    // Only fires if the user saved or discarded (m_dirty == false).
+    // If save dialog was cancelled, m_dirty is still true and the action is dropped.
+    if (m_pending_action != PendingAction::None) {
+        auto action = m_pending_action;
+        m_pending_action = PendingAction::None;
+        if (m_dirty) {
+            // User cancelled the save dialog; drop the pending action entirely
+            LOG_INFO("Unsaved changes still present - pending action dropped");
+        } else {
+            switch (action) {
+                case PendingAction::New:  newProject(); break;
+                case PendingAction::Open: openFileDialog(); break;
+                case PendingAction::Exit: std::exit(0); break;
+                default: break;
+            }
+        }
+    }
+
+    // File menu bar
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("New", "Ctrl+N")) {
+                if (m_dirty) { m_pending_action = PendingAction::New; ImGui::OpenPopup("Unsaved Changes"); }
+                else newProject();
+            }
+            if (ImGui::MenuItem("Open...", "Ctrl+O")) {
+                if (m_dirty) { m_pending_action = PendingAction::Open; ImGui::OpenPopup("Unsaved Changes"); }
+                else openFileDialog();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Save", "Ctrl+S")) {
+                if (!m_current_project_path.empty()) saveProject(m_current_project_path);
+                else saveFileDialog();
+            }
+            if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
+                saveFileDialog();
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit")) {
+                if (m_dirty) { m_pending_action = PendingAction::Exit; ImGui::OpenPopup("Unsaved Changes"); }
+                else std::exit(0);
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Log", nullptr, &m_show_log);
+            ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
+            ImGui::MenuItem("Properties", nullptr, &m_show_properties);
+            ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
+            ImGui::EndMenu();
+        }
+        // Title / project name on the right
+        {
+            float tw = ImGui::GetContentRegionAvail().x;
+            ImGui::SameLine(tw - 300.0f);
+            if (!m_current_project_path.empty()) {
+                auto p = m_current_project_path.find_last_of("\\/");
+                std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1) : m_current_project_path;
+                ImGui::Text("%s%s", m_dirty ? "* " : "", fname.c_str());
+            } else if (m_dirty) {
+                ImGui::Text("*Untitled");
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("%.1f FPS", io.Framerate);
+        }
+        ImGui::EndMainMenuBar();
+    }
+
+    // Keyboard shortcuts (skip while editing text fields)
+    if (!io.WantTextInput) {
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
+            if (!m_current_project_path.empty()) saveProject(m_current_project_path);
+            else saveFileDialog();
+        }
+        if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S))
+            saveFileDialog();
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O))
+            openFileDialog();
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N))
+            newProject();
+    }
+
+    // Unsaved Changes popup
+    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("You have unsaved changes. Save before continuing?");
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            if (!m_current_project_path.empty()) saveProject(m_current_project_path);
+            else {
+                auto path = pfd::save_file("Save Project As", ".",
+                    {"RF Simulator Project (*.rfsim)", "*.rfsim"}).result();
+                if (!path.empty()) saveProject(path);
+            }
+            ImGui::CloseCurrentPopup();
+            // m_pending_action stays set, executes next frame if save succeeded (m_dirty == false)
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(120, 0))) {
+            m_dirty = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_pending_action = PendingAction::None;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 
     if (m_show_node_editor)
         m_graph_widget->draw("Node Editor", &m_show_node_editor);

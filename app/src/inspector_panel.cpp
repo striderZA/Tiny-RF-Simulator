@@ -97,6 +97,8 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         return;
     }
 
+    m_param_edited = false;
+
     // Build label from graph node
     int node_id = hit.engine->graphNodeId();
 
@@ -165,31 +167,44 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         break;
     }
 
+    if (m_param_edited && onParamChange)
+        onParamChange();
+
     ImGui::End();
 }
 
 void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index) {
     (void)index;
     double gain = engine.gain_dB();
-    if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
+    if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0)) {
         engine.setGain_dB(gain);
+        m_param_edited = true;
+    }
 
     double nf = engine.nf_dB();
-    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0)) {
         engine.setNF_dB(nf);
+        m_param_edited = true;
+    }
 
     bool nonlin = engine.enableNonlinear();
-    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin))
+    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin)) {
         engine.setEnableNonlinear(nonlin);
+        m_param_edited = true;
+    }
 
     if (nonlin) {
         double oip2 = engine.oip2_dBm();
-        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0))
+        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP2_dBm(oip2);
+            m_param_edited = true;
+        }
 
         double oip3 = engine.oip3_dBm();
-        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0))
+        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP3_dBm(oip3);
+            m_param_edited = true;
+        }
 
         double p1dB_est = oip3 - 10.0;
         ImGui::TextDisabled("P1dB ≈ %.1f dBm", p1dB_est);
@@ -204,16 +219,22 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
 void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
     (void)index;
     double lo = engine.loFreq_Hz();
-    if (utils::inputFrequency("LO Frequency (MHz)", lo, 1.0, 100.0, "%.0f", 0.0, 100e9))
+    if (utils::inputFrequency("LO Frequency (MHz)", lo, 1.0, 100.0, "%.0f", 0.0, 100e9)) {
         engine.setLoFreq_Hz(lo);
+        m_param_edited = true;
+    }
 
     double gain = engine.conversionGain_dB();
-    if (utils::inputDouble("Conv. Gain (dB)", gain, 1, 10, "%.1f", -30.0, 30.0))
+    if (utils::inputDouble("Conv. Gain (dB)", gain, 1, 10, "%.1f", -30.0, 30.0)) {
         engine.setConversionGain_dB(gain);
+        m_param_edited = true;
+    }
 
     double nf = engine.nf_dB();
-    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+    if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0)) {
         engine.setNF_dB(nf);
+        m_param_edited = true;
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
@@ -240,6 +261,7 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
         if (!result.empty()) {
             engine.reload(result[0]);
             LOG_INFO("S-param component reloaded: %s", result[0].c_str());
+            m_param_edited = true;
         }
     }
 
@@ -252,6 +274,7 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
         int mode_idx = static_cast<int>(current_mode);
         if (ImGui::Combo("Mode", &mode_idx, mode_items, IM_ARRAYSIZE(mode_items))) {
             engine.setMode(static_cast<SParamEngine::Mode>(mode_idx));
+            m_param_edited = true;
         }
 
         // Common port selector (only when not FullMatrix)
@@ -261,8 +284,10 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
             if (ImGui::BeginCombo("Common Port", preview.c_str())) {
                 for (int p = 0; p < np; ++p) {
                     std::string lbl = "Port " + std::to_string(p + 1);
-                    if (ImGui::Selectable(lbl.c_str(), p == common))
+                    if (ImGui::Selectable(lbl.c_str(), p == common)) {
                         engine.setCommonPort(p);
+                        m_param_edited = true;
+                    }
                 }
                 ImGui::EndCombo();
             }
@@ -275,12 +300,16 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
                 ? "All S-params"
                 : "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
             if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
-                if (ImGui::Selectable("All S-params", fwd_idx < 0))
+                if (ImGui::Selectable("All S-params", fwd_idx < 0)) {
                     engine.setFullMatrixMode(true);
+                    m_param_edited = true;
+                }
                 for (int pi = 0; pi < np * np; ++pi) {
                     std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
-                    if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
+                    if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx)) {
                         engine.setForwardParamIdx(pi);
+                        m_param_edited = true;
+                    }
                 }
                 ImGui::EndCombo();
             }
@@ -294,26 +323,35 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
     bool has_nf = (engine.nf_dB() > 0.0);
     if (ImGui::Checkbox("Noise Figure", &has_nf)) {
         engine.setNF_dB(has_nf ? 3.0 : 0.0);
+        m_param_edited = true;
     }
     if (has_nf) {
         double nf = engine.nf_dB();
-        if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
+        if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0)) {
             engine.setNF_dB(nf);
+            m_param_edited = true;
+        }
     }
 
     // Optional: Nonlinearity
     bool nonlin = engine.enableNonlinear();
-    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin))
+    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin)) {
         engine.setEnableNonlinear(nonlin);
+        m_param_edited = true;
+    }
 
     if (nonlin) {
         double oip2 = engine.oip2_dBm();
-        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0))
+        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP2_dBm(oip2);
+            m_param_edited = true;
+        }
 
         double oip3 = engine.oip3_dBm();
-        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0))
+        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP3_dBm(oip3);
+            m_param_edited = true;
+        }
 
         double p1dB_est = oip3 - 10.0;
         ImGui::TextDisabled("P1dB ~ %.1f dBm", p1dB_est);
@@ -328,12 +366,16 @@ void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
 void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
     (void)index;
     double fs = engine.fs_Hz();
-    if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 1e3, 1e12))
+    if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 1e3, 1e12)) {
         engine.setFs_Hz(fs);
+        m_param_edited = true;
+    }
 
     double nsd = engine.nsd_dBm_per_Hz();
-    if (utils::inputDouble("NSD (dBm/Hz)", nsd, 1, 10, "%.1f", -250.0, -30.0))
+    if (utils::inputDouble("NSD (dBm/Hz)", nsd, 1, 10, "%.1f", -250.0, -30.0)) {
         engine.setNsd_dBm_per_Hz(nsd);
+        m_param_edited = true;
+    }
 
     int bits = engine.bits();
     ImGui::SetNextItemWidth(120.0f);
@@ -343,12 +385,15 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
         if (bits > 24)
             bits = 24;
         engine.setBits(bits);
+        m_param_edited = true;
     }
 
     double vfs = engine.v_fs();
     ImGui::SetNextItemWidth(120.0f);
-    if (utils::inputDouble("V_FS (V)", vfs, 0.1, 1.0, "%.2f", 0.1, 10.0))
+    if (utils::inputDouble("V_FS (V)", vfs, 0.1, 1.0, "%.2f", 0.1, 10.0)) {
         engine.setVfs(vfs);
+        m_param_edited = true;
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
@@ -360,8 +405,10 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
 
     ImGui::TextDisabled("Output Sample Rate (for PFB chain):");
     double fs = engine.fs_Hz();
-    if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 0.0, 100e9))
+    if (utils::inputFrequency("Fs (MHz)", fs, 1.0, 100.0, "%.0f", 0.0, 100e9)) {
         engine.setFs_Hz(fs);
+        m_param_edited = true;
+    }
 
     if (ImGui::BeginTable("gen_tones", 5, ImGuiTableFlags_Borders)) {
         ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 30.0f);
@@ -390,20 +437,26 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
             ImGui::TableNextColumn();
             bool p_ch = utils::inputDouble("##phase", phase, 1, 10, "%.0f", -180.0, 180.0);
 
-            if (f_ch || a_ch || p_ch)
+            if (f_ch || a_ch || p_ch) {
                 engine.updateTone(i, freq, amp, phase);
+                m_param_edited = true;
+            }
 
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("X"))
                 to_delete = i;
         }
         ImGui::EndTable();
-        if (to_delete >= 0)
+        if (to_delete >= 0) {
             engine.removeTone(to_delete);
+            m_param_edited = true;
+        }
     }
 
-    if (ImGui::Button("+ Add Tone"))
+    if (ImGui::Button("+ Add Tone")) {
         engine.addTone(100e6, -60.0);
+        m_param_edited = true;
+    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
@@ -419,8 +472,10 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
         if (ImGui::BeginCombo("Model", preview)) {
             for (int i = 0; i < static_cast<int>(kCoaxCablePresets.size()); ++i) {
                 bool selected = (i == engine.presetIndex());
-                if (ImGui::Selectable(kCoaxCablePresets[i].name, selected))
+                if (ImGui::Selectable(kCoaxCablePresets[i].name, selected)) {
                     engine.setPresetIndex(i);
+                    m_param_edited = true;
+                }
                 if (selected) ImGui::SetItemDefaultFocus();
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
@@ -438,13 +493,17 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
 
     // Length
     double L = engine.lengthM();
-    if (utils::inputDouble("Length (m)", L, 0.01, 1.0, "%.3f", 0.0, 1000.0))
+    if (utils::inputDouble("Length (m)", L, 0.01, 1.0, "%.3f", 0.0, 1000.0)) {
         engine.setLengthM(L);
+        m_param_edited = true;
+    }
 
     // Connector loss
     double conn = engine.connectorsLossDB();
-        if (utils::inputDouble("Connector Loss (dB)", conn, 0.1, 1.0, "%.2f", -100.0, 100.0))
+        if (utils::inputDouble("Connector Loss (dB)", conn, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
         engine.setConnectorsLossDB(conn);
+        m_param_edited = true;
+    }
 
     // Read-out at input centre frequency
     if (!engine.node().inputs.empty() && engine.node().inputs[0] &&
@@ -480,12 +539,14 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
     bool view = engine.node().view_enabled;
     if (ImGui::Checkbox("Measure", &view)) {
         engine.node().view_enabled = view;
+        m_param_edited = true;
     }
 
     const char* type_names[] = {"LPF", "HPF", "BPF", "BSF"};
     int current = static_cast<int>(engine.filterType());
     if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
         engine.setFilterType(static_cast<FilterType>(current));
+        m_param_edited = true;
     }
 
     FilterType ft = engine.filterType();
@@ -493,6 +554,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
         double fc = engine.fcLow_Hz();
         if (utils::inputFrequency("Cutoff", fc, 0.0, 2000.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
             engine.setCutoff_Hz(fc);
+            m_param_edited = true;
         }
     } else {
         double low = engine.fcLow_Hz();
@@ -506,6 +568,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
         }
         if (changed) {
             engine.setCutoffs_Hz(low, high);
+            m_param_edited = true;
         }
     }
 
@@ -531,6 +594,7 @@ void InspectorPanel::drawGroupPanel(int group_id) {
     ImGui::InputText("Name", name_buf, sizeof(name_buf));
     if (ImGui::IsItemDeactivatedAfterEdit()) {
         m_graph.renameGroup(group_id, name_buf);
+        m_param_edited = true;
     }
 
     ImGui::Separator();
@@ -561,6 +625,7 @@ void InspectorPanel::drawGroupPanel(int group_id) {
     if (ImGui::Button("Ungroup")) {
         m_graph.removeGroup(group_id);
         last_gid = -1;
+        m_param_edited = true;
     }
 }
 
@@ -576,6 +641,7 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
         if (M > 2048)
             M = 2048;
         engine.setChannelCount(M);
+        m_param_edited = true;
     }
 
     if (ImGui::InputInt("Taps/Branch (K)", &K)) {
@@ -584,13 +650,18 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
         if (K > 64)
             K = 64;
         engine.setTapsPerBranch(K);
+        m_param_edited = true;
     }
 
-    if (ImGui::SliderFloat("Kaiser Beta", &beta, 0.0f, 20.0f, "%.1f"))
+    if (ImGui::SliderFloat("Kaiser Beta", &beta, 0.0f, 20.0f, "%.1f")) {
         engine.setKaiserBeta(beta);
+        m_param_edited = true;
+    }
 
-    if (ImGui::SliderInt("Active Channel", &ch, 0, engine.channelCount() - 1))
+    if (ImGui::SliderInt("Active Channel", &ch, 0, engine.channelCount() - 1)) {
         engine.setActiveChannel(ch);
+        m_param_edited = true;
+    }
 
     const auto &channels = engine.channels();
     if (!channels.empty()) {

@@ -39,7 +39,9 @@ public:
     }
 
     std::function<void(int graph_node_id)> onRemoveNode;
+    std::function<void()> onParamChange;
     void setViewToggles(const ViewToggles& t) { m_viewToggles = t; }
+    bool m_param_edited = false;
 
 private:
     NodeGraphEngine& m_graph;
