@@ -401,7 +401,9 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
 
 void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int index) {
     (void)index;
-    ImGui::Checkbox("Measure", &engine.node().view_enabled);
+    if (ImGui::Checkbox("Measure", &engine.node().view_enabled)) {
+        m_param_edited = true;
+    }
 
     ImGui::TextDisabled("Output Sample Rate (for PFB chain):");
     double fs = engine.fs_Hz();

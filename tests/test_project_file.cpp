@@ -56,6 +56,22 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with 
     cleanup();
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: zero components after newProject", "[project_file]") {
+    cleanup();
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        app.saveProject(tempPath());
+        REQUIRE(app.componentCount() == 0);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(tempPath());
+        REQUIRE(app.componentCount() == 0);
+    }
+    cleanup();
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "Load invalid JSON does not crash", "[project_file]") {
     cleanup();
     {
