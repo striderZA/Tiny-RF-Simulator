@@ -59,11 +59,20 @@ class NodeGraphWidget {
 
     // Subcircuit state
     std::unordered_map<int, int> m_synth_pin_to_real_pin;  // rebuilt every frame
-    std::unordered_map<int, int> m_phantom_id_for_node;    // rebuilt every frame if needed
-    bool m_use_phantom_nodes = false;
+    std::unordered_map<int, int> m_real_to_synth_pin;      // rebuilt every frame (inverse, for link drawing)
+
     int m_context_menu_group_id = -1;
     int m_pending_rename_group_id = -1;
     char m_rename_buffer[128] = {};
+
+    // Cached node screen-space positions (populated during drawNodes, consumed by drawGroupBackgrounds
+    // and drawGroupCollapsedBlocks). Hidden nodes retain their last-known position from when they were
+    // last rendered, avoiding assertion from ImNodes::GetNode*Pos on nodes removed from the pool
+    // (ObjectPoolUpdate in EndNodeEditor cleans up any node not registered via BeginNode).
+    std::unordered_map<int, ImVec2> m_node_screen_positions;
+    // Offset from grid-space to screen-space: screen = grid + grid_to_screen_offset.
+    // Computed from the first visible node during drawNodes(); consumed the next frame.
+    ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
 
     // Rubber-band state
     bool m_rubber_band_active = false;
@@ -75,12 +84,11 @@ class NodeGraphWidget {
     // Internal rendering helpers
     void rebuildSynthMaps();
     void drawGroupBackgrounds();
-    void drawPhantomNodes();
     void drawGroupCollapsedBlocks();
     void drawGroupTitleBar(Group& g, const ImVec2& top_left);
 
     // Interaction handlers
-    void handleRubberBand();
+    void handleRubberBand(bool editor_hovered);
     void handleGroupSelection();
     size_t findNodeIndex(int node_id) const;
 };
