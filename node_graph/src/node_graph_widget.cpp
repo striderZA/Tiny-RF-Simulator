@@ -329,6 +329,8 @@ void NodeGraphWidget::handleLinkCreation() {
                     }
                 }
             }
+
+            if (onLinkChanged) onLinkChanged();
         }
     }
 }
@@ -341,6 +343,7 @@ void NodeGraphWidget::handleLinkDeletion() {
         for (const auto& g : m_engine.groups()) {
             m_engine.rebuildGroupBoundaryPins(g.id);
         }
+        if (onLinkChanged) onLinkChanged();
     }
 }
 

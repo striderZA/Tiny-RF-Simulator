@@ -32,7 +32,10 @@ class NodeGraphWidget {
     std::function<void()> onAddIdealFilter;
     std::function<void()> onAddCoaxCable;
     std::function<void(int node_id)> onRemoveNode;
+    std::function<void()> onLinkChanged;
     std::function<std::string(int graph_node_id)> onNodeHover;
+
+    ImNodesEditorContext* context() { return m_context; }
 
   private:
     NodeGraphEngine &m_engine;

@@ -37,6 +37,15 @@ class RfSimulatorApp {
     SessionState m_state;
     ~RfSimulatorApp();
 
+    // Project save/load
+    void saveProject(const std::string& path);
+    void loadProject(const std::string& path);
+    void newProject();
+    bool isDirty() const { return m_dirty; }
+    std::string m_current_project_path;
+    void markDirty() { m_dirty = true; }
+    bool m_dirty = false;
+
   private:
     void load_window_states();
     NodeGraphEngine m_graph_engine;
