@@ -6,4 +6,4 @@ target_include_directories(common
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(common INTERFACE simulator::logging_core)
+target_link_libraries(common INTERFACE simulator::logging_core nlohmann_json::nlohmann_json)

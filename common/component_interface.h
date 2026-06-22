@@ -1,6 +1,7 @@
 #pragma once
 
 #include "signal_node.h"
+#include <nlohmann/json.hpp>
 #include <string>
 
 class IComponentEngine {
@@ -23,4 +24,8 @@ public:
     // Pin count (default: 1/1 for legacy single-pin engines)
     virtual int numInputPins() const { return 1; }
     virtual int numOutputPins() const { return 1; }
+
+    // Serialization — default no-op
+    virtual nlohmann::json serialize() const { return nlohmann::json::object(); }
+    virtual void deserialize(const nlohmann::json&) {}
 };
