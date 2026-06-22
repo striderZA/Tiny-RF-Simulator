@@ -94,7 +94,7 @@ When the user requests a durable behavior change, record it here or in the relev
 ## Child DOX Index
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
-- app/AGENTS.md — *(pending)* Application orchestrator (`RfSimulatorApp`)
+- [app/AGENTS.md](app/AGENTS.md) — Application orchestrator (`RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
 - node_graph/AGENTS.md — *(pending)* Node editor engine and widget, plus subcircuit groups
 - tests/AGENTS.md — *(pending)* Catch2 unit + benchmark tests
 - amplifier/AGENTS.md — *(pending)* Amplifier engine + widget
