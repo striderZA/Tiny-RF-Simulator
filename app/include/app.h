@@ -46,7 +46,7 @@ class RfSimulatorApp {
     bool isDirty() const { return m_dirty; }
     size_t componentCount() const { return m_components.size(); }
     std::string m_current_project_path;
-    void markDirty() { m_dirty = true; }
+    void markDirty();
     bool m_dirty = false;
     void testMakeDirty();
     void openFileDialog();

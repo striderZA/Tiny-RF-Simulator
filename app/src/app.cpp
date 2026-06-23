@@ -151,6 +151,11 @@ void RfSimulatorApp::testMakeDirty() {
     markDirty();
 }
 
+void RfSimulatorApp::markDirty() {
+    LOG_INFO("markDirty called");
+    m_dirty = true;
+}
+
 void RfSimulatorApp::saveProject(const std::string& path) {
     nlohmann::json root;
     root["version"] = 1;
