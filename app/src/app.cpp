@@ -152,7 +152,6 @@ void RfSimulatorApp::testMakeDirty() {
 }
 
 void RfSimulatorApp::markDirty() {
-    LOG_INFO("markDirty called");
     m_dirty = true;
 }
 
@@ -529,8 +528,7 @@ void RfSimulatorApp::draw_ui() {
                 else newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
-                LOG_INFO("Open clicked, m_dirty=%d show=%d", (int)m_dirty, (int)m_show_unsaved_dialog);
-                if (m_dirty) { LOG_INFO("SETTING show=true"); m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
+                if (m_dirty) { m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
                 else openFileDialog();
             }
             ImGui::Separator();
