@@ -507,25 +507,6 @@ void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
 
-    // Execute pending action deferred from Unsaved Changes popup
-    // Only fires if the user saved or discarded (m_dirty == false).
-    // If save dialog was cancelled, m_dirty is still true and the action is dropped.
-    if (m_pending_action != PendingAction::None) {
-        auto action = m_pending_action;
-        m_pending_action = PendingAction::None;
-        if (m_dirty) {
-            // User cancelled the save dialog; drop the pending action entirely
-            LOG_INFO("Unsaved changes still present - pending action dropped");
-        } else {
-            switch (action) {
-                case PendingAction::New:  newProject(); break;
-                case PendingAction::Open: openFileDialog(); break;
-                case PendingAction::Exit: std::exit(0); break;
-                default: break;
-            }
-        }
-    }
-
     // File menu bar
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
@@ -599,13 +580,31 @@ void RfSimulatorApp::draw_ui() {
                     {"RF Simulator Project (*.rfsim)", "*.rfsim"}).result();
                 if (!path.empty()) saveProject(path);
             }
-            ImGui::CloseCurrentPopup();
-            // m_pending_action stays set, executes next frame if save succeeded (m_dirty == false)
+            if (!m_dirty) {
+                // Save succeeded — execute the pending action now
+                auto action = m_pending_action;
+                m_pending_action = PendingAction::None;
+                ImGui::CloseCurrentPopup();
+                switch (action) {
+                    case PendingAction::New:  newProject(); break;
+                    case PendingAction::Open: openFileDialog(); break;
+                    case PendingAction::Exit: std::exit(0); break;
+                    default: break;
+                }
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
-            m_dirty = false;
+            auto action = m_pending_action;
+            m_pending_action = PendingAction::None;
             ImGui::CloseCurrentPopup();
+            // Execute immediately — user chose to discard
+            switch (action) {
+                case PendingAction::New:  newProject(); break;
+                case PendingAction::Open: openFileDialog(); break;
+                case PendingAction::Exit: std::exit(0); break;
+                default: break;
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
