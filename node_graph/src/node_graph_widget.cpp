@@ -685,23 +685,24 @@ void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_screen)
 }
 
 void NodeGraphWidget::detectNodeMoves() {
-    bool moved = false;
-    for (const auto& node : m_engine.nodes()) {
-        ImVec2 current = ImNodes::GetNodeEditorSpacePos(node.node_id);
-        auto it = m_last_node_grid_positions.find(node.node_id);
-        if (it != m_last_node_grid_positions.end()) {
-            float dx = current.x - it->second.x;
-            float dy = current.y - it->second.y;
-            if (dx * dx + dy * dy > 0.01f) {
-                LOG_INFO("Node %d moved from (%.0f,%.0f) to (%.0f,%.0f)", node.node_id,
-                         it->second.x, it->second.y, current.x, current.y);
-                moved = true;
-            }
-        }
-        m_last_node_grid_positions[node.node_id] = current;
+    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        return;
+    // Check if the release happened over a node (click or drag end)
+    int hovered = -1;
+    if (ImNodes::IsNodeHovered(&hovered) && hovered >= 0) {
+        LOG_INFO("Node interaction detected: node_id=%d", hovered);
+        if (onNodeMoved)
+            onNodeMoved();
+        return;
     }
-    if (moved && onNodeMoved)
-        onNodeMoved();
+    // Fallback: mouse released anywhere in the editor — could be a drag that
+    // ended just outside the node. Check if any node is selected as evidence.
+    int num_selected = ImNodes::NumSelectedNodes();
+    if (num_selected > 0) {
+        LOG_INFO("Node interaction detected (fallback: %d selected)", num_selected);
+        if (onNodeMoved)
+            onNodeMoved();
+    }
 }
 
 void NodeGraphWidget::handleRubberBand(bool editor_hovered) {
