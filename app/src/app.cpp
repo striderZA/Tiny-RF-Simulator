@@ -516,12 +516,12 @@ void RfSimulatorApp::draw_ui() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New", "Ctrl+N")) {
-                if (m_dirty) { m_pending_action = PendingAction::New; ImGui::OpenPopup("Unsaved Changes"); }
+                if (m_dirty) { m_pending_action = PendingAction::New; m_show_unsaved_dialog = true; }
                 else newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
                 LOG_INFO("Open clicked, m_dirty=%d", (int)m_dirty);
-                if (m_dirty) { m_pending_action = PendingAction::Open; ImGui::OpenPopup("Unsaved Changes"); }
+                if (m_dirty) { m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
                 else openFileDialog();
             }
             ImGui::Separator();
@@ -533,7 +533,7 @@ void RfSimulatorApp::draw_ui() {
                 saveFileDialog();
             ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
-                if (m_dirty) { m_pending_action = PendingAction::Exit; ImGui::OpenPopup("Unsaved Changes"); }
+                if (m_dirty) { m_pending_action = PendingAction::Exit; m_show_unsaved_dialog = true; }
                 else std::exit(0);
             }
             ImGui::EndMenu();
@@ -577,7 +577,11 @@ void RfSimulatorApp::draw_ui() {
             newProject();
     }
 
-    // Unsaved Changes popup
+    // Unsaved Changes popup — use a bool flag instead of OpenPopup/BeginPopupModal,
+    // which can be unreliable when called from inside a menu bar context.
+    if (m_show_unsaved_dialog) {
+        ImGui::OpenPopup("Unsaved Changes");
+    }
     if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("You have unsaved changes. Save before continuing?");
         if (ImGui::Button("Save", ImVec2(120, 0))) {
@@ -616,7 +620,12 @@ void RfSimulatorApp::draw_ui() {
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             m_pending_action = PendingAction::None;
+            m_show_unsaved_dialog = false;
             ImGui::CloseCurrentPopup();
+        }
+        // Close the popup when the user dismisses it by clicking outside
+        if (!ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup)) {
+            m_show_unsaved_dialog = false;
         }
         ImGui::EndPopup();
     }

@@ -70,4 +70,5 @@ class RfSimulatorApp {
     ComponentRegistry m_components;
     int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
+    bool m_show_unsaved_dialog = false;
 };
