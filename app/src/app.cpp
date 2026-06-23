@@ -595,6 +595,7 @@ void RfSimulatorApp::draw_ui() {
                 // Save succeeded — execute the pending action now
                 auto action = m_pending_action;
                 m_pending_action = PendingAction::None;
+                m_show_unsaved_dialog = false;
                 ImGui::CloseCurrentPopup();
                 switch (action) {
                     case PendingAction::New:  newProject(); break;
@@ -608,6 +609,7 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
             auto action = m_pending_action;
             m_pending_action = PendingAction::None;
+            m_show_unsaved_dialog = false;
             ImGui::CloseCurrentPopup();
             // Execute immediately — user chose to discard
             switch (action) {
