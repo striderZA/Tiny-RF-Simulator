@@ -519,8 +519,7 @@ void RfSimulatorApp::draw_ui() {
                 else newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
-                if (m_dirty) { m_pending_action = PendingAction::Open; ImGui::OpenPopup("Unsaved Changes"); }
-                else openFileDialog();
+                openFileDialog();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
@@ -568,8 +567,9 @@ void RfSimulatorApp::draw_ui() {
         }
         if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S))
             saveFileDialog();
-        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O))
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
             openFileDialog();
+        }
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N))
             newProject();
     }
