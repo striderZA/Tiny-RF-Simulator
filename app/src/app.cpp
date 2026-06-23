@@ -57,6 +57,7 @@ RfSimulatorApp::RfSimulatorApp()
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
         markDirty();
     };    
+    m_graph_widget->onNodeMoved = [this]() { markDirty(); };
     m_graph_widget->onLinkChanged = [this]() { markDirty(); };
     m_graph_widget->onRemoveNode = [this](int id) {
         markDirty();
@@ -519,7 +520,8 @@ void RfSimulatorApp::draw_ui() {
                 else newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
-                openFileDialog();
+                if (m_dirty) { m_pending_action = PendingAction::Open; ImGui::OpenPopup("Unsaved Changes"); }
+                else openFileDialog();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {

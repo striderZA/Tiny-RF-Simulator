@@ -22,6 +22,7 @@ class NodeGraphWidget {
     IconRegistry& iconRegistry() { return m_icons; }
 
     // Callbacks for app to create/destroy components
+    std::function<void()> onNodeMoved;
     std::function<void()> onAddGenerator;
     std::function<void()> onAddAmplifier;
     std::function<void()> onAddSplitter;
@@ -78,6 +79,9 @@ class NodeGraphWidget {
     // Computed from the first visible node during drawNodes(); consumed the next frame.
     ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
 
+    // Last known grid-space positions for detecting node moves
+    std::unordered_map<int, ImVec2> m_last_node_grid_positions;
+
     // Rubber-band state
     bool m_rubber_band_active = false;
     ImVec2 m_rubber_band_start = ImVec2(0, 0);
@@ -92,6 +96,7 @@ class NodeGraphWidget {
     void drawGroupTitleBar(Group& g, const ImVec2& top_left);
 
     // Interaction handlers
+    void detectNodeMoves();
     void handleRubberBand(bool editor_hovered);
     void handleGroupSelection();
     size_t findNodeIndex(int node_id) const;

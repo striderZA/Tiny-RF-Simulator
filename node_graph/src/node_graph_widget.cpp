@@ -60,6 +60,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         handleGroupSelection();
         handleContextMenu(editor_hovered);
         handleNodeDeletion();
+        detectNodeMoves();
 
         // "Create Subcircuit" popup after rubber-band selection
         if (m_show_create_popup) {
@@ -680,6 +681,24 @@ void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_screen)
     if (ImGui::IsMouseClicked(0) && btn_hovered) {
         m_engine.setGroupCollapsed(g.id, true);
     }
+}
+
+void NodeGraphWidget::detectNodeMoves() {
+    bool moved = false;
+    for (const auto& node : m_engine.nodes()) {
+        ImVec2 current = ImNodes::GetNodeEditorSpacePos(node.node_id);
+        auto it = m_last_node_grid_positions.find(node.node_id);
+        if (it != m_last_node_grid_positions.end()) {
+            float dx = current.x - it->second.x;
+            float dy = current.y - it->second.y;
+            if (dx * dx + dy * dy > 0.01f) {
+                moved = true;
+            }
+        }
+        m_last_node_grid_positions[node.node_id] = current;
+    }
+    if (moved && onNodeMoved)
+        onNodeMoved();
 }
 
 void NodeGraphWidget::handleRubberBand(bool editor_hovered) {
