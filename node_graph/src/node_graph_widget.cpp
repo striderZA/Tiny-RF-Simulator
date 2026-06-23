@@ -1,5 +1,6 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "node_graph_widget.h"
+#include "logging_core.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include <algorithm>
@@ -692,6 +693,8 @@ void NodeGraphWidget::detectNodeMoves() {
             float dx = current.x - it->second.x;
             float dy = current.y - it->second.y;
             if (dx * dx + dy * dy > 0.01f) {
+                LOG_INFO("Node %d moved from (%.0f,%.0f) to (%.0f,%.0f)", node.node_id,
+                         it->second.x, it->second.y, current.x, current.y);
                 moved = true;
             }
         }
