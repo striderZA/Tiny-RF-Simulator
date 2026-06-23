@@ -512,6 +512,10 @@ void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
 
+    // Reset the unsaved dialog flag at the start of each frame.
+    // The menu handlers below set it to true only when m_dirty is set.
+    m_show_unsaved_dialog = false;
+
     // File menu bar
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
