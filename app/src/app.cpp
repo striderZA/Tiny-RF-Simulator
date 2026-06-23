@@ -146,6 +146,10 @@ void RfSimulatorApp::newProject() {
     m_dirty = false;
 }
 
+void RfSimulatorApp::testMakeDirty() {
+    markDirty();
+}
+
 void RfSimulatorApp::saveProject(const std::string& path) {
     nlohmann::json root;
     root["version"] = 1;

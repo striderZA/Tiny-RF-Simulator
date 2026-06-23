@@ -49,7 +49,7 @@ int main() {
     test_io.ConfigVerboseLevel = ImGuiTestVerboseLevel_Info;
     test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
     test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;
-    test_io.ConfigLogToTTY = false;
+    test_io.ConfigLogToTTY = true;
     test_io.ConfigSavedSettings = false;
 
     ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());

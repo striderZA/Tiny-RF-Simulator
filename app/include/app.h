@@ -48,6 +48,7 @@ class RfSimulatorApp {
     std::string m_current_project_path;
     void markDirty() { m_dirty = true; }
     bool m_dirty = false;
+    void testMakeDirty();
     void openFileDialog();
     void saveFileDialog();
 
