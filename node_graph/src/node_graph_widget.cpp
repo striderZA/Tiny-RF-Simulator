@@ -131,9 +131,16 @@ void NodeGraphWidget::drawNodes() {
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
 
-        // Symbol body (replaces the empty 80x56 dummy). Real implementation
-        // lands in Task 6; for now, an empty dummy keeps the layout stable.
-        ImGui::Dummy(ImVec2(96, 64));
+        // Schematic symbol body. Centered in the body region.
+        // ponytail: hardcoded body rect; upgrade when GetNodeBodyRect becomes available.
+        constexpr float BODY_W = 96.0f;
+        constexpr float BODY_H = 64.0f;
+        constexpr float TITLE_BAR_H = 24.0f;
+        ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
+                           screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        drawSchematicSymbol(dl, body_center, kind, static_cast<ImU32>(themeColor(kind)));
+        ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
