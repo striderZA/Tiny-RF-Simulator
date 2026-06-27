@@ -142,3 +142,26 @@ TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_gra
     REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);   // case-sensitive
     REQUIRE(nodeKindFromLabel("Amplifier") == NodeKind::Amplifier);  // no trailing space still matches
 }
+
+#include <cstdint>
+
+TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {
+    REQUIRE(themeColor(NodeKind::Unknown)        != 0u);
+    REQUIRE(themeColor(NodeKind::Generator)      != 0u);
+    REQUIRE(themeColor(NodeKind::Amplifier)      != 0u);
+    REQUIRE(themeColor(NodeKind::Splitter)       != 0u);
+    REQUIRE(themeColor(NodeKind::Mixer)          != 0u);
+    REQUIRE(themeColor(NodeKind::SParam)         != 0u);
+    REQUIRE(themeColor(NodeKind::Adc)            != 0u);
+    REQUIRE(themeColor(NodeKind::PFB)            != 0u);
+    REQUIRE(themeColor(NodeKind::IdealFilter)    != 0u);
+    REQUIRE(themeColor(NodeKind::CoaxCable)      != 0u);
+    REQUIRE(themeColor(NodeKind::GroupCollapsed) != 0u);
+}
+
+TEST_CASE("themeColor returns a distinct color per NodeKind", "[node_graph][appearance]") {
+    REQUIRE(themeColor(NodeKind::Generator) != themeColor(NodeKind::Amplifier));
+    REQUIRE(themeColor(NodeKind::Mixer)     != themeColor(NodeKind::Adc));
+    REQUIRE(themeColor(NodeKind::PFB)       != themeColor(NodeKind::IdealFilter));
+    REQUIRE(themeColor(NodeKind::CoaxCable) != themeColor(NodeKind::Unknown));
+}

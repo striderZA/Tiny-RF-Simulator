@@ -123,3 +123,23 @@ inline NodeKind nodeKindFromLabel(const std::string& label) {
     if (label.rfind("Coax Cable", 0) == 0)   return NodeKind::CoaxCable;
     return NodeKind::Unknown;
 }
+
+// Per-NodeKind ARGB color. Engine has no imgui include, so the return type
+// is plain uint32_t (same bit layout as IM_COL32: 0xAARRGGBB). The widget
+// casts to ImU32 at the call site.
+inline uint32_t themeColor(NodeKind k) {
+    switch (k) {
+        case NodeKind::Generator:      return 0xFF4ADE80;  // green
+        case NodeKind::Amplifier:      return 0xFFFB923C;  // orange
+        case NodeKind::Mixer:          return 0xFFC084FC;  // purple
+        case NodeKind::Splitter:       return 0xFFFACC15;  // amber
+        case NodeKind::Adc:            return 0xFF60A5FA;  // blue
+        case NodeKind::PFB:            return 0xFF22D3EE;  // cyan
+        case NodeKind::IdealFilter:    return 0xFF2DD4BF;  // teal
+        case NodeKind::CoaxCable:      return 0xFF94A3B8;  // slate
+        case NodeKind::SParam:         return 0xFFF472B6;  // pink
+        case NodeKind::GroupCollapsed: return 0xFF818CF8;  // indigo
+        case NodeKind::Unknown:        // fallthrough
+        default:                       return 0xFF9CA3AF;  // gray
+    }
+}
