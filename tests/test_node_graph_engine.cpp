@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "node_graph_engine.h"
+#include <cstdint>
 #include <string>
 
 TEST_CASE("NodeGraphEngine can add and remove nodes", "[node_graph]") {
@@ -142,8 +143,6 @@ TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_gra
     REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);   // case-sensitive
     REQUIRE(nodeKindFromLabel("Amplifier") == NodeKind::Amplifier);  // no trailing space still matches
 }
-
-#include <cstdint>
 
 TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {
     REQUIRE(themeColor(NodeKind::Unknown)        != 0u);

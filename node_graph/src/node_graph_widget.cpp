@@ -92,7 +92,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
                 ImGui::EndPopup();
             }
         }
-        // pop the 8 imnodes + 1 ImGui color styles pushed by setupDarkTheme() at frame start.
+        // pop the 9 imnodes + 1 ImGui color styles pushed by setupDarkTheme() at frame start.
         // ponytail: explicit pop rather than relying on imnodes' frame-level reset,
         // which does NOT auto-pop user-pushed color styles.
         ImNodes::PopColorStyle();   // PinHovered
@@ -152,7 +152,7 @@ void NodeGraphWidget::drawNodes() {
         ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
                            screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        drawSchematicSymbol(dl, body_center, kind, static_cast<ImU32>(themeColor(kind)));
+        drawSchematicSymbol(dl, body_center, kind, color);
         ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
@@ -636,7 +636,9 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
         case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
         case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
-        case NodeKind::Unknown:        /* dimmed, draw nothing */                   break;
+        default:
+            // Future/unknown kinds: draw nothing silently.
+            break;
     }
 }
 
