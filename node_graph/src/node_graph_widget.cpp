@@ -20,6 +20,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
     if (ImGui::Begin(title, p_open)) {
+        setupDarkTheme();
         rebuildSynthMaps();
 
         drawGroupBackgrounds();
@@ -500,6 +501,22 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
     ImGui::EndTooltip();
 }
 
+}
+
+void NodeGraphWidget::setupDarkTheme() {
+    // ponytail: per-frame push is balanced by imnodes' BeginNodeEditor stack
+    // reset; we don't pop here. Per-node title/border overrides (Task 4) are
+    // pushed inside BeginNode/EndNode and explicitly popped in the same block.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(20, 20, 28, 255));  // editor window
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground,  IM_COL32(30, 30, 38, 255));
+    ImNodes::PushColorStyle(ImNodesCol_GridLine,        IM_COL32(50, 50, 65, 100));
+    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(55, 55, 72, 120));
+    ImNodes::PushColorStyle(ImNodesCol_Link,            IM_COL32(180, 180, 200, 200));
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackground, IM_COL32(35, 35, 45, 255));
+    ImNodes::PushColorStyle(ImNodesCol_NodeOutline,     IM_COL32(80, 80, 100, 255));
+    ImNodes::PushColorStyle(ImNodesCol_TitleBar,        IM_COL32(60, 60, 80, 255));
+    ImNodes::PushColorStyle(ImNodesCol_Pin,             IM_COL32(200, 200, 220, 255));
+    ImNodes::PushColorStyle(ImNodesCol_PinHovered,      IM_COL32(120, 200, 255, 255));
 }
 
 void NodeGraphWidget::rebuildSynthMaps() {

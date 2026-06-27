@@ -65,22 +65,29 @@ class NodeGraphWidget {
     int m_pending_rename_group_id = -1;
     char m_rename_buffer[128] = {};
 
-    // Rubber-band state
+    // Rubber-band state & screen-position cache
     bool m_rubber_band_active = false;
     ImVec2 m_rubber_band_start = ImVec2(0, 0);
     ImVec2 m_rubber_band_end = ImVec2(0, 0);
     std::vector<int> m_rubber_band_members;
+    std::unordered_map<int, ImVec2> m_node_screen_positions;
+    ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
     bool m_show_create_popup = false;
 
     // Internal rendering helpers
+    std::unordered_map<int, int> m_real_to_synth_pin;
     void rebuildSynthMaps();
     void drawGroupBackgrounds();
     void drawPhantomNodes();
     void drawGroupCollapsedBlocks();
     void drawGroupTitleBar(Group& g, const ImVec2& top_left);
 
+    // Theme & symbol drawing
+    void setupDarkTheme();
+    static void drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color);
+
     // Interaction handlers
-    void handleRubberBand();
+    void handleRubberBand(bool editor_hovered);
     void handleGroupSelection();
     size_t findNodeIndex(int node_id) const;
 };
