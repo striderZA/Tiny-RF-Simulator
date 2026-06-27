@@ -90,3 +90,36 @@ class NodeGraphEngine {
 
     void rebuildNodeToGroupCache();
 };
+
+// View-layer component type. Used by NodeGraphWidget to pick a color and
+// schematic symbol. The engine never reads, stores, or returns this type;
+// it is derived from GraphNode::label at render time.
+enum class NodeKind {
+    Unknown,
+    Generator,
+    Amplifier,
+    Splitter,
+    Mixer,
+    SParam,
+    Adc,
+    PFB,
+    IdealFilter,
+    CoaxCable,
+    GroupCollapsed
+};
+
+// Maps a node label to a NodeKind by prefix matching. Each engine
+// constructor sets a unique, stable label prefix. First match wins.
+// Unrecognised input (empty, group names, future engines) returns Unknown.
+inline NodeKind nodeKindFromLabel(const std::string& label) {
+    if (label.rfind("Generator", 0) == 0)    return NodeKind::Generator;
+    if (label.rfind("Amplifier", 0) == 0)    return NodeKind::Amplifier;
+    if (label.rfind("Splitter", 0) == 0)     return NodeKind::Splitter;
+    if (label.rfind("Mixer", 0) == 0)        return NodeKind::Mixer;
+    if (label.rfind("S-Param", 0) == 0)      return NodeKind::SParam;
+    if (label.rfind("ADC", 0) == 0)          return NodeKind::Adc;
+    if (label.rfind("PFB", 0) == 0)          return NodeKind::PFB;
+    if (label.rfind("IdealFilter", 0) == 0)  return NodeKind::IdealFilter;
+    if (label.rfind("Coax Cable", 0) == 0)   return NodeKind::CoaxCable;
+    return NodeKind::Unknown;
+}

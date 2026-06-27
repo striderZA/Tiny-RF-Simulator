@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "node_graph_engine.h"
+#include <string>
 
 TEST_CASE("NodeGraphEngine can add and remove nodes", "[node_graph]") {
     NodeGraphEngine engine;
@@ -121,4 +122,23 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
     REQUIRE(sources.size() == 2);
     REQUIRE(sources[0] == &gen1);
     REQUIRE(sources[1] == &gen2);
+}
+
+TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
+    REQUIRE(nodeKindFromLabel("Generator 1") == NodeKind::Generator);
+    REQUIRE(nodeKindFromLabel("Amplifier 2") == NodeKind::Amplifier);
+    REQUIRE(nodeKindFromLabel("Splitter 3") == NodeKind::Splitter);
+    REQUIRE(nodeKindFromLabel("Mixer 4") == NodeKind::Mixer);
+    REQUIRE(nodeKindFromLabel("S-Param 5") == NodeKind::SParam);  // note: hyphen
+    REQUIRE(nodeKindFromLabel("ADC 6") == NodeKind::Adc);
+    REQUIRE(nodeKindFromLabel("PFB 7") == NodeKind::PFB);
+    REQUIRE(nodeKindFromLabel("IdealFilter 8") == NodeKind::IdealFilter);
+    REQUIRE(nodeKindFromLabel("Coax Cable 9") == NodeKind::CoaxCable);
+}
+
+TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_graph][appearance]") {
+    REQUIRE(nodeKindFromLabel("") == NodeKind::Unknown);
+    REQUIRE(nodeKindFromLabel("Subcircuit 1") == NodeKind::Unknown);  // groups handled separately
+    REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);   // case-sensitive
+    REQUIRE(nodeKindFromLabel("Amplifier") == NodeKind::Amplifier);  // no trailing space still matches
 }
