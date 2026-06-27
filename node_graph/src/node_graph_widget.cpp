@@ -122,17 +122,17 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
+        const NodeKind kind = nodeKindFromLabel(node.label);
+        const ImU32 color = static_cast<ImU32>(themeColor(kind));
+        ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
+        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
 
-        // Icon body (pixel art from registry, or empty area if no icon loaded)
-        ImTextureID tex = m_icons.get(node.label);
-        if (tex) {
-            ImGui::Image(tex, ImVec2(80, 56));
-        } else {
-            ImGui::Dummy(ImVec2(80, 56));
-        }
+        // Symbol body (replaces the empty 80x56 dummy). Real implementation
+        // lands in Task 6; for now, an empty dummy keeps the layout stable.
+        ImGui::Dummy(ImVec2(96, 64));
 
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
@@ -167,6 +167,8 @@ void NodeGraphWidget::drawNodes() {
             }
         }
 
+        ImNodes::PopColorStyle();  // NodeOutline
+        ImNodes::PopColorStyle();  // TitleBar
         ImNodes::EndNode();
     }
 }
