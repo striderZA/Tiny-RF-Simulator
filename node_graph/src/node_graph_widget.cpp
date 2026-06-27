@@ -723,6 +723,9 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
+        const ImU32 group_color = static_cast<ImU32>(themeColor(NodeKind::GroupCollapsed));
+        ImNodes::PushColorStyle(ImNodesCol_TitleBar, group_color);
+        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, group_color);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(g.name.c_str());
         ImNodes::EndNodeTitleBar();
@@ -769,6 +772,17 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             }
         }
 
+        // Schematic symbol in the body (same machinery as drawNodes).
+        // ponytail: hardcoded body rect — see plain-node draw for upgrade path.
+        ImVec2 block_screen_pos = ImNodes::GetNodeScreenSpacePos(g.id);
+        constexpr float BODY_W = 120.0f;
+        constexpr float BODY_H = 60.0f;
+        constexpr float TITLE_BAR_H = 24.0f;
+        ImVec2 body_center(block_screen_pos.x + BODY_W * 0.5f,
+                           block_screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        drawSchematicSymbol(dl, body_center, NodeKind::GroupCollapsed, group_color);
+
         // Expand button in the body. Placing it in the title bar would conflict with
         // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
         ImGui::Dummy(ImVec2(0, 4));  // small vertical spacer
@@ -776,6 +790,8 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             m_engine.setGroupCollapsed(g.id, false);
         }
 
+        ImNodes::PopColorStyle();  // NodeOutline
+        ImNodes::PopColorStyle();  // TitleBar
         ImNodes::EndNode();
     }
 }
