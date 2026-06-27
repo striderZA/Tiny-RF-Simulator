@@ -92,6 +92,19 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
                 ImGui::EndPopup();
             }
         }
+        // pop the 8 imnodes + 1 ImGui color styles pushed by setupDarkTheme() at frame start.
+        // ponytail: explicit pop rather than relying on imnodes' frame-level reset,
+        // which does NOT auto-pop user-pushed color styles.
+        ImNodes::PopColorStyle();   // PinHovered
+        ImNodes::PopColorStyle();   // Pin
+        ImNodes::PopColorStyle();   // TitleBar
+        ImNodes::PopColorStyle();   // NodeOutline
+        ImNodes::PopColorStyle();   // NodeBackground
+        ImNodes::PopColorStyle();   // Link
+        ImNodes::PopColorStyle();   // GridLinePrimary
+        ImNodes::PopColorStyle();   // GridLine
+        ImNodes::PopColorStyle();   // GridBackground
+        ImGui::PopStyleColor();     // WindowBg
     }
     ImGui::End();
 }
@@ -628,8 +641,8 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
 }
 
 void NodeGraphWidget::setupDarkTheme() {
-    // ponytail: per-frame push is balanced by imnodes' BeginNodeEditor stack
-    // reset; we don't pop here. Per-node title/border overrides (Task 4) are
+    // ponytail: pushes are popped at the end of the same draw() call (balanced
+    // before the closing ImGui::End()). Per-node title/border overrides are
     // pushed inside BeginNode/EndNode and explicitly popped in the same block.
     ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(20, 20, 28, 255));  // editor window
     ImNodes::PushColorStyle(ImNodesCol_GridBackground,  IM_COL32(30, 30, 38, 255));
