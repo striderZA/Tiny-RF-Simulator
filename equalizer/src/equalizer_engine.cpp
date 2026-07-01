@@ -40,7 +40,7 @@ void EqualizerEngine::update(double dt) {
     if (in_ptr) {
         for (const auto& t : in_ptr->tones) {
             Spectrum::Tone out_t = t;
-            out_t.power_dBm -= m_loss_at_DC_dB;
+            out_t.power_dBm -= lossAt(t.freq_Hz);
             out.tones.push_back(out_t);
         }
     }
@@ -52,12 +52,12 @@ void EqualizerEngine::update(double dt) {
         out.phase_deg.assign(N, 0.0);
     }
 
-    const double L_lin = dbToLinear(m_loss_at_DC_dB);
     out.noise_W.assign(N, 0.0);
     out.noise_added_W.assign(N, 0.0);
     out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i) {
         const double nin = (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
+        const double L_lin = dbToLinear(lossAt(out.frequencies[i]));
         out.noise_W[i] = nin / L_lin;
         out.noise_total_W[i] = out.noise_W[i];
     }
@@ -75,4 +75,17 @@ void EqualizerEngine::setLossAtDC(double dB) {
         m_loss_at_DC_dB = dB;
         m_dirty = true;
     }
+}
+
+void EqualizerEngine::setSlope(double dB_per_decade) {
+    if (dB_per_decade != m_slope_dB_per_decade) {
+        m_slope_dB_per_decade = dB_per_decade;
+        m_dirty = true;
+    }
+}
+
+double EqualizerEngine::lossAt(double freq_Hz) const {
+    double f = std::abs(freq_Hz);
+    if (f < 1.0) f = 1.0;
+    return m_loss_at_DC_dB + m_slope_dB_per_decade * std::log10(f);
 }

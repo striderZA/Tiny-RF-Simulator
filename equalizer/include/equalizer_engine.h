@@ -17,6 +17,8 @@ class EqualizerEngine : public IComponentEngine {
     const SignalNode& node() const override { return m_node; }
     void setLossAtDC(double dB);
     double lossAtDC() const { return m_loss_at_DC_dB; }
+    void setSlope(double dB_per_decade);
+    double slope() const { return m_slope_dB_per_decade; }
     void update(double dt) override;
 
   private:
@@ -26,6 +28,8 @@ class EqualizerEngine : public IComponentEngine {
     SignalNode m_node;                        // 1 input, 1 output
     bool m_dirty = true;
     double m_loss_at_DC_dB = 0.0;
+    double m_slope_dB_per_decade = 0.0;
     const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
+    double lossAt(double freq_Hz) const;
 };
