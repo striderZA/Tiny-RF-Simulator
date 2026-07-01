@@ -1,4 +1,5 @@
 #include "equalizer_engine.h"
+#include <cmath>
 #include <cstdio>
 
 EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine& graph)
@@ -35,7 +36,14 @@ void EqualizerEngine::update(double dt) {
         buildDefaultFrequencyGrid(out.frequencies);
     }
 
-    out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.tones.clear();
+    if (in_ptr) {
+        for (const auto& t : in_ptr->tones) {
+            Spectrum::Tone out_t = t;
+            out_t.power_dBm -= m_loss_at_DC_dB;
+            out.tones.push_back(out_t);
+        }
+    }
 
     const size_t N = out.frequencies.size();
     if (in_ptr && !in_ptr->phase_deg.empty()) {
@@ -44,9 +52,15 @@ void EqualizerEngine::update(double dt) {
         out.phase_deg.assign(N, 0.0);
     }
 
+    const double L_lin = dbToLinear(m_loss_at_DC_dB);
     out.noise_W.assign(N, 0.0);
     out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W.assign(N, 0.0);
+    out.noise_total_W.resize(N);
+    for (size_t i = 0; i < N; ++i) {
+        const double nin = (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
+        out.noise_W[i] = nin / L_lin;
+        out.noise_total_W[i] = out.noise_W[i];
+    }
 
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     out.bumpGeneration();
@@ -54,4 +68,11 @@ void EqualizerEngine::update(double dt) {
 
 std::string EqualizerEngine::hoverSummary() const {
     return "Equalizer";
+}
+
+void EqualizerEngine::setLossAtDC(double dB) {
+    if (dB != m_loss_at_DC_dB) {
+        m_loss_at_DC_dB = dB;
+        m_dirty = true;
+    }
 }

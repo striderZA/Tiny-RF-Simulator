@@ -15,6 +15,8 @@ class EqualizerEngine : public IComponentEngine {
     std::string hoverSummary() const override;
     SignalNode& node() override { return m_node; }
     const SignalNode& node() const override { return m_node; }
+    void setLossAtDC(double dB);
+    double lossAtDC() const { return m_loss_at_DC_dB; }
     void update(double dt) override;
 
   private:
@@ -23,6 +25,7 @@ class EqualizerEngine : public IComponentEngine {
     NodeGraphEngine* m_graph = nullptr;
     SignalNode m_node;                        // 1 input, 1 output
     bool m_dirty = true;
+    double m_loss_at_DC_dB = 0.0;
     const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };
