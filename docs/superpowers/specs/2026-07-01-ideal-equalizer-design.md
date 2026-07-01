@@ -188,7 +188,7 @@ New file `tests/test_equalizer_engine.cpp`, registered in `tests/CMakeLists.txt`
 ### Behavioural coverage
 
 - **Identity** — `L_DC=0`, `slope=0` → output tones match input tones (power, frequency, phase).
-- **Pure DC loss** — `L_DC=−3 dB`, `slope=0` → all tones and noise reduced by 3 dB (linear factor 2).
+- **Pure DC loss** — `L_DC=+3 dB`, `slope=0` → all tones and noise reduced by 3 dB (linear factor 0.5). `L_DC` follows the codebase's "positive = attenuation" convention (matches `CoaxCableEngine` / `AmplifierEngine`); `L_DC = −3 dB` is 3 dB of gain, not 3 dB of loss.
 - **Pure slope** — `L_DC=0`, `slope=2 dB/decade` → loss at 1 Hz = 0 dB (tone unchanged), loss at 10 Hz = 2 dB, loss at 1 GHz = 18 dB, loss at 10 GHz = 20 dB. Each test asserts the output tone power = input tone power − the computed loss.
 - **Negative slope (pre-emphasis)** — `L_DC=0`, `slope=−2 dB/decade` → loss at 1 GHz = −18 dB (i.e. +18 dB gain); output tone power exceeds input by 18 dB. Linear noise factor is the reciprocal of the positive-slope case (gain instead of attenuation).
 - **DC floor** — tone at `freq_Hz = 0` (synthesised in test) → loss = `L_DC` exactly.
