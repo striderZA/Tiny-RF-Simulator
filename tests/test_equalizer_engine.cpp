@@ -193,3 +193,35 @@ TEST_CASE("Equalizer with no input produces empty tones on default grid", "[equa
     REQUIRE(out.noise_total_W.size() == out.frequencies.size());
     REQUIRE(out.generation > 0);
 }
+
+TEST_CASE("Equalizer dirty flag skips recompute on identical inputs", "[equalizer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    EqualizerEngine eq(0, graph);
+    eq.setLossAtDC(-3.0);
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+    const uint64_t gen0 = eq.node().outputs[0].generation;
+
+    eq.update(0.0);
+    REQUIRE(eq.node().outputs[0].generation == gen0);   // no recompute
+}
+
+TEST_CASE("Equalizer generation bumps on slope change", "[equalizer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+
+    EqualizerEngine eq(0, graph);
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+    const uint64_t gen0 = eq.node().outputs[0].generation;
+
+    eq.setSlope(5.0);
+    eq.update(0.0);
+    REQUIRE(eq.node().outputs[0].generation != gen0);
+}
