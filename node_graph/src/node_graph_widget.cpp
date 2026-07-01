@@ -596,6 +596,15 @@ static void drawCoaxSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(c,  8.0f, color, 24, 2.0f);
 }
 
+static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Input/output horizontal lines (signal path)
+    dl->AddLine(ImVec2(c.x - 24, c.y), ImVec2(c.x - 10, c.y), color, 2.0f);
+    dl->AddLine(ImVec2(c.x + 10, c.y), ImVec2(c.x + 24, c.y), color, 2.0f);
+    // Diagonal response curve (the slope)
+    dl->AddLine(ImVec2(c.x - 10, c.y + 8), ImVec2(c.x + 10, c.y - 8), color, 2.0f);
+    dl->AddText(ImVec2(c.x - 5, c.y - 18), color, "EQ");
+}
+
 static void drawSParamSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     ImVec2 tl(c.x - 16, c.y - 12);
     ImVec2 br(c.x + 16, c.y + 12);
@@ -638,6 +647,7 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::PFB:            drawPfbSymbol(dl, center, color);            break;
         case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
         case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
+        case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
         case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
         default:
             // Future/unknown kinds: draw nothing silently.
