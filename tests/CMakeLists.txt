@@ -15,6 +15,7 @@ set(TEST_SOURCES
     test_component_registry.cpp
     test_coax_cable_presets.cpp
     test_coax_cable_engine.cpp
+    test_equalizer_engine.cpp
     test_group.cpp
 )
 
@@ -30,6 +31,7 @@ target_link_libraries(tests PRIVATE
     simulator::signal_generator_engine
     simulator::amplifier_engine
     simulator::ideal_filter_engine
+    simulator::equalizer_engine
     simulator::splitter_engine
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
