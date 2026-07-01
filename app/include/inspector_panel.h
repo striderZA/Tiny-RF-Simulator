@@ -11,6 +11,7 @@
 class AdcEngine;
 class AmplifierEngine;
 class CoaxCableEngine;
+class EqualizerEngine;
 class MixerEngine;
 class SignalGeneratorEngine;
 class SplitterEngine;
@@ -48,7 +49,7 @@ private:
     int m_selected_pfb_index = 0;
     ViewToggles m_viewToggles;
 
-    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParam, Adc, PFB, IdealFilter, CoaxCable };
+    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParam, Adc, PFB, IdealFilter, Equalizer, CoaxCable };
     struct Hit { ComponentType type; IComponentEngine* engine = nullptr; };
     Hit findSelected() const;
     std::string labelForHit(const Hit& hit) const;
@@ -62,5 +63,6 @@ private:
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
     void drawPFBProperties(PFBChannelizerEngine& engine);
     void drawIdealFilterProperties(IdealFilterEngine& engine, int index);
+    void drawEqualizerProperties(EqualizerEngine& engine, int index);
     void drawGroupPanel(int group_id);
 };

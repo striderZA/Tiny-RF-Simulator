@@ -4,6 +4,7 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "coax_cable_engine.h"
+#include "equalizer_engine.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
@@ -43,6 +44,9 @@ RfSimulatorApp::RfSimulatorApp()
     };
     m_graph_widget->onAddIdealFilter = [this]() {
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
+    };
+    m_graph_widget->onAddEqualizer = [this]() {
+        m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
     };
     m_graph_widget->onRemoveNode = [this](int id) {
         m_components.remove(id);

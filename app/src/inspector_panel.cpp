@@ -12,6 +12,7 @@
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "coax_cable_engine.h"
+#include "equalizer_engine.h"
 #include "utils.h"
 #include <cstring>
 #include <portable-file-dialogs.h>
@@ -41,6 +42,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
     else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
     else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
+    else if (dynamic_cast<EqualizerEngine*>(engine))             return {ComponentType::Equalizer, engine};
     else if (dynamic_cast<CoaxCableEngine*>(engine))            return {ComponentType::CoaxCable, engine};
 
     return {ComponentType::None, nullptr};
@@ -59,6 +61,7 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
         case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
+        case ComponentType::Equalizer:     return "Equalizer " + std::to_string(hit.engine->id());
         case ComponentType::CoaxCable:     return "Coax Cable " + std::to_string(hit.engine->id());
     default:                           return "";
     }
@@ -157,6 +160,9 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
     case ComponentType::IdealFilter:
         drawIdealFilterProperties(*static_cast<IdealFilterEngine*>(hit.engine), hit.engine->id());
+        break;
+    case ComponentType::Equalizer:
+        drawEqualizerProperties(*static_cast<EqualizerEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::CoaxCable:
         drawCoaxCableProperties(*static_cast<CoaxCableEngine*>(hit.engine), hit.engine->id());
@@ -508,6 +514,35 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
             engine.setCutoffs_Hz(low, high);
         }
     }
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index) {
+    (void)index;
+    ImGui::Text("Equalizer");
+    ImGui::Separator();
+
+    bool view = engine.node().view_enabled;
+    if (ImGui::Checkbox("Measure", &view)) {
+        engine.node().view_enabled = view;
+    }
+
+    double loss_dc = engine.lossAtDC();
+    if (utils::inputDouble("L@DC (dB)", loss_dc, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
+        engine.setLossAtDC(loss_dc);
+    }
+
+    double slope = engine.slope();
+    if (utils::inputDouble("Slope (dB/decade)", slope, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
+        engine.setSlope(slope);
+    }
+
+    const double loss_1ghz = engine.lossAtDC() + 9.0 * engine.slope();
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "Loss at 1 GHz = %.2f dB", loss_1ghz);
+    ImGui::Text("%s", buf);
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

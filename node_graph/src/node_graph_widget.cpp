@@ -320,6 +320,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Ideal Filter")) {
             if (onAddIdealFilter) onAddIdealFilter();
         }
+        if (ImGui::MenuItem("Add Equalizer")) {
+            if (onAddEqualizer) onAddEqualizer();
+        }
         ImGui::EndPopup();
     }
 }
