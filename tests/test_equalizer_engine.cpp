@@ -225,3 +225,12 @@ TEST_CASE("Equalizer generation bumps on slope change", "[equalizer]") {
     eq.update(0.0);
     REQUIRE(eq.node().outputs[0].generation != gen0);
 }
+
+TEST_CASE("Equalizer hoverSummary shows L_DC and slope", "[equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.setLossAtDC(-2.5);
+    eq.setSlope(1.5);
+    const std::string s = eq.hoverSummary();
+    REQUIRE(s == "Equalizer | L@DC=-2.50 dB, slope=1.50 dB/dec");
+}

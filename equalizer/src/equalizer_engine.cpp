@@ -67,7 +67,10 @@ void EqualizerEngine::update(double dt) {
 }
 
 std::string EqualizerEngine::hoverSummary() const {
-    return "Equalizer";
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "Equalizer | L@DC=%.2f dB, slope=%.2f dB/dec",
+                  m_loss_at_DC_dB, m_slope_dB_per_decade);
+    return buf;
 }
 
 void EqualizerEngine::setLossAtDC(double dB) {
