@@ -8,7 +8,7 @@ Own the `EqualizerEngine`: a 1-in/1-out DSP engine that applies a frequency-depe
 
 - `equalizer/CMakeLists.txt` — `equalizer_engine` static library, exposed as `simulator::equalizer_engine`.
 - `equalizer/include/equalizer_engine.h` — class declaration.
-- `equalizer/src/equalizer_engine.cpp` — implementation; `lossAt(f)` helper applies the DC floor.
+- `equalizer/src/equalizer_engine.cpp` — implementation; public `lossAt(f)` helper applies the DC floor.
 - `equalizer/AGENTS.md` — this file.
 
 ## Local Contracts

@@ -529,17 +529,19 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index)
         engine.node().view_enabled = view;
     }
 
+    // ponytail: spec §6 calls for free-range inputs; utils::inputDouble has no overload without bounds, so use ±1e9 as effectively-unbounded
     double loss_dc = engine.lossAtDC();
-    if (utils::inputDouble("L@DC (dB)", loss_dc, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
+    if (utils::inputDouble("L@DC (dB)", loss_dc, 0.1, 1.0, "%.2f", -1e9, 1e9)) {
         engine.setLossAtDC(loss_dc);
     }
 
+    // ponytail: spec §6 calls for free-range inputs; use ±1e9 as effectively-unbounded
     double slope = engine.slope();
-    if (utils::inputDouble("Slope (dB/decade)", slope, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
+    if (utils::inputDouble("Slope (dB/decade)", slope, 0.1, 1.0, "%.2f", -1e9, 1e9)) {
         engine.setSlope(slope);
     }
 
-    const double loss_1ghz = engine.lossAtDC() + 9.0 * engine.slope();
+    const double loss_1ghz = engine.lossAt(1e9);
     char buf[64];
     std::snprintf(buf, sizeof(buf), "Loss at 1 GHz = %.2f dB", loss_1ghz);
     ImGui::Text("%s", buf);
