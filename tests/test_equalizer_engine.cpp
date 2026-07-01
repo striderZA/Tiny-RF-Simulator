@@ -128,3 +128,68 @@ TEST_CASE("Equalizer sub-1 Hz floor clamps to L_DC", "[equalizer]") {
 
     REQUIRE(eq.node().outputs[0].tones[0].power_dBm == Approx(3.0));   // 0.5 Hz -> loss = -3 dB
 }
+
+TEST_CASE("Equalizer phase passes through unchanged", "[equalizer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);                                    // populate out.tones from m_tones (m_dirty=false afterwards)
+    gen.node().outputs[0].tones[0].phase_deg = 42.0;     // set phase on the populated output tone
+
+    EqualizerEngine eq(0, graph);
+    eq.setSlope(3.0);                      // ensure slope is non-zero so update() is exercised
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+
+    REQUIRE(eq.node().outputs[0].tones[0].phase_deg == Approx(42.0));
+}
+
+TEST_CASE("Equalizer fs_Hz passes through", "[equalizer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(100e6, -20.0);
+    gen.update(0.0);
+    gen.node().outputs[0].fs_Hz = 200e6;    // set after update so it sticks
+
+    EqualizerEngine eq(0, graph);
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+
+    REQUIRE(eq.node().outputs[0].fs_Hz == Approx(200e6));
+}
+
+TEST_CASE("Equalizer noise density scales by 1/L_linear", "[equalizer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.update(0.0);
+    // Manually populate noise on input
+    auto& in_spec = gen.node().outputs[0];
+    in_spec.noise_total_W.assign(in_spec.frequencies.size(), 1e-20);
+    for (auto& v : in_spec.noise_total_W) v = 1e-20;
+
+    EqualizerEngine eq(0, graph);
+    eq.setLossAtDC(-3.0);
+    eq.node().inputs[0] = &in_spec;
+    eq.update(0.0);
+
+    const double L_lin = dbToLinear(-3.0);
+    const auto& out = eq.node().outputs[0];
+    REQUIRE(out.noise_W.size() == in_spec.frequencies.size());
+    for (size_t i = 0; i < out.noise_W.size(); ++i) {
+        REQUIRE(out.noise_W[i] == Approx(1e-20 / L_lin).epsilon(1e-9));
+        REQUIRE(out.noise_total_W[i] == Approx(out.noise_W[i]).epsilon(1e-30));
+        REQUIRE(out.noise_added_W[i] == Approx(0.0).epsilon(1e-30));
+    }
+}
+
+TEST_CASE("Equalizer with no input produces empty tones on default grid", "[equalizer][edge]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.update(0.0);
+
+    const auto& out = eq.node().outputs[0];
+    REQUIRE(out.tones.empty());
+    REQUIRE(out.frequencies.size() >= 2);
+    REQUIRE(out.noise_total_W.size() == out.frequencies.size());
+    REQUIRE(out.generation > 0);
+}
