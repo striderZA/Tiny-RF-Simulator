@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Own the `EqualizerEngine`: a 1-in/1-out DSP engine that applies a frequency-dependent loss defined by `L(f) = L_DC + slope_dB_per_decade * log10(max(|f|, 1 Hz))`. Engine-only (no widget); configuration lives in the existing `InspectorPanel`.
+Own the `EqualizerEngine`: a 1-in/1-out DSP engine that applies a frequency-dependent loss defined by `L(f) = L_DC - slope_dB_per_decade * log10(max(|f|, 1 Hz))`. Loss decreases with frequency, matching the Mini-Circuits-style RF equalizer (max loss at DC, min loss at high end). Engine-only (no widget); configuration lives in the existing `InspectorPanel`.
 
 ## Ownership
 
@@ -14,7 +14,7 @@ Own the `EqualizerEngine`: a 1-in/1-out DSP engine that applies a frequency-depe
 ## Local Contracts
 
 - Two free parameters: `L_DC_dB` (loss at DC, default 0 dB) and `slope_dB_per_decade` (default 0 dB/decade). Both unbounded; no clamping.
-- Positive slope = more loss at high f (cable-like). Negative slope = pre-emphasis. Zero slope + zero `L_DC` = identity.
+- Positive slope = loss decreases with frequency (standard RF equalizer). Negative slope = loss increases with frequency (inverse equalizer). Zero slope + zero `L_DC` = identity.
 - Phase: zero shift. Noise: passive, no NF (`noise_added_W` always zero).
 - Setters flip `m_dirty` on actual change; `update()` short-circuits when neither dirty flag nor upstream spectrum changed.
 - `|f| < 1 Hz` is clamped to the 1 Hz floor to avoid `log10(0)`.
@@ -28,7 +28,7 @@ Own the `EqualizerEngine`: a 1-in/1-out DSP engine that applies a frequency-depe
 ## Verification
 
 - `cmake --build build && ctest --test-dir build -R Equalizer` must pass with all 14 `[equalizer]`-tagged tests.
-- Manual smoke: launch the app, add a Generator (e.g. 1 GHz, −20 dBm), add an Equalizer (`L_DC=0`, `slope=2 dB/decade`), wire generator → equalizer → spectrum analyzer, verify the probed tone reads ≈ −38 dBm (20 dB loss at 1 GHz from the slope).
+- Manual smoke: launch the app, add a Generator (e.g. 1 GHz, −20 dBm), add an Equalizer (`L_DC=5`, `slope=0.5`), wire generator → equalizer → spectrum analyzer, verify the probed tone reads ≈ −20.5 dBm (loss at 1 GHz = 5 − 0.5×log10(1e9) = 5 − 4.5 = 0.5 dB).
 
 ## Child DOX Index
 
