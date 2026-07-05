@@ -90,5 +90,5 @@ void EqualizerEngine::setSlope(double dB_per_decade) {
 double EqualizerEngine::lossAt(double freq_Hz) const {
     double f = std::abs(freq_Hz);
     if (f < 1.0) f = 1.0;
-    return m_loss_at_DC_dB + m_slope_dB_per_decade * std::log10(f);
+    return m_loss_at_DC_dB - m_slope_dB_per_decade * std::log10(f);
 }

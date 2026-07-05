@@ -61,39 +61,46 @@ TEST_CASE("Equalizer L_DC dirty flag triggers recompute", "[equalizer]") {
     REQUIRE(eq.node().outputs[0].tones[0].power_dBm == Approx(-23.0));
 }
 
-TEST_CASE("Equalizer slope produces 18 dB loss at 1 GHz", "[equalizer]") {
+TEST_CASE("Equalizer slope reduces loss with frequency", "[equalizer]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(1.0, 0.0);                 // 1 Hz, log10(1) = 0
     gen.addTone(10.0, 0.0);                // 10 Hz, log10(10) = 1
-    gen.addTone(1e9, 0.0);                 // 1 GHz, log10(1e9) = 9
-    gen.addTone(1e10, 0.0);                // 10 GHz, log10(1e10) = 10
+    gen.addTone(100.0, 0.0);               // 100 Hz, log10(100) = 2
+    gen.addTone(1e3, 0.0);                 // 1 kHz, log10(1e3) = 3
     gen.update(0.0);
 
     EqualizerEngine eq(0, graph);
-    eq.setSlope(2.0);                      // 2 dB/decade
+    eq.setLossAtDC(10.0);                  // 10 dB at DC
+    eq.setSlope(2.0);                      // loss drops 2 dB/decade
     eq.node().inputs[0] = &gen.node().outputs[0];
     eq.update(0.0);
 
     const auto& out = eq.node().outputs[0];
-    REQUIRE(out.tones[0].power_dBm == Approx(0.0));      // 1 Hz: 0 dB loss
-    REQUIRE(out.tones[1].power_dBm == Approx(-2.0));     // 10 Hz: 2 dB loss
-    REQUIRE(out.tones[2].power_dBm == Approx(-18.0));    // 1 GHz: 18 dB loss
-    REQUIRE(out.tones[3].power_dBm == Approx(-20.0));    // 10 GHz: 20 dB loss
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0));    // 1 Hz:  10 - 2*0   = 10 dB loss
+    REQUIRE(out.tones[1].power_dBm == Approx(-8.0));     // 10 Hz: 10 - 2*1   = 8 dB loss
+    REQUIRE(out.tones[2].power_dBm == Approx(-6.0));     // 100 Hz: 10 - 2*2  = 6 dB loss
+    REQUIRE(out.tones[3].power_dBm == Approx(-4.0));     // 1 kHz:  10 - 2*3  = 4 dB loss
 }
 
-TEST_CASE("Equalizer negative slope acts as pre-emphasis", "[equalizer]") {
+TEST_CASE("Equalizer negative slope increases loss with frequency", "[equalizer]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
-    gen.addTone(1e9, 0.0);
+    gen.addTone(1.0, 0.0);                 // 1 Hz:  log10(1) = 0
+    gen.addTone(10.0, 0.0);                // 10 Hz: log10(10) = 1
+    gen.addTone(1e3, 0.0);                 // 1 kHz: log10(1e3) = 3
     gen.update(0.0);
 
     EqualizerEngine eq(0, graph);
-    eq.setSlope(-2.0);                     // -2 dB/decade
+    eq.setLossAtDC(10.0);                  // 10 dB at DC
+    eq.setSlope(-2.0);                     // loss increases 2 dB/decade (inverse equalizer)
     eq.node().inputs[0] = &gen.node().outputs[0];
     eq.update(0.0);
 
-    REQUIRE(eq.node().outputs[0].tones[0].power_dBm == Approx(18.0));
+    const auto& out = eq.node().outputs[0];
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0));    // 1 Hz:  10 - (-2)*0  = 10 dB loss
+    REQUIRE(out.tones[1].power_dBm == Approx(-12.0));    // 10 Hz: 10 - (-2)*1  = 12 dB loss
+    REQUIRE(out.tones[2].power_dBm == Approx(-16.0));    // 1 kHz: 10 - (-2)*3  = 16 dB loss
 }
 
 TEST_CASE("Equalizer DC floor clamps f<=0 to L_DC", "[equalizer]") {
