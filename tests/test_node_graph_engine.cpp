@@ -134,6 +134,7 @@ TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
     REQUIRE(nodeKindFromLabel("PFB 7") == NodeKind::PFB);
     REQUIRE(nodeKindFromLabel("IdealFilter 8") == NodeKind::IdealFilter);
     REQUIRE(nodeKindFromLabel("Coax Cable 9") == NodeKind::CoaxCable);
+    REQUIRE(nodeKindFromLabel("Equalizer 10") == NodeKind::Equalizer);
 }
 
 TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_graph][appearance]") {
@@ -154,6 +155,7 @@ TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph
     REQUIRE(themeColor(NodeKind::IdealFilter)    != 0u);
     REQUIRE(themeColor(NodeKind::CoaxCable)      != 0u);
     REQUIRE(themeColor(NodeKind::GroupCollapsed) != 0u);
+    REQUIRE(themeColor(NodeKind::Equalizer) == 0xFF34D399);
 }
 
 TEST_CASE("themeColor returns a distinct color per NodeKind", "[node_graph][appearance]") {

@@ -96,6 +96,7 @@ void IdealFilterEngine::update(double dt) {
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W = out.noise_W;
 
+        out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
         out.bumpGeneration();
         return;
     }

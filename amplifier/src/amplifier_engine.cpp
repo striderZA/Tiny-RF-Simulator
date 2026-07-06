@@ -1,5 +1,6 @@
 #include "amplifier_engine.h"
 #include <cmath>
+#include <numbers>
 
 AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
@@ -95,26 +96,27 @@ void AmplifierEngine::update(double dt) {
 
         // Amplify input noise by |S21|^2
         out.noise_W.assign(N, 0.0);
+        double sum_gain = 0.0;
+        int gain_count = 0;
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], m_sparam_fwd_idx);
             double gain_linear = std::norm(S);
+            sum_gain += gain_linear;
+            ++gain_count;
             double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = gain_linear * nin;
         }
 
-        // Noise figure (same as ideal mode)
-        double G = 1.0;
-        double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, G);
-        out.noise_added_W.resize(N);
-        if (added_density <= 0.0)
-            out.noise_added_W.assign(N, 0.0);
-        else
-            out.noise_added_W.assign(N, added_density);
+        // Noise figure (scaled by average S21 gain)
+        double avg_gain = (gain_count > 0) ? (sum_gain / gain_count) : 1.0;
+        double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, avg_gain);
+        out.noise_added_W.assign(N, added_density <= 0.0 ? 0.0 : added_density);
 
         out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i)
             out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
 
+        out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
         out.bumpGeneration();
         return;
     }
