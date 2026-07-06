@@ -30,6 +30,7 @@ class NodeGraphWidget {
     std::function<void()> onAddPFB;
     std::function<void()> onAddIdealFilter;
     std::function<void()> onAddCoaxCable;
+    std::function<void()> onAddEqualizer;
     std::function<void(int node_id)> onRemoveNode;
     std::function<std::string(int graph_node_id)> onNodeHover;
 

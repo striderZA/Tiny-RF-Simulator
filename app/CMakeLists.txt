@@ -32,6 +32,7 @@ target_link_libraries(app
         simulator::splitter_engine
         simulator::adc_engine
         simulator::coax_cable_engine
+        simulator::equalizer_engine
         simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
         simulator::ideal_filter_engine

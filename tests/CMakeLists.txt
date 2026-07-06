@@ -17,6 +17,7 @@ set(TEST_SOURCES
     test_group.cpp
     test_amplifier_sparam.cpp
     test_ideal_filter_sparam.cpp
+    test_equalizer.cpp
 )
 
 if(WIN32)
@@ -38,6 +39,7 @@ target_link_libraries(tests PRIVATE
     simulator::adc_engine
     simulator::node_graph_engine
     simulator::coax_cable_engine
+    simulator::equalizer_engine
     simulator::pfb_channelizer_engine
     simulator::app
 )

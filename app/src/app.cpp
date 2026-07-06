@@ -38,6 +38,9 @@ RfSimulatorApp::RfSimulatorApp()
     m_graph_widget->onAddCoaxCable = [this]() {
         m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
     };
+    m_graph_widget->onAddEqualizer = [this]() {
+        m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
+    };
     m_graph_widget->onAddIdealFilter = [this]() {
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
     };

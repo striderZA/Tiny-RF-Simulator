@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 #include "component_registry.h"
+#include "equalizer_engine.h"
 
 class RfSimulatorApp {
   public:

@@ -11,6 +11,7 @@
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "coax_cable_engine.h"
+#include "equalizer_engine.h"
 #include "utils.h"
 #include <cstring>
 #include <portable-file-dialogs.h>
@@ -40,6 +41,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
     else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
     else if (dynamic_cast<CoaxCableEngine*>(engine))            return {ComponentType::CoaxCable, engine};
+    else if (dynamic_cast<EqualizerEngine*>(engine))             return {ComponentType::Equalizer, engine};
 
     return {ComponentType::None, nullptr};
 }
@@ -57,6 +59,7 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
         case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
         case ComponentType::CoaxCable:     return "Coax Cable " + std::to_string(hit.engine->id());
+        case ComponentType::Equalizer:     return "Equalizer " + std::to_string(hit.engine->id());
     default:                           return "";
     }
 }
@@ -154,6 +157,9 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         break;
     case ComponentType::CoaxCable:
         drawCoaxCableProperties(*static_cast<CoaxCableEngine*>(hit.engine), hit.engine->id());
+        break;
+    case ComponentType::Equalizer:
+        drawEqualizerProperties(*static_cast<EqualizerEngine*>(hit.engine), hit.engine->id());
         break;
     default:
         break;
@@ -397,6 +403,54 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
 
     ImGui::TextDisabled("Max freq: %.2f GHz  |  Delay: %.3f ns/m  |  Diameter: %.1f mm",
                         p.max_freq_GHz, p.delay_ns_per_m, p.diameter_mm);
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index) {
+    (void)index;
+
+    ImGui::SeparatorText("Mode");
+    const char* eq_modes[] = {"Ideal", "S-Parameter"};
+    int eq_mode_idx = engine.sparamMode() ? 1 : 0;
+    if (ImGui::Combo("##eq_mode", &eq_mode_idx, eq_modes, IM_ARRAYSIZE(eq_modes))) {
+        engine.setSParamMode(eq_mode_idx == 1);
+    }
+
+    if (engine.sparamMode()) {
+        ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
+        if (ImGui::Button("Browse##eq_sparam")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+            if (!result.empty()) {
+                engine.setSParamFilepath(result[0]);
+            }
+        }
+        if (engine.sparamLoaded()) {
+            ImGui::TextDisabled("Points: %zu | Ports: %d",
+                engine.sparamData().freqs().size(),
+                engine.sparamData().numPorts());
+        } else if (!engine.sparamFilepath().empty()) {
+            ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load file");
+        }
+        ImGui::BeginDisabled();
+    }
+
+    double ref_gain = engine.refGain_dB();
+    if (utils::inputDouble("Ref Gain (dB)", ref_gain, 1, 10, "%.1f", -40.0, 40.0))
+        engine.setRefGain_dB(ref_gain);
+
+    double ref_freq = engine.refFreq_Hz();
+    if (utils::inputFrequency("Ref Freq (MHz)", ref_freq, 1.0, 100.0, "%.0f", 1.0, 100e9))
+        engine.setRefFreq_Hz(ref_freq);
+
+    double slope = engine.slope_dBPerDecade();
+    if (utils::inputDouble("Slope (dB/dec)", slope, 0.1, 1.0, "%.1f", -100.0, 100.0))
+        engine.setSlope_dBPerDecade(slope);
+
+    if (engine.sparamMode())
+        ImGui::EndDisabled();
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

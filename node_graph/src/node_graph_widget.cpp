@@ -305,6 +305,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Coax Cable")) {
             if (onAddCoaxCable) onAddCoaxCable();
         }
+        if (ImGui::MenuItem("Add Equalizer")) {
+            if (onAddEqualizer) onAddEqualizer();
+        }
         if (ImGui::MenuItem("Add Mixer")) {
             if (onAddMixer) onAddMixer();
         }
@@ -590,6 +593,14 @@ static void drawCoaxSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(c,  8.0f, color, 24, 2.0f);
 }
 
+static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Rising/falling slope line
+    dl->AddLine(ImVec2(c.x - 20, c.y + 8), ImVec2(c.x + 20, c.y - 8), color, 2.0f);
+    // Small reference markers
+    dl->AddCircleFilled(ImVec2(c.x - 14, c.y + 4), 2.0f, color);
+    dl->AddCircleFilled(ImVec2(c.x + 14, c.y - 4), 2.0f, color);
+}
+
 static void drawPfbSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     for (int i = 0; i < 3; ++i) {
         float y_off = (i - 1) * 8.0f;
@@ -624,6 +635,7 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::PFB:            drawPfbSymbol(dl, center, color);            break;
         case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
         case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
+        case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
         case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
         default:
             // Future/unknown kinds: draw nothing silently.
