@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "node_graph_engine.h"
+#include "s_parameter_data.h"
 #include "signal_node.h"
 #include "component_interface.h"
 
@@ -28,6 +29,14 @@ class IdealFilterEngine : public IComponentEngine {
     const SignalNode& node() const override { return m_node; }
     void update(double dt) override;
 
+    // S-parameter mode
+    void setSParamFilepath(const std::string& path);
+    bool sparamMode() const { return m_sparam_mode; }
+    void setSParamMode(bool en) { m_sparam_mode = en; m_dirty = true; }
+    bool sparamLoaded() const { return m_sparam_data.loaded(); }
+    const std::string& sparamFilepath() const { return m_sparam_filepath; }
+    const SParameterData& sparamData() const { return m_sparam_data; }
+
   private:
     int m_id;
     int m_graph_node_id = -1;
@@ -41,4 +50,12 @@ class IdealFilterEngine : public IComponentEngine {
     uint64_t m_cached_input_generation = 0;
 
     bool isInPassband(double freq_Hz) const;
+
+    // S-parameter state
+    SParameterData m_sparam_data;
+    std::string m_sparam_filepath;
+    bool m_sparam_mode = false;
+    int m_sparam_fwd_idx = 0;
+    const Spectrum* m_cached_sparam_input = nullptr;
+    uint64_t m_cached_sparam_generation = 0;
 };

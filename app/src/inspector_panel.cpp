@@ -412,6 +412,31 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
         engine.node().view_enabled = view;
     }
 
+    ImGui::SeparatorText("Mode");
+    const char* filter_modes[] = {"Ideal", "S-Parameter"};
+    int f_mode_idx = engine.sparamMode() ? 1 : 0;
+    if (ImGui::Combo("##filter_mode", &f_mode_idx, filter_modes, IM_ARRAYSIZE(filter_modes))) {
+        engine.setSParamMode(f_mode_idx == 1);
+    }
+
+    if (engine.sparamMode()) {
+        ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
+        if (ImGui::Button("Browse##filter_sparam")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+            if (!result.empty()) {
+                engine.setSParamFilepath(result[0]);
+            }
+        }
+        if (engine.sparamLoaded()) {
+            ImGui::TextDisabled("Points: %zu | Ports: %d",
+                engine.sparamData().freqs().size(),
+                engine.sparamData().numPorts());
+        }
+        // Disable ideal-mode controls in S-param mode
+        ImGui::BeginDisabled();
+    }
+
     const char* type_names[] = {"LPF", "HPF", "BPF", "BSF"};
     int current = static_cast<int>(engine.filterType());
     if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
@@ -437,6 +462,10 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
         if (changed) {
             engine.setCutoffs_Hz(low, high);
         }
+    }
+
+    if (engine.sparamMode()) {
+        ImGui::EndDisabled();
     }
 
     if (ImGui::Button("Delete") && onRemoveNode)
