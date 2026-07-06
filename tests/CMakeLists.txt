@@ -6,7 +6,6 @@ set(TEST_SOURCES
     test_main.cpp
     test_node_graph_engine.cpp
     test_touchstone.cpp
-    test_s_parameter_amplifier.cpp
     test_adc.cpp
     test_pfb.cpp
     test_bench_dsp.cpp
@@ -34,7 +33,6 @@ target_link_libraries(tests PRIVATE
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
     simulator::touchstone_parser
-        simulator::s_param_engine
     simulator::adc_engine
     simulator::node_graph_engine
     simulator::coax_cable_engine

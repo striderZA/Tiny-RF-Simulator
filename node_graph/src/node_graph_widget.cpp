@@ -308,9 +308,6 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Mixer")) {
             if (onAddMixer) onAddMixer();
         }
-        if (ImGui::MenuItem("Add S-Param Component")) {
-            if (onAddSParamComponent) onAddSParamComponent();
-        }
         if (ImGui::MenuItem("Add RF ADC")) {
             if (onAddAdc) onAddAdc();
         }
@@ -593,13 +590,6 @@ static void drawCoaxSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(c,  8.0f, color, 24, 2.0f);
 }
 
-static void drawSParamSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
-    ImVec2 tl(c.x - 16, c.y - 12);
-    ImVec2 br(c.x + 16, c.y + 12);
-    dl->AddRect(tl, br, color, 0.0f, ImDrawFlags_None, 2.0f);
-    dl->AddText(ImVec2(c.x - 5, c.y - 8), color, "S");
-}
-
 static void drawPfbSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     for (int i = 0; i < 3; ++i) {
         float y_off = (i - 1) * 8.0f;
@@ -630,7 +620,6 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::Amplifier:      drawAmplifierSymbol(dl, center, color);      break;
         case NodeKind::Splitter:       drawSplitterSymbol(dl, center, color);       break;
         case NodeKind::Mixer:          drawMixerSymbol(dl, center, color);          break;
-        case NodeKind::SParam:         drawSParamSymbol(dl, center, color);         break;
         case NodeKind::Adc:            drawAdcSymbol(dl, center, color);            break;
         case NodeKind::PFB:            drawPfbSymbol(dl, center, color);            break;
         case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;

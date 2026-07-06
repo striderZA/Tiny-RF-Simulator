@@ -7,7 +7,6 @@
 #include "logging_core.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
-#include "s_param_engine.h"
 #include "ideal_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -37,7 +36,6 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<AmplifierEngine*>(engine))             return {ComponentType::Amplifier, engine};
     else if (dynamic_cast<SplitterEngine*>(engine))              return {ComponentType::Splitter, engine};
     else if (dynamic_cast<MixerEngine*>(engine))                 return {ComponentType::Mixer, engine};
-    else if (dynamic_cast<SParamEngine*>(engine))                return {ComponentType::SParam, engine};
     else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
     else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
     else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
@@ -55,7 +53,6 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::Amplifier:     return "Amplifier " + std::to_string(hit.engine->id());
     case ComponentType::Mixer:         return "Mixer " + std::to_string(hit.engine->id());
     case ComponentType::Splitter:      return "Splitter " + std::to_string(hit.engine->id());
-    case ComponentType::SParam:        return "S-Param " + std::to_string(hit.engine->id());
     case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
         case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
@@ -111,9 +108,6 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         break;
     case ComponentType::Splitter:
         drawSplitterProperties(*static_cast<SplitterEngine*>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::SParam:
-        drawSParamProperties(*static_cast<SParamEngine*>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Adc:
         drawAdcProperties(*static_cast<AdcEngine*>(hit.engine), hit.engine->id());
@@ -222,105 +216,6 @@ void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
 void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
     (void)index;
     ImGui::TextDisabled("Splitter: 1 input, 2 outputs, -3 dB split loss");
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
-}
-
-void InspectorPanel::drawSParamProperties(SParamEngine& engine, int index) {
-    (void)index;
-    if (!engine.loaded()) {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load S-parameter file");
-    }
-
-    ImGui::TextWrapped("File: %s", engine.filepath().c_str());
-    if (ImGui::Button("Browse...")) {
-        auto result = pfd::open_file("Select S-parameter file", "",
-                                     {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
-                          .result();
-        if (!result.empty()) {
-            engine.reload(result[0]);
-            LOG_INFO("S-param component reloaded: %s", result[0].c_str());
-        }
-    }
-
-    if (engine.loaded()) {
-        int np = engine.data().numPorts();
-
-        // Mode selector
-        auto current_mode = engine.mode();
-        const char* mode_items[] = {"Splitter", "Combiner", "Full Matrix"};
-        int mode_idx = static_cast<int>(current_mode);
-        if (ImGui::Combo("Mode", &mode_idx, mode_items, IM_ARRAYSIZE(mode_items))) {
-            engine.setMode(static_cast<SParamEngine::Mode>(mode_idx));
-        }
-
-        // Common port selector (only when not FullMatrix)
-        if (current_mode != SParamEngine::Mode::FullMatrix) {
-            int common = engine.commonPort();
-            std::string preview = "Port " + std::to_string(common + 1);
-            if (ImGui::BeginCombo("Common Port", preview.c_str())) {
-                for (int p = 0; p < np; ++p) {
-                    std::string lbl = "Port " + std::to_string(p + 1);
-                    if (ImGui::Selectable(lbl.c_str(), p == common))
-                        engine.setCommonPort(p);
-                }
-                ImGui::EndCombo();
-            }
-        }
-
-        // Forward param override (FullMatrix only, for diagnostics)
-        if (current_mode == SParamEngine::Mode::FullMatrix) {
-            int fwd_idx = engine.forwardParamIdx();
-            std::string preview = (fwd_idx < 0)
-                ? "All S-params"
-                : "S" + std::to_string((fwd_idx / np) + 1) + std::to_string((fwd_idx % np) + 1);
-            if (ImGui::BeginCombo("Forward Param", preview.c_str())) {
-                if (ImGui::Selectable("All S-params", fwd_idx < 0))
-                    engine.setFullMatrixMode(true);
-                for (int pi = 0; pi < np * np; ++pi) {
-                    std::string lbl = "S" + std::to_string((pi / np) + 1) + std::to_string((pi % np) + 1);
-                    if (ImGui::Selectable(lbl.c_str(), pi == fwd_idx))
-                        engine.setForwardParamIdx(pi);
-                }
-                ImGui::EndCombo();
-            }
-        }
-
-        ImGui::Text("Ports: %d | Data points: %zu | Max: %.0f MHz",
-                    np, engine.data().freqs().size(), engine.data().freqs().back() / 1e6);
-    }
-
-    // Optional: Noise Figure
-    bool has_nf = (engine.nf_dB() > 0.0);
-    if (ImGui::Checkbox("Noise Figure", &has_nf)) {
-        engine.setNF_dB(has_nf ? 3.0 : 0.0);
-    }
-    if (has_nf) {
-        double nf = engine.nf_dB();
-        if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
-            engine.setNF_dB(nf);
-    }
-
-    // Optional: Nonlinearity
-    bool nonlin = engine.enableNonlinear();
-    if (ImGui::Checkbox("Enable Nonlinearity", &nonlin))
-        engine.setEnableNonlinear(nonlin);
-
-    if (nonlin) {
-        double oip2 = engine.oip2_dBm();
-        if (utils::inputDouble("OIP2 (dBm)", oip2, 1, 10, "%.1f", -100.0, 200.0))
-            engine.setOIP2_dBm(oip2);
-
-        double oip3 = engine.oip3_dBm();
-        if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0))
-            engine.setOIP3_dBm(oip3);
-
-        double p1dB_est = oip3 - 10.0;
-        ImGui::TextDisabled("P1dB ~ %.1f dBm", p1dB_est);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Estimated 1 dB compression point");
-    }
-
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }

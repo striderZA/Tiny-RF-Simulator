@@ -130,7 +130,6 @@ TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
     REQUIRE(nodeKindFromLabel("Amplifier 2") == NodeKind::Amplifier);
     REQUIRE(nodeKindFromLabel("Splitter 3") == NodeKind::Splitter);
     REQUIRE(nodeKindFromLabel("Mixer 4") == NodeKind::Mixer);
-    REQUIRE(nodeKindFromLabel("S-Param 5") == NodeKind::SParam);  // note: hyphen
     REQUIRE(nodeKindFromLabel("ADC 6") == NodeKind::Adc);
     REQUIRE(nodeKindFromLabel("PFB 7") == NodeKind::PFB);
     REQUIRE(nodeKindFromLabel("IdealFilter 8") == NodeKind::IdealFilter);
@@ -150,7 +149,6 @@ TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph
     REQUIRE(themeColor(NodeKind::Amplifier)      != 0u);
     REQUIRE(themeColor(NodeKind::Splitter)       != 0u);
     REQUIRE(themeColor(NodeKind::Mixer)          != 0u);
-    REQUIRE(themeColor(NodeKind::SParam)         != 0u);
     REQUIRE(themeColor(NodeKind::Adc)            != 0u);
     REQUIRE(themeColor(NodeKind::PFB)            != 0u);
     REQUIRE(themeColor(NodeKind::IdealFilter)    != 0u);

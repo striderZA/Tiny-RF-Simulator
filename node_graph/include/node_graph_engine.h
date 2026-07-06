@@ -100,7 +100,6 @@ enum class NodeKind {
     Amplifier,
     Splitter,
     Mixer,
-    SParam,
     Adc,
     PFB,
     IdealFilter,
@@ -116,7 +115,6 @@ inline NodeKind nodeKindFromLabel(const std::string& label) {
     if (label.rfind("Amplifier", 0) == 0)    return NodeKind::Amplifier;
     if (label.rfind("Splitter", 0) == 0)     return NodeKind::Splitter;
     if (label.rfind("Mixer", 0) == 0)        return NodeKind::Mixer;
-    if (label.rfind("S-Param", 0) == 0)      return NodeKind::SParam;
     if (label.rfind("ADC", 0) == 0)          return NodeKind::Adc;
     if (label.rfind("PFB", 0) == 0)          return NodeKind::PFB;
     if (label.rfind("IdealFilter", 0) == 0)  return NodeKind::IdealFilter;
@@ -137,7 +135,6 @@ inline uint32_t themeColor(NodeKind k) {
         case NodeKind::PFB:            return 0xFF22D3EE;  // cyan
         case NodeKind::IdealFilter:    return 0xFF2DD4BF;  // teal
         case NodeKind::CoaxCable:      return 0xFF94A3B8;  // slate
-        case NodeKind::SParam:         return 0xFFF472B6;  // pink
         case NodeKind::GroupCollapsed: return 0xFF818CF8;  // indigo
         case NodeKind::Unknown:        // fallthrough
         default:                       return 0xFF9CA3AF;  // gray

@@ -108,8 +108,6 @@ Build your RF chain visually: add components via right-click context menu on the
 - **Amplifier** — gain (dB) + noise figure (dB), adds amplified noise. Optional nonlinear mode with OIP2/OIP3 (harmonics, IMD, compression)
 - **Splitter** — 1-in/2-out, -3 dB split loss
 - **Mixer** — frequency conversion with LO, sum/difference tones, conversion gain
-- **S-Parameter Amplifier** — frequency-dependent gain from Touchstone (.s2p/.s3p/.s4p) files, with phase rotation and file browser
-- **S-Parameter Filter** — passive frequency-selective component using Touchstone S-parameter data
 - **RF ADC** — sampler with configurable sample rate, NSD noise floor, bit depth, and full-scale voltage; includes aliasing and Nyquist zone effects
 - **PFB Channelizer** — polyphase filter bank channelizer (M channels, K taps/branch, Kaiser window) with per-channel noise and tone routing. Full-spectrum output with active channel highlighting when probed
 

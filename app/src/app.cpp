@@ -23,9 +23,6 @@ RfSimulatorApp::RfSimulatorApp()
     m_graph_widget->onAddMixer = [this]() {
         m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
     };
-    m_graph_widget->onAddSParamComponent = [this]() {
-        m_components.add<SParamEngine>(m_next_component_id++, m_graph_engine, "");
-    };
     m_graph_widget->onAddAdc = [this]() {
         m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
     };

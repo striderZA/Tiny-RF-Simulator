@@ -15,7 +15,6 @@ class MixerEngine;
 class SignalGeneratorEngine;
 class SplitterEngine;
 class IdealFilterEngine;
-class SParamEngine;
 class PFBChannelizerEngine;
 class ComponentRegistry;
 
@@ -48,7 +47,7 @@ private:
     int m_selected_pfb_index = 0;
     ViewToggles m_viewToggles;
 
-    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, SParam, Adc, PFB, IdealFilter, CoaxCable };
+    enum class ComponentType { None, Generator, Amplifier, Splitter, Mixer, Adc, PFB, IdealFilter, CoaxCable };
     struct Hit { ComponentType type; IComponentEngine* engine = nullptr; };
     Hit findSelected() const;
     std::string labelForHit(const Hit& hit) const;
@@ -57,7 +56,6 @@ private:
     void drawCoaxCableProperties(CoaxCableEngine& engine, int index);
     void drawMixerProperties(MixerEngine& engine, int index);
     void drawSplitterProperties(SplitterEngine& engine, int index);
-    void drawSParamProperties(SParamEngine& engine, int index);
     void drawAdcProperties(AdcEngine& engine, int index);
     void drawGeneratorProperties(SignalGeneratorEngine& engine, int index);
     void drawPFBProperties(PFBChannelizerEngine& engine);

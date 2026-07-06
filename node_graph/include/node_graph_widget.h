@@ -26,7 +26,6 @@ class NodeGraphWidget {
     std::function<void()> onAddAmplifier;
     std::function<void()> onAddSplitter;
     std::function<void()> onAddMixer;
-    std::function<void()> onAddSParamComponent;
     std::function<void()> onAddAdc;
     std::function<void()> onAddPFB;
     std::function<void()> onAddIdealFilter;

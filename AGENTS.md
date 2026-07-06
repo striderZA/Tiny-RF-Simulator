@@ -105,7 +105,6 @@ When the user requests a durable behavior change, record it here or in the relev
 - coax/AGENTS.md — *(pending)* Coaxial cable engine + widget
 - ideal_filter/AGENTS.md — *(pending)* Ideal filter engine + widget
 - splitter/AGENTS.md — *(pending)* Power splitter engine + widget
-- s_parametric_component/AGENTS.md — *(pending)* S-parameter component engine + widget
 - pfb_channelizer/AGENTS.md — *(pending)* PFB channelizer engine + widget
 - iq_plot/AGENTS.md — *(pending)* IQ plot widget
 - touchstone/AGENTS.md — *(pending)* Touchstone file parser
