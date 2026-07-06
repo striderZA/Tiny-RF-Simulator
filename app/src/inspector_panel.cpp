@@ -175,8 +175,7 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
     const char* amp_modes[] = {"Ideal", "S-Parameter"};
     int amp_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##amp_mode", &amp_mode_idx, amp_modes, IM_ARRAYSIZE(amp_modes))) {
-        if (amp_mode_idx == 0)
-            engine.setSParamMode(false);
+        engine.setSParamMode(amp_mode_idx == 1);
     }
 
     if (amp_mode_idx == 1) {
