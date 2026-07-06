@@ -164,9 +164,44 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
 
 void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index) {
     (void)index;
-    double gain = engine.gain_dB();
-    if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
-        engine.setGain_dB(gain);
+
+    ImGui::SeparatorText("Mode");
+    const char* amp_modes[] = {"Ideal", "S-Parameter"};
+    int amp_mode_idx = engine.sparamMode() ? 1 : 0;
+    if (ImGui::Combo("##amp_mode", &amp_mode_idx, amp_modes, IM_ARRAYSIZE(amp_modes))) {
+        if (amp_mode_idx == 0)
+            engine.setSParamMode(false);
+    }
+
+    if (amp_mode_idx == 1) {
+        ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
+        if (ImGui::Button("Browse##amp_sparam")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+            if (!result.empty()) {
+                engine.setSParamFilepath(result[0]);
+                LOG_INFO("Amplifier S-param file: %s", result[0].c_str());
+            }
+        }
+        if (engine.sparamLoaded()) {
+            ImGui::TextDisabled("Points: %zu | Ports: %d",
+                engine.sparamData().freqs().size(),
+                engine.sparamData().numPorts());
+        } else if (!engine.sparamFilepath().empty()) {
+            ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load file");
+        }
+    }
+
+    if (engine.sparamMode()) {
+        ImGui::BeginDisabled();
+        double g = engine.gain_dB();
+        utils::inputDouble("Gain (dB)", g, 1, 10, "%.1f", -10.0, 40.0);
+        ImGui::EndDisabled();
+    } else {
+        double gain = engine.gain_dB();
+        if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
+            engine.setGain_dB(gain);
+    }
 
     double nf = engine.nf_dB();
     if (utils::inputDouble("NF (dB)", nf, 0.1, 10, "%.1f", 0.0, 30.0))
