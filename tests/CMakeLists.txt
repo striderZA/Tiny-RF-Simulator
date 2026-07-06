@@ -15,6 +15,7 @@ set(TEST_SOURCES
     test_coax_cable_presets.cpp
     test_coax_cable_engine.cpp
     test_group.cpp
+    test_amplifier_sparam.cpp
 )
 
 if(WIN32)
