@@ -9,7 +9,7 @@
 using Catch::Approx;
 
 TEST_CASE("TouchstoneParser parses real .s2p file", "[touchstone]") {
-    std::string path = std::string(PROJECT_SOURCE_DIR) + "/amplifier/data_files/adm-8344psm-s_parameters/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    std::string path = std::string(PROJECT_SOURCE_DIR) + "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
     auto result = TouchstoneParser::parse(path);
     REQUIRE(result.has_value());
 
