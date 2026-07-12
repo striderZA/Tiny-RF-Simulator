@@ -270,20 +270,6 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
     if (utils::inputDouble("NSD (dBm/Hz)", nsd, 1, 10, "%.1f", -250.0, -30.0))
         engine.setNsd_dBm_per_Hz(nsd);
 
-    int bits = engine.bits();
-    ImGui::SetNextItemWidth(120.0f);
-    if (ImGui::InputInt("Bits", &bits)) {
-        if (bits < 1)
-            bits = 1;
-        if (bits > 24)
-            bits = 24;
-        engine.setBits(bits);
-    }
-
-    double vfs = engine.v_fs();
-    ImGui::SetNextItemWidth(120.0f);
-    if (utils::inputDouble("V_FS (V)", vfs, 0.1, 1.0, "%.2f", 0.1, 10.0))
-        engine.setVfs(vfs);
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
