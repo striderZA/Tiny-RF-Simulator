@@ -93,15 +93,15 @@ TEST_CASE("Coax cable applies per-tone phase shift", "[coax][phase]") {
     gen.update(0.0);
 
     CoaxCableEngine cable(0, graph);
-    cable.setPresetIndex(4);  // MT 340, delay 0.4 ns/m
+    cable.setPresetIndex(4);  // MT 340, delay 4.76 ns/m
     cable.setLengthM(1.0);
     cable.node().inputs[0] = &gen.node().outputs[0];
     cable.update(0.0);
 
     const auto& out = cable.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
-    // Expected shift: -360 * 1 * 1 * 0.4 * 1e-3 = -0.144 deg
-    REQUIRE(out.tones[0].phase_deg == Approx(30.0 - 0.144).epsilon(1e-9));
+    // Expected shift: -360 * (1e9/1e9) * 1 * 4.76 = -1713.6 deg
+    REQUIRE(out.tones[0].phase_deg == Approx(30.0 - 1713.6).epsilon(1e-9));
 }
 
 TEST_CASE("Coax cable applies per-bin phase shift", "[coax][phase]") {
@@ -122,7 +122,7 @@ TEST_CASE("Coax cable applies per-bin phase shift", "[coax][phase]") {
     REQUIRE(out.phase_deg.size() == out.frequencies.size());
     for (size_t i = 0; i < out.frequencies.size(); ++i) {
         const double f_Hz_c = std::clamp(std::abs(out.frequencies[i]), 1.0, 18.5e9);
-        const double expected_shift = -360.0 * (f_Hz_c / 1e9) * 2.0 * 0.4 * 1e-3;
+        const double expected_shift = -360.0 * (f_Hz_c / 1e9) * 2.0 * 4.76;
         REQUIRE(out.phase_deg[i] == Approx(expected_shift).epsilon(1e-9));
     }
 }

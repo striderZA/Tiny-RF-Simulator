@@ -17,6 +17,6 @@ inline const std::array<CableSpec, 6> kCoaxCablePresets = {{
     {"MT 230",  0.0,       0.0,       0.0,   100.0,  0.0},  // TODO: populate from MT 230 datasheet
     {"MT 265",  0.0,       0.0,       0.0,   100.0,  0.0},  // TODO: populate from MT 265 datasheet
     {"MT 300",  0.0,       0.0,       0.0,   100.0,  0.0},  // TODO: populate from MT 300 datasheet
-    {"MT 340",  0.004710,  0.000004,  0.4,   18.5,   8.6},
+    {"MT 340",  0.004710,  0.000004,  4.76,  18.5,   8.6},
     {"MT 480",  0.0,       0.0,       0.0,   100.0,  0.0},  // TODO: populate from MT 480 datasheet
 }};
