@@ -99,7 +99,7 @@ jobs:
             build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
             mingw-dlls/
 
-  # Create a GitHub Release with packaged binaries when a v* tag is pushed
+  # Create a GitHub Release (draft) with auto-generated changelog and binaries
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -108,6 +108,25 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # need full history + tags for git-cliff
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
+            exit 1
+          fi
+          echo "Version check passed: $TAG_VERSION == $CMAKE_VERSION"
+
+      - name: Generate release notes
+        run: |
+          npm install -g git-cliff --silent
+          git-cliff --config cliff.toml --latest --strip header -o release-notes.md
+          echo "Release notes generated:"
+          cat release-notes.md
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -127,10 +146,11 @@ jobs:
           cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/ 2>/dev/null || true
           zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
 
-      - name: Create Release
+      - name: Create Release (draft)
         uses: softprops/action-gh-release@v2
         with:
-          body_path: .github/release_template.md
+          body_path: release-notes.md
           files: |
             rf-simulator-linux-x86_64.tar.gz
             rf-simulator-windows-x86_64.zip
+          draft: true
