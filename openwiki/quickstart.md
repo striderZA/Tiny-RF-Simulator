@@ -24,8 +24,8 @@ RF Simulator is a **modular RF signal chain simulator** with a real-time spectru
 ```bash
 cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
 cmake --build build
-build/bin/main.exe        # Windows
-# build/bin/main          # Linux/macOS
+build/bin/tiny-rf-simulator.exe        # Windows
+# build/bin/tiny-rf-simulator          # Linux/macOS
 ```
 
 First build takes 60–90s (FetchContent downloads all dependencies). Subsequent builds are fast.

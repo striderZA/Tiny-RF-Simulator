@@ -61,10 +61,10 @@ cmake -B build -G Ninja ...
 
 ```powershell
 # Windows
-build/bin/main.exe
+build/bin/tiny-rf-simulator.exe
 
 # Linux/macOS
-build/bin/main
+build/bin/tiny-rf-simulator
 ```
 
 ---

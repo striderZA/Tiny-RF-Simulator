@@ -14,7 +14,7 @@ Design a cascade of RF components and probe any node to see the spectrum.
 ```bash
 cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
 cmake --build build
-build/bin/main.exe
+build/bin/tiny-rf-simulator.exe
 ```
 
 **First build** takes 60-90s (FetchContent downloads all dependencies). For detailed setup, prerequisites, and per-platform instructions see the [Quickstart Guide](openwiki/quickstart.md).
