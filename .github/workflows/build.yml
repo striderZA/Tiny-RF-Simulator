@@ -79,3 +79,58 @@ jobs:
         # Also exclude the catch_discover_tests concatenation quirk on Windows
         # where many test cases are joined with ; into one unparseable entry.
         run: ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+
+      # Collect MinGW runtime DLLs so the Windows binary is portable
+      - name: Collect MinGW runtime DLLs
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p mingw-dlls
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            cp /mingw64/bin/$dll mingw-dlls/
+          done
+
+      # Upload build binaries as workflow artifacts (only on tag push)
+      - name: Upload build artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ runner.os == 'Windows' && 'windows' || 'linux' }}
+          path: |
+            build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
+            mingw-dlls/
+
+  # Create a GitHub Release with packaged binaries when a v* tag is pushed
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package Linux binary
+        run: |
+          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux
+          chmod +x rf-simulator-linux
+          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux
+
+      - name: Package Windows binary + DLLs
+        run: |
+          mkdir -p rf-simulator-windows
+          cp artifacts/build-windows/build/bin/tiny-rf-simulator.exe rf-simulator-windows/
+          cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/ 2>/dev/null || true
+          zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: .github/release_template.md
+          files: |
+            rf-simulator-linux-x86_64.tar.gz
+            rf-simulator-windows-x86_64.zip
