@@ -1,5 +1,6 @@
 #include "equalizer_engine.h"
 #include <cmath>
+#include <algorithm>
 #include <numbers>
 
 EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine& graph)
@@ -101,7 +102,9 @@ void EqualizerEngine::update(double dt) {
     // Apply gain vs frequency profile
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
     for (auto& t : out.tones) {
-        double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(t.freq_Hz / m_ref_freq_Hz);
+        double f = std::max(t.freq_Hz, 1.0);
+        double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
+        double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(ratio);
         t.power_dBm += gain_db;
         // No phase rotation in ideal mode
     }
@@ -122,7 +125,9 @@ void EqualizerEngine::update(double dt) {
     // Apply gain to noise per bin
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-        double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(out.frequencies[i] / m_ref_freq_Hz);
+        double f = std::max(out.frequencies[i], 1.0);
+        double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
+        double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(ratio);
         double gain_linear = dbToLinear(gain_db);
         double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
         out.noise_W[i] = gain_linear * nin;

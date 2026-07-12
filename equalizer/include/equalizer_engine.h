@@ -6,6 +6,7 @@
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include <string>
+#include <algorithm>
 
 class EqualizerEngine : public IComponentEngine {
 public:
@@ -23,7 +24,7 @@ public:
     // Ideal mode parameters
     void setRefGain_dB(double g) { m_ref_gain_dB = g; m_dirty = true; }
     double refGain_dB() const { return m_ref_gain_dB; }
-    void setRefFreq_Hz(double f) { m_ref_freq_Hz = f; m_dirty = true; }
+    void setRefFreq_Hz(double f) { m_ref_freq_Hz = std::max(f, 1.0); m_dirty = true; }
     double refFreq_Hz() const { return m_ref_freq_Hz; }
     void setSlope_dBPerDecade(double s) { m_slope_dB_per_decade = s; m_dirty = true; }
     double slope_dBPerDecade() const { return m_slope_dB_per_decade; }
