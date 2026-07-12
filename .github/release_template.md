@@ -1,34 +1,20 @@
-# v0.X.0 — <!-- release title -->
+# v0.5.1 — executable rename, window title, CI release packaging
 
 ## Highlights
 
-<!-- 1-3 biggest changes for the release, paragraph style -->
+The main binary is now named `tiny-rf-simulator` (was `main`), window title updated to match, and tag pushes automatically produce platform-specific release archives on GitHub.
 
 ## Features
 
-<!-- new components, engines, widgets, or user-facing capabilities -->
-- ...
-
-## Bug Fixes
-
-<!-- per-component bug fixes, one per bullet -->
-- **component:** description
-- ...
+- **Executable rename:** binary target renamed `main` → `tiny-rf-simulator` (`.exe` on Windows)
+- **Window title:** "RF Simulator GUI" → "Tiny RF Simulator"
 
 ## Documentation
 
-<!-- docs changes, openwiki updates, README changes -->
-- ...
+- Updated all usage examples in README, quickstart guide, and build-runbook to use the new executable name
+- release_template.md restored as a template for future releases
 
 ## Internal
 
-<!-- refactors, build changes, CI, dependency updates, version bumps -->
-- ...
-
----
-
-<!--
-Usage:
-  gh release create v0.X.0 --title "v0.X.0 — <title>" --notes-file .github/release_template.md
-Edit the file first to fill in the sections, then run the command.
--->
+- **CI release pipeline:** on `v*` tag push, the workflow now packages `tiny-rf-simulator` (+ MinGW DLLs on Windows) and uploads as GitHub Release assets
+- **Version bump:** 0.5.0 → 0.5.1
