@@ -6,6 +6,7 @@
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include "component_interface.h"
+#include <algorithm>
 
 class AmplifierEngine : public IComponentEngine {
   public:
@@ -23,8 +24,9 @@ class AmplifierEngine : public IComponentEngine {
         }
     }
     void setNF_dB(double nf) {
-        if (nf != m_nf_dB) {
-            m_nf_dB = nf;
+        double clamped = std::max(0.0, nf);
+        if (clamped != m_nf_dB) {
+            m_nf_dB = clamped;
             m_dirty = true;
         }
     }
@@ -46,11 +48,11 @@ class AmplifierEngine : public IComponentEngine {
         }
     }
     void setOIP2_dBm(double oip2) {
-        m_nonlinear.setOIP2_dBm(oip2);
+        m_nonlinear.setOIP2_dBm(std::max(-30.0, oip2));
         if (m_nonlinear.enabled()) m_dirty = true;
     }
     void setOIP3_dBm(double oip3) {
-        m_nonlinear.setOIP3_dBm(oip3);
+        m_nonlinear.setOIP3_dBm(std::max(-30.0, oip3));
         if (m_nonlinear.enabled()) m_dirty = true;
     }
 

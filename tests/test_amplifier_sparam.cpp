@@ -184,3 +184,44 @@ TEST_CASE("Amplifier S-param handles bad file gracefully", "[amp][sparam]") {
     REQUIRE(!amp.sparamMode());
     amp.update(0.0); // should not crash
 }
+
+TEST_CASE("Amplifier clamps negative noise figure to 0 dB", "[amp][nf]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+
+    amp.setNF_dB(-5.0);
+    REQUIRE(amp.nf_dB() == Approx(0.0));
+
+    amp.setNF_dB(-100.0);
+    REQUIRE(amp.nf_dB() == Approx(0.0));
+
+    // Positive values still work
+    amp.setNF_dB(3.0);
+    REQUIRE(amp.nf_dB() == Approx(3.0));
+}
+
+TEST_CASE("Amplifier clamps OIP2 and OIP3 to >= -30 dBm", "[amp][nonlinear]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+
+    // Extreme negative values should be clamped
+    amp.setOIP2_dBm(-100.0);
+    REQUIRE(amp.oip2_dBm() == Approx(-30.0));
+
+    amp.setOIP3_dBm(-100.0);
+    REQUIRE(amp.oip3_dBm() == Approx(-30.0));
+
+    // Boundary value
+    amp.setOIP2_dBm(-30.0);
+    REQUIRE(amp.oip2_dBm() == Approx(-30.0));
+
+    amp.setOIP3_dBm(-30.0);
+    REQUIRE(amp.oip3_dBm() == Approx(-30.0));
+
+    // Normal positive values still work
+    amp.setOIP2_dBm(40.0);
+    REQUIRE(amp.oip2_dBm() == Approx(40.0));
+
+    amp.setOIP3_dBm(30.0);
+    REQUIRE(amp.oip3_dBm() == Approx(30.0));
+}
