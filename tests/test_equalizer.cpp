@@ -103,3 +103,56 @@ TEST_CASE("Equalizer S-param mode applies S21 gain", "[equalizer][sparam]") {
     double expected = 20.0 * std::log10(std::abs(S21));
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + expected).margin(0.5));
 }
+
+TEST_CASE("Equalizer handles zero frequency tone without NaN", "[equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.setRefGain_dB(10.0);
+    eq.setSlope_dBPerDecade(5.0);
+
+    SignalGeneratorEngine gen(1, graph);
+    gen.addTone(0.0, -20.0);  // zero frequency
+    gen.update(0.0);
+
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+
+    const auto& out = eq.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(std::isfinite(out.tones[0].power_dBm));
+    REQUIRE_FALSE(std::isnan(out.tones[0].power_dBm));
+}
+
+TEST_CASE("Equalizer setRefFreq_Hz clamps to minimum 1 Hz", "[equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+
+    eq.setRefFreq_Hz(0.0);
+    REQUIRE(eq.refFreq_Hz() == Approx(1.0));
+
+    eq.setRefFreq_Hz(-100.0);
+    REQUIRE(eq.refFreq_Hz() == Approx(1.0));
+
+    eq.setRefFreq_Hz(1e6);
+    REQUIRE(eq.refFreq_Hz() == Approx(1e6));
+}
+
+TEST_CASE("Equalizer handles negative frequency tone without NaN", "[equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.setRefGain_dB(10.0);
+    eq.setSlope_dBPerDecade(5.0);
+
+    SignalGeneratorEngine gen(1, graph);
+    gen.addTone(-1e9, -20.0);  // negative frequency
+    gen.update(0.0);
+
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+
+    const auto& out = eq.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(std::isfinite(out.tones[0].power_dBm));
+    REQUIRE_FALSE(std::isnan(out.tones[0].power_dBm));
+}
+
