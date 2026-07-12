@@ -28,6 +28,8 @@ cmake --build build
 
 The first build takes 60-90s while FetchContent clones dependencies. Subsequent builds are fast.
 
+> **See also:** [Build & Operations guide](openwiki/operations/build-runbook.md) for release builds, clean builds, CI/CD, and troubleshooting.
+
 ## Testing
 
 ```bash
@@ -43,6 +45,8 @@ build/bin/tests [bench]       # Linux/macOS
 build/bin/tests.exe [bench]   # Windows
 ```
 
+> **See also:** [Testing Guide](openwiki/testing/guidance.md) for test structure, patterns, benchmarks, and UI tests.
+
 ## Architecture (Quick Reference)
 
 - **C++20** modular library.
@@ -50,7 +54,7 @@ build/bin/tests.exe [bench]   # Windows
 - **Only widget files** may `#include <imgui.h>` / `<implot.h>`.
 - **CMake targets** use `simulator::*` aliases (e.g. `simulator::signal_generator_engine`).
 - **Signal wiring** is explicit: the app queries `NodeGraphEngine` to route `Spectrum` data between engines each frame.
-- For full architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+- For full architecture details, see the [Architecture Overview](openwiki/architecture/overview.md).
 
 ## Code Style
 
@@ -60,6 +64,8 @@ build/bin/tests.exe [bench]   # Windows
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
 - **Portability:** `uint64_t` requires explicit `#include <cstdint>` (g++ does not provide it transitively).
+
+> **See also:** [Build & Operations guide](openwiki/operations/build-runbook.md#code-style) for full code style conventions.
 
 ## Git Workflow
 

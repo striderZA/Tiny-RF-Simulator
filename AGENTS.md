@@ -7,7 +7,7 @@ All project conventions — development setup, build commands, architecture, cod
 Additional references:
 
 - [README.md](README.md) — project overview, features, quick start
-- [ARCHITECTURE.md](ARCHITECTURE.md) — full architecture document
+- [Architecture overview](openwiki/architecture/overview.md) — full architecture deep-dive (engine+widget pattern, signal chain, subcircuit groups, dirty-flag caching)
 - [`.clang-format`](.clang-format) — code style rules
 - [`.github/workflows/build.yml`](.github/workflows/build.yml) — CI configuration
 
@@ -115,3 +115,13 @@ When the user requests a durable behavior change, record it here or in the relev
 - src/AGENTS.md — *(pending)* Main entry point
 - test_engine/AGENTS.md — *(pending)* Test signal engine
 - (other module-specific docs created as needed)
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository uses OpenWiki for recurring code documentation. Start with `openwiki/quickstart.md`, then follow its links to architecture, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->
