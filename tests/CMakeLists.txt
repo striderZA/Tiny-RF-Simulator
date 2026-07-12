@@ -18,6 +18,7 @@ set(TEST_SOURCES
     test_amplifier_sparam.cpp
     test_ideal_filter_sparam.cpp
     test_equalizer.cpp
+    test_iq_plot.cpp
 )
 
 if(WIN32)
@@ -41,6 +42,7 @@ target_link_libraries(tests PRIVATE
     simulator::coax_cable_engine
     simulator::equalizer_engine
     simulator::pfb_channelizer_engine
+    simulator::iq_plot_widget
     simulator::app
 )
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
