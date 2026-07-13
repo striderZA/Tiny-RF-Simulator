@@ -25,7 +25,7 @@ If applicable, add screenshots to help explain the problem.
 
 **Environment (please complete the following):**
  - OS: [e.g. Windows 11, Ubuntu 22.04]
- - Compiler: [e.g. MSVC 2022, GCC 14]
+ - Compiler: [e.g. MinGW-w64 GCC 14, GCC 14]
  - Build config: [e.g. Debug, Release]
 
 **Additional context**
