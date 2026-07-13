@@ -63,7 +63,7 @@ build/bin/tests [bench]
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (67) + benchmarks (6) |
+| `tests/` | Catch2 unit tests (166, including 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
 | `src/` | `main.cpp` entry point |
 | `docs/` | Engineering docs (nonlinear model, PFB, ADC, Touchstone specs) |

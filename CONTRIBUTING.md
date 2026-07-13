@@ -36,7 +36,7 @@ The first build takes 60-90s while FetchContent clones dependencies. Subsequent 
 ctest --test-dir build --output-on-failure
 ```
 
-73 tests (67 unit + 6 benchmarks) cover all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
+166 tests (including 14 benchmarks) cover all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
 
 For per-engine dirty/clean benchmarks:
 
