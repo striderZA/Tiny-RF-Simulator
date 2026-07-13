@@ -1,5 +1,4 @@
 #include "touchstone_parser.h"
-#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <numbers>

@@ -1,8 +1,6 @@
 #define _USE_MATH_DEFINES
 #include "pfb_channelizer_engine.h"
-#include <algorithm>
 #include <cmath>
-#include <limits>
 
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {

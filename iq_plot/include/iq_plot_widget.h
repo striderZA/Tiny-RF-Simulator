@@ -2,8 +2,6 @@
 
 #include "pfb_channelizer_engine.h"
 #include <deque>
-#include <vector>
-#include <complex>
 
 struct ZoomState {
     bool active = false;

@@ -1,14 +1,12 @@
 #define _USE_MATH_DEFINES
 #include "iq_plot_widget.h"
 #include "iq_plot_dsp.h"
-#include "common.h"
 #include "imgui.h"
 #include "implot.h"
 #include <kiss_fft.h>
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <limits>
 
 IQPlotWidget::~IQPlotWidget() {
     if (m_ifft) kiss_fft_free(m_ifft);

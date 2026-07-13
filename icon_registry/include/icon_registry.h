@@ -1,7 +1,6 @@
 #pragma once
 #include "imgui.h"
 #include <string>
-#include <unordered_map>
 
 class IconRegistry {
   public:

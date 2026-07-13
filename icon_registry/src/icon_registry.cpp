@@ -1,7 +1,6 @@
 #include "icon_registry.h"
 #include "texture_loader.h"
-#include <algorithm>
-
+#include <unordered_map>
 struct IconRegistry::Impl {
     std::unordered_map<std::string, ImTextureID> icons;
 };

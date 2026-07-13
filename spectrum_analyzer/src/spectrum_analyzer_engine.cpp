@@ -1,5 +1,4 @@
 #include "spectrum_analyzer_engine.h"
-#include "common.h"
 #include "logging_core.h"
 #include <algorithm>
 #include <cmath>
