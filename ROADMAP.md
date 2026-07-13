@@ -8,7 +8,7 @@
 | 2 | **Spectrum analyzer enhancements** — more functionality in the spectrum analyzer view | 📋 Planned | |
 | 3 | **RF-accurate node-graph components** — improved RF representation in the node graph | 📋 Planned | |
 | 4 | **Multi-port components** — support components with >2 ports, multiple signal paths | ✅ Completed | Data structures refactored (SignalNode/GraphNode vectors); Splitter (1→2 ports, −3dB) implemented and tested |
-| 5 | **Digital chain** — polyphase filter bank + digital downconversion | ✅ Completed (ADC) / 📋 Planned (PFB) | Sub-project 1 (RF ADC): frequency-domain sampler, Nyquist zone aliasing, NSD-based noise model, IQStream type for later I/Q pipeline |
+| 5 | **Digital chain** — polyphase filter bank + digital downconversion | ✅ Completed | RF ADC (frequency-domain sampler, Nyquist zone aliasing, NSD noise, IQStream) + PFB channelizer (M channels, K taps, engine + widget, 8 tests + benchmarks) |
 | 6 | **Time domain view** — add time-domain visualization | 📋 Planned | |
 | 7 | **Pulsed signal generation** — pulse-generation capability | 📋 Planned | |
 | 8 | **Spectrum phase** — add phase member to the `Spectrum` class | ✅ Completed | `phase_deg` on `Tone` + per-bin vector, GUI column, propagated through amplifier |
