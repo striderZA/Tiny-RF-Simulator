@@ -223,7 +223,7 @@ All library dependencies are fetched automatically via `FetchContent`:
 
 ```
 build/
-├── bin/            # Executables (main, tests, test_ui)
+├── bin/            # Executables (tiny-rf-simulator, tests, test_ui)
 ├── lib/            # Static libraries
 └── _deps/          # FetchContent downloads
 ```
