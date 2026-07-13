@@ -39,4 +39,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), the [OpenWiki](openwiki/), and [AGENTS.m
 
 ## License
 
-[MIT](LICENSE)
+[Apache-2.0](LICENSE)

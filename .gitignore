@@ -297,6 +297,11 @@ PublishScripts/
 *.nuget.props
 *.nuget.targets
 
+# RF Simulator local artifacts
+imgui.ini
+.worktrees/
+output.log
+
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
