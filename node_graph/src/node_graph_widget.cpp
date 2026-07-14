@@ -302,6 +302,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Splitter")) {
             if (onAddSplitter) onAddSplitter();
         }
+        if (ImGui::MenuItem("Add Combiner")) {
+            if (onAddCombiner) onAddCombiner();
+        }
         if (ImGui::MenuItem("Add Coax Cable")) {
             if (onAddCoaxCable) onAddCoaxCable();
         }
@@ -571,6 +574,20 @@ static void drawSplitterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(out_b, 2.5f, color);
 }
 
+static void drawCombinerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Reverse of splitter: 2 inputs on left, 1 output on right
+    ImVec2 in_a(c.x - 22, c.y - 12);
+    ImVec2 in_b(c.x - 22, c.y + 12);
+    ImVec2 mid(c.x, c.y);
+    ImVec2 out_pt(c.x + 22, c.y);
+    dl->AddLine(in_a, mid, color, 2.0f);
+    dl->AddLine(in_b, mid, color, 2.0f);
+    dl->AddLine(mid, out_pt, color, 2.0f);
+    dl->AddCircleFilled(in_a, 2.5f, color);
+    dl->AddCircleFilled(in_b, 2.5f, color);
+    dl->AddCircleFilled(out_pt, 2.5f, color);
+}
+
 static void drawAdcSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     ImVec2 pts[6] = {
         ImVec2(c.x - 24, c.y + 8),
@@ -658,6 +675,7 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
         case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
         case NodeKind::Attenuator:     drawAttenuatorSymbol(dl, center, color);     break;
+        case NodeKind::Combiner:       drawCombinerSymbol(dl, center, color);       break;
         case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
         default:
             // Future/unknown kinds: draw nothing silently.

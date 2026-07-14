@@ -106,6 +106,7 @@ enum class NodeKind {
     CoaxCable,
     Equalizer,
     Attenuator,
+    Combiner,
     GroupCollapsed
 };
 
@@ -123,6 +124,7 @@ inline NodeKind nodeKindFromLabel(const std::string& label) {
     if (label.rfind("Coax Cable", 0) == 0)   return NodeKind::CoaxCable;
     if (label.rfind("Equalizer", 0) == 0)    return NodeKind::Equalizer;
     if (label.rfind("Attenuator", 0) == 0)   return NodeKind::Attenuator;
+    if (label.rfind("Combiner", 0) == 0)     return NodeKind::Combiner;
     return NodeKind::Unknown;
 }
 
@@ -141,6 +143,7 @@ inline uint32_t themeColor(NodeKind k) {
         case NodeKind::CoaxCable:      return 0xFF94A3B8;  // slate
         case NodeKind::Equalizer:      return 0xFF34D399;  // emerald
         case NodeKind::Attenuator:     return 0xFF64B48C;  // muted green
+        case NodeKind::Combiner:       return 0xFFF87171;  // red
         case NodeKind::GroupCollapsed: return 0xFF818CF8;  // indigo
         case NodeKind::Unknown:        // fallthrough
         default:                       return 0xFF9CA3AF;  // gray
