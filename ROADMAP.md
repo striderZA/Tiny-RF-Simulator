@@ -16,6 +16,7 @@
 | 10 | **Frequency conversion** — mixer components | ✅ Completed | Internal LO, sum+difference sidebands, editable LO freq + conv gain, noise scaled, phase preserved |
 | 11 | **Subcircuit groups** — expandable/collapsible node groups with synthesized input/output pins for navigating large circuits | ✅ Completed | Snapshot editing model; visual layer only, DSP graph stays flat; engine + widget + inspector integration |
 | 12 | **Attenuator component** — passive attenuator with manual dB control and S-parameter mode | ✅ Completed | Physically accurate noise model (NF = atten), Touchstone S-param support, zigzag schematic symbol, inspector panel, 10 unit tests |
+| 13 | **Combiner component** — 2-input → 1-output passive RF combiner with Wilkinson model and S-parameter mode | ✅ Completed | Exact dual of splitter (-3 dB per input), coherent signal combination, 3-port Touchstone S-param support, Y-shaped schematic symbol, inspector panel with mode toggle, 6 unit tests |
 
 ## Status Key
 
