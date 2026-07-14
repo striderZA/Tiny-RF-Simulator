@@ -5,6 +5,7 @@
 #include "pfb_channelizer_engine.h"
 #include "coax_cable_engine.h"
 #include "attenuator_engine.h"
+#include "combiner_engine.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
@@ -47,6 +48,9 @@ RfSimulatorApp::RfSimulatorApp()
     };
     m_graph_widget->onAddAttenuator = [this]() {
         m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
+    };
+    m_graph_widget->onAddCombiner = [this]() {
+        m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
     };
     m_graph_widget->onRemoveNode = [this](int id) {
         m_components.remove(id);

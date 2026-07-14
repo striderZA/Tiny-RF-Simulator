@@ -37,6 +37,7 @@ target_link_libraries(app
         simulator::spectrum_analyzer_widget
         simulator::ideal_filter_engine
         simulator::attenuator_engine
+        simulator::combiner_engine
         simulator::node_graph_engine
         simulator::node_graph_widget
         common

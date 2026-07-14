@@ -13,6 +13,7 @@
 #include "coax_cable_engine.h"
 #include "equalizer_engine.h"
 #include "attenuator_engine.h"
+#include "combiner_engine.h"
 #include "utils.h"
 #include <cstring>
 #include <portable-file-dialogs.h>
@@ -44,6 +45,7 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     else if (dynamic_cast<CoaxCableEngine*>(engine))            return {ComponentType::CoaxCable, engine};
     else if (dynamic_cast<EqualizerEngine*>(engine))             return {ComponentType::Equalizer, engine};
     else if (dynamic_cast<AttenuatorEngine*>(engine))            return {ComponentType::Attenuator, engine};
+    else if (dynamic_cast<CombinerEngine*>(engine))              return {ComponentType::Combiner, engine};
 
     return {ComponentType::None, nullptr};
 }
@@ -60,8 +62,8 @@ std::string InspectorPanel::labelForHit(const Hit& hit) const {
     case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
     case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
         case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
-        case ComponentType::Equalizer:     return "Equalizer " + std::to_string(hit.engine->id());
         case ComponentType::Attenuator:    return "Attenuator " + std::to_string(hit.engine->id());
+        case ComponentType::Combiner:      return "Combiner " + std::to_string(hit.engine->id());
     default:                           return "";
     }
 }
@@ -165,6 +167,9 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         break;
     case ComponentType::Attenuator:
         drawAttenuatorProperties(*static_cast<AttenuatorEngine*>(hit.engine), hit.engine->id());
+        break;
+    case ComponentType::Combiner:
+        drawCombinerProperties(*static_cast<CombinerEngine*>(hit.engine), hit.engine->id());
         break;
     default:
         break;
@@ -539,6 +544,32 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine& engine, int inde
     }
 
     ImGui::Text("NF = %.2f dB", engine.attenuation());
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawCombinerProperties(CombinerEngine& engine, int index) {
+    (void)index;
+
+    ImGui::TextDisabled("Combiner: 2 inputs → 1 output");
+
+    bool sparam_mode = engine.sParamMode();
+    if (ImGui::Checkbox("S-parameter mode", &sparam_mode)) {
+        engine.setSParamMode(sparam_mode);
+    }
+
+    if (sparam_mode) {
+        std::string path = engine.sParamFile();
+        char path_buf[512];
+        strncpy(path_buf, path.c_str(), sizeof(path_buf) - 1);
+        path_buf[sizeof(path_buf) - 1] = '\0';
+        if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
+            engine.setSParamFile(path_buf);
+        }
+    }
+
+    ImGui::Text("Loss: -3 dB per input");
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
