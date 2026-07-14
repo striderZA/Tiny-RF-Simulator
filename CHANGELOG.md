@@ -1,8 +1,45 @@
-## [unreleased]
+## [0.7.0] - 2026-07-14
+
+### Features
+
+- Add passive attenuator component with manual dB control and S-parameter mode
+  - Physically accurate noise model (NF = attenuation)
+  - Touchstone S-param support (2-port .s2p files)
+  - Zigzag schematic symbol in node graph
+  - Inspector panel with attenuation slider and S-param file picker
+  - 10 unit tests
+- Add combiner component (2-input → 1-output passive RF combiner)
+  - Wilkinson model with -3 dB loss per input (exact dual of splitter)
+  - Coherent signal combination with phase preservation
+  - S-parameter mode with 3-port Touchstone support (.s3p files)
+  - Y-shaped schematic symbol in node graph
+  - Inspector panel with S-param mode toggle
+  - 6 unit tests
 
 ### Documentation
 
-- Fill v0.5.1 release notes in template
+- Prepare repository for open source release
+- Add MIT license, README, CONTRIBUTING.md, AGENTS.md
+- Update ROADMAP with attenuator and combiner as completed
+
+## [0.6.0] - 2026-07-13
+
+### Bug Fixes
+
+- Stale binary name in runbook, uncalibrated coax preset comments
+- Replace MSVC with MinGW-w64 in bug report template
+- Gitignore `.agents/` and scope Testing pattern to root only
+
+### Documentation
+
+- Clean up AGENTS.md child DOX index for public release
+- Mark PFB channelizer as completed in roadmap
+- Update test counts (73 → 166) and track testing guidance
+
+### CI
+
+- Fix openwiki workflow description (manual, not scheduled)
+
 ## [0.5.1] - 2026-07-12
 
 ### Bug Fixes
