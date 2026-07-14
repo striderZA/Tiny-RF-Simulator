@@ -50,3 +50,10 @@ target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}
 include(CTest)
 include(Catch)
 catch_discover_tests(tests)
+add_executable(test_attenuator test_attenuator.cpp)
+target_link_libraries(test_attenuator PRIVATE
+    simulator::attenuator_engine
+    simulator::node_graph_engine
+    Catch2::Catch2WithMain
+)
+add_test(NAME test_attenuator COMMAND test_attenuator)

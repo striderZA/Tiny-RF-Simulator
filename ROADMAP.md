@@ -15,6 +15,7 @@
 | 9 | **Node tooltips** — tooltips showing noise level, power level, center frequency, etc. | ✅ Completed | Per-pin hover tooltip: tone count + strongest tone, noise floor, freq range; MHz-only display |
 | 10 | **Frequency conversion** — mixer components | ✅ Completed | Internal LO, sum+difference sidebands, editable LO freq + conv gain, noise scaled, phase preserved |
 | 11 | **Subcircuit groups** — expandable/collapsible node groups with synthesized input/output pins for navigating large circuits | ✅ Completed | Snapshot editing model; visual layer only, DSP graph stays flat; engine + widget + inspector integration |
+| 12 | **Attenuator component** — passive attenuator with manual dB control and S-parameter mode | ✅ Completed | Physically accurate noise model (NF = atten), Touchstone S-param support, zigzag schematic symbol, inspector panel, 10 unit tests |
 
 ## Status Key
 

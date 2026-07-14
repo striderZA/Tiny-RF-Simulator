@@ -320,6 +320,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Ideal Filter")) {
             if (onAddIdealFilter) onAddIdealFilter();
         }
+        if (ImGui::MenuItem("Add Attenuator")) {
+            if (onAddAttenuator) onAddAttenuator();
+        }
         ImGui::EndPopup();
     }
 }
@@ -601,6 +604,25 @@ static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(ImVec2(c.x + 14, c.y - 4), 2.0f, color);
 }
 
+static void drawAttenuatorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Zigzag resistor-style symbol with "ATT" label
+    const float x0 = c.x - 15.0f;
+    const float x1 = c.x + 15.0f;
+    const float amp = 4.0f;
+    dl->PathClear();
+    dl->PathLineTo(ImVec2(x0, c.y));
+    for (int i = 0; i < 4; ++i) {
+        float x = x0 + (x1 - x0) * (i + 0.5f) / 4.0f;
+        float yo = (i % 2 == 0) ? -amp : amp;
+        dl->PathLineTo(ImVec2(x, c.y + yo));
+    }
+    dl->PathLineTo(ImVec2(x1, c.y));
+    dl->PathStroke(color, 0, 2.0f);
+    const char* label = "ATT";
+    ImVec2 ts = ImGui::CalcTextSize(label);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - 14.0f), color, label);
+}
+
 static void drawPfbSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     for (int i = 0; i < 3; ++i) {
         float y_off = (i - 1) * 8.0f;
@@ -622,7 +644,6 @@ static void drawGroupCollapsedSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(b, 3.0f, color);
     dl->AddCircleFilled(d, 3.0f, color);
 }
-
 }
 
 void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color) {
@@ -636,6 +657,7 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKin
         case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
         case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
         case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
+        case NodeKind::Attenuator:     drawAttenuatorSymbol(dl, center, color);     break;
         case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
         default:
             // Future/unknown kinds: draw nothing silently.
