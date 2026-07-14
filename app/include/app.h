@@ -22,6 +22,7 @@
 #include <vector>
 #include "component_registry.h"
 #include "equalizer_engine.h"
+#include "attenuator_engine.h"
 
 class RfSimulatorApp {
   public:

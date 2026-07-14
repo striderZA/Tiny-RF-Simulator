@@ -502,6 +502,7 @@ imgui.ini
 
 # Brainstorming session files
 .superpowers/
+superpowers/
 
 # GitNexus knowledge graph index
 .gitnexus/
