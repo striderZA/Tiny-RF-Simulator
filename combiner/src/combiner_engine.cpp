@@ -55,5 +55,80 @@ std::string CombinerEngine::hoverSummary() const {
 
 void CombinerEngine::update(double dt) {
     (void)dt;
-    // Implementation in next task
+    const Spectrum* in0 = m_node.inputs.size() > 0 ? m_node.inputs[0] : nullptr;
+    const Spectrum* in1 = m_node.inputs.size() > 1 ? m_node.inputs[1] : nullptr;
+
+    if (!m_dirty &&
+        in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
+        (!in0 || in0->generation == m_cached_input0_generation) &&
+        (!in1 || in1->generation == m_cached_input1_generation))
+        return;
+
+    m_dirty = false;
+    m_cached_input0_ptr = in0;
+    m_cached_input1_ptr = in1;
+    if (in0) m_cached_input0_generation = in0->generation;
+    if (in1) m_cached_input1_generation = in1->generation;
+
+    auto& out = m_node.outputs[0];
+
+    if (in0 && !in0->frequencies.empty()) {
+        out.frequencies = in0->frequencies;
+    } else if (in1 && !in1->frequencies.empty()) {
+        out.frequencies = in1->frequencies;
+    } else if (out.frequencies.size() < 2) {
+        buildDefaultFrequencyGrid(out.frequencies);
+    }
+
+    const size_t N = out.frequencies.size();
+
+    if (N < 2) {
+        out.tones.clear();
+        out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.assign(N, 0.0);
+        out.phase_deg.assign(N, 0.0);
+        out.bumpGeneration();
+        return;
+    }
+
+    // Combine tones from both inputs with -3 dB loss
+    double loss_linear = std::pow(10.0, -COMBINER_LOSS_DB / 10.0);  // 0.5
+
+    std::vector<Spectrum::Tone> combined_tones;
+
+    // Add tones from input 0
+    if (in0) {
+        for (const auto& t : in0->tones) {
+            Spectrum::Tone t_out = t;
+            t_out.power_dBm -= COMBINER_LOSS_DB;
+            combined_tones.push_back(t_out);
+        }
+    }
+
+    // Add tones from input 1
+    if (in1) {
+        for (const auto& t : in1->tones) {
+            Spectrum::Tone t_out = t;
+            t_out.power_dBm -= COMBINER_LOSS_DB;
+            combined_tones.push_back(t_out);
+        }
+    }
+
+    out.tones = combined_tones;
+
+    // Noise: incoherent power sum, then apply loss
+    out.noise_W.assign(N, 0.0);
+    for (size_t i = 0; i < N; ++i) {
+        double n0 = (in0 && i < in0->noise_total_W.size()) ? in0->noise_total_W[i] : 0.0;
+        double n1 = (in1 && i < in1->noise_total_W.size()) ? in1->noise_total_W[i] : 0.0;
+        out.noise_W[i] = loss_linear * (n0 + n1);
+    }
+
+    out.noise_added_W.assign(N, 0.0);
+    out.noise_total_W = out.noise_W;
+
+    out.phase_deg.assign(N, 0.0);
+    out.fs_Hz = in0 ? in0->fs_Hz : (in1 ? in1->fs_Hz : 0.0);
+    out.bumpGeneration();
 }

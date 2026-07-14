@@ -57,3 +57,10 @@ target_link_libraries(test_attenuator PRIVATE
     Catch2::Catch2WithMain
 )
 add_test(NAME test_attenuator COMMAND test_attenuator)
+add_executable(test_combiner test_combiner.cpp)
+target_link_libraries(test_combiner PRIVATE
+    simulator::combiner_engine
+    simulator::node_graph_engine
+    Catch2::Catch2WithMain
+)
+add_test(NAME test_combiner COMMAND test_combiner)
