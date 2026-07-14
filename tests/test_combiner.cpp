@@ -95,3 +95,25 @@ TEST_CASE("Combiner: hover summary", "[combiner]") {
     REQUIRE(summary.find("2") != std::string::npos);
     REQUIRE(summary.find("1") != std::string::npos);
 }
+
+TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
+    NodeGraphEngine graph;
+    CombinerEngine combiner(1, graph);
+
+    combiner.setSParamFile("component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p");
+    REQUIRE(combiner.sParamMode());
+
+    Spectrum input0 = buildTestSpectrum(1e9, -10.0, 0.0);
+    Spectrum input1 = buildTestSpectrum(2e9, -20.0, 0.0);
+    combiner.node().inputs[0] = &input0;
+    combiner.node().inputs[1] = &input1;
+
+    combiner.update(0.016);
+
+    const auto& output = combiner.node().outputs[0];
+    REQUIRE(output.tones.size() == 2);
+
+    // Verify S-parameters are applied (tones should be modified by S21/S31)
+    REQUIRE(output.tones[0].power_dBm != -10.0);
+    REQUIRE(output.tones[1].power_dBm != -20.0);
+}
