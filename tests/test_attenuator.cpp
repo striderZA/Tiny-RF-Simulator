@@ -110,3 +110,94 @@ TEST_CASE("Attenuator: noise floor convergence at high attenuation", "[attenuato
 
     REQUIRE_THAT(output.noise_total_W[0], WithinAbs(thermal_noise, 1e-22));
 }
+
+TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][sparam]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+
+    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    REQUIRE(atten.sParamMode());
+
+    Spectrum input = buildTestSpectrum();
+    atten.node().inputs[0] = &input;
+
+    atten.update(0.016);
+
+    const auto& output = atten.node().outputs[0];
+    REQUIRE(output.tones.size() == 3);
+
+    // Verify gain is applied (tones should be attenuated by S21 magnitude)
+    REQUIRE(output.tones[0].power_dBm < input.tones[0].power_dBm);
+}
+
+TEST_CASE("Attenuator: S-param noise model", "[attenuator][sparam]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+
+    Spectrum input = buildTestSpectrum();
+    atten.node().inputs[0] = &input;
+
+    atten.update(0.016);
+
+    const auto& output = atten.node().outputs[0];
+
+    for (size_t i = 0; i < output.noise_total_W.size(); ++i) {
+        REQUIRE(output.noise_total_W[i] >= 0.0);
+        REQUIRE(std::isfinite(output.noise_total_W[i]));
+    }
+}
+
+TEST_CASE("Attenuator: S-param phase shift", "[attenuator][sparam]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+
+    Spectrum input = buildTestSpectrum();
+    atten.node().inputs[0] = &input;
+
+    atten.update(0.016);
+
+    const auto& output = atten.node().outputs[0];
+    REQUIRE(output.phase_deg.size() == 3);
+}
+
+TEST_CASE("Attenuator: attenuation clamping", "[attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+
+    atten.setAttenuation(-10.0);
+    REQUIRE(atten.attenuation() == 0.0);
+
+    atten.setAttenuation(300.0);
+    REQUIRE(atten.attenuation() == 200.0);
+
+    atten.setAttenuation(50.0);
+    REQUIRE(atten.attenuation() == 50.0);
+}
+
+TEST_CASE("Attenuator: dirty-flag skip", "[attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setAttenuation(6.0);
+
+    Spectrum input = buildTestSpectrum();
+    atten.node().inputs[0] = &input;
+
+    atten.update(0.016);
+    uint64_t gen1 = atten.node().outputs[0].generation;
+
+    atten.update(0.016);
+    uint64_t gen2 = atten.node().outputs[0].generation;
+
+    REQUIRE(gen1 == gen2);
+}
+
+TEST_CASE("Attenuator: hover summary", "[attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setAttenuation(10.0);
+
+    std::string summary = atten.hoverSummary();
+    REQUIRE(summary.find("10") != std::string::npos);
+}
