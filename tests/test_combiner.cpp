@@ -100,7 +100,7 @@ TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
     NodeGraphEngine graph;
     CombinerEngine combiner(1, graph);
 
-    combiner.setSParamFile("component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p");
+    combiner.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p");
     REQUIRE(combiner.sParamMode());
 
     Spectrum input0 = buildTestSpectrum(1e9, -10.0, 0.0);

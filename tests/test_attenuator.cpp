@@ -115,7 +115,7 @@ TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][spa
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
 
-    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
     REQUIRE(atten.sParamMode());
 
     Spectrum input = buildTestSpectrum();
@@ -133,7 +133,7 @@ TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][spa
 TEST_CASE("Attenuator: S-param noise model", "[attenuator][sparam]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
-    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
 
     Spectrum input = buildTestSpectrum();
     atten.node().inputs[0] = &input;
@@ -151,7 +151,7 @@ TEST_CASE("Attenuator: S-param noise model", "[attenuator][sparam]") {
 TEST_CASE("Attenuator: S-param phase shift", "[attenuator][sparam]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
-    atten.setSParamFile("component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
 
     Spectrum input = buildTestSpectrum();
     atten.node().inputs[0] = &input;
