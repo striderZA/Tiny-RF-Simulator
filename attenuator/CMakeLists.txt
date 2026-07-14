@@ -4,8 +4,8 @@ add_library(attenuator_engine
 
 target_include_directories(attenuator_engine PUBLIC include)
 target_link_libraries(attenuator_engine
-    PUBLIC simulator::common
-    PUBLIC simulator::touchstone
+    PUBLIC common
+    PUBLIC simulator::touchstone_parser
     PUBLIC simulator::node_graph_engine
 )
 
