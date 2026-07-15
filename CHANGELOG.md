@@ -1,3 +1,10 @@
+## [0.7.1] - 2026-07-14
+
+### Bug Fixes
+
+- Fix CI test failures: use PROJECT_SOURCE_DIR for S-param file paths in standalone test executables
+- Set WORKING_DIRECTORY for test_attenuator and test_combiner ctest registrations
+
 ## [0.7.0] - 2026-07-14
 
 ### Features
