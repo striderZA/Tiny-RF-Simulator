@@ -57,7 +57,7 @@ target_link_libraries(test_attenuator PRIVATE
     Catch2::Catch2WithMain
 )
 target_compile_definitions(test_attenuator PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_attenuator COMMAND test_attenuator)
+add_test(NAME test_attenuator COMMAND test_attenuator WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_combiner test_combiner.cpp)
 target_link_libraries(test_combiner PRIVATE
@@ -66,4 +66,4 @@ target_link_libraries(test_combiner PRIVATE
     Catch2::Catch2WithMain
 )
 target_compile_definitions(test_combiner PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_combiner COMMAND test_combiner)
+add_test(NAME test_combiner COMMAND test_combiner WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
