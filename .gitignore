@@ -301,6 +301,7 @@ PublishScripts/
 imgui.ini
 .worktrees/
 output.log
+docs/specs/
 
 # Microsoft Azure Build Output
 csx/
