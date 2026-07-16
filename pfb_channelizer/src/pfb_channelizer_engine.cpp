@@ -221,13 +221,16 @@ double PFBChannelizerEngine::kaiserWindow(double x) const {
 nlohmann::json PFBChannelizerEngine::serialize() const {
     return {{"channel_count", m_cfg.M},
             {"taps_per_branch", m_cfg.K},
-            {"kaiser_beta", m_cfg.beta}};
+            {"kaiser_beta", m_cfg.beta},
+            {"active_channel", m_active_channel}};
 }
 
 void PFBChannelizerEngine::deserialize(const nlohmann::json& j) {
     m_cfg.M = j.value("channel_count", 16);
     m_cfg.K = j.value("taps_per_branch", 8);
     m_cfg.beta = j.value("kaiser_beta", 6.0);
+    m_active_channel = j.value("active_channel", 0);
+    if (m_active_channel >= m_cfg.M) m_active_channel = m_cfg.M - 1;
     m_dirty = true;
 }
 

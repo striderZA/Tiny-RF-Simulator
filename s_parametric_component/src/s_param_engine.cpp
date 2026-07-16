@@ -554,7 +554,7 @@ void SParamEngine::deserialize(const nlohmann::json& j) {
     if (!fp.empty()) {
         m_mode = static_cast<Mode>(j.value("mode", static_cast<int>(Mode::FullMatrix)));
         m_common_port = j.value("common_port", 0);
-        m_forward_param_idx = j.value("forward_param_idx", -1);
+        int saved_forward_idx = j.value("forward_param_idx", -1);
         m_nf_dB = j.value("nf_dB", 0.0);
         m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
         m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
@@ -564,6 +564,8 @@ void SParamEngine::deserialize(const nlohmann::json& j) {
         } else {
             m_dirty = true;
         }
+        // Restore after reload() which unconditionally resets to -1
+        m_forward_param_idx = saved_forward_idx;
     }
 }
 

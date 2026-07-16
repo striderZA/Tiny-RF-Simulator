@@ -144,6 +144,7 @@ void RfSimulatorApp::newProject() {
 
     m_next_component_id = 100;
     m_current_project_path.clear();
+    m_graph_widget->clearPositionCache();
     m_dirty = false;
 }
 
@@ -578,10 +579,13 @@ void RfSimulatorApp::draw_ui() {
         if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S))
             saveFileDialog();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
-            openFileDialog();
+            if (m_dirty) { m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
+            else openFileDialog();
         }
-        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N))
-            newProject();
+        if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
+            if (m_dirty) { m_pending_action = PendingAction::New; m_show_unsaved_dialog = true; }
+            else newProject();
+        }
     }
 
     // Unsaved Changes popup — use a bool flag instead of OpenPopup/BeginPopupModal,
@@ -631,10 +635,6 @@ void RfSimulatorApp::draw_ui() {
             m_pending_action = PendingAction::None;
             m_show_unsaved_dialog = false;
             ImGui::CloseCurrentPopup();
-        }
-        // Close the popup when the user dismisses it by clicking outside
-        if (!ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup)) {
-            m_show_unsaved_dialog = false;
         }
         ImGui::EndPopup();
     }
