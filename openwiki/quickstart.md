@@ -1,8 +1,15 @@
+---
+type: Entry Point
+title: RF Simulator — Quickstart
+description: Entry point for the RF Simulator documentation. Covers repository layout, build & test commands, key architectural concepts, recent milestones, and links to all major wiki sections.
+tags: [quickstart, entrypoint, rf-simulator]
+---
+
 # RF Simulator — Quickstart
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.8.0
 
 ---
 
@@ -54,17 +61,20 @@ build/bin/tests [bench]
 | `splitter/` | 1-to-2 power splitter (-3 dB) |
 | `ideal_filter/` | Brickwall LPF/HPF/BPF/BSF + S-param mode |
 | `equalizer/` | Gain-slope (dB/decade) equalizer + S-param mode |
+| `attenuator/` | Passive attenuator with manual dB control + S-param mode, passive noise model |
+| `combiner/` | 2-input, 1-output passive RF combiner (Wilkinson -3 dB model) + 3-port S-param mode |
 | `coax/` | Coaxial cable loss/phase model (MilTech presets) |
 | `adc/` | RF ADC with sampling, aliasing, NSD noise model |
 | `pfb_channelizer/` | Polyphase filter bank (M channels, K taps) |
 | `spectrum_analyzer/` | Real-time spectrum display (RBW, VBW, jitter, markers, peaks) |
-| `iq_plot/` | Time-domain I/Q waveform (IFFT from spectrum) |
+| `iq_plot/` | Time-domain I/Q waveform (IFFT from spectrum) with ring buffer and zoom |
 | `node_graph/` | Node graph topology engine + imnodes-based editor + subcircuit groups |
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (166, including 14 benchmarks) |
+| `tests/` | Catch2 unit tests (~188 test cases, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
+| `component_data/` | S-parameter data files (.s2p/.sNp) for amplifiers, filters, equalizers, attenuators, splitters |
 | `src/` | `main.cpp` entry point |
 | `docs/` | Engineering docs (nonlinear model, PFB, ADC, Touchstone specs) |
 
@@ -87,7 +97,15 @@ build/bin/tests [bench]
 
 **Engine + Widget separation** — Every RF component is split into a pure-DSP `*Engine` (no UI includes) and an optional `*Widget` (ImGui UI). Only widget files include `<imgui.h>`.
 
-**Spectrum data structure** — All signals flow as `Spectrum` objects containing a frequency grid, discrete tones (`{freq, power_dBm, phase_deg}`), and noise PSD vectors in W/Hz.
+**Spectrum data structure** — All signals flow as `Spectrum` objects containing a frequency grid, discrete tones (`{freq, power_dBm, phase_deg}`), and noise PSD vectors in **W/Hz** (migrated from per-bin W; the old `addedNoisePerBin_W()` helper is deprecated).
+
+**Noise model** — Noise is stored as power spectral density (W/Hz) throughout the signal chain. Each engine adds noise density appropriate to its model (thermal noise floor at kT ≈ −174 dBm/Hz, noise figure, or NSD).
+
+**Project save/load** — Full circuit persistence to `.rfsim` JSON files (v0.8.0). Every engine implements `serialize()`/`deserialize()` via nlohmann/json. Graph topology, node positions, links, and probes are all round-tripped. Unsaved-changes dialog with dirty tracking.
+
+**S-parameter mode** — Five components (amplifier, ideal filter, equalizer, attenuator, combiner) support dual-mode operation: ideal parametric OR Touchstone .sNp file driven. S-parameter data files live in `component_data/`.
+
+**Subcircuit groups** — The node graph supports grouping nodes into subcircuits with automatic boundary pin synthesis, collapse/expand, and rename.
 
 **Dirty-flag caching** — Each `Spectrum` has a `generation` counter. Engines cache `(input*, generation)` pairs and skip recomputation when nothing changed (~5 ns overhead for cached skip).
 
@@ -99,6 +117,9 @@ build/bin/tests [bench]
 
 | Milestone | Date | Description | Git Ref |
 |---|---|---|---|
+| Project save/load | v0.8.0 | File menu, keyboard shortcuts, unsaved-changes dialog, serialization on all 12 component types, 9 round-trip tests | `77c5611` |
+| Combiner component | July 14 | 2-input passive RF combiner (Wilkinson -3 dB model), 3-port Touchstone S-param mode, Y-shaped symbol | `e8226fe` |
+| Attenuator component | July 14 | Passive attenuator with manual dB control, passive noise model (NF = atten), S-param mode | `3e4b025` |
 | Touchstone validation | Latest | Input validation, `log10(0)` clamp, `lower_bound` interpolation | `6d71618` |
 | IQ plot DSP extraction | Latest | Extracted `build_iq_spectrum()` from widget to testable function, added Fs guard | `5cfa82d` |
 | Equalizer NaN guards | Latest | NaN guards for `log10(0)`, clamp ref freq | `fdd70ab` |

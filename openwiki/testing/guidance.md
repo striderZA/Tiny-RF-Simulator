@@ -1,6 +1,13 @@
+---
+type: Testing Guide
+title: Testing Guide
+description: Guide to the RF Simulator test suite — how to run tests, test structure, writing new tests, CI configuration, and coverage priorities.
+tags: [testing, catch2, unit-tests, ui-tests]
+---
+
 # Testing Guide
 
-RF Simulator has **166 tests** (including 14 benchmarks) covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~188 test cases** (including 14 benchmarks) across **21 test source files**, covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, project save/load, subcircuits, and UI. Two additional standalone test executables cover the attenuator and combiner engines. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -31,7 +38,7 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-**18 test files:**
+These test files are compiled into the main `tests` executable (17 files; 18 on Windows with `test_session_state.cpp`). Two additional standalone executables — `test_attenuator` and `test_combiner` — are built separately because they link only specific engine libraries.
 
 | Test File | Tags | What It Tests |
 |---|---|---|
@@ -49,9 +56,17 @@ build/bin/test_ui
 | `test_equalizer.cpp` | `[equalizer]`, `[sparam]` | Equalizer ideal mode, S-param mode, NaN guards |
 | `test_group.cpp` | `[group]`, `[integration]` | Group operations, boundary pins, signal flow through groups |
 | `test_iq_plot.cpp` | `[iq_plot]` | `build_iq_spectrum` IFFT, Parseval, empty/degenerate grids |
-| `test_session_state.cpp` | `[session]` | Windows INI save/load round-trip |
+| `test_project_file.cpp` | `[project_file]` | Save/load round-trip: empty project, linked components, newProject, parameter values, groups, invalid JSON |
+| `test_session_state.cpp` | `[session]` | Windows-only: INI save/load round-trip |
 | `test_bench_dsp.cpp` | `[bench]`, `[generator]`, `[amplifier]`, `[mixer]`, `[splitter]`, `[pfb]`, `[spectrum]` | Per-engine dirty/clean benchmarks |
 | `test_bench_groups.cpp` | `[benchmark]`, `[group]` | Group operation benchmarks |
+
+**Standalone executables:**
+
+| Test File | Executable | What It Tests |
+|---|---|---|
+| `test_attenuator.cpp` | `test_attenuator` | Pass-through, flat attenuation, passive noise model, noise floor convergence, S-param, clamping, dirty-flag, hover |
+| `test_combiner.cpp` | `test_combiner` | Basic combination, single/both inputs, dirty-flag, S-param mode |
 
 ### UI Tests (`test_engine/`)
 
@@ -68,6 +83,7 @@ build/bin/test_ui
 | `subcircuit_rubber_band_creates_group` | Shift-drag creates subcircuit group |
 | `subcircuit_create_group_and_verify_popup` | Second group creation |
 | `subcircuit_expand_and_collapse` | Expand/collapse rendering |
+| `properties_window_exists` | Properties window is focusable |
 
 ---
 

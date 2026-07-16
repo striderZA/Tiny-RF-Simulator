@@ -1,3 +1,10 @@
+---
+type: Integration Guide
+title: S-Parameter System
+description: Documentation for the Touchstone-based S-parameter system covering file parsing, interpolation, per-component S-param modes (amplifier, filter, equalizer, attenuator, combiner), and inspector panel integration.
+tags: [s-parameter, touchstone, integration, dsp]
+---
+
 # S-Parameter System
 
 The S-parameter system provides frequency-dependent component behavior from industry-standard Touchstone (.sNp) files.
@@ -19,13 +26,15 @@ The S-parameter system has two layers:
 
 ### 2. Per-Component S-Param Modes — added in the July 2026 rework
 
-Instead of a single generic `SParamEngine`, three components have their own S-parameter mode toggle:
+Instead of a single generic `SParamEngine`, five components have their own S-parameter mode toggle:
 
 | Component | S21 Interpolation Replaces | Source File |
 |---|---|---|
 | `AmplifierEngine` | Flat `gain_dB` | `amplifier/src/amplifier_engine.cpp` |
 | `IdealFilterEngine` | Binary `isInPassband()` | `ideal_filter/src/ideal_filter_engine.cpp` |
 | `EqualizerEngine` | `G(f) = refGain + slope * log10(f/fref)` | `equalizer/src/equalizer_engine.cpp` |
+| `AttenuatorEngine` | Flat `atten_dB` | `attenuator/src/attenuator_engine.cpp` |
+| `CombinerEngine` | Manual -3 dB Wilkinson model | `combiner/src/combiner_engine.cpp` |
 
 ---
 
@@ -59,7 +68,11 @@ Touchstone stores data in **column-major** format (`S11, S21, S12, S22` for 2-po
 - Rejects NaN, inf, negative, or non-monotonic frequency values.
 - Enforces 10 million point maximum.
 - Missing option line returns `nullopt`.
-- Recent fix (`6d71618`): uses `lower_bound` for interpolation, clamps `log10(0)`.
+- Recent fix: uses `lower_bound` for interpolation, clamps `log10(0)`.
+
+### Data File Repository
+
+S-parameter measurement data files live in `component_data/` at the repository root, organized by component type (`amplifiers/`, `filters/`, `equalizers/`, etc.). These are industry-standard Touchstone files used in the per-component S-param modes and test fixtures.
 
 ---
 
@@ -91,9 +104,21 @@ Touchstone stores data in **column-major** format (`S11, S21, S12, S22` for 2-po
 
 ### Equalizer S-Param Mode
 
-- Most recent addition (July 2026).
 - S-param interpolation replaces the `G(f) = refGain + slope * log10(f/fref)` ideal model.
 - No added noise in either mode.
+
+### Attenuator S-Param Mode
+
+- S21 replaces flat `atten_dB`. Each tone's power is modified by `20*log10(|S21|)`, phase by `arg(S21)`.
+- Passive noise model: `noise_total = noise_in * |S21|^2 + k*T*(1 - |S21|^2)`.
+- Supports 2-port .s2p Touchstone files.
+
+### Combiner S-Param Mode
+
+- Uses 3-port Touchstone data (`.s3p`): port 0 = input 0, port 1 = input 1, port 2 = output.
+- Two S-parameters interpolated independently: S21 (in0→out) and S31 (in1→out).
+- Passive noise model with thermal floor: `noise_added = k*T*(1 - |S21|^2 - |S31|^2)`.
+- Manual mode fallback applies -3 dB Wilkinson loss per input.
 
 ---
 
@@ -133,6 +158,8 @@ The rework was motivated by the observation that a generic SParamEngine duplicat
 | `amplifier/src/amplifier_engine.cpp` | Amplifier S-param mode |
 | `ideal_filter/src/ideal_filter_engine.cpp` | Filter S-param mode |
 | `equalizer/src/equalizer_engine.cpp` | Equalizer S-param mode |
+| `attenuator/src/attenuator_engine.cpp` | Attenuator S-param mode |
+| `combiner/src/combiner_engine.cpp` | Combiner 3-port S-param mode |
 | `app/src/inspector_panel.cpp` | S-param file browser UI |
 | `component_data/` | Touchstone data files for testing |
 
@@ -140,7 +167,7 @@ The rework was motivated by the observation that a generic SParamEngine duplicat
 
 ## For Future Agents
 
-- **Forward param is always S21** (index `1 * numPorts + 0`). No user-selectable S-param matrix element.
+- **Forward param is always S21** (index `1 * numPorts + 0`). For 3-port combiner, S31 (`2 * numPorts + 1`) is also used.
 - **NF and nonlinearity stay with the amplifier** — these are physical device properties not derivable from S-parameters.
 - To add S-param mode to a new component: add `SParameterData` member + `bool m_sparam_mode`, branch on `update()`, add inspector UI in `draw*Properties()`, add file browser support.
 - The `touchstone/` data layer should remain untouched — it's the stable shared library.

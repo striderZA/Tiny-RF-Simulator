@@ -1,3 +1,10 @@
+---
+type: Architecture Overview
+title: Architecture Overview
+description: Four-layer architecture of the RF Simulator — platform core, common data model, DSP engines/widgets, and application orchestrator with node graph, dirty-flag caching, and project save/load.
+tags: [architecture, dsp, design-patterns]
+---
+
 # Architecture Overview
 
 ## Layered Design
@@ -16,11 +23,11 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 │  Widgets │  DSP Engines                 │
 │  (ImGui) │  (pure C++, no UI)           │
 │          │                              │
-│  signal_generator/  amplifier/          │
-│  mixer/  splitter/  coax/              │
-│  adc/  ideal_filter/  equalizer/       │
-│  pfb_channelizer/  spectrum_analyzer/  │
-│  iq_plot/                              │
+│  signal_generator/  amplifier/  attenuator/│
+│  mixer/  splitter/  combiner/  coax/     │
+│  adc/  ideal_filter/  equalizer/         │
+│  pfb_channelizer/  spectrum_analyzer/    │
+│  iq_plot/                                │
 ├──────────┴──────────────────────────────┤
 │  Common Data Model (common/)            │
 │  IComponentEngine, SignalNode,          │
@@ -77,7 +84,25 @@ Defined in `app/include/component_registry.h`. A type-erased polymorphic contain
 - **`all()`** — Returns a `std::span<IComponentEngine*>` over all engines
 - **`find(graphNodeId)`** — Find by graph node ID
 
+### Project Save/Load
+
+Save/load (v0.8.0) provides full circuit persistence to `.rfsim` JSON files:
+
+- **File menu** — New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As
+- **Unsaved-changes dialog** — prompts Save/Discard/Cancel when closing or opening a new project with unsaved changes
+- **Dirty tracking** — `RfSimulatorApp::markDirty()` called on parameter edits, node moves, link changes, component add/remove. Dirty flag cleared on save.
+- **Serialization** — Every engine implements `serialize()`/`deserialize()` via `nlohmann::json`. `saveProject()`/`loadProject()` orchestrates engine state, graph topology (node positions, links, probes), and component registry reconstruction.
+- **Graph state helpers** — `setNextIds()`, `removeAllLinks()` for clean project init and link restoration.
+
+Test coverage: 9 round-trip tests in `tests/test_project_file.cpp` (55 assertions).
+
 ### SessionState
+
+**`SessionState`** (Windows-only; no-op on other platforms) persists window visibility toggles to INI files via `save()`/`load()`. Not used for project data (use `.rfsim` files for that).
+
+### Component Data Files
+
+S-parameter data files live in `component_data/` at the repository root, organized by type: `amplifiers/`, `filters/`, `equalizers/`, `fixed_attenuators/`, `splitters/`, `step_attenuators/`. Each directory contains `.s2p`/`.sNp` Touchstone-formatted files that feed the per-component S-param modes.
 
 `common/session_state.h` — Persists window state (open/closed) to `app.ini` using Win32 `WritePrivateProfileStringA`/`GetPrivateProfileStringA`. On non-Windows platforms the load/save methods are no-ops.
 
@@ -158,6 +183,10 @@ class IComponentEngine {
     virtual int numOutputPins() const { return 1; }
     virtual int inputPinId(int port) const;
     virtual int outputPinId(int port) const;
+
+    // Serialization (default no-op)
+    virtual nlohmann::json serialize() const;
+    virtual void deserialize(const nlohmann::json&);
 };
 ```
 

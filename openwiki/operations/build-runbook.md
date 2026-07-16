@@ -1,8 +1,17 @@
+---
+type: Runbook
+title: Build & Operations
+description: Build system setup, CI/CD pipelines, debugging tips, and operational notes for the RF Simulator project.
+tags: [build, ci, operations, runbook]
+---
+
 # Build & Operations
 
-Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project.
+Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.8.0**.
 
 ---
+
+## Prerequisites
 
 ## Prerequisites
 

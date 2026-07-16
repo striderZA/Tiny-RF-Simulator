@@ -1,3 +1,10 @@
+---
+type: Domain Guide
+title: RF Components — DSP Engine Modules
+description: Detailed reference for every RF signal-processing component in the simulator, including design decisions, parameters, dual-mode operation, and test coverage.
+tags: [rf-components, dsp-engine, reference]
+---
+
 # RF Components — DSP Engine Modules
 
 Every RF component in the simulator follows the same pattern: a **pure-DSP engine** (`*Engine`) that inherits from `IComponentEngine` and a **widget** (`*Widget`) for the ImGui property editor. This page documents each component's purpose, parameters, design decisions, and implementation notes.
@@ -163,6 +170,65 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 
 ---
 
+## Attenuator (`attenuator/`)
+
+| Property | Value |
+|---|---|
+| Headers | `include/attenuator_engine.h` |
+| Type | Processing node (1 input, 1 output) |
+| CMake target | `simulator::attenuator_engine` |
+| Added | July 2026 (v0.7.0) |
+
+**Purpose:** Passive attenuator with configurable attenuation, physically accurate noise model, and S-parameter mode.
+
+**Parameters:**
+- `atten_dB` — attenuation in dB (clamped 0–200 dB)
+- S-param mode: toggle + `.sNp` file path
+
+**Dual mode operation:**
+- **Manual mode:** Flat attenuation applied to all tones (`P_out = P_in - atten_dB`). Noise follows passive model: `noise_total = noise_in * G + k*T*(1 - G)` where `G = 10^(-atten/10)`.
+- **S-param mode:** S21 interpolation replaces flat attenuation. Complex S21 magnitude/phase applied to tones, `|S21|^2` scaling applied to noise. Same passive noise model.
+
+**Design decisions:**
+- Physically accurate noise model: as attenuation increases, output noise converges to `k*T` (thermal floor), never below it.
+- Phase unchanged in manual mode; S-param mode applies `arg(S21)` phase rotation.
+- Dedicated widget not required — properties edited via InspectorPanel with attenuation slider.
+- Zigzag schematic symbol in node graph.
+
+**Tests:** `test_attenuator.cpp` — pass-through at 0 dB, flat 6 dB attenuation, passive noise model, noise floor convergence at high attenuation, S-param mode, clamping, dirty-flag skip, hover summary.
+
+---
+
+## Combiner (`combiner/`)
+
+| Property | Value |
+|---|---|
+| Headers | `include/combiner_engine.h` |
+| Type | Processing node (**2 inputs**, 1 output) |
+| CMake target | `simulator::combiner_engine` |
+| Added | July 2026 (v0.7.0) |
+
+**Purpose:** Passive 2-input → 1-output RF combiner with Wilkinson model and 3-port S-parameter mode.
+
+**Parameters:**
+- Manual / S-param mode toggle
+- S-param mode: `.sNp` file path (3-port .s3p files for S21, S31)
+
+**Dual mode operation:**
+- **Manual mode (Wilkinson):** Each input sees `COMBINER_LOSS_DB = 3.0103 dB` loss. Tones from both inputs are combined into a single output list. Noise is summed incoherently, then scaled by loss: `noise_out = G * (n0 + n1)`.
+- **S-param mode:** Uses 3-port Touchstone data. Port 0 = input 0, port 1 = input 1, port 2 = output. S21 applied to input 0 tones/noise, S31 applied to input 1 tones/noise. Passive noise model with thermal floor.
+
+**Design decisions:**
+- Exact dual of splitter (same -3 dB loss per path).
+- Coherent signal combination: tones from both inputs are preserved with their original frequencies, powers, and phases (minus combiner loss).
+- S-param mode supports true 3-port devices — S21 (in0→out) and S31 (in1→out) are interpolated separately.
+- Y-shaped schematic symbol in node graph.
+- No added noise in manual mode (ideal passive combiner); S-param mode adds thermal noise `k*T*(1 - |S21|^2 - |S31|^2)`.
+
+**Tests:** `test_combiner.cpp` — basic combination with -3 dB loss, single input, both inputs unconnected, dirty-flag skip, hover summary, S-param mode.
+
+---
+
 ## Coaxial Cable (`coax/`)
 
 | Property | Value |
@@ -302,3 +368,33 @@ Only **MT 340** is fully populated. Others (MT 210, 230, 265, 300, 480) are stub
 - Drag-to-zoom, reset-zoom, auto-scale buttons.
 
 **Tests:** `test_iq_plot.cpp`.
+
+---
+
+## Component Data Files
+
+S-parameter measurement data files are stored in `component_data/` at the repository root, organized by type:
+
+| Directory | Contents |
+|---|---|
+| `amplifiers/` | Amplifier .s2p files |
+| `equalizers/` | Equalizer .s2p files |
+| `filters/` | Filter .s2p files |
+| `fixed_attenuators/` | Fixed pad .s2p data |
+| `splitters/` | Splitter .s2p data |
+| `step_attenuators/` | Step attenuator .s2p data |
+
+These feed the per-component S-param modes described above.
+
+---
+
+## Notes on the Noise Model
+
+The `Spectrum` data type stores noise as **power spectral density in W/Hz** throughout the signal chain. This was migrated from an earlier per-bin W model. The old helper function `addedNoisePerBin_W()` is deprecated in favor of PSD-based computation. Each engine adds noise density appropriate to its physical model:
+
+- **Signal Generator:** Thermal noise floor `k·T = 4.00e-21 W/Hz` (≈ −174 dBm/Hz at 290 K)
+- **Amplifier:** `N_added = k·T·(10^(NF/10) − 1)·G_linear`
+- **Attenuator:** Passive noise model where NF equals attenuation value
+- **Mixer:** Noise figure applied as added noise density
+- **ADC:** NSD (noise spectral density) in dBm/Hz
+- **Coax:** Noise from physical loss model
