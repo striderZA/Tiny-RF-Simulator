@@ -73,25 +73,27 @@ void SignalGeneratorEngine::update(double) {
 }
 
 nlohmann::json SignalGeneratorEngine::serialize() const {
-    nlohmann::json j = nlohmann::json::array();
+    nlohmann::json tones = nlohmann::json::array();
     for (const auto& t : m_tones) {
-        j.push_back({{"freq_Hz", t.freq_Hz},
-                     {"power_dBm", t.power_dBm},
-                     {"phase_deg", t.phase_deg}});
+        tones.push_back({{"freq_Hz", t.freq_Hz},
+                         {"power_dBm", t.power_dBm},
+                         {"phase_deg", t.phase_deg}});
     }
-    return j;
+    return {{"tones", tones}, {"fs_Hz", m_fs_Hz}};
 }
 
 void SignalGeneratorEngine::deserialize(const nlohmann::json& j) {
     m_tones.clear();
-    if (!j.is_array()) return;
-    for (const auto& tj : j) {
-        m_tones.push_back({
-            tj.value("freq_Hz", 100e6),
-            tj.value("power_dBm", -20.0),
-            tj.value("phase_deg", 0.0)
-        });
+    if (j.contains("tones") && j["tones"].is_array()) {
+        for (const auto& tj : j["tones"]) {
+            m_tones.push_back({
+                tj.value("freq_Hz", 100e6),
+                tj.value("power_dBm", -20.0),
+                tj.value("phase_deg", 0.0)
+            });
+        }
     }
+    m_fs_Hz = j.value("fs_Hz", 0.0);
     m_dirty = true;
 }
 

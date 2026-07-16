@@ -158,13 +158,22 @@ void IdealFilterEngine::update(double dt) {
 nlohmann::json IdealFilterEngine::serialize() const {
     return {{"filter_type", static_cast<int>(m_type)},
             {"fc_low_Hz", m_fc_low_Hz},
-            {"fc_high_Hz", m_fc_high_Hz}};
+            {"fc_high_Hz", m_fc_high_Hz},
+            {"sparam_mode", m_sparam_mode},
+            {"sparam_filepath", m_sparam_filepath},
+            {"sparam_fwd_idx", m_sparam_fwd_idx}};
 }
 
 void IdealFilterEngine::deserialize(const nlohmann::json& j) {
-    m_type = static_cast<FilterType>(j.value("filter_type", 0));
+    int ft = j.value("filter_type", 0);
+    if (ft < 0) ft = 0;
+    if (ft > 3) ft = 3;
+    m_type = static_cast<FilterType>(ft);
     m_fc_low_Hz = j.value("fc_low_Hz", 100e6);
     m_fc_high_Hz = j.value("fc_high_Hz", 200e6);
+    m_sparam_mode = j.value("sparam_mode", false);
+    m_sparam_filepath = j.value("sparam_filepath", "");
+    m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     m_dirty = true;
 }
 

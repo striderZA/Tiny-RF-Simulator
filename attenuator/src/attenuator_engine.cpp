@@ -1,4 +1,5 @@
 #include "attenuator_engine.h"
+#include <nlohmann/json.hpp>
 #include "common.h"
 #include <cmath>
 #include <algorithm>
@@ -168,6 +169,20 @@ void AttenuatorEngine::update(double dt) {
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     out.bumpGeneration();
 }
+
+nlohmann::json AttenuatorEngine::serialize() const {
+    return {{"atten_dB", m_atten_dB},
+            {"sparam_mode", m_sparam_mode},
+            {"sparam_path", m_sparam_path}};
+}
+
+void AttenuatorEngine::deserialize(const nlohmann::json& j) {
+    m_atten_dB = j.value("atten_dB", 0.0);
+    m_sparam_mode = j.value("sparam_mode", false);
+    m_sparam_path = j.value("sparam_path", "");
+    m_dirty = true;
+}
+
 
 std::string AttenuatorEngine::hoverSummary() const {
     return "Attenuator: -" + std::to_string(static_cast<int>(m_atten_dB)) + " dB";

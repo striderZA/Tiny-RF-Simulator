@@ -101,7 +101,7 @@ nlohmann::json MixerEngine::serialize() const {
 
 void MixerEngine::deserialize(const nlohmann::json& j) {
     m_lo_freq_Hz = j.value("lo_freq_Hz", 1e9);
-    m_conv_gain_dB = j.value("conv_gain_dB", 0.0);
+    m_conv_gain_dB = j.value("conv_gain_dB", -6.0);
     m_nf_dB = j.value("nf_dB", 0.0);
     m_dirty = true;
 }

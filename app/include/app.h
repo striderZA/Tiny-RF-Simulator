@@ -50,6 +50,10 @@ class RfSimulatorApp {
     void markDirty();
     bool m_dirty = false;
     void testMakeDirty();
+    // Test helpers exposed for project file round-trip tests
+    NodeGraphEngine& testGraphEngine() { return m_graph_engine; }
+    ComponentRegistry& testComponents() { return m_components; }
+
     void openFileDialog();
     void saveFileDialog();
 

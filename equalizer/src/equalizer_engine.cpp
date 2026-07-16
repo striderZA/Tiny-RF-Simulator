@@ -1,4 +1,5 @@
 #include "equalizer_engine.h"
+#include <nlohmann/json.hpp>
 #include <cmath>
 #include <algorithm>
 #include <numbers>
@@ -148,4 +149,21 @@ std::string EqualizerEngine::hoverSummary() const {
     std::snprintf(buf, sizeof(buf), "Equalizer | Ref: %.1f dB @ %.0f MHz | Slope: %.1f dB/dec",
         m_ref_gain_dB, m_ref_freq_Hz / 1e6, m_slope_dB_per_decade);
     return buf;
+}
+
+nlohmann::json EqualizerEngine::serialize() const {
+    return {{"ref_gain_dB", m_ref_gain_dB},
+            {"ref_freq_Hz", m_ref_freq_Hz},
+            {"slope_dB_per_decade", m_slope_dB_per_decade},
+            {"sparam_mode", m_sparam_mode},
+            {"sparam_filepath", m_sparam_filepath}};
+}
+
+void EqualizerEngine::deserialize(const nlohmann::json& j) {
+    m_ref_gain_dB = j.value("ref_gain_dB", 0.0);
+    m_ref_freq_Hz = j.value("ref_freq_Hz", 1e9);
+    m_slope_dB_per_decade = j.value("slope_dB_per_decade", 0.0);
+    m_sparam_mode = j.value("sparam_mode", false);
+    m_sparam_filepath = j.value("sparam_filepath", "");
+    m_dirty = true;
 }

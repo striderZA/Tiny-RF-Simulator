@@ -397,9 +397,12 @@ void NodeGraphWidget::handleNodeDeletion() {
             std::vector<int> selected_nodes(num_selected);
             ImNodes::GetSelectedNodes(selected_nodes.data());
             for (int node_id : selected_nodes) {
+                size_t links_before = m_engine.links().size();
                 if (onRemoveNode) onRemoveNode(node_id);
-                // Remove from position cache so it doesn't accumulate stale entries
+                if (m_engine.links().size() < links_before && onLinkChanged) onLinkChanged();
+                // Remove from position caches so they don't accumulate stale entries
                 m_node_screen_positions.erase(node_id);
+                m_last_node_grid_positions.erase(node_id);
             }
             ImNodes::ClearNodeSelection();
         }

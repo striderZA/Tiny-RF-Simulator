@@ -119,8 +119,8 @@ nlohmann::json AdcEngine::serialize() const {
 }
 
 void AdcEngine::deserialize(const nlohmann::json& j) {
-    m_fs_Hz = j.value("sample_rate_Hz", 100e6);
-    m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -150.0);
+    m_fs_Hz = j.value("sample_rate_Hz", 1e9);
+    m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
     m_dirty = true;
 }
 

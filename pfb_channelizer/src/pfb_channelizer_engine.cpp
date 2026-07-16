@@ -225,11 +225,14 @@ nlohmann::json PFBChannelizerEngine::serialize() const {
 }
 
 void PFBChannelizerEngine::deserialize(const nlohmann::json& j) {
-    m_cfg.M = j.value("channel_count", 16);
+    m_cfg.M = j.value("channel_count", 32);
+    if (m_cfg.M < 2) m_cfg.M = 2;
+    if (m_cfg.M > 2048) m_cfg.M = 2048;
     m_cfg.K = j.value("taps_per_branch", 8);
-    m_cfg.beta = j.value("kaiser_beta", 6.0);
+    m_cfg.beta = j.value("kaiser_beta", 8.0);
     m_active_channel = j.value("active_channel", 0);
-    if (m_active_channel >= m_cfg.M) m_active_channel = m_cfg.M - 1;
+    if (m_active_channel < 0) m_active_channel = 0;
+    if (m_cfg.M > 0 && m_active_channel >= m_cfg.M) m_active_channel = m_cfg.M - 1;
     m_dirty = true;
 }
 

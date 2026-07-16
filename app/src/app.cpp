@@ -190,6 +190,11 @@ void RfSimulatorApp::saveProject(const std::string& path) {
         {std::type_index(typeid(IdealFilterEngine)), "IdealFilter"},
     };
 
+    // Ensure all engine nodes are registered with the imnodes context
+    // so GetNodeEditorSpacePos() doesn't assert on node IDs added without
+    // a prior render frame (e.g. via newProject then programmatic add).
+    m_graph_widget->syncNodesFromEngine();
+
     // Save components by iterating the registry
     nlohmann::json comps_arr = nlohmann::json::array();
     for (auto* comp : m_components.all()) {
@@ -401,12 +406,19 @@ void RfSimulatorApp::loadProject(const std::string& path) {
         int from_port = lj.value("from_port", 0);
         int to_port = lj.value("to_port", 0);
         if (from_idx < 0 || to_idx < 0 ||
-            static_cast<size_t>(from_idx) >= m_components.size() ||
-            static_cast<size_t>(to_idx) >= m_components.size())
+            static_cast<size_t>(from_idx) >= new_node_ids.size() ||
+            static_cast<size_t>(to_idx) >= new_node_ids.size())
             continue;
 
-        auto* from_comp = m_components.all()[from_idx];
-        auto* to_comp = m_components.all()[to_idx];
+        int from_node = new_node_ids[from_idx];
+        int to_node = new_node_ids[to_idx];
+        if (from_node < 0 || to_node < 0)
+            continue;
+
+        auto* from_comp = m_components.find(from_node);
+        auto* to_comp = m_components.find(to_node);
+        if (!from_comp || !to_comp)
+            continue;
 
         int start_pin = from_comp->outputPinId(from_port);
         int end_pin = to_comp->inputPinId(to_port);

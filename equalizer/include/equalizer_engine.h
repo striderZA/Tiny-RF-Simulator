@@ -19,6 +19,8 @@ public:
     SignalNode& node() override { return m_node; }
     const SignalNode& node() const override { return m_node; }
     void update(double dt) override;
+    nlohmann::json serialize() const override;
+    void deserialize(const nlohmann::json&) override;
 
     // Ideal mode parameters
     void setRefGain_dB(double g) { m_ref_gain_dB = g; m_dirty = true; }

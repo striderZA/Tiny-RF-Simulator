@@ -2,16 +2,23 @@
 #include <catch2/catch_approx.hpp>
 #include <cstdio>
 #include <fstream>
+#include <string>
 #include "app.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "combiner_engine.h"
+#include "coax_cable_engine.h"
 #include <nlohmann/json.hpp>
 
 using Catch::Approx;
 
-static std::string tempPath() { return "test_roundtrip.rfsim"; }
-static void cleanup() { std::remove(tempPath().c_str()); }
+// Generate a unique temp filename per call so parallel test processes don't
+// step on each other's files.
+static int s_temp_counter = 0;
+static std::string tempPath(const std::string& suffix = "") {
+    return "test_roundtrip_" + std::to_string(s_temp_counter++) + suffix + ".rfsim";
+}
 
 struct ImGuiFixture {
     ImGuiFixture() {
@@ -26,54 +33,83 @@ struct ImGuiFixture {
     }
 };
 
+// ---------------------------------------------------------------------------
+// 1 — Save the default app (2 components), reload, verify count
+// ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture, "Round-trip: empty project", "[project_file]") {
-    cleanup();
+    auto path = tempPath();
+    std::remove(path.c_str());
     {
         RfSimulatorApp app;
-        app.saveProject(tempPath());
+        app.saveProject(path);
         REQUIRE(app.isDirty() == false);
     }
     {
         RfSimulatorApp app;
-        app.loadProject(tempPath());
+        app.loadProject(path);
         REQUIRE(app.isDirty() == false);
         REQUIRE(app.componentCount() == 2); // default gen + amp
     }
-    cleanup();
+    std::remove(path.c_str());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with link", "[project_file]") {
-    cleanup();
+// ---------------------------------------------------------------------------
+// 2 — Create an actual link between the two default components, save, reload,
+//     verify the link survived.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with link",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
     {
         RfSimulatorApp app;
-        app.saveProject(tempPath());
+
+        // The app starts with a SignalGenerator (index 0) and an Amplifier (index 1).
+        auto comps = app.testComponents().all();
+        REQUIRE(comps.size() == 2);
+
+        int start_pin = comps[0]->outputPinId(0);
+        int end_pin = comps[1]->inputPinId(0);
+        int link_id = app.testGraphEngine().addLink(start_pin, end_pin);
+        REQUIRE(link_id > 0);
+        REQUIRE(app.testGraphEngine().links().size() == 1);
+
+        app.saveProject(path);
     }
     {
         RfSimulatorApp app;
-        app.loadProject(tempPath());
+        app.loadProject(path);
         REQUIRE(app.componentCount() == 2);
+        REQUIRE(app.testGraphEngine().links().size() == 1);
     }
-    cleanup();
+    std::remove(path.c_str());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: zero components after newProject", "[project_file]") {
-    cleanup();
+// ---------------------------------------------------------------------------
+// 3 — newProject clears everything; save + reload stays empty
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: zero components after newProject",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
     {
         RfSimulatorApp app;
         app.newProject();
-        app.saveProject(tempPath());
+        app.saveProject(path);
         REQUIRE(app.componentCount() == 0);
     }
     {
         RfSimulatorApp app;
-        app.loadProject(tempPath());
+        app.loadProject(path);
         REQUIRE(app.componentCount() == 0);
     }
-    cleanup();
+    std::remove(path.c_str());
 }
 
+// ---------------------------------------------------------------------------
+// 4 — Discard via newProject clears dirty flag
+// ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture, "Discard clears dirty state", "[project_file]") {
-    cleanup();
     {
         RfSimulatorApp app;
         REQUIRE(app.componentCount() == 2);
@@ -88,40 +124,208 @@ TEST_CASE_METHOD(ImGuiFixture, "Discard clears dirty state", "[project_file]") {
         REQUIRE(app.isDirty() == false);
         REQUIRE(app.componentCount() == 0);
     }
-    cleanup();
 }
 
+// ---------------------------------------------------------------------------
+// 5 — Save a dirty project, reload, verify content
+// ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture, "Discard then save round-trip", "[project_file]") {
-    cleanup();
+    auto path = tempPath();
+    std::remove(path.c_str());
     {
         RfSimulatorApp app;
         app.testMakeDirty();
         REQUIRE(app.isDirty() == true);
 
         // Save the dirty project
-        app.saveProject(tempPath());
+        app.saveProject(path);
         REQUIRE(app.isDirty() == false);
     }
     {
         // Open it fresh — should have default 2 components (save was from dirty default state)
         RfSimulatorApp app;
-        app.loadProject(tempPath());
+        app.loadProject(path);
         REQUIRE(app.isDirty() == false);
         REQUIRE(app.componentCount() == 2);
     }
-    cleanup();
+    std::remove(path.c_str());
 }
 
+// ---------------------------------------------------------------------------
+// 6 — Loading garbage JSON doesn't crash and leaves a clean default project
+// ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture, "Load invalid JSON does not crash", "[project_file]") {
-    cleanup();
+    auto path = tempPath();
+    std::remove(path.c_str());
     {
-        std::ofstream out(tempPath());
+        std::ofstream out(path);
         out << "not valid json {{{";
     }
     {
         RfSimulatorApp app;
-        app.loadProject(tempPath());
+        app.loadProject(path);
         REQUIRE(app.componentCount() == 2);
     }
-    cleanup();
+    std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 7 — Add components with custom parameter values, save, reload, verify that
+//     every parameter survived the round-trip.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: parameter values survive save/load",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto& gen = app.testComponents().add<SignalGeneratorEngine>(
+            10001, app.testGraphEngine());
+        gen.addTone(200e6, -10.0);
+        gen.setFs_Hz(500e6);
+
+        auto& amp = app.testComponents().add<AmplifierEngine>(
+            10002, app.testGraphEngine());
+        amp.setGain_dB(20.0);
+        amp.setNF_dB(3.5);
+
+        auto& mixer = app.testComponents().add<MixerEngine>(
+            10003, app.testGraphEngine());
+        mixer.setLoFreq_Hz(2.4e9);
+        mixer.setConversionGain_dB(8.0);
+        mixer.setNF_dB(5.0);
+
+        auto& coax = app.testComponents().add<CoaxCableEngine>(
+            10004, app.testGraphEngine());
+        coax.setLengthM(2.5);
+
+        REQUIRE(app.componentCount() == 4);
+        app.saveProject(path);
+        REQUIRE(app.isDirty() == false);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.componentCount() == 4);
+
+        // SignalGenerator
+        auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        REQUIRE(gens.size() == 1);
+        CHECK(gens[0]->toneCount() == 1);
+        CHECK(gens[0]->tones()[0].freq_Hz == Approx(200e6));
+        CHECK(gens[0]->tones()[0].power_dBm == Approx(-10.0));
+
+        // Amplifier
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+        CHECK(amps[0]->gain_dB() == Approx(20.0));
+        CHECK(amps[0]->nf_dB() == Approx(3.5));
+
+        // Mixer
+        auto mixers = app.testComponents().byType<MixerEngine>();
+        REQUIRE(mixers.size() == 1);
+        CHECK(mixers[0]->loFreq_Hz() == Approx(2.4e9));
+        CHECK(mixers[0]->conversionGain_dB() == Approx(8.0));
+        CHECK(mixers[0]->nf_dB() == Approx(5.0));
+
+        // Coax cable
+        auto coaxs = app.testComponents().byType<CoaxCableEngine>();
+        REQUIRE(coaxs.size() == 1);
+        CHECK(coaxs[0]->lengthM() == Approx(2.5));
+    }
+    std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 8 — Create a group containing components, save, reload, verify the group
+//     (name, member count) survived.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
+        app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+        app.testComponents().add<MixerEngine>(10003, app.testGraphEngine());
+        REQUIRE(app.componentCount() == 3);
+
+        // Group the first two components
+        auto comps = app.testComponents().all();
+        REQUIRE(comps.size() == 3);
+        std::vector<int> member_ids = {comps[0]->graphNodeId(),
+                                       comps[1]->graphNodeId()};
+        int gid = app.testGraphEngine().addGroup("RF Frontend", member_ids);
+        REQUIRE(gid >= 0);
+        REQUIRE(app.testGraphEngine().numGroups() == 1);
+
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.componentCount() == 3);
+        REQUIRE(app.testGraphEngine().numGroups() == 1);
+
+        const auto& groups = app.testGraphEngine().groups();
+        REQUIRE(groups.size() == 1);
+        CHECK(groups[0].name == "RF Frontend");
+        CHECK(groups[0].member_node_ids.size() == 2);
+    }
+    std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 9 — Round-trip Attenuator, Combiner, and Equalizer with modified parameters
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto& atten = app.testComponents().add<AttenuatorEngine>(
+            10001, app.testGraphEngine());
+        atten.setAttenuation(15.5);
+
+        auto& comb = app.testComponents().add<CombinerEngine>(
+            10002, app.testGraphEngine());
+        comb.setManualMode(true);
+
+        auto& eq = app.testComponents().add<EqualizerEngine>(
+            10003, app.testGraphEngine());
+        eq.setRefGain_dB(-3.0);
+        eq.setRefFreq_Hz(500e6);
+        eq.setSlope_dBPerDecade(6.0);
+
+        REQUIRE(app.componentCount() == 3);
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.componentCount() == 3);
+
+        auto attens = app.testComponents().byType<AttenuatorEngine>();
+        REQUIRE(attens.size() == 1);
+        CHECK(attens[0]->attenuation() == Approx(15.5));
+
+        auto combs = app.testComponents().byType<CombinerEngine>();
+        REQUIRE(combs.size() == 1);
+        CHECK(combs[0]->manualMode() == true);
+
+        auto eqs = app.testComponents().byType<EqualizerEngine>();
+        REQUIRE(eqs.size() == 1);
+        CHECK(eqs[0]->refGain_dB() == Approx(-3.0));
+        CHECK(eqs[0]->refFreq_Hz() == Approx(500e6));
+        CHECK(eqs[0]->slope_dBPerDecade() == Approx(6.0));
+    }
+    std::remove(path.c_str());
 }

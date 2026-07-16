@@ -1,4 +1,5 @@
 #include "combiner_engine.h"
+#include <nlohmann/json.hpp>
 #include "common.h"
 #include <cmath>
 #include <algorithm>
@@ -51,6 +52,19 @@ void CombinerEngine::setSParamFile(const std::string& path) {
 
 std::string CombinerEngine::hoverSummary() const {
     return "Combiner: 2→1, -3 dB";
+}
+
+nlohmann::json CombinerEngine::serialize() const {
+    return {{"manual_mode", m_manual_mode},
+            {"sparam_mode", m_sparam_mode},
+            {"sparam_path", m_sparam_path}};
+}
+
+void CombinerEngine::deserialize(const nlohmann::json& j) {
+    m_manual_mode = j.value("manual_mode", true);
+    m_sparam_mode = j.value("sparam_mode", false);
+    m_sparam_path = j.value("sparam_path", "");
+    m_dirty = true;
 }
 
 void CombinerEngine::update(double dt) {
