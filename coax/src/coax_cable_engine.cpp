@@ -37,8 +37,9 @@ void CoaxCableEngine::setLengthM(double m) {
 }
 
 void CoaxCableEngine::setConnectorsLossDB(double db) {
-    if (db != m_connectors_loss_dB) {
-        m_connectors_loss_dB = db;
+    double clamped = std::clamp(db, 0.0, 30.0);
+    if (clamped != m_connectors_loss_dB) {
+        m_connectors_loss_dB = clamped;
         m_dirty = true;
     }
 }
@@ -82,7 +83,7 @@ void CoaxCableEngine::update(double dt) {
             + m_connectors_loss_dB;
         t.power_dBm -= loss_dB;
         const double phase_shift_deg =
-            -360.0 * (f_Hz / 1e9) * m_length_m * p.delay_ns_per_m * 1e-3;
+            -360.0 * (f_Hz / 1e9) * m_length_m * p.delay_ns_per_m;
         t.phase_deg += phase_shift_deg;
     }
 
@@ -96,7 +97,7 @@ void CoaxCableEngine::update(double dt) {
         const double f_Hz = std::abs(out.frequencies[i]);
         const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
         const double phase_shift_deg =
-            -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m * 1e-3;
+            -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m;
         out.phase_deg[i] += phase_shift_deg;
     }
 

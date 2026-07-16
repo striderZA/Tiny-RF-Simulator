@@ -6,6 +6,8 @@
 #include "pfb_channelizer_engine.h"
 #include "coax_cable_engine.h"
 #include <portable-file-dialogs.h>
+#include "attenuator_engine.h"
+#include "combiner_engine.h"
 #include <algorithm>
 #include <fstream>
 #include <functional>
@@ -31,10 +33,7 @@ RfSimulatorApp::RfSimulatorApp()
         m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
         markDirty();
     };
-    m_graph_widget->onAddSParamComponent = [this]() {
-        m_components.add<SParamEngine>(m_next_component_id++, m_graph_engine, "");
-        markDirty();
-    };
+
     m_graph_widget->onAddAdc = [this]() {
         m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
         markDirty();
@@ -53,10 +52,21 @@ RfSimulatorApp::RfSimulatorApp()
         m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
         markDirty();
     };
+    m_graph_widget->onAddEqualizer = [this]() {
+        m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
+    };
     m_graph_widget->onAddIdealFilter = [this]() {
         m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
         markDirty();
-    };    
+    };
+    m_graph_widget->onAddAttenuator = [this]() {
+        m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
+        markDirty();
+    };
+    m_graph_widget->onAddCombiner = [this]() {
+        m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
+        markDirty();
+    };
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
     m_graph_widget->onLinkChanged = [this]() { markDirty(); };
     m_graph_widget->onRemoveNode = [this](int id) {
@@ -171,7 +181,9 @@ void RfSimulatorApp::saveProject(const std::string& path) {
         {std::type_index(typeid(AmplifierEngine)), "Amplifier"},
         {std::type_index(typeid(SplitterEngine)), "Splitter"},
         {std::type_index(typeid(MixerEngine)), "Mixer"},
-        {std::type_index(typeid(SParamEngine)), "SParam"},
+        {std::type_index(typeid(AttenuatorEngine)), "Attenuator"},
+        {std::type_index(typeid(CombinerEngine)), "Combiner"},
+        {std::type_index(typeid(EqualizerEngine)), "Equalizer"},
         {std::type_index(typeid(AdcEngine)), "ADC"},
         {std::type_index(typeid(PFBChannelizerEngine)), "PFBChannelizer"},
         {std::type_index(typeid(CoaxCableEngine)), "CoaxCable"},
@@ -331,8 +343,16 @@ void RfSimulatorApp::loadProject(const std::string& path) {
             auto& ref = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
-        } else if (type == "SParam") {
-            auto& ref = m_components.add<SParamEngine>(m_next_component_id++, m_graph_engine, "");
+        } else if (type == "Attenuator") {
+            auto& ref = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
+            ref.deserialize(params);
+            comp = &ref;
+        } else if (type == "Combiner") {
+            auto& ref = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
+            ref.deserialize(params);
+            comp = &ref;
+        } else if (type == "Equalizer") {
+            auto& ref = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "ADC") {

@@ -7,7 +7,7 @@ All project conventions — development setup, build commands, architecture, cod
 Additional references:
 
 - [README.md](README.md) — project overview, features, quick start
-- [ARCHITECTURE.md](ARCHITECTURE.md) — full architecture document
+- [Architecture overview](openwiki/architecture/overview.md) — full architecture deep-dive (engine+widget pattern, signal chain, subcircuit groups, dirty-flag caching)
 - [`.clang-format`](.clang-format) — code style rules
 - [`.github/workflows/build.yml`](.github/workflows/build.yml) — CI configuration
 
@@ -95,23 +95,14 @@ When the user requests a durable behavior change, record it here or in the relev
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
 - [app/AGENTS.md](app/AGENTS.md) — Application orchestrator (`RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
-- node_graph/AGENTS.md — *(pending)* Node editor engine and widget, plus subcircuit groups
-- tests/AGENTS.md — *(pending)* Catch2 unit + benchmark tests
-- amplifier/AGENTS.md — *(pending)* Amplifier engine + widget
-- signal_generator/AGENTS.md — *(pending)* Signal generator engine + widget
-- spectrum_analyzer/AGENTS.md — *(pending)* Spectrum analyzer engine + widget
-- adc/AGENTS.md — *(pending)* ADC engine + widget
-- mixer/AGENTS.md — *(pending)* Mixer engine + widget
-- coax/AGENTS.md — *(pending)* Coaxial cable engine + widget
-- ideal_filter/AGENTS.md — *(pending)* Ideal filter engine + widget
-- splitter/AGENTS.md — *(pending)* Power splitter engine + widget
-- s_parametric_component/AGENTS.md — *(pending)* S-parameter component engine + widget
-- pfb_channelizer/AGENTS.md — *(pending)* PFB channelizer engine + widget
-- iq_plot/AGENTS.md — *(pending)* IQ plot widget
-- touchstone/AGENTS.md — *(pending)* Touchstone file parser
-- core/AGENTS.md — *(pending)* Core ECS/engine abstractions
-- logging/AGENTS.md — *(pending)* Logging infrastructure
-- icon_registry/AGENTS.md — *(pending)* Icon utilities
-- src/AGENTS.md — *(pending)* Main entry point
-- test_engine/AGENTS.md — *(pending)* Test signal engine
-- (other module-specific docs created as needed)
+- [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit + benchmark tests
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository uses OpenWiki for recurring code documentation. Start with `openwiki/quickstart.md`, then follow its links to architecture, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->

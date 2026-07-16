@@ -6,7 +6,6 @@ set(TEST_SOURCES
     test_main.cpp
     test_node_graph_engine.cpp
     test_touchstone.cpp
-    test_s_parameter_amplifier.cpp
     test_adc.cpp
     test_pfb.cpp
     test_bench_dsp.cpp
@@ -17,6 +16,10 @@ set(TEST_SOURCES
     test_coax_cable_engine.cpp
     test_group.cpp
     test_project_file.cpp
+    test_amplifier_sparam.cpp
+    test_ideal_filter_sparam.cpp
+    test_equalizer.cpp
+    test_iq_plot.cpp
 )
 
 if(WIN32)
@@ -35,11 +38,12 @@ target_link_libraries(tests PRIVATE
     simulator::mixer_engine
     simulator::spectrum_analyzer_engine
     simulator::touchstone_parser
-        simulator::s_param_engine
     simulator::adc_engine
     simulator::node_graph_engine
     simulator::coax_cable_engine
+    simulator::equalizer_engine
     simulator::pfb_channelizer_engine
+    simulator::iq_plot_widget
     simulator::app
 )
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -47,3 +51,20 @@ target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}
 include(CTest)
 include(Catch)
 catch_discover_tests(tests)
+add_executable(test_attenuator test_attenuator.cpp)
+target_link_libraries(test_attenuator PRIVATE
+    simulator::attenuator_engine
+    simulator::node_graph_engine
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_attenuator PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_attenuator COMMAND test_attenuator WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_combiner test_combiner.cpp)
+target_link_libraries(test_combiner PRIVATE
+    simulator::combiner_engine
+    simulator::node_graph_engine
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_combiner PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_combiner COMMAND test_combiner WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

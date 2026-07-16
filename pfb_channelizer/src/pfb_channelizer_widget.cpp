@@ -1,5 +1,4 @@
 #include "pfb_channelizer_widget.h"
-#include "common.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include <algorithm>

@@ -34,7 +34,7 @@ bool RfSimulatorCore::Initialize() {
     if (!glfwInit())
         return false;
 
-    p_impl->window = glfwCreateWindow(1920, 1080, "RF Simulator GUI", nullptr, nullptr);
+    p_impl->window = glfwCreateWindow(1920, 1080, "Tiny RF Simulator", nullptr, nullptr);
     if (p_impl->window == nullptr) {
         glfwTerminate();
         return false;

@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numbers>
 
 #include "common.h"
 #include "logging_core.h"
@@ -70,7 +69,7 @@ void AdcEngine::update(double /*dt*/) {
     out.fs_Hz = m_fs_Hz / 2.0;
 
     // -- Noise mapping + NSD --
-    double nsd_W_per_Hz = 0.001 * std::pow(10.0, m_nsd_dBm_per_Hz / 10.0);
+    double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
     out.noise_W.assign(N, 0.0);
     out.noise_added_W.assign(N, nsd_W_per_Hz);
     out.noise_total_W.resize(N, 0.0);
@@ -130,6 +129,6 @@ void AdcEngine::deserialize(const nlohmann::json& j) {
 }
 
 std::string AdcEngine::hoverSummary() const {
-    return "Fs: " + std::to_string(m_fs_Hz / 1e6) + " MHz | " + std::to_string(m_bits) +
-           " bit | NSD: " + std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
+    return "Fs: " + std::to_string(m_fs_Hz / 1e6) + " MHz | NSD: " +
+           std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
 }

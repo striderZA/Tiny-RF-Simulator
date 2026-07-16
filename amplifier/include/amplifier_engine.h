@@ -1,10 +1,11 @@
 #pragma once
 
-#include "common.h"
 #include "node_graph_engine.h"
 #include "nonlinear_model.h"
+#include "s_parameter_data.h"
 #include "signal_node.h"
 #include "component_interface.h"
+#include <algorithm>
 
 class AmplifierEngine : public IComponentEngine {
   public:
@@ -22,8 +23,9 @@ class AmplifierEngine : public IComponentEngine {
         }
     }
     void setNF_dB(double nf) {
-        if (nf != m_nf_dB) {
-            m_nf_dB = nf;
+        double clamped = std::max(0.0, nf);
+        if (clamped != m_nf_dB) {
+            m_nf_dB = clamped;
             m_dirty = true;
         }
     }
@@ -47,13 +49,21 @@ class AmplifierEngine : public IComponentEngine {
         }
     }
     void setOIP2_dBm(double oip2) {
-        m_nonlinear.setOIP2_dBm(oip2);
+        m_nonlinear.setOIP2_dBm(std::max(-30.0, oip2));
         if (m_nonlinear.enabled()) m_dirty = true;
     }
     void setOIP3_dBm(double oip3) {
-        m_nonlinear.setOIP3_dBm(oip3);
+        m_nonlinear.setOIP3_dBm(std::max(-30.0, oip3));
         if (m_nonlinear.enabled()) m_dirty = true;
     }
+
+    // S-parameter mode
+    void setSParamFilepath(const std::string& path);
+    bool sparamMode() const { return m_sparam_mode; }
+    void setSParamMode(bool en) { m_sparam_mode = en; m_dirty = true; }
+    bool sparamLoaded() const { return m_sparam_data.loaded(); }
+    const std::string& sparamFilepath() const { return m_sparam_filepath; }
+    const SParameterData& sparamData() const { return m_sparam_data; }
 
   private:
     int m_id;
@@ -67,4 +77,12 @@ class AmplifierEngine : public IComponentEngine {
     const Spectrum* m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
     NonlinearModel m_nonlinear;
+
+    // S-parameter state
+    SParameterData m_sparam_data;
+    std::string m_sparam_filepath;
+    bool m_sparam_mode = false;
+    int m_sparam_fwd_idx = 0;
+    const Spectrum* m_cached_sparam_input = nullptr;
+    uint64_t m_cached_sparam_generation = 0;
 };

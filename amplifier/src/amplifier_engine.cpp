@@ -1,12 +1,21 @@
 #include "amplifier_engine.h"
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <numbers>
 
 AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
+}
+
+void AmplifierEngine::setSParamFilepath(const std::string& path) {
+    m_sparam_filepath = path;
+    m_sparam_mode = m_sparam_data.load(path);
+    if (m_sparam_data.loaded())
+        m_sparam_fwd_idx = 1 * m_sparam_data.numPorts() + 0; // S21
+    m_dirty = true;
 }
 
 int AmplifierEngine::inputPinId() const {
@@ -22,6 +31,97 @@ void AmplifierEngine::update(double dt) {
     const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
     if (!m_dirty && in_ptr == m_cached_input_ptr && (!in_ptr || in_ptr->generation == m_cached_input_generation))
         return;
+
+    // --- S-parameter mode ---
+    if (m_sparam_mode && m_sparam_data.loaded()) {
+        if (!m_dirty && in_ptr == m_cached_sparam_input &&
+            (!in_ptr || in_ptr->generation == m_cached_sparam_generation))
+            return;
+        m_dirty = false;
+        m_cached_sparam_input = in_ptr;
+        m_cached_input_ptr = in_ptr;
+        if (in_ptr) {
+            m_cached_sparam_generation = in_ptr->generation;
+            m_cached_input_generation = in_ptr->generation;
+        }
+
+        auto& out = m_node.outputs[0];
+
+        if (in_ptr && !in_ptr->frequencies.empty())
+            out.frequencies = in_ptr->frequencies;
+        else if (out.frequencies.size() < 2)
+            buildDefaultFrequencyGrid(out.frequencies);
+
+        out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        const size_t N = out.frequencies.size();
+
+        // Apply S21 complex gain to tones
+        for (auto& t : out.tones) {
+            auto S = m_sparam_data.interpolate(t.freq_Hz, m_sparam_fwd_idx);
+            double mag = std::abs(S);
+            t.power_dBm += 20.0 * std::log10(mag);
+            t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
+        }
+
+        // Nonlinear processing
+        if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
+            size_t n_fund = out.tones.size();
+            auto result = m_nonlinear.process(in_ptr->tones,
+                [this](double freq) {
+                    auto S = this->m_sparam_data.interpolate(freq, this->m_sparam_fwd_idx);
+                    return std::abs(S);
+                });
+            for (const auto& t : result.extra_tones)
+                out.tones.push_back(t);
+            if (result.compression_dB < -1e8) {
+                for (size_t i = 0; i < n_fund; ++i)
+                    out.tones[i].power_dBm = MIN_POWER;
+            } else {
+                for (size_t i = 0; i < n_fund; ++i)
+                    out.tones[i].power_dBm += result.compression_dB;
+            }
+        }
+
+        if (in_ptr && !in_ptr->phase_deg.empty())
+            out.phase_deg = in_ptr->phase_deg;
+        else
+            out.phase_deg.assign(N, 0.0);
+
+        if (N < 2) {
+            out.noise_W.assign(N, 0.0);
+            out.noise_added_W.assign(N, 0.0);
+            out.noise_total_W.assign(N, 0.0);
+            out.bumpGeneration();
+            return;
+        }
+
+        // Amplify input noise by |S21|^2
+        out.noise_W.assign(N, 0.0);
+        double sum_gain = 0.0;
+        int gain_count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            auto S = m_sparam_data.interpolate(out.frequencies[i], m_sparam_fwd_idx);
+            double gain_linear = std::norm(S);
+            sum_gain += gain_linear;
+            ++gain_count;
+            double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
+            out.noise_W[i] = gain_linear * nin;
+        }
+
+        // Noise figure (scaled by average S21 gain)
+        double avg_gain = (gain_count > 0) ? (sum_gain / gain_count) : 1.0;
+        double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, avg_gain);
+        out.noise_added_W.assign(N, added_density <= 0.0 ? 0.0 : added_density);
+
+        out.noise_total_W.resize(N);
+        for (size_t i = 0; i < N; ++i)
+            out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
+
+        out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
+        out.bumpGeneration();
+        return;
+    }
+
     m_dirty = false;
     m_cached_input_ptr = in_ptr;
     if (in_ptr)
@@ -118,5 +218,9 @@ void AmplifierEngine::deserialize(const nlohmann::json& j) {
 }
 
 std::string AmplifierEngine::hoverSummary() const {
+    if (m_sparam_mode && m_sparam_data.loaded()) {
+        return "S-Param Amp | NF: " + std::to_string(m_nf_dB) + " dB"
+            + (m_nonlinear.enabled() ? " | NL On" : "");
+    }
     return "Gain: " + std::to_string(m_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
 }

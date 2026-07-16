@@ -145,6 +145,11 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
     }
 
     size_t num_freq_points = raw_values.size() / values_per_freq;
+
+    // R2: Upper bound on frequency points to prevent OOM
+    constexpr size_t MAX_FREQ_POINTS = 10000000;
+    if (num_freq_points > MAX_FREQ_POINTS) return std::nullopt;
+
     data.frequencies.reserve(num_freq_points);
     data.parameters.reserve(num_freq_points);
 
@@ -170,6 +175,13 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
             rm_params[r * data.num_ports + c] = cm_params[p];
         }
         data.parameters.push_back(std::move(rm_params));
+    }
+
+    // R1: Validate frequencies — reject NaN, infinity, negative, non-monotonic
+    for (size_t i = 0; i < data.frequencies.size(); ++i) {
+        double f = data.frequencies[i];
+        if (std::isnan(f) || std::isinf(f) || f < 0.0) return std::nullopt;
+        if (i > 0 && f <= data.frequencies[i - 1]) return std::nullopt;
     }
 
     return data;

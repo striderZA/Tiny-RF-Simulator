@@ -11,7 +11,6 @@
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
-#include "s_param_engine.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -22,6 +21,8 @@
 #include <memory>
 #include <vector>
 #include "component_registry.h"
+#include "equalizer_engine.h"
+#include "attenuator_engine.h"
 
 enum class PendingAction { None, New, Open, Exit };
 

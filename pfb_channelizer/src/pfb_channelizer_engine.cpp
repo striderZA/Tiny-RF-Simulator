@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine& graph)
     : m_id(id), m_graph(&graph) {

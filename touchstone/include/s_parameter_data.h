@@ -1,6 +1,5 @@
 #pragma once
 
-#include "common.h"
 #include "signal_node.h"
 #include <complex>
 #include <string>

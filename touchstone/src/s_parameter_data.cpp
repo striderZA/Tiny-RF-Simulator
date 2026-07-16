@@ -1,7 +1,9 @@
 #include "s_parameter_data.h"
 #include "touchstone_parser.h"
 #include "logging_core.h"
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 bool SParameterData::load(const std::string& filepath) {
@@ -29,9 +31,8 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     if (freq_Hz <= m_freqs.front()) return m_params.front()[param_idx];
     if (freq_Hz >= m_freqs.back()) return m_params.back()[param_idx];
 
-    size_t i = 0;
-    while (i + 1 < m_freqs.size() && m_freqs[i + 1] < freq_Hz)
-        ++i;
+    auto it = std::lower_bound(m_freqs.begin(), m_freqs.end(), freq_Hz);
+    size_t i = (it == m_freqs.begin()) ? 0 : static_cast<size_t>(std::distance(m_freqs.begin(), it) - 1);
     double f0 = m_freqs[i], f1 = m_freqs[i + 1];
     double t = (freq_Hz - f0) / (f1 - f0);
     auto p0 = m_params[i][param_idx];
@@ -57,7 +58,8 @@ void SParameterData::applyToSpectrum(const Spectrum& in, Spectrum& out, int para
     out.tones = in.tones;
     for (auto& t : out.tones) {
         auto S = interpolate(t.freq_Hz, param_idx);
-        t.power_dBm += 20.0 * std::log10(std::abs(S));
+        double mag = std::max(std::abs(S), std::numeric_limits<double>::min());
+        t.power_dBm += 20.0 * std::log10(mag);
         t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
     }
 

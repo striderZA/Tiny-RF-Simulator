@@ -1,5 +1,4 @@
 #pragma once
-#include "common.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include "component_interface.h"

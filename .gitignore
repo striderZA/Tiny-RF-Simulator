@@ -44,7 +44,7 @@ CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
-Testing
+/Testing
 Makefile
 cmake_install.cmake
 install_manifest.txt
@@ -297,6 +297,12 @@ PublishScripts/
 *.nuget.props
 *.nuget.targets
 
+# RF Simulator local artifacts
+imgui.ini
+.worktrees/
+output.log
+docs/specs/
+
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
@@ -497,6 +503,7 @@ imgui.ini
 
 # Brainstorming session files
 .superpowers/
+superpowers/
 
 # GitNexus knowledge graph index
 .gitnexus/
@@ -515,3 +522,6 @@ out/
 
 # Knowledge graph
 graphify-out/
+
+# AI agent session state
+.agents/

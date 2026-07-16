@@ -170,3 +170,20 @@ TEST_CASE("ADC DDC preserves tone power and phase", "[adc]") {
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
     REQUIRE(out.tones[0].phase_deg == Approx(45.0));
 }
+
+TEST_CASE("ADC setFs_Hz clamps invalid values", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(8, graph);
+
+    // Zero should be clamped to 1.0
+    adc.setFs_Hz(0.0);
+    REQUIRE(adc.fs_Hz() == Approx(1.0));
+
+    // Negative should be clamped to 1.0
+    adc.setFs_Hz(-1e9);
+    REQUIRE(adc.fs_Hz() == Approx(1.0));
+
+    // Valid value should be accepted
+    adc.setFs_Hz(1e9);
+    REQUIRE(adc.fs_Hz() == Approx(1e9));
+}

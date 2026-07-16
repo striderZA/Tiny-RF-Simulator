@@ -27,11 +27,13 @@ class NodeGraphWidget {
     std::function<void()> onAddAmplifier;
     std::function<void()> onAddSplitter;
     std::function<void()> onAddMixer;
-    std::function<void()> onAddSParamComponent;
     std::function<void()> onAddAdc;
     std::function<void()> onAddPFB;
     std::function<void()> onAddIdealFilter;
     std::function<void()> onAddCoaxCable;
+    std::function<void()> onAddEqualizer;
+    std::function<void()> onAddAttenuator;
+    std::function<void()> onAddCombiner;
     std::function<void(int node_id)> onRemoveNode;
     std::function<void()> onLinkChanged;
     std::function<std::string(int graph_node_id)> onNodeHover;
@@ -71,23 +73,16 @@ class NodeGraphWidget {
     int m_pending_rename_group_id = -1;
     char m_rename_buffer[128] = {};
 
-    // Cached node screen-space positions (populated during drawNodes, consumed by drawGroupBackgrounds
-    // and drawGroupCollapsedBlocks). Hidden nodes retain their last-known position from when they were
-    // last rendered, avoiding assertion from ImNodes::GetNode*Pos on nodes removed from the pool
-    // (ObjectPoolUpdate in EndNodeEditor cleans up any node not registered via BeginNode).
-    std::unordered_map<int, ImVec2> m_node_screen_positions;
-    // Offset from grid-space to screen-space: screen = grid + grid_to_screen_offset.
-    // Computed from the first visible node during drawNodes(); consumed the next frame.
-    ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
-
-    // Last known grid-space positions for detecting node moves
-    std::unordered_map<int, ImVec2> m_last_node_grid_positions;
-
-    // Rubber-band state
+    // Rubber-band state & screen-position cache
     bool m_rubber_band_active = false;
     ImVec2 m_rubber_band_start = ImVec2(0, 0);
     ImVec2 m_rubber_band_end = ImVec2(0, 0);
     std::vector<int> m_rubber_band_members;
+    std::unordered_map<int, ImVec2> m_node_screen_positions;
+    ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
+
+    // Last known grid-space positions for detecting node moves
+    std::unordered_map<int, ImVec2> m_last_node_grid_positions;
     bool m_show_create_popup = false;
 
     // Internal rendering helpers
@@ -95,6 +90,10 @@ class NodeGraphWidget {
     void drawGroupBackgrounds();
     void drawGroupCollapsedBlocks();
     void drawGroupTitleBar(Group& g, const ImVec2& top_left);
+
+    // Theme & symbol drawing
+    void setupDarkTheme();
+    static void drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color);
 
     // Interaction handlers
     void detectNodeMoves();

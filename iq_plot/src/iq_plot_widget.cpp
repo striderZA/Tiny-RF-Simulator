@@ -1,13 +1,12 @@
 #define _USE_MATH_DEFINES
 #include "iq_plot_widget.h"
-#include "common.h"
+#include "iq_plot_dsp.h"
 #include "imgui.h"
 #include "implot.h"
 #include <kiss_fft.h>
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <limits>
 
 IQPlotWidget::~IQPlotWidget() {
     if (m_ifft) kiss_fft_free(m_ifft);
@@ -28,6 +27,12 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
 
     double Fs = m_pfb.fs_Hz();
     int M = m_pfb.channelCount();
+
+    if (Fs <= 0.0) {
+        ImGui::Text("Waiting for sample rate...");
+        ImGui::End();
+        return;
+    }
 
     if (!m_time_inited) {
         m_time_step_s = static_cast<double>(M) / (2.0 * Fs);
@@ -148,34 +153,12 @@ void IQPlotWidget::runIDFT() {
     size_t N = out.frequencies.size();
     if (N < 2) return;
 
-    double bin_width = (N > 1)
-        ? (out.frequencies.back() - out.frequencies.front()) / static_cast<double>(N - 1)
-        : 1.0;
-
-    std::vector<std::complex<double>> spectrum(N, {0.0, 0.0});
-    for (size_t i = 0; i < N; ++i) {
-        double psd = (i < out.noise_total_W.size()) ? out.noise_total_W[i] : 0.0;
-        double magnitude = std::sqrt(std::max(0.0, psd * bin_width));
-        double phase_rad = (i < out.phase_deg.size()) ? out.phase_deg[i] * M_PI / 180.0 : 0.0;
-        spectrum[i] = std::complex<double>(magnitude * std::cos(phase_rad), magnitude * std::sin(phase_rad));
+    // Build frequency-domain spectrum via extracted DSP helper
+    std::vector<std::complex<double>> spectrum;
+    if (!build_iq_spectrum(out.frequencies, out.noise_total_W, out.phase_deg, out.tones, spectrum)) {
+        return;
     }
 
-    for (const auto& tone : out.tones) {
-        double best_dist = std::numeric_limits<double>::max();
-        int best_idx = -1;
-        for (size_t i = 0; i < N; ++i) {
-            double dist = std::abs(out.frequencies[i] - tone.freq_Hz);
-            if (dist < best_dist) {
-                best_dist = dist;
-                best_idx = static_cast<int>(i);
-            }
-        }
-        if (best_idx >= 0 && best_idx < static_cast<int>(N)) {
-            double mag = std::pow(10.0, tone.power_dBm / 20.0) / std::sqrt(50.0);
-            double phase_rad = tone.phase_deg * M_PI / 180.0;
-            spectrum[best_idx] += std::complex<double>(mag * std::cos(phase_rad), mag * std::sin(phase_rad));
-        }
-    }
 
     std::vector<double> td_i(N), td_q(N);
     {

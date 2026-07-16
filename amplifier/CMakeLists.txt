@@ -11,5 +11,5 @@ target_include_directories(amplifier_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(amplifier_engine PUBLIC common simulator::node_graph_engine)
+target_link_libraries(amplifier_engine PUBLIC common simulator::node_graph_engine simulator::touchstone_parser)
 add_library(simulator::amplifier_engine ALIAS amplifier_engine)

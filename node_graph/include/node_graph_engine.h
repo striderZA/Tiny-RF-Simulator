@@ -100,3 +100,62 @@ class NodeGraphEngine {
 
     void rebuildNodeToGroupCache();
 };
+
+// View-layer component type. Used by NodeGraphWidget to pick a color and
+// schematic symbol. The engine never reads, stores, or returns this type;
+// it is derived from GraphNode::label at render time.
+enum class NodeKind {
+    Unknown,
+    Generator,
+    Amplifier,
+    Splitter,
+    Mixer,
+    Adc,
+    PFB,
+    IdealFilter,
+    CoaxCable,
+    Equalizer,
+    Attenuator,
+    Combiner,
+    GroupCollapsed
+};
+
+// Maps a node label to a NodeKind by prefix matching. Each engine
+// constructor sets a unique, stable label prefix. First match wins.
+// Unrecognised input (empty, group names, future engines) returns Unknown.
+inline NodeKind nodeKindFromLabel(const std::string& label) {
+    if (label.rfind("Generator", 0) == 0)    return NodeKind::Generator;
+    if (label.rfind("Amplifier", 0) == 0)    return NodeKind::Amplifier;
+    if (label.rfind("Splitter", 0) == 0)     return NodeKind::Splitter;
+    if (label.rfind("Mixer", 0) == 0)        return NodeKind::Mixer;
+    if (label.rfind("ADC", 0) == 0)          return NodeKind::Adc;
+    if (label.rfind("PFB", 0) == 0)          return NodeKind::PFB;
+    if (label.rfind("IdealFilter", 0) == 0)  return NodeKind::IdealFilter;
+    if (label.rfind("Coax Cable", 0) == 0)   return NodeKind::CoaxCable;
+    if (label.rfind("Equalizer", 0) == 0)    return NodeKind::Equalizer;
+    if (label.rfind("Attenuator", 0) == 0)   return NodeKind::Attenuator;
+    if (label.rfind("Combiner", 0) == 0)     return NodeKind::Combiner;
+    return NodeKind::Unknown;
+}
+
+// Per-NodeKind ARGB color. Engine has no imgui include, so the return type
+// is plain uint32_t (same bit layout as IM_COL32: 0xAARRGGBB). The widget
+// casts to ImU32 at the call site.
+inline uint32_t themeColor(NodeKind k) {
+    switch (k) {
+        case NodeKind::Generator:      return 0xFF4ADE80;  // green
+        case NodeKind::Amplifier:      return 0xFFFB923C;  // orange
+        case NodeKind::Mixer:          return 0xFFC084FC;  // purple
+        case NodeKind::Splitter:       return 0xFFFACC15;  // amber
+        case NodeKind::Adc:            return 0xFF60A5FA;  // blue
+        case NodeKind::PFB:            return 0xFF22D3EE;  // cyan
+        case NodeKind::IdealFilter:    return 0xFF2DD4BF;  // teal
+        case NodeKind::CoaxCable:      return 0xFF94A3B8;  // slate
+        case NodeKind::Equalizer:      return 0xFF34D399;  // emerald
+        case NodeKind::Attenuator:     return 0xFF64B48C;  // muted green
+        case NodeKind::Combiner:       return 0xFFF87171;  // red
+        case NodeKind::GroupCollapsed: return 0xFF818CF8;  // indigo
+        case NodeKind::Unknown:        // fallthrough
+        default:                       return 0xFF9CA3AF;  // gray
+    }
+}

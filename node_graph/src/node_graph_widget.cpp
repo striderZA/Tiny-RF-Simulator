@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <limits>
 #include <string>
+#include <cmath>
 
 NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
@@ -32,6 +33,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
     if (ImGui::Begin(title, p_open)) {
+        setupDarkTheme();
         rebuildSynthMaps();
 
         drawGroupBackgrounds();
@@ -103,6 +105,19 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
                 ImGui::EndPopup();
             }
         }
+        // pop the 9 imnodes + 1 ImGui color styles pushed by setupDarkTheme() at frame start.
+        // ponytail: explicit pop rather than relying on imnodes' frame-level reset,
+        // which does NOT auto-pop user-pushed color styles.
+        ImNodes::PopColorStyle();   // PinHovered
+        ImNodes::PopColorStyle();   // Pin
+        ImNodes::PopColorStyle();   // TitleBar
+        ImNodes::PopColorStyle();   // NodeOutline
+        ImNodes::PopColorStyle();   // NodeBackground
+        ImNodes::PopColorStyle();   // Link
+        ImNodes::PopColorStyle();   // GridLinePrimary
+        ImNodes::PopColorStyle();   // GridLine
+        ImNodes::PopColorStyle();   // GridBackground
+        ImGui::PopStyleColor();     // WindowBg
     }
     ImGui::End();
 }
@@ -134,17 +149,24 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
+        const NodeKind kind = nodeKindFromLabel(node.label);
+        const ImU32 color = static_cast<ImU32>(themeColor(kind));
+        ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
+        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
 
-        // Icon body (pixel art from registry, or empty area if no icon loaded)
-        ImTextureID tex = m_icons.get(node.label);
-        if (tex) {
-            ImGui::Image(tex, ImVec2(80, 56));
-        } else {
-            ImGui::Dummy(ImVec2(80, 56));
-        }
+        // Schematic symbol body. Centered in the body region.
+        // ponytail: hardcoded body rect; upgrade when GetNodeBodyRect becomes available.
+        constexpr float BODY_W = 96.0f;
+        constexpr float BODY_H = 64.0f;
+        constexpr float TITLE_BAR_H = 24.0f;
+        ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
+                           screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        drawSchematicSymbol(dl, body_center, kind, color);
+        ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
@@ -179,6 +201,8 @@ void NodeGraphWidget::drawNodes() {
             }
         }
 
+        ImNodes::PopColorStyle();  // NodeOutline
+        ImNodes::PopColorStyle();  // TitleBar
         ImNodes::EndNode();
     }
 }
@@ -291,14 +315,17 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Add Splitter")) {
             if (onAddSplitter) onAddSplitter();
         }
+        if (ImGui::MenuItem("Add Combiner")) {
+            if (onAddCombiner) onAddCombiner();
+        }
         if (ImGui::MenuItem("Add Coax Cable")) {
             if (onAddCoaxCable) onAddCoaxCable();
         }
+        if (ImGui::MenuItem("Add Equalizer")) {
+            if (onAddEqualizer) onAddEqualizer();
+        }
         if (ImGui::MenuItem("Add Mixer")) {
             if (onAddMixer) onAddMixer();
-        }
-        if (ImGui::MenuItem("Add S-Param Component")) {
-            if (onAddSParamComponent) onAddSParamComponent();
         }
         if (ImGui::MenuItem("Add RF ADC")) {
             if (onAddAdc) onAddAdc();
@@ -308,6 +335,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         }
         if (ImGui::MenuItem("Add Ideal Filter")) {
             if (onAddIdealFilter) onAddIdealFilter();
+        }
+        if (ImGui::MenuItem("Add Attenuator")) {
+            if (onAddAttenuator) onAddAttenuator();
         }
         ImGui::EndPopup();
     }
@@ -516,6 +546,173 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
     ImGui::EndTooltip();
 }
 
+// ponytail: per-name symbol helpers are static and one-shot.
+
+static void drawGeneratorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    constexpr int N = 16;
+    constexpr float W = 30.0f, H = 12.0f;
+    ImVec2 pts[N];
+    for (int i = 0; i < N; ++i) {
+        float t = static_cast<float>(i) / (N - 1);
+        float x = c.x - W + 2.0f * W * t;
+        float y = c.y - H * std::sin(2.0f * 3.14159265f * 2.0f * t);
+        pts[i] = ImVec2(x, y);
+    }
+    dl->AddPolyline(pts, N, color, ImDrawFlags_None, 2.0f);
+}
+
+static void drawAmplifierSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    ImVec2 a(c.x - 20, c.y - 16);
+    ImVec2 b(c.x - 20, c.y + 16);
+    ImVec2 d(c.x + 20, c.y);
+    dl->AddTriangle(a, b, d, color, 2.0f);
+    dl->AddLine(ImVec2(a.x - 8, c.y - 6), ImVec2(a.x - 8, c.y - 14), color, 2.0f);
+    dl->AddLine(ImVec2(a.x - 12, c.y - 10), ImVec2(a.x - 4, c.y - 10), color, 2.0f);
+    dl->AddLine(ImVec2(a.x - 8, c.y + 6), ImVec2(a.x - 8, c.y + 14), color, 2.0f);
+}
+
+static void drawMixerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    dl->AddCircle(c, 14.0f, color, 24, 2.0f);
+    dl->AddLine(ImVec2(c.x - 10, c.y - 10), ImVec2(c.x + 10, c.y + 10), color, 2.0f);
+    dl->AddLine(ImVec2(c.x - 10, c.y + 10), ImVec2(c.x + 10, c.y - 10), color, 2.0f);
+}
+
+static void drawSplitterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    ImVec2 in_pt(c.x - 22, c.y);
+    ImVec2 mid(c.x, c.y);
+    ImVec2 out_a(c.x + 22, c.y - 12);
+    ImVec2 out_b(c.x + 22, c.y + 12);
+    dl->AddLine(in_pt, mid, color, 2.0f);
+    dl->AddLine(mid, out_a, color, 2.0f);
+    dl->AddLine(mid, out_b, color, 2.0f);
+    dl->AddCircleFilled(in_pt, 2.5f, color);
+    dl->AddCircleFilled(out_a, 2.5f, color);
+    dl->AddCircleFilled(out_b, 2.5f, color);
+}
+
+static void drawCombinerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Reverse of splitter: 2 inputs on left, 1 output on right
+    ImVec2 in_a(c.x - 22, c.y - 12);
+    ImVec2 in_b(c.x - 22, c.y + 12);
+    ImVec2 mid(c.x, c.y);
+    ImVec2 out_pt(c.x + 22, c.y);
+    dl->AddLine(in_a, mid, color, 2.0f);
+    dl->AddLine(in_b, mid, color, 2.0f);
+    dl->AddLine(mid, out_pt, color, 2.0f);
+    dl->AddCircleFilled(in_a, 2.5f, color);
+    dl->AddCircleFilled(in_b, 2.5f, color);
+    dl->AddCircleFilled(out_pt, 2.5f, color);
+}
+
+static void drawAdcSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    ImVec2 pts[6] = {
+        ImVec2(c.x - 24, c.y + 8),
+        ImVec2(c.x - 16, c.y + 8),
+        ImVec2(c.x - 16, c.y - 4),
+        ImVec2(c.x - 8,  c.y - 4),
+        ImVec2(c.x - 8,  c.y + 8),
+        ImVec2(c.x + 24, c.y + 8),
+    };
+    dl->AddPolyline(pts, 6, color, ImDrawFlags_None, 2.0f);
+}
+
+static void drawFilterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    dl->AddCircle(ImVec2(c.x - 10, c.y), 5.0f, color, 16, 2.0f);
+    dl->AddCircle(ImVec2(c.x + 10, c.y), 5.0f, color, 16, 2.0f);
+    dl->AddLine(ImVec2(c.x - 22, c.y - 10), ImVec2(c.x - 22, c.y + 10), color, 2.0f);
+    dl->AddLine(ImVec2(c.x + 22, c.y - 10), ImVec2(c.x + 22, c.y + 10), color, 2.0f);
+    dl->AddLine(ImVec2(c.x - 22, c.y), ImVec2(c.x + 22, c.y), color, 2.0f);
+}
+
+static void drawCoaxSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    dl->AddCircle(c, 16.0f, color, 32, 2.0f);
+    dl->AddCircle(c,  8.0f, color, 24, 2.0f);
+}
+
+static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Rising/falling slope line
+    dl->AddLine(ImVec2(c.x - 20, c.y + 8), ImVec2(c.x + 20, c.y - 8), color, 2.0f);
+    // Small reference markers
+    dl->AddCircleFilled(ImVec2(c.x - 14, c.y + 4), 2.0f, color);
+    dl->AddCircleFilled(ImVec2(c.x + 14, c.y - 4), 2.0f, color);
+}
+
+static void drawAttenuatorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    // Zigzag resistor-style symbol with "ATT" label
+    const float x0 = c.x - 15.0f;
+    const float x1 = c.x + 15.0f;
+    const float amp = 4.0f;
+    dl->PathClear();
+    dl->PathLineTo(ImVec2(x0, c.y));
+    for (int i = 0; i < 4; ++i) {
+        float x = x0 + (x1 - x0) * (i + 0.5f) / 4.0f;
+        float yo = (i % 2 == 0) ? -amp : amp;
+        dl->PathLineTo(ImVec2(x, c.y + yo));
+    }
+    dl->PathLineTo(ImVec2(x1, c.y));
+    dl->PathStroke(color, 0, 2.0f);
+    const char* label = "ATT";
+    ImVec2 ts = ImGui::CalcTextSize(label);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - 14.0f), color, label);
+}
+
+static void drawPfbSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    for (int i = 0; i < 3; ++i) {
+        float y_off = (i - 1) * 8.0f;
+        dl->AddRect(
+            ImVec2(c.x - 20, c.y - 4 + y_off),
+            ImVec2(c.x + 20, c.y + 4 + y_off),
+            color, 0.0f, ImDrawFlags_None, 2.0f);
+    }
+    dl->AddText(ImVec2(c.x - 4, c.y - 18), color, "M");
+}
+
+static void drawGroupCollapsedSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+    ImVec2 a(c.x - 18, c.y - 6);
+    ImVec2 b(c.x, c.y);
+    ImVec2 d(c.x + 18, c.y + 6);
+    dl->AddLine(a, b, color, 2.0f);
+    dl->AddLine(b, d, color, 2.0f);
+    dl->AddCircleFilled(a, 3.0f, color);
+    dl->AddCircleFilled(b, 3.0f, color);
+    dl->AddCircleFilled(d, 3.0f, color);
+}
+}
+
+void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color) {
+    switch (kind) {
+        case NodeKind::Generator:      drawGeneratorSymbol(dl, center, color);      break;
+        case NodeKind::Amplifier:      drawAmplifierSymbol(dl, center, color);      break;
+        case NodeKind::Splitter:       drawSplitterSymbol(dl, center, color);       break;
+        case NodeKind::Mixer:          drawMixerSymbol(dl, center, color);          break;
+        case NodeKind::Adc:            drawAdcSymbol(dl, center, color);            break;
+        case NodeKind::PFB:            drawPfbSymbol(dl, center, color);            break;
+        case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
+        case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
+        case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
+        case NodeKind::Attenuator:     drawAttenuatorSymbol(dl, center, color);     break;
+        case NodeKind::Combiner:       drawCombinerSymbol(dl, center, color);       break;
+        case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
+        default:
+            // Future/unknown kinds: draw nothing silently.
+            break;
+    }
+}
+
+void NodeGraphWidget::setupDarkTheme() {
+    // ponytail: pushes are popped at the end of the same draw() call (balanced
+    // before the closing ImGui::End()). Per-node title/border overrides are
+    // pushed inside BeginNode/EndNode and explicitly popped in the same block.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(20, 20, 28, 255));  // editor window
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground,  IM_COL32(30, 30, 38, 255));
+    ImNodes::PushColorStyle(ImNodesCol_GridLine,        IM_COL32(50, 50, 65, 100));
+    ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(55, 55, 72, 120));
+    ImNodes::PushColorStyle(ImNodesCol_Link,            IM_COL32(180, 180, 200, 200));
+    ImNodes::PushColorStyle(ImNodesCol_NodeBackground, IM_COL32(35, 35, 45, 255));
+    ImNodes::PushColorStyle(ImNodesCol_NodeOutline,     IM_COL32(80, 80, 100, 255));
+    ImNodes::PushColorStyle(ImNodesCol_TitleBar,        IM_COL32(60, 60, 80, 255));
+    ImNodes::PushColorStyle(ImNodesCol_Pin,             IM_COL32(200, 200, 220, 255));
+    ImNodes::PushColorStyle(ImNodesCol_PinHovered,      IM_COL32(120, 200, 255, 255));
 }
 
 void NodeGraphWidget::rebuildSynthMaps() {
@@ -598,6 +795,9 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
+        const ImU32 group_color = static_cast<ImU32>(themeColor(NodeKind::GroupCollapsed));
+        ImNodes::PushColorStyle(ImNodesCol_TitleBar, group_color);
+        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, group_color);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(g.name.c_str());
         ImNodes::EndNodeTitleBar();
@@ -644,6 +844,17 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             }
         }
 
+        // Schematic symbol in the body (same machinery as drawNodes).
+        // ponytail: hardcoded body rect — see plain-node draw for upgrade path.
+        ImVec2 block_screen_pos = ImNodes::GetNodeScreenSpacePos(g.id);
+        constexpr float BODY_W = 120.0f;
+        constexpr float BODY_H = 60.0f;
+        constexpr float TITLE_BAR_H = 24.0f;
+        ImVec2 body_center(block_screen_pos.x + BODY_W * 0.5f,
+                           block_screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        drawSchematicSymbol(dl, body_center, NodeKind::GroupCollapsed, group_color);
+
         // Expand button in the body. Placing it in the title bar would conflict with
         // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
         ImGui::Dummy(ImVec2(0, 4));  // small vertical spacer
@@ -651,6 +862,8 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             m_engine.setGroupCollapsed(g.id, false);
         }
 
+        ImNodes::PopColorStyle();  // NodeOutline
+        ImNodes::PopColorStyle();  // TitleBar
         ImNodes::EndNode();
     }
 }

@@ -1,0 +1,49 @@
+# git-cliff configuration for Tiny RF Simulator
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}_({{ commit.scope }})_{% endif %}\
+            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+render_always = true
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+require_conventional = false
+split_commits = false
+commit_preprocessors = [
+    { pattern = "\\(#(\\d+)\\)", replace = "" },
+    { pattern = "\\s+", replace = " " },
+]
+protect_breaking_commits = false
+commit_parsers = [
+    { message = "^feat", group = "Features" },
+    { message = "^fix", group = "Bug Fixes" },
+    { message = "^doc", group = "Documentation" },
+    { message = "^perf", group = "Performance" },
+    { message = "^refactor", group = "Refactoring" },
+    { message = "^test", group = "Testing" },
+    { message = "^style", group = "Styling" },
+    { message = "^chore|^ci|^build", group = "Miscellaneous Tasks" },
+    { message = "^revert", group = "Revert" },
+]
+filter_commits = false
+use_branch_tags = false
+topo_order = false
+topo_order_commits = true
+sort_commits = "oldest"
