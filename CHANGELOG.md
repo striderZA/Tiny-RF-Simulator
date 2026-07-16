@@ -1,3 +1,35 @@
+## [0.8.0] - 2026-07-16
+
+### Features
+
+- **Project save/load** — persist entire circuits to `.rfsim` JSON files
+  - File menu with New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S)
+  - Unsaved-changes dialog with Save/Discard/Cancel on close or new/open
+  - Dirty tracking: parameter edits, node moves, link changes, component add/remove
+  - Full round-trip fidelity for all 12 component types
+  - Graph state restoration: node positions, wiring, probe visibility
+  - 9 project file round-trip tests (55 assertions)
+- Serialize/deserialize on all engine types: SignalGenerator, Amplifier, Splitter, Mixer, ADC, PFB Channelizer, Coax Cable, Ideal Filter, Attenuator, Combiner, Equalizer
+- Amplifier and IdealFilter S-parameter mode state preserved across save/load
+- Graph state helpers: `setNextIds`, `removeAllLinks`, group/boundary-pin ID restore
+
+### Bug Fixes
+
+- Fix link restoration when unknown component types are skipped during load
+- Fix deserialize defaults to match constructor defaults (ADC, Mixer, PFB)
+- Fix PFB active_channel clamping safety (bounds check, M=0 guard)
+- Add FilterType enum validation on IdealFilter deserialize
+- Clear position cache on node deletion to prevent stale entries
+- Fire onLinkChanged when node deletion implicitly removes links
+
+### Tests
+
+- 178 test cases, 65,368 assertions (up from 166)
+- Parameter value round-trip verification (gen/amp/mixer/coax)
+- Group save/load round-trip test
+- Attenuator/Combiner/Equalizer round-trip test
+- Invalid JSON load test, unique temp paths for parallel safety
+
 ## [0.7.1] - 2026-07-14
 
 ### Bug Fixes
