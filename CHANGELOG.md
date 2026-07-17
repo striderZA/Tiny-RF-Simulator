@@ -1,3 +1,9 @@
+## [0.8.2] - 2026-07-17
+
+### Bug Fixes
+
+- Fix marker applying to hidden signals in spectrum analyzer. Marker now only considers actively displayed traces when snapping to peaks. Added per-trace visibility tracking that syncs with ImPlot legend state.
+
 ## [0.8.1] - 2026-07-16
 
 ### Bug Fixes
