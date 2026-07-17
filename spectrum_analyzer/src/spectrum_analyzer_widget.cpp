@@ -168,6 +168,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     auto active_nodes = m_view_manager.getActiveNodes();
 
+    // Sync visibility tracking vector with current probe count
+    if (m_trace_visible.size() != active_nodes.size()) {
+        m_trace_visible.assign(active_nodes.size(), true);
+    }
+
     if (active_nodes.empty()) {
         ImGui::Text("No signal node selected for display!");
         ImGui::End();
@@ -189,19 +194,21 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    // Build combined specs for marker + avg noise
-    std::vector<const Spectrum*> specs;
-    for (auto* node : active_nodes) {
+    // Build combined specs from VISIBLE traces only (for marker + avg noise)
+    std::vector<const Spectrum*> visible_specs;
+    for (size_t i = 0; i < active_nodes.size(); ++i) {
+        if (!m_trace_visible[i]) continue;
+        auto* node = active_nodes[i];
         if (!node) continue;
         auto pfbIter = m_pfb_map.find(node);
-        specs.push_back(pfbIter != m_pfb_map.end()
+        visible_specs.push_back(pfbIter != m_pfb_map.end()
             ? &node->outputs[1] : &node->outputs[0]);
     }
 
-    // Render combined spectrum (for marker + noise readout)
-    std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(specs);
+    // Render combined spectrum from VISIBLE traces only (for marker + noise readout)
+    std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
     if (combined_dBm.empty()) {
-        ImGui::Text("Unable to render combined spectrum.");
+        ImGui::Text("No visible traces. Enable at least one trace in the legend.");
         ImGui::End();
         return;
     }
@@ -231,10 +238,19 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
             std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
                               : ("Probe " + std::to_string(i));
+
+            // Sync ImPlot visibility with our tracking
+            ImPlot::HideNextItem(!m_trace_visible[i], ImPlotCond_Always);
             ImPlot::PlotLine(label.c_str(), spec.frequencies.data(), trace.data(),
                              static_cast<int>(trace.size()),
                              {ImPlotProp_LineColor, is_pfb ? pfb_full_color : trace_colors[i % 4],
                               ImPlotProp_LineWeight, is_pfb ? 1.0f : 1.5f});
+
+            // Detect legend click to toggle visibility
+            if (ImPlot::IsLegendEntryHovered(label.c_str()) &&
+                ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                m_trace_visible[i] = !m_trace_visible[i];
+            }
 
             // For PFB: overlay active channel highlight trace
             if (is_pfb) {
@@ -316,7 +332,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
     }
 
-    double avg_noise = m_engine.computeAverageNoiseLevel(specs);
+    double avg_noise = m_engine.computeAverageNoiseLevel(visible_specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
 
     if (ImGui::Button("Reset Zoom")) {

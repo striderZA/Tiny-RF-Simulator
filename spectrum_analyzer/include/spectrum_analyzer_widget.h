@@ -37,6 +37,7 @@ class SpectrumAnalyzerWidget {
     DragZoomState m_zoom;
     std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
     std::unordered_map<SignalNode*, PFBChannelizerEngine*> m_pfb_map;
+    std::vector<bool> m_trace_visible;  // Track visibility for each probe trace
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;
