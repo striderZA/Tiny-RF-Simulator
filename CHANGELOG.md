@@ -1,3 +1,9 @@
+## [0.8.1] - 2026-07-16
+
+### Bug Fixes
+
+- Fix crash when adding components via right-click context menu in the node graph. `detectNodeMoves()` called `GetNodeEditorSpacePos()` on newly-added nodes not yet registered with imnodes, hitting an assertion. Clear `m_node_screen_positions` each frame so only nodes drawn by imnodes are queried.
+
 ## [0.8.0] - 2026-07-16
 
 ### Features

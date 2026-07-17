@@ -40,7 +40,7 @@ class NodeGraphWidget {
 
     ImNodesEditorContext* context() { return m_context; }
     void syncNodesFromEngine();
-    void clearPositionCache() { m_last_node_grid_positions.clear(); }
+    void clearPositionCache() { m_last_node_grid_positions.clear(); m_node_screen_positions.clear(); }
 
   private:
     NodeGraphEngine &m_engine;

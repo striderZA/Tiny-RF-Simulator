@@ -123,6 +123,11 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 }
 
 void NodeGraphWidget::drawNodes() {
+    // Clear screen position cache - will be repopulated for nodes drawn this frame.
+    // This ensures detectNodeMoves() only checks nodes that were actually drawn,
+    // not stale entries from previous frames.
+    m_node_screen_positions.clear();
+
     std::unordered_set<int> hidden_nodes;
     for (const auto& g : m_engine.groups()) {
         if (g.collapsed) {
@@ -909,6 +914,10 @@ void NodeGraphWidget::detectNodeMoves() {
         return;
     bool moved = false;
     for (const auto& node : m_engine.nodes()) {
+        // Skip nodes not drawn this frame (newly added nodes haven't been
+        // through BeginNode yet, so GetNodeEditorSpacePos would assert).
+        if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
+            continue;
         ImVec2 current = ImNodes::GetNodeEditorSpacePos(node.node_id);
         auto it = m_last_node_grid_positions.find(node.node_id);
         if (it != m_last_node_grid_positions.end()) {
