@@ -1,3 +1,9 @@
+## [0.8.4] - 2026-07-20
+
+### Features
+
+- **Duplicate components** — right-click any component in the node graph to duplicate it with all parameters. The duplicate appears offset from the original. Connections are not copied. Supports all 12 component types including PFB Channelizer (creates associated IQ plot and grid widgets).
+
 ## [0.8.2] - 2026-07-17
 
 ### Bug Fixes
