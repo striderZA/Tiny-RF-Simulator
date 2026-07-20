@@ -32,15 +32,15 @@ commit_preprocessors = [
 ]
 protect_breaking_commits = false
 commit_parsers = [
-    { message = "^feat", group = "Features" },
-    { message = "^fix", group = "Bug Fixes" },
-    { message = "^doc", group = "Documentation" },
-    { message = "^perf", group = "Performance" },
-    { message = "^refactor", group = "Refactoring" },
-    { message = "^test", group = "Testing" },
-    { message = "^style", group = "Styling" },
-    { message = "^chore|^ci|^build", group = "Miscellaneous Tasks" },
-    { message = "^revert", group = "Revert" },
+    { message = "(?i)^feat", group = "Features" },
+    { message = "(?i)^fix", group = "Bug Fixes" },
+    { message = "(?i)^doc", group = "Documentation" },
+    { message = "(?i)^perf", group = "Performance" },
+    { message = "(?i)^refactor", group = "Refactoring" },
+    { message = "(?i)^test", group = "Testing" },
+    { message = "(?i)^style", group = "Styling" },
+    { message = "(?i)^chore|(?i)^ci|(?i)^build", group = "Miscellaneous Tasks" },
+    { message = "(?i)^revert", group = "Revert" },
 ]
 filter_commits = false
 use_branch_tags = false
