@@ -336,6 +336,7 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
 
         int to_delete = -1;
         for (int i = 0; i < static_cast<int>(engine.toneCount()); ++i) {
+            ImGui::PushID(i);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::Text("%d", i + 1);
@@ -361,6 +362,7 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("X"))
                 to_delete = i;
+            ImGui::PopID();
         }
         ImGui::EndTable();
         if (to_delete >= 0) {
