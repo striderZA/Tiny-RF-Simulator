@@ -35,6 +35,7 @@ class NodeGraphWidget {
     std::function<void()> onAddAttenuator;
     std::function<void()> onAddCombiner;
     std::function<void(int node_id)> onRemoveNode;
+    std::function<void(int node_id)> onDuplicateNode;
     std::function<void()> onLinkChanged;
     std::function<std::string(int graph_node_id)> onNodeHover;
 

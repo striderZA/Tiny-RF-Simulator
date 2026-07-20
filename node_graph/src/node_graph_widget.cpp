@@ -304,6 +304,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     }
 
     if (ImGui::BeginPopup("node_context_menu")) {
+        if (ImGui::MenuItem("Duplicate")) {
+            if (onDuplicateNode) onDuplicateNode(m_context_menu_node);
+        }
         if (ImGui::MenuItem("Remove")) {
             if (onRemoveNode) onRemoveNode(m_context_menu_node);
         }
