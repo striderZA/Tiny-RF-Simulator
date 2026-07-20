@@ -89,6 +89,9 @@ RfSimulatorApp::RfSimulatorApp()
     m_graph_widget->onNodeHover = [this](int id) {
         return m_components.hoverSummary(id);
     };
+    m_graph_widget->onDuplicateNode = [this](int id) {
+        duplicateComponent(id);
+    };
 
     m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine).addTone(100e6, -20.0);
     m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
@@ -123,6 +126,61 @@ void RfSimulatorApp::load_window_states() {
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
+}
+
+void RfSimulatorApp::duplicateComponent(int graph_node_id) {
+    IComponentEngine* src = m_components.find(graph_node_id);
+    if (!src) return;
+
+    // Capture source position before creating the new node
+    ImNodes::EditorContextSet(m_graph_widget->context());
+    ImVec2 src_pos = ImNodes::GetNodeEditorSpacePos(graph_node_id);
+    constexpr float OFFSET = 40.0f;
+
+    // Helper: create a new engine of type T, copy params via serialize/deserialize,
+    // position it offset from the source, and return a reference to the new engine.
+    auto dup = [&](auto* typed_src) -> decltype(typed_src) {
+        using T = std::remove_pointer_t<decltype(typed_src)>;
+        auto& new_eng = m_components.add<T>(m_next_component_id++, m_graph_engine);
+        new_eng.deserialize(typed_src->serialize());
+        int new_nid = new_eng.graphNodeId();
+        // Register with imnodes pool and set position
+        ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
+        return &new_eng;
+    };
+
+    if (auto* e = dynamic_cast<SignalGeneratorEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<AmplifierEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<SplitterEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<MixerEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<AdcEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<PFBChannelizerEngine*>(src)) {
+        auto* new_pfb = dup(e);
+        // PFB also needs IQ plot widget and grid widget (same as onAddPFB)
+        m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*new_pfb));
+        m_show_iq_pfbs.push_back(
+            m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(new_pfb->id())).c_str(), true));
+        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*new_pfb));
+        m_show_pfb_grids.push_back(
+            m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(new_pfb->id())).c_str(), true));
+    } else if (auto* e = dynamic_cast<CoaxCableEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<EqualizerEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<IdealFilterEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<AttenuatorEngine*>(src)) {
+        dup(e);
+    } else if (auto* e = dynamic_cast<CombinerEngine*>(src)) {
+        dup(e);
+    }
+
+    markDirty();
 }
 
 void RfSimulatorApp::newProject() {

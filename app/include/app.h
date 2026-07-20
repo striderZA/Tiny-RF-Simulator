@@ -59,6 +59,7 @@ class RfSimulatorApp {
 
   private:
     void load_window_states();
+    void duplicateComponent(int graph_node_id);
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
