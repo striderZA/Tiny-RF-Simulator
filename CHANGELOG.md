@@ -1,3 +1,10 @@
+## [0.9.2] - 2026-07-21
+
+### Bug Fixes
+
+- **Component placement** — components added via right-click context menu now appear at the cursor position instead of at the origin (0,0). This fixes the issue where components appeared off-screen when the node editor was panned.
+
+
 ## [0.9.1] - 2026-07-21
 
 ### Features
