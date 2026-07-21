@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <filesystem>
 #include "app.h"
 #include "imgui.h"
 #include "imnodes.h"
@@ -328,4 +329,37 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer",
         CHECK(eqs[0]->slope_dBPerDecade() == Approx(6.0));
     }
     std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 10 — Save/load preserves amplifier P1dB
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Project save/load preserves amplifier P1dB",
+                 "[project][p1db]") {
+    auto path = tempPath();
+    std::filesystem::remove(path);
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto& amp = app.testComponents().add<AmplifierEngine>(
+            100, app.testGraphEngine());
+        amp.setGain_dB(20.0);
+        amp.setNF_dB(2.5);
+        amp.setP1dB_dBm(15.0);
+        amp.setEnableNonlinear(true);
+
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+        REQUIRE(amps[0]->p1db_dBm() == Catch::Approx(15.0));
+        REQUIRE(amps[0]->gain_dB() == Catch::Approx(20.0));
+        REQUIRE(amps[0]->nf_dB() == Catch::Approx(2.5));
+    }
+    std::filesystem::remove(path);
 }
