@@ -110,6 +110,23 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
                             def.parameters.contains("oip3_dBm") ||
                             def.parameters.contains("p1db_dBm");
         if (has_nonlinear) amp.setEnableNonlinear(true);
+        // Auto-load S-param file if available
+        for (const auto& df : def.data_files) {
+            if (df.type == "s_parameters") {
+                std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
+                std::filesystem::path sparam_path = json_dir / df.path;
+                amp.setSParamFilepath(sparam_path.string());
+
+                if (amp.sparamLoaded()) {
+                    LOG_INFO("Loaded S-param file for %s: %s",
+                             def.part_number.c_str(), sparam_path.string().c_str());
+                } else {
+                    LOG_WARN("Failed to load S-param file for %s: %s (falling back to single-point params)",
+                             def.part_number.c_str(), sparam_path.string().c_str());
+                }
+                break;  // Only load first S-param file
+            }
+        }
         result = &amp;
     } else if (def.type == "attenuator") {
         auto& att = registry.add<AttenuatorEngine>(id, graph);
