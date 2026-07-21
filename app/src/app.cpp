@@ -13,6 +13,7 @@
 #include <functional>
 #include <typeindex>
 #include <unordered_map>
+#include <filesystem>
 
 RfSimulatorApp::RfSimulatorApp()
     : m_components(m_graph_engine, m_view_manager) {
@@ -110,6 +111,28 @@ RfSimulatorApp::RfSimulatorApp()
         &m_show_node_editor
     });
     m_inspector_panel->onParamChange = [this]() { markDirty(); };
+
+    // Initialize component library
+#ifdef _WIN32
+    const char* home = std::getenv("USERPROFILE");
+#else
+    const char* home = std::getenv("HOME");
+#endif
+    if (home) {
+        m_library.scan((std::filesystem::path(home) / ".rf-sim" / "libraries").string());
+    }
+    if (std::filesystem::exists("rf-sim-libraries")) {
+        m_library.scan("rf-sim-libraries");
+    }
+    if (std::filesystem::exists("component_data/library")) {
+        m_library.scan("component_data/library");
+    }
+
+    m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
+    m_library_browser->onInsert = [this](const ComponentDefinition& def) {
+        auto* engine = m_library.instantiate(def, m_next_component_id++, m_components, m_graph_engine);
+        if (engine) markDirty();
+    };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
 
@@ -641,6 +664,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
+            ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::EndMenu();
         }
         // Title / project name on the right
@@ -759,6 +783,10 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_show_properties && m_inspector_panel)
         m_inspector_panel->draw("Properties", &m_show_properties);
+
+    if (m_show_library && m_library_browser) {
+        m_library_browser->draw("Component Library", &m_show_library);
+    }
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);

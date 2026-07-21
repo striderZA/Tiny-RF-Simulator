@@ -23,6 +23,8 @@
 #include "component_registry.h"
 #include "equalizer_engine.h"
 #include "attenuator_engine.h"
+#include "component_library.h"
+#include "library_browser_widget.h"
 
 enum class PendingAction { None, New, Open, Exit };
 
@@ -70,6 +72,9 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
     std::vector<bool> m_show_iq_pfbs;
     std::vector<std::unique_ptr<PFBChannelizerWidget>> m_pfb_grid_widgets;
+    ComponentLibrary m_library;
+    std::unique_ptr<LibraryBrowserWidget> m_library_browser;
+    bool m_show_library = false;
     std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
