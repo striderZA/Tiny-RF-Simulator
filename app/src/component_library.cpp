@@ -46,6 +46,18 @@ void ComponentLibrary::loadFile(const std::string& filepath) {
     def.notes = j.value("notes", "");
     def.source_path = filepath;
 
+    // Parse data_files array if present
+    if (j.contains("data_files") && j["data_files"].is_array()) {
+        for (const auto& df : j["data_files"]) {
+            if (df.contains("type") && df.contains("path")) {
+                def.data_files.push_back({
+                    df["type"].get<std::string>(),
+                    df["path"].get<std::string>()
+                });
+            }
+        }
+    }
+
     m_definitions.push_back(std::move(def));
 }
 

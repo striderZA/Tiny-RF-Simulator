@@ -291,3 +291,60 @@ TEST_CASE("ComponentLibrary sets part_number on graph node", "[library]") {
 
     std::filesystem::remove(path);
 }
+
+
+TEST_CASE("ComponentLibrary parses data_files array from v2 JSON", "[library]") {
+    std::string json = R"({
+        "schema_version": 2,
+        "type": "amplifier",
+        "part_number": "TEST-DATA-001",
+        "manufacturer": "Test Corp",
+        "parameters": {
+            "gain_dB": 20.0,
+            "nf_dB": 1.0
+        },
+        "data_files": [
+            {"type": "s_parameters", "path": "TEST001.s2p"}
+        ]
+    })";
+
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    const auto& def = *defs[0];
+    REQUIRE(def.schema_version == 2);
+    REQUIRE(def.part_number == "TEST-DATA-001");
+    REQUIRE(def.data_files.size() == 1);
+    REQUIRE(def.data_files[0].type == "s_parameters");
+    REQUIRE(def.data_files[0].path == "TEST001.s2p");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary handles v1 JSON without data_files", "[library]") {
+    std::string json = R"({
+        "schema_version": 1,
+        "type": "amplifier",
+        "part_number": "V1PART",
+        "parameters": {
+            "gain_dB": 15.0
+        }
+    })";
+
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    const auto& def = *defs[0];
+    REQUIRE(def.schema_version == 1);
+    REQUIRE(def.data_files.empty());
+
+    std::filesystem::remove(path);
+}
