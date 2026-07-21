@@ -23,17 +23,17 @@ class NodeGraphWidget {
 
     // Callbacks for app to create/destroy components
     std::function<void()> onNodeMoved;
-    std::function<void()> onAddGenerator;
-    std::function<void()> onAddAmplifier;
-    std::function<void()> onAddSplitter;
-    std::function<void()> onAddMixer;
-    std::function<void()> onAddAdc;
-    std::function<void()> onAddPFB;
-    std::function<void()> onAddIdealFilter;
-    std::function<void()> onAddCoaxCable;
-    std::function<void()> onAddEqualizer;
-    std::function<void()> onAddAttenuator;
-    std::function<void()> onAddCombiner;
+    std::function<void(ImVec2 pos)> onAddGenerator;
+    std::function<void(ImVec2 pos)> onAddAmplifier;
+    std::function<void(ImVec2 pos)> onAddSplitter;
+    std::function<void(ImVec2 pos)> onAddMixer;
+    std::function<void(ImVec2 pos)> onAddAdc;
+    std::function<void(ImVec2 pos)> onAddPFB;
+    std::function<void(ImVec2 pos)> onAddIdealFilter;
+    std::function<void(ImVec2 pos)> onAddCoaxCable;
+    std::function<void(ImVec2 pos)> onAddEqualizer;
+    std::function<void(ImVec2 pos)> onAddAttenuator;
+    std::function<void(ImVec2 pos)> onAddCombiner;
     std::function<void(int node_id)> onRemoveNode;
     std::function<void(int node_id)> onDuplicateNode;
     std::function<void()> onLinkChanged;
@@ -71,6 +71,7 @@ class NodeGraphWidget {
     std::unordered_map<int, int> m_real_to_synth_pin;      // rebuilt every frame (inverse, for link drawing)
 
     int m_context_menu_group_id = -1;
+    ImVec2 m_context_menu_pos = ImVec2(0, 0);  // Editor-space position of right-click
     int m_pending_rename_group_id = -1;
     char m_rename_buffer[128] = {};
 

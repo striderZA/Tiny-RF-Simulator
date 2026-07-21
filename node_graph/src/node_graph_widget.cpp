@@ -289,6 +289,10 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
                 m_context_menu_node = hovered_node;
             }
         } else {
+            // Capture mouse position in editor space for component placement
+            ImVec2 mouse_screen = ImGui::GetMousePos();
+            ImVec2 window_pos = ImGui::GetWindowPos();
+            m_context_menu_pos = ImVec2(mouse_screen.x - window_pos.x, mouse_screen.y - window_pos.y);
             ImGui::OpenPopup("canvas_context_menu");
         }
     }
@@ -324,37 +328,37 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
 
     if (ImGui::BeginPopup("canvas_context_menu")) {
         if (ImGui::MenuItem("Add Generator")) {
-            if (onAddGenerator) onAddGenerator();
+            if (onAddGenerator) onAddGenerator(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Amplifier")) {
-            if (onAddAmplifier) onAddAmplifier();
+            if (onAddAmplifier) onAddAmplifier(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Splitter")) {
-            if (onAddSplitter) onAddSplitter();
+            if (onAddSplitter) onAddSplitter(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Combiner")) {
-            if (onAddCombiner) onAddCombiner();
+            if (onAddCombiner) onAddCombiner(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Coax Cable")) {
-            if (onAddCoaxCable) onAddCoaxCable();
+            if (onAddCoaxCable) onAddCoaxCable(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Equalizer")) {
-            if (onAddEqualizer) onAddEqualizer();
+            if (onAddEqualizer) onAddEqualizer(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Mixer")) {
-            if (onAddMixer) onAddMixer();
+            if (onAddMixer) onAddMixer(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add RF ADC")) {
-            if (onAddAdc) onAddAdc();
+            if (onAddAdc) onAddAdc(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add PFB Channelizer")) {
-            if (onAddPFB) onAddPFB();
+            if (onAddPFB) onAddPFB(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Ideal Filter")) {
-            if (onAddIdealFilter) onAddIdealFilter();
+            if (onAddIdealFilter) onAddIdealFilter(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Attenuator")) {
-            if (onAddAttenuator) onAddAttenuator();
+            if (onAddAttenuator) onAddAttenuator(m_context_menu_pos);
         }
         ImGui::EndPopup();
     }
