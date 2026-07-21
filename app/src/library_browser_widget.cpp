@@ -48,7 +48,11 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
                     mfg_label += " (" + std::to_string(defs.size()) + ")";
                     if (ImGui::TreeNode(mfg_label.c_str())) {
                         for (auto* def : defs) {
-                            std::string item_label = def->part_number;
+                            std::string item_label;
+                            if (!def->data_files.empty()) {
+                                item_label += "[DATA] ";
+                            }
+                            item_label += def->part_number;
                             if (!def->description.empty())
                                 item_label += "  " + def->description;
                             if (ImGui::Selectable(item_label.c_str())) {
@@ -61,6 +65,13 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
                                 tooltip += "Type: " + def->type + "\n";
                                 if (!def->notes.empty())
                                     tooltip += "Notes: " + def->notes + "\n";
+                                // List data files if present
+                                if (!def->data_files.empty()) {
+                                    tooltip += "Data files:\n";
+                                    for (const auto& df : def->data_files) {
+                                        tooltip += "  - " + df.path + " (" + df.type + ")\n";
+                                    }
+                                }
                                 tooltip += "Source: " + def->source_path;
                                 ImGui::SetTooltip("%s", tooltip.c_str());
                             }
