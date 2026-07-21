@@ -44,3 +44,24 @@ TEST_CASE("ComponentLibrary loads valid amplifier JSON", "[library]") {
 
     std::filesystem::remove(path);
 }
+
+TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
+    std::filesystem::create_directories("test_lib/amplifiers/test");
+
+    std::string json1 = R"({"schema_version":1,"type":"amplifier","part_number":"AMP-001","parameters":{"gain_dB":10.0}})";
+    std::string json2 = R"({"schema_version":1,"type":"amplifier","part_number":"AMP-002","parameters":{"gain_dB":20.0}})";
+
+    { std::ofstream ofs("test_lib/amplifiers/test/amp1.json"); ofs << json1; }
+    { std::ofstream ofs("test_lib/amplifiers/test/amp2.json"); ofs << json2; }
+
+    ComponentLibrary lib;
+    lib.scan("test_lib");
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 2);
+
+    auto amps = lib.byType("amplifier");
+    REQUIRE(amps.size() == 2);
+
+    std::filesystem::remove_all("test_lib");
+}

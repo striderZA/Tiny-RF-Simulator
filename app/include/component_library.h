@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 
+
+class ComponentRegistry;
+class NodeGraphEngine;
+class IComponentEngine;
 struct ComponentDefinition {
     int schema_version;
     std::string type;           // "amplifier"
@@ -20,6 +24,8 @@ class ComponentLibrary {
 public:
     void loadFile(const std::string& filepath);
     std::vector<const ComponentDefinition*> all() const;
+    void scan(const std::string& directory);
+    std::vector<const ComponentDefinition*> byType(const std::string& type) const;
 
 private:
     std::vector<ComponentDefinition> m_definitions;

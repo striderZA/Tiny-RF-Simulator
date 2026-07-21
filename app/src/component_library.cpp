@@ -1,5 +1,6 @@
 #include "component_library.h"
 #include "logging_core.h"
+#include <filesystem>
 #include <fstream>
 
 void ComponentLibrary::loadFile(const std::string& filepath) {
@@ -41,6 +42,24 @@ std::vector<const ComponentDefinition*> ComponentLibrary::all() const {
     result.reserve(m_definitions.size());
     for (const auto& def : m_definitions) {
         result.push_back(&def);
+    }
+    return result;
+}
+
+void ComponentLibrary::scan(const std::string& directory) {
+    namespace fs = std::filesystem;
+    if (!fs::exists(directory)) return;
+    for (const auto& entry : fs::recursive_directory_iterator(directory)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            loadFile(entry.path().string());
+        }
+    }
+}
+
+std::vector<const ComponentDefinition*> ComponentLibrary::byType(const std::string& type) const {
+    std::vector<const ComponentDefinition*> result;
+    for (const auto& def : m_definitions) {
+        if (def.type == type) result.push_back(&def);
     }
     return result;
 }
