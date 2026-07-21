@@ -47,6 +47,7 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 **Parameters:**
 - `gain_dB` — flat gain
 - `nf_dB` — noise figure (clamped to >= 0 dB)
+- `p1db_dBm` — 1-dB compression point (default 100 dBm, disabled)
 - Nonlinear mode: OIP2 (dBm), OIP3 (dBm) — generates harmonics and IMD
 - S-param mode: toggle + `.sNp` file path
 
@@ -59,6 +60,7 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 - Nonlinearity computed on tones only: 2nd/3rd harmonics, IM2/IM3 for up to 3 fundamentals, gain compression.
 - `NonlinearModel` (`common/include/nonlinear_model.h`) is a reusable class extracted from the amplifier.
 - OIP2/OIP3 clamped to >= -30 dBm.
+- **P1dB** (v0.9.0): first-class 1-dB compression point with automatic OIP3 derivation (`OIP3 = P1dB + 9.6 dB`) when OIP3 is at default value (100 dBm). Explicit OIP3 setting is preserved when P1dB changes. Serialized in project save/load.
 - No dedicated widget — properties edited via `InspectorPanel`.
 
 **Tests:** `test_amplifier_sparam.cpp`, coverage via `test_main.cpp`.
@@ -385,6 +387,37 @@ S-parameter measurement data files are stored in `component_data/` at the reposi
 | `step_attenuators/` | Step attenuator .s2p data |
 
 These feed the per-component S-param modes described above.
+
+---
+
+## Component Library (`app/`)
+
+| Property | Value |
+|---|---|
+| Headers | `app/include/component_library.h`, `app/include/library_browser_widget.h` |
+| Type | Application-level feature (not a DSP engine) |
+| Added | v0.9.0 |
+
+**Purpose:** File-based component definition system with a library browser panel for one-click insertion into the node graph.
+
+**JSON definitions** live in `component_data/library/` organized by type → manufacturer:
+- `component_data/library/amplifiers/mini-circuits/mga-62563.json`
+- `component_data/library/amplifiers/mini-circuits/zx60-33ln.json`
+- `component_data/library/filters/mini-circuits/bfc-160.json`
+- (and corresponding entries for attenuators, splitters, mixers, equalizers, combiners, ADCs)
+
+Each JSON definition contains datasheet parameters (gain, NF, OIP3, P1dB) used to pre-populate the instantiated component.
+
+**Library Browser panel** (`LibraryBrowserWidget`):
+- Tree view grouped by component type → manufacturer
+- Text filter for quick search
+- One-click insert places the component in the node graph with all parameters pre-set
+- Three scan roots: built-in examples, global `~/.rf-sim/libraries/`, per-project `./rf-sim-libraries/`
+- Accessed via View menu
+
+**Part number display** (v0.9.1): instantiated component blocks in the node editor show the library part number as a subtitle below the title bar.
+
+**Tests:** `tests/test_component_library.cpp` — 11 test cases covering JSON loading, directory scanning, instantiation of all 7 component types, part number propagation.
 
 ---
 

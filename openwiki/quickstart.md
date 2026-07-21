@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.8.0
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.9.1
 
 ---
 
@@ -52,7 +52,7 @@ build/bin/tests [bench]
 
 | Path | Purpose |
 |---|---|
-| `app/` | Application orchestrator (`RfSimulatorApp`), inspector panel, component registry |
+| `app/` | Application orchestrator (`RfSimulatorApp`), component registry, library browser, inspector panel |
 | `core/` | GLFW window, ImGui/ImPlot lifecycle, main loop / previously `RfSimulatorCore` (now inlined) |
 | `common/` | Header-only data model: `Spectrum`, `SignalNode`, `IComponentEngine`, `ViewManager`, `Group` |
 | `signal_generator/` | Tone generator engine + widget |
@@ -72,9 +72,9 @@ build/bin/tests [bench]
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (~188 test cases, 14 benchmarks) |
+| `tests/` | Catch2 unit tests (~210 test cases, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
-| `component_data/` | S-parameter data files (.s2p/.sNp) for amplifiers, filters, equalizers, attenuators, splitters |
+| `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
 | `src/` | `main.cpp` entry point |
 | `docs/` | Engineering docs (nonlinear model, PFB, ADC, Touchstone specs) |
 
@@ -105,6 +105,10 @@ build/bin/tests [bench]
 
 **S-parameter mode** — Five components (amplifier, ideal filter, equalizer, attenuator, combiner) support dual-mode operation: ideal parametric OR Touchstone .sNp file driven. S-parameter data files live in `component_data/`.
 
+**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 7 categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). One-click insert into the node graph via View menu.
+
+**P1dB parameter** — First-class 1-dB compression point support (v0.9.0) on `NonlinearModel` and `AmplifierEngine`. Automatic OIP3 ↔ P1dB derivation (OIP3 = P1dB + 9.6 dB) when OIP3 is at default. Persisted in project save/load.
+
 **Subcircuit groups** — The node graph supports grouping nodes into subcircuits with automatic boundary pin synthesis, collapse/expand, and rename.
 
 **Dirty-flag caching** — Each `Spectrum` has a `generation` counter. Engines cache `(input*, generation)` pairs and skip recomputation when nothing changed (~5 ns overhead for cached skip).
@@ -117,6 +121,10 @@ build/bin/tests [bench]
 
 | Milestone | Date | Description | Git Ref |
 |---|---|---|---|
+| Part number display | v0.9.1 | Component blocks show library part number subtitle; 7 new component categories in library | `0934e8b` |
+| Component library | v0.9.0 | File-based library manager with JSON definitions, tree-browser panel, one-click insert; P1dB parameter on AmplifierEngine/NonlinearModel with auto OIP3 derivation; 3 example amplifiers (AM1143, ZX60-33LN+, MGA-62563) | `0934e8b` |
+| Duplicate components | v0.8.4 | Right-click → duplicate copies a component with all parameters (offset position, no connections copied) | `0934e8b` |
+| Marker fix | v0.8.2 | Markers now only consider actively displayed traces; per-trace visibility tracking | `0934e8b` |
 | Project save/load | v0.8.0 | File menu, keyboard shortcuts, unsaved-changes dialog, serialization on all 12 component types, 9 round-trip tests | `77c5611` |
 | Combiner component | July 14 | 2-input passive RF combiner (Wilkinson -3 dB model), 3-port Touchstone S-param mode, Y-shaped symbol | `e8226fe` |
 | Attenuator component | July 14 | Passive attenuator with manual dB control, passive noise model (NF = atten), S-param mode | `3e4b025` |

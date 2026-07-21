@@ -15,7 +15,8 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 ┌─────────────────────────────────────────┐
 │  Application Orchestrator (app/)        │
 │  RfSimulatorApp, InspectorPanel,        │
-│  ComponentRegistry, SessionState        │
+│  ComponentRegistry, ComponentLibrary,   │
+│  LibraryBrowserWidget, SessionState     │
 ├─────────────────────────────────────────┤
 │  Node Graph (node_graph/)               │
 │  NodeGraphEngine + NodeGraphWidget      │
@@ -83,6 +84,16 @@ Defined in `app/include/component_registry.h`. A type-erased polymorphic contain
 - **`byType<T>()`** — Returns `std::vector<T*>` for all engines of type `T`
 - **`all()`** — Returns a `std::span<IComponentEngine*>` over all engines
 - **`find(graphNodeId)`** — Find by graph node ID
+
+### ComponentLibrary
+
+Added in v0.9.0. Defined in `app/include/component_library.h`. A file-based component definition manager:
+
+- **Three scan roots**: built-in examples (`component_data/library/`), global (`~/.rf-sim/libraries/`), per-project (`./rf-sim-libraries/`)
+- **JSON component definitions** with datasheet parameters (gain, NF, OIP3, P1dB) organized by type → manufacturer
+- **LibraryBrowserWidget** (`app/include/library_browser_widget.h`) provides a tree-view panel with text filter
+- **One-click insert** creates a fully configured component in the node graph, sets `part_number` on the graph node for subtitle display (v0.9.1)
+- Supports 7 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
 
 ### Project Save/Load
 
@@ -250,6 +261,8 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/include/app.h` | `RfSimulatorApp` — orchestrator |
 | `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring |
 | `app/include/component_registry.h` | Type-erased engine container |
+| `app/include/component_library.h` | File-based component library manager |
+| `app/include/library_browser_widget.h` | Library browser tree-view widget |
 | `app/include/inspector_panel.h` | Properties panel header |
 | `app/src/inspector_panel.cpp` | Per-component property editors (23KB) |
 | `common/include/component_interface.h` | `IComponentEngine` abstract base |

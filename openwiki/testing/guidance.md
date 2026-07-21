@@ -7,7 +7,7 @@ tags: [testing, catch2, unit-tests, ui-tests]
 
 # Testing Guide
 
-RF Simulator has **~188 test cases** (including 14 benchmarks) across **21 test source files**, covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, project save/load, subcircuits, and UI. Two additional standalone test executables cover the attenuator and combiner engines. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~210 test cases** (including 14 benchmarks) across **23 test source files** (plus 2 standalone executables), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -38,7 +38,7 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-These test files are compiled into the main `tests` executable (17 files; 18 on Windows with `test_session_state.cpp`). Two additional standalone executables — `test_attenuator` and `test_combiner` — are built separately because they link only specific engine libraries.
+These test files are compiled into the main `tests` executable (20 files; 21 on Windows with `test_session_state.cpp`). Two additional standalone executables — `test_attenuator` and `test_combiner` — are built separately because they link only specific engine libraries.
 
 | Test File | Tags | What It Tests |
 |---|---|---|
@@ -46,10 +46,13 @@ These test files are compiled into the main `tests` executable (17 files; 18 on 
 | `test_node_graph_engine.cpp` | `[node_graph]`, `[appearance]` | Topology, linking, probes, `nodeKindFromLabel`, `themeColor` |
 | `test_touchstone.cpp` | `[touchstone]` | .sNp parser: real files, synthetic files, error cases |
 | `test_adc.cpp` | `[adc]` | ADC DDC, aliasing, NSD noise, Fs clamping |
+| `test_nonlinear_p1db.cpp` | `[nonlinear]`, `[p1db]` | NonlinearModel P1dB default, setter, OIP3 derivation |
 | `test_pfb.cpp` | `[pfb]` | PFB channel routing, noise distribution, two outputs, flatness |
 | `test_ideal_filter.cpp` | `[filter]`, `[edge]` | LPF/HPF/BPF/BSF, exact cutoff, noise, dirty flags |
 | `test_ideal_filter_sparam.cpp` | `[filter]`, `[sparam]` | Filter S-param mode |
+| `test_amplifier_p1db.cpp` | `[amplifier]`, `[p1db]` | P1dB default, setter, serialize/deserialize |
 | `test_amplifier_sparam.cpp` | `[amp]`, `[sparam]`, `[nf]`, `[nonlinear]` | Amp S-param mode, NF, nonlinearity |
+| `test_component_library.cpp` | `[library]` | JSON loading, directory scanning, instantiation for 7 component types, part number |
 | `test_component_registry.cpp` | `[registry]` | ComponentRegistry add/find/remove |
 | `test_coax_cable_engine.cpp` | `[coax]`, `[datasheet]`, `[noise]`, `[phase]`, `[connectors]`, `[edge]`, `[caching]` | Coax loss, phase, noise, connectors, clamping, caching |
 | `test_coax_cable_presets.cpp` | `[coax]`, `[presets]` | Cable preset table validation |

@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-07-16T19:19:45.204Z",
+  "updatedAt": "2026-07-21T19:11:17.662Z",
   "command": "update",
-  "notes": "Updated test counts (~188 + 2 standalone), added component_data/ to layout, documented PSD noise model migration, expanded IQ Plot coverage, added standalone test executables to testing guide, added Component Data Files section to rf-components and architecture pages",
-  "model": "current"
+  "gitHead": "0934e8bc534ed58ce27007aa27eeb6e077fe0fb7",
+  "model": "deepseek-v4-flash"
 }
