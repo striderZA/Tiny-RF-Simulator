@@ -160,6 +160,15 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     ImVec2 src_pos = ImNodes::GetNodeEditorSpacePos(graph_node_id);
     constexpr float OFFSET = 40.0f;
 
+    // Capture source part number for copying to the duplicate
+    std::string src_part_number;
+    for (const auto& gn : m_graph_engine.nodes()) {
+        if (gn.node_id == graph_node_id) {
+            src_part_number = gn.part_number;
+            break;
+        }
+    }
+
     // Helper: create a new engine of type T, copy params via serialize/deserialize,
     // position it offset from the source, and return a reference to the new engine.
     auto dup = [&](auto* typed_src) -> decltype(typed_src) {
@@ -169,6 +178,9 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
         int new_nid = new_eng.graphNodeId();
         // Register with imnodes pool and set position
         ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
+        // Copy library part number
+        if (!src_part_number.empty())
+            m_graph_engine.setNodePartNumber(new_nid, src_part_number);
         return &new_eng;
     };
 
@@ -290,6 +302,14 @@ void RfSimulatorApp::saveProject(const std::string& path) {
         ImVec2 pos_n = ImNodes::GetNodeEditorSpacePos(nid);
         cj["pos"]["x"] = pos_n.x;
         cj["pos"]["y"] = pos_n.y;
+
+        // Save library part number if set
+        for (const auto& gn : m_graph_engine.nodes()) {
+            if (gn.node_id == nid && !gn.part_number.empty()) {
+                cj["part_number"] = gn.part_number;
+                break;
+            }
+        }
 
         comps_arr.push_back(cj);
     }
@@ -477,6 +497,10 @@ void RfSimulatorApp::loadProject(const std::string& path) {
                 comp->graphNodeId(),
                 ImVec2(cj["pos"].value("x", 0.0f), cj["pos"].value("y", 0.0f)));
         }
+
+        // Restore library part number
+        if (comp && cj.contains("part_number"))
+            m_graph_engine.setNodePartNumber(comp->graphNodeId(), cj["part_number"].get<std::string>());
     }
 
     // Restore links (saved as component-index + port pairs)

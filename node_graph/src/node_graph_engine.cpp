@@ -249,6 +249,15 @@ void NodeGraphEngine::setNodePinLabels(int node_id,
     }
 }
 
+void NodeGraphEngine::setNodePartNumber(int node_id, const std::string& part_number) {
+    for (auto& node : m_nodes) {
+        if (node.node_id == node_id) {
+            node.part_number = part_number;
+            return;
+        }
+    }
+}
+
 std::vector<int> NodeGraphEngine::topologicalOrder() const {
     std::unordered_map<int, int> in_degree;
     for (const auto& n : m_nodes)

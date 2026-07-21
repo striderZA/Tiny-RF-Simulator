@@ -12,6 +12,7 @@ struct GraphNode {
     std::vector<int> output_pin_ids;
     SignalNode *signal_node;
     std::string label;
+    std::string part_number;  // library part number (e.g. "ZX60-33LN+"), empty for manual nodes
 
     // Per-pin labels for rendering (empty → default "IN"/"OUT")
     std::vector<std::string> input_labels;
@@ -61,6 +62,9 @@ class NodeGraphEngine {
     void setNodePinLabels(int node_id,
                           const std::vector<std::string>& input_labels,
                           const std::vector<std::string>& output_labels);
+
+    // Set the library part number for a node (for display in the node graph)
+    void setNodePartNumber(int node_id, const std::string& part_number);
 
     // Group counter accessors for project save/load
     int nextGroupId() const { return m_next_group_id; }

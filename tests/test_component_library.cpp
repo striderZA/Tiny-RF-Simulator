@@ -260,3 +260,34 @@ TEST_CASE("ComponentLibrary instantiates adc from definition", "[library]") {
 
     std::filesystem::remove(path);
 }
+
+TEST_CASE("ComponentLibrary sets part_number on graph node", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"amplifier","part_number":"ZX60-33LN+","manufacturer":"Mini-Circuits","parameters":{"gain_dB":28.0,"nf_dB":1.1}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(defs[0]->part_number == "ZX60-33LN+");
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 200, registry, graph);
+    REQUIRE(engine != nullptr);
+
+    // Verify part_number was set on the graph node
+    bool found = false;
+    for (const auto& gn : graph.nodes()) {
+        if (gn.node_id == engine->graphNodeId()) {
+            REQUIRE(gn.part_number == "ZX60-33LN+");
+            found = true;
+            break;
+        }
+    }
+    REQUIRE(found);
+
+    std::filesystem::remove(path);
+}

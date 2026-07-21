@@ -167,9 +167,18 @@ void NodeGraphWidget::drawNodes() {
         constexpr float BODY_W = 96.0f;
         constexpr float BODY_H = 64.0f;
         constexpr float TITLE_BAR_H = 24.0f;
+        float subtitle_offset = 0.0f;
+        if (!node.part_number.empty())
+            subtitle_offset = ImGui::GetTextLineHeightWithSpacing();
         ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
-                           screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
+                           screen_pos.y + TITLE_BAR_H + subtitle_offset + BODY_H * 0.5f);
         ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // Render part number subtitle
+        if (!node.part_number.empty()) {
+            ImGui::TextDisabled("%s", node.part_number.c_str());
+        }
+
         drawSchematicSymbol(dl, body_center, kind, color);
         ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
