@@ -26,6 +26,10 @@ public:
     std::vector<const ComponentDefinition*> all() const;
     void scan(const std::string& directory);
     std::vector<const ComponentDefinition*> byType(const std::string& type) const;
+    IComponentEngine* instantiate(const ComponentDefinition& def,
+                                  int id,
+                                  ComponentRegistry& registry,
+                                  NodeGraphEngine& graph);
 
 private:
     std::vector<ComponentDefinition> m_definitions;

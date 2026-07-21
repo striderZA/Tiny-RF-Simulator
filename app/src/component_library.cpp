@@ -1,6 +1,11 @@
 #include "component_library.h"
 #include "logging_core.h"
 #include <filesystem>
+
+#include "component_registry.h"
+#include "component_interface.h"
+#include "node_graph_engine.h"
+#include "amplifier_engine.h"
 #include <fstream>
 
 void ComponentLibrary::loadFile(const std::string& filepath) {
@@ -62,4 +67,30 @@ std::vector<const ComponentDefinition*> ComponentLibrary::byType(const std::stri
         if (def.type == type) result.push_back(&def);
     }
     return result;
+}
+
+IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
+                                                 int id,
+                                                 ComponentRegistry& registry,
+                                                 NodeGraphEngine& graph) {
+    if (def.type == "amplifier") {
+        auto& amp = registry.add<AmplifierEngine>(id, graph);
+        if (def.parameters.contains("gain_dB"))
+            amp.setGain_dB(def.parameters["gain_dB"].get<double>());
+        if (def.parameters.contains("nf_dB"))
+            amp.setNF_dB(def.parameters["nf_dB"].get<double>());
+        if (def.parameters.contains("oip2_dBm"))
+            amp.setOIP2_dBm(def.parameters["oip2_dBm"].get<double>());
+        if (def.parameters.contains("oip3_dBm"))
+            amp.setOIP3_dBm(def.parameters["oip3_dBm"].get<double>());
+        if (def.parameters.contains("p1db_dBm"))
+            amp.setP1dB_dBm(def.parameters["p1db_dBm"].get<double>());
+        bool has_nonlinear = def.parameters.contains("oip2_dBm") ||
+                            def.parameters.contains("oip3_dBm") ||
+                            def.parameters.contains("p1db_dBm");
+        if (has_nonlinear) amp.setEnableNonlinear(true);
+        return &amp;
+    }
+    LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
+    return nullptr;
 }

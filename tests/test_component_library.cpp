@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "component_library.h"
+#include "component_registry.h"
+#include "view_manager.h"
+#include "amplifier_engine.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
@@ -64,4 +67,31 @@ TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
     REQUIRE(amps.size() == 2);
 
     std::filesystem::remove_all("test_lib");
+}
+
+TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"amplifier","part_number":"TEST-AMP","parameters":{"gain_dB":25.0,"nf_dB":3.0,"oip3_dBm":35.0,"p1db_dBm":20.0}})";
+
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 100, registry, graph);
+    REQUIRE(engine != nullptr);
+
+    auto* amp = dynamic_cast<AmplifierEngine*>(engine);
+    REQUIRE(amp != nullptr);
+    REQUIRE(amp->gain_dB() == Approx(25.0));
+    REQUIRE(amp->nf_dB() == Approx(3.0));
+    REQUIRE(amp->oip3_dBm() == Approx(35.0));
+    REQUIRE(amp->p1db_dBm() == Approx(20.0));
+
+    std::filesystem::remove(path);
 }
