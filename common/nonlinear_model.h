@@ -43,6 +43,17 @@ class NonlinearModel {
 
     double oip2_dBm() const { return m_oip2_dBm; }
     double oip3_dBm() const { return m_oip3_dBm; }
+    double p1db_dBm() const { return m_p1db_dBm; }
+    void setP1dB_dBm(double p1db) {
+        if (p1db != m_p1db_dBm) {
+            m_p1db_dBm = p1db;
+            // If OIP3 is default (100), derive from P1dB
+            if (m_oip3_dBm >= 99.0 && m_p1db_dBm < 90.0) {
+                m_oip3_dBm = m_p1db_dBm + 9.6;
+                if (m_enabled) recomputeCoefficients();
+            }
+        }
+    }
 
     struct Result {
         std::vector<Spectrum::Tone> extra_tones;
@@ -134,6 +145,7 @@ class NonlinearModel {
     bool m_enabled = false;
     double m_oip2_dBm = 100.0;
     double m_oip3_dBm = 100.0;
+    double m_p1db_dBm = 100.0;
     double m_k1 = 0.0;
     double m_k2 = 0.0;
 

@@ -20,6 +20,7 @@ set(TEST_SOURCES
     test_ideal_filter_sparam.cpp
     test_equalizer.cpp
     test_iq_plot.cpp
+    test_nonlinear_p1db.cpp
 )
 
 if(WIN32)
