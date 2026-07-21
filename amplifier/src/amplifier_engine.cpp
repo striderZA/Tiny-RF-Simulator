@@ -205,6 +205,7 @@ nlohmann::json AmplifierEngine::serialize() const {
         {"enable_nonlinear", m_nonlinear.enabled()},
         {"oip2_dBm", m_nonlinear.oip2_dBm()},
         {"oip3_dBm", m_nonlinear.oip3_dBm()},
+        {"p1db_dBm", m_nonlinear.p1db_dBm()},
         {"sparam_mode", m_sparam_mode},
         {"sparam_filepath", m_sparam_filepath},
         {"sparam_fwd_idx", m_sparam_fwd_idx}
@@ -217,6 +218,7 @@ void AmplifierEngine::deserialize(const nlohmann::json& j) {
     m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
     m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
     m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
+    m_nonlinear.setP1dB_dBm(j.value("p1db_dBm", 100.0));
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);

@@ -41,6 +41,7 @@ class AmplifierEngine : public IComponentEngine {
     bool enableNonlinear() const { return m_nonlinear.enabled(); }
     double oip2_dBm() const { return m_nonlinear.oip2_dBm(); }
     double oip3_dBm() const { return m_nonlinear.oip3_dBm(); }
+    double p1db_dBm() const { return m_nonlinear.p1db_dBm(); }
 
     void setEnableNonlinear(bool en) {
         if (en != m_nonlinear.enabled()) {
@@ -54,6 +55,10 @@ class AmplifierEngine : public IComponentEngine {
     }
     void setOIP3_dBm(double oip3) {
         m_nonlinear.setOIP3_dBm(std::max(-30.0, oip3));
+        if (m_nonlinear.enabled()) m_dirty = true;
+    }
+    void setP1dB_dBm(double p1db) {
+        m_nonlinear.setP1dB_dBm(std::max(-30.0, p1db));
         if (m_nonlinear.enabled()) m_dirty = true;
     }
 

@@ -21,6 +21,7 @@ set(TEST_SOURCES
     test_equalizer.cpp
     test_iq_plot.cpp
     test_nonlinear_p1db.cpp
+    test_amplifier_p1db.cpp
 )
 
 if(WIN32)
