@@ -20,5 +20,5 @@
     "vdd_V": 5.0,
     "idd_mA": 60
   },
-  "notes": "Typical values at 1 GHz from datasheet Rev C"
+  "notes": "Typical values at 1 GHz from datasheet Rev C. S-param file is a synthetic placeholder for demonstration."
 }
