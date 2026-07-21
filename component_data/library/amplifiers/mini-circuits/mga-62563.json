@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "MGA-62563",
+  "manufacturer": "Broadcom",
+  "description": "Low noise LNA",
+  "parameters": {
+    "gain_dB": 15.0,
+    "nf_dB": 1.3,
+    "oip3_dBm": 25.0,
+    "p1db_dBm": 10.0
+  },
+  "test_conditions": {
+    "frequency_Hz": 900e6,
+    "temperature_C": 25,
+    "vdd_V": 3.3,
+    "idd_mA": 20
+  },
+  "notes": "Typical values at 900 MHz"
+}

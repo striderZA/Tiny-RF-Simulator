@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "AM1143",
+  "manufacturer": "Anatech Electronics",
+  "description": "Low noise amplifier",
+  "parameters": {
+    "gain_dB": 30.0,
+    "nf_dB": 1.5,
+    "oip3_dBm": 35.0,
+    "p1db_dBm": 20.0,
+    "oip2_dBm": 50.0
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "idd_mA": 60
+  },
+  "notes": "Typical values at 1 GHz from datasheet Rev C"
+}

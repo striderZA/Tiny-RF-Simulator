@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "ZX60-33LN+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Low noise gain block",
+  "parameters": {
+    "gain_dB": 28.0,
+    "nf_dB": 1.1,
+    "oip3_dBm": 33.0,
+    "p1db_dBm": 18.0
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "idd_mA": 75
+  },
+  "notes": "Typical values at 1 GHz"
+}
