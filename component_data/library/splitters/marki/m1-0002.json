@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "M1-0002",
+  "manufacturer": "Marki Microwave",
+  "description": "2-way power splitter, 2-18 GHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [2e9, 18e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way splitter model (3.01 dB per output). Typical broadband splitter."
+}

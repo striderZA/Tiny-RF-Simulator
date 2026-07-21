@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "type": "adc",
+  "part_number": "AD9226",
+  "manufacturer": "Analog Devices",
+  "description": "12-bit, 65 MSPS ADC",
+  "parameters": {
+    "fs_Hz": 65e6,
+    "nsd_dBm_per_Hz": -153.2
+  },
+  "test_conditions": {
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "resolution_bits": 12
+  },
+  "notes": "Typical noise spectral density at 65 MSPS sample rate."
+}

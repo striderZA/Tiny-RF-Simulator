@@ -6,6 +6,13 @@
 #include "component_interface.h"
 #include "node_graph_engine.h"
 #include "amplifier_engine.h"
+#include "attenuator_engine.h"
+#include "splitter_engine.h"
+#include "ideal_filter_engine.h"
+#include "mixer_engine.h"
+#include "equalizer_engine.h"
+#include "combiner_engine.h"
+#include "adc_engine.h"
 #include <fstream>
 
 void ComponentLibrary::loadFile(const std::string& filepath) {
@@ -90,6 +97,67 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
                             def.parameters.contains("p1db_dBm");
         if (has_nonlinear) amp.setEnableNonlinear(true);
         return &amp;
+    }
+    if (def.type == "attenuator") {
+        auto& att = registry.add<AttenuatorEngine>(id, graph);
+        if (def.parameters.contains("attenuation_dB"))
+            att.setAttenuation(def.parameters["attenuation_dB"].get<double>());
+        return &att;
+    }
+    if (def.type == "splitter") {
+        auto& spl = registry.add<SplitterEngine>(id, graph);
+        return &spl;
+    }
+    if (def.type == "filter") {
+        auto& flt = registry.add<IdealFilterEngine>(id, graph);
+        if (def.parameters.contains("filter_type")) {
+            std::string ft = def.parameters["filter_type"].get<std::string>();
+            if (ft == "LPF") flt.setFilterType(FilterType::LPF);
+            else if (ft == "HPF") flt.setFilterType(FilterType::HPF);
+            else if (ft == "BPF") flt.setFilterType(FilterType::BPF);
+            else if (ft == "BSF") flt.setFilterType(FilterType::BSF);
+        }
+        double fc_low = def.parameters.value("fc_low_Hz", 100e6);
+        double fc_high = def.parameters.value("fc_high_Hz", 200e6);
+        if (def.parameters.contains("fc_low_Hz") && def.parameters.contains("fc_high_Hz"))
+            flt.setCutoffs_Hz(fc_low, fc_high);
+        else if (def.parameters.contains("fc_low_Hz"))
+            flt.setCutoff_Hz(fc_low);
+        return &flt;
+    }
+    if (def.type == "mixer") {
+        auto& mix = registry.add<MixerEngine>(id, graph);
+        if (def.parameters.contains("lo_freq_Hz"))
+            mix.setLoFreq_Hz(def.parameters["lo_freq_Hz"].get<double>());
+        if (def.parameters.contains("conversion_gain_dB"))
+            mix.setConversionGain_dB(def.parameters["conversion_gain_dB"].get<double>());
+        if (def.parameters.contains("nf_dB"))
+            mix.setNF_dB(def.parameters["nf_dB"].get<double>());
+        return &mix;
+    }
+    if (def.type == "equalizer") {
+        auto& eq = registry.add<EqualizerEngine>(id, graph);
+        if (def.parameters.contains("ref_gain_dB"))
+            eq.setRefGain_dB(def.parameters["ref_gain_dB"].get<double>());
+        if (def.parameters.contains("ref_freq_Hz"))
+            eq.setRefFreq_Hz(def.parameters["ref_freq_Hz"].get<double>());
+        if (def.parameters.contains("slope_dB_per_decade"))
+            eq.setSlope_dBPerDecade(def.parameters["slope_dB_per_decade"].get<double>());
+        return &eq;
+    }
+    if (def.type == "combiner") {
+        auto& comb = registry.add<CombinerEngine>(id, graph);
+        if (def.parameters.contains("manual_mode"))
+            comb.setManualMode(def.parameters["manual_mode"].get<bool>());
+        return &comb;
+    }
+    if (def.type == "adc") {
+        auto& adc = registry.add<AdcEngine>(id, graph);
+        if (def.parameters.contains("fs_Hz"))
+            adc.setFs_Hz(def.parameters["fs_Hz"].get<double>());
+        if (def.parameters.contains("nsd_dBm_per_Hz"))
+            adc.setNsd_dBm_per_Hz(def.parameters["nsd_dBm_per_Hz"].get<double>());
+        return &adc;
     }
     LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
     return nullptr;

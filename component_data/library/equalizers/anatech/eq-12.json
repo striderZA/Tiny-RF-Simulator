@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "equalizer",
+  "part_number": "EQ-12",
+  "manufacturer": "Anatech Electronics",
+  "description": "Slope equalizer, -12 dB/decade",
+  "parameters": {
+    "ref_gain_dB": 0.0,
+    "ref_freq_Hz": 500e6,
+    "slope_dB_per_decade": -12.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [100e6, 3e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Typical values for demonstration. -12 dB/decade slope equalizer."
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "MPD-0226CH",
+  "manufacturer": "Mini-Circuits",
+  "description": "2-way power splitter, 10-2600 MHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 2600e6],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way splitter model (3.01 dB per output). S-parameter data available in component_data/splitters/mpd-0226ch/"
+}

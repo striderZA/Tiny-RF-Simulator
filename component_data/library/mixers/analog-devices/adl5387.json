@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "ADL5387",
+  "manufacturer": "Analog Devices",
+  "description": "Quadrature demodulator / I/Q mixer, 400 MHz - 2.7 GHz",
+  "parameters": {
+    "lo_freq_Hz": 900e6,
+    "conversion_gain_dB": -3.0,
+    "nf_dB": 11.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [400e6, 2.7e9],
+    "temperature_C": 25,
+    "vdd_V": 5.0
+  },
+  "notes": "Typical values at 900 MHz LO. I/Q demodulator."
+}

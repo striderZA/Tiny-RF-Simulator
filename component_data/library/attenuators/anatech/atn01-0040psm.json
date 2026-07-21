@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "attenuator",
+  "part_number": "ATN01-0040PSM",
+  "manufacturer": "Anatech Electronics",
+  "description": "Fixed coaxial attenuator, ~1 dB",
+  "parameters": {
+    "attenuation_dB": 1.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 4e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "~1 dB insertion loss per bundled S2P data (S21 ~ -0.97 dB at 10 MHz, -1.02 dB at 100 MHz). S-parameter data in component_data/fixed_attenuators/atn01-0040psm/"
+}

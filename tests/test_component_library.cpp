@@ -4,18 +4,29 @@
 #include "component_registry.h"
 #include "view_manager.h"
 #include "amplifier_engine.h"
+#include "attenuator_engine.h"
+#include "splitter_engine.h"
+#include "ideal_filter_engine.h"
+#include "mixer_engine.h"
+#include "equalizer_engine.h"
+#include "combiner_engine.h"
+#include "adc_engine.h"
 #include <nlohmann/json.hpp>
+#include <random>
 #include <fstream>
 #include <filesystem>
 
 using Catch::Approx;
 
 static std::string write_temp_json(const std::string& content) {
-    std::string path = "test_component_temp.json";
+    static std::random_device rd;
+    std::uniform_int_distribution<int> dis(100000, 999999);
+    auto path = std::filesystem::temp_directory_path() /
+        ("test_component_" + std::to_string(dis(rd)) + ".json");
     std::ofstream ofs(path);
     ofs << content;
     ofs.close();
-    return path;
+    return path.string();
 }
 
 TEST_CASE("ComponentLibrary loads valid amplifier JSON", "[library]") {
@@ -92,6 +103,160 @@ TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]"
     REQUIRE(amp->nf_dB() == Approx(3.0));
     REQUIRE(amp->oip3_dBm() == Approx(35.0));
     REQUIRE(amp->p1db_dBm() == Approx(20.0));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates attenuator from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"attenuator","part_number":"TEST-ATT","parameters":{"attenuation_dB":10.0}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 101, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* att = dynamic_cast<AttenuatorEngine*>(engine);
+    REQUIRE(att != nullptr);
+    REQUIRE(att->attenuation() == Approx(10.0));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates splitter from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"splitter","part_number":"TEST-SPL","parameters":{}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 102, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* spl = dynamic_cast<SplitterEngine*>(engine);
+    REQUIRE(spl != nullptr);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates filter from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"filter","part_number":"TEST-FLT","parameters":{"filter_type":"BPF","fc_low_Hz":100e6,"fc_high_Hz":200e6}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 103, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* flt = dynamic_cast<IdealFilterEngine*>(engine);
+    REQUIRE(flt != nullptr);
+    REQUIRE(flt->filterType() == FilterType::BPF);
+    REQUIRE(flt->fcLow_Hz() == Approx(100e6));
+    REQUIRE(flt->fcHigh_Hz() == Approx(200e6));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates mixer from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"mixer","part_number":"TEST-MIX","parameters":{"lo_freq_Hz":500e6,"conversion_gain_dB":-7.0,"nf_dB":8.0}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 104, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* mix = dynamic_cast<MixerEngine*>(engine);
+    REQUIRE(mix != nullptr);
+    REQUIRE(mix->loFreq_Hz() == Approx(500e6));
+    REQUIRE(mix->conversionGain_dB() == Approx(-7.0));
+    REQUIRE(mix->nf_dB() == Approx(8.0));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates equalizer from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"equalizer","part_number":"TEST-EQ","parameters":{"ref_gain_dB":0.0,"ref_freq_Hz":1e9,"slope_dB_per_decade":-12.0}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 105, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* eq = dynamic_cast<EqualizerEngine*>(engine);
+    REQUIRE(eq != nullptr);
+    REQUIRE(eq->refGain_dB() == Approx(0.0));
+    REQUIRE(eq->refFreq_Hz() == Approx(1e9));
+    REQUIRE(eq->slope_dBPerDecade() == Approx(-12.0));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates combiner from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"combiner","part_number":"TEST-COMB","parameters":{"manual_mode":true}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 106, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* comb = dynamic_cast<CombinerEngine*>(engine);
+    REQUIRE(comb != nullptr);
+    REQUIRE(comb->manualMode() == true);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates adc from definition", "[library]") {
+    std::string json = R"({"schema_version":1,"type":"adc","part_number":"TEST-ADC","parameters":{"fs_Hz":65e6,"nsd_dBm_per_Hz":-153.0}})";
+    auto path = write_temp_json(json);
+
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 107, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto* adc = dynamic_cast<AdcEngine*>(engine);
+    REQUIRE(adc != nullptr);
+    REQUIRE(adc->fs_Hz() == Approx(65e6));
+    REQUIRE(adc->nsd_dBm_per_Hz() == Approx(-153.0));
 
     std::filesystem::remove(path);
 }

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "BHP-500+",
+  "manufacturer": "Mini-Circuits",
+  "description": "High-pass filter, 500 MHz cutoff",
+  "parameters": {
+    "filter_type": "HPF",
+    "fc_low_Hz": 500e6,
+    "fc_high_Hz": 500e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [100e6, 4e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal HPF at 500 MHz. Typical values for demonstration."
+}

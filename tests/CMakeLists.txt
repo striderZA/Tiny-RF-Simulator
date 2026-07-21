@@ -45,6 +45,8 @@ target_link_libraries(tests PRIVATE
     simulator::node_graph_engine
     simulator::coax_cable_engine
     simulator::equalizer_engine
+    simulator::attenuator_engine
+    simulator::combiner_engine
     simulator::pfb_channelizer_engine
     simulator::iq_plot_widget
     simulator::app

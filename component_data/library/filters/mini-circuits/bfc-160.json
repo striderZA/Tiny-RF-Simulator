@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "BFC-160+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Band-pass filter, 140-180 MHz",
+  "parameters": {
+    "filter_type": "BPF",
+    "fc_low_Hz": 140e6,
+    "fc_high_Hz": 180e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [50e6, 500e6],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal BPF 140-180 MHz. Typical values for demonstration."
+}

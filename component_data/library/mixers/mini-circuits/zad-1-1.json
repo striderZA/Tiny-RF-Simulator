@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "ZAD-1-1+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Double-balanced mixer, 0.001-1000 MHz",
+  "parameters": {
+    "lo_freq_Hz": 100e6,
+    "conversion_gain_dB": -6.5,
+    "nf_dB": 7.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [1e3, 1e9],
+    "temperature_C": 25,
+    "lo_power_dBm": 7
+  },
+  "notes": "Typical values at 100 MHz LO. Double-balanced passive mixer."
+}

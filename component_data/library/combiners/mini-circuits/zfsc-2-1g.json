@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "combiner",
+  "part_number": "ZFSC-2-1G-S+",
+  "manufacturer": "Mini-Circuits",
+  "description": "2-way power combiner, 10-2500 MHz",
+  "parameters": {
+    "manual_mode": true
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 2500e6],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way combiner model (3.01 dB loss per input). Typical values for demonstration."
+}

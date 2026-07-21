@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "MFLP-00033CSP1",
+  "manufacturer": "Mini-Circuits",
+  "description": "Low-pass filter, 3.3 GHz cutoff",
+  "parameters": {
+    "filter_type": "LPF",
+    "fc_low_Hz": 3.3e9,
+    "fc_high_Hz": 3.3e9
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 6e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal LPF at 3.3 GHz. S-parameter data available in component_data/filters/mflp-00033/"
+}

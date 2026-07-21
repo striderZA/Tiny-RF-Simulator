@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "equalizer",
+  "part_number": "MEQ0-20ASM",
+  "manufacturer": "Mini-Circuits",
+  "description": "Slope equalizer, -20 dB/decade",
+  "parameters": {
+    "ref_gain_dB": 0.0,
+    "ref_freq_Hz": 1e9,
+    "slope_dB_per_decade": -20.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [100e6, 6e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal slope equalizer model. S-parameter data available in component_data/equalizers/meq0-20/"
+}
