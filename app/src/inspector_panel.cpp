@@ -251,10 +251,11 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
             m_param_edited = true;
         }
 
-        double p1dB_est = oip3 - 10.0;
-        ImGui::TextDisabled("P1dB ≈ %.1f dBm", p1dB_est);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Estimated 1 dB compression point");
+        double p1db = engine.p1db_dBm();
+        if (utils::inputDouble("P1dB (dBm)", p1db, 1, 10, "%.1f", -100.0, 200.0)) {
+            engine.setP1dB_dBm(p1db);
+            m_param_edited = true;
+        }
     }
 
     if (ImGui::Button("Delete") && onRemoveNode)
