@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "type": "amplifier",
   "part_number": "AM1143",
   "manufacturer": "Anatech Electronics",
@@ -11,6 +11,9 @@
     "p1db_dBm": 20.0,
     "oip2_dBm": 50.0
   },
+  "data_files": [
+    {"type": "s_parameters", "path": "AM1143.s2p"}
+  ],
   "test_conditions": {
     "frequency_Hz": 1e9,
     "temperature_C": 25,
