@@ -1,3 +1,30 @@
+## [0.9.0] - 2026-07-21
+
+### Features
+
+- **Component library manager** — file-based library browser with global and per-project libraries
+  - JSON-based component definitions with datasheet parameters (gain, NF, OIP3, P1dB)
+  - Library browser panel with tree view (grouped by type → manufacturer) and text filter
+  - Three scan roots: built-in examples, global (~/.rf-sim/libraries/), per-project (./rf-sim-libraries/)
+  - One-click insert into node graph via View menu
+- **P1dB parameter** — first-class 1-dB compression point support
+  - Added to NonlinearModel with automatic OIP3 ↔ P1dB derivation (OIP3 = P1dB + 9.6 dB)
+  - AmplifierEngine exposes P1dB with serialize/deserialize for project save/load
+  - Inspector panel: editable P1dB field (no longer an estimate)
+- **Example components** — 3 real-world amplifier definitions
+  - AM1143 (Anatech Electronics) — 30 dB LNA, NF 1.5 dB
+  - ZX60-33LN+ (Mini-Circuits) — 28 dB gain block, NF 1.1 dB
+  - MGA-62563 (Broadcom) — 15 dB LNA, NF 1.3 dB
+
+### Bug Fixes
+
+- _(ci)_ Upgrade GitHub Actions to resolve Node.js 20 deprecation
+
+### Testing
+
+- 12 new tests (190 total, 65 398 assertions, zero regressions)
+- P1dB round-trip test verifies save/load persistence
+
 ## [0.8.4] - 2026-07-20
 
 ### Features
