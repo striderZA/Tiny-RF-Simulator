@@ -1,3 +1,15 @@
+## [0.9.1] - 2026-07-21
+
+### Features
+
+- **Part number display** — component blocks in the node editor show the library part number as a subtitle below the title bar
+- **7 new component categories** — attenuators, splitters, filters, mixers, equalizers, combiners, and ADCs added to the component library with JSON definitions and instantiation code
+
+### Testing
+
+- Part number propagation test verifies instantiation sets the graph node field
+- 131 total tests pass, zero regressions
+
 ## [0.9.0] - 2026-07-21
 
 ### Features
