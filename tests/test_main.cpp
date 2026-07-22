@@ -541,6 +541,68 @@ TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     REQUIRE(out2[4] < -50.0);  // bin 4 held low from frame 2
 }
 
+TEST_CASE("VideoAverage converges to constant input", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::VideoAverage);
+    sa.setVideoAvgCount(5);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.noise_total_W = {1e-18, 1e-18, 1e-18, 1e-18, 1e-18};
+    spec.generation = 1;
+
+    // Feed many identical frames — EWMA should converge
+    std::vector<double> prev;
+    for (int i = 0; i < 50; ++i) {
+        spec.generation = i + 1;
+        prev = sa.renderSpectrum(spec);
+    }
+
+    // One more frame — should be essentially unchanged
+    spec.generation = 51;
+    auto out = sa.renderSpectrum(spec);
+    for (size_t i = 0; i < out.size(); ++i) {
+        REQUIRE(out[i] == Approx(prev[i]).epsilon(0.01));
+    }
+}
+
+TEST_CASE("VideoAverage responds to step change", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::VideoAverage);
+    sa.setVideoAvgCount(3);
+
+    Spectrum spec_lo;
+    spec_lo.frequencies = {0, 1e6, 2e6};
+    spec_lo.noise_total_W = {1e-20, 1e-20, 1e-20};
+
+    // Feed spec_lo for many frames to converge
+    for (int i = 0; i < 100; ++i) {
+        spec_lo.generation = i + 1;
+        sa.renderSpectrum(spec_lo);
+    }
+
+    // Now switch to spec_hi — modify spec_lo in place because the engine
+    // uses the address as the history key
+    spec_lo.noise_total_W = {1e-15, 1e-15, 1e-15};
+    spec_lo.generation = 101;
+    auto out = sa.renderSpectrum(spec_lo);
+
+    // After one step, output should be between old and new (EWMA blend)
+    // The old converged value was ~W_to_dBm(1e-20 * 1e6) = W_to_dBm(1e-14) = -110 dBm
+    // The new raw value is ~W_to_dBm(1e-15 * 1e6) = W_to_dBm(1e-9) = -60 dBm
+    // With alpha = 2/(3+1) = 0.5, one step: 0.5*(-60) + 0.5*(-110) = -85 dBm
+    double expected_approx = -85.0;
+    for (double v : out) {
+        REQUIRE(v == Approx(expected_approx).margin(5.0));
+    }
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);

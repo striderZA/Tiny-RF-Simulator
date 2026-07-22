@@ -304,16 +304,16 @@ std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
     std::unordered_map<const Spectrum*, std::vector<double>>* history = nullptr;
     if (m_trace_mode == TraceMode::MaxHold) history = &m_max_hold;
     else if (m_trace_mode == TraceMode::MinHold) history = &m_min_hold;
-    // VideoAverage will be added in a subsequent task
+    else if (m_trace_mode == TraceMode::VideoAverage) history = &m_video_avg;
     if (!history) return after_vbw;
-
+    
     auto& h = (*history)[&spec];
-
+    
     if (h.size() != after_vbw.size()) {
         h = after_vbw;
         return after_vbw;
     }
-
+    
     if (m_trace_mode == TraceMode::MaxHold) {
         for (size_t i = 0; i < h.size(); ++i)
             h[i] = std::max(h[i], after_vbw[i]);
@@ -322,5 +322,11 @@ std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
         for (size_t i = 0; i < h.size(); ++i)
             h[i] = std::min(h[i], after_vbw[i]);
     }
+    else { // VideoAverage
+        double alpha = 2.0 / (m_video_avg_count + 1);
+        for (size_t i = 0; i < h.size(); ++i)
+            h[i] = alpha * after_vbw[i] + (1.0 - alpha) * h[i];
+    }
     return h;
 }
+

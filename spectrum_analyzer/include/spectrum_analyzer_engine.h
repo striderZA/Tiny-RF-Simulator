@@ -75,6 +75,7 @@ class SpectrumAnalyzerEngine {
     mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
     mutable std::unordered_map<const Spectrum*, std::vector<double>> m_max_hold;
     mutable std::unordered_map<const Spectrum*, std::vector<double>> m_min_hold;
+    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_video_avg;
 
     mutable int m_video_avg_count = 10;
 };
