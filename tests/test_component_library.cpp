@@ -291,3 +291,161 @@ TEST_CASE("ComponentLibrary sets part_number on graph node", "[library]") {
 
     std::filesystem::remove(path);
 }
+
+
+TEST_CASE("ComponentLibrary parses data_files array from v2 JSON", "[library]") {
+    std::string json = R"({
+        "schema_version": 2,
+        "type": "amplifier",
+        "part_number": "TEST-DATA-001",
+        "manufacturer": "Test Corp",
+        "parameters": {
+            "gain_dB": 20.0,
+            "nf_dB": 1.0
+        },
+        "data_files": [
+            {"type": "s_parameters", "path": "TEST001.s2p"}
+        ]
+    })";
+
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    const auto& def = *defs[0];
+    REQUIRE(def.schema_version == 2);
+    REQUIRE(def.part_number == "TEST-DATA-001");
+    REQUIRE(def.data_files.size() == 1);
+    REQUIRE(def.data_files[0].type == "s_parameters");
+    REQUIRE(def.data_files[0].path == "TEST001.s2p");
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary handles v1 JSON without data_files", "[library]") {
+    std::string json = R"({
+        "schema_version": 1,
+        "type": "amplifier",
+        "part_number": "V1PART",
+        "parameters": {
+            "gain_dB": 15.0
+        }
+    })";
+
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    const auto& def = *defs[0];
+    REQUIRE(def.schema_version == 1);
+    REQUIRE(def.data_files.empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary instantiates amplifier with S-param file", "[library]") {
+    // Create a temporary directory with JSON and S-param file
+    std::string tmpdir = (std::filesystem::temp_directory_path() / "sparam_test").string();
+    std::filesystem::create_directories(tmpdir);
+
+    std::string sparam_path_str = tmpdir + "/amp.s2p";
+    std::string json_path_str = tmpdir + "/amp_with_sparam.json";
+
+    // Create minimal valid .s2p file
+    {
+        std::ofstream ofs(sparam_path_str);
+        ofs << "! Test S-param file\n";
+        ofs << "# GHz S MA R 50\n";
+        ofs << "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+
+    // Create JSON referencing the S-param file
+    std::string json = R"({
+        "schema_version": 2,
+        "type": "amplifier",
+        "part_number": "AMP_SPARAM",
+        "parameters": {
+            "gain_dB": 20.0,
+            "nf_dB": 1.0
+        },
+        "data_files": [
+            {"type": "s_parameters", "path": "amp.s2p"}
+        ]
+    })";
+    {
+        std::ofstream ofs(json_path_str);
+        ofs << json;
+    }
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path_str);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 300, registry, graph);
+    REQUIRE(engine != nullptr);
+
+    auto* amp = dynamic_cast<AmplifierEngine*>(engine);
+    REQUIRE(amp != nullptr);
+    REQUIRE(amp->sparamMode() == true);
+    REQUIRE(amp->sparamLoaded() == true);
+
+    std::filesystem::remove_all(tmpdir);
+}
+
+TEST_CASE("ComponentLibrary falls back when S-param file missing", "[library]") {
+    std::string tmpdir = (std::filesystem::temp_directory_path() / "fallback_test").string();
+    std::filesystem::create_directories(tmpdir);
+
+    std::string json_path_str = tmpdir + "/amp_missing_sparam.json";
+
+    // Create JSON referencing non-existent S-param file
+    std::string json = R"({
+        "schema_version": 2,
+        "type": "amplifier",
+        "part_number": "AMP_MISSING",
+        "parameters": {
+            "gain_dB": 20.0,
+            "nf_dB": 1.0
+        },
+        "data_files": [
+            {"type": "s_parameters", "path": "nonexistent.s2p"}
+        ]
+    })";
+    {
+        std::ofstream ofs(json_path_str);
+        ofs << json;
+    }
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path_str);
+
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+
+    auto* engine = lib.instantiate(*defs[0], 301, registry, graph);
+    REQUIRE(engine != nullptr);
+
+    auto* amp = dynamic_cast<AmplifierEngine*>(engine);
+    REQUIRE(amp != nullptr);
+    REQUIRE(amp->sparamMode() == false);  // Should NOT be in S-param mode
+    REQUIRE(amp->gain_dB() == Approx(20.0));  // Should use single-point params
+    REQUIRE(amp->nf_dB() == Approx(1.0));
+
+    std::filesystem::remove_all(tmpdir);
+}

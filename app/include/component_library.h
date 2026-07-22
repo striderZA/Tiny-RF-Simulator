@@ -8,6 +8,12 @@
 class ComponentRegistry;
 class NodeGraphEngine;
 class IComponentEngine;
+
+struct DataFileRef {
+    std::string type;  // "s_parameters"
+    std::string path;  // relative or absolute path
+};
+
 struct ComponentDefinition {
     int schema_version;
     std::string type;           // "amplifier"
@@ -18,6 +24,7 @@ struct ComponentDefinition {
     nlohmann::json test_conditions;
     std::string notes;
     std::string source_path;    // filesystem path for diagnostics
+    std::vector<DataFileRef> data_files;
 };
 
 class ComponentLibrary {

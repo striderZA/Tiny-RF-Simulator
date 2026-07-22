@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "type": "amplifier",
   "part_number": "AM1143",
   "manufacturer": "Anatech Electronics",
@@ -11,11 +11,14 @@
     "p1db_dBm": 20.0,
     "oip2_dBm": 50.0
   },
+  "data_files": [
+    {"type": "s_parameters", "path": "AM1143.s2p"}
+  ],
   "test_conditions": {
     "frequency_Hz": 1e9,
     "temperature_C": 25,
     "vdd_V": 5.0,
     "idd_mA": 60
   },
-  "notes": "Typical values at 1 GHz from datasheet Rev C"
+  "notes": "Typical values at 1 GHz from datasheet Rev C. S-param file is a synthetic placeholder for demonstration."
 }
