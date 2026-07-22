@@ -1,3 +1,21 @@
+## [0.10.0] - 2026-07-21
+
+### Features
+
+- **S-parameter data file import for component library** — library components can now reference Touchstone S-parameter files for frequency-dependent simulation
+  - JSON schema version 2 with `data_files` array for referencing external data files
+  - Auto-loading of S-param files when instantiating amplifiers from library definitions
+  - Graceful fallback to single-point parameters if data file missing or invalid (with warning logged)
+  - Library browser UI shows `[DATA]` indicator on components with data files; tooltip lists available files
+  - Relative path resolution against the JSON file's directory
+  - AM1143 example updated to schema v2 with S-param file reference
+
+### Testing
+
+- 4 new component library tests: v2 schema parsing, backward compatibility, S-param auto-loading, fallback on missing file
+- 15 total ComponentLibrary tests, all passing
+- 144/145 total tests pass (1 pre-existing CTest configuration issue unrelated to this release)
+
 ## [0.9.2] - 2026-07-21
 
 ### Bug Fixes

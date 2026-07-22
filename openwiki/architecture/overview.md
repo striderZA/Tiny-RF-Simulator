@@ -93,7 +93,8 @@ Added in v0.9.0. Defined in `app/include/component_library.h`. A file-based comp
 - **JSON component definitions** with datasheet parameters (gain, NF, OIP3, P1dB) organized by type → manufacturer
 - **LibraryBrowserWidget** (`app/include/library_browser_widget.h`) provides a tree-view panel with text filter
 - **One-click insert** creates a fully configured component in the node graph, sets `part_number` on the graph node for subtitle display (v0.9.1)
-- Supports 7 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
+- Supports 8 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
+- **Data file support** (v0.10.0): JSON schema version 2 adds `data_files` array for referencing external data files (S-parameters, etc.). Relative paths resolved against the JSON file's directory. When a library amplifier with S-param data files is instantiated, the engine auto-loads the Touchstone file via `setSParamFilepath()` for frequency-dependent simulation. Falls back to single-point parameters if the file is missing or invalid. Library browser shows `[DATA]` indicator on components with data files.
 
 ### Project Save/Load
 

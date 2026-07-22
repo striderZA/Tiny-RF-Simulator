@@ -61,6 +61,7 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 - `NonlinearModel` (`common/include/nonlinear_model.h`) is a reusable class extracted from the amplifier.
 - OIP2/OIP3 clamped to >= -30 dBm.
 - **P1dB** (v0.9.0): first-class 1-dB compression point with automatic OIP3 derivation (`OIP3 = P1dB + 9.6 dB`) when OIP3 is at default value (100 dBm). Explicit OIP3 setting is preserved when P1dB changes. Serialized in project save/load.
+- **Library data file import** (v0.10.0): when instantiated from a library JSON definition with `data_files` referencing an S-param file, the amplifier auto-loads the Touchstone file via `setSParamFilepath()` during `ComponentLibrary::instantiate()`. Falls back to single-point parameters if the file is missing or invalid.
 - No dedicated widget — properties edited via `InspectorPanel`.
 
 **Tests:** `test_amplifier_sparam.cpp`, coverage via `test_main.cpp`.
