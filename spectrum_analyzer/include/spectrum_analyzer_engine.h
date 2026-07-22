@@ -3,6 +3,9 @@
 #include "spectrum.h"
 #include <random>
 #include <vector>
+#include <unordered_map>
+
+enum class TraceMode { ClearWrite, MaxHold, MinHold, VideoAverage };
 
 class SpectrumAnalyzerEngine {
   public:
@@ -27,6 +30,12 @@ class SpectrumAnalyzerEngine {
     double maxPower() const { return m_max_power; }
     double vbw() const { return m_vbw; }
     double rbw() const { return m_rbw; }
+
+    void setTraceMode(TraceMode m) { m_trace_mode = m; }
+    void setVideoAvgCount(int n) { m_video_avg_count = n; }
+
+    TraceMode traceMode() const { return m_trace_mode; }
+    int videoAvgCount() const { return m_video_avg_count; }
 
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
@@ -60,4 +69,7 @@ class SpectrumAnalyzerEngine {
     mutable std::mt19937 m_rng;
     mutable bool m_noise_jitter_enabled = true;
     mutable double m_noise_jitter_sigma_dB = 1.5;
+
+    mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
+    mutable int m_video_avg_count = 10;
 };

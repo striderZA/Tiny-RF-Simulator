@@ -462,6 +462,33 @@ TEST_CASE("findPeaks detects peak in minimum 3-point spectrum", "[spectrum]") {
     REQUIRE(peaks[0].power_dBm == -30.0);
 }
 
+TEST_CASE("TraceMode default is ClearWrite", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    REQUIRE(sa.traceMode() == TraceMode::ClearWrite);
+    REQUIRE(sa.videoAvgCount() == 10);
+}
+
+TEST_CASE("ClearWrite returns frame unchanged (no history)", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.noise_total_W = {1e-18, 1e-18, 1e-18, 1e-18, 1e-18};
+    spec.generation = 1;
+
+    auto out1 = sa.renderSpectrum(spec);
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    REQUIRE(out1.size() == out2.size());
+    for (size_t i = 0; i < out1.size(); ++i) {
+        REQUIRE(out1[i] == Approx(out2[i]).epsilon(1e-9));
+    }
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
