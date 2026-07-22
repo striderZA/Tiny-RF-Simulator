@@ -91,8 +91,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     }
 
     std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
-
-    return vbw_out;
+    return this->applyTraceMode(spec, vbw_out);
 }
 
 std::vector<double>
@@ -294,4 +293,30 @@ std::vector<double> SpectrumAnalyzerEngine::applyVBW(const std::vector<double> &
         out[i] = (count > 0) ? (sum / count) : power_dBm[i];
     }
     return out;
+}
+
+std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
+    const Spectrum &spec, const std::vector<double> &after_vbw) const
+{
+    if (m_trace_mode == TraceMode::ClearWrite) {
+        return after_vbw;
+    }
+
+    std::unordered_map<const Spectrum*, std::vector<double>>* history = nullptr;
+    if (m_trace_mode == TraceMode::MaxHold) history = &m_max_hold;
+    // MinHold and VideoAverage will be added in subsequent tasks
+    if (!history) return after_vbw;
+
+    auto& h = (*history)[&spec];
+
+    if (h.size() != after_vbw.size()) {
+        h = after_vbw;
+        return after_vbw;
+    }
+
+    if (m_trace_mode == TraceMode::MaxHold) {
+        for (size_t i = 0; i < h.size(); ++i)
+            h[i] = std::max(h[i], after_vbw[i]);
+    }
+    return h;
 }

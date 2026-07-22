@@ -489,6 +489,31 @@ TEST_CASE("ClearWrite returns frame unchanged (no history)", "[spectrum][trace]"
     }
 }
 
+TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);       // 1 MHz RBW
+    sa.setVideoBw(1e6);     // 1 MHz VBW (window=1 → passthrough)
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    // 5 MHz spacing → RBW kernel_half=1 → smearing only reaches ±1 bin
+    Spectrum spec;
+    spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    spec.tones = {{0.0, -10.0, 0.0}};   // tone at bin 0
+    spec.generation = 1;
+    auto out1 = sa.renderSpectrum(spec);
+
+    // Second frame: tone moves to bin 4 (far right)
+    spec.tones = {{20e6, -10.0, 0.0}};
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    // With ClearWrite, out2[0] ≈ noise floor (no tone nearby).
+    // With MaxHold, out2[0] holds the -10 dBm peak from frame 1.
+    REQUIRE(out2[0] > out2[1] + 5.0);    // bin 0 held high
+    REQUIRE(out2[4] > out2[1] + 5.0);    // bin 4 now high (tone moved)
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);

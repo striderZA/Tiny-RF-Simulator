@@ -57,6 +57,8 @@ class SpectrumAnalyzerEngine {
     double m_rbw = DEFAULT_RBW;
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
+    std::vector<double> applyTraceMode(const Spectrum &spec,
+                                        const std::vector<double> &after_vbw) const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
@@ -71,5 +73,7 @@ class SpectrumAnalyzerEngine {
     mutable double m_noise_jitter_sigma_dB = 1.5;
 
     mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
+    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_max_hold;
+
     mutable int m_video_avg_count = 10;
 };
