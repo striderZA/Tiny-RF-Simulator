@@ -31,11 +31,13 @@ class SpectrumAnalyzerEngine {
     double vbw() const { return m_vbw; }
     double rbw() const { return m_rbw; }
 
-    void setTraceMode(TraceMode m) { m_trace_mode = m; }
+    void setTraceMode(TraceMode m);
     void setVideoAvgCount(int n) { m_video_avg_count = n; }
 
     TraceMode traceMode() const { return m_trace_mode; }
     int videoAvgCount() const { return m_video_avg_count; }
+    void resetTraceHistory() const;
+    void pruneHistory(const std::vector<const Spectrum *> &active_keys) const;
 
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;

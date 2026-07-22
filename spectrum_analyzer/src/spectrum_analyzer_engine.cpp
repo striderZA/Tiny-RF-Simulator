@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <unordered_set>
 
 SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() : m_rng(std::random_device{}()) {
     LOG_INFO("Constructing spectrum engine...");
@@ -330,3 +331,29 @@ std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
     return h;
 }
 
+
+void SpectrumAnalyzerEngine::setTraceMode(TraceMode m) {
+    m_trace_mode = m;
+    resetTraceHistory();
+}
+
+void SpectrumAnalyzerEngine::resetTraceHistory() const {
+    m_max_hold.clear();
+    m_min_hold.clear();
+    m_video_avg.clear();
+}
+
+void SpectrumAnalyzerEngine::pruneHistory(
+    const std::vector<const Spectrum *> &active_keys) const
+{
+    std::unordered_set<const Spectrum*> active(active_keys.begin(), active_keys.end());
+    for (auto* map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
+        for (auto it = map->begin(); it != map->end(); ) {
+            if (active.find(it->first) == active.end()) {
+                it = map->erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}

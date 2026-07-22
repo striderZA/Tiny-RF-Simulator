@@ -603,6 +603,101 @@ TEST_CASE("VideoAverage responds to step change", "[spectrum][trace]") {
     }
 }
 
+TEST_CASE("Mode switch resets history", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 1;
+
+    // Build up MaxHold history
+    sa.setTraceMode(TraceMode::MaxHold);
+    sa.renderSpectrum(spec);
+
+    // Switch to ClearWrite — should not see held values
+    sa.setTraceMode(TraceMode::ClearWrite);
+    spec.tones = {};  // remove tone
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+
+    // With no tone and ClearWrite, bin 2 should be low (noise floor)
+    REQUIRE(out[2] < -50.0);
+}
+
+TEST_CASE("resetTraceHistory clears all buffers", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 1;
+
+    sa.setTraceMode(TraceMode::MaxHold);
+    sa.renderSpectrum(spec);
+    sa.resetTraceHistory();
+
+    // After reset, rendering with no tone should show noise floor (not held tone)
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+    REQUIRE(out[2] < -50.0);
+}
+
+TEST_CASE("pruneHistory removes stale entries", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6};
+    spec.tones = {{1e6, -10.0, 0.0}};
+    spec.generation = 1;
+    sa.renderSpectrum(spec);
+
+    // Prune with empty active set — should clear all history
+    sa.pruneHistory({});
+
+    // After prune, same spec should start fresh (size mismatch resets, so no held values)
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+    REQUIRE(out[1] < -50.0);
+}
+
+TEST_CASE("Size mismatch resets history", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6};
+    spec.tones = {{1e6, -10.0, 0.0}};
+    spec.generation = 1;
+    sa.renderSpectrum(spec);
+
+    // Change spectrum size
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6, 5e6};
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+
+    // All bins should be noise floor (no held values from old-size history)
+    for (double v : out) {
+        REQUIRE(v < -50.0);
+    }
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
