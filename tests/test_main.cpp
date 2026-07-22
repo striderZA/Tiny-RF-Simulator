@@ -514,6 +514,33 @@ TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
     REQUIRE(out2[4] > out2[1] + 5.0);    // bin 4 now high (tone moved)
 }
 
+TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MinHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+
+    // Frame 1: tone at bin 4 ONLY (bin 2 is noise floor, low)
+    spec.tones = {{4e6, -10.0, 0.0}};
+    spec.generation = 1;
+    auto out1 = sa.renderSpectrum(spec);
+
+    // Frame 2: tone at bin 2 ONLY (moved from bin 4)
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    // MinHold: a bin that was noise in frame 1 should still be noise, even if
+    // frame 2 has a tone there. ClearWrite would show the tone.
+    // With RBW=1e6, noise floor << -50 dBm, so this assertion fails on ClearWrite.
+    REQUIRE(out2[2] < -50.0);  // bin 2 held low from frame 1 (MinHold)
+    REQUIRE(out2[4] < -50.0);  // bin 4 held low from frame 2
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
