@@ -1,3 +1,20 @@
+## [0.11.0] - 2026-07-23
+
+### Documentation
+
+- Update ROADMAP with v0.10.0 library data file support
+- Spectrum analyzer trace modes design spec Adds MaxHold, MinHold, VideoAverage trace modes with per-trace history buffers. Detectors deferred (requires display-points decimation to be meaningful).
+- Spectrum analyzer trace modes implementation plan
+
+### Features
+
+- _(spectrum)_Add TraceMode enum, state, and ClearWrite baseline test
+- _(spectrum)_Add MaxHold trace mode with per-trace history
+- _(spectrum)_Add MinHold trace mode
+- _(spectrum)_Add VideoAverage trace mode with EWMA
+- _(spectrum)_Add resetTraceHistory, pruneHistory, mode-switch reset
+- _(spectrum)_Add trace mode UI controls and peak status line
+
 ## [0.10.0] - 2026-07-21
 
 ### Features
