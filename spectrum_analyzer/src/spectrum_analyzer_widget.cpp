@@ -146,6 +146,35 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update RBW: %.0f MHz", m_engine.rbw() / 1e6);
     }
 
+    // Trace mode controls
+    static const char* trace_mode_labels[] = { "Clear/Write", "Max Hold", "Min Hold", "Video Avg" };
+    static const TraceMode trace_mode_values[] = {
+        TraceMode::ClearWrite, TraceMode::MaxHold, TraceMode::MinHold, TraceMode::VideoAverage
+    };
+    int current_mode_idx = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (m_engine.traceMode() == trace_mode_values[i]) { current_mode_idx = i; break; }
+    }
+    if (ImGui::Combo("Trace Mode", &current_mode_idx, trace_mode_labels, 4)) {
+        m_engine.setTraceMode(trace_mode_values[current_mode_idx]);
+    }
+
+    int avg_count = m_engine.videoAvgCount();
+    bool avg_enabled = (m_engine.traceMode() == TraceMode::VideoAverage);
+    if (!avg_enabled) ImGui::BeginDisabled();
+    if (ImGui::SliderInt("Avg Count", &avg_count, 2, 100)) {
+        m_engine.setVideoAvgCount(avg_count);
+    }
+    if (!avg_enabled) ImGui::EndDisabled();
+
+    bool show_reset = (m_engine.traceMode() == TraceMode::MaxHold ||
+                       m_engine.traceMode() == TraceMode::MinHold);
+    if (show_reset) {
+        if (ImGui::Button("Reset Hold")) {
+            m_engine.resetTraceHistory();
+        }
+    }
+
     if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
         m_engine.setMaxPower(maxp);
         LOG_INFO("Update ref power: %.0f dBm", m_engine.maxPower());
@@ -204,6 +233,16 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         visible_specs.push_back(pfbIter != m_pfb_map.end()
             ? &node->outputs[1] : &node->outputs[0]);
     }
+
+    // Prune stale trace history for nodes no longer visible
+    std::vector<const Spectrum*> all_active;
+    for (auto* node : active_nodes) {
+        if (!node) continue;
+        auto pfbIter = m_pfb_map.find(node);
+        all_active.push_back(pfbIter != m_pfb_map.end()
+            ? &node->outputs[1] : &node->outputs[0]);
+    }
+    m_engine.pruneHistory(all_active);
 
     // Render combined spectrum from VISIBLE traces only (for marker + noise readout)
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
@@ -334,6 +373,30 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     double avg_noise = m_engine.computeAverageNoiseLevel(visible_specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
+
+    // Trace mode + peak readout
+    {
+        const char* mode_name = "Clear/Write";
+        switch (m_engine.traceMode()) {
+            case TraceMode::MaxHold: mode_name = "Max Hold"; break;
+            case TraceMode::MinHold: mode_name = "Min Hold"; break;
+            case TraceMode::VideoAverage: mode_name = "Video Avg"; break;
+            default: break;
+        }
+        // Find peak in combined display
+        double peak_val = -174.0;
+        double peak_freq = 0.0;
+        if (!combined_dBm.empty() && !freq_axis->empty()) {
+            for (size_t i = 0; i < combined_dBm.size() && i < freq_axis->size(); ++i) {
+                if (combined_dBm[i] > peak_val) {
+                    peak_val = combined_dBm[i];
+                    peak_freq = (*freq_axis)[i];
+                }
+            }
+        }
+        ImGui::Text("Trace: %s | Peak: %.2f MHz, %.2f dBm",
+                    mode_name, peak_freq / 1e6, peak_val);
+    }
 
     if (ImGui::Button("Reset Zoom")) {
         m_engine.setStartFrequency(MIN_FREQ);

@@ -3,6 +3,9 @@
 #include "spectrum.h"
 #include <random>
 #include <vector>
+#include <unordered_map>
+
+enum class TraceMode { ClearWrite, MaxHold, MinHold, VideoAverage };
 
 class SpectrumAnalyzerEngine {
   public:
@@ -28,6 +31,14 @@ class SpectrumAnalyzerEngine {
     double vbw() const { return m_vbw; }
     double rbw() const { return m_rbw; }
 
+    void setTraceMode(TraceMode m);
+    void setVideoAvgCount(int n) { m_video_avg_count = n; }
+
+    TraceMode traceMode() const { return m_trace_mode; }
+    int videoAvgCount() const { return m_video_avg_count; }
+    void resetTraceHistory() const;
+    void pruneHistory(const std::vector<const Spectrum *> &active_keys) const;
+
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
@@ -48,6 +59,8 @@ class SpectrumAnalyzerEngine {
     double m_rbw = DEFAULT_RBW;
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
+    std::vector<double> applyTraceMode(const Spectrum &spec,
+                                        const std::vector<double> &after_vbw) const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
@@ -60,4 +73,11 @@ class SpectrumAnalyzerEngine {
     mutable std::mt19937 m_rng;
     mutable bool m_noise_jitter_enabled = true;
     mutable double m_noise_jitter_sigma_dB = 1.5;
+
+    mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
+    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_max_hold;
+    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_min_hold;
+    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_video_avg;
+
+    mutable int m_video_avg_count = 10;
 };

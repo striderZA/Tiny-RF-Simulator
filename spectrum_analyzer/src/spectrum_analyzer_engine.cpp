@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <unordered_set>
 
 SpectrumAnalyzerEngine::SpectrumAnalyzerEngine() : m_rng(std::random_device{}()) {
     LOG_INFO("Constructing spectrum engine...");
@@ -91,8 +92,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     }
 
     std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
-
-    return vbw_out;
+    return this->applyTraceMode(spec, vbw_out);
 }
 
 std::vector<double>
@@ -294,4 +294,66 @@ std::vector<double> SpectrumAnalyzerEngine::applyVBW(const std::vector<double> &
         out[i] = (count > 0) ? (sum / count) : power_dBm[i];
     }
     return out;
+}
+
+std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
+    const Spectrum &spec, const std::vector<double> &after_vbw) const
+{
+    if (m_trace_mode == TraceMode::ClearWrite) {
+        return after_vbw;
+    }
+    std::unordered_map<const Spectrum*, std::vector<double>>* history = nullptr;
+    if (m_trace_mode == TraceMode::MaxHold) history = &m_max_hold;
+    else if (m_trace_mode == TraceMode::MinHold) history = &m_min_hold;
+    else if (m_trace_mode == TraceMode::VideoAverage) history = &m_video_avg;
+    if (!history) return after_vbw;
+    
+    auto& h = (*history)[&spec];
+    
+    if (h.size() != after_vbw.size()) {
+        h = after_vbw;
+        return after_vbw;
+    }
+    
+    if (m_trace_mode == TraceMode::MaxHold) {
+        for (size_t i = 0; i < h.size(); ++i)
+            h[i] = std::max(h[i], after_vbw[i]);
+    }
+    else if (m_trace_mode == TraceMode::MinHold) {
+        for (size_t i = 0; i < h.size(); ++i)
+            h[i] = std::min(h[i], after_vbw[i]);
+    }
+    else { // VideoAverage
+        double alpha = 2.0 / (m_video_avg_count + 1);
+        for (size_t i = 0; i < h.size(); ++i)
+            h[i] = alpha * after_vbw[i] + (1.0 - alpha) * h[i];
+    }
+    return h;
+}
+
+
+void SpectrumAnalyzerEngine::setTraceMode(TraceMode m) {
+    m_trace_mode = m;
+    resetTraceHistory();
+}
+
+void SpectrumAnalyzerEngine::resetTraceHistory() const {
+    m_max_hold.clear();
+    m_min_hold.clear();
+    m_video_avg.clear();
+}
+
+void SpectrumAnalyzerEngine::pruneHistory(
+    const std::vector<const Spectrum *> &active_keys) const
+{
+    std::unordered_set<const Spectrum*> active(active_keys.begin(), active_keys.end());
+    for (auto* map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
+        for (auto it = map->begin(); it != map->end(); ) {
+            if (active.find(it->first) == active.end()) {
+                it = map->erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
 }

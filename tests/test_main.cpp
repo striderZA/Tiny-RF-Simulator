@@ -462,6 +462,242 @@ TEST_CASE("findPeaks detects peak in minimum 3-point spectrum", "[spectrum]") {
     REQUIRE(peaks[0].power_dBm == -30.0);
 }
 
+TEST_CASE("TraceMode default is ClearWrite", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    REQUIRE(sa.traceMode() == TraceMode::ClearWrite);
+    REQUIRE(sa.videoAvgCount() == 10);
+}
+
+TEST_CASE("ClearWrite returns frame unchanged (no history)", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.noise_total_W = {1e-18, 1e-18, 1e-18, 1e-18, 1e-18};
+    spec.generation = 1;
+
+    auto out1 = sa.renderSpectrum(spec);
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    REQUIRE(out1.size() == out2.size());
+    for (size_t i = 0; i < out1.size(); ++i) {
+        REQUIRE(out1[i] == Approx(out2[i]).epsilon(1e-9));
+    }
+}
+
+TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);       // 1 MHz RBW
+    sa.setVideoBw(1e6);     // 1 MHz VBW (window=1 → passthrough)
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    // 5 MHz spacing → RBW kernel_half=1 → smearing only reaches ±1 bin
+    Spectrum spec;
+    spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    spec.tones = {{0.0, -10.0, 0.0}};   // tone at bin 0
+    spec.generation = 1;
+    auto out1 = sa.renderSpectrum(spec);
+
+    // Second frame: tone moves to bin 4 (far right)
+    spec.tones = {{20e6, -10.0, 0.0}};
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    // With ClearWrite, out2[0] ≈ noise floor (no tone nearby).
+    // With MaxHold, out2[0] holds the -10 dBm peak from frame 1.
+    REQUIRE(out2[0] > out2[1] + 5.0);    // bin 0 held high
+    REQUIRE(out2[4] > out2[1] + 5.0);    // bin 4 now high (tone moved)
+}
+
+TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MinHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+
+    // Frame 1: tone at bin 4 ONLY (bin 2 is noise floor, low)
+    spec.tones = {{4e6, -10.0, 0.0}};
+    spec.generation = 1;
+    auto out1 = sa.renderSpectrum(spec);
+
+    // Frame 2: tone at bin 2 ONLY (moved from bin 4)
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 2;
+    auto out2 = sa.renderSpectrum(spec);
+
+    // MinHold: a bin that was noise in frame 1 should still be noise, even if
+    // frame 2 has a tone there. ClearWrite would show the tone.
+    // With RBW=1e6, noise floor << -50 dBm, so this assertion fails on ClearWrite.
+    REQUIRE(out2[2] < -50.0);  // bin 2 held low from frame 1 (MinHold)
+    REQUIRE(out2[4] < -50.0);  // bin 4 held low from frame 2
+}
+
+TEST_CASE("VideoAverage converges to constant input", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::VideoAverage);
+    sa.setVideoAvgCount(5);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.noise_total_W = {1e-18, 1e-18, 1e-18, 1e-18, 1e-18};
+    spec.generation = 1;
+
+    // Feed many identical frames — EWMA should converge
+    std::vector<double> prev;
+    for (int i = 0; i < 50; ++i) {
+        spec.generation = i + 1;
+        prev = sa.renderSpectrum(spec);
+    }
+
+    // One more frame — should be essentially unchanged
+    spec.generation = 51;
+    auto out = sa.renderSpectrum(spec);
+    for (size_t i = 0; i < out.size(); ++i) {
+        REQUIRE(out[i] == Approx(prev[i]).epsilon(0.01));
+    }
+}
+
+TEST_CASE("VideoAverage responds to step change", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::VideoAverage);
+    sa.setVideoAvgCount(3);
+
+    Spectrum spec_lo;
+    spec_lo.frequencies = {0, 1e6, 2e6};
+    spec_lo.noise_total_W = {1e-20, 1e-20, 1e-20};
+
+    // Feed spec_lo for many frames to converge
+    for (int i = 0; i < 100; ++i) {
+        spec_lo.generation = i + 1;
+        sa.renderSpectrum(spec_lo);
+    }
+
+    // Now switch to spec_hi — modify spec_lo in place because the engine
+    // uses the address as the history key
+    spec_lo.noise_total_W = {1e-15, 1e-15, 1e-15};
+    spec_lo.generation = 101;
+    auto out = sa.renderSpectrum(spec_lo);
+
+    // After one step, output should be between old and new (EWMA blend)
+    // The old converged value was ~W_to_dBm(1e-20 * 1e6) = W_to_dBm(1e-14) = -110 dBm
+    // The new raw value is ~W_to_dBm(1e-15 * 1e6) = W_to_dBm(1e-9) = -60 dBm
+    // With alpha = 2/(3+1) = 0.5, one step: 0.5*(-60) + 0.5*(-110) = -85 dBm
+    double expected_approx = -85.0;
+    for (double v : out) {
+        REQUIRE(v == Approx(expected_approx).margin(5.0));
+    }
+}
+
+TEST_CASE("Mode switch resets history", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 1;
+
+    // Build up MaxHold history
+    sa.setTraceMode(TraceMode::MaxHold);
+    sa.renderSpectrum(spec);
+
+    // Switch to ClearWrite — should not see held values
+    sa.setTraceMode(TraceMode::ClearWrite);
+    spec.tones = {};  // remove tone
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+
+    // With no tone and ClearWrite, bin 2 should be low (noise floor)
+    REQUIRE(out[2] < -50.0);
+}
+
+TEST_CASE("resetTraceHistory clears all buffers", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+    spec.tones = {{2e6, -10.0, 0.0}};
+    spec.generation = 1;
+
+    sa.setTraceMode(TraceMode::MaxHold);
+    sa.renderSpectrum(spec);
+    sa.resetTraceHistory();
+
+    // After reset, rendering with no tone should show noise floor (not held tone)
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+    REQUIRE(out[2] < -50.0);
+}
+
+TEST_CASE("pruneHistory removes stale entries", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6};
+    spec.tones = {{1e6, -10.0, 0.0}};
+    spec.generation = 1;
+    sa.renderSpectrum(spec);
+
+    // Prune with empty active set — should clear all history
+    sa.pruneHistory({});
+
+    // After prune, same spec should start fresh (size mismatch resets, so no held values)
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+    REQUIRE(out[1] < -50.0);
+}
+
+TEST_CASE("Size mismatch resets history", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum spec;
+    spec.frequencies = {0, 1e6, 2e6};
+    spec.tones = {{1e6, -10.0, 0.0}};
+    spec.generation = 1;
+    sa.renderSpectrum(spec);
+
+    // Change spectrum size
+    spec.frequencies = {0, 1e6, 2e6, 3e6, 4e6, 5e6};
+    spec.tones = {};
+    spec.generation = 2;
+    auto out = sa.renderSpectrum(spec);
+
+    // All bins should be noise floor (no held values from old-size history)
+    for (double v : out) {
+        REQUIRE(v < -50.0);
+    }
+}
+
 TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
