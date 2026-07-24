@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 | Dependency | Minimum | Notes |
 |------------|---------|-------|
-| **Compiler** | C++20 | GCC 11+ (MinGW-w64 on Windows), Clang 14+ |
+| **Compiler** | C++20 | GCC 14, Clang 18 (CI); MinGW-w64 (Windows) |
 | **CMake** | ≥ 3.20 | [cmake.org/download](https://cmake.org/download) |
 | **Ninja** | ≥ 1.10 | [github.com/ninja-build/ninja](https://github.com/ninja-build/ninja) |
 | **OpenGL** | 2.1+ | System-provided on all platforms |
@@ -36,7 +36,7 @@ The first build takes 60-90s while FetchContent clones dependencies. Subsequent 
 ctest --test-dir build --output-on-failure
 ```
 
-166 tests (including 14 benchmarks) cover all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI.
+22+ test source files (including benchmark suites) cover all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI. CI runs these with Xvfb for UI tests, AddressSanitizer for memory safety, and tracks coverage via gcov/lcov (uploaded to Codecov).
 
 For per-engine dirty/clean benchmarks:
 
@@ -46,6 +46,19 @@ build/bin/tests.exe [bench]   # Windows
 ```
 
 > **See also:** [Testing Guide](openwiki/testing/guidance.md) for test structure, patterns, benchmarks, and UI tests.
+
+## CI Pipeline
+
+Every push and pull request runs through:
+
+- **Format check** — clang-format 18 enforces code style
+- **Conventional commits** — PR titles must follow conventional commit format
+- **Build matrix** — GCC 14 (Debug + Release), Clang 18, MinGW-w64
+- **Tests** — unit tests + UI tests (Xvfb on Linux)
+- **AddressSanitizer** — memory safety checks on Linux
+- **Coverage** — gcov/lcov, uploaded to Codecov
+
+Release tags (`v*`) trigger binary packaging and draft GitHub Releases with auto-generated changelogs.
 
 ## Architecture (Quick Reference)
 
@@ -59,7 +72,7 @@ build/bin/tests.exe [bench]   # Windows
 ## Code Style
 
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
-  Run `clang-format -i <file>` on every changed file before committing.
+  Run `clang-format -i <file>` on every changed file before committing. CI will reject PRs with formatting violations.
 - **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
