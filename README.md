@@ -1,4 +1,4 @@
-# RF Simulator
+# Tiny RF Simulator
 
 <p align="center">
   <strong>Modular RF signal chain simulator with real-time spectrum display</strong><br>
