@@ -1,6 +1,6 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
 #include "touchstone_parser.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -9,11 +9,13 @@
 using Catch::Approx;
 
 TEST_CASE("TouchstoneParser parses real .s2p file", "[touchstone]") {
-    std::string path = std::string(PROJECT_SOURCE_DIR) + "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    std::string path =
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
     auto result = TouchstoneParser::parse(path);
     REQUIRE(result.has_value());
 
-    const auto& data = *result;
+    const auto &data = *result;
     REQUIRE(data.num_ports == 2);
     REQUIRE(data.reference_impedance == Approx(50.0));
     REQUIRE(data.format == TouchstoneData::Format::DB);
@@ -40,7 +42,7 @@ TEST_CASE("TouchstoneParser parses real .s2p file", "[touchstone]") {
     double expected_mag = std::pow(10.0, -20.405844 / 20.0);
     double expected_rad = -4.3232856 * std::numbers::pi / 180.0;
     std::complex<double> expected_s11(expected_mag * std::cos(expected_rad),
-                                       expected_mag * std::sin(expected_rad));
+                                      expected_mag * std::sin(expected_rad));
 
     REQUIRE(data.parameters[0][0].real() == Approx(expected_s11.real()).epsilon(1e-6));
     REQUIRE(data.parameters[0][0].imag() == Approx(expected_s11.imag()).epsilon(1e-6));
@@ -60,7 +62,7 @@ TEST_CASE("TouchstoneParser parses synthetic v1.0 1-port file", "[touchstone]") 
     auto result = TouchstoneParser::parse(tmpfile);
     REQUIRE(result.has_value());
 
-    const auto& data = *result;
+    const auto &data = *result;
     REQUIRE(data.num_ports == 1);
     REQUIRE(data.reference_impedance == Approx(50.0));
     REQUIRE(data.format == TouchstoneData::Format::MA);
@@ -93,7 +95,7 @@ TEST_CASE("TouchstoneParser parses synthetic v1.0 2-port DB file", "[touchstone]
     auto result = TouchstoneParser::parse(tmpfile);
     REQUIRE(result.has_value());
 
-    const auto& data = *result;
+    const auto &data = *result;
     REQUIRE(data.num_ports == 2);
     REQUIRE(data.reference_impedance == Approx(75.0));
     REQUIRE(data.format == TouchstoneData::Format::DB);
@@ -120,8 +122,10 @@ TEST_CASE("TouchstoneParser parses synthetic v1.0 2-port DB file", "[touchstone]
 
     // S22: -10 dB = 0.3162... mag, -45 deg
     REQUIRE(std::abs(data.parameters[0][3]) == Approx(0.316227766).epsilon(1e-6));
-    REQUIRE(data.parameters[0][3].real() == Approx(0.316227766 * std::cos(-45.0 * std::numbers::pi / 180.0)).epsilon(1e-6));
-    REQUIRE(data.parameters[0][3].imag() == Approx(0.316227766 * std::sin(-45.0 * std::numbers::pi / 180.0)).epsilon(1e-6));
+    REQUIRE(data.parameters[0][3].real() ==
+            Approx(0.316227766 * std::cos(-45.0 * std::numbers::pi / 180.0)).epsilon(1e-6));
+    REQUIRE(data.parameters[0][3].imag() ==
+            Approx(0.316227766 * std::sin(-45.0 * std::numbers::pi / 180.0)).epsilon(1e-6));
 
     std::filesystem::remove(tmpfile);
 }

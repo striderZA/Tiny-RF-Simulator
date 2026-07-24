@@ -10,17 +10,17 @@ struct ZoomState {
 };
 
 struct kiss_fft_state;
-typedef struct kiss_fft_state* kiss_fft_cfg;
+typedef struct kiss_fft_state *kiss_fft_cfg;
 
 class IQPlotWidget {
   public:
-    explicit IQPlotWidget(PFBChannelizerEngine& engine) : m_pfb(engine) {}
+    explicit IQPlotWidget(PFBChannelizerEngine &engine) : m_pfb(engine) {}
     ~IQPlotWidget();
 
-    void draw(const char* title, bool* p_open = nullptr);
+    void draw(const char *title, bool *p_open = nullptr);
 
   private:
-    PFBChannelizerEngine& m_pfb;
+    PFBChannelizerEngine &m_pfb;
     std::deque<double> m_stream_i;
     std::deque<double> m_stream_q;
     double m_time_step_s = 0.0;

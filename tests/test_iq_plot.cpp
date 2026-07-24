@@ -13,7 +13,7 @@
 using Catch::Approx;
 
 // Helper: run a naive DFT (no kiss_fft dependency) for small N verification
-static std::vector<std::complex<double>> naive_idft(const std::vector<std::complex<double>>& fd) {
+static std::vector<std::complex<double>> naive_idft(const std::vector<std::complex<double>> &fd) {
     size_t N = fd.size();
     std::vector<std::complex<double>> td(N, {0.0, 0.0});
     for (size_t n = 0; n < N; ++n) {
@@ -21,7 +21,7 @@ static std::vector<std::complex<double>> naive_idft(const std::vector<std::compl
             double angle = 2.0 * M_PI * k * n / static_cast<double>(N);
             td[n] += fd[k] * std::complex<double>(std::cos(angle), std::sin(angle));
         }
-        td[n] /= static_cast<double>(N);  // normalise like kiss_fft + /N
+        td[n] /= static_cast<double>(N); // normalise like kiss_fft + /N
     }
     return td;
 }
@@ -36,12 +36,12 @@ TEST_CASE("IQ plot DSP: single tone IFFT peak at correct bin", "[iq_plot]") {
     for (size_t i = 0; i < N; ++i)
         freqs[i] = -32e6 + i * 1e6;
 
-    std::vector<double> noise_W(N, 0.0);  // no noise
+    std::vector<double> noise_W(N, 0.0); // no noise
     std::vector<double> phase(N, 0.0);
 
     // Place a tone at exactly bin 48 (freq = -32 + 48 = 16 MHz)
     std::vector<Spectrum::Tone> tones;
-    tones.push_back({16e6, 0.0, 0.0});  // 0 dBm at 16 MHz, 0 phase
+    tones.push_back({16e6, 0.0, 0.0}); // 0 dBm at 16 MHz, 0 phase
 
     std::vector<std::complex<double>> spectrum;
     bool ok = build_iq_spectrum(freqs, noise_W, phase, tones, spectrum);
@@ -79,7 +79,7 @@ TEST_CASE("IQ plot DSP: tone and noise use same sqrt(Watts) scale", "[iq_plot]")
     // Actually: tone mag = 10^(0/20) / sqrt(1000) = 1/sqrt(1000) = sqrt(1/1000) = sqrt(1e-3)
     // Noise mag for a bin = sqrt(psd * bin_width)
     // For these to be equal: psd * bin_width = 1e-3 → psd = 1e-3 / bin_width
-    double tone_power_W = 1e-3;  // 0 dBm
+    double tone_power_W = 1e-3; // 0 dBm
     double psd = tone_power_W / bin_width;
 
     std::vector<double> noise_W(N, psd);
@@ -97,7 +97,7 @@ TEST_CASE("IQ plot DSP: tone and noise use same sqrt(Watts) scale", "[iq_plot]")
     // Now with a 0 dBm tone (no noise)
     std::vector<double> noise_zero(N, 0.0);
     std::vector<Spectrum::Tone> tones_one;
-    tones_one.push_back({0.0, 0.0, 0.0});  // 0 dBm at 0 Hz (bin 16)
+    tones_one.push_back({0.0, 0.0, 0.0}); // 0 dBm at 0 Hz (bin 16)
     std::vector<std::complex<double>> spectrum_tone;
     bool ok2 = build_iq_spectrum(freqs, noise_zero, phase, tones_one, spectrum_tone);
     REQUIRE(ok2);
@@ -106,7 +106,8 @@ TEST_CASE("IQ plot DSP: tone and noise use same sqrt(Watts) scale", "[iq_plot]")
     double tone_mag = 0.0;
     for (size_t i = 0; i < N; ++i) {
         double m = std::abs(spectrum_tone[i]);
-        if (m > tone_mag) tone_mag = m;
+        if (m > tone_mag)
+            tone_mag = m;
     }
 
     // Both should be in the same scale: sqrt(Watts)
@@ -144,14 +145,14 @@ TEST_CASE("IQ plot DSP: empty spectrum N < 2 returns false", "[iq_plot]") {
 TEST_CASE("IQ plot DSP: degenerate frequency grid handled gracefully", "[iq_plot]") {
     // All identical frequencies → bin_width = 0, magnitudes should be 0
     const size_t N = 4;
-    std::vector<double> freqs(N, 1e6);  // all same
+    std::vector<double> freqs(N, 1e6); // all same
     std::vector<double> noise_W(N, 1e-20);
     std::vector<double> phase(N, 0.0);
     std::vector<Spectrum::Tone> tones;
     std::vector<std::complex<double>> spectrum;
 
     bool ok = build_iq_spectrum(freqs, noise_W, phase, tones, spectrum);
-    REQUIRE(ok);  // N >= 2, so it returns true
+    REQUIRE(ok); // N >= 2, so it returns true
     REQUIRE(spectrum.size() == N);
 
     // With bin_width = 0, all noise magnitudes = sqrt(0) = 0
@@ -176,8 +177,8 @@ TEST_CASE("IQ plot DSP: IFFT reconstruction matches naive DFT", "[iq_plot]") {
 
     // Two tones
     std::vector<Spectrum::Tone> tones;
-    tones.push_back({0.0, 0.0, 0.0});      // 0 dBm at 0 Hz
-    tones.push_back({3e6, -10.0, 45.0});   // -10 dBm at 3 MHz, 45 deg phase
+    tones.push_back({0.0, 0.0, 0.0});    // 0 dBm at 0 Hz
+    tones.push_back({3e6, -10.0, 45.0}); // -10 dBm at 3 MHz, 45 deg phase
 
     std::vector<std::complex<double>> spectrum;
     bool ok = build_iq_spectrum(freqs, noise_W, phase, tones, spectrum);
@@ -201,9 +202,9 @@ TEST_CASE("IQ plot DSP: IFFT reconstruction matches naive DFT", "[iq_plot]") {
         sum_td += std::norm(td[i]);
         sum_fd += std::norm(spectrum[i]);
     }
-    // With our normalisation (divide by N in IFFT): sum|td|^2 = (1/N^2) * sum|fd|^2 * N = sum|fd|^2 / N
-    // Actually: naive DFT as defined: td[n] = (1/N) * sum_k fd[k] * exp(j2pi kn/N)
-    // Parseval: sum|td|^2 = (1/N) * sum|fd|^2 / N ... let me just check they're both positive and related
+    // With our normalisation (divide by N in IFFT): sum|td|^2 = (1/N^2) * sum|fd|^2 * N = sum|fd|^2
+    // / N Actually: naive DFT as defined: td[n] = (1/N) * sum_k fd[k] * exp(j2pi kn/N) Parseval:
+    // sum|td|^2 = (1/N) * sum|fd|^2 / N ... let me just check they're both positive and related
     REQUIRE(sum_td > 0.0);
     REQUIRE(sum_fd > 0.0);
 }
@@ -222,14 +223,14 @@ TEST_CASE("IQ plot DSP: tone dBm to magnitude conversion", "[iq_plot]") {
 
     // 0 dBm = 1 mW. magnitude should be sqrt(1e-3) = sqrt(P_W)
     std::vector<Spectrum::Tone> tones;
-    tones.push_back({0.0, 0.0, 0.0});  // 0 dBm at bin 0
+    tones.push_back({0.0, 0.0, 0.0}); // 0 dBm at bin 0
 
     std::vector<std::complex<double>> spectrum;
     bool ok = build_iq_spectrum(freqs, noise_W, phase, tones, spectrum);
     REQUIRE(ok);
 
     double mag = std::abs(spectrum[0]);
-    double expected = std::sqrt(1e-3);  // sqrt(0.001) ≈ 0.03162
+    double expected = std::sqrt(1e-3); // sqrt(0.001) ≈ 0.03162
     REQUIRE(mag == Approx(expected).epsilon(1e-10));
 
     // 30 dBm = 1 W. magnitude should be sqrt(1.0) = 1.0

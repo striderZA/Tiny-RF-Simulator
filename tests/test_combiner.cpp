@@ -1,8 +1,8 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "combiner_engine.h"
 #include "node_graph_engine.h"
 #include "spectrum.h"
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 
 using Catch::Matchers::WithinAbs;
@@ -34,9 +34,9 @@ TEST_CASE("Combiner: basic combination with -3 dB loss per input", "[combiner]")
 
     combiner.update(0.016);
 
-    const auto& output = combiner.node().outputs[0];
+    const auto &output = combiner.node().outputs[0];
     REQUIRE(output.tones.size() == 2);
-    
+
     // Each tone should have -3 dB loss applied
     REQUIRE_THAT(output.tones[0].power_dBm, WithinAbs(-13.01, 0.01));
     REQUIRE_THAT(output.tones[1].power_dBm, WithinAbs(-23.01, 0.01));
@@ -52,7 +52,7 @@ TEST_CASE("Combiner: single input connected", "[combiner]") {
 
     combiner.update(0.016);
 
-    const auto& output = combiner.node().outputs[0];
+    const auto &output = combiner.node().outputs[0];
     REQUIRE(output.tones.size() == 1);
     REQUIRE_THAT(output.tones[0].power_dBm, WithinAbs(-13.01, 0.01));
 }
@@ -66,7 +66,7 @@ TEST_CASE("Combiner: both inputs unconnected", "[combiner]") {
 
     combiner.update(0.016);
 
-    const auto& output = combiner.node().outputs[0];
+    const auto &output = combiner.node().outputs[0];
     REQUIRE(output.tones.empty());
 }
 
@@ -100,7 +100,8 @@ TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
     NodeGraphEngine graph;
     CombinerEngine combiner(1, graph);
 
-    combiner.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p");
+    combiner.setSParamFile(std::string(PROJECT_SOURCE_DIR) +
+                           "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p");
     REQUIRE(combiner.sParamMode());
 
     Spectrum input0 = buildTestSpectrum(1e9, -10.0, 0.0);
@@ -110,7 +111,7 @@ TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
 
     combiner.update(0.016);
 
-    const auto& output = combiner.node().outputs[0];
+    const auto &output = combiner.node().outputs[0];
     REQUIRE(output.tones.size() == 2);
 
     // Verify S-parameters are applied (tones should be modified by S21/S31)

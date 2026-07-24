@@ -3,24 +3,25 @@
 #include "imgui.h"
 #include "implot.h"
 #include "logging_core.h"
+#include "pfb_channelizer_engine.h"
 #include "utils.h"
 #include "view_manager.h"
-#include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <limits>
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
-void SpectrumAnalyzerWidget::setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs) {
+void SpectrumAnalyzerWidget::setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs) {
     m_pfb_ptrs = pfbs;
     m_pfb_map.clear();
-    for (auto* pfb : m_pfb_ptrs)
-        if (pfb) m_pfb_map[&pfb->node()] = pfb;
+    for (auto *pfb : m_pfb_ptrs)
+        if (pfb)
+            m_pfb_map[&pfb->node()] = pfb;
 }
 
 int SpectrumAnalyzerWidget::resolveMarkerIdx(const std::vector<double> &freq_axis,
-                                              const std::vector<double> &data) const {
+                                             const std::vector<double> &data) const {
     if (!m_marker.enabled || data.empty() || freq_axis.empty()) {
         return -1;
     }
@@ -147,13 +148,15 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
 
     // Trace mode controls
-    static const char* trace_mode_labels[] = { "Clear/Write", "Max Hold", "Min Hold", "Video Avg" };
-    static const TraceMode trace_mode_values[] = {
-        TraceMode::ClearWrite, TraceMode::MaxHold, TraceMode::MinHold, TraceMode::VideoAverage
-    };
+    static const char *trace_mode_labels[] = {"Clear/Write", "Max Hold", "Min Hold", "Video Avg"};
+    static const TraceMode trace_mode_values[] = {TraceMode::ClearWrite, TraceMode::MaxHold,
+                                                  TraceMode::MinHold, TraceMode::VideoAverage};
     int current_mode_idx = 0;
     for (int i = 0; i < 4; ++i) {
-        if (m_engine.traceMode() == trace_mode_values[i]) { current_mode_idx = i; break; }
+        if (m_engine.traceMode() == trace_mode_values[i]) {
+            current_mode_idx = i;
+            break;
+        }
     }
     if (ImGui::Combo("Trace Mode", &current_mode_idx, trace_mode_labels, 4)) {
         m_engine.setTraceMode(trace_mode_values[current_mode_idx]);
@@ -161,14 +164,16 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     int avg_count = m_engine.videoAvgCount();
     bool avg_enabled = (m_engine.traceMode() == TraceMode::VideoAverage);
-    if (!avg_enabled) ImGui::BeginDisabled();
+    if (!avg_enabled)
+        ImGui::BeginDisabled();
     if (ImGui::SliderInt("Avg Count", &avg_count, 2, 100)) {
         m_engine.setVideoAvgCount(avg_count);
     }
-    if (!avg_enabled) ImGui::EndDisabled();
+    if (!avg_enabled)
+        ImGui::EndDisabled();
 
-    bool show_reset = (m_engine.traceMode() == TraceMode::MaxHold ||
-                       m_engine.traceMode() == TraceMode::MinHold);
+    bool show_reset =
+        (m_engine.traceMode() == TraceMode::MaxHold || m_engine.traceMode() == TraceMode::MinHold);
     if (show_reset) {
         if (ImGui::Button("Reset Hold")) {
             m_engine.resetTraceHistory();
@@ -208,11 +213,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    const std::vector<double>* freq_axis = nullptr;
-    for (auto* node : active_nodes) {
-        if (!node) continue;
+    const std::vector<double> *freq_axis = nullptr;
+    for (auto *node : active_nodes) {
+        if (!node)
+            continue;
         auto pfbIter = m_pfb_map.find(node);
-        const auto& spec = pfbIter != m_pfb_map.end() ? node->outputs[1] : node->outputs[0];
+        const auto &spec = pfbIter != m_pfb_map.end() ? node->outputs[1] : node->outputs[0];
         if (!freq_axis && !spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
@@ -224,23 +230,24 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
 
     // Build combined specs from VISIBLE traces only (for marker + avg noise)
-    std::vector<const Spectrum*> visible_specs;
+    std::vector<const Spectrum *> visible_specs;
     for (size_t i = 0; i < active_nodes.size(); ++i) {
-        if (!m_trace_visible[i]) continue;
-        auto* node = active_nodes[i];
-        if (!node) continue;
+        if (!m_trace_visible[i])
+            continue;
+        auto *node = active_nodes[i];
+        if (!node)
+            continue;
         auto pfbIter = m_pfb_map.find(node);
-        visible_specs.push_back(pfbIter != m_pfb_map.end()
-            ? &node->outputs[1] : &node->outputs[0]);
+        visible_specs.push_back(pfbIter != m_pfb_map.end() ? &node->outputs[1] : &node->outputs[0]);
     }
 
     // Prune stale trace history for nodes no longer visible
-    std::vector<const Spectrum*> all_active;
-    for (auto* node : active_nodes) {
-        if (!node) continue;
+    std::vector<const Spectrum *> all_active;
+    for (auto *node : active_nodes) {
+        if (!node)
+            continue;
         auto pfbIter = m_pfb_map.find(node);
-        all_active.push_back(pfbIter != m_pfb_map.end()
-            ? &node->outputs[1] : &node->outputs[0]);
+        all_active.push_back(pfbIter != m_pfb_map.end() ? &node->outputs[1] : &node->outputs[0]);
     }
     m_engine.pruneHistory(all_active);
 
@@ -253,12 +260,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
 
     static const ImVec4 trace_colors[4] = {
-        ImVec4(0.09f, 0.78f, 0.60f, 1.0f),  // Teal
-        ImVec4(0.90f, 0.59f, 0.16f, 1.0f),  // Orange
-        ImVec4(0.47f, 0.20f, 0.67f, 1.0f),  // Purple
-        ImVec4(0.24f, 0.55f, 0.86f, 1.0f),  // Blue
+        ImVec4(0.09f, 0.78f, 0.60f, 1.0f), // Teal
+        ImVec4(0.90f, 0.59f, 0.16f, 1.0f), // Orange
+        ImVec4(0.47f, 0.20f, 0.67f, 1.0f), // Purple
+        ImVec4(0.24f, 0.55f, 0.86f, 1.0f), // Blue
     };
-    static const ImVec4 pfb_full_color(0.60f, 0.80f, 0.95f, 1.0f);   // Light sky blue
+    static const ImVec4 pfb_full_color(0.60f, 0.80f, 0.95f, 1.0f);      // Light sky blue
     static const ImVec4 pfb_highlight_color(1.00f, 0.50f, 0.00f, 1.0f); // Bright orange
 
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
@@ -266,17 +273,19 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     if (ImPlot::BeginPlot("Spectrum")) {
         for (size_t i = 0; i < active_nodes.size(); ++i) {
-            auto* node = active_nodes[i];
-            if (!node) continue;
+            auto *node = active_nodes[i];
+            if (!node)
+                continue;
             auto pfbIter = m_pfb_map.find(node);
             bool is_pfb = pfbIter != m_pfb_map.end();
-            const auto& spec = is_pfb ? node->outputs[1] : node->outputs[0];
+            const auto &spec = is_pfb ? node->outputs[1] : node->outputs[0];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
-            if (trace.size() != spec.frequencies.size()) continue;
+            if (trace.size() != spec.frequencies.size())
+                continue;
 
-            std::string label = (i < m_probe_labels.size()) ? m_probe_labels[i]
-                              : ("Probe " + std::to_string(i));
+            std::string label =
+                (i < m_probe_labels.size()) ? m_probe_labels[i] : ("Probe " + std::to_string(i));
 
             // Sync ImPlot visibility with our tracking
             ImPlot::HideNextItem(!m_trace_visible[i], ImPlotCond_Always);
@@ -293,7 +302,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
             // For PFB: overlay active channel highlight trace
             if (is_pfb) {
-                const auto* pfb_ptr = pfbIter->second;
+                const auto *pfb_ptr = pfbIter->second;
                 double ch_center = pfb_ptr->activeChannelCenter_Hz();
                 double ch_bw = pfb_ptr->activeChannelBandwidth_Hz();
                 double ch_lo = ch_center - ch_bw / 2.0;
@@ -308,10 +317,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                     }
                 }
                 if (!highlight_data.empty()) {
-                    ImPlot::PlotLine("Active Ch", highlight_freqs.data(), highlight_data.data(),
-                                     static_cast<int>(highlight_data.size()),
-                                     {ImPlotProp_LineColor, pfb_highlight_color,
-                                      ImPlotProp_LineWeight, 2.5f});
+                    ImPlot::PlotLine(
+                        "Active Ch", highlight_freqs.data(), highlight_data.data(),
+                        static_cast<int>(highlight_data.size()),
+                        {ImPlotProp_LineColor, pfb_highlight_color, ImPlotProp_LineWeight, 2.5f});
                 }
             }
         }
@@ -339,9 +348,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                 double y2 = m_engine.maxPower();
                 ImPlotPoint p1 = ImPlot::PlotToPixels(x1, y1);
                 ImPlotPoint p2 = ImPlot::PlotToPixels(x2, y2);
-                ImPlot::GetPlotDrawList()->AddRectFilled(
-                    ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
-                    IM_COL32(100, 150, 255, 40));
+                ImPlot::GetPlotDrawList()->AddRectFilled(ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
+                                                         IM_COL32(100, 150, 255, 40));
             }
         }
 
@@ -376,12 +384,19 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     // Trace mode + peak readout
     {
-        const char* mode_name = "Clear/Write";
+        const char *mode_name = "Clear/Write";
         switch (m_engine.traceMode()) {
-            case TraceMode::MaxHold: mode_name = "Max Hold"; break;
-            case TraceMode::MinHold: mode_name = "Min Hold"; break;
-            case TraceMode::VideoAverage: mode_name = "Video Avg"; break;
-            default: break;
+        case TraceMode::MaxHold:
+            mode_name = "Max Hold";
+            break;
+        case TraceMode::MinHold:
+            mode_name = "Min Hold";
+            break;
+        case TraceMode::VideoAverage:
+            mode_name = "Video Avg";
+            break;
+        default:
+            break;
         }
         // Find peak in combined display
         double peak_val = -174.0;
@@ -394,8 +409,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                 }
             }
         }
-        ImGui::Text("Trace: %s | Peak: %.2f MHz, %.2f dBm",
-                    mode_name, peak_freq / 1e6, peak_val);
+        ImGui::Text("Trace: %s | Peak: %.2f MHz, %.2f dBm", mode_name, peak_freq / 1e6, peak_val);
     }
 
     if (ImGui::Button("Reset Zoom")) {

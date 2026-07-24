@@ -1,7 +1,7 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
-#include <string>
 #include "coax_presets.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <string>
 
 using Catch::Approx;
 
@@ -16,7 +16,7 @@ TEST_CASE("Coax preset table has six MilTech entries", "[coax][presets]") {
 }
 
 TEST_CASE("MT 340 preset matches datasheet", "[coax][presets]") {
-    const CableSpec& mt340 = kCoaxCablePresets[4];
+    const CableSpec &mt340 = kCoaxCablePresets[4];
     REQUIRE(mt340.K1_dB_per_m == Approx(0.004710));
     REQUIRE(mt340.K2_dB_per_m == Approx(0.000004));
     REQUIRE(mt340.delay_ns_per_m == Approx(4.76));

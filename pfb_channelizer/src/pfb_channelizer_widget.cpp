@@ -5,26 +5,25 @@
 #include <cmath>
 #include <cstdio>
 
-PFBChannelizerWidget::PFBChannelizerWidget(PFBChannelizerEngine& engine)
-    : m_engine(engine) {}
+PFBChannelizerWidget::PFBChannelizerWidget(PFBChannelizerEngine &engine) : m_engine(engine) {}
 
 void PFBChannelizerWidget::rebuildCache() {
-    const Spectrum* in = m_engine.node().inputs[0];
+    const Spectrum *in = m_engine.node().inputs[0];
     if (!in || in->frequencies.size() < 2) {
         m_cells.clear();
         return;
     }
 
     double bin_width = in->frequencies[1] - in->frequencies[0];
-    const auto& channels = m_engine.channels();
+    const auto &channels = m_engine.channels();
     int M = static_cast<int>(channels.size());
     int start = std::min(m_grid_offset, std::max(0, M - 1));
     int count = std::min(16, M - start);
     m_cells.resize(count);
 
     for (int ci = 0; ci < count; ++ci) {
-        auto& ch = channels[start + ci];
-        auto& cell = m_cells[ci];
+        auto &ch = channels[start + ci];
+        auto &cell = m_cells[ci];
         size_t n = ch.bin_indices.size();
         cell.freqs.resize(n);
         cell.power_dBm.resize(n);
@@ -39,36 +38,42 @@ void PFBChannelizerWidget::rebuildCache() {
                 continue;
             }
             cell.freqs[i] = in->frequencies[bi];
-            double psd = (bi < static_cast<int>(in->noise_total_W.size()))
-                ? in->noise_total_W[bi] : 0.0;
+            double psd =
+                (bi < static_cast<int>(in->noise_total_W.size())) ? in->noise_total_W[bi] : 0.0;
             double power_W = psd * w * w * bin_width;
             cell.power_dBm[i] = 10.0 * std::log10(power_W / 0.001 + 1e-100);
         }
     }
     m_y_min = 1e30;
     m_y_max = -1e30;
-    for (auto& c : m_cells) {
+    for (auto &c : m_cells) {
         for (auto v : c.power_dBm) {
-            if (v < m_y_min) m_y_min = v;
-            if (v > m_y_max) m_y_max = v;
+            if (v < m_y_min)
+                m_y_min = v;
+            if (v > m_y_max)
+                m_y_max = v;
         }
     }
     double y_range = m_y_max - m_y_min;
-    if (y_range < 10.0) { m_y_min -= 5.0; m_y_max += 5.0; y_range = m_y_max - m_y_min; }
+    if (y_range < 10.0) {
+        m_y_min -= 5.0;
+        m_y_max += 5.0;
+        y_range = m_y_max - m_y_min;
+    }
     m_y_min -= 3.0;
     m_y_max += 3.0;
 
     m_cached_gen = in->generation;
 }
 
-void PFBChannelizerWidget::draw(const char* title, bool* p_open) {
+void PFBChannelizerWidget::draw(const char *title, bool *p_open) {
     ImGui::SetNextWindowSize(ImVec2(800, 700), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;
     }
 
-    const Spectrum* in = m_engine.node().inputs[0];
+    const Spectrum *in = m_engine.node().inputs[0];
     int M = static_cast<int>(m_engine.channels().size());
 
     if (!in || M == 0) {
@@ -88,7 +93,7 @@ void PFBChannelizerWidget::draw(const char* title, bool* p_open) {
     if (in->generation != m_cached_gen)
         rebuildCache();
 
-    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 win_pos = ImGui::GetCursorScreenPos();
     ImVec2 win_size = ImGui::GetContentRegionAvail();
 
@@ -120,8 +125,7 @@ void PFBChannelizerWidget::draw(const char* title, bool* p_open) {
     ImGui::End();
 }
 
-void PFBChannelizerWidget::drawCell(ImDrawList* dl, const ImRect& rect,
-                                    int ch_idx) {
+void PFBChannelizerWidget::drawCell(ImDrawList *dl, const ImRect &rect, int ch_idx) {
     if (ch_idx < 0 || ch_idx >= static_cast<int>(m_engine.channels().size()))
         return;
 
@@ -129,29 +133,25 @@ void PFBChannelizerWidget::drawCell(ImDrawList* dl, const ImRect& rect,
 
     dl->AddRectFilled(rect.Min, rect.Max, IM_COL32(12, 12, 12, 255));
 
-    ImU32 border_col = active ? IM_COL32(255, 165, 0, 255)
-                              : IM_COL32(50, 50, 50, 255);
-    dl->AddRect(rect.Min, rect.Max, border_col, 0.0f, 0,
-                active ? 2.5f : 1.0f);
+    ImU32 border_col = active ? IM_COL32(255, 165, 0, 255) : IM_COL32(50, 50, 50, 255);
+    dl->AddRect(rect.Min, rect.Max, border_col, 0.0f, 0, active ? 2.5f : 1.0f);
 
-    const auto& ch = m_engine.channels()[ch_idx];
+    const auto &ch = m_engine.channels()[ch_idx];
     char title[64];
-    snprintf(title, sizeof(title), "Ch %d  %.1f MHz",
-             ch_idx, ch.center_freq_Hz / 1e6);
-    dl->AddText(ImVec2(rect.Min.x + 4, rect.Min.y + 2),
-                IM_COL32(180, 180, 180, 255), title);
+    snprintf(title, sizeof(title), "Ch %d  %.1f MHz", ch_idx, ch.center_freq_Hz / 1e6);
+    dl->AddText(ImVec2(rect.Min.x + 4, rect.Min.y + 2), IM_COL32(180, 180, 180, 255), title);
 
     const float header_h = 18.0f;
     const float margin = 3.0f;
-    ImRect plot(rect.Min.x + margin, rect.Min.y + header_h,
-                rect.Max.x - margin, rect.Max.y - margin);
+    ImRect plot(rect.Min.x + margin, rect.Min.y + header_h, rect.Max.x - margin,
+                rect.Max.y - margin);
     if (plot.GetWidth() < 10 || plot.GetHeight() < 10)
         return;
 
     int cache_idx = ch_idx - m_grid_offset;
     if (cache_idx < 0 || cache_idx >= static_cast<int>(m_cells.size()))
         return;
-    auto& cell = m_cells[cache_idx];
+    auto &cell = m_cells[cache_idx];
     if (cell.freqs.empty() || cell.power_dBm.empty())
         return;
 
@@ -173,13 +173,14 @@ void PFBChannelizerWidget::drawCell(ImDrawList* dl, const ImRect& rect,
         dl->PathClear();
         dl->PathLineTo(toScreen(cell.freqs[0], cell.power_dBm[0]));
         for (size_t i = 1; i < cell.power_dBm.size(); ++i) {
-            if (i >= cell.freqs.size()) break;
+            if (i >= cell.freqs.size())
+                break;
             dl->PathLineTo(toScreen(cell.freqs[i], cell.power_dBm[i]));
         }
         dl->PathStroke(IM_COL32(23, 200, 153, 255), false, 1.5f);
     }
 
-    for (auto& t : cell.tones) {
+    for (auto &t : cell.tones) {
         double tone_power_W = std::pow(10.0, t.power_dBm / 10.0) * 0.001;
         for (size_t i = 0; i + 1 < cell.freqs.size(); ++i) {
             if (cell.freqs[i] <= t.freq_Hz && t.freq_Hz <= cell.freqs[i + 1]) {

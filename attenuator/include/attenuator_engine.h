@@ -1,16 +1,16 @@
 #pragma once
 
-#include <string>
-#include <memory>
-#include "node_graph_engine.h"
-#include "signal_node.h"
 #include "component_interface.h"
-#include "spectrum.h"
+#include "node_graph_engine.h"
 #include "s_parameter_data.h"
+#include "signal_node.h"
+#include "spectrum.h"
+#include <memory>
+#include <string>
 
 class AttenuatorEngine : public IComponentEngine {
-public:
-    AttenuatorEngine(int id, NodeGraphEngine& graph);
+  public:
+    AttenuatorEngine(int id, NodeGraphEngine &graph);
 
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_node_id; }
@@ -20,10 +20,10 @@ public:
     int outputPinId(int index) const override;
     void update(double dt) override;
     nlohmann::json serialize() const override;
-    void deserialize(const nlohmann::json&) override;
+    void deserialize(const nlohmann::json &) override;
 
-    SignalNode& node() override { return m_node; }
-    const SignalNode& node() const override { return m_node; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
 
     void setAttenuation(double dB);
     double attenuation() const { return m_atten_dB; }
@@ -31,13 +31,13 @@ public:
     void setSParamMode(bool enabled);
     bool sParamMode() const { return m_sparam_mode; }
 
-    void setSParamFile(const std::string& path);
-    const std::string& sParamFile() const { return m_sparam_path; }
+    void setSParamFile(const std::string &path);
+    const std::string &sParamFile() const { return m_sparam_path; }
 
-private:
+  private:
     int m_id;
     int m_graph_node_id = -1;
-    NodeGraphEngine* m_graph = nullptr;
+    NodeGraphEngine *m_graph = nullptr;
 
     SignalNode m_node;
 
@@ -48,6 +48,6 @@ private:
     SParameterData m_sparam;
 
     bool m_dirty = true;
-    const Spectrum* m_cached_input_ptr = nullptr;
+    const Spectrum *m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
 };

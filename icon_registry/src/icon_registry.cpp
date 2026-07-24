@@ -12,14 +12,14 @@ IconRegistry::~IconRegistry() {
     delete m_impl;
 }
 
-void IconRegistry::load(const std::string& label_prefix, const char* png_path) {
+void IconRegistry::load(const std::string &label_prefix, const char *png_path) {
     ImTextureID tex = loadTextureFromFile(png_path);
     if (tex)
         m_impl->icons[label_prefix] = tex;
 }
 
-ImTextureID IconRegistry::get(const std::string& node_label) const {
-    for (const auto& [prefix, tex] : m_impl->icons) {
+ImTextureID IconRegistry::get(const std::string &node_label) const {
+    for (const auto &[prefix, tex] : m_impl->icons) {
         if (node_label.rfind(prefix, 0) == 0)
             return tex;
     }
@@ -27,7 +27,7 @@ ImTextureID IconRegistry::get(const std::string& node_label) const {
 }
 
 void IconRegistry::clear() {
-    for (auto& [prefix, tex] : m_impl->icons)
+    for (auto &[prefix, tex] : m_impl->icons)
         freeTexture(tex);
     m_impl->icons.clear();
 }

@@ -2,20 +2,20 @@
 #include "logging_core.h"
 #include <filesystem>
 
-#include "component_registry.h"
-#include "component_interface.h"
-#include "node_graph_engine.h"
+#include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
-#include "splitter_engine.h"
+#include "combiner_engine.h"
+#include "component_interface.h"
+#include "component_registry.h"
+#include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
-#include "equalizer_engine.h"
-#include "combiner_engine.h"
-#include "adc_engine.h"
+#include "node_graph_engine.h"
+#include "splitter_engine.h"
 #include <fstream>
 
-void ComponentLibrary::loadFile(const std::string& filepath) {
+void ComponentLibrary::loadFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
     if (!ifs.is_open()) {
         LOG_WARN("ComponentLibrary: cannot open file: %s", filepath.c_str());
@@ -25,7 +25,7 @@ void ComponentLibrary::loadFile(const std::string& filepath) {
     nlohmann::json j;
     try {
         ifs >> j;
-    } catch (const nlohmann::json::parse_error& e) {
+    } catch (const nlohmann::json::parse_error &e) {
         LOG_WARN("ComponentLibrary: JSON parse error in %s: %s", filepath.c_str(), e.what());
         return;
     }
@@ -48,12 +48,10 @@ void ComponentLibrary::loadFile(const std::string& filepath) {
 
     // Parse data_files array if present
     if (j.contains("data_files") && j["data_files"].is_array()) {
-        for (const auto& df : j["data_files"]) {
+        for (const auto &df : j["data_files"]) {
             if (df.contains("type") && df.contains("path")) {
-                def.data_files.push_back({
-                    df["type"].get<std::string>(),
-                    df["path"].get<std::string>()
-                });
+                def.data_files.push_back(
+                    {df["type"].get<std::string>(), df["path"].get<std::string>()});
             }
         }
     }
@@ -61,41 +59,42 @@ void ComponentLibrary::loadFile(const std::string& filepath) {
     m_definitions.push_back(std::move(def));
 }
 
-std::vector<const ComponentDefinition*> ComponentLibrary::all() const {
-    std::vector<const ComponentDefinition*> result;
+std::vector<const ComponentDefinition *> ComponentLibrary::all() const {
+    std::vector<const ComponentDefinition *> result;
     result.reserve(m_definitions.size());
-    for (const auto& def : m_definitions) {
+    for (const auto &def : m_definitions) {
         result.push_back(&def);
     }
     return result;
 }
 
-void ComponentLibrary::scan(const std::string& directory) {
+void ComponentLibrary::scan(const std::string &directory) {
     namespace fs = std::filesystem;
-    if (!fs::exists(directory)) return;
-    for (const auto& entry : fs::recursive_directory_iterator(directory)) {
+    if (!fs::exists(directory))
+        return;
+    for (const auto &entry : fs::recursive_directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().extension() == ".json") {
             loadFile(entry.path().string());
         }
     }
 }
 
-std::vector<const ComponentDefinition*> ComponentLibrary::byType(const std::string& type) const {
-    std::vector<const ComponentDefinition*> result;
-    for (const auto& def : m_definitions) {
-        if (def.type == type) result.push_back(&def);
+std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::string &type) const {
+    std::vector<const ComponentDefinition *> result;
+    for (const auto &def : m_definitions) {
+        if (def.type == type)
+            result.push_back(&def);
     }
     return result;
 }
 
-IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
-                                                 int id,
-                                                 ComponentRegistry& registry,
-                                                 NodeGraphEngine& graph) {
-    IComponentEngine* result = nullptr;
+IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, int id,
+                                                ComponentRegistry &registry,
+                                                NodeGraphEngine &graph) {
+    IComponentEngine *result = nullptr;
 
     if (def.type == "amplifier") {
-        auto& amp = registry.add<AmplifierEngine>(id, graph);
+        auto &amp = registry.add<AmplifierEngine>(id, graph);
         if (def.parameters.contains("gain_dB"))
             amp.setGain_dB(def.parameters["gain_dB"].get<double>());
         if (def.parameters.contains("nf_dB"))
@@ -107,43 +106,50 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
         if (def.parameters.contains("p1db_dBm"))
             amp.setP1dB_dBm(def.parameters["p1db_dBm"].get<double>());
         bool has_nonlinear = def.parameters.contains("oip2_dBm") ||
-                            def.parameters.contains("oip3_dBm") ||
-                            def.parameters.contains("p1db_dBm");
-        if (has_nonlinear) amp.setEnableNonlinear(true);
+                             def.parameters.contains("oip3_dBm") ||
+                             def.parameters.contains("p1db_dBm");
+        if (has_nonlinear)
+            amp.setEnableNonlinear(true);
         // Auto-load S-param file if available
-        for (const auto& df : def.data_files) {
+        for (const auto &df : def.data_files) {
             if (df.type == "s_parameters") {
-                std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
+                std::filesystem::path json_dir =
+                    std::filesystem::path(def.source_path).parent_path();
                 std::filesystem::path sparam_path = json_dir / df.path;
                 amp.setSParamFilepath(sparam_path.string());
 
                 if (amp.sparamLoaded()) {
-                    LOG_INFO("Loaded S-param file for %s: %s",
-                             def.part_number.c_str(), sparam_path.string().c_str());
+                    LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
+                             sparam_path.string().c_str());
                 } else {
-                    LOG_WARN("Failed to load S-param file for %s: %s (falling back to single-point params)",
+                    LOG_WARN("Failed to load S-param file for %s: %s (falling back to single-point "
+                             "params)",
                              def.part_number.c_str(), sparam_path.string().c_str());
                 }
-                break;  // Only load first S-param file
+                break; // Only load first S-param file
             }
         }
         result = &amp;
     } else if (def.type == "attenuator") {
-        auto& att = registry.add<AttenuatorEngine>(id, graph);
+        auto &att = registry.add<AttenuatorEngine>(id, graph);
         if (def.parameters.contains("attenuation_dB"))
             att.setAttenuation(def.parameters["attenuation_dB"].get<double>());
         result = &att;
     } else if (def.type == "splitter") {
-        auto& spl = registry.add<SplitterEngine>(id, graph);
+        auto &spl = registry.add<SplitterEngine>(id, graph);
         result = &spl;
     } else if (def.type == "filter") {
-        auto& flt = registry.add<IdealFilterEngine>(id, graph);
+        auto &flt = registry.add<IdealFilterEngine>(id, graph);
         if (def.parameters.contains("filter_type")) {
             std::string ft = def.parameters["filter_type"].get<std::string>();
-            if (ft == "LPF") flt.setFilterType(FilterType::LPF);
-            else if (ft == "HPF") flt.setFilterType(FilterType::HPF);
-            else if (ft == "BPF") flt.setFilterType(FilterType::BPF);
-            else if (ft == "BSF") flt.setFilterType(FilterType::BSF);
+            if (ft == "LPF")
+                flt.setFilterType(FilterType::LPF);
+            else if (ft == "HPF")
+                flt.setFilterType(FilterType::HPF);
+            else if (ft == "BPF")
+                flt.setFilterType(FilterType::BPF);
+            else if (ft == "BSF")
+                flt.setFilterType(FilterType::BSF);
         }
         double fc_low = def.parameters.value("fc_low_Hz", 100e6);
         double fc_high = def.parameters.value("fc_high_Hz", 200e6);
@@ -153,7 +159,7 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
             flt.setCutoff_Hz(fc_low);
         result = &flt;
     } else if (def.type == "mixer") {
-        auto& mix = registry.add<MixerEngine>(id, graph);
+        auto &mix = registry.add<MixerEngine>(id, graph);
         if (def.parameters.contains("lo_freq_Hz"))
             mix.setLoFreq_Hz(def.parameters["lo_freq_Hz"].get<double>());
         if (def.parameters.contains("conversion_gain_dB"))
@@ -162,7 +168,7 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
             mix.setNF_dB(def.parameters["nf_dB"].get<double>());
         result = &mix;
     } else if (def.type == "equalizer") {
-        auto& eq = registry.add<EqualizerEngine>(id, graph);
+        auto &eq = registry.add<EqualizerEngine>(id, graph);
         if (def.parameters.contains("ref_gain_dB"))
             eq.setRefGain_dB(def.parameters["ref_gain_dB"].get<double>());
         if (def.parameters.contains("ref_freq_Hz"))
@@ -171,12 +177,12 @@ IComponentEngine* ComponentLibrary::instantiate(const ComponentDefinition& def,
             eq.setSlope_dBPerDecade(def.parameters["slope_dB_per_decade"].get<double>());
         result = &eq;
     } else if (def.type == "combiner") {
-        auto& comb = registry.add<CombinerEngine>(id, graph);
+        auto &comb = registry.add<CombinerEngine>(id, graph);
         if (def.parameters.contains("manual_mode"))
             comb.setManualMode(def.parameters["manual_mode"].get<bool>());
         result = &comb;
     } else if (def.type == "adc") {
-        auto& adc = registry.add<AdcEngine>(id, graph);
+        auto &adc = registry.add<AdcEngine>(id, graph);
         if (def.parameters.contains("fs_Hz"))
             adc.setFs_Hz(def.parameters["fs_Hz"].get<double>());
         if (def.parameters.contains("nsd_dBm_per_Hz"))

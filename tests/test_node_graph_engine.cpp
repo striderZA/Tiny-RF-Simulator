@@ -1,5 +1,5 @@
-#include <catch2/catch_test_macros.hpp>
 #include "node_graph_engine.h"
+#include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <string>
 
@@ -27,13 +27,13 @@ TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {
     int gen_id = engine.addNode("Generator", &gen_node, false, true);
     int amp_id = engine.addNode("Amplifier", &amp_node, true, true);
 
-    auto& gen = engine.nodes()[0];
-    auto& amp = engine.nodes()[1];
+    auto &gen = engine.nodes()[0];
+    auto &amp = engine.nodes()[1];
 
     engine.addLink(gen.output_pin_ids[0], amp.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
 
-    auto* source = engine.getSourceForInput(amp.input_pin_ids[0]);
+    auto *source = engine.getSourceForInput(amp.input_pin_ids[0]);
     REQUIRE(source == &gen_node);
 }
 
@@ -93,7 +93,7 @@ TEST_CASE("NodeGraphEngine removeNode clears probes", "[node_graph]") {
     SignalNode node;
 
     engine.addNode("Generator", &node, false, true);
-    auto& n = engine.nodes()[0];
+    auto &n = engine.nodes()[0];
 
     engine.addProbePin(n.output_pin_ids[0]);
     REQUIRE(engine.probePins().size() == 1);
@@ -112,9 +112,9 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
     engine.addNode("Gen2", &gen2, false, true);
     engine.addNode("Amp", &amp, true, true);
 
-    auto& g1 = engine.nodes()[0];
-    auto& g2 = engine.nodes()[1];
-    auto& a = engine.nodes()[2];
+    auto &g1 = engine.nodes()[0];
+    auto &g2 = engine.nodes()[1];
+    auto &a = engine.nodes()[2];
 
     engine.addLink(g1.output_pin_ids[0], a.input_pin_ids[0]);
     engine.addLink(g2.output_pin_ids[0], a.input_pin_ids[0]);
@@ -133,7 +133,7 @@ TEST_CASE("NodeGraphEngine setNextIds controls subsequent IDs", "[node_graph]") 
     int id = engine.addNode("Test", &node, 1, 1);
     REQUIRE(id == 42);
 
-    const auto& n = engine.nodes()[0];
+    const auto &n = engine.nodes()[0];
     REQUIRE(n.input_pin_ids[0] == 142);
     REQUIRE(n.output_pin_ids[0] == 143);
 
@@ -147,8 +147,8 @@ TEST_CASE("NodeGraphEngine removeAllLinks clears all links", "[node_graph]") {
 
     engine.addNode("Src", &src, false, true);
     engine.addNode("Dst", &dst, true, true);
-    auto& g = engine.nodes()[0];
-    auto& a = engine.nodes()[1];
+    auto &g = engine.nodes()[0];
+    auto &a = engine.nodes()[1];
 
     engine.addLink(g.output_pin_ids[0], a.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
@@ -195,28 +195,29 @@ TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
 
 TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_graph][appearance]") {
     REQUIRE(nodeKindFromLabel("") == NodeKind::Unknown);
-    REQUIRE(nodeKindFromLabel("Subcircuit 1") == NodeKind::Unknown);  // groups handled separately
-    REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);   // case-sensitive
-    REQUIRE(nodeKindFromLabel("Amplifier") == NodeKind::Amplifier);  // no trailing space still matches
+    REQUIRE(nodeKindFromLabel("Subcircuit 1") == NodeKind::Unknown); // groups handled separately
+    REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);  // case-sensitive
+    REQUIRE(nodeKindFromLabel("Amplifier") ==
+            NodeKind::Amplifier); // no trailing space still matches
 }
 
 TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {
-    REQUIRE(themeColor(NodeKind::Unknown)        != 0u);
-    REQUIRE(themeColor(NodeKind::Generator)      != 0u);
-    REQUIRE(themeColor(NodeKind::Amplifier)      != 0u);
-    REQUIRE(themeColor(NodeKind::Splitter)       != 0u);
-    REQUIRE(themeColor(NodeKind::Mixer)          != 0u);
-    REQUIRE(themeColor(NodeKind::Adc)            != 0u);
-    REQUIRE(themeColor(NodeKind::PFB)            != 0u);
-    REQUIRE(themeColor(NodeKind::IdealFilter)    != 0u);
-    REQUIRE(themeColor(NodeKind::CoaxCable)      != 0u);
+    REQUIRE(themeColor(NodeKind::Unknown) != 0u);
+    REQUIRE(themeColor(NodeKind::Generator) != 0u);
+    REQUIRE(themeColor(NodeKind::Amplifier) != 0u);
+    REQUIRE(themeColor(NodeKind::Splitter) != 0u);
+    REQUIRE(themeColor(NodeKind::Mixer) != 0u);
+    REQUIRE(themeColor(NodeKind::Adc) != 0u);
+    REQUIRE(themeColor(NodeKind::PFB) != 0u);
+    REQUIRE(themeColor(NodeKind::IdealFilter) != 0u);
+    REQUIRE(themeColor(NodeKind::CoaxCable) != 0u);
     REQUIRE(themeColor(NodeKind::GroupCollapsed) != 0u);
     REQUIRE(themeColor(NodeKind::Equalizer) == 0xFF34D399);
 }
 
 TEST_CASE("themeColor returns a distinct color per NodeKind", "[node_graph][appearance]") {
     REQUIRE(themeColor(NodeKind::Generator) != themeColor(NodeKind::Amplifier));
-    REQUIRE(themeColor(NodeKind::Mixer)     != themeColor(NodeKind::Adc));
-    REQUIRE(themeColor(NodeKind::PFB)       != themeColor(NodeKind::IdealFilter));
+    REQUIRE(themeColor(NodeKind::Mixer) != themeColor(NodeKind::Adc));
+    REQUIRE(themeColor(NodeKind::PFB) != themeColor(NodeKind::IdealFilter));
     REQUIRE(themeColor(NodeKind::CoaxCable) != themeColor(NodeKind::Unknown));
 }

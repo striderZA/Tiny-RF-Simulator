@@ -12,7 +12,7 @@ struct GraphNode {
     std::vector<int> output_pin_ids;
     SignalNode *signal_node;
     std::string label;
-    std::string part_number;  // library part number (e.g. "ZX60-33LN+"), empty for manual nodes
+    std::string part_number; // library part number (e.g. "ZX60-33LN+"), empty for manual nodes
 
     // Per-pin labels for rendering (empty → default "IN"/"OUT")
     std::vector<std::string> input_labels;
@@ -46,12 +46,12 @@ class NodeGraphEngine {
 
     static constexpr int MAX_PROBES = 4;
 
-    const std::vector<int>& probePins() const { return m_probe_pins; }
+    const std::vector<int> &probePins() const { return m_probe_pins; }
     bool addProbePin(int pin_id);
     bool removeProbePin(int pin_id);
     void clearProbes();
     int probeSlotForPin(int pin_id) const;
-    std::vector<SignalNode*> probedSignalNodes() const;
+    std::vector<SignalNode *> probedSignalNodes() const;
 
     const std::vector<GraphNode> &nodes() const { return m_nodes; }
     const std::vector<GraphLink> &links() const { return m_links; }
@@ -59,12 +59,11 @@ class NodeGraphEngine {
     int nodeIdForPin(int pin_id) const;
 
     // Set pin labels for a node (for rendering in the node graph widget)
-    void setNodePinLabels(int node_id,
-                          const std::vector<std::string>& input_labels,
-                          const std::vector<std::string>& output_labels);
+    void setNodePinLabels(int node_id, const std::vector<std::string> &input_labels,
+                          const std::vector<std::string> &output_labels);
 
     // Set the library part number for a node (for display in the node graph)
-    void setNodePartNumber(int node_id, const std::string& part_number);
+    void setNodePartNumber(int node_id, const std::string &part_number);
 
     // Group counter accessors for project save/load
     int nextGroupId() const { return m_next_group_id; }
@@ -77,8 +76,8 @@ class NodeGraphEngine {
     void removeGroup(int group_id, bool rebuild_cache = true);
 
     // Group collection + accessors
-    const std::vector<Group>& groups() const { return m_groups; }
-    const Group* groupById(int group_id) const;
+    const std::vector<Group> &groups() const { return m_groups; }
+    const Group *groupById(int group_id) const;
     int numGroups() const { return static_cast<int>(m_groups.size()); }
     int selectedGroupId() const { return m_selected_group_id; }
     void setSelectedGroupId(int id);
@@ -87,7 +86,7 @@ class NodeGraphEngine {
     bool isGroupCollapsed(int group_id) const;
     void rebuildGroupBoundaryPins(int group_id);
     int groupIdForNode(int node_id) const;
-    const std::vector<int>& groupsContainingNode(int node_id) const;
+    const std::vector<int> &groupsContainingNode(int node_id) const;
 
   private:
     int m_next_node_id = 1;
@@ -127,18 +126,29 @@ enum class NodeKind {
 // Maps a node label to a NodeKind by prefix matching. Each engine
 // constructor sets a unique, stable label prefix. First match wins.
 // Unrecognised input (empty, group names, future engines) returns Unknown.
-inline NodeKind nodeKindFromLabel(const std::string& label) {
-    if (label.rfind("Generator", 0) == 0)    return NodeKind::Generator;
-    if (label.rfind("Amplifier", 0) == 0)    return NodeKind::Amplifier;
-    if (label.rfind("Splitter", 0) == 0)     return NodeKind::Splitter;
-    if (label.rfind("Mixer", 0) == 0)        return NodeKind::Mixer;
-    if (label.rfind("ADC", 0) == 0)          return NodeKind::Adc;
-    if (label.rfind("PFB", 0) == 0)          return NodeKind::PFB;
-    if (label.rfind("IdealFilter", 0) == 0)  return NodeKind::IdealFilter;
-    if (label.rfind("Coax Cable", 0) == 0)   return NodeKind::CoaxCable;
-    if (label.rfind("Equalizer", 0) == 0)    return NodeKind::Equalizer;
-    if (label.rfind("Attenuator", 0) == 0)   return NodeKind::Attenuator;
-    if (label.rfind("Combiner", 0) == 0)     return NodeKind::Combiner;
+inline NodeKind nodeKindFromLabel(const std::string &label) {
+    if (label.rfind("Generator", 0) == 0)
+        return NodeKind::Generator;
+    if (label.rfind("Amplifier", 0) == 0)
+        return NodeKind::Amplifier;
+    if (label.rfind("Splitter", 0) == 0)
+        return NodeKind::Splitter;
+    if (label.rfind("Mixer", 0) == 0)
+        return NodeKind::Mixer;
+    if (label.rfind("ADC", 0) == 0)
+        return NodeKind::Adc;
+    if (label.rfind("PFB", 0) == 0)
+        return NodeKind::PFB;
+    if (label.rfind("IdealFilter", 0) == 0)
+        return NodeKind::IdealFilter;
+    if (label.rfind("Coax Cable", 0) == 0)
+        return NodeKind::CoaxCable;
+    if (label.rfind("Equalizer", 0) == 0)
+        return NodeKind::Equalizer;
+    if (label.rfind("Attenuator", 0) == 0)
+        return NodeKind::Attenuator;
+    if (label.rfind("Combiner", 0) == 0)
+        return NodeKind::Combiner;
     return NodeKind::Unknown;
 }
 
@@ -147,19 +157,32 @@ inline NodeKind nodeKindFromLabel(const std::string& label) {
 // casts to ImU32 at the call site.
 inline uint32_t themeColor(NodeKind k) {
     switch (k) {
-        case NodeKind::Generator:      return 0xFF4ADE80;  // green
-        case NodeKind::Amplifier:      return 0xFFFB923C;  // orange
-        case NodeKind::Mixer:          return 0xFFC084FC;  // purple
-        case NodeKind::Splitter:       return 0xFFFACC15;  // amber
-        case NodeKind::Adc:            return 0xFF60A5FA;  // blue
-        case NodeKind::PFB:            return 0xFF22D3EE;  // cyan
-        case NodeKind::IdealFilter:    return 0xFF2DD4BF;  // teal
-        case NodeKind::CoaxCable:      return 0xFF94A3B8;  // slate
-        case NodeKind::Equalizer:      return 0xFF34D399;  // emerald
-        case NodeKind::Attenuator:     return 0xFF64B48C;  // muted green
-        case NodeKind::Combiner:       return 0xFFF87171;  // red
-        case NodeKind::GroupCollapsed: return 0xFF818CF8;  // indigo
-        case NodeKind::Unknown:        // fallthrough
-        default:                       return 0xFF9CA3AF;  // gray
+    case NodeKind::Generator:
+        return 0xFF4ADE80; // green
+    case NodeKind::Amplifier:
+        return 0xFFFB923C; // orange
+    case NodeKind::Mixer:
+        return 0xFFC084FC; // purple
+    case NodeKind::Splitter:
+        return 0xFFFACC15; // amber
+    case NodeKind::Adc:
+        return 0xFF60A5FA; // blue
+    case NodeKind::PFB:
+        return 0xFF22D3EE; // cyan
+    case NodeKind::IdealFilter:
+        return 0xFF2DD4BF; // teal
+    case NodeKind::CoaxCable:
+        return 0xFF94A3B8; // slate
+    case NodeKind::Equalizer:
+        return 0xFF34D399; // emerald
+    case NodeKind::Attenuator:
+        return 0xFF64B48C; // muted green
+    case NodeKind::Combiner:
+        return 0xFFF87171; // red
+    case NodeKind::GroupCollapsed:
+        return 0xFF818CF8;  // indigo
+    case NodeKind::Unknown: // fallthrough
+    default:
+        return 0xFF9CA3AF; // gray
     }
 }

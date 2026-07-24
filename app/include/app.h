@@ -2,9 +2,14 @@
 
 #include "adc_engine.h"
 #include "amplifier_engine.h"
-#include "inspector_panel.h"
+#include "attenuator_engine.h"
+#include "component_library.h"
+#include "component_registry.h"
+#include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
+#include "inspector_panel.h"
 #include "iq_plot_widget.h"
+#include "library_browser_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
@@ -20,11 +25,6 @@
 #include "view_manager.h"
 #include <memory>
 #include <vector>
-#include "component_registry.h"
-#include "equalizer_engine.h"
-#include "attenuator_engine.h"
-#include "component_library.h"
-#include "library_browser_widget.h"
 
 enum class PendingAction { None, New, Open, Exit };
 
@@ -43,8 +43,8 @@ class RfSimulatorApp {
     ~RfSimulatorApp();
 
     // Project save/load
-    void saveProject(const std::string& path);
-    void loadProject(const std::string& path);
+    void saveProject(const std::string &path);
+    void loadProject(const std::string &path);
     void newProject();
     bool isDirty() const { return m_dirty; }
     size_t componentCount() const { return m_components.size(); }
@@ -53,8 +53,8 @@ class RfSimulatorApp {
     bool m_dirty = false;
     void testMakeDirty();
     // Test helpers exposed for project file round-trip tests
-    NodeGraphEngine& testGraphEngine() { return m_graph_engine; }
-    ComponentRegistry& testComponents() { return m_components; }
+    NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
+    ComponentRegistry &testComponents() { return m_components; }
 
     void openFileDialog();
     void saveFileDialog();

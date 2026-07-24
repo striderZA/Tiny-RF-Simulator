@@ -1,17 +1,16 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
 #include "amplifier_engine.h"
-#include "signal_generator_engine.h"
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <numbers>
 
 using Catch::Approx;
 
 static std::string s2p_path() {
-    return std::string(PROJECT_SOURCE_DIR) +
-        "/component_data/amplifiers/adm-3844psm/"
-        "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    return std::string(PROJECT_SOURCE_DIR) + "/component_data/amplifiers/adm-3844psm/"
+                                             "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
 }
 
 TEST_CASE("Amplifier ideal mode unchanged after S-param refactor", "[amp][sparam]") {
@@ -47,7 +46,7 @@ TEST_CASE("Amplifier S-param mode loads .s2p and applies S21 gain", "[amp][spara
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
 
     // S21 at 1 GHz on this amp gives ~19.6 dB gain
@@ -70,7 +69,7 @@ TEST_CASE("Amplifier S-param applies phase rotation", "[amp][sparam]") {
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     auto S21 = amp.sparamData().interpolate(1e9, 2);
     double expected_phase = std::arg(S21) * 180.0 / std::numbers::pi;
@@ -90,7 +89,7 @@ TEST_CASE("Amplifier S-param interpolates between data points", "[amp][sparam]")
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     auto S21 = amp.sparamData().interpolate(1.005e9, 2);
     double expected_gain = 20.0 * std::log10(std::abs(S21));
@@ -111,7 +110,7 @@ TEST_CASE("Amplifier S-param handles out-of-band frequency", "[amp][sparam]") {
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     auto S21 = amp.sparamData().interpolate(f_outside, 2);
     double expected_phase = std::arg(S21) * 180.0 / std::numbers::pi;
@@ -132,7 +131,7 @@ TEST_CASE("Amplifier S-param adds noise figure correctly", "[amp][sparam][nf]") 
     // NF = 0: noise_added_W should be zero
     amp.setNF_dB(0.0);
     amp.update(0.0);
-    const auto& out0 = amp.node().outputs[0];
+    const auto &out0 = amp.node().outputs[0];
     REQUIRE(!out0.noise_added_W.empty());
     for (double n : out0.noise_added_W)
         REQUIRE(n == Approx(0.0).margin(1e-30));
@@ -140,10 +139,13 @@ TEST_CASE("Amplifier S-param adds noise figure correctly", "[amp][sparam][nf]") 
     // NF = 3 dB: noise_added_W should be positive
     amp.setNF_dB(3.0);
     amp.update(0.0);
-    const auto& out3 = amp.node().outputs[0];
+    const auto &out3 = amp.node().outputs[0];
     bool any_positive = false;
     for (double n : out3.noise_added_W) {
-        if (n > 0.0) { any_positive = true; break; }
+        if (n > 0.0) {
+            any_positive = true;
+            break;
+        }
     }
     REQUIRE(any_positive);
 }
@@ -164,13 +166,15 @@ TEST_CASE("Amplifier S-param nonlinear creates harmonics", "[amp][sparam][nonlin
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() >= 3);
 
     bool found_h2 = false, found_h3 = false;
-    for (const auto& t : out.tones) {
-        if (std::abs(t.freq_Hz - 200e6) < 1.0) found_h2 = true;
-        if (std::abs(t.freq_Hz - 300e6) < 1.0) found_h3 = true;
+    for (const auto &t : out.tones) {
+        if (std::abs(t.freq_Hz - 200e6) < 1.0)
+            found_h2 = true;
+        if (std::abs(t.freq_Hz - 300e6) < 1.0)
+            found_h3 = true;
     }
     REQUIRE(found_h2);
     REQUIRE(found_h3);

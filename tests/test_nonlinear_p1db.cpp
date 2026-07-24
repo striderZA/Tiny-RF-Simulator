@@ -1,6 +1,6 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
 #include "nonlinear_model.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 using Catch::Approx;
 
@@ -18,7 +18,7 @@ TEST_CASE("NonlinearModel P1dB setter updates value", "[nonlinear][p1db]") {
 TEST_CASE("NonlinearModel derives OIP3 from P1dB when OIP3 is default", "[nonlinear][p1db]") {
     NonlinearModel model;
     REQUIRE(model.oip3_dBm() == Approx(100.0)); // default
-    
+
     model.setP1dB_dBm(20.0);
     REQUIRE(model.oip3_dBm() == Approx(29.6).margin(0.01)); // 20 + 9.6
 }

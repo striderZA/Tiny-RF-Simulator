@@ -1,56 +1,55 @@
 #include "app.h"
+#include "attenuator_engine.h"
+#include "coax_cable_engine.h"
+#include "combiner_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
-#include "coax_cable_engine.h"
-#include <portable-file-dialogs.h>
-#include "attenuator_engine.h"
-#include "combiner_engine.h"
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <functional>
+#include <portable-file-dialogs.h>
 #include <typeindex>
 #include <unordered_map>
-#include <filesystem>
 
-RfSimulatorApp::RfSimulatorApp()
-    : m_components(m_graph_engine, m_view_manager) {
+RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_graph_widget->onAddGenerator = [this](ImVec2 pos) {
-        auto& comp = m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddAmplifier = [this](ImVec2 pos) {
-        auto& comp = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddSplitter = [this](ImVec2 pos) {
-        auto& comp = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddMixer = [this](ImVec2 pos) {
-        auto& comp = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
 
     m_graph_widget->onAddAdc = [this](ImVec2 pos) {
-        auto& comp = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddPFB = [this](ImVec2 pos) {
-        auto& pfb = m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
+        auto &pfb = m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(pfb.graphNodeId(), pos);
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(pfb));
@@ -62,30 +61,30 @@ RfSimulatorApp::RfSimulatorApp()
         markDirty();
     };
     m_graph_widget->onAddCoaxCable = [this](ImVec2 pos) {
-        auto& comp = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddEqualizer = [this](ImVec2 pos) {
-        auto& comp = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
     };
     m_graph_widget->onAddIdealFilter = [this](ImVec2 pos) {
-        auto& comp = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddAttenuator = [this](ImVec2 pos) {
-        auto& comp = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
     };
     m_graph_widget->onAddCombiner = [this](ImVec2 pos) {
-        auto& comp = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
+        auto &comp = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
         ImNodes::EditorContextSet(m_graph_widget->context());
         ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
         markDirty();
@@ -100,23 +99,20 @@ RfSimulatorApp::RfSimulatorApp()
         m_show_iq_pfbs.clear();
         m_pfb_grid_widgets.clear();
         m_show_pfb_grids.clear();
-        for (auto* pfb : pfb_vec) {
+        for (auto *pfb : pfb_vec) {
             m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
-            m_show_iq_pfbs.push_back(
-                m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
+            m_show_iq_pfbs.push_back(m_state.loadBool(
+                "WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
             m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
-            m_show_pfb_grids.push_back(
-                m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
+            m_show_pfb_grids.push_back(m_state.loadBool(
+                "WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
         }
     };
-    m_graph_widget->onNodeHover = [this](int id) {
-        return m_components.hoverSummary(id);
-    };
-    m_graph_widget->onDuplicateNode = [this](int id) {
-        duplicateComponent(id);
-    };
+    m_graph_widget->onNodeHover = [this](int id) { return m_components.hoverSummary(id); };
+    m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
 
-    m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine).addTone(100e6, -20.0);
+    m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)
+        .addTone(100e6, -20.0);
     m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
 
     m_inspector_panel = std::make_unique<InspectorPanel>(m_graph_engine, m_components);
@@ -125,20 +121,16 @@ RfSimulatorApp::RfSimulatorApp()
             m_graph_widget->onRemoveNode(graph_node_id);
     };
 
-    m_inspector_panel->setViewToggles({
-        &m_show_log,
-        &m_show_spectrum,
-        &m_show_properties,
-        nullptr, // iq_plot (per-PFB toggles used instead)
-        &m_show_node_editor
-    });
+    m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
+                                       nullptr, // iq_plot (per-PFB toggles used instead)
+                                       &m_show_node_editor});
     m_inspector_panel->onParamChange = [this]() { markDirty(); };
 
     // Initialize component library
 #ifdef _WIN32
-    const char* home = std::getenv("USERPROFILE");
+    const char *home = std::getenv("USERPROFILE");
 #else
-    const char* home = std::getenv("HOME");
+    const char *home = std::getenv("HOME");
 #endif
     if (home) {
         m_library.scan((std::filesystem::path(home) / ".rf-sim" / "libraries").string());
@@ -151,9 +143,11 @@ RfSimulatorApp::RfSimulatorApp()
     }
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
-    m_library_browser->onInsert = [this](const ComponentDefinition& def) {
-        auto* engine = m_library.instantiate(def, m_next_component_id++, m_components, m_graph_engine);
-        if (engine) markDirty();
+    m_library_browser->onInsert = [this](const ComponentDefinition &def) {
+        auto *engine =
+            m_library.instantiate(def, m_next_component_id++, m_components, m_graph_engine);
+        if (engine)
+            markDirty();
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
@@ -174,8 +168,9 @@ void RfSimulatorApp::load_window_states() {
 }
 
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
-    IComponentEngine* src = m_components.find(graph_node_id);
-    if (!src) return;
+    IComponentEngine *src = m_components.find(graph_node_id);
+    if (!src)
+        return;
 
     // Capture source position before creating the new node
     ImNodes::EditorContextSet(m_graph_widget->context());
@@ -184,7 +179,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
 
     // Capture source part number for copying to the duplicate
     std::string src_part_number;
-    for (const auto& gn : m_graph_engine.nodes()) {
+    for (const auto &gn : m_graph_engine.nodes()) {
         if (gn.node_id == graph_node_id) {
             src_part_number = gn.part_number;
             break;
@@ -193,9 +188,9 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
 
     // Helper: create a new engine of type T, copy params via serialize/deserialize,
     // position it offset from the source, and return a reference to the new engine.
-    auto dup = [&](auto* typed_src) -> decltype(typed_src) {
+    auto dup = [&](auto *typed_src) -> decltype(typed_src) {
         using T = std::remove_pointer_t<decltype(typed_src)>;
-        auto& new_eng = m_components.add<T>(m_next_component_id++, m_graph_engine);
+        auto &new_eng = m_components.add<T>(m_next_component_id++, m_graph_engine);
         new_eng.deserialize(typed_src->serialize());
         int new_nid = new_eng.graphNodeId();
         // Register with imnodes pool and set position
@@ -206,34 +201,34 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
         return &new_eng;
     };
 
-    if (auto* e = dynamic_cast<SignalGeneratorEngine*>(src)) {
+    if (auto *e = dynamic_cast<SignalGeneratorEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<AmplifierEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<AmplifierEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<SplitterEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<SplitterEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<MixerEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<MixerEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<AdcEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<AdcEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<PFBChannelizerEngine*>(src)) {
-        auto* new_pfb = dup(e);
+    } else if (auto *e = dynamic_cast<PFBChannelizerEngine *>(src)) {
+        auto *new_pfb = dup(e);
         // PFB also needs IQ plot widget and grid widget (same as onAddPFB)
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*new_pfb));
-        m_show_iq_pfbs.push_back(
-            m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(new_pfb->id())).c_str(), true));
+        m_show_iq_pfbs.push_back(m_state.loadBool(
+            "WindowState", ("IQPlot_" + std::to_string(new_pfb->id())).c_str(), true));
         m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*new_pfb));
-        m_show_pfb_grids.push_back(
-            m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(new_pfb->id())).c_str(), true));
-    } else if (auto* e = dynamic_cast<CoaxCableEngine*>(src)) {
+        m_show_pfb_grids.push_back(m_state.loadBool(
+            "WindowState", ("PFBGrid_" + std::to_string(new_pfb->id())).c_str(), true));
+    } else if (auto *e = dynamic_cast<CoaxCableEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<EqualizerEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<EqualizerEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<IdealFilterEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<IdealFilterEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<AttenuatorEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<AttenuatorEngine *>(src)) {
         dup(e);
-    } else if (auto* e = dynamic_cast<CombinerEngine*>(src)) {
+    } else if (auto *e = dynamic_cast<CombinerEngine *>(src)) {
         dup(e);
     }
 
@@ -247,7 +242,7 @@ void RfSimulatorApp::newProject() {
     // Remove all components — ComponentRegistry handles cleanup
     // Collect IDs first to avoid iterator invalidation
     std::vector<int> ids;
-    for (auto* comp : m_components.all())
+    for (auto *comp : m_components.all())
         ids.push_back(comp->graphNodeId());
     for (int id : ids)
         m_components.remove(id);
@@ -273,15 +268,11 @@ void RfSimulatorApp::newProject() {
     m_dirty = false;
 }
 
-void RfSimulatorApp::testMakeDirty() {
-    markDirty();
-}
+void RfSimulatorApp::testMakeDirty() { markDirty(); }
 
-void RfSimulatorApp::markDirty() {
-    m_dirty = true;
-}
+void RfSimulatorApp::markDirty() { m_dirty = true; }
 
-void RfSimulatorApp::saveProject(const std::string& path) {
+void RfSimulatorApp::saveProject(const std::string &path) {
     nlohmann::json root;
     root["version"] = 1;
 
@@ -312,7 +303,7 @@ void RfSimulatorApp::saveProject(const std::string& path) {
 
     // Save components by iterating the registry
     nlohmann::json comps_arr = nlohmann::json::array();
-    for (auto* comp : m_components.all()) {
+    for (auto *comp : m_components.all()) {
         nlohmann::json cj;
         auto it = s_type_names.find(std::type_index(typeid(*comp)));
         cj["type"] = (it != s_type_names.end()) ? it->second : "Unknown";
@@ -326,7 +317,7 @@ void RfSimulatorApp::saveProject(const std::string& path) {
         cj["pos"]["y"] = pos_n.y;
 
         // Save library part number if set
-        for (const auto& gn : m_graph_engine.nodes()) {
+        for (const auto &gn : m_graph_engine.nodes()) {
             if (gn.node_id == nid && !gn.part_number.empty()) {
                 cj["part_number"] = gn.part_number;
                 break;
@@ -340,12 +331,16 @@ void RfSimulatorApp::saveProject(const std::string& path) {
     // Save links as component-index + port pairs (not raw pin IDs)
     nlohmann::json links_arr = nlohmann::json::array();
     // Build a map: pin_id \u2192 {comp_index, port, is_output}
-    struct PinInfo { size_t comp; int port; bool is_output; };
+    struct PinInfo {
+        size_t comp;
+        int port;
+        bool is_output;
+    };
     std::unordered_map<int, PinInfo> pin_map;
     for (size_t i = 0; i < m_components.size(); ++i) {
-        auto* comp = m_components.all()[i];
+        auto *comp = m_components.all()[i];
         int nid = comp->graphNodeId();
-        for (const auto& gn : m_graph_engine.nodes()) {
+        for (const auto &gn : m_graph_engine.nodes()) {
             if (gn.node_id == nid) {
                 for (size_t p = 0; p < gn.input_pin_ids.size(); ++p)
                     pin_map[gn.input_pin_ids[p]] = {i, (int)p, false};
@@ -355,10 +350,11 @@ void RfSimulatorApp::saveProject(const std::string& path) {
             }
         }
     }
-    for (const auto& link : m_graph_engine.links()) {
+    for (const auto &link : m_graph_engine.links()) {
         auto from_it = pin_map.find(link.start_pin_id);
         auto to_it = pin_map.find(link.end_pin_id);
-        if (from_it == pin_map.end() || to_it == pin_map.end()) continue;
+        if (from_it == pin_map.end() || to_it == pin_map.end())
+            continue;
         nlohmann::json lj;
         lj["from"] = from_it->second.comp;
         lj["from_port"] = from_it->second.port;
@@ -389,7 +385,7 @@ void RfSimulatorApp::saveProject(const std::string& path) {
     for (size_t i = 0; i < m_components.size(); ++i)
         nid_to_comp[m_components.all()[i]->graphNodeId()] = i;
 
-    for (const auto& g : m_graph_engine.groups()) {
+    for (const auto &g : m_graph_engine.groups()) {
         nlohmann::json gj;
         gj["name"] = g.name;
         gj["collapsed"] = g.collapsed;
@@ -425,7 +421,7 @@ void RfSimulatorApp::saveProject(const std::string& path) {
     LOG_INFO("Saved project to %s", path.c_str());
 }
 
-void RfSimulatorApp::loadProject(const std::string& path) {
+void RfSimulatorApp::loadProject(const std::string &path) {
     std::ifstream in(path);
     if (!in) {
         LOG_ERROR("Failed to open project file: %s", path.c_str());
@@ -434,7 +430,7 @@ void RfSimulatorApp::loadProject(const std::string& path) {
     nlohmann::json root;
     try {
         in >> root;
-    } catch (const nlohmann::json::exception& e) {
+    } catch (const nlohmann::json::exception &e) {
         LOG_ERROR("Invalid project file: %s", e.what());
         return;
     }
@@ -443,52 +439,54 @@ void RfSimulatorApp::loadProject(const std::string& path) {
 
     // Map: type string \u2192 factory lambda
     std::vector<nlohmann::json::iterator> comp_order;
-    auto& comps = root["components"];
+    auto &comps = root["components"];
     for (auto it = comps.begin(); it != comps.end(); ++it)
         comp_order.push_back(it);
 
     // Create components in saved order
     std::vector<int> new_node_ids; // maps saved index \u2192 new graph node ID
-    for (auto& it : comp_order) {
-        auto& cj = *it;
+    for (auto &it : comp_order) {
+        auto &cj = *it;
         std::string type = cj.value("type", "");
-        auto& params = cj["params"];
+        auto &params = cj["params"];
 
-        IComponentEngine* comp = nullptr;
+        IComponentEngine *comp = nullptr;
         if (type == "SignalGenerator") {
-            auto& ref = m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref =
+                m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Amplifier") {
-            auto& ref = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Mixer") {
-            auto& ref = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Splitter") {
-            auto& ref = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Attenuator") {
-            auto& ref = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Combiner") {
-            auto& ref = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "Equalizer") {
-            auto& ref = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "ADC") {
-            auto& ref = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "PFBChannelizer") {
-            auto& ref = m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref =
+                m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             // Restore IQ plot + PFB grid widgets for this PFB
             m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(ref));
@@ -497,11 +495,11 @@ void RfSimulatorApp::loadProject(const std::string& path) {
             m_show_pfb_grids.push_back(true);
             comp = &ref;
         } else if (type == "CoaxCable") {
-            auto& ref = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else if (type == "IdealFilter") {
-            auto& ref = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
+            auto &ref = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
             ref.deserialize(params);
             comp = &ref;
         } else {
@@ -515,25 +513,24 @@ void RfSimulatorApp::loadProject(const std::string& path) {
         // Restore position
         if (comp && cj.contains("pos")) {
             ImNodes::EditorContextSet(m_graph_widget->context());
-            ImNodes::SetNodeEditorSpacePos(
-                comp->graphNodeId(),
-                ImVec2(cj["pos"].value("x", 0.0f), cj["pos"].value("y", 0.0f)));
+            ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), ImVec2(cj["pos"].value("x", 0.0f),
+                                                                       cj["pos"].value("y", 0.0f)));
         }
 
         // Restore library part number
         if (comp && cj.contains("part_number"))
-            m_graph_engine.setNodePartNumber(comp->graphNodeId(), cj["part_number"].get<std::string>());
+            m_graph_engine.setNodePartNumber(comp->graphNodeId(),
+                                             cj["part_number"].get<std::string>());
     }
 
     // Restore links (saved as component-index + port pairs)
-    auto& saved_links = root["links"];
-    for (const auto& lj : saved_links) {
+    auto &saved_links = root["links"];
+    for (const auto &lj : saved_links) {
         int from_idx = lj.value("from", -1);
         int to_idx = lj.value("to", -1);
         int from_port = lj.value("from_port", 0);
         int to_port = lj.value("to_port", 0);
-        if (from_idx < 0 || to_idx < 0 ||
-            static_cast<size_t>(from_idx) >= new_node_ids.size() ||
+        if (from_idx < 0 || to_idx < 0 || static_cast<size_t>(from_idx) >= new_node_ids.size() ||
             static_cast<size_t>(to_idx) >= new_node_ids.size())
             continue;
 
@@ -542,8 +539,8 @@ void RfSimulatorApp::loadProject(const std::string& path) {
         if (from_node < 0 || to_node < 0)
             continue;
 
-        auto* from_comp = m_components.find(from_node);
-        auto* to_comp = m_components.find(to_node);
+        auto *from_comp = m_components.find(from_node);
+        auto *to_comp = m_components.find(to_node);
         if (!from_comp || !to_comp)
             continue;
 
@@ -554,24 +551,25 @@ void RfSimulatorApp::loadProject(const std::string& path) {
     }
 
     // Restore probes
-    auto& saved_probes = root["probe_pins"];
-    for (const auto& pj : saved_probes) {
+    auto &saved_probes = root["probe_pins"];
+    for (const auto &pj : saved_probes) {
         int comp_idx = pj.value("comp", -1);
         int port = pj.value("port", 0);
         bool is_output = pj.value("is_output", true);
         if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= m_components.size())
             continue;
-        auto* comp = m_components.all()[comp_idx];
+        auto *comp = m_components.all()[comp_idx];
         int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
-        if (pin >= 0) m_graph_engine.addProbePin(pin);
+        if (pin >= 0)
+            m_graph_engine.addProbePin(pin);
     }
 
     // Restore groups
-    auto& saved_groups = root["groups"];
-    for (const auto& gj : saved_groups) {
+    auto &saved_groups = root["groups"];
+    for (const auto &gj : saved_groups) {
         std::string name = gj.value("name", "Group");
         std::vector<int> member_ids;
-        for (const auto& mj : gj["member_components"]) {
+        for (const auto &mj : gj["member_components"]) {
             int comp_idx = mj.get<int>();
             if (comp_idx >= 0 && static_cast<size_t>(comp_idx) < new_node_ids.size() &&
                 new_node_ids[comp_idx] >= 0) {
@@ -587,7 +585,7 @@ void RfSimulatorApp::loadProject(const std::string& path) {
     }
 
     // Restore window state
-    auto& ws = root["window_state"];
+    auto &ws = root["window_state"];
     if (!ws.is_null()) {
         m_show_log = ws.value("log", true);
         m_show_spectrum = ws.value("spectrum_analyzer", true);
@@ -596,7 +594,7 @@ void RfSimulatorApp::loadProject(const std::string& path) {
     }
 
     // Restore graph state counters
-    auto& gs = root["graph_state"];
+    auto &gs = root["graph_state"];
     if (!gs.is_null()) {
         m_next_component_id = gs.value("next_component_id", m_next_component_id);
     }
@@ -608,14 +606,16 @@ void RfSimulatorApp::loadProject(const std::string& path) {
 
 void RfSimulatorApp::openFileDialog() {
     auto result = pfd::open_file("Open Project", ".",
-        {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"}).result();
+                                 {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"})
+                      .result();
     if (!result.empty())
         loadProject(result[0]);
 }
 
 void RfSimulatorApp::saveFileDialog() {
-    auto result = pfd::save_file("Save Project As", ".",
-        {"RF Simulator Project (*.rfsim)", "*.rfsim"}).result();
+    auto result =
+        pfd::save_file("Save Project As", ".", {"RF Simulator Project (*.rfsim)", "*.rfsim"})
+            .result();
     if (!result.empty())
         saveProject(result);
 }
@@ -623,12 +623,12 @@ void RfSimulatorApp::saveFileDialog() {
 void RfSimulatorApp::update_dsp() {
     std::unordered_map<int, std::function<void()>> updates;
 
-    for (auto* comp : m_components.all()) {
+    for (auto *comp : m_components.all()) {
         int N = comp->numInputPins();
         for (int k = 0; k < N; ++k) {
             int pid = comp->inputPinId(k);
             if (pid >= 0) {
-                auto* source = m_graph_engine.getSourceForInput(pid);
+                auto *source = m_graph_engine.getSourceForInput(pid);
                 comp->node().inputs[k] = source ? &source->outputs[0] : nullptr;
             } else if (static_cast<size_t>(k) < comp->node().inputs.size()) {
                 comp->node().inputs[k] = nullptr;
@@ -647,9 +647,9 @@ void RfSimulatorApp::update_dsp() {
     // Update spectrum view based on first active probe
     auto probed_nodes = m_graph_engine.probedSignalNodes();
     std::vector<std::string> probe_labels;
-    for (auto* pn : probed_nodes) {
+    for (auto *pn : probed_nodes) {
         std::string label;
-        for (const auto& node : m_graph_engine.nodes()) {
+        for (const auto &node : m_graph_engine.nodes()) {
             if (node.signal_node == pn) {
                 label = node.label + " OUT";
                 break;
@@ -659,15 +659,16 @@ void RfSimulatorApp::update_dsp() {
     }
     m_spectrum_widget->setProbeLabels(probe_labels);
 
-    for (auto* node : m_view_manager.nodes()) {
+    for (auto *node : m_view_manager.nodes()) {
         if (node) {
-            node->view_enabled = std::find(probed_nodes.begin(), probed_nodes.end(), node) != probed_nodes.end();
+            node->view_enabled =
+                std::find(probed_nodes.begin(), probed_nodes.end(), node) != probed_nodes.end();
         }
     }
 
     // Sync PFB pointers to spectrum analyzer and inspector panel
     auto pfb_ptrs = m_components.byType<PFBChannelizerEngine>();
-    std::vector<PFBChannelizerEngine*> pfb_vec(pfb_ptrs.begin(), pfb_ptrs.end());
+    std::vector<PFBChannelizerEngine *> pfb_vec(pfb_ptrs.begin(), pfb_ptrs.end());
     m_spectrum_widget->setPFBs(pfb_vec);
     m_inspector_panel->setPFBs(pfb_vec);
 }
@@ -684,24 +685,35 @@ void RfSimulatorApp::draw_ui() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New", "Ctrl+N")) {
-                if (m_dirty) { m_pending_action = PendingAction::New; m_show_unsaved_dialog = true; }
-                else newProject();
+                if (m_dirty) {
+                    m_pending_action = PendingAction::New;
+                    m_show_unsaved_dialog = true;
+                } else
+                    newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
-                if (m_dirty) { m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
-                else openFileDialog();
+                if (m_dirty) {
+                    m_pending_action = PendingAction::Open;
+                    m_show_unsaved_dialog = true;
+                } else
+                    openFileDialog();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
-                if (!m_current_project_path.empty()) saveProject(m_current_project_path);
-                else saveFileDialog();
+                if (!m_current_project_path.empty())
+                    saveProject(m_current_project_path);
+                else
+                    saveFileDialog();
             }
             if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
                 saveFileDialog();
             ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
-                if (m_dirty) { m_pending_action = PendingAction::Exit; m_show_unsaved_dialog = true; }
-                else std::exit(0);
+                if (m_dirty) {
+                    m_pending_action = PendingAction::Exit;
+                    m_show_unsaved_dialog = true;
+                } else
+                    std::exit(0);
             }
             ImGui::EndMenu();
         }
@@ -719,7 +731,8 @@ void RfSimulatorApp::draw_ui() {
             ImGui::SameLine(tw - 300.0f);
             if (!m_current_project_path.empty()) {
                 auto p = m_current_project_path.find_last_of("\\/");
-                std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1) : m_current_project_path;
+                std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1)
+                                                             : m_current_project_path;
                 ImGui::Text("%s%s", m_dirty ? "* " : "", fname.c_str());
             } else if (m_dirty) {
                 ImGui::Text("*Untitled");
@@ -733,18 +746,26 @@ void RfSimulatorApp::draw_ui() {
     // Keyboard shortcuts (skip while editing text fields)
     if (!io.WantTextInput) {
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
-            if (!m_current_project_path.empty()) saveProject(m_current_project_path);
-            else saveFileDialog();
+            if (!m_current_project_path.empty())
+                saveProject(m_current_project_path);
+            else
+                saveFileDialog();
         }
         if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S))
             saveFileDialog();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
-            if (m_dirty) { m_pending_action = PendingAction::Open; m_show_unsaved_dialog = true; }
-            else openFileDialog();
+            if (m_dirty) {
+                m_pending_action = PendingAction::Open;
+                m_show_unsaved_dialog = true;
+            } else
+                openFileDialog();
         }
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            if (m_dirty) { m_pending_action = PendingAction::New; m_show_unsaved_dialog = true; }
-            else newProject();
+            if (m_dirty) {
+                m_pending_action = PendingAction::New;
+                m_show_unsaved_dialog = true;
+            } else
+                newProject();
         }
     }
 
@@ -756,11 +777,14 @@ void RfSimulatorApp::draw_ui() {
     if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("You have unsaved changes. Save before continuing?");
         if (ImGui::Button("Save", ImVec2(120, 0))) {
-            if (!m_current_project_path.empty()) saveProject(m_current_project_path);
+            if (!m_current_project_path.empty())
+                saveProject(m_current_project_path);
             else {
                 auto path = pfd::save_file("Save Project As", ".",
-                    {"RF Simulator Project (*.rfsim)", "*.rfsim"}).result();
-                if (!path.empty()) saveProject(path);
+                                           {"RF Simulator Project (*.rfsim)", "*.rfsim"})
+                                .result();
+                if (!path.empty())
+                    saveProject(path);
             }
             if (!m_dirty) {
                 // Save succeeded — execute the pending action now
@@ -769,10 +793,17 @@ void RfSimulatorApp::draw_ui() {
                 m_show_unsaved_dialog = false;
                 ImGui::CloseCurrentPopup();
                 switch (action) {
-                    case PendingAction::New:  newProject(); break;
-                    case PendingAction::Open: openFileDialog(); break;
-                    case PendingAction::Exit: std::exit(0); break;
-                    default: break;
+                case PendingAction::New:
+                    newProject();
+                    break;
+                case PendingAction::Open:
+                    openFileDialog();
+                    break;
+                case PendingAction::Exit:
+                    std::exit(0);
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -784,10 +815,17 @@ void RfSimulatorApp::draw_ui() {
             ImGui::CloseCurrentPopup();
             // Execute immediately — user chose to discard
             switch (action) {
-                case PendingAction::New:  newProject(); break;
-                case PendingAction::Open: openFileDialog(); break;
-                case PendingAction::Exit: std::exit(0); break;
-                default: break;
+            case PendingAction::New:
+                newProject();
+                break;
+            case PendingAction::Open:
+                openFileDialog();
+                break;
+            case PendingAction::Exit:
+                std::exit(0);
+                break;
+            default:
+                break;
             }
         }
         ImGui::SameLine();

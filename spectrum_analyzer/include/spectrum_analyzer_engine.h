@@ -2,8 +2,8 @@
 #include "common.h"
 #include "spectrum.h"
 #include <random>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 enum class TraceMode { ClearWrite, MaxHold, MinHold, VideoAverage };
 
@@ -46,8 +46,7 @@ class SpectrumAnalyzerEngine {
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
     std::vector<Peak> findPeaks(const std::vector<double> &power_dBm,
-                                const std::vector<double> &freq_axis,
-                                size_t max_count = 8) const;
+                                const std::vector<double> &freq_axis, size_t max_count = 8) const;
 
   private:
     // Config
@@ -60,11 +59,11 @@ class SpectrumAnalyzerEngine {
 
     std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
     std::vector<double> applyTraceMode(const Spectrum &spec,
-                                        const std::vector<double> &after_vbw) const;
+                                       const std::vector<double> &after_vbw) const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
-    mutable const Spectrum* m_cache_spectrum = nullptr;
+    mutable const Spectrum *m_cache_spectrum = nullptr;
     mutable uint64_t m_cache_spec_gen = 0;
     mutable double m_cache_rbw = 0;
     mutable double m_cache_bin_width = 0;
@@ -75,9 +74,9 @@ class SpectrumAnalyzerEngine {
     mutable double m_noise_jitter_sigma_dB = 1.5;
 
     mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
-    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_max_hold;
-    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_min_hold;
-    mutable std::unordered_map<const Spectrum*, std::vector<double>> m_video_avg;
+    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_max_hold;
+    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_min_hold;
+    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_video_avg;
 
     mutable int m_video_avg_count = 10;
 };

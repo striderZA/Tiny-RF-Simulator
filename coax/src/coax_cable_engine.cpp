@@ -1,11 +1,10 @@
 #include "coax_cable_engine.h"
-#include <nlohmann/json.hpp>
 #include "logging_core.h"
 #include <algorithm>
 #include <cmath>
+#include <nlohmann/json.hpp>
 
-CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine& graph)
-    : m_id(id), m_graph(&graph) {
+CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Coax Cable " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
@@ -20,11 +19,12 @@ int CoaxCableEngine::outputPinId() const {
 }
 
 void CoaxCableEngine::setPresetIndex(int idx) {
-    if (idx < 0 || static_cast<size_t>(idx) >= kCoaxCablePresets.size()) return;
+    if (idx < 0 || static_cast<size_t>(idx) >= kCoaxCablePresets.size())
+        return;
     if (idx != m_preset_index) {
         m_preset_index = idx;
         m_dirty = true;
-        m_warned_above_max = false;  // reset warn flag on preset change
+        m_warned_above_max = false; // reset warn flag on preset change
     }
 }
 
@@ -46,16 +46,17 @@ void CoaxCableEngine::setConnectorsLossDB(double db) {
 
 void CoaxCableEngine::update(double dt) {
     (void)dt;
-    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
     if (!m_dirty && in_ptr == m_cached_input_ptr &&
         (!in_ptr || in_ptr->generation == m_cached_input_generation)) {
         return;
     }
     m_dirty = false;
     m_cached_input_ptr = in_ptr;
-    if (in_ptr) m_cached_input_generation = in_ptr->generation;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
 
-    auto& out = m_node.outputs[0];
+    auto &out = m_node.outputs[0];
 
     // Pass-through: copy frequencies, tones, phase, noise from input. The
     // frequency-dependent loss and phase shift are added in Task 3+.
@@ -67,23 +68,23 @@ void CoaxCableEngine::update(double dt) {
 
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
 
-    const CableSpec& p = preset();
+    const CableSpec &p = preset();
     const double max_f_Hz = p.max_freq_GHz * 1e9;
-    for (auto& t : out.tones) {
+    for (auto &t : out.tones) {
         const double f_Hz_raw = std::abs(t.freq_Hz);
         const double f_Hz = std::clamp(f_Hz_raw, 1.0, max_f_Hz);
         if (f_Hz_raw > max_f_Hz && !m_warned_above_max) {
-            LOG_WARN("Coax cable %d: tone at %.3e Hz exceeds preset %s max freq (%.3e Hz); clamping.",
-                     m_id, f_Hz_raw, p.name, max_f_Hz);
+            LOG_WARN(
+                "Coax cable %d: tone at %.3e Hz exceeds preset %s max freq (%.3e Hz); clamping.",
+                m_id, f_Hz_raw, p.name, max_f_Hz);
             m_warned_above_max = true;
         }
         const double f_MHz = f_Hz / 1e6;
         const double loss_dB =
-            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m
-            + m_connectors_loss_dB;
+            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m +
+            m_connectors_loss_dB;
         t.power_dBm -= loss_dB;
-        const double phase_shift_deg =
-            -360.0 * (f_Hz / 1e9) * m_length_m * p.delay_ns_per_m;
+        const double phase_shift_deg = -360.0 * (f_Hz / 1e9) * m_length_m * p.delay_ns_per_m;
         t.phase_deg += phase_shift_deg;
     }
 
@@ -96,8 +97,7 @@ void CoaxCableEngine::update(double dt) {
     for (size_t i = 0; i < N; ++i) {
         const double f_Hz = std::abs(out.frequencies[i]);
         const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
-        const double phase_shift_deg =
-            -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m;
+        const double phase_shift_deg = -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m;
         out.phase_deg[i] += phase_shift_deg;
     }
 
@@ -109,12 +109,13 @@ void CoaxCableEngine::update(double dt) {
         const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
         const double f_MHz = f_Hz_c / 1e6;
         const double loss_dB =
-            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m
-            + m_connectors_loss_dB;
+            (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m +
+            m_connectors_loss_dB;
         const double L_lin = dbToLinear(loss_dB);
-        const double nin = (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
+        const double nin =
+            (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
         out.noise_W[i] = nin / L_lin;
-        out.noise_total_W[i] = out.noise_W[i];  // noise_added_W is 0
+        out.noise_total_W[i] = out.noise_W[i]; // noise_added_W is 0
     }
 
     out.bumpGeneration();
@@ -126,7 +127,7 @@ nlohmann::json CoaxCableEngine::serialize() const {
             {"connectors_loss_dB", m_connectors_loss_dB}};
 }
 
-void CoaxCableEngine::deserialize(const nlohmann::json& j) {
+void CoaxCableEngine::deserialize(const nlohmann::json &j) {
     m_preset_index = j.value("preset_index", 4);
     m_length_m = j.value("length_m", 1.0);
     m_connectors_loss_dB = j.value("connectors_loss_dB", 0.0);
@@ -134,18 +135,18 @@ void CoaxCableEngine::deserialize(const nlohmann::json& j) {
 }
 
 std::string CoaxCableEngine::hoverSummary() const {
-    std::string summary = "Coax Cable: " + std::string(preset().name) +
-                          " | L=" + std::to_string(m_length_m) + " m";
+    std::string summary =
+        "Coax Cable: " + std::string(preset().name) + " | L=" + std::to_string(m_length_m) + " m";
 
-    if (!m_node.inputs.empty() && m_node.inputs[0] &&
-        !m_node.inputs[0]->frequencies.empty()) {
-        const auto& freqs = m_node.inputs[0]->frequencies;
+    if (!m_node.inputs.empty() && m_node.inputs[0] && !m_node.inputs[0]->frequencies.empty()) {
+        const auto &freqs = m_node.inputs[0]->frequencies;
         const double fc = std::abs((freqs.front() + freqs.back()) / 2.0);
         const double fc_clamped = std::clamp(fc, 1.0, preset().max_freq_GHz * 1e9);
         const double fc_MHz = fc_clamped / 1e6;
         const double loss_dB =
-            (preset().K1_dB_per_m * std::sqrt(fc_MHz) + preset().K2_dB_per_m * fc_MHz)
-            * m_length_m + m_connectors_loss_dB;
+            (preset().K1_dB_per_m * std::sqrt(fc_MHz) + preset().K2_dB_per_m * fc_MHz) *
+                m_length_m +
+            m_connectors_loss_dB;
         summary += " | Loss@fc=" + std::to_string(loss_dB) + " dB";
     }
 

@@ -1,8 +1,8 @@
 #include "core.h"
-#include "session_state.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
+#include "session_state.h"
 #include <GLFW/glfw3.h>
 #include <imgui_internal.h>
 #include <implot.h>

@@ -8,12 +8,12 @@ struct ImRect;
 
 class PFBChannelizerWidget {
   public:
-    explicit PFBChannelizerWidget(PFBChannelizerEngine& engine);
+    explicit PFBChannelizerWidget(PFBChannelizerEngine &engine);
 
-    void draw(const char* title, bool* p_open = nullptr);
+    void draw(const char *title, bool *p_open = nullptr);
 
   private:
-    PFBChannelizerEngine& m_engine;
+    PFBChannelizerEngine &m_engine;
     int m_grid_offset = 0;
     uint64_t m_cached_gen = 0;
 
@@ -27,5 +27,5 @@ class PFBChannelizerWidget {
     double m_y_max = 20.0;
 
     void rebuildCache();
-    void drawCell(ImDrawList* dl, const ImRect& rect, int ch_idx);
+    void drawCell(ImDrawList *dl, const ImRect &rect, int ch_idx);
 };

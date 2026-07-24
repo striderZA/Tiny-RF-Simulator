@@ -1,11 +1,10 @@
 #include "equalizer_engine.h"
-#include <nlohmann/json.hpp>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <nlohmann/json.hpp>
 #include <numbers>
 
-EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine& graph)
-    : m_id(id), m_graph(&graph) {
+EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Equalizer " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
@@ -19,7 +18,7 @@ int EqualizerEngine::outputPinId() const {
     return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
-void EqualizerEngine::setSParamFilepath(const std::string& path) {
+void EqualizerEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
     m_sparam_mode = m_sparam_data.load(path);
     if (m_sparam_data.loaded())
@@ -29,7 +28,7 @@ void EqualizerEngine::setSParamFilepath(const std::string& path) {
 
 void EqualizerEngine::update(double dt) {
     (void)dt;
-    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
 
     // --- S-parameter mode ---
     if (m_sparam_mode && m_sparam_data.loaded()) {
@@ -38,9 +37,10 @@ void EqualizerEngine::update(double dt) {
             return;
         m_dirty = false;
         m_cached_sparam_input = in_ptr;
-        if (in_ptr) m_cached_sparam_generation = in_ptr->generation;
+        if (in_ptr)
+            m_cached_sparam_generation = in_ptr->generation;
 
-        auto& out = m_node.outputs[0];
+        auto &out = m_node.outputs[0];
 
         if (in_ptr && !in_ptr->frequencies.empty())
             out.frequencies = in_ptr->frequencies;
@@ -51,7 +51,7 @@ void EqualizerEngine::update(double dt) {
         int idx = m_sparam_fwd_idx;
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
-        for (auto& t : out.tones) {
+        for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
             t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
@@ -73,7 +73,8 @@ void EqualizerEngine::update(double dt) {
         out.noise_W.assign(N, 0.0);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], idx);
-            double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
+            double nin =
+                (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = std::norm(S) * nin;
         }
         out.noise_added_W.assign(N, 0.0);
@@ -89,9 +90,10 @@ void EqualizerEngine::update(double dt) {
         return;
     m_dirty = false;
     m_cached_input_ptr = in_ptr;
-    if (in_ptr) m_cached_input_generation = in_ptr->generation;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
 
-    auto& out = m_node.outputs[0];
+    auto &out = m_node.outputs[0];
 
     if (in_ptr && !in_ptr->frequencies.empty())
         out.frequencies = in_ptr->frequencies;
@@ -102,7 +104,7 @@ void EqualizerEngine::update(double dt) {
 
     // Apply gain vs frequency profile
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
-    for (auto& t : out.tones) {
+    for (auto &t : out.tones) {
         double f = std::max(t.freq_Hz, 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
         double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(ratio);
@@ -142,12 +144,13 @@ void EqualizerEngine::update(double dt) {
 std::string EqualizerEngine::hoverSummary() const {
     if (m_sparam_mode && m_sparam_data.loaded()) {
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "S-Param Equalizer | %zu pts", m_sparam_data.freqs().size());
+        std::snprintf(buf, sizeof(buf), "S-Param Equalizer | %zu pts",
+                      m_sparam_data.freqs().size());
         return buf;
     }
     char buf[96];
     std::snprintf(buf, sizeof(buf), "Equalizer | Ref: %.1f dB @ %.0f MHz | Slope: %.1f dB/dec",
-        m_ref_gain_dB, m_ref_freq_Hz / 1e6, m_slope_dB_per_decade);
+                  m_ref_gain_dB, m_ref_freq_Hz / 1e6, m_slope_dB_per_decade);
     return buf;
 }
 
@@ -159,7 +162,7 @@ nlohmann::json EqualizerEngine::serialize() const {
             {"sparam_filepath", m_sparam_filepath}};
 }
 
-void EqualizerEngine::deserialize(const nlohmann::json& j) {
+void EqualizerEngine::deserialize(const nlohmann::json &j) {
     m_ref_gain_dB = j.value("ref_gain_dB", 0.0);
     m_ref_freq_Hz = j.value("ref_freq_Hz", 1e9);
     m_slope_dB_per_decade = j.value("slope_dB_per_decade", 0.0);

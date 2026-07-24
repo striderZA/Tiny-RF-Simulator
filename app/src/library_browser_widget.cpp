@@ -1,18 +1,18 @@
 #include "library_browser_widget.h"
 #include "component_library.h"
-#include <imgui.h>
-#include <cstring>
 #include <algorithm>
+#include <cstring>
+#include <imgui.h>
 #include <map>
 
-LibraryBrowserWidget::LibraryBrowserWidget(ComponentLibrary& library)
-    : m_library(&library) {}
+LibraryBrowserWidget::LibraryBrowserWidget(ComponentLibrary &library) : m_library(&library) {}
 
-bool LibraryBrowserWidget::matchesFilter(const ComponentDefinition& def) const {
-    if (m_filter_buffer[0] == '\0') return true;
+bool LibraryBrowserWidget::matchesFilter(const ComponentDefinition &def) const {
+    if (m_filter_buffer[0] == '\0')
+        return true;
     std::string filter = m_filter_buffer;
     std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
-    auto contains = [&](const std::string& s) {
+    auto contains = [&](const std::string &s) {
         std::string lower = s;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
         return lower.find(filter) != std::string::npos;
@@ -20,8 +20,11 @@ bool LibraryBrowserWidget::matchesFilter(const ComponentDefinition& def) const {
     return contains(def.part_number) || contains(def.manufacturer) || contains(def.description);
 }
 
-void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
-    if (!ImGui::Begin(title, p_open)) { ImGui::End(); return; }
+void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
+    if (!ImGui::Begin(title, p_open)) {
+        ImGui::End();
+        return;
+    }
 
     ImGui::InputTextWithHint("##filter", "Filter by part number, manufacturer, or description",
                              m_filter_buffer, sizeof(m_filter_buffer));
@@ -30,9 +33,10 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
     auto all_defs = m_library->all();
 
     // Group by type, then manufacturer
-    std::map<std::string, std::map<std::string, std::vector<const ComponentDefinition*>>> grouped;
-    for (auto* def : all_defs) {
-        if (!matchesFilter(*def)) continue;
+    std::map<std::string, std::map<std::string, std::vector<const ComponentDefinition *>>> grouped;
+    for (auto *def : all_defs) {
+        if (!matchesFilter(*def))
+            continue;
         grouped[def->type][def->manufacturer].push_back(def);
     }
 
@@ -41,13 +45,13 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
         if (all_defs.empty())
             ImGui::TextDisabled("Add .json files to ~/.rf-sim/libraries/");
     } else {
-        for (auto& [type, manufacturers] : grouped) {
+        for (auto &[type, manufacturers] : grouped) {
             if (ImGui::TreeNode(type.c_str())) {
-                for (auto& [manufacturer, defs] : manufacturers) {
+                for (auto &[manufacturer, defs] : manufacturers) {
                     std::string mfg_label = manufacturer.empty() ? "(Unknown)" : manufacturer;
                     mfg_label += " (" + std::to_string(defs.size()) + ")";
                     if (ImGui::TreeNode(mfg_label.c_str())) {
-                        for (auto* def : defs) {
+                        for (auto *def : defs) {
                             std::string item_label;
                             if (!def->data_files.empty()) {
                                 item_label += "[DATA] ";
@@ -56,7 +60,8 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
                             if (!def->description.empty())
                                 item_label += "  " + def->description;
                             if (ImGui::Selectable(item_label.c_str())) {
-                                if (onInsert) onInsert(*def);
+                                if (onInsert)
+                                    onInsert(*def);
                             }
                             if (ImGui::IsItemHovered()) {
                                 std::string tooltip = "Part: " + def->part_number + "\n";
@@ -68,7 +73,7 @@ void LibraryBrowserWidget::draw(const char* title, bool* p_open) {
                                 // List data files if present
                                 if (!def->data_files.empty()) {
                                     tooltip += "Data files:\n";
-                                    for (const auto& df : def->data_files) {
+                                    for (const auto &df : def->data_files) {
                                         tooltip += "  - " + df.path + " (" + df.type + ")\n";
                                     }
                                 }

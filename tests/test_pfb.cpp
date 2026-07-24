@@ -219,7 +219,7 @@ TEST_CASE("PFB channelizer recomputes channels when M increases", "[pfb]") {
     REQUIRE(pfb.channels()[100].center_freq_Hz != 0.0);
     REQUIRE(pfb.channels()[100].bandwidth_Hz > 0.0);
     // Output should also be valid
-    const auto& out = pfb.node().outputs[0];
+    const auto &out = pfb.node().outputs[0];
     REQUIRE(out.tones.size() <= 1);
     REQUIRE(out.frequencies.size() > 0);
 }

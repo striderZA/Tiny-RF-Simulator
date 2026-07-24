@@ -34,22 +34,22 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                 ImGui::TableNextColumn();
                 double freq = m_engine.tones()[static_cast<size_t>(i)].freq_Hz;
                 ImGui::PushID(("freq" + std::to_string(i)).c_str());
-                bool freq_changed = utils::inputFrequency("##freq", freq, 1.0, 100.0, "%.0f",
-                                                          MIN_FREQ, MAX_FREQ);
+                bool freq_changed =
+                    utils::inputFrequency("##freq", freq, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ);
                 ImGui::PopID();
 
                 ImGui::TableNextColumn();
                 double amp = m_engine.tones()[static_cast<size_t>(i)].power_dBm;
                 ImGui::PushID(("amp" + std::to_string(i)).c_str());
-                bool amp_changed = utils::inputDouble("##amp", amp, 1, 5, "%.0f",
-                                                      MIN_POWER, MAX_POWER);
+                bool amp_changed =
+                    utils::inputDouble("##amp", amp, 1, 5, "%.0f", MIN_POWER, MAX_POWER);
                 ImGui::PopID();
 
                 ImGui::TableNextColumn();
                 double phase = m_engine.tones()[static_cast<size_t>(i)].phase_deg;
                 ImGui::PushID(("phase" + std::to_string(i)).c_str());
-                bool phase_changed = utils::inputDouble("##phase", phase, 1, 10, "%.0f",
-                                                        -180.0, 180.0);
+                bool phase_changed =
+                    utils::inputDouble("##phase", phase, 1, 10, "%.0f", -180.0, 180.0);
                 ImGui::PopID();
 
                 if (freq_changed || amp_changed || phase_changed) {
@@ -63,8 +63,8 @@ void SignalGeneratorWidget::draw(const char *title, bool *p_open) {
                                  m_engine.id(), i, amp);
                     }
                     if (phase_changed) {
-                        LOG_INFO("Update tone phase: [gen%d tone%d -> %.0f deg].",
-                                 m_engine.id(), i, phase);
+                        LOG_INFO("Update tone phase: [gen%d tone%d -> %.0f deg].", m_engine.id(), i,
+                                 phase);
                     }
                 }
 

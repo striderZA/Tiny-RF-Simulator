@@ -30,8 +30,9 @@ static bool inputDouble(std::string label, double &ref, double minorStep, double
 
     return changed;
 }
-static bool inputFrequency(const char* label, double& freq_Hz, double minorStep_MHz, double majorStep_MHz,
-                          const char* format, double lowerLimit_Hz, double upperLimit_Hz) {
+static bool inputFrequency(const char *label, double &freq_Hz, double minorStep_MHz,
+                           double majorStep_MHz, const char *format, double lowerLimit_Hz,
+                           double upperLimit_Hz) {
     // clamp external writes to freq_Hz BEFORE drawing widget
     if (freq_Hz > upperLimit_Hz) {
         LOG_WARN("Unable to update frequency: %s! (above upper limit)", label);

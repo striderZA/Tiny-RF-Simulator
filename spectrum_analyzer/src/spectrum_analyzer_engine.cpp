@@ -66,8 +66,8 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     // Cache the expensive integrate + RBW step. Jitter + VBW still run every
     // frame so the display keeps its instrument-like live feel.
     std::vector<double> rbw_power_W;
-    if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen &&
-        m_rbw == m_cache_rbw && bin_width == m_cache_bin_width) {
+    if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
+        bin_width == m_cache_bin_width) {
         rbw_power_W = m_cache_rbw_power_W;
     } else {
         std::vector<double> power_W = this->integratePowerPerBin(spec);
@@ -155,8 +155,8 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
     return vbw_out;
 }
 
-double SpectrumAnalyzerEngine::computeAverageNoiseLevel(
-    const std::vector<const Spectrum *> &specs) const {
+double
+SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const {
     if (specs.empty()) {
         return -174.0;
     }
@@ -296,41 +296,42 @@ std::vector<double> SpectrumAnalyzerEngine::applyVBW(const std::vector<double> &
     return out;
 }
 
-std::vector<double> SpectrumAnalyzerEngine::applyTraceMode(
-    const Spectrum &spec, const std::vector<double> &after_vbw) const
-{
+std::vector<double>
+SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
+                                       const std::vector<double> &after_vbw) const {
     if (m_trace_mode == TraceMode::ClearWrite) {
         return after_vbw;
     }
-    std::unordered_map<const Spectrum*, std::vector<double>>* history = nullptr;
-    if (m_trace_mode == TraceMode::MaxHold) history = &m_max_hold;
-    else if (m_trace_mode == TraceMode::MinHold) history = &m_min_hold;
-    else if (m_trace_mode == TraceMode::VideoAverage) history = &m_video_avg;
-    if (!history) return after_vbw;
-    
-    auto& h = (*history)[&spec];
-    
+    std::unordered_map<const Spectrum *, std::vector<double>> *history = nullptr;
+    if (m_trace_mode == TraceMode::MaxHold)
+        history = &m_max_hold;
+    else if (m_trace_mode == TraceMode::MinHold)
+        history = &m_min_hold;
+    else if (m_trace_mode == TraceMode::VideoAverage)
+        history = &m_video_avg;
+    if (!history)
+        return after_vbw;
+
+    auto &h = (*history)[&spec];
+
     if (h.size() != after_vbw.size()) {
         h = after_vbw;
         return after_vbw;
     }
-    
+
     if (m_trace_mode == TraceMode::MaxHold) {
         for (size_t i = 0; i < h.size(); ++i)
             h[i] = std::max(h[i], after_vbw[i]);
-    }
-    else if (m_trace_mode == TraceMode::MinHold) {
+    } else if (m_trace_mode == TraceMode::MinHold) {
         for (size_t i = 0; i < h.size(); ++i)
             h[i] = std::min(h[i], after_vbw[i]);
-    }
-    else { // VideoAverage
+    } else { // VideoAverage
         double alpha = 2.0 / (m_video_avg_count + 1);
         for (size_t i = 0; i < h.size(); ++i)
             h[i] = alpha * after_vbw[i] + (1.0 - alpha) * h[i];
     }
     return h;
 }
-
 
 void SpectrumAnalyzerEngine::setTraceMode(TraceMode m) {
     m_trace_mode = m;
@@ -343,12 +344,10 @@ void SpectrumAnalyzerEngine::resetTraceHistory() const {
     m_video_avg.clear();
 }
 
-void SpectrumAnalyzerEngine::pruneHistory(
-    const std::vector<const Spectrum *> &active_keys) const
-{
-    std::unordered_set<const Spectrum*> active(active_keys.begin(), active_keys.end());
-    for (auto* map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
-        for (auto it = map->begin(); it != map->end(); ) {
+void SpectrumAnalyzerEngine::pruneHistory(const std::vector<const Spectrum *> &active_keys) const {
+    std::unordered_set<const Spectrum *> active(active_keys.begin(), active_keys.end());
+    for (auto *map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
+        for (auto it = map->begin(); it != map->end();) {
             if (active.find(it->first) == active.end()) {
                 it = map->erase(it);
             } else {

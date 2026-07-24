@@ -1,5 +1,5 @@
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include "adc_engine.h"
 #include "node_graph_engine.h"
@@ -37,12 +37,12 @@ TEST_CASE("ADC DDC tone at Fs/4 maps to DC", "[adc]") {
     adc.setFs_Hz(Fs);
 
     Spectrum in = makeInput(101, 0.0, 500e6);
-    in.tones.push_back({Fs / 4.0, -10.0, 0.0});   // 250 MHz
+    in.tones.push_back({Fs / 4.0, -10.0, 0.0}); // 250 MHz
 
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
 }
@@ -58,7 +58,7 @@ TEST_CASE("ADC DDC tone at 3Fs/4 aliases to DC", "[adc]") {
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
 }
@@ -74,7 +74,7 @@ TEST_CASE("ADC DDC tone at 0 Hz maps to -Fs/4", "[adc]") {
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(-Fs / 4.0).margin(1.0));
 }
@@ -89,7 +89,7 @@ TEST_CASE("ADC DDC output grid spans [-Fs/4, Fs/4)", "[adc]") {
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.frequencies.size() >= 2);
     REQUIRE(out.frequencies.front() == Approx(-Fs / 4.0).margin(1e-6));
     double df = out.frequencies[1] - out.frequencies[0];
@@ -129,14 +129,16 @@ TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == out.frequencies.size());
     const double in_noise = 1e-20;
-    double nsd_W_per_Hz = 0.001 * std::pow(10.0, -150.0 / 10.0); // matches setNsd_dBm_per_Hz(-150.0)
+    double nsd_W_per_Hz =
+        0.001 * std::pow(10.0, -150.0 / 10.0); // matches setNsd_dBm_per_Hz(-150.0)
     double expected_noise_per_bin = in_noise + nsd_W_per_Hz;
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
         REQUIRE(out.noise_total_W[i] > in_noise);
-        REQUIRE(out.noise_total_W[i] == Approx(expected_noise_per_bin).margin(expected_noise_per_bin * 0.1));
+        REQUIRE(out.noise_total_W[i] ==
+                Approx(expected_noise_per_bin).margin(expected_noise_per_bin * 0.1));
     }
 }
 
@@ -148,7 +150,7 @@ TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
     adc.node().inputs[0] = nullptr;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.frequencies.empty());
     REQUIRE(out.tones.empty());
     REQUIRE(out.noise_total_W.empty());
@@ -165,7 +167,7 @@ TEST_CASE("ADC DDC preserves tone power and phase", "[adc]") {
     adc.node().inputs[0] = &in;
     adc.update(0.0);
 
-    const auto& out = adc.node().outputs[0];
+    const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
     REQUIRE(out.tones[0].phase_deg == Approx(45.0));

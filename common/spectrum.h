@@ -1,8 +1,8 @@
 #pragma once
 
 #include "common.h"
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 struct Spectrum {
@@ -17,9 +17,9 @@ struct Spectrum {
 
     // Noise vectors store POWER SPECTRAL DENSITY in W/Hz.
     // To get total power in a bin, multiply by bin width.
-    std::vector<double> noise_W;        // input noise density (W/Hz)
-    std::vector<double> noise_added_W;  // added noise density (W/Hz)
-    std::vector<double> noise_total_W;  // total output noise density (W/Hz)
+    std::vector<double> noise_W;       // input noise density (W/Hz)
+    std::vector<double> noise_added_W; // added noise density (W/Hz)
+    std::vector<double> noise_total_W; // total output noise density (W/Hz)
 
     // Phase (degrees) per frequency bin, same size as frequencies.
     std::vector<double> phase_deg;
@@ -45,7 +45,6 @@ struct Spectrum {
             double noise_added = (i < noise_added_W.size()) ? noise_added_W[i] : 0.0;
             noise_total_W[i] = noise_input + noise_added;
         }
-
     }
 };
 

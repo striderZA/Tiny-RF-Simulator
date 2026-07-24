@@ -1,15 +1,15 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "node_graph_widget.h"
-#include "logging_core.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include "logging_core.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <unordered_set>
 #include <limits>
 #include <string>
-#include <cmath>
+#include <unordered_set>
 
 NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
@@ -20,7 +20,7 @@ NodeGraphWidget::~NodeGraphWidget() { ImNodes::EditorContextFree(m_context); }
 
 void NodeGraphWidget::syncNodesFromEngine() {
     ImNodes::EditorContextSet(m_context);
-    for (const auto& node : m_engine.nodes()) {
+    for (const auto &node : m_engine.nodes()) {
         // Register node with the imnodes pool if not already present.
         // SetNodeGridSpacePos uses ObjectPoolFindOrCreateObject internally,
         // so it creates the node if it doesn't exist (e.g. before first render frame)
@@ -67,7 +67,8 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 
         // "Create Subcircuit" popup after rubber-band selection
         if (m_show_create_popup) {
-            if (ImGui::BeginPopupModal("CreateSubcircuit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (ImGui::BeginPopupModal("CreateSubcircuit", nullptr,
+                                       ImGuiWindowFlags_AlwaysAutoResize)) {
                 static char name_buf[128];
                 static int last_member_count = -1;
                 if (last_member_count != static_cast<int>(m_rubber_band_members.size())) {
@@ -79,7 +80,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
                 ImGui::Text("Members (%zu):", m_rubber_band_members.size());
                 ImGui::Indent();
                 for (int nid : m_rubber_band_members) {
-                    for (const auto& n : m_engine.nodes()) {
+                    for (const auto &n : m_engine.nodes()) {
                         if (n.node_id == nid) {
                             ImGui::TextUnformatted(n.label.c_str());
                             break;
@@ -108,16 +109,16 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         // pop the 9 imnodes + 1 ImGui color styles pushed by setupDarkTheme() at frame start.
         // ponytail: explicit pop rather than relying on imnodes' frame-level reset,
         // which does NOT auto-pop user-pushed color styles.
-        ImNodes::PopColorStyle();   // PinHovered
-        ImNodes::PopColorStyle();   // Pin
-        ImNodes::PopColorStyle();   // TitleBar
-        ImNodes::PopColorStyle();   // NodeOutline
-        ImNodes::PopColorStyle();   // NodeBackground
-        ImNodes::PopColorStyle();   // Link
-        ImNodes::PopColorStyle();   // GridLinePrimary
-        ImNodes::PopColorStyle();   // GridLine
-        ImNodes::PopColorStyle();   // GridBackground
-        ImGui::PopStyleColor();     // WindowBg
+        ImNodes::PopColorStyle(); // PinHovered
+        ImNodes::PopColorStyle(); // Pin
+        ImNodes::PopColorStyle(); // TitleBar
+        ImNodes::PopColorStyle(); // NodeOutline
+        ImNodes::PopColorStyle(); // NodeBackground
+        ImNodes::PopColorStyle(); // Link
+        ImNodes::PopColorStyle(); // GridLinePrimary
+        ImNodes::PopColorStyle(); // GridLine
+        ImNodes::PopColorStyle(); // GridBackground
+        ImGui::PopStyleColor();   // WindowBg
     }
     ImGui::End();
 }
@@ -129,15 +130,17 @@ void NodeGraphWidget::drawNodes() {
     m_node_screen_positions.clear();
 
     std::unordered_set<int> hidden_nodes;
-    for (const auto& g : m_engine.groups()) {
+    for (const auto &g : m_engine.groups()) {
         if (g.collapsed) {
-            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+            for (int nid : g.member_node_ids)
+                hidden_nodes.insert(nid);
         }
     }
 
     bool first_visible = true;
     for (const auto &node : m_engine.nodes()) {
-        if (hidden_nodes.count(node.node_id)) continue;
+        if (hidden_nodes.count(node.node_id))
+            continue;
 
         ImNodes::BeginNode(node.node_id);
 
@@ -172,7 +175,7 @@ void NodeGraphWidget::drawNodes() {
             subtitle_offset = ImGui::GetTextLineHeightWithSpacing();
         ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
                            screen_pos.y + TITLE_BAR_H + subtitle_offset + BODY_H * 0.5f);
-        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImDrawList *dl = ImGui::GetWindowDrawList();
 
         // Render part number subtitle
         if (!node.part_number.empty()) {
@@ -184,17 +187,18 @@ void NodeGraphWidget::drawNodes() {
 
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
-            const char* label = (i < node.input_labels.size() && !node.input_labels[i].empty())
-                ? node.input_labels[i].c_str() : "IN";
+            const char *label = (i < node.input_labels.size() && !node.input_labels[i].empty())
+                                    ? node.input_labels[i].c_str()
+                                    : "IN";
             ImGui::Text("%s", label);
             ImNodes::EndInputAttribute();
         }
 
         static const ImU32 probe_colors[4] = {
-            IM_COL32(22, 199, 154, 255),  // Teal
-            IM_COL32(230, 150, 40, 255),  // Orange
-            IM_COL32(120, 50, 170, 255),  // Purple
-            IM_COL32(60, 140, 220, 255),  // Blue
+            IM_COL32(22, 199, 154, 255), // Teal
+            IM_COL32(230, 150, 40, 255), // Orange
+            IM_COL32(120, 50, 170, 255), // Purple
+            IM_COL32(60, 140, 220, 255), // Blue
         };
 
         for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
@@ -205,8 +209,9 @@ void NodeGraphWidget::drawNodes() {
                 ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
             }
             ImNodes::BeginOutputAttribute(pin);
-            const char* label = (i < node.output_labels.size() && !node.output_labels[i].empty())
-                ? node.output_labels[i].c_str() : "OUT";
+            const char *label = (i < node.output_labels.size() && !node.output_labels[i].empty())
+                                    ? node.output_labels[i].c_str()
+                                    : "OUT";
             ImGui::Text("%s", label);
             ImNodes::EndOutputAttribute();
             if (slot >= 0) {
@@ -215,24 +220,29 @@ void NodeGraphWidget::drawNodes() {
             }
         }
 
-        ImNodes::PopColorStyle();  // NodeOutline
-        ImNodes::PopColorStyle();  // TitleBar
+        ImNodes::PopColorStyle(); // NodeOutline
+        ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
     }
 }
 
 void NodeGraphWidget::drawLinks() {
     std::unordered_set<int> hidden_nodes;
-    for (const auto& g : m_engine.groups()) {
+    for (const auto &g : m_engine.groups()) {
         if (g.collapsed) {
-            for (int nid : g.member_node_ids) hidden_nodes.insert(nid);
+            for (int nid : g.member_node_ids)
+                hidden_nodes.insert(nid);
         }
     }
 
     auto pin_owner_node = [this](int pin_id) -> int {
-        for (const auto& n : m_engine.nodes()) {
-            for (int p : n.input_pin_ids) if (p == pin_id) return n.node_id;
-            for (int p : n.output_pin_ids) if (p == pin_id) return n.node_id;
+        for (const auto &n : m_engine.nodes()) {
+            for (int p : n.input_pin_ids)
+                if (p == pin_id)
+                    return n.node_id;
+            for (int p : n.output_pin_ids)
+                if (p == pin_id)
+                    return n.node_id;
         }
         return -1;
     };
@@ -240,11 +250,13 @@ void NodeGraphWidget::drawLinks() {
     for (const auto &link : m_engine.links()) {
         int start_node = pin_owner_node(link.start_pin_id);
         int end_node = pin_owner_node(link.end_pin_id);
-        if (start_node < 0 || end_node < 0) continue;
+        if (start_node < 0 || end_node < 0)
+            continue;
 
         bool start_hidden = hidden_nodes.count(start_node) > 0;
         bool end_hidden = hidden_nodes.count(end_node) > 0;
-        if (start_hidden && end_hidden) continue;  // internal link in collapsed group
+        if (start_hidden && end_hidden)
+            continue; // internal link in collapsed group
 
         // When a link endpoint is on a hidden (grouped) node, redirect the link to the
         // group's synthesized boundary pin so it visually attaches to the collapsed block.
@@ -257,7 +269,7 @@ void NodeGraphWidget::drawLinks() {
             if (it != m_real_to_synth_pin.end()) {
                 draw_start_pin = it->second;
             } else {
-                continue;  // no boundary pin for this internal pin; skip
+                continue; // no boundary pin for this internal pin; skip
             }
         }
         if (end_hidden) {
@@ -292,14 +304,15 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
             // Capture mouse position in editor space for component placement
             ImVec2 mouse_screen = ImGui::GetMousePos();
             ImVec2 window_pos = ImGui::GetWindowPos();
-            m_context_menu_pos = ImVec2(mouse_screen.x - window_pos.x, mouse_screen.y - window_pos.y);
+            m_context_menu_pos =
+                ImVec2(mouse_screen.x - window_pos.x, mouse_screen.y - window_pos.y);
             ImGui::OpenPopup("canvas_context_menu");
         }
     }
 
     // Render popups unconditionally so they stay open across frames
     if (ImGui::BeginPopup("group_context_menu")) {
-        const Group* g = m_engine.groupById(m_context_menu_group_id);
+        const Group *g = m_engine.groupById(m_context_menu_group_id);
         if (g) {
             if (ImGui::MenuItem(g->collapsed ? "Expand" : "Collapse")) {
                 m_engine.setGroupCollapsed(m_context_menu_group_id, !g->collapsed);
@@ -318,47 +331,60 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
 
     if (ImGui::BeginPopup("node_context_menu")) {
         if (ImGui::MenuItem("Duplicate")) {
-            if (onDuplicateNode) onDuplicateNode(m_context_menu_node);
+            if (onDuplicateNode)
+                onDuplicateNode(m_context_menu_node);
         }
         if (ImGui::MenuItem("Remove")) {
-            if (onRemoveNode) onRemoveNode(m_context_menu_node);
+            if (onRemoveNode)
+                onRemoveNode(m_context_menu_node);
         }
         ImGui::EndPopup();
     }
 
     if (ImGui::BeginPopup("canvas_context_menu")) {
         if (ImGui::MenuItem("Add Generator")) {
-            if (onAddGenerator) onAddGenerator(m_context_menu_pos);
+            if (onAddGenerator)
+                onAddGenerator(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Amplifier")) {
-            if (onAddAmplifier) onAddAmplifier(m_context_menu_pos);
+            if (onAddAmplifier)
+                onAddAmplifier(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Splitter")) {
-            if (onAddSplitter) onAddSplitter(m_context_menu_pos);
+            if (onAddSplitter)
+                onAddSplitter(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Combiner")) {
-            if (onAddCombiner) onAddCombiner(m_context_menu_pos);
+            if (onAddCombiner)
+                onAddCombiner(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Coax Cable")) {
-            if (onAddCoaxCable) onAddCoaxCable(m_context_menu_pos);
+            if (onAddCoaxCable)
+                onAddCoaxCable(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Equalizer")) {
-            if (onAddEqualizer) onAddEqualizer(m_context_menu_pos);
+            if (onAddEqualizer)
+                onAddEqualizer(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Mixer")) {
-            if (onAddMixer) onAddMixer(m_context_menu_pos);
+            if (onAddMixer)
+                onAddMixer(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add RF ADC")) {
-            if (onAddAdc) onAddAdc(m_context_menu_pos);
+            if (onAddAdc)
+                onAddAdc(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add PFB Channelizer")) {
-            if (onAddPFB) onAddPFB(m_context_menu_pos);
+            if (onAddPFB)
+                onAddPFB(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Ideal Filter")) {
-            if (onAddIdealFilter) onAddIdealFilter(m_context_menu_pos);
+            if (onAddIdealFilter)
+                onAddIdealFilter(m_context_menu_pos);
         }
         if (ImGui::MenuItem("Add Attenuator")) {
-            if (onAddAttenuator) onAddAttenuator(m_context_menu_pos);
+            if (onAddAttenuator)
+                onAddAttenuator(m_context_menu_pos);
         }
         ImGui::EndPopup();
     }
@@ -371,11 +397,13 @@ void NodeGraphWidget::handleLinkCreation() {
         // Translate synthesized boundary pin ids to real internal pin ids
         if (start_pin >= 100000) {
             auto it = m_synth_pin_to_real_pin.find(start_pin);
-            if (it != m_synth_pin_to_real_pin.end()) start_pin = it->second;
+            if (it != m_synth_pin_to_real_pin.end())
+                start_pin = it->second;
         }
         if (end_pin >= 100000) {
             auto it = m_synth_pin_to_real_pin.find(end_pin);
-            if (it != m_synth_pin_to_real_pin.end()) end_pin = it->second;
+            if (it != m_synth_pin_to_real_pin.end())
+                end_pin = it->second;
         }
         if (start_pin < 100000 && end_pin < 100000) {
             m_engine.addLink(start_pin, end_pin);
@@ -385,7 +413,7 @@ void NodeGraphWidget::handleLinkCreation() {
             int end_node = m_engine.nodeIdForPin(end_pin);
 
             // Rebuild boundary pins for any affected group
-            for (const auto& g : m_engine.groups()) {
+            for (const auto &g : m_engine.groups()) {
                 for (int nid : g.member_node_ids) {
                     if (nid == start_node || nid == end_node) {
                         m_engine.rebuildGroupBoundaryPins(g.id);
@@ -394,7 +422,8 @@ void NodeGraphWidget::handleLinkCreation() {
                 }
             }
 
-            if (onLinkChanged) onLinkChanged();
+            if (onLinkChanged)
+                onLinkChanged();
         }
     }
 }
@@ -404,10 +433,11 @@ void NodeGraphWidget::handleLinkDeletion() {
     if (ImNodes::IsLinkDestroyed(&link_id)) {
         m_engine.removeLink(link_id);
         // Rebuild boundary pins for all groups to reflect the removed link
-        for (const auto& g : m_engine.groups()) {
+        for (const auto &g : m_engine.groups()) {
             m_engine.rebuildGroupBoundaryPins(g.id);
         }
-        if (onLinkChanged) onLinkChanged();
+        if (onLinkChanged)
+            onLinkChanged();
     }
 }
 
@@ -419,8 +449,10 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::GetSelectedNodes(selected_nodes.data());
             for (int node_id : selected_nodes) {
                 size_t links_before = m_engine.links().size();
-                if (onRemoveNode) onRemoveNode(node_id);
-                if (m_engine.links().size() < links_before && onLinkChanged) onLinkChanged();
+                if (onRemoveNode)
+                    onRemoveNode(node_id);
+                if (m_engine.links().size() < links_before && onLinkChanged)
+                    onLinkChanged();
                 // Remove from position caches so they don't accumulate stale entries
                 m_node_screen_positions.erase(node_id);
                 m_last_node_grid_positions.erase(node_id);
@@ -470,9 +502,9 @@ void NodeGraphWidget::handleProbeClick() {
             }
             if (target_pin < 0 && m_clicked_node >= 50000 && m_clicked_node < 100000) {
                 // Group-block click; probe the first output boundary pin
-                const Group* g = m_engine.groupById(m_clicked_node);
+                const Group *g = m_engine.groupById(m_clicked_node);
                 if (g) {
-                    for (const auto& bp : g->boundary_pins) {
+                    for (const auto &bp : g->boundary_pins) {
                         if (bp.is_output) {
                             target_pin = bp.internal_pin_id;
                             break;
@@ -486,7 +518,7 @@ void NodeGraphWidget::handleProbeClick() {
                 if (it != m_synth_pin_to_real_pin.end()) {
                     target_pin = it->second;
                 } else {
-                    target_pin = -1;  // stale pin id
+                    target_pin = -1; // stale pin id
                 }
             }
             if (target_pin >= 0) {
@@ -533,9 +565,8 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
             }
         }
         char buf[128];
-        std::snprintf(buf, sizeof(buf),
-                      "Tones: %d  |  Strongest: %.3f MHz @ %.1f dBm",
-                      num_tones, strongest_freq / 1e6, strongest_power);
+        std::snprintf(buf, sizeof(buf), "Tones: %d  |  Strongest: %.3f MHz @ %.1f dBm", num_tones,
+                      strongest_freq / 1e6, strongest_power);
         ImGui::TextUnformatted(buf);
     } else {
         ImGui::Text("Tones: 0");
@@ -562,9 +593,8 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
             std::snprintf(buf, sizeof(buf), "%.3f MHz", hz / 1e6);
             return buf;
         };
-        ImGui::Text("Freq range: %s - %s (center: %s)",
-                    fmt_freq(f_min).c_str(), fmt_freq(f_max).c_str(),
-                    fmt_freq(f_center).c_str());
+        ImGui::Text("Freq range: %s - %s (center: %s)", fmt_freq(f_min).c_str(),
+                    fmt_freq(f_max).c_str(), fmt_freq(f_center).c_str());
     }
 
     ImGui::EndTooltip();
@@ -572,7 +602,7 @@ void showSpectrumTooltip(const Spectrum &spec, const char *direction) {
 
 // ponytail: per-name symbol helpers are static and one-shot.
 
-static void drawGeneratorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawGeneratorSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     constexpr int N = 16;
     constexpr float W = 30.0f, H = 12.0f;
     ImVec2 pts[N];
@@ -585,7 +615,7 @@ static void drawGeneratorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddPolyline(pts, N, color, ImDrawFlags_None, 2.0f);
 }
 
-static void drawAmplifierSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawAmplifierSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 a(c.x - 20, c.y - 16);
     ImVec2 b(c.x - 20, c.y + 16);
     ImVec2 d(c.x + 20, c.y);
@@ -595,13 +625,13 @@ static void drawAmplifierSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddLine(ImVec2(a.x - 8, c.y + 6), ImVec2(a.x - 8, c.y + 14), color, 2.0f);
 }
 
-static void drawMixerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawMixerSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(c, 14.0f, color, 24, 2.0f);
     dl->AddLine(ImVec2(c.x - 10, c.y - 10), ImVec2(c.x + 10, c.y + 10), color, 2.0f);
     dl->AddLine(ImVec2(c.x - 10, c.y + 10), ImVec2(c.x + 10, c.y - 10), color, 2.0f);
 }
 
-static void drawSplitterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawSplitterSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 in_pt(c.x - 22, c.y);
     ImVec2 mid(c.x, c.y);
     ImVec2 out_a(c.x + 22, c.y - 12);
@@ -614,7 +644,7 @@ static void drawSplitterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(out_b, 2.5f, color);
 }
 
-static void drawCombinerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawCombinerSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     // Reverse of splitter: 2 inputs on left, 1 output on right
     ImVec2 in_a(c.x - 22, c.y - 12);
     ImVec2 in_b(c.x - 22, c.y + 12);
@@ -628,19 +658,15 @@ static void drawCombinerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(out_pt, 2.5f, color);
 }
 
-static void drawAdcSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawAdcSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 pts[6] = {
-        ImVec2(c.x - 24, c.y + 8),
-        ImVec2(c.x - 16, c.y + 8),
-        ImVec2(c.x - 16, c.y - 4),
-        ImVec2(c.x - 8,  c.y - 4),
-        ImVec2(c.x - 8,  c.y + 8),
-        ImVec2(c.x + 24, c.y + 8),
+        ImVec2(c.x - 24, c.y + 8), ImVec2(c.x - 16, c.y + 8), ImVec2(c.x - 16, c.y - 4),
+        ImVec2(c.x - 8, c.y - 4),  ImVec2(c.x - 8, c.y + 8),  ImVec2(c.x + 24, c.y + 8),
     };
     dl->AddPolyline(pts, 6, color, ImDrawFlags_None, 2.0f);
 }
 
-static void drawFilterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawFilterSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(ImVec2(c.x - 10, c.y), 5.0f, color, 16, 2.0f);
     dl->AddCircle(ImVec2(c.x + 10, c.y), 5.0f, color, 16, 2.0f);
     dl->AddLine(ImVec2(c.x - 22, c.y - 10), ImVec2(c.x - 22, c.y + 10), color, 2.0f);
@@ -648,12 +674,12 @@ static void drawFilterSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddLine(ImVec2(c.x - 22, c.y), ImVec2(c.x + 22, c.y), color, 2.0f);
 }
 
-static void drawCoaxSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawCoaxSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     dl->AddCircle(c, 16.0f, color, 32, 2.0f);
-    dl->AddCircle(c,  8.0f, color, 24, 2.0f);
+    dl->AddCircle(c, 8.0f, color, 24, 2.0f);
 }
 
-static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawEqualizerSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     // Rising/falling slope line
     dl->AddLine(ImVec2(c.x - 20, c.y + 8), ImVec2(c.x + 20, c.y - 8), color, 2.0f);
     // Small reference markers
@@ -661,7 +687,7 @@ static void drawEqualizerSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(ImVec2(c.x + 14, c.y - 4), 2.0f, color);
 }
 
-static void drawAttenuatorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawAttenuatorSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     // Zigzag resistor-style symbol with "ATT" label
     const float x0 = c.x - 15.0f;
     const float x1 = c.x + 15.0f;
@@ -675,23 +701,21 @@ static void drawAttenuatorSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     }
     dl->PathLineTo(ImVec2(x1, c.y));
     dl->PathStroke(color, 0, 2.0f);
-    const char* label = "ATT";
+    const char *label = "ATT";
     ImVec2 ts = ImGui::CalcTextSize(label);
     dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - 14.0f), color, label);
 }
 
-static void drawPfbSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawPfbSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     for (int i = 0; i < 3; ++i) {
         float y_off = (i - 1) * 8.0f;
-        dl->AddRect(
-            ImVec2(c.x - 20, c.y - 4 + y_off),
-            ImVec2(c.x + 20, c.y + 4 + y_off),
-            color, 0.0f, ImDrawFlags_None, 2.0f);
+        dl->AddRect(ImVec2(c.x - 20, c.y - 4 + y_off), ImVec2(c.x + 20, c.y + 4 + y_off), color,
+                    0.0f, ImDrawFlags_None, 2.0f);
     }
     dl->AddText(ImVec2(c.x - 4, c.y - 18), color, "M");
 }
 
-static void drawGroupCollapsedSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
+static void drawGroupCollapsedSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 a(c.x - 18, c.y - 6);
     ImVec2 b(c.x, c.y);
     ImVec2 d(c.x + 18, c.y + 6);
@@ -701,25 +725,50 @@ static void drawGroupCollapsedSymbol(ImDrawList* dl, ImVec2 c, ImU32 color) {
     dl->AddCircleFilled(b, 3.0f, color);
     dl->AddCircleFilled(d, 3.0f, color);
 }
-}
+} // namespace
 
-void NodeGraphWidget::drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color) {
+void NodeGraphWidget::drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKind kind,
+                                          ImU32 color) {
     switch (kind) {
-        case NodeKind::Generator:      drawGeneratorSymbol(dl, center, color);      break;
-        case NodeKind::Amplifier:      drawAmplifierSymbol(dl, center, color);      break;
-        case NodeKind::Splitter:       drawSplitterSymbol(dl, center, color);       break;
-        case NodeKind::Mixer:          drawMixerSymbol(dl, center, color);          break;
-        case NodeKind::Adc:            drawAdcSymbol(dl, center, color);            break;
-        case NodeKind::PFB:            drawPfbSymbol(dl, center, color);            break;
-        case NodeKind::IdealFilter:    drawFilterSymbol(dl, center, color);         break;
-        case NodeKind::CoaxCable:      drawCoaxSymbol(dl, center, color);           break;
-        case NodeKind::Equalizer:      drawEqualizerSymbol(dl, center, color);      break;
-        case NodeKind::Attenuator:     drawAttenuatorSymbol(dl, center, color);     break;
-        case NodeKind::Combiner:       drawCombinerSymbol(dl, center, color);       break;
-        case NodeKind::GroupCollapsed: drawGroupCollapsedSymbol(dl, center, color); break;
-        default:
-            // Future/unknown kinds: draw nothing silently.
-            break;
+    case NodeKind::Generator:
+        drawGeneratorSymbol(dl, center, color);
+        break;
+    case NodeKind::Amplifier:
+        drawAmplifierSymbol(dl, center, color);
+        break;
+    case NodeKind::Splitter:
+        drawSplitterSymbol(dl, center, color);
+        break;
+    case NodeKind::Mixer:
+        drawMixerSymbol(dl, center, color);
+        break;
+    case NodeKind::Adc:
+        drawAdcSymbol(dl, center, color);
+        break;
+    case NodeKind::PFB:
+        drawPfbSymbol(dl, center, color);
+        break;
+    case NodeKind::IdealFilter:
+        drawFilterSymbol(dl, center, color);
+        break;
+    case NodeKind::CoaxCable:
+        drawCoaxSymbol(dl, center, color);
+        break;
+    case NodeKind::Equalizer:
+        drawEqualizerSymbol(dl, center, color);
+        break;
+    case NodeKind::Attenuator:
+        drawAttenuatorSymbol(dl, center, color);
+        break;
+    case NodeKind::Combiner:
+        drawCombinerSymbol(dl, center, color);
+        break;
+    case NodeKind::GroupCollapsed:
+        drawGroupCollapsedSymbol(dl, center, color);
+        break;
+    default:
+        // Future/unknown kinds: draw nothing silently.
+        break;
     }
 }
 
@@ -727,26 +776,27 @@ void NodeGraphWidget::setupDarkTheme() {
     // ponytail: pushes are popped at the end of the same draw() call (balanced
     // before the closing ImGui::End()). Per-node title/border overrides are
     // pushed inside BeginNode/EndNode and explicitly popped in the same block.
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(20, 20, 28, 255));  // editor window
-    ImNodes::PushColorStyle(ImNodesCol_GridBackground,  IM_COL32(30, 30, 38, 255));
-    ImNodes::PushColorStyle(ImNodesCol_GridLine,        IM_COL32(50, 50, 65, 100));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(20, 20, 28, 255)); // editor window
+    ImNodes::PushColorStyle(ImNodesCol_GridBackground, IM_COL32(30, 30, 38, 255));
+    ImNodes::PushColorStyle(ImNodesCol_GridLine, IM_COL32(50, 50, 65, 100));
     ImNodes::PushColorStyle(ImNodesCol_GridLinePrimary, IM_COL32(55, 55, 72, 120));
-    ImNodes::PushColorStyle(ImNodesCol_Link,            IM_COL32(180, 180, 200, 200));
+    ImNodes::PushColorStyle(ImNodesCol_Link, IM_COL32(180, 180, 200, 200));
     ImNodes::PushColorStyle(ImNodesCol_NodeBackground, IM_COL32(35, 35, 45, 255));
-    ImNodes::PushColorStyle(ImNodesCol_NodeOutline,     IM_COL32(80, 80, 100, 255));
-    ImNodes::PushColorStyle(ImNodesCol_TitleBar,        IM_COL32(60, 60, 80, 255));
-    ImNodes::PushColorStyle(ImNodesCol_Pin,             IM_COL32(200, 200, 220, 255));
-    ImNodes::PushColorStyle(ImNodesCol_PinHovered,      IM_COL32(120, 200, 255, 255));
+    ImNodes::PushColorStyle(ImNodesCol_NodeOutline, IM_COL32(80, 80, 100, 255));
+    ImNodes::PushColorStyle(ImNodesCol_TitleBar, IM_COL32(60, 60, 80, 255));
+    ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(200, 200, 220, 255));
+    ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(120, 200, 255, 255));
 }
 
 void NodeGraphWidget::rebuildSynthMaps() {
     m_synth_pin_to_real_pin.clear();
     m_real_to_synth_pin.clear();
-    for (const auto& g : m_engine.groups()) {
+    for (const auto &g : m_engine.groups()) {
         // Only COLLAPSED groups have registered synthetic pins; expanded groups'
         // boundary pins are cleared (by setGroupCollapsed), but guard anyway.
-        if (!g.collapsed) continue;
-        for (const auto& bp : g.boundary_pins) {
+        if (!g.collapsed)
+            continue;
+        for (const auto &bp : g.boundary_pins) {
             m_synth_pin_to_real_pin[bp.id] = bp.internal_pin_id;
             // Only one synthetic pin per internal pin (the first wins; if the same
             // internal pin appears in multiple boundary pins due to multiple outgoing
@@ -761,27 +811,30 @@ void NodeGraphWidget::rebuildSynthMaps() {
 void NodeGraphWidget::drawGroupBackgrounds() {
     // Group background is drawn here; internals (when expanded) are drawn by
     // drawNodes() afterward, on top of this background.
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    for (const auto& g : m_engine.groups()) {
-        if (g.collapsed) continue;
-        if (g.member_node_ids.empty()) continue;
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    for (const auto &g : m_engine.groups()) {
+        if (g.collapsed)
+            continue;
+        if (g.member_node_ids.empty())
+            continue;
 
         // Compute bounding box in screen space from cached screen-space positions
-        ImVec2 top_left(std::numeric_limits<float>::max(),
-                         std::numeric_limits<float>::max());
+        ImVec2 top_left(std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
         ImVec2 bottom_right(std::numeric_limits<float>::lowest(),
                             std::numeric_limits<float>::lowest());
-        const float NODE_W = 120.0f, NODE_H = 80.0f;  // approximate; refined in spike
+        const float NODE_W = 120.0f, NODE_H = 80.0f; // approximate; refined in spike
         for (int nid : g.member_node_ids) {
             auto pos_it = m_node_screen_positions.find(nid);
-            if (pos_it == m_node_screen_positions.end()) continue;
+            if (pos_it == m_node_screen_positions.end())
+                continue;
             ImVec2 pos = pos_it->second;
             top_left.x = std::min(top_left.x, pos.x);
             top_left.y = std::min(top_left.y, pos.y);
             bottom_right.x = std::max(bottom_right.x, pos.x + NODE_W);
             bottom_right.y = std::max(bottom_right.y, pos.y + NODE_H);
         }
-        if (top_left.x > bottom_right.x) continue;  // no valid members
+        if (top_left.x > bottom_right.x)
+            continue; // no valid members
 
         ImVec2 pad(16, 16);
         ImVec2 tl_screen = top_left - pad;
@@ -791,27 +844,31 @@ void NodeGraphWidget::drawGroupBackgrounds() {
         dl->AddRect(tl_screen, br_screen, IM_COL32(120, 120, 180, 96));
 
         // Title bar at the top of the rectangle (in screen space)
-        drawGroupTitleBar(const_cast<Group&>(g), top_left);
+        drawGroupTitleBar(const_cast<Group &>(g), top_left);
     }
 }
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
-    for (const auto& g : m_engine.groups()) {
-        if (!g.collapsed) continue;
+    for (const auto &g : m_engine.groups()) {
+        if (!g.collapsed)
+            continue;
 
         // Compute centroid in screen space using cached positions (member nodes may have been
         // removed from the imnodes pool since hidden nodes aren't rendered each frame)
-        if (g.member_node_ids.empty()) continue;
+        if (g.member_node_ids.empty())
+            continue;
         ImVec2 sum(0, 0);
         int count = 0;
         for (int nid : g.member_node_ids) {
             auto pos_it = m_node_screen_positions.find(nid);
-            if (pos_it == m_node_screen_positions.end()) continue;
+            if (pos_it == m_node_screen_positions.end())
+                continue;
             sum.x += pos_it->second.x;
             sum.y += pos_it->second.y;
             ++count;
         }
-        if (count == 0) continue;
+        if (count == 0)
+            continue;
         ImVec2 centroid_screen(sum.x / count, sum.y / count);
         // Convert to grid space and position the collapsed block at the centroid
         ImVec2 centroid_grid = centroid_screen - m_grid_to_screen_offset;
@@ -840,7 +897,7 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             ImGui::PopStyleColor();
             ImGui::Unindent(8);
         } else {
-            for (const auto& bp : g.boundary_pins) {
+            for (const auto &bp : g.boundary_pins) {
                 int slot = m_engine.probeSlotForPin(bp.internal_pin_id);
                 if (slot >= 0) {
                     static const ImU32 probe_colors[4] = {
@@ -876,24 +933,24 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         constexpr float TITLE_BAR_H = 24.0f;
         ImVec2 body_center(block_screen_pos.x + BODY_W * 0.5f,
                            block_screen_pos.y + TITLE_BAR_H + BODY_H * 0.5f);
-        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImDrawList *dl = ImGui::GetWindowDrawList();
         drawSchematicSymbol(dl, body_center, NodeKind::GroupCollapsed, group_color);
 
         // Expand button in the body. Placing it in the title bar would conflict with
         // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
-        ImGui::Dummy(ImVec2(0, 4));  // small vertical spacer
+        ImGui::Dummy(ImVec2(0, 4)); // small vertical spacer
         if (ImGui::Button("Expand", ImVec2(120, 0))) {
             m_engine.setGroupCollapsed(g.id, false);
         }
 
-        ImNodes::PopColorStyle();  // NodeOutline
-        ImNodes::PopColorStyle();  // TitleBar
+        ImNodes::PopColorStyle(); // NodeOutline
+        ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
     }
 }
 
-void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_screen) {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
+void NodeGraphWidget::drawGroupTitleBar(Group &g, const ImVec2 &top_left_screen) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 tl_screen = top_left_screen - ImVec2(16, 16);
     ImVec2 br_screen = top_left_screen + ImVec2(180, 8);
 
@@ -907,13 +964,13 @@ void NodeGraphWidget::drawGroupTitleBar(Group& g, const ImVec2& top_left_screen)
     ImVec2 btn_min = ImVec2(br_screen.x - 24, tl_screen.y);
     ImVec2 btn_max = br_screen;
     ImVec2 mouse = ImGui::GetMousePos();
-    bool btn_hovered = mouse.x >= btn_min.x && mouse.x <= btn_max.x &&
-                       mouse.y >= btn_min.y && mouse.y <= btn_max.y;
+    bool btn_hovered = mouse.x >= btn_min.x && mouse.x <= btn_max.x && mouse.y >= btn_min.y &&
+                       mouse.y <= btn_max.y;
     ImU32 btn_color = btn_hovered ? IM_COL32(130, 130, 180, 255) : IM_COL32(100, 100, 140, 255);
     dl->AddRectFilled(btn_min, btn_max, btn_color);
     // Center the glyph in the 24x24 button
     ImVec2 text_pos(btn_min.x + 8, btn_min.y + 4);
-    dl->AddText(text_pos, IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC");  // ▼
+    dl->AddText(text_pos, IM_COL32(255, 255, 255, 255), "\xE2\x96\xBC"); // ▼
 
     // Hit-test the button
     if (ImGui::IsMouseClicked(0) && btn_hovered) {
@@ -929,7 +986,7 @@ void NodeGraphWidget::detectNodeMoves() {
     if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
         return;
     bool moved = false;
-    for (const auto& node : m_engine.nodes()) {
+    for (const auto &node : m_engine.nodes()) {
         // Skip nodes not drawn this frame (newly added nodes haven't been
         // through BeginNode yet, so GetNodeEditorSpacePos would assert).
         if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
@@ -966,7 +1023,7 @@ void NodeGraphWidget::handleRubberBand(bool editor_hovered) {
     // Update end position while dragging, draw the selection rectangle
     if (m_rubber_band_active && left_down) {
         m_rubber_band_end = ImGui::GetMousePos();
-        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImDrawList *dl = ImGui::GetWindowDrawList();
         ImVec2 a(std::min(m_rubber_band_start.x, m_rubber_band_end.x),
                  std::min(m_rubber_band_start.y, m_rubber_band_end.y));
         ImVec2 b(std::max(m_rubber_band_start.x, m_rubber_band_end.x),
@@ -980,21 +1037,21 @@ void NodeGraphWidget::handleRubberBand(bool editor_hovered) {
         m_rubber_band_active = false;
         m_rubber_band_members.clear();
 
-        ImVec2 screen_a(
-            std::min(m_rubber_band_start.x, m_rubber_band_end.x),
-            std::min(m_rubber_band_start.y, m_rubber_band_end.y));
-        ImVec2 screen_b(
-            std::max(m_rubber_band_start.x, m_rubber_band_end.x),
-            std::max(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 screen_a(std::min(m_rubber_band_start.x, m_rubber_band_end.x),
+                        std::min(m_rubber_band_start.y, m_rubber_band_end.y));
+        ImVec2 screen_b(std::max(m_rubber_band_start.x, m_rubber_band_end.x),
+                        std::max(m_rubber_band_start.y, m_rubber_band_end.y));
 
-        for (const auto& node : m_engine.nodes()) {
-            if (m_engine.groupIdForNode(node.node_id) != -1) continue;  // skip grouped
+        for (const auto &node : m_engine.nodes()) {
+            if (m_engine.groupIdForNode(node.node_id) != -1)
+                continue; // skip grouped
             auto pos_it = m_node_screen_positions.find(node.node_id);
-            if (pos_it == m_node_screen_positions.end()) continue;
+            if (pos_it == m_node_screen_positions.end())
+                continue;
             ImVec2 pos = pos_it->second;
-            ImVec2 center = pos + ImVec2(60, 40);  // approximate node center
-            if (center.x >= screen_a.x && center.x <= screen_b.x &&
-                center.y >= screen_a.y && center.y <= screen_b.y) {
+            ImVec2 center = pos + ImVec2(60, 40); // approximate node center
+            if (center.x >= screen_a.x && center.x <= screen_b.x && center.y >= screen_a.y &&
+                center.y <= screen_b.y) {
                 m_rubber_band_members.push_back(node.node_id);
             }
         }
@@ -1049,9 +1106,7 @@ void NodeGraphWidget::showPinTooltips() {
         for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
             if (node.input_pin_ids[i] != hovered_pin)
                 continue;
-            const Spectrum *spec = (i < signal->inputs.size())
-                                       ? signal->inputs[i]
-                                       : nullptr;
+            const Spectrum *spec = (i < signal->inputs.size()) ? signal->inputs[i] : nullptr;
             if (spec) {
                 showSpectrumTooltip(*spec, "IN");
                 return;
@@ -1061,9 +1116,7 @@ void NodeGraphWidget::showPinTooltips() {
         for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
             if (node.output_pin_ids[i] != hovered_pin)
                 continue;
-            const Spectrum &spec = (i < signal->outputs.size())
-                                       ? signal->outputs[i]
-                                       : Spectrum();
+            const Spectrum &spec = (i < signal->outputs.size()) ? signal->outputs[i] : Spectrum();
             showSpectrumTooltip(spec, "OUT");
             return;
         }
@@ -1074,7 +1127,7 @@ void NodeGraphWidget::showPinTooltips() {
         auto it = m_synth_pin_to_real_pin.find(hovered_pin);
         if (it != m_synth_pin_to_real_pin.end()) {
             int real_pin = it->second;
-            for (const auto& node : m_engine.nodes()) {
+            for (const auto &node : m_engine.nodes()) {
                 for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
                     if (node.output_pin_ids[i] == real_pin && node.signal_node) {
                         if (i < node.signal_node->outputs.size()) {
@@ -1085,8 +1138,9 @@ void NodeGraphWidget::showPinTooltips() {
                 }
                 for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
                     if (node.input_pin_ids[i] == real_pin && node.signal_node) {
-                        const Spectrum* spec = (i < node.signal_node->inputs.size())
-                            ? node.signal_node->inputs[i] : nullptr;
+                        const Spectrum *spec = (i < node.signal_node->inputs.size())
+                                                   ? node.signal_node->inputs[i]
+                                                   : nullptr;
                         if (spec) {
                             showSpectrumTooltip(*spec, "IN");
                             return;
@@ -1099,7 +1153,8 @@ void NodeGraphWidget::showPinTooltips() {
 }
 
 void NodeGraphWidget::showNodeHoverTooltips() {
-    if (!onNodeHover) return;
+    if (!onNodeHover)
+        return;
 
     for (const auto &node : m_engine.nodes()) {
         int hovered_node = -1;

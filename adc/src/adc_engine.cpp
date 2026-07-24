@@ -114,17 +114,16 @@ void AdcEngine::update(double /*dt*/) {
 }
 
 nlohmann::json AdcEngine::serialize() const {
-    return {{"sample_rate_Hz", m_fs_Hz},
-            {"nsd_dBm_per_Hz", m_nsd_dBm_per_Hz}};
+    return {{"sample_rate_Hz", m_fs_Hz}, {"nsd_dBm_per_Hz", m_nsd_dBm_per_Hz}};
 }
 
-void AdcEngine::deserialize(const nlohmann::json& j) {
+void AdcEngine::deserialize(const nlohmann::json &j) {
     m_fs_Hz = j.value("sample_rate_Hz", 1e9);
     m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
     m_dirty = true;
 }
 
 std::string AdcEngine::hoverSummary() const {
-    return "Fs: " + std::to_string(m_fs_Hz / 1e6) + " MHz | NSD: " +
-           std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
+    return "Fs: " + std::to_string(m_fs_Hz / 1e6) +
+           " MHz | NSD: " + std::to_string(m_nsd_dBm_per_Hz) + " dBm/Hz";
 }

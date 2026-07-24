@@ -1,18 +1,19 @@
 #define _USE_MATH_DEFINES
 #include "iq_plot_widget.h"
-#include "iq_plot_dsp.h"
 #include "imgui.h"
 #include "implot.h"
-#include <kiss_fft.h>
+#include "iq_plot_dsp.h"
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <kiss_fft.h>
 
 IQPlotWidget::~IQPlotWidget() {
-    if (m_ifft) kiss_fft_free(m_ifft);
+    if (m_ifft)
+        kiss_fft_free(m_ifft);
 }
 
-void IQPlotWidget::draw(const char* title, bool* p_open) {
+void IQPlotWidget::draw(const char *title, bool *p_open) {
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -61,9 +62,8 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
         total_us += m_time_step_s * 1e6;
     }
 
-    ImGui::Text("Ch %d/%d | dt=%.1f ns | Window: %.1f us (%zu samp)",
-        m_pfb.activeChannel(), m_pfb.channelCount(),
-        m_time_step_s * 1e9, window_us, n);
+    ImGui::Text("Ch %d/%d | dt=%.1f ns | Window: %.1f us (%zu samp)", m_pfb.activeChannel(),
+                m_pfb.channelCount(), m_time_step_s * 1e9, window_us, n);
 
     double x_min = m_zoom_locked ? m_zoom_locked_xmin : 0.0;
     double x_max = m_zoom_locked ? m_zoom_locked_xmax : window_us;
@@ -116,9 +116,8 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
             if (std::abs(x2 - x1) > 1e-12) {
                 ImPlotPoint p1 = ImPlot::PlotToPixels(x1, y_min);
                 ImPlotPoint p2 = ImPlot::PlotToPixels(x2, y_max);
-                ImPlot::GetPlotDrawList()->AddRectFilled(
-                    ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
-                    IM_COL32(100, 150, 255, 40));
+                ImPlot::GetPlotDrawList()->AddRectFilled(ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
+                                                         IM_COL32(100, 150, 255, 40));
             }
         }
 
@@ -148,17 +147,18 @@ void IQPlotWidget::draw(const char* title, bool* p_open) {
 }
 
 void IQPlotWidget::runIDFT() {
-    auto& out = m_pfb.node().outputs[0];
+    auto &out = m_pfb.node().outputs[0];
 
     size_t N = out.frequencies.size();
-    if (N < 2) return;
+    if (N < 2)
+        return;
 
     // Build frequency-domain spectrum via extracted DSP helper
     std::vector<std::complex<double>> spectrum;
-    if (!build_iq_spectrum(out.frequencies, out.noise_total_W, out.phase_deg, out.tones, spectrum)) {
+    if (!build_iq_spectrum(out.frequencies, out.noise_total_W, out.phase_deg, out.tones,
+                           spectrum)) {
         return;
     }
-
 
     std::vector<double> td_i(N), td_q(N);
     {
@@ -169,7 +169,8 @@ void IQPlotWidget::runIDFT() {
         }
 
         if (N != m_ifft_N) {
-            if (m_ifft) kiss_fft_free(m_ifft);
+            if (m_ifft)
+                kiss_fft_free(m_ifft);
             m_ifft = kiss_fft_alloc(static_cast<int>(N), 1, nullptr, nullptr);
             m_ifft_N = N;
         }

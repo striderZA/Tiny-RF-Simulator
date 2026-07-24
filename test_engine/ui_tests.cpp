@@ -3,28 +3,26 @@
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
 
-void RegisterUiTests(ImGuiTestEngine* e) {
-    ImGuiTest* t = nullptr;
+void RegisterUiTests(ImGuiTestEngine *e) {
+    ImGuiTest *t = nullptr;
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_editor_exists");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->WindowFocus("Node Editor");
-    };
+    t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Node Editor"); };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "single_generator_present");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->SetRef("Generator 0");
         ctx->ItemExists("Measure");
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "single_amplifier_present");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->SetRef("Amplifier 0");
         ctx->ItemExists("Measure");
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "canvas_context_menu");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
         ctx->WindowResize("Node Editor", ImVec2(800, 600));
         ctx->Yield(2);
@@ -44,7 +42,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_context_menu");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
         ctx->WindowResize("Node Editor", ImVec2(800, 600));
         ctx->Yield(2);
@@ -52,8 +50,8 @@ void RegisterUiTests(ImGuiTestEngine* e) {
         // Try to find a node, fall back to hardcoded offset
         auto node_info = ctx->ItemInfo("Generator 0", ImGuiTestOpFlags_NoError);
         ImVec2 click_pos = (node_info.ID != 0)
-            ? node_info.RectFull.GetCenter()
-            : ctx->WindowInfo("Node Editor").RectFull.Min + ImVec2(80, 80);
+                               ? node_info.RectFull.GetCenter()
+                               : ctx->WindowInfo("Node Editor").RectFull.Min + ImVec2(80, 80);
 
         ctx->MouseMoveToPos(click_pos);
         ctx->MouseClick(1);
@@ -67,9 +65,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "properties_window_exists");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->WindowFocus("Properties");
-    };
+    t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Properties"); };
 
     // =========================================================================
     // Subcircuit Group UI Tests
@@ -95,7 +91,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     // =========================================================================
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "subcircuit_rubber_band_creates_group");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
         ctx->WindowResize("Node Editor", ImVec2(900, 700));
         ctx->Yield(2);
@@ -120,8 +116,8 @@ void RegisterUiTests(ImGuiTestEngine* e) {
         //    Node Editor canvas area to enclose all nodes --
         // All nodes are stacked at the canvas origin (top-left of canvas),
         // so a large rectangle covering the entire canvas will catch them.
-        ImVec2 rb_start = info.RectFull.Min + ImVec2(10, 30);  // below title bar
-        ImVec2 rb_end   = info.RectFull.Max - ImVec2(10, 10);  // above bottom edge
+        ImVec2 rb_start = info.RectFull.Min + ImVec2(10, 30); // below title bar
+        ImVec2 rb_end = info.RectFull.Max - ImVec2(10, 10);   // above bottom edge
 
         ctx->KeyDown(ImGuiKey_LeftShift);
         ctx->MouseMoveToPos(rb_start);
@@ -149,7 +145,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "subcircuit_create_group_and_verify_popup");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         // This test adds more nodes and creates a new group (2nd group).
         // It verifies the rubber-band creation flow works with freshly added
         // nodes that are not yet grouped.
@@ -180,7 +176,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
 
         // Rubber band across most of the canvas to enclose all ungrouped nodes
         ImVec2 rb_start = info.RectFull.Min + ImVec2(10, 30);
-        ImVec2 rb_end   = info.RectFull.Max - ImVec2(10, 10);
+        ImVec2 rb_end = info.RectFull.Max - ImVec2(10, 10);
 
         ctx->KeyDown(ImGuiKey_LeftShift);
         ctx->MouseMoveToPos(rb_start);
@@ -206,7 +202,7 @@ void RegisterUiTests(ImGuiTestEngine* e) {
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "subcircuit_expand_and_collapse");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
+    t->TestFunc = [](ImGuiTestContext *ctx) {
         // After the previous test created a group, the generator+amplifier+splitter
         // are inside a collapsed subcircuit. Try to expand and re-collapse it to
         // exercise the rendering path and catch any crash on the transition.

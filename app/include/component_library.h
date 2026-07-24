@@ -4,40 +4,37 @@
 #include <string>
 #include <vector>
 
-
 class ComponentRegistry;
 class NodeGraphEngine;
 class IComponentEngine;
 
 struct DataFileRef {
-    std::string type;  // "s_parameters"
-    std::string path;  // relative or absolute path
+    std::string type; // "s_parameters"
+    std::string path; // relative or absolute path
 };
 
 struct ComponentDefinition {
     int schema_version;
-    std::string type;           // "amplifier"
-    std::string part_number;    // "AM1143"
+    std::string type;        // "amplifier"
+    std::string part_number; // "AM1143"
     std::string manufacturer;
     std::string description;
     nlohmann::json parameters;
     nlohmann::json test_conditions;
     std::string notes;
-    std::string source_path;    // filesystem path for diagnostics
+    std::string source_path; // filesystem path for diagnostics
     std::vector<DataFileRef> data_files;
 };
 
 class ComponentLibrary {
-public:
-    void loadFile(const std::string& filepath);
-    std::vector<const ComponentDefinition*> all() const;
-    void scan(const std::string& directory);
-    std::vector<const ComponentDefinition*> byType(const std::string& type) const;
-    IComponentEngine* instantiate(const ComponentDefinition& def,
-                                  int id,
-                                  ComponentRegistry& registry,
-                                  NodeGraphEngine& graph);
+  public:
+    void loadFile(const std::string &filepath);
+    std::vector<const ComponentDefinition *> all() const;
+    void scan(const std::string &directory);
+    std::vector<const ComponentDefinition *> byType(const std::string &type) const;
+    IComponentEngine *instantiate(const ComponentDefinition &def, int id,
+                                  ComponentRegistry &registry, NodeGraphEngine &graph);
 
-private:
+  private:
     std::vector<ComponentDefinition> m_definitions;
 };

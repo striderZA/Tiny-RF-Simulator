@@ -30,12 +30,13 @@ inline double addedNoisePerBin_W(double nf_dB, double g, double bin_width) {
     return addedNoiseDensity_W_per_Hz(nf_dB, g) * bin_width;
 }
 
-inline void buildDefaultFrequencyGrid(std::vector<double>& freqs) {
+inline void buildDefaultFrequencyGrid(std::vector<double> &freqs) {
     constexpr double start_Hz = MIN_FREQ;
     constexpr double stop_Hz = MAX_FREQ;
     constexpr double f_step_Hz = 10e6;
     size_t n = static_cast<size_t>((stop_Hz - start_Hz) / f_step_Hz);
-    if (n < 2) n = 2;
+    if (n < 2)
+        n = 2;
     freqs.resize(n);
     for (size_t i = 0; i < n; ++i)
         freqs[i] = start_Hz + i * f_step_Hz;

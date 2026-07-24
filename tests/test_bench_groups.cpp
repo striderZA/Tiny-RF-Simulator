@@ -1,16 +1,16 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/benchmark/catch_benchmark.hpp>
 #include "node_graph_engine.h"
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-TEST_CASE("Benchmark: rebuildGroupBoundaryPins with 100 cross-boundary links", "[benchmark][group]") {
+TEST_CASE("Benchmark: rebuildGroupBoundaryPins with 100 cross-boundary links",
+          "[benchmark][group]") {
     NodeGraphEngine engine;
 
     // 50 group members
     std::vector<SignalNode> member_nodes(50);
     std::vector<int> members;
     for (int i = 0; i < 50; ++i) {
-        members.push_back(
-            engine.addNode("N" + std::to_string(i), &member_nodes[i], 1, 1));
+        members.push_back(engine.addNode("N" + std::to_string(i), &member_nodes[i], 1, 1));
     }
     int gid = engine.addGroup("Big", members);
 
@@ -32,9 +32,7 @@ TEST_CASE("Benchmark: rebuildGroupBoundaryPins with 100 cross-boundary links", "
                        engine.nodes()[i].input_pin_ids[0]);
     }
 
-    BENCHMARK("rebuildGroupBoundaryPins") {
-        engine.rebuildGroupBoundaryPins(gid);
-    };
+    BENCHMARK("rebuildGroupBoundaryPins") { engine.rebuildGroupBoundaryPins(gid); };
 }
 
 TEST_CASE("Benchmark: group add/remove cycle", "[benchmark][group]") {
@@ -43,8 +41,7 @@ TEST_CASE("Benchmark: group add/remove cycle", "[benchmark][group]") {
     std::vector<SignalNode> sig_nodes(10);
     std::vector<int> nodes;
     for (int i = 0; i < 10; ++i) {
-        nodes.push_back(
-            engine.addNode("N" + std::to_string(i), &sig_nodes[i], 1, 1));
+        nodes.push_back(engine.addNode("N" + std::to_string(i), &sig_nodes[i], 1, 1));
     }
 
     BENCHMARK("addGroup+removeGroup") {

@@ -11,14 +11,16 @@ class ViewManager {
     void registerNode(SignalNode *node) {
         if (node) {
             LOG_INFO("Register new node: %d inputs | %d outputs.",
-                     node->inputs.empty() ? 0 : (node->inputs[0] ? node->inputs[0]->tones.size() : 0),
+                     node->inputs.empty() ? 0
+                                          : (node->inputs[0] ? node->inputs[0]->tones.size() : 0),
                      node->outputs.empty() ? 0 : node->outputs[0].tones.size());
             m_nodes.push_back(node);
         }
     }
 
     void unregisterNode(SignalNode *node) {
-        if (!node) return;
+        if (!node)
+            return;
         auto it = std::find(m_nodes.begin(), m_nodes.end(), node);
         if (it != m_nodes.end()) {
             m_nodes.erase(it);

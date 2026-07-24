@@ -30,10 +30,10 @@ struct TouchstoneData {
 
 class TouchstoneParser {
   public:
-    static std::optional<TouchstoneData> parse(const std::string& filepath);
+    static std::optional<TouchstoneData> parse(const std::string &filepath);
 
   private:
-    static std::string stripComment(const std::string& line);
-    static bool parseOptionLine(const std::string& line, TouchstoneData& data);
+    static std::string stripComment(const std::string &line);
+    static bool parseOptionLine(const std::string &line, TouchstoneData &data);
     static std::complex<double> parsePair(double a, double b, TouchstoneData::Format fmt);
 };

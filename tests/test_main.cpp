@@ -1,13 +1,13 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
-#include "common.h"
-#include "spectrum.h"
-#include "signal_generator_engine.h"
 #include "amplifier_engine.h"
-#include "splitter_engine.h"
+#include "common.h"
 #include "mixer_engine.h"
-#include "spectrum_analyzer_engine.h"
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
+#include "spectrum.h"
+#include "spectrum_analyzer_engine.h"
+#include "splitter_engine.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 using Catch::Approx;
 
@@ -51,7 +51,8 @@ TEST_CASE("Spectrum computeTotalNoise", "[common]") {
     spec.computeTotalNoise();
     REQUIRE(spec.noise_total_W.size() == N);
     for (int i = 0; i < N; ++i) {
-        REQUIRE(spec.noise_total_W[i] == Approx(spec.noise_W[i] + spec.noise_added_W[i]).epsilon(1e-30));
+        REQUIRE(spec.noise_total_W[i] ==
+                Approx(spec.noise_W[i] + spec.noise_added_W[i]).epsilon(1e-30));
     }
 }
 
@@ -200,7 +201,7 @@ TEST_CASE("Splitter produces two outputs with -3dB tones", "[splitter]") {
 
     REQUIRE(split.node().outputs.size() == 2);
     for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
-        const auto& out = split.node().outputs[out_idx];
+        const auto &out = split.node().outputs[out_idx];
         REQUIRE(out.tones.size() == 1);
         REQUIRE(out.tones[0].freq_Hz == 100e6);
         REQUIRE(out.tones[0].power_dBm == Approx(-20.0 - 3.0103).epsilon(0.001));
@@ -218,7 +219,7 @@ TEST_CASE("Splitter preserves phase on both outputs", "[splitter]") {
     split.update(0.0);
 
     for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
-        const auto& out = split.node().outputs[out_idx];
+        const auto &out = split.node().outputs[out_idx];
         REQUIRE(out.tones[0].phase_deg == 45.0);
     }
 }
@@ -234,7 +235,7 @@ TEST_CASE("Splitter scales noise density by -3dB", "[splitter]") {
 
     double expected_density = (k * T) / 2.0;
     for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
-        const auto& out = split.node().outputs[out_idx];
+        const auto &out = split.node().outputs[out_idx];
         REQUIRE(!out.noise_total_W.empty());
         for (double density : out.noise_total_W) {
             REQUIRE(density == Approx(expected_density).epsilon(1e-30));
@@ -254,7 +255,7 @@ TEST_CASE("Mixer produces sum and difference tones", "[mixer]") {
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
-    const auto& out = mix.node().outputs[0];
+    const auto &out = mix.node().outputs[0];
     REQUIRE(out.tones.size() == 2);
     // Lower sideband: |100 - 80| = 20 MHz
     REQUIRE(out.tones[0].freq_Hz == 20e6);
@@ -275,7 +276,7 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
-    const auto& out = mix.node().outputs[0];
+    const auto &out = mix.node().outputs[0];
     REQUIRE(out.tones.size() == 2);
     REQUIRE(out.tones[0].phase_deg == 45.0);
     REQUIRE(out.tones[1].phase_deg == 45.0);
@@ -293,7 +294,7 @@ TEST_CASE("Mixer scales noise by conversion gain", "[mixer]") {
 
     double G = dbToLinear(-6.0);
     double expected_density = k * T * G;
-    const auto& out = mix.node().outputs[0];
+    const auto &out = mix.node().outputs[0];
     REQUIRE(!out.noise_total_W.empty());
     for (double density : out.noise_total_W) {
         REQUIRE(density == Approx(expected_density).epsilon(1e-30));
@@ -307,7 +308,7 @@ TEST_CASE("Mixer with no input produces no tones", "[mixer]") {
     mix.setConversionGain_dB(-6.0);
     mix.update(0.0);
 
-    const auto& out = mix.node().outputs[0];
+    const auto &out = mix.node().outputs[0];
     REQUIRE(out.tones.empty());
 }
 
@@ -492,14 +493,14 @@ TEST_CASE("ClearWrite returns frame unchanged (no history)", "[spectrum][trace]"
 TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);
-    sa.setResBw(1e6);       // 1 MHz RBW
-    sa.setVideoBw(1e6);     // 1 MHz VBW (window=1 → passthrough)
+    sa.setResBw(1e6);   // 1 MHz RBW
+    sa.setVideoBw(1e6); // 1 MHz VBW (window=1 → passthrough)
     sa.setTraceMode(TraceMode::MaxHold);
 
     // 5 MHz spacing → RBW kernel_half=1 → smearing only reaches ±1 bin
     Spectrum spec;
     spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
-    spec.tones = {{0.0, -10.0, 0.0}};   // tone at bin 0
+    spec.tones = {{0.0, -10.0, 0.0}}; // tone at bin 0
     spec.generation = 1;
     auto out1 = sa.renderSpectrum(spec);
 
@@ -510,8 +511,8 @@ TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
 
     // With ClearWrite, out2[0] ≈ noise floor (no tone nearby).
     // With MaxHold, out2[0] holds the -10 dBm peak from frame 1.
-    REQUIRE(out2[0] > out2[1] + 5.0);    // bin 0 held high
-    REQUIRE(out2[4] > out2[1] + 5.0);    // bin 4 now high (tone moved)
+    REQUIRE(out2[0] > out2[1] + 5.0); // bin 0 held high
+    REQUIRE(out2[4] > out2[1] + 5.0); // bin 4 now high (tone moved)
 }
 
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
@@ -537,8 +538,8 @@ TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     // MinHold: a bin that was noise in frame 1 should still be noise, even if
     // frame 2 has a tone there. ClearWrite would show the tone.
     // With RBW=1e6, noise floor << -50 dBm, so this assertion fails on ClearWrite.
-    REQUIRE(out2[2] < -50.0);  // bin 2 held low from frame 1 (MinHold)
-    REQUIRE(out2[4] < -50.0);  // bin 4 held low from frame 2
+    REQUIRE(out2[2] < -50.0); // bin 2 held low from frame 1 (MinHold)
+    REQUIRE(out2[4] < -50.0); // bin 4 held low from frame 2
 }
 
 TEST_CASE("VideoAverage converges to constant input", "[spectrum][trace]") {
@@ -620,7 +621,7 @@ TEST_CASE("Mode switch resets history", "[spectrum][trace]") {
 
     // Switch to ClearWrite — should not see held values
     sa.setTraceMode(TraceMode::ClearWrite);
-    spec.tones = {};  // remove tone
+    spec.tones = {}; // remove tone
     spec.generation = 2;
     auto out = sa.renderSpectrum(spec);
 
@@ -709,7 +710,7 @@ TEST_CASE("Amplifier nonlinear disabled = linear passthrough", "[amplifier][nonl
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == 100e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-10.0));
@@ -729,7 +730,7 @@ TEST_CASE("Amplifier generates 2nd and 3rd harmonics", "[amplifier][nonlinear]")
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 3);
 
     REQUIRE(out.tones[0].freq_Hz == 100e6);
@@ -757,14 +758,16 @@ TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]")
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     // 2 fundamentals + 4 harmonics + 6 IMD = 12 tones
     REQUIRE(out.tones.size() == 12);
 
     bool found_99 = false, found_102 = false;
-    for (const auto& t : out.tones) {
-        if (std::abs(t.freq_Hz - 99e6) < 1.0) found_99 = true;
-        if (std::abs(t.freq_Hz - 102e6) < 1.0) found_102 = true;
+    for (const auto &t : out.tones) {
+        if (std::abs(t.freq_Hz - 99e6) < 1.0)
+            found_99 = true;
+        if (std::abs(t.freq_Hz - 102e6) < 1.0)
+            found_102 = true;
     }
     REQUIRE(found_99);
     REQUIRE(found_102);
@@ -803,6 +806,6 @@ TEST_CASE("Amplifier single tone produces no IMD products", "[amplifier][nonline
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    const auto& out = amp.node().outputs[0];
+    const auto &out = amp.node().outputs[0];
     REQUIRE(out.tones.size() == 3);
 }

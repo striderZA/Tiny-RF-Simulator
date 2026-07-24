@@ -1,14 +1,14 @@
 #pragma once
 
-#include "component_interface.h"
 #include "coax_presets.h"
+#include "component_interface.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include <string>
 
 class CoaxCableEngine : public IComponentEngine {
   public:
-    CoaxCableEngine(int id, NodeGraphEngine& graph);
+    CoaxCableEngine(int id, NodeGraphEngine &graph);
 
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_node_id; }
@@ -17,10 +17,10 @@ class CoaxCableEngine : public IComponentEngine {
 
     void update(double dt) override;
     nlohmann::json serialize() const override;
-    void deserialize(const nlohmann::json&) override;
+    void deserialize(const nlohmann::json &) override;
 
-    SignalNode& node() override { return m_node; }
-    const SignalNode& node() const override { return m_node; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
 
     std::string hoverSummary() const override;
 
@@ -31,19 +31,19 @@ class CoaxCableEngine : public IComponentEngine {
     int presetIndex() const { return m_preset_index; }
     double lengthM() const { return m_length_m; }
     double connectorsLossDB() const { return m_connectors_loss_dB; }
-    const CableSpec& preset() const { return kCoaxCablePresets[m_preset_index]; }
+    const CableSpec &preset() const { return kCoaxCablePresets[m_preset_index]; }
 
   private:
     int m_id;
     int m_graph_node_id = -1;
-    NodeGraphEngine* m_graph = nullptr;
+    NodeGraphEngine *m_graph = nullptr;
 
-    SignalNode m_node;                  // 1 input, 1 output
-    int m_preset_index = 4;             // default to MT 340
+    SignalNode m_node;      // 1 input, 1 output
+    int m_preset_index = 4; // default to MT 340
     double m_length_m = 1.0;
     double m_connectors_loss_dB = 0.0;
     bool m_dirty = true;
-    const Spectrum* m_cached_input_ptr = nullptr;
+    const Spectrum *m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
-    bool m_warned_above_max = false;    // rate-limit flag for over-max_freq warning
+    bool m_warned_above_max = false; // rate-limit flag for over-max_freq warning
 };

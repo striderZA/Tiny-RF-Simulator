@@ -1,23 +1,23 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
-#include <cstdio>
-#include <fstream>
-#include <string>
-#include <filesystem>
 #include "app.h"
+#include "coax_cable_engine.h"
+#include "combiner_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
-#include "combiner_engine.h"
-#include "coax_cable_engine.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
+#include <string>
 
 using Catch::Approx;
 
 // Generate a unique temp filename per call so parallel test processes don't
 // step on each other's files.
 static int s_temp_counter = 0;
-static std::string tempPath(const std::string& suffix = "") {
+static std::string tempPath(const std::string &suffix = "") {
     return "test_roundtrip_" + std::to_string(s_temp_counter++) + suffix + ".rfsim";
 }
 
@@ -89,8 +89,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with 
 // ---------------------------------------------------------------------------
 // 3 — newProject clears everything; save + reload stays empty
 // ---------------------------------------------------------------------------
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: zero components after newProject",
-                 "[project_file]") {
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: zero components after newProject", "[project_file]") {
     auto path = tempPath();
     std::remove(path.c_str());
     {
@@ -174,32 +173,27 @@ TEST_CASE_METHOD(ImGuiFixture, "Load invalid JSON does not crash", "[project_fil
 // 7 — Add components with custom parameter values, save, reload, verify that
 //     every parameter survived the round-trip.
 // ---------------------------------------------------------------------------
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: parameter values survive save/load",
-                 "[project_file]") {
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: parameter values survive save/load", "[project_file]") {
     auto path = tempPath();
     std::remove(path.c_str());
     {
         RfSimulatorApp app;
         app.newProject();
 
-        auto& gen = app.testComponents().add<SignalGeneratorEngine>(
-            10001, app.testGraphEngine());
+        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
         gen.addTone(200e6, -10.0);
         gen.setFs_Hz(500e6);
 
-        auto& amp = app.testComponents().add<AmplifierEngine>(
-            10002, app.testGraphEngine());
+        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
         amp.setGain_dB(20.0);
         amp.setNF_dB(3.5);
 
-        auto& mixer = app.testComponents().add<MixerEngine>(
-            10003, app.testGraphEngine());
+        auto &mixer = app.testComponents().add<MixerEngine>(10003, app.testGraphEngine());
         mixer.setLoFreq_Hz(2.4e9);
         mixer.setConversionGain_dB(8.0);
         mixer.setNF_dB(5.0);
 
-        auto& coax = app.testComponents().add<CoaxCableEngine>(
-            10004, app.testGraphEngine());
+        auto &coax = app.testComponents().add<CoaxCableEngine>(10004, app.testGraphEngine());
         coax.setLengthM(2.5);
 
         REQUIRE(app.componentCount() == 4);
@@ -243,8 +237,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: parameter values survive save/load",
 // 8 — Create a group containing components, save, reload, verify the group
 //     (name, member count) survived.
 // ---------------------------------------------------------------------------
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load",
-                 "[project_file]") {
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load", "[project_file]") {
     auto path = tempPath();
     std::remove(path.c_str());
     {
@@ -259,8 +252,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load",
         // Group the first two components
         auto comps = app.testComponents().all();
         REQUIRE(comps.size() == 3);
-        std::vector<int> member_ids = {comps[0]->graphNodeId(),
-                                       comps[1]->graphNodeId()};
+        std::vector<int> member_ids = {comps[0]->graphNodeId(), comps[1]->graphNodeId()};
         int gid = app.testGraphEngine().addGroup("RF Frontend", member_ids);
         REQUIRE(gid >= 0);
         REQUIRE(app.testGraphEngine().numGroups() == 1);
@@ -273,7 +265,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load",
         REQUIRE(app.componentCount() == 3);
         REQUIRE(app.testGraphEngine().numGroups() == 1);
 
-        const auto& groups = app.testGraphEngine().groups();
+        const auto &groups = app.testGraphEngine().groups();
         REQUIRE(groups.size() == 1);
         CHECK(groups[0].name == "RF Frontend");
         CHECK(groups[0].member_node_ids.size() == 2);
@@ -284,24 +276,20 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load",
 // ---------------------------------------------------------------------------
 // 9 — Round-trip Attenuator, Combiner, and Equalizer with modified parameters
 // ---------------------------------------------------------------------------
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer",
-                 "[project_file]") {
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer", "[project_file]") {
     auto path = tempPath();
     std::remove(path.c_str());
     {
         RfSimulatorApp app;
         app.newProject();
 
-        auto& atten = app.testComponents().add<AttenuatorEngine>(
-            10001, app.testGraphEngine());
+        auto &atten = app.testComponents().add<AttenuatorEngine>(10001, app.testGraphEngine());
         atten.setAttenuation(15.5);
 
-        auto& comb = app.testComponents().add<CombinerEngine>(
-            10002, app.testGraphEngine());
+        auto &comb = app.testComponents().add<CombinerEngine>(10002, app.testGraphEngine());
         comb.setManualMode(true);
 
-        auto& eq = app.testComponents().add<EqualizerEngine>(
-            10003, app.testGraphEngine());
+        auto &eq = app.testComponents().add<EqualizerEngine>(10003, app.testGraphEngine());
         eq.setRefGain_dB(-3.0);
         eq.setRefFreq_Hz(500e6);
         eq.setSlope_dBPerDecade(6.0);
@@ -334,16 +322,14 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer",
 // ---------------------------------------------------------------------------
 // 10 — Save/load preserves amplifier P1dB
 // ---------------------------------------------------------------------------
-TEST_CASE_METHOD(ImGuiFixture, "Project save/load preserves amplifier P1dB",
-                 "[project][p1db]") {
+TEST_CASE_METHOD(ImGuiFixture, "Project save/load preserves amplifier P1dB", "[project][p1db]") {
     auto path = tempPath();
     std::filesystem::remove(path);
     {
         RfSimulatorApp app;
         app.newProject();
 
-        auto& amp = app.testComponents().add<AmplifierEngine>(
-            100, app.testGraphEngine());
+        auto &amp = app.testComponents().add<AmplifierEngine>(100, app.testGraphEngine());
         amp.setGain_dB(20.0);
         amp.setNF_dB(2.5);
         amp.setP1dB_dBm(15.0);

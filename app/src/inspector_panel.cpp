@@ -1,19 +1,19 @@
 #include "inspector_panel.h"
 #include "adc_engine.h"
 #include "amplifier_engine.h"
+#include "attenuator_engine.h"
+#include "coax_cable_engine.h"
+#include "combiner_engine.h"
 #include "common.h"
+#include "equalizer_engine.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
-#include "ideal_filter_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
-#include "coax_cable_engine.h"
-#include "equalizer_engine.h"
-#include "attenuator_engine.h"
-#include "combiner_engine.h"
 #include "utils.h"
 #include <cstring>
 #include <portable-file-dialogs.h>
@@ -31,40 +31,60 @@ InspectorPanel::Hit InspectorPanel::findSelected() const {
     int selected_id = -1;
     ImNodes::GetSelectedNodes(&selected_id);
 
-    auto* engine = m_components->find(selected_id);
+    auto *engine = m_components->find(selected_id);
     if (!engine)
         return {ComponentType::None, nullptr};
 
-         if (dynamic_cast<SignalGeneratorEngine*>(engine))       return {ComponentType::Generator, engine};
-    else if (dynamic_cast<AmplifierEngine*>(engine))             return {ComponentType::Amplifier, engine};
-    else if (dynamic_cast<SplitterEngine*>(engine))              return {ComponentType::Splitter, engine};
-    else if (dynamic_cast<MixerEngine*>(engine))                 return {ComponentType::Mixer, engine};
-    else if (dynamic_cast<AdcEngine*>(engine))                   return {ComponentType::Adc, engine};
-    else if (dynamic_cast<PFBChannelizerEngine*>(engine))        return {ComponentType::PFB, engine};
-    else if (dynamic_cast<IdealFilterEngine*>(engine))           return {ComponentType::IdealFilter, engine};
-    else if (dynamic_cast<CoaxCableEngine*>(engine))            return {ComponentType::CoaxCable, engine};
-    else if (dynamic_cast<EqualizerEngine*>(engine))             return {ComponentType::Equalizer, engine};
-    else if (dynamic_cast<AttenuatorEngine*>(engine))            return {ComponentType::Attenuator, engine};
-    else if (dynamic_cast<CombinerEngine*>(engine))              return {ComponentType::Combiner, engine};
+    if (dynamic_cast<SignalGeneratorEngine *>(engine))
+        return {ComponentType::Generator, engine};
+    else if (dynamic_cast<AmplifierEngine *>(engine))
+        return {ComponentType::Amplifier, engine};
+    else if (dynamic_cast<SplitterEngine *>(engine))
+        return {ComponentType::Splitter, engine};
+    else if (dynamic_cast<MixerEngine *>(engine))
+        return {ComponentType::Mixer, engine};
+    else if (dynamic_cast<AdcEngine *>(engine))
+        return {ComponentType::Adc, engine};
+    else if (dynamic_cast<PFBChannelizerEngine *>(engine))
+        return {ComponentType::PFB, engine};
+    else if (dynamic_cast<IdealFilterEngine *>(engine))
+        return {ComponentType::IdealFilter, engine};
+    else if (dynamic_cast<CoaxCableEngine *>(engine))
+        return {ComponentType::CoaxCable, engine};
+    else if (dynamic_cast<EqualizerEngine *>(engine))
+        return {ComponentType::Equalizer, engine};
+    else if (dynamic_cast<AttenuatorEngine *>(engine))
+        return {ComponentType::Attenuator, engine};
+    else if (dynamic_cast<CombinerEngine *>(engine))
+        return {ComponentType::Combiner, engine};
 
     return {ComponentType::None, nullptr};
 }
 
-std::string InspectorPanel::labelForHit(const Hit& hit) const {
+std::string InspectorPanel::labelForHit(const Hit &hit) const {
     if (hit.type == ComponentType::None || !hit.engine)
         return "";
     if (hit.type == ComponentType::PFB)
         return "PFB " + std::to_string(hit.engine->id());
     switch (hit.type) {
-    case ComponentType::Amplifier:     return "Amplifier " + std::to_string(hit.engine->id());
-    case ComponentType::Mixer:         return "Mixer " + std::to_string(hit.engine->id());
-    case ComponentType::Splitter:      return "Splitter " + std::to_string(hit.engine->id());
-    case ComponentType::Adc:           return "ADC " + std::to_string(hit.engine->id());
-    case ComponentType::Generator:     return "Generator " + std::to_string(hit.engine->id());
-        case ComponentType::IdealFilter:   return "IdealFilter " + std::to_string(hit.engine->id());
-        case ComponentType::Attenuator:    return "Attenuator " + std::to_string(hit.engine->id());
-        case ComponentType::Combiner:      return "Combiner " + std::to_string(hit.engine->id());
-    default:                           return "";
+    case ComponentType::Amplifier:
+        return "Amplifier " + std::to_string(hit.engine->id());
+    case ComponentType::Mixer:
+        return "Mixer " + std::to_string(hit.engine->id());
+    case ComponentType::Splitter:
+        return "Splitter " + std::to_string(hit.engine->id());
+    case ComponentType::Adc:
+        return "ADC " + std::to_string(hit.engine->id());
+    case ComponentType::Generator:
+        return "Generator " + std::to_string(hit.engine->id());
+    case ComponentType::IdealFilter:
+        return "IdealFilter " + std::to_string(hit.engine->id());
+    case ComponentType::Attenuator:
+        return "Attenuator " + std::to_string(hit.engine->id());
+    case ComponentType::Combiner:
+        return "Combiner " + std::to_string(hit.engine->id());
+    default:
+        return "";
     }
 }
 
@@ -110,22 +130,23 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
 
     switch (hit.type) {
     case ComponentType::Amplifier:
-        drawAmplifierProperties(*static_cast<AmplifierEngine*>(hit.engine), hit.engine->id());
+        drawAmplifierProperties(*static_cast<AmplifierEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Mixer:
-        drawMixerProperties(*static_cast<MixerEngine*>(hit.engine), hit.engine->id());
+        drawMixerProperties(*static_cast<MixerEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Splitter:
-        drawSplitterProperties(*static_cast<SplitterEngine*>(hit.engine), hit.engine->id());
+        drawSplitterProperties(*static_cast<SplitterEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Adc:
-        drawAdcProperties(*static_cast<AdcEngine*>(hit.engine), hit.engine->id());
+        drawAdcProperties(*static_cast<AdcEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Generator:
-        drawGeneratorProperties(*static_cast<SignalGeneratorEngine*>(hit.engine), hit.engine->id());
+        drawGeneratorProperties(*static_cast<SignalGeneratorEngine *>(hit.engine),
+                                hit.engine->id());
         break;
     case ComponentType::PFB: {
-        auto* pfb = static_cast<PFBChannelizerEngine*>(hit.engine);
+        auto *pfb = static_cast<PFBChannelizerEngine *>(hit.engine);
         for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
             if (m_pfb_ptrs[i] == pfb) {
                 m_selected_pfb_index = i;
@@ -159,19 +180,19 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         break;
     }
     case ComponentType::IdealFilter:
-        drawIdealFilterProperties(*static_cast<IdealFilterEngine*>(hit.engine), hit.engine->id());
+        drawIdealFilterProperties(*static_cast<IdealFilterEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::CoaxCable:
-        drawCoaxCableProperties(*static_cast<CoaxCableEngine*>(hit.engine), hit.engine->id());
+        drawCoaxCableProperties(*static_cast<CoaxCableEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Equalizer:
-        drawEqualizerProperties(*static_cast<EqualizerEngine*>(hit.engine), hit.engine->id());
+        drawEqualizerProperties(*static_cast<EqualizerEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Attenuator:
-        drawAttenuatorProperties(*static_cast<AttenuatorEngine*>(hit.engine), hit.engine->id());
+        drawAttenuatorProperties(*static_cast<AttenuatorEngine *>(hit.engine), hit.engine->id());
         break;
     case ComponentType::Combiner:
-        drawCombinerProperties(*static_cast<CombinerEngine*>(hit.engine), hit.engine->id());
+        drawCombinerProperties(*static_cast<CombinerEngine *>(hit.engine), hit.engine->id());
         break;
     default:
         break;
@@ -187,7 +208,7 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
     (void)index;
 
     ImGui::SeparatorText("Mode");
-    const char* amp_modes[] = {"Ideal", "S-Parameter"};
+    const char *amp_modes[] = {"Ideal", "S-Parameter"};
     int amp_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##amp_mode", &amp_mode_idx, amp_modes, IM_ARRAYSIZE(amp_modes))) {
         engine.setSParamMode(amp_mode_idx == 1);
@@ -198,7 +219,8 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##amp_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                              .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
                 LOG_INFO("Amplifier S-param file: %s", result[0].c_str());
@@ -206,11 +228,10 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
             }
         }
         if (engine.sparamLoaded()) {
-            ImGui::TextDisabled("Points: %zu | Ports: %d",
-                engine.sparamData().freqs().size(),
-                engine.sparamData().numPorts());
+            ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
+                                engine.sparamData().numPorts());
         } else if (!engine.sparamFilepath().empty()) {
-            ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load file");
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load file");
         }
     }
 
@@ -223,7 +244,7 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
         double gain = engine.gain_dB();
         if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
             engine.setGain_dB(gain);
-            m_param_edited = true;
+        m_param_edited = true;
     }
 
     double nf = engine.nf_dB();
@@ -293,7 +314,6 @@ void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
         onRemoveNode(engine.graphNodeId());
 }
 
-
 void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
     (void)index;
     double fs = engine.fs_Hz();
@@ -307,8 +327,6 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
         engine.setNsd_dBm_per_Hz(nsd);
         m_param_edited = true;
     }
-
-
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
@@ -381,13 +399,13 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index) {
+void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index) {
     (void)index;
-    const CableSpec& p = engine.preset();
+    const CableSpec &p = engine.preset();
 
     // Preset combo
     {
-        const char* preview = p.name;
+        const char *preview = p.name;
         if (ImGui::BeginCombo("Model", preview)) {
             for (int i = 0; i < static_cast<int>(kCoaxCablePresets.size()); ++i) {
                 bool selected = (i == engine.presetIndex());
@@ -395,7 +413,8 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
                     engine.setPresetIndex(i);
                     m_param_edited = true;
                 }
-                if (selected) ImGui::SetItemDefaultFocus();
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", kCoaxCablePresets[i].name);
@@ -419,7 +438,7 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
 
     // Connector loss
     double conn = engine.connectorsLossDB();
-        if (utils::inputDouble("Connector Loss (dB)", conn, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
+    if (utils::inputDouble("Connector Loss (dB)", conn, 0.1, 1.0, "%.2f", -100.0, 100.0)) {
         engine.setConnectorsLossDB(conn);
         m_param_edited = true;
     }
@@ -427,13 +446,13 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
     // Read-out at input centre frequency
     if (!engine.node().inputs.empty() && engine.node().inputs[0] &&
         !engine.node().inputs[0]->frequencies.empty()) {
-        const auto& fin = engine.node().inputs[0]->frequencies;
+        const auto &fin = engine.node().inputs[0]->frequencies;
         const double fc = (fin.front() + fin.back()) / 2.0;
         const double fc_clamped = std::clamp(std::abs(fc), 1.0, p.max_freq_GHz * 1e9);
         const double fc_MHz = fc_clamped / 1e6;
         const double loss_dB =
-            (p.K1_dB_per_m * std::sqrt(fc_MHz) + p.K2_dB_per_m * fc_MHz) * engine.lengthM()
-            + engine.connectorsLossDB();
+            (p.K1_dB_per_m * std::sqrt(fc_MHz) + p.K2_dB_per_m * fc_MHz) * engine.lengthM() +
+            engine.connectorsLossDB();
         const double phase_shift =
             -360.0 * (fc_clamped / 1e9) * engine.lengthM() * p.delay_ns_per_m * 1e-3;
         ImGui::TextDisabled("Loss @ fc: %.3f dB", loss_dB);
@@ -450,11 +469,11 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine& engine, int index)
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index) {
+void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index) {
     (void)index;
 
     ImGui::SeparatorText("Mode");
-    const char* eq_modes[] = {"Ideal", "S-Parameter"};
+    const char *eq_modes[] = {"Ideal", "S-Parameter"};
     int eq_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##eq_mode", &eq_mode_idx, eq_modes, IM_ARRAYSIZE(eq_modes))) {
         engine.setSParamMode(eq_mode_idx == 1);
@@ -464,17 +483,17 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index)
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##eq_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                              .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
             }
         }
         if (engine.sparamLoaded()) {
-            ImGui::TextDisabled("Points: %zu | Ports: %d",
-                engine.sparamData().freqs().size(),
-                engine.sparamData().numPorts());
+            ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
+                                engine.sparamData().numPorts());
         } else if (!engine.sparamFilepath().empty()) {
-            ImGui::TextColored(ImVec4(1,0,0,1), "Failed to load file");
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load file");
         }
         ImGui::BeginDisabled();
     }
@@ -498,7 +517,7 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine& engine, int index)
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int index) {
+void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int index) {
     (void)index;
     ImGui::Text("Ideal Filter");
     ImGui::Separator();
@@ -510,7 +529,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
     }
 
     ImGui::SeparatorText("Mode");
-    const char* filter_modes[] = {"Ideal", "S-Parameter"};
+    const char *filter_modes[] = {"Ideal", "S-Parameter"};
     int f_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##filter_mode", &f_mode_idx, filter_modes, IM_ARRAYSIZE(filter_modes))) {
         engine.setSParamMode(f_mode_idx == 1);
@@ -520,21 +539,21 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##filter_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"}).result();
+                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                              .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
             }
         }
         if (engine.sparamLoaded()) {
-            ImGui::TextDisabled("Points: %zu | Ports: %d",
-                engine.sparamData().freqs().size(),
-                engine.sparamData().numPorts());
+            ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
+                                engine.sparamData().numPorts());
         }
         // Disable ideal-mode controls in S-param mode
         ImGui::BeginDisabled();
     }
 
-    const char* type_names[] = {"LPF", "HPF", "BPF", "BSF"};
+    const char *type_names[] = {"LPF", "HPF", "BPF", "BSF"};
     int current = static_cast<int>(engine.filterType());
     if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
         engine.setFilterType(static_cast<FilterType>(current));
@@ -571,7 +590,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine& engine, int in
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }
-void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine& engine, int index) {
+void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int index) {
     (void)index;
 
     float atten_f = static_cast<float>(engine.attenuation());
@@ -600,7 +619,7 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine& engine, int inde
         onRemoveNode(engine.graphNodeId());
 }
 
-void InspectorPanel::drawCombinerProperties(CombinerEngine& engine, int index) {
+void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     (void)index;
 
     ImGui::TextDisabled("Combiner: 2 inputs → 1 output");
@@ -627,7 +646,7 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine& engine, int index) {
 }
 
 void InspectorPanel::drawGroupPanel(int group_id) {
-    const Group* g = m_graph.groupById(group_id);
+    const Group *g = m_graph.groupById(group_id);
     if (!g) {
         m_graph.setSelectedGroupId(-1);
         return;
@@ -651,7 +670,7 @@ void InspectorPanel::drawGroupPanel(int group_id) {
     ImGui::Text("Members (%zu):", g->member_node_ids.size());
     ImGui::Indent();
     for (int nid : g->member_node_ids) {
-        for (const auto& n : m_graph.nodes()) {
+        for (const auto &n : m_graph.nodes()) {
             if (n.node_id == nid) {
                 ImGui::TextUnformatted(n.label.c_str());
                 break;
@@ -664,8 +683,8 @@ void InspectorPanel::drawGroupPanel(int group_id) {
         ImGui::Separator();
         ImGui::Text("Boundary pins:");
         ImGui::Indent();
-        for (const auto& bp : g->boundary_pins) {
-            const char* dir = bp.is_output ? "OUT" : "IN";
+        for (const auto &bp : g->boundary_pins) {
+            const char *dir = bp.is_output ? "OUT" : "IN";
             ImGui::Text("%s -> \"%s\"", dir, bp.label.c_str());
         }
         ImGui::Unindent();

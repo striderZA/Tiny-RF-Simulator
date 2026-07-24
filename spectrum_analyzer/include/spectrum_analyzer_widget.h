@@ -1,6 +1,6 @@
 #pragma once
-#include "spectrum_analyzer_engine.h"
 #include "spectrum.h"
+#include "spectrum_analyzer_engine.h"
 #include "view_manager.h"
 #include <string>
 #include <unordered_map>
@@ -26,8 +26,8 @@ class SpectrumAnalyzerWidget {
     SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm);
 
     void draw(const char *title, bool *p_open = nullptr);
-    void setProbeLabels(const std::vector<std::string>& labels) { m_probe_labels = labels; }
-    void setPFBs(const std::vector<PFBChannelizerEngine*>& pfbs);
+    void setProbeLabels(const std::vector<std::string> &labels) { m_probe_labels = labels; }
+    void setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs);
 
   private:
     SpectrumAnalyzerEngine &m_engine;
@@ -35,9 +35,9 @@ class SpectrumAnalyzerWidget {
     std::vector<std::string> m_probe_labels;
     MarkerState m_marker;
     DragZoomState m_zoom;
-    std::vector<PFBChannelizerEngine*> m_pfb_ptrs;
-    std::unordered_map<SignalNode*, PFBChannelizerEngine*> m_pfb_map;
-    std::vector<bool> m_trace_visible;  // Track visibility for each probe trace
+    std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
+    std::unordered_map<SignalNode *, PFBChannelizerEngine *> m_pfb_map;
+    std::vector<bool> m_trace_visible; // Track visibility for each probe trace
 
     int resolveMarkerIdx(const std::vector<double> &freq_axis,
                          const std::vector<double> &data) const;

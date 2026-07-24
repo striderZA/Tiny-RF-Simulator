@@ -50,7 +50,8 @@ class NonlinearModel {
             // If OIP3 is default (100), derive from P1dB
             if (m_oip3_dBm >= 99.0 && m_p1db_dBm < 90.0) {
                 m_oip3_dBm = m_p1db_dBm + 9.6;
-                if (m_enabled) recomputeCoefficients();
+                if (m_enabled)
+                    recomputeCoefficients();
             }
         }
     }
@@ -60,11 +61,10 @@ class NonlinearModel {
         double compression_dB = 0.0;
     };
 
-    Result process(const std::vector<Spectrum::Tone>& input_tones,
-                   GainFn gain_at_freq) const {
+    Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq) const {
         using detail::dbmToV;
-        using detail::vToDbm;
         using detail::dbmToW;
+        using detail::vToDbm;
         using detail::wToDbm;
 
         Result r;
@@ -74,7 +74,7 @@ class NonlinearModel {
         double total_distortion_mW = 0.0;
 
         // Harmonics (from each input tone)
-        for (const auto& tone : input_tones) {
+        for (const auto &tone : input_tones) {
             double g_linear = gain_at_freq(tone.freq_Hz);
             double Pout_dBm = tone.power_dBm + 20.0 * std::log10(g_linear);
             double Vp1 = dbmToV(Pout_dBm);
@@ -125,7 +125,7 @@ class NonlinearModel {
 
         // Compression
         double Pfund_mW = 0.0;
-        for (const auto& tone : input_tones) {
+        for (const auto &tone : input_tones) {
             double g = gain_at_freq(tone.freq_Hz);
             double Pout = tone.power_dBm + 20.0 * std::log10(g);
             Pfund_mW += dbmToW(Pout);

@@ -4,50 +4,48 @@
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
-    struct TestEngineA : IComponentEngine {
-        int m_id;
-        int m_graph_id;
-        SignalNode m_node;
-        TestEngineA(int id, NodeGraphEngine& graph, int extra = 0)
-            : m_id(id), m_graph_id(-1) {
-            (void)extra;
-            m_graph_id = graph.addNode("TestA", &m_node, 0, 1);
-        }
-        int id() const override { return m_id; }
-        int graphNodeId() const override { return m_graph_id; }
-        int outputPinId() const override { return 1; }
-        std::string hoverSummary() const override { return "TestA(" + std::to_string(m_id) + ")"; }
-        SignalNode& node() override { return m_node; }
-        const SignalNode& node() const override { return m_node; }
-        void update(double) override {}
-    };
+struct TestEngineA : IComponentEngine {
+    int m_id;
+    int m_graph_id;
+    SignalNode m_node;
+    TestEngineA(int id, NodeGraphEngine &graph, int extra = 0) : m_id(id), m_graph_id(-1) {
+        (void)extra;
+        m_graph_id = graph.addNode("TestA", &m_node, 0, 1);
+    }
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_id; }
+    int outputPinId() const override { return 1; }
+    std::string hoverSummary() const override { return "TestA(" + std::to_string(m_id) + ")"; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
+    void update(double) override {}
+};
 
-    struct TestEngineB : IComponentEngine {
-        int m_id;
-        int m_graph_id;
-        SignalNode m_node;
-        TestEngineB(int id, NodeGraphEngine& graph)
-            : m_id(id), m_graph_id(-1) {
-            m_graph_id = graph.addNode("TestB", &m_node, 1, 1);
-        }
-        int id() const override { return m_id; }
-        int graphNodeId() const override { return m_graph_id; }
-        int outputPinId() const override { return 2; }
-        int inputPinId() const override { return 10; }
-        std::string hoverSummary() const override { return "TestB(" + std::to_string(m_id) + ")"; }
-        SignalNode& node() override { return m_node; }
-        const SignalNode& node() const override { return m_node; }
-        void update(double) override {}
-    };
-}
+struct TestEngineB : IComponentEngine {
+    int m_id;
+    int m_graph_id;
+    SignalNode m_node;
+    TestEngineB(int id, NodeGraphEngine &graph) : m_id(id), m_graph_id(-1) {
+        m_graph_id = graph.addNode("TestB", &m_node, 1, 1);
+    }
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_id; }
+    int outputPinId() const override { return 2; }
+    int inputPinId() const override { return 10; }
+    std::string hoverSummary() const override { return "TestB(" + std::to_string(m_id) + ")"; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
+    void update(double) override {}
+};
+} // namespace
 
 TEST_CASE("ComponentRegistry add and find", "[registry]") {
     NodeGraphEngine graph;
     ViewManager view;
     ComponentRegistry reg(graph, view);
 
-    auto& a = reg.add<TestEngineA>(1, graph);
-    auto& b = reg.add<TestEngineB>(2, graph);
+    auto &a = reg.add<TestEngineA>(1, graph);
+    auto &b = reg.add<TestEngineB>(2, graph);
 
     CHECK(reg.size() == 2);
     CHECK(reg.find(a.graphNodeId()) != nullptr);
@@ -60,7 +58,7 @@ TEST_CASE("ComponentRegistry remove", "[registry]") {
     ViewManager view;
     ComponentRegistry reg(graph, view);
 
-    auto& a = reg.add<TestEngineA>(1, graph);
+    auto &a = reg.add<TestEngineA>(1, graph);
     int gid = a.graphNodeId();
     CHECK(reg.size() == 1);
 
@@ -76,7 +74,7 @@ TEST_CASE("ComponentRegistry hoverSummary", "[registry]") {
     ViewManager view;
     ComponentRegistry reg(graph, view);
 
-    auto& a = reg.add<TestEngineA>(42, graph);
+    auto &a = reg.add<TestEngineA>(42, graph);
     CHECK(reg.hoverSummary(a.graphNodeId()) == "TestA(42)");
     CHECK(reg.hoverSummary(999).empty());
 }
@@ -121,8 +119,8 @@ TEST_CASE("ComponentRegistry remove updates byType", "[registry]") {
     ViewManager view;
     ComponentRegistry reg(graph, view);
 
-    auto& a = reg.add<TestEngineA>(1, graph);
-    auto& b = reg.add<TestEngineB>(2, graph);
+    auto &a = reg.add<TestEngineA>(1, graph);
+    auto &b = reg.add<TestEngineB>(2, graph);
 
     CHECK(reg.byType<TestEngineA>().size() == 1);
     reg.remove(a.graphNodeId());

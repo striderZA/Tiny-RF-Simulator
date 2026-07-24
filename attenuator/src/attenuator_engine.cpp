@@ -1,12 +1,11 @@
 #include "attenuator_engine.h"
-#include <nlohmann/json.hpp>
 #include "common.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <nlohmann/json.hpp>
 #include <numbers>
 
-AttenuatorEngine::AttenuatorEngine(int id, NodeGraphEngine& graph)
-    : m_id(id), m_graph(&graph) {
+AttenuatorEngine::AttenuatorEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Attenuator " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
@@ -17,10 +16,12 @@ int AttenuatorEngine::inputPinId() const {
 }
 
 int AttenuatorEngine::outputPinId(int index) const {
-    if (!m_graph || m_graph_node_id < 0 || index != 0) return -1;
-    for (const auto& node : m_graph->nodes()) {
+    if (!m_graph || m_graph_node_id < 0 || index != 0)
+        return -1;
+    for (const auto &node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            if (node.output_pin_ids.empty()) return -1;
+            if (node.output_pin_ids.empty())
+                return -1;
             return node.output_pin_ids[0];
         }
     }
@@ -37,7 +38,7 @@ void AttenuatorEngine::setSParamMode(bool enabled) {
     m_dirty = true;
 }
 
-void AttenuatorEngine::setSParamFile(const std::string& path) {
+void AttenuatorEngine::setSParamFile(const std::string &path) {
     m_sparam_path = path;
     m_sparam_mode = m_sparam.load(path);
     m_dirty = true;
@@ -45,7 +46,7 @@ void AttenuatorEngine::setSParamFile(const std::string& path) {
 
 void AttenuatorEngine::update(double dt) {
     (void)dt;
-    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
 
     // --- S-parameter mode ---
     if (m_sparam_mode && m_sparam.loaded()) {
@@ -54,9 +55,10 @@ void AttenuatorEngine::update(double dt) {
             return;
         m_dirty = false;
         m_cached_input_ptr = in_ptr;
-        if (in_ptr) m_cached_input_generation = in_ptr->generation;
+        if (in_ptr)
+            m_cached_input_generation = in_ptr->generation;
 
-        auto& out = m_node.outputs[0];
+        auto &out = m_node.outputs[0];
 
         if (in_ptr && !in_ptr->frequencies.empty())
             out.frequencies = in_ptr->frequencies;
@@ -67,7 +69,7 @@ void AttenuatorEngine::update(double dt) {
         int idx = 1 * m_sparam.numPorts() + 0; // S21 index
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
-        for (auto& t : out.tones) {
+        for (auto &t : out.tones) {
             auto S = m_sparam.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
             t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
@@ -97,8 +99,8 @@ void AttenuatorEngine::update(double dt) {
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam.interpolate(out.frequencies[i], idx);
             double mag_sq = std::norm(S); // |S21|^2
-            double noise_in = (in_ptr && i < in_ptr->noise_total_W.size()
-                               ? in_ptr->noise_total_W[i] : 0.0);
+            double noise_in =
+                (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
 
             out.noise_W[i] = noise_in * mag_sq;
             out.noise_added_W[i] = k * T * (1.0 - mag_sq);
@@ -116,9 +118,10 @@ void AttenuatorEngine::update(double dt) {
         return;
     m_dirty = false;
     m_cached_input_ptr = in_ptr;
-    if (in_ptr) m_cached_input_generation = in_ptr->generation;
+    if (in_ptr)
+        m_cached_input_generation = in_ptr->generation;
 
-    auto& out = m_node.outputs[0];
+    auto &out = m_node.outputs[0];
 
     if (in_ptr && !in_ptr->frequencies.empty())
         out.frequencies = in_ptr->frequencies;
@@ -129,7 +132,7 @@ void AttenuatorEngine::update(double dt) {
 
     // Attenuate tones
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
-    for (auto& t : out.tones) {
+    for (auto &t : out.tones) {
         t.power_dBm -= m_atten_dB;
         // Phase unchanged in manual mode
     }
@@ -158,8 +161,8 @@ void AttenuatorEngine::update(double dt) {
     out.noise_total_W.resize(N);
 
     for (size_t i = 0; i < N; ++i) {
-        double noise_in = (in_ptr && i < in_ptr->noise_total_W.size()
-                           ? in_ptr->noise_total_W[i] : 0.0);
+        double noise_in =
+            (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
 
         out.noise_W[i] = noise_in * G_linear;
         out.noise_added_W[i] = k * T * (1.0 - G_linear);
@@ -171,18 +174,16 @@ void AttenuatorEngine::update(double dt) {
 }
 
 nlohmann::json AttenuatorEngine::serialize() const {
-    return {{"atten_dB", m_atten_dB},
-            {"sparam_mode", m_sparam_mode},
-            {"sparam_path", m_sparam_path}};
+    return {
+        {"atten_dB", m_atten_dB}, {"sparam_mode", m_sparam_mode}, {"sparam_path", m_sparam_path}};
 }
 
-void AttenuatorEngine::deserialize(const nlohmann::json& j) {
+void AttenuatorEngine::deserialize(const nlohmann::json &j) {
     m_atten_dB = j.value("atten_dB", 0.0);
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_path = j.value("sparam_path", "");
     m_dirty = true;
 }
-
 
 std::string AttenuatorEngine::hoverSummary() const {
     return "Attenuator: -" + std::to_string(static_cast<int>(m_atten_dB)) + " dB";

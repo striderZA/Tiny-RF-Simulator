@@ -1,8 +1,8 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "attenuator_engine.h"
 #include "node_graph_engine.h"
 #include "spectrum.h"
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 
 using Catch::Matchers::WithinAbs;
@@ -12,11 +12,7 @@ namespace {
 Spectrum buildTestSpectrum() {
     Spectrum s;
     s.frequencies = {1e9, 2e9, 3e9};
-    s.tones = {
-        {1e9, -10.0, 0.0},
-        {2e9, -20.0, 45.0},
-        {3e9, -30.0, 90.0}
-    };
+    s.tones = {{1e9, -10.0, 0.0}, {2e9, -20.0, 45.0}, {3e9, -30.0, 90.0}};
     s.noise_W.assign(3, 1e-21);
     s.noise_added_W.assign(3, 0.0);
     s.noise_total_W.assign(3, 1e-21);
@@ -37,7 +33,7 @@ TEST_CASE("Attenuator: pass-through at 0 dB", "[attenuator]") {
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
 
     REQUIRE(output.tones.size() == 3);
     REQUIRE(output.tones[0].power_dBm == -10.0);
@@ -59,7 +55,7 @@ TEST_CASE("Attenuator: flat 6 dB attenuation", "[attenuator]") {
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
 
     REQUIRE_THAT(output.tones[0].power_dBm, WithinAbs(-16.0, 0.01));
     REQUIRE_THAT(output.tones[1].power_dBm, WithinAbs(-26.0, 0.01));
@@ -80,7 +76,7 @@ TEST_CASE("Attenuator: passive noise model", "[attenuator]") {
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
 
     const double k = 1.3806e-23;
     const double T = 290.0;
@@ -102,7 +98,7 @@ TEST_CASE("Attenuator: noise floor convergence at high attenuation", "[attenuato
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
 
     const double k = 1.3806e-23;
     const double T = 290.0;
@@ -115,7 +111,9 @@ TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][spa
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
 
-    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
     REQUIRE(atten.sParamMode());
 
     Spectrum input = buildTestSpectrum();
@@ -123,7 +121,7 @@ TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][spa
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
     REQUIRE(output.tones.size() == 3);
 
     // Verify gain is applied (tones should be attenuated by S21 magnitude)
@@ -133,14 +131,16 @@ TEST_CASE("Attenuator: S-param mode frequency-dependent gain", "[attenuator][spa
 TEST_CASE("Attenuator: S-param noise model", "[attenuator][sparam]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
-    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
 
     Spectrum input = buildTestSpectrum();
     atten.node().inputs[0] = &input;
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
 
     for (size_t i = 0; i < output.noise_total_W.size(); ++i) {
         REQUIRE(output.noise_total_W[i] >= 0.0);
@@ -151,14 +151,16 @@ TEST_CASE("Attenuator: S-param noise model", "[attenuator][sparam]") {
 TEST_CASE("Attenuator: S-param phase shift", "[attenuator][sparam]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(1, graph);
-    atten.setSParamFile(std::string(PROJECT_SOURCE_DIR) + "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    atten.setSParamFile(
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
 
     Spectrum input = buildTestSpectrum();
     atten.node().inputs[0] = &input;
 
     atten.update(0.016);
 
-    const auto& output = atten.node().outputs[0];
+    const auto &output = atten.node().outputs[0];
     REQUIRE(output.phase_deg.size() == 3);
 }
 

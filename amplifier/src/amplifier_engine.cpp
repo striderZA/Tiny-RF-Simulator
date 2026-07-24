@@ -1,16 +1,15 @@
 #include "amplifier_engine.h"
-#include <nlohmann/json.hpp>
 #include <cmath>
+#include <nlohmann/json.hpp>
 #include <numbers>
 
-AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine& graph)
-    : m_id(id), m_graph(&graph) {
+AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, 1, 1);
     m_node.inputs.resize(1);
     m_node.outputs.resize(1);
 }
 
-void AmplifierEngine::setSParamFilepath(const std::string& path) {
+void AmplifierEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
     m_sparam_mode = m_sparam_data.load(path);
     if (m_sparam_data.loaded())
@@ -28,8 +27,9 @@ int AmplifierEngine::outputPinId() const {
 
 void AmplifierEngine::update(double dt) {
     (void)dt;
-    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr && (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr == m_cached_input_ptr &&
+        (!in_ptr || in_ptr->generation == m_cached_input_generation))
         return;
 
     // --- S-parameter mode ---
@@ -45,7 +45,7 @@ void AmplifierEngine::update(double dt) {
             m_cached_input_generation = in_ptr->generation;
         }
 
-        auto& out = m_node.outputs[0];
+        auto &out = m_node.outputs[0];
 
         if (in_ptr && !in_ptr->frequencies.empty())
             out.frequencies = in_ptr->frequencies;
@@ -56,7 +56,7 @@ void AmplifierEngine::update(double dt) {
         const size_t N = out.frequencies.size();
 
         // Apply S21 complex gain to tones
-        for (auto& t : out.tones) {
+        for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, m_sparam_fwd_idx);
             double mag = std::abs(S);
             t.power_dBm += 20.0 * std::log10(mag);
@@ -66,12 +66,11 @@ void AmplifierEngine::update(double dt) {
         // Nonlinear processing
         if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
             size_t n_fund = out.tones.size();
-            auto result = m_nonlinear.process(in_ptr->tones,
-                [this](double freq) {
-                    auto S = this->m_sparam_data.interpolate(freq, this->m_sparam_fwd_idx);
-                    return std::abs(S);
-                });
-            for (const auto& t : result.extra_tones)
+            auto result = m_nonlinear.process(in_ptr->tones, [this](double freq) {
+                auto S = this->m_sparam_data.interpolate(freq, this->m_sparam_fwd_idx);
+                return std::abs(S);
+            });
+            for (const auto &t : result.extra_tones)
                 out.tones.push_back(t);
             if (result.compression_dB < -1e8) {
                 for (size_t i = 0; i < n_fund; ++i)
@@ -104,7 +103,8 @@ void AmplifierEngine::update(double dt) {
             double gain_linear = std::norm(S);
             sum_gain += gain_linear;
             ++gain_count;
-            double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
+            double nin =
+                (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = gain_linear * nin;
         }
 
@@ -144,10 +144,10 @@ void AmplifierEngine::update(double dt) {
     if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
         size_t n_fund = out.tones.size();
         double gain_linear = dbToLinear(m_gain_dB);
-        auto result = m_nonlinear.process(in_ptr->tones,
-            [gain_linear](double) { return gain_linear; });
+        auto result =
+            m_nonlinear.process(in_ptr->tones, [gain_linear](double) { return gain_linear; });
 
-        for (const auto& t : result.extra_tones)
+        for (const auto &t : result.extra_tones)
             out.tones.push_back(t);
 
         if (result.compression_dB < -1e8) {
@@ -199,20 +199,18 @@ void AmplifierEngine::update(double dt) {
 }
 
 nlohmann::json AmplifierEngine::serialize() const {
-    return {
-        {"gain_dB", m_gain_dB},
-        {"nf_dB", m_nf_dB},
-        {"enable_nonlinear", m_nonlinear.enabled()},
-        {"oip2_dBm", m_nonlinear.oip2_dBm()},
-        {"oip3_dBm", m_nonlinear.oip3_dBm()},
-        {"p1db_dBm", m_nonlinear.p1db_dBm()},
-        {"sparam_mode", m_sparam_mode},
-        {"sparam_filepath", m_sparam_filepath},
-        {"sparam_fwd_idx", m_sparam_fwd_idx}
-    };
+    return {{"gain_dB", m_gain_dB},
+            {"nf_dB", m_nf_dB},
+            {"enable_nonlinear", m_nonlinear.enabled()},
+            {"oip2_dBm", m_nonlinear.oip2_dBm()},
+            {"oip3_dBm", m_nonlinear.oip3_dBm()},
+            {"p1db_dBm", m_nonlinear.p1db_dBm()},
+            {"sparam_mode", m_sparam_mode},
+            {"sparam_filepath", m_sparam_filepath},
+            {"sparam_fwd_idx", m_sparam_fwd_idx}};
 }
 
-void AmplifierEngine::deserialize(const nlohmann::json& j) {
+void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_gain_dB = j.value("gain_dB", 0.0);
     m_nf_dB = j.value("nf_dB", 0.0);
     m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
@@ -227,8 +225,8 @@ void AmplifierEngine::deserialize(const nlohmann::json& j) {
 
 std::string AmplifierEngine::hoverSummary() const {
     if (m_sparam_mode && m_sparam_data.loaded()) {
-        return "S-Param Amp | NF: " + std::to_string(m_nf_dB) + " dB"
-            + (m_nonlinear.enabled() ? " | NL On" : "");
+        return "S-Param Amp | NF: " + std::to_string(m_nf_dB) + " dB" +
+               (m_nonlinear.enabled() ? " | NL On" : "");
     }
     return "Gain: " + std::to_string(m_gain_dB) + " dB | NF: " + std::to_string(m_nf_dB) + " dB";
 }

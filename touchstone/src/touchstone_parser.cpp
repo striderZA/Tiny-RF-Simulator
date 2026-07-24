@@ -4,42 +4,58 @@
 #include <numbers>
 #include <sstream>
 
-std::string TouchstoneParser::stripComment(const std::string& line) {
+std::string TouchstoneParser::stripComment(const std::string &line) {
     size_t pos = line.find('!');
-    if (pos == std::string::npos) return line;
+    if (pos == std::string::npos)
+        return line;
     return line.substr(0, pos);
 }
 
-bool TouchstoneParser::parseOptionLine(const std::string& line, TouchstoneData& data) {
+bool TouchstoneParser::parseOptionLine(const std::string &line, TouchstoneData &data) {
     std::istringstream iss(line);
     std::string token;
     iss >> token;
-    if (token != "#") return false;
+    if (token != "#")
+        return false;
 
     while (iss >> token) {
         // Case-insensitive compare
-        auto lower = [](const std::string& s) {
+        auto lower = [](const std::string &s) {
             std::string r = s;
-            for (char& c : r) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            for (char &c : r)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             return r;
         };
         std::string t = lower(token);
 
-        if (t == "hz") data.freq_unit = TouchstoneData::FrequencyUnit::Hz;
-        else if (t == "khz") data.freq_unit = TouchstoneData::FrequencyUnit::kHz;
-        else if (t == "mhz") data.freq_unit = TouchstoneData::FrequencyUnit::MHz;
-        else if (t == "ghz") data.freq_unit = TouchstoneData::FrequencyUnit::GHz;
-        else if (t == "s") data.parameter = TouchstoneData::Parameter::S;
-        else if (t == "y") data.parameter = TouchstoneData::Parameter::Y;
-        else if (t == "z") data.parameter = TouchstoneData::Parameter::Z;
-        else if (t == "h") data.parameter = TouchstoneData::Parameter::H;
-        else if (t == "g") data.parameter = TouchstoneData::Parameter::G;
-        else if (t == "db") data.format = TouchstoneData::Format::DB;
-        else if (t == "ma") data.format = TouchstoneData::Format::MA;
-        else if (t == "ri") data.format = TouchstoneData::Format::RI;
+        if (t == "hz")
+            data.freq_unit = TouchstoneData::FrequencyUnit::Hz;
+        else if (t == "khz")
+            data.freq_unit = TouchstoneData::FrequencyUnit::kHz;
+        else if (t == "mhz")
+            data.freq_unit = TouchstoneData::FrequencyUnit::MHz;
+        else if (t == "ghz")
+            data.freq_unit = TouchstoneData::FrequencyUnit::GHz;
+        else if (t == "s")
+            data.parameter = TouchstoneData::Parameter::S;
+        else if (t == "y")
+            data.parameter = TouchstoneData::Parameter::Y;
+        else if (t == "z")
+            data.parameter = TouchstoneData::Parameter::Z;
+        else if (t == "h")
+            data.parameter = TouchstoneData::Parameter::H;
+        else if (t == "g")
+            data.parameter = TouchstoneData::Parameter::G;
+        else if (t == "db")
+            data.format = TouchstoneData::Format::DB;
+        else if (t == "ma")
+            data.format = TouchstoneData::Format::MA;
+        else if (t == "ri")
+            data.format = TouchstoneData::Format::RI;
         else if (t == "r") {
             double r;
-            if (iss >> r) data.reference_impedance = r;
+            if (iss >> r)
+                data.reference_impedance = r;
         }
     }
     return true;
@@ -47,24 +63,25 @@ bool TouchstoneParser::parseOptionLine(const std::string& line, TouchstoneData& 
 
 std::complex<double> TouchstoneParser::parsePair(double a, double b, TouchstoneData::Format fmt) {
     switch (fmt) {
-        case TouchstoneData::Format::DB: {
-            double mag = std::pow(10.0, a / 20.0);
-            double rad = b * std::numbers::pi / 180.0;
-            return std::complex<double>(mag * std::cos(rad), mag * std::sin(rad));
-        }
-        case TouchstoneData::Format::MA: {
-            double rad = b * std::numbers::pi / 180.0;
-            return std::complex<double>(a * std::cos(rad), a * std::sin(rad));
-        }
-        case TouchstoneData::Format::RI:
-            return std::complex<double>(a, b);
+    case TouchstoneData::Format::DB: {
+        double mag = std::pow(10.0, a / 20.0);
+        double rad = b * std::numbers::pi / 180.0;
+        return std::complex<double>(mag * std::cos(rad), mag * std::sin(rad));
+    }
+    case TouchstoneData::Format::MA: {
+        double rad = b * std::numbers::pi / 180.0;
+        return std::complex<double>(a * std::cos(rad), a * std::sin(rad));
+    }
+    case TouchstoneData::Format::RI:
+        return std::complex<double>(a, b);
     }
     return std::complex<double>(a, b);
 }
 
-std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepath) {
+std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepath) {
     std::ifstream file(filepath);
-    if (!file.is_open()) return std::nullopt;
+    if (!file.is_open())
+        return std::nullopt;
 
     TouchstoneData data;
     bool option_line_found = false;
@@ -74,30 +91,36 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
 
     while (std::getline(file, line)) {
         // Normalize line endings (CR, LF, CRLF)
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
 
         std::string stripped = stripComment(line);
         // Trim whitespace
         size_t start = stripped.find_first_not_of(" \t\r\n");
-        if (start == std::string::npos) continue;
+        if (start == std::string::npos)
+            continue;
         size_t end = stripped.find_last_not_of(" \t\r\n");
         stripped = stripped.substr(start, end - start + 1);
 
-        if (stripped.empty()) continue;
+        if (stripped.empty())
+            continue;
 
         // Detect version 2.0 keyword
         if (stripped.size() > 10 && stripped[0] == '[') {
             std::string lower = stripped;
-            for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            for (char &c : lower)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             if (lower.find("[version] 2.0") != std::string::npos) {
                 has_version_keyword = true;
             }
             // For now, skip all v2.0 keywords; we'll handle them later
-            if (has_version_keyword) continue;
+            if (has_version_keyword)
+                continue;
         }
 
         if (stripped[0] == '#') {
-            if (!parseOptionLine(stripped, data)) return std::nullopt;
+            if (!parseOptionLine(stripped, data))
+                return std::nullopt;
             option_line_found = true;
             continue;
         }
@@ -110,7 +133,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
         }
     }
 
-    if (!option_line_found) return std::nullopt;
+    if (!option_line_found)
+        return std::nullopt;
 
     // Infer port count from file extension if not explicitly known
     // .s1p -> 1 port, .s2p -> 2 ports, etc.
@@ -148,7 +172,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
 
     // R2: Upper bound on frequency points to prevent OOM
     constexpr size_t MAX_FREQ_POINTS = 10000000;
-    if (num_freq_points > MAX_FREQ_POINTS) return std::nullopt;
+    if (num_freq_points > MAX_FREQ_POINTS)
+        return std::nullopt;
 
     data.frequencies.reserve(num_freq_points);
     data.parameters.reserve(num_freq_points);
@@ -180,8 +205,10 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
     // R1: Validate frequencies — reject NaN, infinity, negative, non-monotonic
     for (size_t i = 0; i < data.frequencies.size(); ++i) {
         double f = data.frequencies[i];
-        if (std::isnan(f) || std::isinf(f) || f < 0.0) return std::nullopt;
-        if (i > 0 && f <= data.frequencies[i - 1]) return std::nullopt;
+        if (std::isnan(f) || std::isinf(f) || f < 0.0)
+            return std::nullopt;
+        if (i > 0 && f <= data.frequencies[i - 1])
+            return std::nullopt;
     }
 
     return data;
@@ -189,10 +216,14 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string& filepat
 
 double TouchstoneData::freqToHz(double freq) const {
     switch (freq_unit) {
-        case FrequencyUnit::Hz: return freq;
-        case FrequencyUnit::kHz: return freq * 1e3;
-        case FrequencyUnit::MHz: return freq * 1e6;
-        case FrequencyUnit::GHz: return freq * 1e9;
+    case FrequencyUnit::Hz:
+        return freq;
+    case FrequencyUnit::kHz:
+        return freq * 1e3;
+    case FrequencyUnit::MHz:
+        return freq * 1e6;
+    case FrequencyUnit::GHz:
+        return freq * 1e9;
     }
     return freq;
 }

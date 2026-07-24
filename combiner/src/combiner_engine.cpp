@@ -1,22 +1,23 @@
 #include "combiner_engine.h"
-#include <nlohmann/json.hpp>
 #include "common.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <nlohmann/json.hpp>
 #include <numbers>
 
-CombinerEngine::CombinerEngine(int id, NodeGraphEngine& graph)
-    : m_id(id), m_graph(&graph) {
+CombinerEngine::CombinerEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("Combiner " + std::to_string(id), &m_node, 2, 1);
     m_node.inputs.resize(2);
     m_node.outputs.resize(1);
 }
 
 int CombinerEngine::inputPinId(int port) const {
-    if (!m_graph || m_graph_node_id < 0 || port < 0 || port >= 2) return -1;
-    for (const auto& node : m_graph->nodes()) {
+    if (!m_graph || m_graph_node_id < 0 || port < 0 || port >= 2)
+        return -1;
+    for (const auto &node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            if (static_cast<size_t>(port) >= node.input_pin_ids.size()) return -1;
+            if (static_cast<size_t>(port) >= node.input_pin_ids.size())
+                return -1;
             return node.input_pin_ids[port];
         }
     }
@@ -24,10 +25,12 @@ int CombinerEngine::inputPinId(int port) const {
 }
 
 int CombinerEngine::outputPinId(int index) const {
-    if (!m_graph || m_graph_node_id < 0 || index != 0) return -1;
-    for (const auto& node : m_graph->nodes()) {
+    if (!m_graph || m_graph_node_id < 0 || index != 0)
+        return -1;
+    for (const auto &node : m_graph->nodes()) {
         if (node.node_id == m_graph_node_id) {
-            if (node.output_pin_ids.empty()) return -1;
+            if (node.output_pin_ids.empty())
+                return -1;
             return node.output_pin_ids[0];
         }
     }
@@ -44,15 +47,13 @@ void CombinerEngine::setSParamMode(bool enabled) {
     m_dirty = true;
 }
 
-void CombinerEngine::setSParamFile(const std::string& path) {
+void CombinerEngine::setSParamFile(const std::string &path) {
     m_sparam_path = path;
     m_sparam_mode = m_sparam.load(path);
     m_dirty = true;
 }
 
-std::string CombinerEngine::hoverSummary() const {
-    return "Combiner: 2→1, -3 dB";
-}
+std::string CombinerEngine::hoverSummary() const { return "Combiner: 2→1, -3 dB"; }
 
 nlohmann::json CombinerEngine::serialize() const {
     return {{"manual_mode", m_manual_mode},
@@ -60,7 +61,7 @@ nlohmann::json CombinerEngine::serialize() const {
             {"sparam_path", m_sparam_path}};
 }
 
-void CombinerEngine::deserialize(const nlohmann::json& j) {
+void CombinerEngine::deserialize(const nlohmann::json &j) {
     m_manual_mode = j.value("manual_mode", true);
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_path = j.value("sparam_path", "");
@@ -69,13 +70,12 @@ void CombinerEngine::deserialize(const nlohmann::json& j) {
 
 void CombinerEngine::update(double dt) {
     (void)dt;
-    const Spectrum* in0 = m_node.inputs.size() > 0 ? m_node.inputs[0] : nullptr;
-    const Spectrum* in1 = m_node.inputs.size() > 1 ? m_node.inputs[1] : nullptr;
+    const Spectrum *in0 = m_node.inputs.size() > 0 ? m_node.inputs[0] : nullptr;
+    const Spectrum *in1 = m_node.inputs.size() > 1 ? m_node.inputs[1] : nullptr;
 
     // --- S-parameter mode ---
     if (m_sparam_mode && m_sparam.loaded()) {
-        if (!m_dirty &&
-            in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
+        if (!m_dirty && in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
             (!in0 || in0->generation == m_cached_input0_generation) &&
             (!in1 || in1->generation == m_cached_input1_generation))
             return;
@@ -83,10 +83,12 @@ void CombinerEngine::update(double dt) {
         m_dirty = false;
         m_cached_input0_ptr = in0;
         m_cached_input1_ptr = in1;
-        if (in0) m_cached_input0_generation = in0->generation;
-        if (in1) m_cached_input1_generation = in1->generation;
+        if (in0)
+            m_cached_input0_generation = in0->generation;
+        if (in1)
+            m_cached_input1_generation = in1->generation;
 
-        auto& out = m_node.outputs[0];
+        auto &out = m_node.outputs[0];
 
         if (in0 && !in0->frequencies.empty()) {
             out.frequencies = in0->frequencies;
@@ -117,7 +119,7 @@ void CombinerEngine::update(double dt) {
 
         // Apply S21 to input 0 tones
         if (in0) {
-            for (const auto& t : in0->tones) {
+            for (const auto &t : in0->tones) {
                 auto S = m_sparam.interpolate(t.freq_Hz, idx_S21);
                 Spectrum::Tone t_out = t;
                 t_out.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -128,7 +130,7 @@ void CombinerEngine::update(double dt) {
 
         // Apply S31 to input 1 tones
         if (in1) {
-            for (const auto& t : in1->tones) {
+            for (const auto &t : in1->tones) {
                 auto S = m_sparam.interpolate(t.freq_Hz, idx_S31);
                 Spectrum::Tone t_out = t;
                 t_out.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -168,8 +170,7 @@ void CombinerEngine::update(double dt) {
     }
 
     // --- Manual mode ---
-    if (!m_dirty &&
-        in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
+    if (!m_dirty && in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
         (!in0 || in0->generation == m_cached_input0_generation) &&
         (!in1 || in1->generation == m_cached_input1_generation))
         return;
@@ -177,10 +178,12 @@ void CombinerEngine::update(double dt) {
     m_dirty = false;
     m_cached_input0_ptr = in0;
     m_cached_input1_ptr = in1;
-    if (in0) m_cached_input0_generation = in0->generation;
-    if (in1) m_cached_input1_generation = in1->generation;
+    if (in0)
+        m_cached_input0_generation = in0->generation;
+    if (in1)
+        m_cached_input1_generation = in1->generation;
 
-    auto& out = m_node.outputs[0];
+    auto &out = m_node.outputs[0];
 
     if (in0 && !in0->frequencies.empty()) {
         out.frequencies = in0->frequencies;
@@ -203,13 +206,13 @@ void CombinerEngine::update(double dt) {
     }
 
     // Combine tones from both inputs with -3 dB loss
-    double loss_linear = std::pow(10.0, -COMBINER_LOSS_DB / 10.0);  // 0.5
+    double loss_linear = std::pow(10.0, -COMBINER_LOSS_DB / 10.0); // 0.5
 
     std::vector<Spectrum::Tone> combined_tones;
 
     // Add tones from input 0
     if (in0) {
-        for (const auto& t : in0->tones) {
+        for (const auto &t : in0->tones) {
             Spectrum::Tone t_out = t;
             t_out.power_dBm -= COMBINER_LOSS_DB;
             combined_tones.push_back(t_out);
@@ -218,7 +221,7 @@ void CombinerEngine::update(double dt) {
 
     // Add tones from input 1
     if (in1) {
-        for (const auto& t : in1->tones) {
+        for (const auto &t : in1->tones) {
             Spectrum::Tone t_out = t;
             t_out.power_dBm -= COMBINER_LOSS_DB;
             combined_tones.push_back(t_out);

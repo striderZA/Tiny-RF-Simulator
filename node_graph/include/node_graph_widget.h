@@ -1,7 +1,7 @@
 #pragma once
 
-#include "icon_registry.h"
 #include "group.h"
+#include "icon_registry.h"
 #include "node_graph_engine.h"
 #include <functional>
 #include <string>
@@ -19,7 +19,7 @@ class NodeGraphWidget {
 
     void draw(const char *title, bool *p_open = nullptr);
 
-    IconRegistry& iconRegistry() { return m_icons; }
+    IconRegistry &iconRegistry() { return m_icons; }
 
     // Callbacks for app to create/destroy components
     std::function<void()> onNodeMoved;
@@ -39,9 +39,12 @@ class NodeGraphWidget {
     std::function<void()> onLinkChanged;
     std::function<std::string(int graph_node_id)> onNodeHover;
 
-    ImNodesEditorContext* context() { return m_context; }
+    ImNodesEditorContext *context() { return m_context; }
     void syncNodesFromEngine();
-    void clearPositionCache() { m_last_node_grid_positions.clear(); m_node_screen_positions.clear(); }
+    void clearPositionCache() {
+        m_last_node_grid_positions.clear();
+        m_node_screen_positions.clear();
+    }
 
   private:
     NodeGraphEngine &m_engine;
@@ -67,11 +70,12 @@ class NodeGraphWidget {
     void handleProbeClick();
 
     // Subcircuit state
-    std::unordered_map<int, int> m_synth_pin_to_real_pin;  // rebuilt every frame
-    std::unordered_map<int, int> m_real_to_synth_pin;      // rebuilt every frame (inverse, for link drawing)
+    std::unordered_map<int, int> m_synth_pin_to_real_pin; // rebuilt every frame
+    std::unordered_map<int, int>
+        m_real_to_synth_pin; // rebuilt every frame (inverse, for link drawing)
 
     int m_context_menu_group_id = -1;
-    ImVec2 m_context_menu_pos = ImVec2(0, 0);  // Editor-space position of right-click
+    ImVec2 m_context_menu_pos = ImVec2(0, 0); // Editor-space position of right-click
     int m_pending_rename_group_id = -1;
     char m_rename_buffer[128] = {};
 
@@ -91,11 +95,11 @@ class NodeGraphWidget {
     void rebuildSynthMaps();
     void drawGroupBackgrounds();
     void drawGroupCollapsedBlocks();
-    void drawGroupTitleBar(Group& g, const ImVec2& top_left);
+    void drawGroupTitleBar(Group &g, const ImVec2 &top_left);
 
     // Theme & symbol drawing
     void setupDarkTheme();
-    static void drawSchematicSymbol(ImDrawList* dl, ImVec2 center, NodeKind kind, ImU32 color);
+    static void drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKind kind, ImU32 color);
 
     // Interaction handlers
     void detectNodeMoves();

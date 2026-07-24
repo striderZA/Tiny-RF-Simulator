@@ -1,12 +1,12 @@
 #include "s_parameter_data.h"
-#include "touchstone_parser.h"
 #include "logging_core.h"
+#include "touchstone_parser.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numbers>
 
-bool SParameterData::load(const std::string& filepath) {
+bool SParameterData::load(const std::string &filepath) {
     m_freqs.clear();
     m_params.clear();
     m_num_ports = 0;
@@ -19,20 +19,25 @@ bool SParameterData::load(const std::string& filepath) {
     m_num_ports = data->num_ports;
     m_freqs = std::move(data->frequencies);
     m_params = std::move(data->parameters);
-    LOG_INFO("Loaded S-parameter data from %s (%zu points, %d ports)",
-             filepath.c_str(), m_freqs.size(), m_num_ports);
+    LOG_INFO("Loaded S-parameter data from %s (%zu points, %d ports)", filepath.c_str(),
+             m_freqs.size(), m_num_ports);
     return true;
 }
 
 std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) const {
-    if (m_freqs.empty() || m_params.empty()) return {1.0, 0.0};
+    if (m_freqs.empty() || m_params.empty())
+        return {1.0, 0.0};
     int total = m_num_ports * m_num_ports;
-    if (param_idx < 0 || param_idx >= total) return {1.0, 0.0};
-    if (freq_Hz <= m_freqs.front()) return m_params.front()[param_idx];
-    if (freq_Hz >= m_freqs.back()) return m_params.back()[param_idx];
+    if (param_idx < 0 || param_idx >= total)
+        return {1.0, 0.0};
+    if (freq_Hz <= m_freqs.front())
+        return m_params.front()[param_idx];
+    if (freq_Hz >= m_freqs.back())
+        return m_params.back()[param_idx];
 
     auto it = std::lower_bound(m_freqs.begin(), m_freqs.end(), freq_Hz);
-    size_t i = (it == m_freqs.begin()) ? 0 : static_cast<size_t>(std::distance(m_freqs.begin(), it) - 1);
+    size_t i =
+        (it == m_freqs.begin()) ? 0 : static_cast<size_t>(std::distance(m_freqs.begin(), it) - 1);
     double f0 = m_freqs[i], f1 = m_freqs[i + 1];
     double t = (freq_Hz - f0) / (f1 - f0);
     auto p0 = m_params[i][param_idx];
@@ -40,7 +45,7 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     return p0 + t * (p1 - p0);
 }
 
-void SParameterData::applyToSpectrum(const Spectrum& in, Spectrum& out, int param_idx) const {
+void SParameterData::applyToSpectrum(const Spectrum &in, Spectrum &out, int param_idx) const {
     if (!loaded()) {
         out.frequencies.clear();
         out.tones.clear();
@@ -56,7 +61,7 @@ void SParameterData::applyToSpectrum(const Spectrum& in, Spectrum& out, int para
     const size_t N = out.frequencies.size();
 
     out.tones = in.tones;
-    for (auto& t : out.tones) {
+    for (auto &t : out.tones) {
         auto S = interpolate(t.freq_Hz, param_idx);
         double mag = std::max(std::abs(S), std::numeric_limits<double>::min());
         t.power_dBm += 20.0 * std::log10(mag);

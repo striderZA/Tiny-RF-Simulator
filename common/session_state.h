@@ -27,13 +27,13 @@ class SessionState {
 #endif
     }
 
-    void save(const char* section, const char* key, const char* value) {
+    void save(const char *section, const char *key, const char *value) {
 #ifdef _WIN32
         WritePrivateProfileStringA(section, key, value, m_path.c_str());
 #endif
     }
 
-    std::string load(const char* section, const char* key, const char* default_val) const {
+    std::string load(const char *section, const char *key, const char *default_val) const {
 #ifdef _WIN32
         std::vector<char> buf(256);
         DWORD ret;
@@ -53,12 +53,12 @@ class SessionState {
 #endif
     }
 
-    bool loadBool(const char* section, const char* key, bool default_val) const {
+    bool loadBool(const char *section, const char *key, bool default_val) const {
         auto s = load(section, key, default_val ? "1" : "0");
         return s == "1";
     }
 
-    void saveBool(const char* section, const char* key, bool val) {
+    void saveBool(const char *section, const char *key, bool val) {
         save(section, key, val ? "1" : "0");
     }
 

@@ -1,11 +1,11 @@
 #pragma once
+#include "component_interface.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
-#include "component_interface.h"
 
 class SignalGeneratorEngine : public IComponentEngine {
   public:
-    SignalGeneratorEngine(int id, NodeGraphEngine& graph);
+    SignalGeneratorEngine(int id, NodeGraphEngine &graph);
 
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_node_id; }
@@ -37,15 +37,15 @@ class SignalGeneratorEngine : public IComponentEngine {
     void setFs_Hz(double fs) { m_fs_Hz = fs; }
 
     SignalNode &node() override { return m_node; }
-    const SignalNode& node() const override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
     void update(double dt) override;
     nlohmann::json serialize() const override;
-    void deserialize(const nlohmann::json&) override;
+    void deserialize(const nlohmann::json &) override;
 
   private:
     int m_id;
     int m_graph_node_id = -1;
-    NodeGraphEngine* m_graph = nullptr;
+    NodeGraphEngine *m_graph = nullptr;
     std::vector<Spectrum::Tone> m_tones;
     SignalNode m_node;
     bool m_dirty = true;

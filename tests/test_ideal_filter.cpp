@@ -1,9 +1,9 @@
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/catch_approx.hpp>
 #include "common.h"
 #include "ideal_filter_engine.h"
-#include "signal_generator_engine.h"
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 using Catch::Approx;
 
@@ -20,7 +20,7 @@ TEST_CASE("IdealFilter LPF passes tones below cutoff, blocks above", "[filter]")
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == 50e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
@@ -39,7 +39,7 @@ TEST_CASE("IdealFilter HPF blocks tones below cutoff, passes above", "[filter]")
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == 150e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-30.0));
@@ -59,7 +59,7 @@ TEST_CASE("IdealFilter BPF passes tones in band, blocks outside", "[filter]") {
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == 75e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
@@ -79,7 +79,7 @@ TEST_CASE("IdealFilter BSF blocks tones in band, passes outside", "[filter]") {
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
     REQUIRE(out.tones.size() == 2);
     REQUIRE(out.tones[0].freq_Hz == 30e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-10.0));
@@ -128,8 +128,8 @@ TEST_CASE("IdealFilter passes noise density unchanged in passband", "[filter]") 
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
-    const auto& in_ref = gen.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
+    const auto &in_ref = gen.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == in_ref.noise_total_W.size());
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
         if (out.frequencies[i] <= 300e6)
@@ -167,7 +167,7 @@ TEST_CASE("IdealFilter dirty flag skips when input unchanged", "[filter]") {
     filt.update(0.0);
 
     uint64_t gen_after_first = filt.node().outputs[0].generation;
-    auto& out = filt.node().outputs[0];
+    auto &out = filt.node().outputs[0];
     size_t tone_count = out.tones.size();
     filt.update(0.0);
     REQUIRE(out.generation == gen_after_first);
@@ -192,8 +192,8 @@ TEST_CASE("IdealFilter BSF passes noise outside stopband, blocks inside", "[filt
     filt.node().inputs[0] = &gen.node().outputs[0];
     filt.update(0.0);
 
-    const auto& out = filt.node().outputs[0];
-    const auto& in_ref = gen.node().outputs[0];
+    const auto &out = filt.node().outputs[0];
+    const auto &in_ref = gen.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == in_ref.noise_total_W.size());
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
         double f = out.frequencies[i];

@@ -3,20 +3,20 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
-#include <GLFW/glfw3.h>
-#include <implot.h>
-#include <imnodes.h>
 #include "imgui_test_engine/imgui_te_engine.h"
-#include "imgui_test_engine/imgui_te_ui.h"
 #include "imgui_test_engine/imgui_te_exporters.h"
+#include "imgui_test_engine/imgui_te_ui.h"
+#include <GLFW/glfw3.h>
+#include <imnodes.h>
+#include <implot.h>
 
-extern void RegisterUiTests(ImGuiTestEngine* engine);
+extern void RegisterUiTests(ImGuiTestEngine *engine);
 
 int main() {
     if (!glfwInit())
         return 1;
 
-    GLFWwindow* window = glfwCreateWindow(800, 600, "RF Simulator UI Tests", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(800, 600, "RF Simulator UI Tests", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
@@ -30,7 +30,7 @@ int main() {
     ImPlot::CreateContext();
     ImNodes::CreateContext();
 
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -44,8 +44,8 @@ int main() {
 
     RfSimulatorApp app;
 
-    ImGuiTestEngine* engine = ImGuiTestEngine_CreateContext();
-    ImGuiTestEngineIO& test_io = ImGuiTestEngine_GetIO(engine);
+    ImGuiTestEngine *engine = ImGuiTestEngine_CreateContext();
+    ImGuiTestEngineIO &test_io = ImGuiTestEngine_GetIO(engine);
     test_io.ConfigVerboseLevel = ImGuiTestVerboseLevel_Info;
     test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
     test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;

@@ -8,9 +8,9 @@
 #endif
 #include <GL/gl.h>
 
-ImTextureID loadTextureFromFile(const char* png_path) {
+ImTextureID loadTextureFromFile(const char *png_path) {
     int w, h, channels;
-    unsigned char* data = stbi_load(png_path, &w, &h, &channels, 4);
+    unsigned char *data = stbi_load(png_path, &w, &h, &channels, 4);
     if (!data)
         return ImTextureID(0);
 
@@ -30,7 +30,8 @@ ImTextureID loadTextureFromFile(const char* png_path) {
 }
 
 void freeTexture(ImTextureID tex) {
-    if (!tex) return;
+    if (!tex)
+        return;
     GLuint gl_tex = static_cast<GLuint>(static_cast<ImU64>(tex));
     glDeleteTextures(1, &gl_tex);
 }

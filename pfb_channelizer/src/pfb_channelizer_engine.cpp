@@ -1,10 +1,10 @@
 #define _USE_MATH_DEFINES
 #include "pfb_channelizer_engine.h"
-#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
+#include <nlohmann/json.hpp>
 
-PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine& graph)
+PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine &graph)
     : m_id(id), m_graph(&graph) {
     m_graph_node_id = graph.addNode("PFB " + std::to_string(id), &m_node, 1, 2);
     m_node.inputs.resize(1);
@@ -20,36 +20,55 @@ int PFBChannelizerEngine::outputPinId() const {
 }
 
 void PFBChannelizerEngine::setChannelCount(int M) {
-    if (M < 2) M = 2;
-    if (M > 2048) M = 2048;
+    if (M < 2)
+        M = 2;
+    if (M > 2048)
+        M = 2048;
     if (M != m_cfg.M) {
         m_cfg.M = M;
         m_dirty = true;
-        if (m_active_channel >= M) m_active_channel = M - 1;
+        if (m_active_channel >= M)
+            m_active_channel = M - 1;
     }
 }
 
 void PFBChannelizerEngine::setTapsPerBranch(int K) {
-    if (K < 1) K = 1;
-    if (K > 64) K = 64;
-    if (K != m_cfg.K) { m_cfg.K = K; m_dirty = true; }
+    if (K < 1)
+        K = 1;
+    if (K > 64)
+        K = 64;
+    if (K != m_cfg.K) {
+        m_cfg.K = K;
+        m_dirty = true;
+    }
 }
 
 void PFBChannelizerEngine::setKaiserBeta(double beta) {
-    if (beta < 0.0) beta = 0.0;
-    if (beta > 20.0) beta = 20.0;
-    if (beta != m_cfg.beta) { m_cfg.beta = beta; m_dirty = true; }
+    if (beta < 0.0)
+        beta = 0.0;
+    if (beta > 20.0)
+        beta = 20.0;
+    if (beta != m_cfg.beta) {
+        m_cfg.beta = beta;
+        m_dirty = true;
+    }
 }
 
 void PFBChannelizerEngine::setActiveChannel(int ch) {
-    if (ch < 0) ch = 0;
-    if (ch >= m_cfg.M) ch = m_cfg.M - 1;
-    if (ch != m_active_channel) { m_active_channel = ch; m_dirty = true; }
+    if (ch < 0)
+        ch = 0;
+    if (ch >= m_cfg.M)
+        ch = m_cfg.M - 1;
+    if (ch != m_active_channel) {
+        m_active_channel = ch;
+        m_dirty = true;
+    }
 }
 
 void PFBChannelizerEngine::update(double) {
-    const Spectrum* in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr && (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
+    if (!m_dirty && in_ptr == m_cached_input_ptr &&
+        (!in_ptr || in_ptr->generation == m_cached_input_generation))
         return;
     m_dirty = false;
 
@@ -61,29 +80,30 @@ void PFBChannelizerEngine::update(double) {
     if (in_ptr)
         m_cached_input_generation = in_ptr->generation;
 
-    auto& out = m_node.outputs[0];
+    auto &out = m_node.outputs[0];
 
     if (!in_ptr || in_ptr->frequencies.size() < 2 || m_cfg.Fs_Hz <= 0.0) {
         out.frequencies.clear();
         out.tones.clear();
         out.noise_W.clear();
         out.noise_total_W.clear();
-        if (!out.frequencies.empty()) out.bumpGeneration();
+        if (!out.frequencies.empty())
+            out.bumpGeneration();
         return;
     }
 
     // Only recompute channels when frequency grid, Fs, or M changes
-    if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz
-        || m_channels.size() != static_cast<size_t>(m_cfg.M)) {
+    if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz ||
+        m_channels.size() != static_cast<size_t>(m_cfg.M)) {
         recomputeChannels(in_ptr->frequencies);
         m_cached_freqs = in_ptr->frequencies;
         m_cached_Fs_Hz = m_cfg.Fs_Hz;
     }
 
-    double bin_width = (in_ptr->frequencies.size() > 1)
-        ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
+    double bin_width =
+        (in_ptr->frequencies.size() > 1) ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
 
-    for (auto& ch : m_channels) {
+    for (auto &ch : m_channels) {
         ch.noise_W = 0.0;
         ch.tones.clear();
 
@@ -92,11 +112,12 @@ void PFBChannelizerEngine::update(double) {
             double weight = ch.bin_weights[i];
 
             double psd = (idx < static_cast<int>(in_ptr->noise_total_W.size()))
-                ? in_ptr->noise_total_W[idx] : 0.0;
+                             ? in_ptr->noise_total_W[idx]
+                             : 0.0;
             ch.noise_W += psd * weight * weight * bin_width;
         }
 
-        for (const auto& tone : in_ptr->tones) {
+        for (const auto &tone : in_ptr->tones) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
             if (std::abs(offset) <= ch.bandwidth_Hz) {
                 Spectrum::Tone t = tone;
@@ -108,7 +129,7 @@ void PFBChannelizerEngine::update(double) {
         }
     }
 
-    const auto& active = m_channels[m_active_channel];
+    const auto &active = m_channels[m_active_channel];
     size_t n = active.bin_indices.size();
     out.frequencies.resize(n);
     out.noise_W.resize(n, 0.0);
@@ -121,7 +142,8 @@ void PFBChannelizerEngine::update(double) {
         double weight = active.bin_weights[i];
         out.frequencies[i] = in_ptr->frequencies[src_idx];
         double psd = (src_idx < static_cast<int>(in_ptr->noise_total_W.size()))
-            ? in_ptr->noise_total_W[src_idx] : 0.0;
+                         ? in_ptr->noise_total_W[src_idx]
+                         : 0.0;
         double weighted_psd = psd * weight * weight;
         out.noise_W[i] = weighted_psd;
         out.noise_total_W[i] = weighted_psd;
@@ -137,7 +159,7 @@ void PFBChannelizerEngine::update(double) {
     // divided by channel bandwidth, giving a noise reduction proportional
     // to the filter's effective bandwidth. Averaging by overlap count
     // removes ripple from overlapping channel contributions.
-    auto& out_full = m_node.outputs[1];
+    auto &out_full = m_node.outputs[1];
     out_full.frequencies = in_ptr->frequencies;
 
     size_t n_full = in_ptr->frequencies.size();
@@ -149,7 +171,7 @@ void PFBChannelizerEngine::update(double) {
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
-    for (const auto& ch : m_channels) {
+    for (const auto &ch : m_channels) {
         double density = ch.noise_W / channel_bw;
         for (int bin_idx : ch.bin_indices) {
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
@@ -169,20 +191,20 @@ void PFBChannelizerEngine::update(double) {
 
     // Collect tones from all channels (channel-weighted)
     out_full.tones.clear();
-    for (const auto& ch : m_channels) {
+    for (const auto &ch : m_channels) {
         out_full.tones.insert(out_full.tones.end(), ch.tones.begin(), ch.tones.end());
     }
 
     out_full.bumpGeneration();
 }
 
-void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
+void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
     double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
     double nyquist = m_cfg.Fs_Hz / 2.0;
     m_channels.resize(m_cfg.M);
 
     for (int k = 0; k < m_cfg.M; ++k) {
-        auto& ch = m_channels[k];
+        auto &ch = m_channels[k];
         ch.channel_index = k;
         ch.center_freq_Hz = -nyquist + channel_bw / 2.0 + k * channel_bw;
         ch.bandwidth_Hz = channel_bw;
@@ -199,7 +221,6 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double>& freqs) {
             }
         }
     }
-
 }
 
 double PFBChannelizerEngine::prototypeResponse(double offset_Hz) const {
@@ -211,10 +232,10 @@ double PFBChannelizerEngine::prototypeResponse(double offset_Hz) const {
 
 double PFBChannelizerEngine::kaiserWindow(double x) const {
     double r = 2.0 * x / m_cfg.K;
-    if (std::abs(r) > 1.0) return 0.0;
+    if (std::abs(r) > 1.0)
+        return 0.0;
     double arg = 1.0 - r * r;
-    return std::cyl_bessel_i(0, m_cfg.beta * std::sqrt(arg))
-         / std::cyl_bessel_i(0, m_cfg.beta);
+    return std::cyl_bessel_i(0, m_cfg.beta * std::sqrt(arg)) / std::cyl_bessel_i(0, m_cfg.beta);
 }
 
 nlohmann::json PFBChannelizerEngine::serialize() const {
@@ -224,19 +245,23 @@ nlohmann::json PFBChannelizerEngine::serialize() const {
             {"active_channel", m_active_channel}};
 }
 
-void PFBChannelizerEngine::deserialize(const nlohmann::json& j) {
+void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
     m_cfg.M = j.value("channel_count", 32);
-    if (m_cfg.M < 2) m_cfg.M = 2;
-    if (m_cfg.M > 2048) m_cfg.M = 2048;
+    if (m_cfg.M < 2)
+        m_cfg.M = 2;
+    if (m_cfg.M > 2048)
+        m_cfg.M = 2048;
     m_cfg.K = j.value("taps_per_branch", 8);
     m_cfg.beta = j.value("kaiser_beta", 8.0);
     m_active_channel = j.value("active_channel", 0);
-    if (m_active_channel < 0) m_active_channel = 0;
-    if (m_cfg.M > 0 && m_active_channel >= m_cfg.M) m_active_channel = m_cfg.M - 1;
+    if (m_active_channel < 0)
+        m_active_channel = 0;
+    if (m_cfg.M > 0 && m_active_channel >= m_cfg.M)
+        m_active_channel = m_cfg.M - 1;
     m_dirty = true;
 }
 
 std::string PFBChannelizerEngine::hoverSummary() const {
-    return "PFB M=" + std::to_string(m_cfg.M) + " K=" + std::to_string(m_cfg.K)
-        + " Ch=" + std::to_string(m_active_channel);
+    return "PFB M=" + std::to_string(m_cfg.M) + " K=" + std::to_string(m_cfg.K) +
+           " Ch=" + std::to_string(m_active_channel);
 }
