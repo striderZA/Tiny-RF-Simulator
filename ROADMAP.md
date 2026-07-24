@@ -5,7 +5,7 @@
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | 1 | **Data-file component descriptions** — describe components with S-parameter / nonlinear data files; built-in utility to plot loaded data file parameters | ✅ Completed | N-port Touchstone parser (1-4 port), row-major reorder, complex interpolation, phase rotation via `std::arg`, forward param combo, multi-trace S-param plot with 16-color palette, native file browser. **v0.10.0**: Library integration — amplifiers auto-load S-param files from `data_files` array in JSON definitions |
-| 2 | **Spectrum analyzer enhancements** — more functionality in the spectrum analyzer view | 📋 Planned | |
+| 2 | **Spectrum analyzer enhancements** — more functionality in the spectrum analyzer view | ✅ Completed | RBW/VBW controls (Gaussian convolution + moving average), noise jitter with configurable σ, 4 trace modes (ClearWrite, MaxHold, MinHold, VideoAverage EWMA), per-trace history buffers with auto-prune, peak detection (findPeaks), snap-to-peak marker with per-trace visibility sync, PFB dual-trace rendering (full spectrum + active channel highlight), generation-keyed RBW cache for static scenes |
 | 3 | **RF-accurate node-graph components** — improved RF representation in the node graph | 📋 Planned | |
 | 4 | **Multi-port components** — support components with >2 ports, multiple signal paths | ✅ Completed | Data structures refactored (SignalNode/GraphNode vectors); Splitter (1→2 ports, −3dB) implemented and tested |
 | 5 | **Digital chain** — polyphase filter bank + digital downconversion | ✅ Completed | RF ADC (frequency-domain sampler, Nyquist zone aliasing, NSD noise, IQStream) + PFB channelizer (M channels, K taps, engine + widget, 8 tests + benchmarks) |
@@ -21,7 +21,7 @@
 | 15 | **IQ plot UX: scroll mode + fixed time/div + zoom** — fix time-domain display to use scroll mode with configurable time window | 📋 Planned (v0.8.0) | Replace growing buffer with fixed-size ring buffer, add time/div control and zoom, stable y-axis. Prerequisite for PFB improvements. |
 | 16 | **Component library manager** — file-based library browser with global and per-project libraries | ✅ Completed | JSON-based component definitions with datasheet parameters (gain, NF, OIP3, P1dB). Library browser panel with tree view and filter. Three scan roots: built-in, global (~/.rf-sim/libraries/), per-project (./rf-sim-libraries/). P1dB added to NonlinearModel and AmplifierEngine. 3 example amplifier definitions (AM1143, ZX60-33LN+, MGA-62563). **v0.10.0**: Schema v2 with `data_files` array for referencing Touchstone S-param files. `[DATA]` UI indicator in browser. |
 | 17 | **PFB channelizer improvements** — multi-channel output, per-channel filtering, decimation | 📋 Planned (v0.9.0) | Expose all M channels as separate output pins, per-channel digital filtering, decimation output at Fs/M, optional zoom FFT mode. |
-| 18 | **Library enhancements** — search/indexing, metadata extraction, real-world part database | 📋 Planned (v0.9.0) | ✅ Text filter in library browser (completed). Remaining: metadata extraction from S-param files, curated real-world component database. |
+| 18 | **Library enhancements** — search/indexing, metadata extraction, real-world part database | 🔄 Partial (v0.9.0) | ✅ Text filter in library browser. Remaining: metadata extraction from S-param files, curated real-world component database. |
 | 19 | **Plugin system** — extensible component architecture | 📋 Planned (future) | Allow users to extend simulator with custom components. TBD design: C++ SDK, embedded scripting (Lua/Python), or config-driven. Revisit after library manager. |
 | 20 | **Modulation components** — AM, FM, PM, and digital modulations (QAM, PSK, OFDM) | 📋 Planned (future) | Fundamental RF building blocks for communication system simulation. |
 | 21 | **Measurement instruments** — power meter, phase noise analyzer, SNR/THD/SFDR meters | 📋 Planned (future) | Signal quality metrics and advanced measurement tools. |
@@ -33,5 +33,6 @@
 | 📋 Planned | Not yet started, on the horizon |
 | 📋 Planned (vX.Y.Z) | Scoped for a specific release |
 | 🎯 In Design | Being designed / spec written |
+| 🔄 Partial | Some sub-items completed, remainder in progress |
 | 🔄 In Progress | Active implementation |
 | ✅ Completed | Implemented and tested |
