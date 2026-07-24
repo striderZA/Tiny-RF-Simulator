@@ -23,7 +23,7 @@ include(FetchContent)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG docking
+    GIT_TAG v1.91.8-docking
 )
 FetchContent_MakeAvailable(imgui)
 
@@ -31,7 +31,7 @@ FetchContent_MakeAvailable(imgui)
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot.git
-    GIT_TAG master
+    GIT_TAG v0.16
 )
 FetchContent_MakeAvailable(implot)
 
@@ -39,7 +39,7 @@ FetchContent_MakeAvailable(implot)
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG master
+    GIT_TAG 3.4
 )
 FetchContent_MakeAvailable(glfw)
 
@@ -207,3 +207,34 @@ add_subdirectory("icon_registry")
 add_subdirectory("ideal_filter")
 add_subdirectory("attenuator")
 add_subdirectory("combiner")
+# =============================================================================
+# Install targets
+# =============================================================================
+install(TARGETS tiny-rf-simulator RUNTIME DESTINATION bin)
+
+# Install documentation
+install(FILES README.md LICENSE DESTINATION share/doc/rf-simulator)
+install(DIRECTORY openwiki/ DESTINATION share/doc/rf-simulator/openwiki
+  PATTERN ".git" EXCLUDE
+  PATTERN ".last-update.json" EXCLUDE)
+
+# =============================================================================
+# CPack configuration
+# =============================================================================
+set(CPACK_PACKAGE_NAME "rf-simulator")
+set(CPACK_PACKAGE_VENDOR "RF Simulator Project")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Tiny RF Simulator")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+
+# Platform-specific generators
+if(WIN32)
+  set(CPACK_GENERATOR "ZIP")
+else()
+  set(CPACK_GENERATOR "TGZ")
+endif()
+
+include(CPack)
