@@ -139,7 +139,7 @@ Probe colors (in order): teal (`#00CED1`), orange (`#FFA500`), purple (`#9370DB`
 |---|---|---|
 | Pulsed signal generation | 📋 Planned | Time-domain pulse capability |
 | Time-domain view improvements | 📋 Planned | Beyond current IQ plot |
-| Spectrum analyzer enhancements | 📋 Planned | More analyzer features |
+| Spectrum analyzer enhancements | ✅ Completed (v0.11.0) | MaxHold, MinHold, VideoAverage trace modes with per-trace history |
 | RF-accurate node-graph components | 📋 Planned | Improved RF representation |
 | Ponytail cleanup | Partially planned | ~1100–1330 line reduction |
 
