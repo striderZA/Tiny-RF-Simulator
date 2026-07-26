@@ -2,8 +2,10 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
+#include "app.h"
+#undef Yield
 
-void RegisterUiTests(ImGuiTestEngine *e) {
+void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     ImGuiTest *t = nullptr;
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_editor_exists");

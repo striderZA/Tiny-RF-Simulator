@@ -10,7 +10,7 @@
 #include <imnodes.h>
 #include <implot.h>
 
-extern void RegisterUiTests(ImGuiTestEngine *engine);
+extern void RegisterUiTests(ImGuiTestEngine *engine, RfSimulatorApp &app);
 
 int main() {
     if (!glfwInit())
@@ -55,7 +55,7 @@ int main() {
     ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
     ImGuiTestEngine_InstallDefaultCrashHandler();
 
-    RegisterUiTests(engine);
+    RegisterUiTests(engine, app);
     ImGuiTestEngine_QueueTests(engine, ImGuiTestGroup_Tests, "all");
 
     int done_frames = 0;

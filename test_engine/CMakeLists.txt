@@ -5,6 +5,7 @@ project(rf_simulator_ui_tests LANGUAGES CXX)
 add_executable(test_ui
     main.cpp
     ui_tests.cpp
+    test_helpers.cpp
 )
 
 target_link_libraries(test_ui PRIVATE
