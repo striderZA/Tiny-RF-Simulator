@@ -15,21 +15,17 @@ int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const c
     ctx->Yield(2);
 
     IM_CHECK_RETV(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup), -1);
+    ctx->SetRef("canvas_context_menu");
     ctx->ItemClick(menuLabel);
     ctx->Yield(2);
 
     IM_CHECK_RETV(nodes.size() == count_before + 1, -1);
     return nodes.back().node_id;
 }
-
 void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
     ctx->WindowFocus("Node Editor");
-    ImVec2 pos = ImNodes::GetNodeScreenSpacePos(nodeId);
-    constexpr float BODY_W = 96.0f;
-    constexpr float TITLE_BAR_H = 12.0f;
-    ImVec2 click_pos(pos.x + BODY_W * 0.5f, pos.y + TITLE_BAR_H * 0.5f);
-    ctx->MouseMoveToPos(click_pos);
-    ctx->MouseClick(ImGuiMouseButton_Left);
+    ImNodes::ClearNodeSelection();
+    ImNodes::SelectNode(nodeId);
     ctx->Yield(2);
 
     IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);

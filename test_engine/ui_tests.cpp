@@ -3,9 +3,18 @@
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
 #include "app.h"
+#include "test_helpers.h"
+#include "amplifier_engine.h"
+#include "signal_generator_engine.h"
+#include "mixer_engine.h"
+#include "coax_cable_engine.h"
+#include "adc_engine.h"
+#include "attenuator_engine.h"
 #undef Yield
+static RfSimulatorApp *s_app = nullptr;
 
-void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
+ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
+    s_app = &app;
     ImGuiTest *t = nullptr;
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_editor_exists");
@@ -229,5 +238,33 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->MouseClick(ImGuiMouseButton_Left);
             ctx->Yield(2);
         }
+    };
+
+    // =========================================================================
+    // Amplifier Inspector Tests
+    // =========================================================================
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_amplifier_gain");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        int node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
+        IM_CHECK(node >= 0);
+        NodeHelper::selectNode(ctx, node);
+        InspectorHelper::waitForPopulated(ctx, node);
+        InspectorHelper::setInputDouble(ctx, "Gain (dB)", 15.0);
+        auto *amp = dynamic_cast<AmplifierEngine *>(s_app->testComponents().find(node));
+        IM_CHECK(amp != nullptr);
+        IM_CHECK_EQ(amp->gain_dB(), 15.0);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_amplifier_nf");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        int node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
+        IM_CHECK(node >= 0);
+        NodeHelper::selectNode(ctx, node);
+        InspectorHelper::waitForPopulated(ctx, node);
+        InspectorHelper::setInputDouble(ctx, "NF (dB)", 3.5);
+        auto *amp = dynamic_cast<AmplifierEngine *>(s_app->testComponents().find(node));
+        IM_CHECK(amp != nullptr);
+        IM_CHECK_EQ(amp->nf_dB(), 3.5);
     };
 }
