@@ -337,6 +337,14 @@ Only **MT 340** is fully populated. Others (MT 210, 230, 265, 300, 480) are stub
 - VBW (video bandwidth, Hz)
 - Noise jitter amplitude (default 1.5 dB)
 
+**Trace modes** (v0.11.0):
+- **ClearWrite** — default; displays the raw frame data with no persistence
+- **MaxHold** — per-bin maximum over time; accumulates the highest power seen at each frequency bin; cleared on mode switch
+- **MinHold** — per-bin minimum over time; accumulates the lowest power seen at each frequency bin; cleared on mode switch
+- **VideoAverage** — EWMA (exponentially weighted moving average) with configurable count (default 10); smooths frame-to-frame variation
+
+Each trace mode uses per-trace history buffers (keyed on `Spectrum*`) stored in the engine, with auto-prune via `pruneHistory()` to remove stale entries when probes change. `resetTraceHistory()` clears all buffers on mode switch.
+
 **Performance features:**
 - **RBW caching:** Gaussian convolution result cached until spectrum generation or RBW changes.
 - **Jitter + VBW** applied every frame on top of cached RBW result.
@@ -418,7 +426,7 @@ Each JSON definition contains datasheet parameters (gain, NF, OIP3, P1dB) used t
 
 **Part number display** (v0.9.1): instantiated component blocks in the node editor show the library part number as a subtitle below the title bar.
 
-**Tests:** `tests/test_component_library.cpp` — 11 test cases covering JSON loading, directory scanning, instantiation of all 7 component types, part number propagation.
+**Tests:** `tests/test_component_library.cpp` — 15 test cases covering JSON loading, directory scanning, instantiation of all 8 component types, part number propagation, schema v2 data_files parsing, S-param auto-loading, and fallback on missing file.
 
 ---
 

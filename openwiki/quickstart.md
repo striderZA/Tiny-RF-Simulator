@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.9.1
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.11.1
 
 ---
 
@@ -121,6 +121,8 @@ build/bin/tests [bench]
 
 | Milestone | Date | Description | Git Ref |
 |---|---|---|---|
+| Spectrum analyzer trace modes | v0.11.0 | 4 trace modes (ClearWrite, MaxHold, MinHold, VideoAverage EWMA) with per-trace history buffers, auto-prune, mode-switch reset; UI controls for trace mode + video average count | `ab87552` |
+| Library S-param data file import | v0.10.0 | JSON schema v2 with `data_files` array for Touchstone references; auto-load S-param on library instantiation; graceful fallback to single-point params; `[DATA]` indicator in browser | `0934e8b` |
 | Part number display | v0.9.1 | Component blocks show library part number subtitle; 7 new component categories in library | `0934e8b` |
 | Component library | v0.9.0 | File-based library manager with JSON definitions, tree-browser panel, one-click insert; P1dB parameter on AmplifierEngine/NonlinearModel with auto OIP3 derivation; 3 example amplifiers (AM1143, ZX60-33LN+, MGA-62563) | `0934e8b` |
 | Duplicate components | v0.8.4 | Right-click → duplicate copies a component with all parameters (offset position, no connections copied) | `0934e8b` |
