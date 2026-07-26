@@ -1,37 +1,87 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "test_helpers.h"
 #include "app.h"
+#undef Yield
 #include "imnodes.h"
 
 int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel) {
-    (void)ctx; (void)app; (void)menuLabel;
-    return -1;
+    auto &nodes = app.testGraphEngine().nodes();
+    size_t count_before = nodes.size();
+
+    ctx->WindowFocus("Node Editor");
+    auto info = ctx->WindowInfo("Node Editor");
+    ctx->MouseMoveToPos(info.RectFull.GetCenter());
+    ctx->MouseClick(ImGuiMouseButton_Right);
+    ctx->Yield(2);
+
+    IM_CHECK_RETV(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup), -1);
+    ctx->ItemClick(menuLabel);
+    ctx->Yield(2);
+
+    IM_CHECK_RETV(nodes.size() == count_before + 1, -1);
+    return nodes.back().node_id;
 }
 
 void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
-    (void)ctx; (void)nodeId;
+    ctx->WindowFocus("Node Editor");
+    ImVec2 pos = ImNodes::GetNodeScreenSpacePos(nodeId);
+    constexpr float BODY_W = 96.0f;
+    constexpr float TITLE_BAR_H = 12.0f;
+    ImVec2 click_pos(pos.x + BODY_W * 0.5f, pos.y + TITLE_BAR_H * 0.5f);
+    ctx->MouseMoveToPos(click_pos);
+    ctx->MouseClick(ImGuiMouseButton_Left);
+    ctx->Yield(2);
+
+    IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);
+    int selected = -1;
+    ImNodes::GetSelectedNodes(&selected);
+    IM_CHECK_EQ(selected, nodeId);
 }
 
 void NodeHelper::deleteSelectedNode(ImGuiTestContext *ctx) {
-    (void)ctx;
+    ctx->KeyDown(ImGuiKey_Delete);
+    ctx->Yield(2);
+    IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 0);
 }
 
 void InspectorHelper::waitForPopulated(ImGuiTestContext *ctx, int nodeId) {
-    (void)ctx; (void)nodeId;
+    for (int frame = 0; frame < 30; ++frame) {
+        ctx->Yield();
+        if (ImNodes::NumSelectedNodes() == 1) {
+            int sel = -1;
+            ImNodes::GetSelectedNodes(&sel);
+            if (sel == nodeId)
+                return;
+        }
+    }
+    IM_CHECK(false);
 }
 
 void InspectorHelper::clickButton(ImGuiTestContext *ctx, const char *label) {
-    (void)ctx; (void)label;
+    ctx->SetRef("Properties");
+    ctx->ItemClick(label);
+    ctx->Yield(2);
 }
 
 void InspectorHelper::toggleCheckbox(ImGuiTestContext *ctx, const char *label) {
-    (void)ctx; (void)label;
+    ctx->SetRef("Properties");
+    ctx->ItemClick(label);
+    ctx->Yield(2);
 }
 
 void InspectorHelper::setInputDouble(ImGuiTestContext *ctx, const char *label, double value) {
-    (void)ctx; (void)label; (void)value;
+    ctx->SetRef("Properties");
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.6g", value);
+    ctx->ItemInputValue(label, buf);
+    ctx->Yield(2);
 }
 
 void InspectorHelper::selectComboItem(ImGuiTestContext *ctx, const char *comboLabel,
                                       const char *itemLabel) {
-    (void)ctx; (void)comboLabel; (void)itemLabel;
+    ctx->SetRef("Properties");
+    ctx->ItemClick(comboLabel);
+    ctx->Yield(2);
+    ctx->ItemClick(itemLabel);
+    ctx->Yield(2);
 }
