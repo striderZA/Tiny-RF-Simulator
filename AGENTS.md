@@ -96,6 +96,7 @@ When the user requests a durable behavior change, record it here or in the relev
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
 - [app/AGENTS.md](app/AGENTS.md) — Application orchestrator (`RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
 - [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit + benchmark tests
+- [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
 
 <!-- OPENWIKI:START -->
 

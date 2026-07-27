@@ -11,7 +11,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 ## Local Contracts
 - `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks
-- File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal
+- File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal; Help menu provides F1-toggled help window
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Destructor saves window state via `SessionState`
 
