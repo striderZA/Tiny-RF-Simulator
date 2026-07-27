@@ -434,8 +434,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "layout_save_as_creates_file");
     t->TestFunc = [](ImGuiTestContext *ctx) {
-        std::filesystem::remove(
-            std::filesystem::path(s_app->testLayoutManager().layoutsDir()) / "UITestLayout.ini");
+        std::filesystem::remove(std::filesystem::path(s_app->testLayoutManager().layoutsDir()) /
+                                "UITestLayout.ini");
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Layouts/Save As...");

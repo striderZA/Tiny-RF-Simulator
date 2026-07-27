@@ -909,7 +909,8 @@ void RfSimulatorApp::draw_ui() {
                         if (m_layout_manager.renameNamedLayout(name, m_rename_buf))
                             m_rename_target.clear();
                         else
-                            LOG_ERROR("Failed to rename layout '%s' to '%s'", name.c_str(), m_rename_buf);
+                            LOG_ERROR("Failed to rename layout '%s' to '%s'", name.c_str(),
+                                      m_rename_buf);
                     }
                 }
                 ImGui::SameLine();
