@@ -45,6 +45,11 @@ class NodeGraphWidget {
         m_last_node_grid_positions.clear();
         m_node_screen_positions.clear();
     }
+    ImVec2 gridToScreenOffset() const { return m_grid_to_screen_offset; }
+    ImVec2 nodeGridPosition(int node_id) const {
+        auto it = m_last_node_grid_positions.find(node_id);
+        return it != m_last_node_grid_positions.end() ? it->second : ImVec2(-1, -1);
+    }
 
   private:
     NodeGraphEngine &m_engine;
