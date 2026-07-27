@@ -208,6 +208,7 @@ add_subdirectory("ideal_filter")
 add_subdirectory("attenuator")
 add_subdirectory("combiner")
 add_subdirectory("help")
+add_subdirectory("layout")
 # =============================================================================
 # Install targets
 # =============================================================================
