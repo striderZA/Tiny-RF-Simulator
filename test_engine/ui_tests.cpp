@@ -322,4 +322,72 @@ static RfSimulatorApp *s_app = nullptr;
         graph.removeLink(link_id);
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
+
+    // =========================================================================
+    // Validation gap documentation tests
+    // These tests document that the engine currently accepts invalid connections.
+    // They encode known behavioral gaps — not desired behavior — so they should
+    // be updated or removed when validation is implemented.
+    // =========================================================================
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_output_to_output_accepted");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Documents: Engine currently accepts output→output connections (no validation)
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int amp_out = graph.outputPinId(2);
+        int gen_out = graph.outputPinId(1);
+        IM_CHECK(amp_out >= 0);
+        IM_CHECK(gen_out >= 0);
+        int link_id = graph.addLink(amp_out, gen_out);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        graph.removeLink(link_id);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_input_to_input_accepted");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Documents: Engine currently accepts input→input connections (no validation)
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int amp_in = graph.inputPinId(2);
+        int splitter_in = graph.inputPinId(3);
+        IM_CHECK(amp_in >= 0);
+        IM_CHECK(splitter_in >= 0);
+        int link_id = graph.addLink(amp_in, splitter_in);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        graph.removeLink(link_id);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_self_loop_accepted");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Documents: Engine currently accepts self-loops (no validation)
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int amp_out = graph.outputPinId(2);
+        int amp_in = graph.inputPinId(2);
+        IM_CHECK(amp_out >= 0);
+        IM_CHECK(amp_in >= 0);
+        int link_id = graph.addLink(amp_out, amp_in);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        graph.removeLink(link_id);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_duplicate_accepted");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Documents: Engine currently creates duplicate links (no deduplication)
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int gen_out = graph.outputPinId(1);
+        int amp_in = graph.inputPinId(2);
+        int link1 = graph.addLink(gen_out, amp_in);
+        int link2 = graph.addLink(gen_out, amp_in);
+        IM_CHECK(link1 >= 0);
+        IM_CHECK(link2 >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 2);
+        graph.removeLink(link1);
+        graph.removeLink(link2);
+    };
 }
