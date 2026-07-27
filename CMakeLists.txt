@@ -167,7 +167,9 @@ target_include_directories(imgui_test_engine PUBLIC
 
 target_compile_definitions(imgui_test_engine PRIVATE
     IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+    IMGUI_TEST_ENGINE_ENABLE_CAPTURE=1
 )
+
 
 target_link_libraries(imgui_test_engine PUBLIC imgui PRIVATE glfw OpenGL::GL)
 

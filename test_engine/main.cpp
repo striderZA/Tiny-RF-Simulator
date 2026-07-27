@@ -6,9 +6,40 @@
 #include "imgui_test_engine/imgui_te_engine.h"
 #include "imgui_test_engine/imgui_te_exporters.h"
 #include "imgui_test_engine/imgui_te_ui.h"
+#include <cstring>
+#include <chrono>
+#include <thread>
 #include <GLFW/glfw3.h>
 #include <imnodes.h>
 #include <implot.h>
+
+// OpenGL screenshot capture callback for ImGui Test Engine
+static bool ScreenCaptureFunc(ImGuiID viewport_id, int x, int y, int w, int h,
+                              unsigned int *pixels, void * /*user_data*/) {
+    IM_UNUSED(viewport_id);
+    // Give compositor time to update before capture
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    
+    int y2 = (int)ImGui::GetIO().DisplaySize.y - (y + h);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(x, y2, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+    // Flip vertically (OpenGL reads bottom-up)
+    const size_t comp = 4;
+    const size_t stride = (size_t)w * comp;
+    unsigned char *line_tmp = new unsigned char[stride];
+    unsigned char *line_a = (unsigned char *)pixels;
+    unsigned char *line_b = (unsigned char *)pixels + (stride * ((size_t)h - 1));
+    while (line_a < line_b) {
+        memcpy(line_tmp, line_a, stride);
+        memcpy(line_a, line_b, stride);
+        memcpy(line_b, line_tmp, stride);
+        line_a += stride;
+        line_b -= stride;
+    }
+    delete[] line_tmp;
+    return true;
+}
 
 extern void RegisterUiTests(ImGuiTestEngine *engine, RfSimulatorApp &app);
 
@@ -51,6 +82,9 @@ int main() {
     test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;
     test_io.ConfigLogToTTY = true;
     test_io.ConfigSavedSettings = false;
+    test_io.ScreenCaptureFunc = ScreenCaptureFunc;
+    test_io.ConfigCaptureEnabled = true;
+    test_io.ConfigCaptureOnError = true;
 
     ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
     ImGuiTestEngine_InstallDefaultCrashHandler();
