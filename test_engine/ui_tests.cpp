@@ -268,4 +268,58 @@ static RfSimulatorApp *s_app = nullptr;
         IM_CHECK(amp != nullptr);
         IM_CHECK_EQ(amp->nf_dB(), 3.5);
     };
+
+    // =========================================================================
+    // Connection Creation Tests
+    // =========================================================================
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_valid_generator_to_amplifier");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int gen_out = graph.outputPinId(1);
+        int amp_in = graph.inputPinId(2);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(amp_in >= 0);
+        int link_id = graph.addLink(gen_out, amp_in);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        const auto &link = graph.links().back();
+        IM_CHECK_EQ(link.start_pin_id, gen_out);
+        IM_CHECK_EQ(link.end_pin_id, amp_in);
+        graph.removeLink(link_id);
+        IM_CHECK_EQ(graph.links().size(), initial_links);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_multi_fanout");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int split_out = graph.outputPinId(3);
+        int amp_in = graph.inputPinId(2);
+        int mixer_in = graph.inputPinId(4);
+        IM_CHECK(split_out >= 0);
+        IM_CHECK(amp_in >= 0);
+        IM_CHECK(mixer_in >= 0);
+        int link1 = graph.addLink(split_out, amp_in);
+        int link2 = graph.addLink(split_out, mixer_in);
+        IM_CHECK(link1 >= 0);
+        IM_CHECK(link2 >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 2);
+        graph.removeLink(link1);
+        graph.removeLink(link2);
+        IM_CHECK_EQ(graph.links().size(), initial_links);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "connection_delete");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int gen_out = graph.outputPinId(1);
+        int amp_in = graph.inputPinId(2);
+        int link_id = graph.addLink(gen_out, amp_in);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        graph.removeLink(link_id);
+        IM_CHECK_EQ(graph.links().size(), initial_links);
+    };
 }
