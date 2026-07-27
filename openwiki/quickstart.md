@@ -72,6 +72,7 @@ build/bin/tests [bench]
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
+| `help/` | Help window — data-driven quick reference with collapsible sections, toggled via F1 or Help menu |
 | `logging/` | Singleton logger with ImGui viewer |
 | `tests/` | Catch2 unit tests (~210 test cases, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
