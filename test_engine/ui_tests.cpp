@@ -431,4 +431,92 @@ static RfSimulatorApp *s_app = nullptr;
         IM_CHECK_EQ(final_pos.x, new_pos.x);
         IM_CHECK_EQ(final_pos.y, new_pos.y);
     };
+
+    // =========================================================================
+    // Visual Regression Tests
+    // =========================================================================
+    // These tests capture screenshots of key views and compare against baselines.
+    // First run: baselines are saved. Subsequent runs: screenshots are compared.
+    // Set UPDATE_BASELINES env var to regenerate baselines after intentional changes.
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_default_graph");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(4);
+        int diff = ScreenshotHelper::verifyBaseline(ctx, "Node Editor", "default_graph");
+        IM_CHECK(diff >= 0 && diff <= 10); // Allow up to 10/255 tolerance for font rendering
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_single_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        NodeHelper::selectNode(ctx, 2); // Select amplifier (node_id=2)
+        ctx->Yield(2);
+        int diff = ScreenshotHelper::verifyBaseline(ctx, "Node Editor", "single_node_selected");
+        IM_CHECK(diff >= 0 && diff <= 10);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_connected_chain");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Add a mixer to make the chain visually distinct from default graph
+        ctx->WindowFocus("Node Editor");
+        auto info = ctx->WindowInfo("Node Editor");
+        ImVec2 center = info.RectFull.GetCenter();
+        ctx->MouseMoveToPos(center);
+        ctx->MouseClick(ImGuiMouseButton_Right);
+        ctx->Yield(2);
+        ctx->SetRef("canvas_context_menu");
+        ctx->ItemClick("Add Mixer");
+        ctx->SetRef("");
+        ctx->Yield(4);
+        int diff = ScreenshotHelper::verifyBaseline(ctx, "Node Editor", "connected_chain");
+        IM_CHECK(diff >= 0 && diff <= 10);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_group_collapsed");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Create a group by rubber-band selecting all nodes, then capture collapsed state
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+        auto info = ctx->WindowInfo("Node Editor");
+        ImVec2 rb_start = info.RectFull.Min + ImVec2(10, 30);
+        ImVec2 rb_end = info.RectFull.Max - ImVec2(10, 10);
+        ctx->KeyDown(ImGuiKey_LeftShift);
+        ctx->MouseMoveToPos(rb_start);
+        ctx->Yield(1);
+        ctx->MouseDown(ImGuiMouseButton_Left);
+        ctx->Yield(1);
+        ctx->MouseMoveToPos(rb_end);
+        ctx->Yield(1);
+        ctx->MouseUp(ImGuiMouseButton_Left);
+        ctx->Yield(1);
+        ctx->KeyUp(ImGuiKey_LeftShift);
+        ctx->Yield(2);
+        // Confirm group creation if popup appeared
+        if (ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup)) {
+            ctx->SetRef("CreateSubcircuit");
+            ctx->ItemClick("Create");
+            ctx->SetRef("");
+            ctx->Yield(4);
+        }
+        int diff = ScreenshotHelper::verifyBaseline(ctx, "Node Editor", "group_collapsed");
+        IM_CHECK(diff >= 0 && diff <= 10);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_inspector_populated");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        NodeHelper::selectNode(ctx, 0); // Select generator
+        InspectorHelper::waitForPopulated(ctx, 0);
+        ctx->Yield(2);
+        int diff = ScreenshotHelper::verifyBaseline(ctx, "Properties", "inspector_populated");
+        IM_CHECK(diff >= 0 && diff <= 10);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "visual_baseline_full_ui");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Capture entire viewport for full UI baseline
+        ctx->Yield(4);
+        int diff = ScreenshotHelper::verifyFullViewportBaseline(ctx, "full_ui");
+        IM_CHECK(diff >= 0 && diff <= 15);
+    };
 }
