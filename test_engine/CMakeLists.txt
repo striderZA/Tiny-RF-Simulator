@@ -7,6 +7,7 @@ add_executable(test_ui
     ui_tests.cpp
     test_helpers.cpp
 )
+
 target_link_libraries(test_ui PRIVATE
     imgui_test_engine
     simulator::app
@@ -23,8 +24,6 @@ file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" PROJECT_SOURCE_DIR_NORMALIZED)
 target_compile_definitions(test_ui PRIVATE
     PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR_NORMALIZED}"
 )
-
-
 
 include(CTest)
 add_test(NAME test_ui COMMAND test_ui)

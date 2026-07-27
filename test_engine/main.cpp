@@ -6,20 +6,20 @@
 #include "imgui_test_engine/imgui_te_engine.h"
 #include "imgui_test_engine/imgui_te_exporters.h"
 #include "imgui_test_engine/imgui_te_ui.h"
-#include <cstring>
-#include <chrono>
-#include <thread>
 #include <GLFW/glfw3.h>
+#include <chrono>
+#include <cstring>
 #include <imnodes.h>
 #include <implot.h>
+#include <thread>
 
 // OpenGL screenshot capture callback for ImGui Test Engine
-static bool ScreenCaptureFunc(ImGuiID viewport_id, int x, int y, int w, int h,
-                              unsigned int *pixels, void * /*user_data*/) {
+static bool ScreenCaptureFunc(ImGuiID viewport_id, int x, int y, int w, int h, unsigned int *pixels,
+                              void * /*user_data*/) {
     IM_UNUSED(viewport_id);
     // Give compositor time to update before capture
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    
+
     int y2 = (int)ImGui::GetIO().DisplaySize.y - (y + h);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(x, y2, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);

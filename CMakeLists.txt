@@ -170,7 +170,6 @@ target_compile_definitions(imgui_test_engine PRIVATE
     IMGUI_TEST_ENGINE_ENABLE_CAPTURE=1
 )
 
-
 target_link_libraries(imgui_test_engine PUBLIC imgui PRIVATE glfw OpenGL::GL)
 
 # Imgui was built with IMGUI_ENABLE_TEST_ENGINE, so link the test engine

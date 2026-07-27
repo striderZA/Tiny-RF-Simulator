@@ -6,10 +6,9 @@
 
 #include "imgui_test_engine/imgui_capture_tool.h"
 #include "stb_image.h"
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-
 
 const char *ScreenshotHelper::baselineDir() {
     static char path[512];
@@ -21,21 +20,24 @@ const char *ScreenshotHelper::baselineDir() {
     return path;
 }
 
-
 bool ScreenshotHelper::captureWindow(ImGuiTestContext *ctx, const char *windowName,
                                      const char *outputPath) {
     ctx->CaptureReset();
     ctx->CaptureAddWindow(windowName);
-    snprintf(ctx->CaptureArgs->InOutputFile, sizeof(ctx->CaptureArgs->InOutputFile), "%s", outputPath);
-    return ctx->CaptureScreenshot(ImGuiCaptureFlags_Instant);
+    snprintf(ctx->CaptureArgs->InOutputFile, sizeof(ctx->CaptureArgs->InOutputFile), "%s",
+             outputPath);
+    // Note: ImGuiCaptureFlags_Instant is only valid for explicit-rect captures
+    // (IM_ASSERT(args->InCaptureWindows.empty()) in imgui_capture_tool.cpp). Window
+    // captures must use the default multi-frame path.
+    return ctx->CaptureScreenshot(0);
 }
 
 bool ScreenshotHelper::captureFullViewport(ImGuiTestContext *ctx, const char *outputPath) {
     ctx->CaptureReset();
-    snprintf(ctx->CaptureArgs->InOutputFile, sizeof(ctx->CaptureArgs->InOutputFile), "%s", outputPath);
-    return ctx->CaptureScreenshot(ImGuiCaptureFlags_Instant);
+    snprintf(ctx->CaptureArgs->InOutputFile, sizeof(ctx->CaptureArgs->InOutputFile), "%s",
+             outputPath);
+    return ctx->CaptureScreenshot(0);
 }
-
 
 int ScreenshotHelper::compareImages(const char *baselinePath, const char *currentPath,
                                     int *widthOut, int *heightOut) {
@@ -140,7 +142,7 @@ int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const c
 }
 void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
     ctx->WindowFocus("Node Editor");
-    ctx->Yield(4);  // Let imnodes draw and register nodes in object pool
+    ctx->Yield(4); // Let imnodes draw and register nodes in object pool
     ImNodes::ClearNodeSelection();
     ImNodes::SelectNode(nodeId);
     ctx->Yield(2);
