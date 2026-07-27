@@ -40,6 +40,7 @@ target_link_libraries(app
         simulator::combiner_engine
         simulator::node_graph_engine
         simulator::node_graph_widget
+        simulator::help_widget
         common
 )
 

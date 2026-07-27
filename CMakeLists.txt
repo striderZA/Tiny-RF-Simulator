@@ -207,6 +207,7 @@ add_subdirectory("icon_registry")
 add_subdirectory("ideal_filter")
 add_subdirectory("attenuator")
 add_subdirectory("combiner")
+add_subdirectory("help")
 # =============================================================================
 # Install targets
 # =============================================================================
