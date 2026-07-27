@@ -32,6 +32,7 @@ target_link_libraries(core
         glfw
         OpenGL::GL
         common
+        simulator::layout
 )
 
 # Optional: group UI dependencies into a folder in IDEs

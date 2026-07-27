@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
-#include "session_state.h"
+#include "layout_manager.h"
 #include <GLFW/glfw3.h>
 #include <imgui_internal.h>
 #include <implot.h>
@@ -15,6 +15,7 @@ struct RfSimulatorCore::Impl {
     GLFWwindow *window = nullptr;
     ImVec4 clearColor = ImVec4(0.45f, 0.55f, 0.60f, 1.00);
     bool done = false;
+    std::string layoutIniPath;
 };
 
 RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
@@ -50,6 +51,9 @@ bool RfSimulatorCore::Initialize() {
 
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
+    LayoutManager layout_mgr;
+    p_impl->layoutIniPath = layout_mgr.defaultLayoutPath();
+    io.IniFilename = p_impl->layoutIniPath.c_str();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
@@ -87,8 +91,8 @@ void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
 
         {
             static bool first_run = []() {
-                SessionState s;
-                return !s.fileExists();
+                LayoutManager lm;
+                return !lm.defaultLayoutExists();
             }();
 
             if (first_run) {
