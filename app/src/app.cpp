@@ -165,6 +165,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
+    m_show_help = m_state.loadBool("WindowState", "Help", false);
 }
 
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -725,6 +726,11 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("How to Use", "F1"))
+                m_show_help = !m_show_help;
+            ImGui::EndMenu();
+        }
         // Title / project name on the right
         {
             float tw = ImGui::GetContentRegionAvail().x;
@@ -767,6 +773,8 @@ void RfSimulatorApp::draw_ui() {
             } else
                 newProject();
         }
+        if (ImGui::IsKeyPressed(ImGuiKey_F1))
+            m_show_help = !m_show_help;
     }
 
     // Unsaved Changes popup — use a bool flag instead of OpenPopup/BeginPopupModal,
@@ -874,6 +882,9 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);
+
+    if (m_show_help)
+        m_help_widget.draw("How to Use", &m_show_help);
 }
 
 RfSimulatorApp::~RfSimulatorApp() {
@@ -891,4 +902,5 @@ RfSimulatorApp::~RfSimulatorApp() {
         m_state.saveBool("WindowState", key.c_str(), m_show_pfb_grids[i]);
     }
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
+    m_state.saveBool("WindowState", "Help", m_show_help);
 }

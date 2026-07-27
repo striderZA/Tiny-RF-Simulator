@@ -7,6 +7,7 @@
 #include "component_registry.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
+#include "help_widget.h"
 #include "inspector_panel.h"
 #include "iq_plot_widget.h"
 #include "library_browser_widget.h"
@@ -39,6 +40,8 @@ class RfSimulatorApp {
     bool m_show_spectrum = true;
     bool m_show_properties = true;
     bool m_show_node_editor = true;
+    bool m_show_help = false;
+    HelpWidget m_help_widget;
     SessionState m_state;
     ~RfSimulatorApp();
 
