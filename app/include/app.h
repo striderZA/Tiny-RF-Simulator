@@ -55,6 +55,7 @@ class RfSimulatorApp {
     // Test helpers exposed for project file round-trip tests
     NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
     ComponentRegistry &testComponents() { return m_components; }
+    NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
 
     void openFileDialog();
     void saveFileDialog();

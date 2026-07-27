@@ -390,4 +390,28 @@ static RfSimulatorApp *s_app = nullptr;
         graph.removeLink(link1);
         graph.removeLink(link2);
     };
+
+    // =========================================================================
+    // Navigation Tests
+    // =========================================================================
+
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "navigation_drag_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(2);
+        ImVec2 initial_pos = s_app->testGraphWidget().nodeGridPosition(2);
+        IM_CHECK(initial_pos.x >= 0);  // amplifier should have valid position
+        // Programmatically set new position
+        ImVec2 new_pos = ImVec2(initial_pos.x + 100, initial_pos.y + 50);
+        ImNodes::SetNodeGridSpacePos(2, new_pos);
+        // CRITICAL: detectNodeMoves() requires mouse release to update cache
+        auto info = ctx->WindowInfo("Node Editor");
+        ctx->MouseMoveToPos(info.RectFull.GetCenter());
+        ctx->MouseClick(ImGuiMouseButton_Left);  // down + up
+        ctx->Yield(2);  // let draw cycle update widget cache
+        ImVec2 final_pos = s_app->testGraphWidget().nodeGridPosition(2);
+        IM_CHECK_EQ(final_pos.x, new_pos.x);
+        IM_CHECK_EQ(final_pos.y, new_pos.y);
+    };
 }
