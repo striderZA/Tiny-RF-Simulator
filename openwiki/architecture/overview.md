@@ -64,7 +64,7 @@ The core uses a PIMPL pattern (`struct Impl`) to hide GLFW/OpenGL types from all
 **`RfSimulatorApp`** is the central coordinator, instantiated by `main.cpp`. It owns:
 
 - **All DSP engines** — stored in a `ComponentRegistry` (type-erased, indexable by `std::type_index`)
-- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s
+- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget`
 - **`NodeGraphEngine`** — the topology manager
 - **`ViewManager`** — registry of all `SignalNode*` instances
 
@@ -73,7 +73,7 @@ Two methods are called every frame:
 | Method | When | What it does |
 |---|---|---|
 | `update_dsp()` | Before `draw_ui()` each frame | Wires inputs from graph topology, computes topological sort, calls each engine's `update()`, updates probe labels and view states |
-| `draw_ui()` | Inside the ImGui frame | Renders all ImGui windows: node editor, spectrum analyzer, IQ plots, PFB grids, properties panel, log |
+| `draw_ui()` | Inside the ImGui frame | Renders all ImGui windows: node editor, spectrum analyzer, IQ plots, PFB grids, properties panel, log, help window |
 
 ### ComponentRegistry
 

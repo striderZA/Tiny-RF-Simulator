@@ -75,6 +75,7 @@ Call `NodeGraphEngine::probedSignalNodes()` to get up to 4 probed `SignalNode*` 
 `RfSimulatorApp::draw_ui()` renders in this order:
 
 ```
+Main Menu Bar        ← File / View / Help menus with keyboard shortcuts
 Node Editor         ← NodeGraphWidget::draw()
 Spectrum Analyzer   ← SpectrumAnalyzerWidget::draw()
 IQ Plot (per PFB)   ← IQPlotWidget::draw()
@@ -82,9 +83,12 @@ Channelizer Grid    ← PFBChannelizerWidget::draw()
 Properties Panel    ← InspectorPanel::draw()  (selected component)
 Generator Widgets   ← SignalGeneratorWidget::draw()
 Log                 ← LoggingWidget::draw()
+Help (How to Use)   ← HelpWidget::draw()      (toggled via F1 or Help > How to Use)
 ```
 
-All windows are gated by boolean visibility flags persisted in `SessionState`.
+The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+
+All windows are gated by boolean visibility flags persisted in `SessionState`, including the help window state (`m_show_help`, saved as `"WindowState.Help"`).
 
 ---
 
