@@ -41,6 +41,7 @@ target_link_libraries(app
         simulator::node_graph_engine
         simulator::node_graph_widget
         simulator::help_widget
+        simulator::layout
         common
 )
 

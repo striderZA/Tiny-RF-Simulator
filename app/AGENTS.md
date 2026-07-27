@@ -12,6 +12,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks
 - File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal; Help menu provides F1-toggled help window
+- View menu's `Layouts` submenu (Save As.../Load/Manage...) drives `LayoutManager` (see `layout/AGENTS.md`) for named window-layout presets; the exe-relative default layout is auto-managed by ImGui itself via `IniFilename`, set in `core/src/core.cpp`
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Destructor saves window state via `SessionState`
 

@@ -23,6 +23,7 @@ set(TEST_SOURCES
     test_iq_plot.cpp
     test_nonlinear_p1db.cpp
     test_amplifier_p1db.cpp
+    test_layout_manager.cpp
 )
 
 if(WIN32)
@@ -50,6 +51,7 @@ target_link_libraries(tests PRIVATE
     simulator::pfb_channelizer_engine
     simulator::iq_plot_widget
     simulator::app
+    simulator::layout
 )
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
