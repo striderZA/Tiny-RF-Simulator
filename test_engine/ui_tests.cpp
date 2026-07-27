@@ -10,6 +10,7 @@
 #include "coax_cable_engine.h"
 #include "adc_engine.h"
 #include "attenuator_engine.h"
+#include <imnodes.h>
 #undef Yield
 static RfSimulatorApp *s_app = nullptr;
 
