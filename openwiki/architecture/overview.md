@@ -110,7 +110,11 @@ Test coverage: 9 round-trip tests in `tests/test_project_file.cpp` (55 assertion
 
 ### SessionState
 
-**`SessionState`** (Windows-only; no-op on other platforms) persists window visibility toggles to INI files via `save()`/`load()`. Not used for project data (use `.rfsim` files for that).
+**`SessionState`** (Windows-only; no-op on other platforms) persists window visibility toggles to INI files via `save()`/`load()`. Not used for project data (use `.rfsim` files for that) or for window docking/layout geometry (that's `LayoutManager`, see below).
+
+### LayoutManager
+
+**`LayoutManager`** (cross-platform) manages ImGui's own window-layout persistence: an exe-relative default layout file (`rf_simulator_layout.ini`, wired into `ImGuiIO::IniFilename` in `core/src/core.cpp` and auto-saved by ImGui itself) plus named presets under `<exe_dir>/layouts/`, explicitly saved/loaded/renamed/deleted via the `View > Layouts` menu in `app/`.
 
 ### Component Data Files
 
@@ -273,6 +277,7 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `common/include/nonlinear_model.h` | `NonlinearModel` (OIP2/OIP3) |
 | `common/include/view_manager.h` | `ViewManager` — node visibility tracking |
 | `common/include/session_state.h` | `SessionState` — window state persistence |
+| `layout/include/layout_manager.h` | `LayoutManager` — window layout persistence (default + named presets) |
 | `node_graph/include/node_graph_engine.h` | `NodeGraphEngine` + `GraphNode`/`GraphLink` |
 | `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (40KB, largest file) |
 | `src/main.cpp` | Entry point (19 lines) |
