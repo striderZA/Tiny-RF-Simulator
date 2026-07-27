@@ -8,6 +8,7 @@
 #include "imgui_test_engine/imgui_te_ui.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <imnodes.h>
 #include <implot.h>
@@ -108,7 +109,12 @@ int main() {
 
         app.draw_ui();
         app.update_dsp();
-        ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
+        // Skip the debug overlay in CI/headless runs: it grows as more tests
+        // complete and can end up occluding the app's own windows, which
+        // silently breaks position-based synthetic clicks in later tests. It's
+        // only useful for interactive local debugging anyway.
+        if (!std::getenv("CI"))
+            ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
 
         ImGui::Render();
         int display_w, display_h;
