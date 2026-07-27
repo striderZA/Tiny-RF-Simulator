@@ -8,6 +8,7 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -165,6 +166,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
+    m_show_help = m_state.loadBool("WindowState", "Help", false);
 }
 
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -723,6 +725,29 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Layouts")) {
+                if (ImGui::MenuItem("Save As...")) {
+                    m_layout_name_buf[0] = '\0';
+                    m_show_save_layout_dialog = true;
+                }
+                auto layout_names = m_layout_manager.listNamedLayouts();
+                if (ImGui::BeginMenu("Load", !layout_names.empty())) {
+                    for (const auto &name : layout_names) {
+                        if (ImGui::MenuItem(name.c_str()))
+                            m_layout_manager.loadNamedLayout(name);
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::MenuItem("Manage..."))
+                    m_show_manage_layouts_dialog = true;
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("How to Use", "F1"))
+                m_show_help = !m_show_help;
             ImGui::EndMenu();
         }
         // Title / project name on the right
@@ -767,6 +792,8 @@ void RfSimulatorApp::draw_ui() {
             } else
                 newProject();
         }
+        if (ImGui::IsKeyPressed(ImGuiKey_F1))
+            m_show_help = !m_show_help;
     }
 
     // Unsaved Changes popup — use a bool flag instead of OpenPopup/BeginPopupModal,
@@ -837,6 +864,83 @@ void RfSimulatorApp::draw_ui() {
         ImGui::EndPopup();
     }
 
+    // Save Layout As popup
+    if (m_show_save_layout_dialog) {
+        ImGui::OpenPopup("Save Layout As");
+    }
+    if (ImGui::BeginPopupModal("Save Layout As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("Name", m_layout_name_buf, sizeof(m_layout_name_buf));
+        bool can_save = m_layout_name_buf[0] != '\0';
+        if (!can_save)
+            ImGui::BeginDisabled();
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            m_layout_manager.saveNamedLayout(m_layout_name_buf);
+            m_layout_name_buf[0] = '\0';
+            m_show_save_layout_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        if (!can_save)
+            ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_layout_name_buf[0] = '\0';
+            m_show_save_layout_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Manage Layouts popup
+    if (m_show_manage_layouts_dialog) {
+        ImGui::OpenPopup("Manage Layouts");
+    }
+    if (ImGui::BeginPopupModal("Manage Layouts", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        auto names = m_layout_manager.listNamedLayouts();
+        if (names.empty())
+            ImGui::TextDisabled("No saved layouts.");
+        for (const auto &name : names) {
+            ImGui::PushID(name.c_str());
+            if (m_rename_target == name) {
+                ImGui::SetNextItemWidth(160);
+                ImGui::InputText("##rename", m_rename_buf, sizeof(m_rename_buf));
+                ImGui::SameLine();
+                if (ImGui::Button("OK")) {
+                    if (m_rename_buf[0] != '\0') {
+                        if (m_layout_manager.renameNamedLayout(name, m_rename_buf))
+                            m_rename_target.clear();
+                        else
+                            LOG_ERROR("Failed to rename layout '%s' to '%s'", name.c_str(),
+                                      m_rename_buf);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("X"))
+                    m_rename_target.clear();
+            } else {
+                ImGui::Text("%s", name.c_str());
+                ImGui::SameLine();
+                if (ImGui::Button("Load"))
+                    m_layout_manager.loadNamedLayout(name);
+                ImGui::SameLine();
+                if (ImGui::Button("Rename")) {
+                    m_rename_target = name;
+                    std::snprintf(m_rename_buf, sizeof(m_rename_buf), "%s", name.c_str());
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Delete"))
+                    m_layout_manager.deleteNamedLayout(name);
+            }
+            ImGui::PopID();
+        }
+        ImGui::Separator();
+        if (ImGui::Button("Close", ImVec2(120, 0))) {
+            m_rename_target.clear();
+            m_show_manage_layouts_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     if (m_show_node_editor)
         m_graph_widget->draw("Node Editor", &m_show_node_editor);
 
@@ -874,6 +978,9 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);
+
+    if (m_show_help)
+        m_help_widget.draw("How to Use", &m_show_help);
 }
 
 RfSimulatorApp::~RfSimulatorApp() {
@@ -891,4 +998,5 @@ RfSimulatorApp::~RfSimulatorApp() {
         m_state.saveBool("WindowState", key.c_str(), m_show_pfb_grids[i]);
     }
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
+    m_state.saveBool("WindowState", "Help", m_show_help);
 }

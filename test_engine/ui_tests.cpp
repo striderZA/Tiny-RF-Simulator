@@ -10,6 +10,7 @@
 #include "mixer_engine.h"
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
+#include <filesystem>
 #include <imnodes.h>
 #undef Yield
 static RfSimulatorApp *s_app = nullptr;
@@ -429,6 +430,40 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImVec2 final_pos = s_app->testGraphWidget().nodeGridPosition(2);
         IM_CHECK_EQ(final_pos.x, new_pos.x);
         IM_CHECK_EQ(final_pos.y, new_pos.y);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "layout_save_as_creates_file");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        std::filesystem::remove(std::filesystem::path(s_app->testLayoutManager().layoutsDir()) /
+                                "UITestLayout.ini");
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->SetRef("Save Layout As");
+        ctx->ItemInputValue("Name", "UITestLayout");
+        ctx->ItemClick("Save");
+        ctx->SetRef("");
+        ctx->Yield();
+
+        IM_CHECK(std::filesystem::exists(
+            std::filesystem::path(s_app->testLayoutManager().layoutsDir()) / "UITestLayout.ini"));
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "layout_manage_delete_removes_file");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto path =
+            std::filesystem::path(s_app->testLayoutManager().layoutsDir()) / "UITestLayout.ini";
+        IM_CHECK(std::filesystem::exists(path));
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Manage...");
+        ctx->SetRef("Manage Layouts");
+        ctx->ItemClick("UITestLayout/Delete");
+        ctx->Yield();
+        ctx->ItemClick("Close");
+        ctx->SetRef("");
+
+        IM_CHECK(!std::filesystem::exists(path));
     };
 
     // =========================================================================

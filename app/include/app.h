@@ -6,9 +6,11 @@
 #include "component_library.h"
 #include "component_registry.h"
 #include "equalizer_engine.h"
+#include "help_widget.h"
 #include "ideal_filter_engine.h"
 #include "inspector_panel.h"
 #include "iq_plot_widget.h"
+#include "layout_manager.h"
 #include "library_browser_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
@@ -39,6 +41,14 @@ class RfSimulatorApp {
     bool m_show_spectrum = true;
     bool m_show_properties = true;
     bool m_show_node_editor = true;
+    bool m_show_help = false;
+    HelpWidget m_help_widget;
+    LayoutManager m_layout_manager;
+    bool m_show_save_layout_dialog = false;
+    bool m_show_manage_layouts_dialog = false;
+    char m_layout_name_buf[128] = {};
+    std::string m_rename_target;
+    char m_rename_buf[128] = {};
     SessionState m_state;
     ~RfSimulatorApp();
 
@@ -56,6 +66,7 @@ class RfSimulatorApp {
     NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
     ComponentRegistry &testComponents() { return m_components; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
+    LayoutManager &testLayoutManager() { return m_layout_manager; }
 
     void openFileDialog();
     void saveFileDialog();

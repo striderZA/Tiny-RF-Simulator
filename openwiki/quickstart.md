@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.11.1
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.12.0
 
 ---
 
@@ -70,6 +70,7 @@ build/bin/tests [bench]
 | `iq_plot/` | Time-domain I/Q waveform (IFFT from spectrum) with ring buffer and zoom |
 | `node_graph/` | Node graph topology engine + imnodes-based editor + subcircuit groups |
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
+| `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `logging/` | Singleton logger with ImGui viewer |
 | `tests/` | Catch2 unit tests (~210 test cases, 14 benchmarks) |

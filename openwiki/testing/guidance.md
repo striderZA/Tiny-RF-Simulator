@@ -75,6 +75,11 @@ These test files are compiled into the main `tests` executable (20 files; 21 on 
 
 **Build target:** `test_ui` (links against `imgui_test_engine`).
 
+The UI test suite uses a **test helper library** (`test_engine/test_helpers.h` / `test_engine/test_helpers.cpp`) that provides reusable helpers:
+
+- `NodeHelper` — `addComponent()` (canvas context menu → click menu item), `selectNode()` (set imnodes selection), `deleteSelectedNode()` (press Delete), `findComponentNodeId<T>()`
+- `InspectorHelper` — `waitForPopulated()`, `clickButton()`, `toggleCheckbox()`, `setInputDouble()`, `selectComboItem()`
+
 | Test Name | What It Tests |
 |---|---|
 | `node_editor_exists` | Node Editor window is focusable |
@@ -86,7 +91,17 @@ These test files are compiled into the main `tests` executable (20 files; 21 on 
 | `subcircuit_rubber_band_creates_group` | Shift-drag creates subcircuit group |
 | `subcircuit_create_group_and_verify_popup` | Second group creation |
 | `subcircuit_expand_and_collapse` | Expand/collapse rendering |
-| `properties_window_exists` | Properties window is focusable |
+| `inspector_amplifier_gain` | Set Gain (dB) on default amplifier via Inspector panel, verify engine state |
+| `inspector_amplifier_nf` | Set NF (dB) on default amplifier via Inspector panel, verify engine state |
+| `connection_valid_generator_to_amplifier` | Programmatic add/remove a valid link |
+| `connection_multi_fanout` | Programmatic fanout from one output to two inputs |
+| `connection_delete` | Programmatic link add then remove |
+| `connection_output_to_output_accepted` | Documents accepted output→output (validation gap — no validation) |
+| `connection_input_to_input_accepted` | Documents accepted input→input (validation gap — no validation) |
+| `connection_self_loop_accepted` | Documents accepted self-loop (validation gap — no validation) |
+| `connection_duplicate_accepted` | Documents accepted duplicate links (validation gap — no deduplication) |
+| `navigation_pan_programmatic` | Programmatic pan offset via imnodes API |
+| `navigation_drag_node` | Programmatic node drag via imnodes API + mouse click to flush cache |
 
 ---
 

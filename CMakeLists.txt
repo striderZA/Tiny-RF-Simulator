@@ -3,7 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.20)
 
-project (RfSimulator VERSION 0.11.1)
+project (RfSimulator VERSION 0.13.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -208,6 +208,8 @@ add_subdirectory("icon_registry")
 add_subdirectory("ideal_filter")
 add_subdirectory("attenuator")
 add_subdirectory("combiner")
+add_subdirectory("help")
+add_subdirectory("layout")
 # =============================================================================
 # Install targets
 # =============================================================================
