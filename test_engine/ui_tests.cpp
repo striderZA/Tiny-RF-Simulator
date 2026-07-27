@@ -395,10 +395,27 @@ static RfSimulatorApp *s_app = nullptr;
     // Navigation Tests
     // =========================================================================
 
+    t = IM_REGISTER_TEST(e, "rf_simulator", "navigation_pan_programmatic");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(2);
+        ImVec2 initial_pan = ImNodes::EditorContextGetPanning();
+        // Programmatically set new pan offset
+        ImVec2 new_pan = ImVec2(initial_pan.x + 50, initial_pan.y + 30);
+        ImNodes::EditorContextResetPanning(new_pan);
+        ctx->Yield(2);
+        ImVec2 final_pan = ImNodes::EditorContextGetPanning();
+        IM_CHECK_EQ(final_pan.x, new_pan.x);
+        IM_CHECK_EQ(final_pan.y, new_pan.y);
+    };
+
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "navigation_drag_node");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
+        ctx->Yield(2);
+        // Reset pan to ensure consistent state after previous test
+        ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
         ImVec2 initial_pos = s_app->testGraphWidget().nodeGridPosition(2);
         IM_CHECK(initial_pos.x >= 0);  // amplifier should have valid position
