@@ -1,20 +1,20 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
+#include "adc_engine.h"
+#include "amplifier_engine.h"
+#include "app.h"
+#include "attenuator_engine.h"
+#include "coax_cable_engine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
-#include "app.h"
-#include "test_helpers.h"
-#include "amplifier_engine.h"
-#include "signal_generator_engine.h"
 #include "mixer_engine.h"
-#include "coax_cable_engine.h"
-#include "adc_engine.h"
-#include "attenuator_engine.h"
+#include "signal_generator_engine.h"
+#include "test_helpers.h"
 #include <imnodes.h>
 #undef Yield
 static RfSimulatorApp *s_app = nullptr;
 
- void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
+void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     s_app = &app;
     ImGuiTest *t = nullptr;
 
@@ -409,7 +409,6 @@ static RfSimulatorApp *s_app = nullptr;
         IM_CHECK_EQ(final_pan.y, new_pan.y);
     };
 
-
     t = IM_REGISTER_TEST(e, "rf_simulator", "navigation_drag_node");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
@@ -418,15 +417,15 @@ static RfSimulatorApp *s_app = nullptr;
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
         ImVec2 initial_pos = s_app->testGraphWidget().nodeGridPosition(2);
-        IM_CHECK(initial_pos.x >= 0);  // amplifier should have valid position
+        IM_CHECK(initial_pos.x >= 0); // amplifier should have valid position
         // Programmatically set new position
         ImVec2 new_pos = ImVec2(initial_pos.x + 100, initial_pos.y + 50);
         ImNodes::SetNodeGridSpacePos(2, new_pos);
         // CRITICAL: detectNodeMoves() requires mouse release to update cache
         auto info = ctx->WindowInfo("Node Editor");
         ctx->MouseMoveToPos(info.RectFull.GetCenter());
-        ctx->MouseClick(ImGuiMouseButton_Left);  // down + up
-        ctx->Yield(2);  // let draw cycle update widget cache
+        ctx->MouseClick(ImGuiMouseButton_Left); // down + up
+        ctx->Yield(2);                          // let draw cycle update widget cache
         ImVec2 final_pos = s_app->testGraphWidget().nodeGridPosition(2);
         IM_CHECK_EQ(final_pos.x, new_pos.x);
         IM_CHECK_EQ(final_pos.y, new_pos.y);

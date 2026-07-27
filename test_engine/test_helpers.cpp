@@ -24,7 +24,7 @@ int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const c
 }
 void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
     ctx->WindowFocus("Node Editor");
-    ctx->Yield(4);  // Let imnodes draw and register nodes in object pool
+    ctx->Yield(4); // Let imnodes draw and register nodes in object pool
     ImNodes::ClearNodeSelection();
     ImNodes::SelectNode(nodeId);
     ctx->Yield(2);
