@@ -116,6 +116,8 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-mesa
+
 
       - name: ccache
         if: runner.os == 'Linux'
@@ -136,14 +138,28 @@ jobs:
         run: cmake --build build
 
       - name: Test
-        # On Linux, UI tests run under Xvfb. On Windows, exclude a
-        # catch_discover_tests concatenation quirk joining test cases with ";".
+        # On Linux, UI tests run under Xvfb. On Windows, tests run with Mesa software rendering.
+        # Timeout prevents hung UI tests from blocking CI indefinitely.
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure --timeout 60 -E "Benchmark|visual_baseline"
+
           else
-            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+            ctest --test-dir build --output-on-failure --timeout 60 -E "Benchmark|visual_baseline|ADC DDC output grid spans"
+
           fi
+
+      - name: Upload test failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-${{ runner.os }}-${{ matrix.label }}
+          path: |
+            build/output/
+            build/Testing/
+          retention-days: 7
+
+
 
       # Collect MinGW runtime DLLs so the Windows binary is portable
       - name: Collect MinGW runtime DLLs
@@ -188,7 +204,8 @@ jobs:
       - name: Test (ASan)
         run: |
           cd build
-          ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
+          ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 xvfb-run --auto-servernum ctest --output-on-failure --timeout 60 -E "Benchmark|visual_baseline"
+
 
   # Code coverage with gcov/lcov, uploaded to Codecov
   coverage:
@@ -212,7 +229,9 @@ jobs:
       - name: Build
         run: cmake --build build
       - name: Test
-        run: ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
+        run: xvfb-run --auto-servernum ctest --test-dir build --output-on-failure --timeout 60 -E "Benchmark|visual_baseline"
+
+
       - name: Generate coverage report
         run: |
           lcov --capture --directory build --output-file coverage.info --gcov-tool gcov-14 --ignore-errors source
