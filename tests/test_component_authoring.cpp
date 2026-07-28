@@ -15,6 +15,9 @@
 #include "component_type_registry.h"
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include <filesystem>
+#include <fstream>
+#include <random>
 
 // --- Task 1: ComponentTypeRegistry ---
 
@@ -108,4 +111,50 @@ TEST_CASE("ComponentLibrary validate passes for well-formed attenuator", "[libra
     nlohmann::json params = {{"attenuation_dB", 10.0}};
     auto issues = lib.validate("attenuator", params);
     REQUIRE(issues.empty());
+}
+
+// --- Task 3: validate() wired into loadFile() ---
+
+static std::string write_temp_json(const std::string &content) {
+    static std::random_device rd;
+    std::uniform_int_distribution<int> dis(100000, 999999);
+    auto path = std::filesystem::temp_directory_path() /
+                ("test_component_" + std::to_string(dis(rd)) + ".json");
+    std::ofstream ofs(path);
+    ofs << content;
+    ofs.close();
+    return path.string();
+}
+
+TEST_CASE("ComponentLibrary loadFile attaches validation issues for out-of-range value",
+         "[library][validate]") {
+    std::string json = R"({
+        "schema_version": 1,
+        "type": "amplifier",
+        "part_number": "BAD-GAIN",
+        "parameters": { "gain_dB": 9999.0 }
+    })";
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE_FALSE(defs[0]->issues.empty());
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("ComponentLibrary loadFile has no issues for well-formed entry", "[library][validate]") {
+    std::string json = R"({
+        "schema_version": 1,
+        "type": "attenuator",
+        "part_number": "GOOD-ATT",
+        "parameters": { "attenuation_dB": 6.0 }
+    })";
+    auto path = write_temp_json(json);
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(defs[0]->issues.empty());
+    std::filesystem::remove(path);
 }
