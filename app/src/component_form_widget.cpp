@@ -20,9 +20,18 @@ void ComponentFormWidget::initBuffersOnce() {
 
 bool ComponentFormWidget::draw(const ComponentLibrary &library) {
     initBuffersOnce();
+    auto issues = m_model->validate(library);
+    auto issue_for = [&](const std::string &key) -> const ValidationIssue * {
+        for (auto &i : issues)
+            if (i.field == key)
+                return &i;
+        return nullptr;
+    };
 
     if (ImGui::InputText("Part Number", m_part_number_buf, sizeof(m_part_number_buf)))
         m_model->setPartNumber(m_part_number_buf);
+    if (const auto *issue = issue_for("part_number"))
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", issue->message.c_str());
     if (ImGui::InputText("Manufacturer", m_manufacturer_buf, sizeof(m_manufacturer_buf)))
         m_model->setManufacturer(m_manufacturer_buf);
     if (ImGui::InputText("Description", m_description_buf, sizeof(m_description_buf)))
@@ -32,13 +41,6 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
 
     ImGui::Separator();
 
-    auto issues = m_model->validate(library);
-    auto issue_for = [&](const std::string &key) -> const ValidationIssue * {
-        for (auto &i : issues)
-            if (i.field == key)
-                return &i;
-        return nullptr;
-    };
 
     for (const auto &field : m_model->descriptor().fields) {
         ImGui::PushID(field.key.c_str());
@@ -121,6 +123,11 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
     if (!valid) {
         ImGui::SameLine();
         ImGui::TextDisabled("(%zu issue%s)", issues.size(), issues.size() == 1 ? "" : "s");
+    }
+    // Whole-definition issues (no specific field) — surface above the Save button
+    for (const auto &issue : issues) {
+        if (issue.field.empty())
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", issue.message.c_str());
     }
     return save_clicked;
 }
