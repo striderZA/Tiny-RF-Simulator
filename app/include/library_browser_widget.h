@@ -11,6 +11,8 @@ class LibraryBrowserWidget {
     explicit LibraryBrowserWidget(ComponentLibrary &library);
     void draw(const char *title, bool *p_open = nullptr);
     std::function<void(const ComponentDefinition &)> onInsert;
+    std::function<void()> onNewComponent;
+    std::function<void(const ComponentDefinition &)> onEditComponent;
 
   private:
     ComponentLibrary *m_library;

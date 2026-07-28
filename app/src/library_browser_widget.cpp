@@ -25,6 +25,11 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
         ImGui::End();
         return;
     }
+    if (ImGui::Button("New Component...")) {
+        if (onNewComponent)
+            onNewComponent();
+    }
+    ImGui::Separator();
 
     ImGui::InputTextWithHint("##filter", "Filter by part number, manufacturer, or description",
                              m_filter_buffer, sizeof(m_filter_buffer));
@@ -79,6 +84,17 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                                 }
                                 tooltip += "Source: " + def->source_path;
                                 ImGui::SetTooltip("%s", tooltip.c_str());
+                            }
+                            bool is_builtin =
+                                def->source_path.find("component_data/library") !=
+                                std::string::npos;
+                            if (!is_builtin) {
+                                ImGui::SameLine();
+                                std::string edit_label = "Edit##" + def->source_path;
+                                if (ImGui::SmallButton(edit_label.c_str())) {
+                                    if (onEditComponent)
+                                        onEditComponent(*def);
+                                }
                             }
                         }
                         ImGui::TreePop();
