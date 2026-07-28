@@ -1,5 +1,6 @@
 #include "component_library.h"
 #include "logging_core.h"
+#include "component_type_registry.h"
 #include <filesystem>
 
 #include "adc_engine.h"
@@ -14,6 +15,75 @@
 #include "node_graph_engine.h"
 #include "splitter_engine.h"
 #include <fstream>
+
+std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
+                                                        const nlohmann::json &parameters) const {
+    std::vector<ValidationIssue> issues;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor) {
+        issues.push_back({"", "Unknown component type '" + type + "'"});
+        return issues;
+    }
+    for (const auto &field : descriptor->fields) {
+        bool present = parameters.contains(field.key);
+        if (!present) {
+            if (field.required)
+                issues.push_back({field.key, "'" + field.label + "' is required"});
+            continue;
+        }
+        const auto &v = parameters[field.key];
+        switch (field.kind) {
+        case FieldKind::Number: {
+            if (!v.is_number()) {
+                issues.push_back({field.key, "'" + field.label + "' must be a number"});
+                break;
+            }
+            double d = v.get<double>();
+            if (d < field.min || d > field.max) {
+                issues.push_back({field.key, "'" + field.label + "' must be between " +
+                                                 std::to_string(field.min) + " and " +
+                                                 std::to_string(field.max)});
+            }
+            break;
+        }
+        case FieldKind::String:
+        case FieldKind::FilePath:
+            if (!v.is_string())
+                issues.push_back({field.key, "'" + field.label + "' must be text"});
+            break;
+        case FieldKind::Bool:
+            if (!v.is_boolean())
+                issues.push_back({field.key, "'" + field.label + "' must be true/false"});
+            break;
+        case FieldKind::Enum: {
+            if (!v.is_string()) {
+                issues.push_back({field.key, "'" + field.label + "' must be text"});
+                break;
+            }
+            std::string s = v.get<std::string>();
+            bool valid = false;
+            for (const auto &ev : field.enum_values)
+                if (ev == s)
+                    valid = true;
+            if (!valid)
+                issues.push_back({field.key, "'" + field.label + "' has an invalid value '" + s +
+                                                 "'"});
+            break;
+        }
+        }
+    }
+    return issues;
+}
+
+void ComponentLibrary::upsert(const ComponentDefinition &def) {
+    for (auto &existing : m_definitions) {
+        if (existing.source_path == def.source_path) {
+            existing = def;
+            return;
+        }
+    }
+    m_definitions.push_back(def);
+}
 
 void ComponentLibrary::loadFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
