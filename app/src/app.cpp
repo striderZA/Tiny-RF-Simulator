@@ -12,9 +12,28 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <cctype>
 #include <portable-file-dialogs.h>
 #include <typeindex>
 #include <unordered_map>
+// Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
+// Strips everything else (incl. /, \\, and . which eliminates .. risks).
+// Trims leading/trailing spaces. Returns fallback if result is empty.
+static std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ')
+            out.push_back(c);
+    }
+    size_t start = out.find_first_not_of(' ');
+    if (start == std::string::npos)
+        return fallback;
+    size_t end = out.find_last_not_of(' ');
+    out = out.substr(start, end - start + 1);
+    return out.empty() ? fallback : out;
+}
+
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -671,9 +690,10 @@ bool RfSimulatorApp::saveComponentForm() {
             m_component_form_error = "Choose a destination (Project or Global) before saving.";
             return false;
         }
-        fs::path dir = fs::path(root) / def.type /
-                      (def.manufacturer.empty() ? "unknown" : def.manufacturer);
-        def.source_path = (dir / (def.part_number + ".json")).string();
+        std::string safe_man = sanitizePathSegment(def.manufacturer, "unknown");
+        std::string safe_pn  = sanitizePathSegment(def.part_number, "component");
+        fs::path dir = fs::path(root) / def.type / safe_man;
+        def.source_path = (dir / (safe_pn + ".json")).string();
         if (fs::exists(def.source_path)) {
             m_component_form_error = "A component already exists at " + def.source_path;
             return false;
@@ -749,17 +769,17 @@ void RfSimulatorApp::drawComponentFormModal() {
             const char *roots[] = {"Project (./rf-sim-libraries)", "Global (~/.rf-sim/libraries)"};
             static int root_idx = 0;
             ImGui::Combo("Save To", &root_idx, roots, 2);
+            const char *home = std::getenv(
+#ifdef _WIN32
+                "USERPROFILE"
+#else
+                "HOME"
+#endif
+            );
             m_component_form_destination_root =
                 root_idx == 0 ? "rf-sim-libraries"
-                              : (std::filesystem::path(std::getenv(
-#ifdef _WIN32
-                                                          "USERPROFILE"
-#else
-                                                          "HOME"
-#endif
-                                                          )) /
-                                 ".rf-sim" / "libraries")
-                                    .string();
+                              : home ? (std::filesystem::path(home) / ".rf-sim" / "libraries").string()
+                                     : "rf-sim-libraries";
             ImGui::Separator();
         }
 
