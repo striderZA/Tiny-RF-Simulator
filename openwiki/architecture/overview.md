@@ -95,6 +95,7 @@ Added in v0.9.0. Defined in `app/include/component_library.h`. A file-based comp
 - **One-click insert** creates a fully configured component in the node graph, sets `part_number` on the graph node for subtitle display (v0.9.1)
 - Supports 8 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
 - **Data file support** (v0.10.0): JSON schema version 2 adds `data_files` array for referencing external data files (S-parameters, etc.). Relative paths resolved against the JSON file's directory. When a library amplifier with S-param data files is instantiated, the engine auto-loads the Touchstone file via `setSParamFilepath()` for frequency-dependent simulation. Falls back to single-point parameters if the file is missing or invalid. Library browser shows `[DATA]` indicator on components with data files.
+- **ComponentTypeRegistry** (v0.11.0, `app/include/component_type_registry.h`): static table mapping each component type to its field schema and factory — `ComponentLibrary::instantiate()` dispatches through this table instead of a hardcoded if/else; the same table powers `ComponentLibrary::validate()` and the library browser's New/Edit Component form
 
 ### Project Save/Load
 
@@ -267,9 +268,12 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring |
 | `app/include/component_registry.h` | Type-erased engine container |
 | `app/include/component_library.h` | File-based component library manager |
+| `app/include/component_type_registry.h` | Component type schema table — field lists + factory per type |
 | `app/include/library_browser_widget.h` | Library browser tree-view widget |
 | `app/include/inspector_panel.h` | Properties panel header |
 | `app/src/inspector_panel.cpp` | Per-component property editors (23KB) |
+| `app/include/component_form_model.h` | Pure-logic form state for New/Edit Component |
+| `app/include/component_form_widget.h` | ImGui renderer for New/Edit Component form |
 | `common/include/component_interface.h` | `IComponentEngine` abstract base |
 | `common/include/spectrum.h` | `Spectrum` data structure |
 | `common/include/signal_node.h` | `SignalNode` structure |
