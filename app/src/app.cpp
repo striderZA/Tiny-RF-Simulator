@@ -524,6 +524,9 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             m_graph_engine.setNodePartNumber(comp->graphNodeId(),
                                              cj["part_number"].get<std::string>());
     }
+    // After restoring all positions, inform the widget so subsequent
+    // syncNodesFromEngine calls (e.g. from saveProject) don't reset them.
+    m_graph_widget->markNodesRegistered();
 
     // Restore links (saved as component-index + port pairs)
     auto &saved_links = root["links"];

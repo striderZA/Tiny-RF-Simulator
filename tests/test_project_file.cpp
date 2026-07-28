@@ -349,3 +349,92 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save/load preserves amplifier P1dB", "[p
     }
     std::filesystem::remove(path);
 }
+
+// ---------------------------------------------------------------------------
+// 11 — Component positions survive save/load round-trip
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: component positions survive save/load",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
+        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+        REQUIRE(app.componentCount() == 2);
+
+        // Register nodes in the pool first, then set explicit positions
+        app.testGraphWidget().syncNodesFromEngine();
+        ImNodes::EditorContextSet(app.testGraphWidget().context());
+        ImNodes::SetNodeEditorSpacePos(gen.graphNodeId(), ImVec2(150.0f, 250.0f));
+        ImNodes::SetNodeEditorSpacePos(amp.graphNodeId(), ImVec2(350.0f, 100.0f));
+
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+
+        REQUIRE(app.componentCount() == 2);
+
+        auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        REQUIRE(gens.size() == 1);
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+
+        // Verify positions survived round-trip
+        ImNodes::EditorContextSet(app.testGraphWidget().context());
+        ImVec2 gen_pos = ImNodes::GetNodeEditorSpacePos(gens[0]->graphNodeId());
+        CHECK(gen_pos.x == Catch::Approx(150.0f));
+        CHECK(gen_pos.y == Catch::Approx(250.0f));
+
+        ImVec2 amp_pos = ImNodes::GetNodeEditorSpacePos(amps[0]->graphNodeId());
+        CHECK(amp_pos.x == Catch::Approx(350.0f));
+        CHECK(amp_pos.y == Catch::Approx(100.0f));
+    }
+    std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 12 — Default (unrendered) component positions are (0,0)
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: default component positions are (0,0)",
+                 "[project_file]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
+        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+
+        // syncNodesFromEngine called by constructor registers default positions.
+        // Save without moving nodes — should preserve (0,0).
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+
+        REQUIRE(app.componentCount() == 2);
+
+        auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        REQUIRE(gens.size() == 1);
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+
+        // Default unrendered nodes should still be at (0,0)
+        ImNodes::EditorContextSet(app.testGraphWidget().context());
+        ImVec2 gen_pos = ImNodes::GetNodeEditorSpacePos(gens[0]->graphNodeId());
+        CHECK(gen_pos.x == Catch::Approx(0.0f));
+        CHECK(gen_pos.y == Catch::Approx(0.0f));
+
+        ImVec2 amp_pos = ImNodes::GetNodeEditorSpacePos(amps[0]->graphNodeId());
+        CHECK(amp_pos.x == Catch::Approx(0.0f));
+        CHECK(amp_pos.y == Catch::Approx(0.0f));
+    }
+    std::remove(path.c_str());
+}
