@@ -5,7 +5,7 @@ project(app LANGUAGES CXX)
 # --------------------------------------------------
 # App library
 # --------------------------------------------------
-add_library(app STATIC src/app.cpp src/inspector_panel.cpp src/component_registry.cpp src/component_library.cpp src/library_browser_widget.cpp)
+add_library(app STATIC src/app.cpp src/inspector_panel.cpp src/component_registry.cpp src/component_library.cpp src/library_browser_widget.cpp src/component_type_registry.cpp)
 add_library(simulator::app ALIAS app)
 
 # --------------------------------------------------
