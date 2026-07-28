@@ -1,4 +1,5 @@
 // app/src/component_form_model.cpp
+#include <filesystem>
 #include "component_form_model.h"
 
 ComponentFormModel::ComponentFormModel(const ComponentTypeDescriptor &descriptor)
@@ -15,6 +16,7 @@ void ComponentFormModel::loadFrom(const ComponentDefinition &def) {
     m_description = def.description;
     m_notes = def.notes;
     m_source_path = def.source_path;
+    m_original_data_files = def.data_files;
     m_parameters = def.parameters;
 }
 
@@ -45,7 +47,11 @@ ComponentDefinition ComponentFormModel::buildDefinition() const {
     def.notes = m_notes;
     def.parameters = m_parameters;
     def.source_path = m_source_path;
-    if (!m_sparam_source_path.empty())
-        def.data_files.push_back({"s_parameters", m_part_number + ".s2p"});
+    if (!m_sparam_source_path.empty()) {
+        auto ext = std::filesystem::path(m_sparam_source_path).extension().string();
+        def.data_files.push_back({"s_parameters", m_part_number + ext});
+    } else if (!m_original_data_files.empty()) {
+        def.data_files = m_original_data_files;
+    }
     return def;
 }

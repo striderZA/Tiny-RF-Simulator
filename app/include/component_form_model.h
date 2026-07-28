@@ -47,4 +47,5 @@ class ComponentFormModel {
     std::string m_sparam_source_path;
     std::string m_source_path;
     nlohmann::json m_parameters = nlohmann::json::object();
+    std::vector<DataFileRef> m_original_data_files;
 };

@@ -225,3 +225,30 @@ TEST_CASE("ComponentFormModel round-trips through ComponentLibrary loadFile/inst
     auto def = model.buildDefinition();
     REQUIRE(def.parameters["attenuation_dB"].get<double>() == 3.0);
 }
+
+// --- Task 4 (cont'd): ComponentFormModel data_files preservation on edit ---
+
+TEST_CASE("ComponentFormModel preserves original data_files on edit without new S-param pick",
+         "[form_model]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+
+    // Create a definition with an existing S-param reference
+    ComponentDefinition existing;
+    existing.type = "amplifier";
+    existing.part_number = "AMP-EDIT-TEST";
+    existing.manufacturer = "TestCorp";
+    existing.parameters = {{"gain_dB", 20.0}, {"nf_dB", 2.0}};
+    existing.data_files = {{"s_parameters", "AMP-EDIT-TEST.s4p"}};
+
+    // Load into the model (no setSparamSourcePath call — simulating edit without re-Browse)
+    ComponentFormModel model(*descriptor);
+    model.loadFrom(existing);
+
+    auto def = model.buildDefinition();
+
+    // data_files from the original should be preserved
+    REQUIRE(def.data_files.size() == 1);
+    REQUIRE(def.data_files[0].type == "s_parameters");
+    REQUIRE(def.data_files[0].path == "AMP-EDIT-TEST.s4p");
+}

@@ -689,7 +689,7 @@ bool RfSimulatorApp::saveComponentForm() {
     // Copy S-param file into place next to the destination JSON, if one was picked.
     if (!model.sparamSourcePath().empty()) {
         fs::path dest_dir = fs::path(def.source_path).parent_path();
-        fs::path dest_sparam = dest_dir / (def.part_number + ".s2p");
+        fs::path dest_sparam = dest_dir / def.data_files[0].path;
         std::error_code ec;
         fs::copy_file(model.sparamSourcePath(), dest_sparam,
                       fs::copy_options::overwrite_existing, ec);
@@ -697,7 +697,6 @@ bool RfSimulatorApp::saveComponentForm() {
             m_component_form_error = "Failed to copy S-parameter file: " + ec.message();
             return false;
         }
-        def.data_files = {{"s_parameters", def.part_number + ".s2p"}};
     }
 
     nlohmann::json j;
