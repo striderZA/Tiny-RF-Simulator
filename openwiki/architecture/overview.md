@@ -64,7 +64,7 @@ The core uses a PIMPL pattern (`struct Impl`) to hide GLFW/OpenGL types from all
 **`RfSimulatorApp`** is the central coordinator, instantiated by `main.cpp`. It owns:
 
 - **All DSP engines** — stored in a `ComponentRegistry` (type-erased, indexable by `std::type_index`)
-- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget`
+- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget` (data-driven "How to Use" panel, toggled via F1 or menu bar)
 - **`NodeGraphEngine`** — the topology manager
 - **`ViewManager`** — registry of all `SignalNode*` instances
 
