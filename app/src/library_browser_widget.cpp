@@ -58,6 +58,9 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                     if (ImGui::TreeNode(mfg_label.c_str())) {
                         for (auto *def : defs) {
                             std::string item_label;
+                            if (!def->issues.empty()) {
+                                item_label += "[!] ";
+                            }
                             if (!def->data_files.empty()) {
                                 item_label += "[DATA] ";
                             }
@@ -80,6 +83,15 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                                     tooltip += "Data files:\n";
                                     for (const auto &df : def->data_files) {
                                         tooltip += "  - " + df.path + " (" + df.type + ")\n";
+                                    }
+                                }
+                                if (!def->issues.empty()) {
+                                    tooltip += "Issues:\n";
+                                    for (const auto &issue : def->issues) {
+                                        tooltip += "  - ";
+                                        if (!issue.field.empty())
+                                            tooltip += issue.field + ": ";
+                                        tooltip += issue.message + "\n";
                                     }
                                 }
                                 tooltip += "Source: " + def->source_path;
