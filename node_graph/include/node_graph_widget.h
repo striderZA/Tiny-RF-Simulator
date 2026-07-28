@@ -6,7 +6,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
-#include <vector>
+#include <unordered_set>
 
 struct ImVec2;
 
@@ -44,7 +44,9 @@ class NodeGraphWidget {
     void clearPositionCache() {
         m_last_node_grid_positions.clear();
         m_node_screen_positions.clear();
+        m_registered_in_pool.clear();
     }
+    void markNodesRegistered();
     ImVec2 gridToScreenOffset() const { return m_grid_to_screen_offset; }
     ImVec2 nodeGridPosition(int node_id) const {
         auto it = m_last_node_grid_positions.find(node_id);
@@ -94,6 +96,9 @@ class NodeGraphWidget {
 
     // Last known grid-space positions for detecting node moves
     std::unordered_map<int, ImVec2> m_last_node_grid_positions;
+    // Set of node IDs registered in the ImNodes pool, so syncNodesFromEngine
+    // can register new nodes without resetting existing positions.
+    std::unordered_set<int> m_registered_in_pool;
     bool m_show_create_popup = false;
 
     // Internal rendering helpers

@@ -23,14 +23,24 @@ void NodeGraphWidget::syncNodesFromEngine() {
     for (const auto &node : m_engine.nodes()) {
         // Register node with the imnodes pool if not already present.
         // SetNodeGridSpacePos uses ObjectPoolFindOrCreateObject internally,
-        // so it creates the node if it doesn't exist (e.g. before first render frame)
-        // and is a no-op for already-registered nodes beyond updating their Origin.
-        ImNodes::SetNodeGridSpacePos(node.node_id, ImVec2(0, 0));
+        // so it creates the node if it doesn't exist. To avoid resetting
+        // positions of already-registered nodes, we only call it the first
+        // time we see a given node ID.
+        if (m_registered_in_pool.insert(node.node_id).second) {
+            ImNodes::SetNodeGridSpacePos(node.node_id, ImVec2(0, 0));
+        }
+    }
+}
+
+void NodeGraphWidget::markNodesRegistered() {
+    for (const auto &node : m_engine.nodes()) {
+        m_registered_in_pool.insert(node.node_id);
     }
 }
 
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
+    markNodesRegistered();
 
     if (ImGui::Begin(title, p_open)) {
         setupDarkTheme();
