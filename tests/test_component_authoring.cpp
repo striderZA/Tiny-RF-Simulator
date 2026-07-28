@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "component_form_model.h"
 #include "component_library.h"
 #include "component_type_registry.h"
 #include <algorithm>
@@ -157,4 +158,70 @@ TEST_CASE("ComponentLibrary loadFile has no issues for well-formed entry", "[lib
     REQUIRE(defs.size() == 1);
     REQUIRE(defs[0]->issues.empty());
     std::filesystem::remove(path);
+}
+
+// --- Task 4: ComponentFormModel ---
+
+TEST_CASE("ComponentFormModel builds a valid amplifier definition", "[form_model]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("TEST-FORM-AMP");
+    model.setManufacturer("Test Corp");
+    model.setParameter("gain_dB", 20.0);
+    model.setParameter("nf_dB", 2.0);
+
+    ComponentLibrary lib;
+    auto issues = model.validate(lib);
+    REQUIRE(issues.empty());
+
+    auto def = model.buildDefinition();
+    REQUIRE(def.type == "amplifier");
+    REQUIRE(def.part_number == "TEST-FORM-AMP");
+    REQUIRE(def.manufacturer == "Test Corp");
+    REQUIRE(def.parameters["gain_dB"].get<double>() == 20.0);
+    REQUIRE(def.parameters["nf_dB"].get<double>() == 2.0);
+}
+
+TEST_CASE("ComponentFormModel validate flags missing required field", "[form_model]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    ComponentFormModel model(*descriptor); // no gain_dB set
+    ComponentLibrary lib;
+    auto issues = model.validate(lib);
+    bool found = false;
+    for (auto &i : issues)
+        if (i.field == "gain_dB")
+            found = true;
+    REQUIRE(found);
+}
+
+TEST_CASE("ComponentFormModel loadFrom pre-fills fields for editing", "[form_model]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("attenuator");
+    ComponentFormModel model(*descriptor);
+
+    ComponentDefinition existing;
+    existing.type = "attenuator";
+    existing.part_number = "ATT-1";
+    existing.manufacturer = "Acme";
+    existing.parameters = {{"attenuation_dB", 6.0}};
+    existing.source_path = "/some/path/att-1.json";
+
+    model.loadFrom(existing);
+
+    REQUIRE(model.partNumber() == "ATT-1");
+    REQUIRE(model.manufacturer() == "Acme");
+    REQUIRE(model.parameter("attenuation_dB").get<double>() == 6.0);
+    REQUIRE(model.sourcePath() == "/some/path/att-1.json");
+}
+
+TEST_CASE("ComponentFormModel round-trips through ComponentLibrary loadFile/instantiate",
+         "[form_model]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("attenuator");
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("ROUNDTRIP-ATT");
+    model.setParameter("attenuation_dB", 3.0);
+
+    auto def = model.buildDefinition();
+    REQUIRE(def.parameters["attenuation_dB"].get<double>() == 3.0);
 }
