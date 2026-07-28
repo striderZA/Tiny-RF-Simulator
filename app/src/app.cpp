@@ -734,6 +734,8 @@ void RfSimulatorApp::drawComponentFormModal() {
     ImGui::OpenPopup("Component Form");
     ImGui::SetNextWindowSize(ImVec2(480, 520), ImGuiCond_Appearing);
     if (ImGui::BeginPopupModal("Component Form", &m_show_component_form)) {
+        ImGui::TextUnformatted(m_component_form_is_edit ? "Edit Component" : "New Component");
+        ImGui::Separator();
         if (!m_component_form_is_edit) {
             const char *type_names[] = {"amplifier", "attenuator", "splitter", "filter",
                                         "mixer",     "equalizer",  "combiner", "adc"};
