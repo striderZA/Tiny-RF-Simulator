@@ -209,6 +209,7 @@ add_subdirectory("attenuator")
 add_subdirectory("combiner")
 add_subdirectory("help")
 add_subdirectory("layout")
+add_subdirectory("tutorial")
 # =============================================================================
 # Install targets
 # =============================================================================

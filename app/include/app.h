@@ -29,11 +29,13 @@
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
 #include "splitter_engine.h"
+#include "tutorial_state.h"
+#include "tutorial_widget.h"
 #include "view_manager.h"
 #include <memory>
 #include <optional>
 #include <vector>
-enum class PendingAction { None, New, Open, Exit };
+enum class PendingAction { None, New, Open, Exit, Tutorial };
 
 class RfSimulatorApp {
   public:
@@ -48,6 +50,11 @@ class RfSimulatorApp {
     bool m_show_node_editor = true;
     bool m_show_help = false;
     HelpWidget m_help_widget;
+    bool m_show_tutorial = false;
+    // Set on construction when no completion marker exists. Public so the UI
+    // test harness can suppress the blocking modal (see test_engine/ui_tests.cpp).
+    bool m_show_tutorial_first_run_prompt = false;
+    TutorialWidget m_tutorial_widget;
     LayoutManager m_layout_manager;
     bool m_show_save_layout_dialog = false;
     bool m_show_manage_layouts_dialog = false;
@@ -55,6 +62,7 @@ class RfSimulatorApp {
     std::string m_rename_target;
     char m_rename_buf[128] = {};
     SessionState m_state;
+    TutorialState m_tutorial_state;
     ~RfSimulatorApp();
 
     // Project save/load
@@ -72,12 +80,18 @@ class RfSimulatorApp {
     ComponentRegistry &testComponents() { return m_components; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
+    TutorialState &testTutorialState() { return m_tutorial_state; }
 
     void openFileDialog();
     void saveFileDialog();
 
   private:
     void load_window_states();
+    // Runs the unsaved-changes guard, then starts the tutorial (directly if the
+    // project is clean, otherwise via PendingAction::Tutorial).
+    void requestTutorial();
+    // Resets to a fresh seeded sandbox and activates the walkthrough.
+    void startTutorial();
     void duplicateComponent(int graph_node_id);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);

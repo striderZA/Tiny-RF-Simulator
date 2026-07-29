@@ -42,6 +42,7 @@ target_link_libraries(app
         simulator::node_graph_widget
         simulator::help_widget
         simulator::layout
+        simulator::tutorial
         common
 )
 

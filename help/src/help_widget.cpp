@@ -20,8 +20,9 @@ const HelpSection sections[] = {
          "Select multiple nodes: Ctrl+click or rubber-band selection",
          "Delete selected nodes: press Delete key",
          "Right-click canvas: open context menu to add components",
+         "New here? Help > Tutorial runs a guided walkthrough of this workflow",
      },
-     6},
+     7},
     {"Adding and Removing Components",
      {
          "Right-click the canvas and choose a component from the context menu",

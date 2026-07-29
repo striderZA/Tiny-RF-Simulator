@@ -13,7 +13,9 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 ## Local Contracts
 - `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks
-- File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal; Help menu provides F1-toggled help window
+- File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal; Help menu provides the F1-toggled help window and `Help > Tutorial`
+- `Help > Tutorial` and the first-run "Welcome" modal both route through `requestTutorial()`, which runs the same `PendingAction`/unsaved-changes guard as New/Open/Exit (`PendingAction::Tutorial`) before `startTutorial()` resets to a seeded sandbox. Any new `PendingAction` value must be handled in both the Save and Discard branches of that modal.
+- The first-run offer is driven by `m_show_tutorial_first_run_prompt`, set on construction from `TutorialState::completed()` (see `tutorial/AGENTS.md`); either answer marks it completed so the prompt never repeats
 - View menu's `Layouts` submenu (Save As.../Load/Manage...) drives `LayoutManager` (see `layout/AGENTS.md`) for named window-layout presets; the exe-relative default layout is auto-managed by ImGui itself via `IniFilename`, set in `core/src/core.cpp`
 - Library browser's "New Component..."/"Edit" flow writes schema-v2 JSON via `ComponentFormModel::buildDefinition()`; new entries save to a user-chosen root (`rf-sim-libraries/` project-local or `~/.rf-sim/libraries/` global); built-in `component_data/library/` entries are read-only (no Edit button) and never a save target; edits always overwrite the original `source_path` (no rename-on-identity-change)
 - `load_window_states()` runs on construction to restore persisted window visibility toggles

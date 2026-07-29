@@ -20,6 +20,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 - Build via `cmake --build build && ctest --test-dir build` or direct `build/bin/tests`
 - Adding a new module? Add its test source to `TEST_SOURCES` in `CMakeLists.txt` and link the library target
 - Platform-specific tests (e.g., Windows-only session state) are gated with `#ifdef WIN32` in CMakeLists.txt
+- `test_component_authoring` and `test_tutorial_state` are standalone executables, not part of `TEST_SOURCES`: the MinGW-w64 toolchain silently drops `TEST_CASE`s registered beyond the ~217 already linked into `tests`. New test files that must run on Windows should follow that pattern.
 
 ## Work Guidance
 

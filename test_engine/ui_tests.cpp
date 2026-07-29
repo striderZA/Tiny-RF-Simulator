@@ -17,6 +17,12 @@ static RfSimulatorApp *s_app = nullptr;
 
 void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     s_app = &app;
+
+    // The first-run tutorial offer is a blocking modal, which would stop every
+    // other test from reaching the menu bar. Suppress it here (before the first
+    // frame) — tutorial_first_run_prompt_marks_completed re-arms it explicitly.
+    app.m_show_tutorial_first_run_prompt = false;
+
     ImGuiTest *t = nullptr;
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_editor_exists");
@@ -464,5 +470,128 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
 
         IM_CHECK(!std::filesystem::exists(path));
+    };
+
+    // Tutorial tests are registered last on purpose: starting the tutorial calls
+    // newProject(), which clears the components and node IDs the tests above
+    // rely on.
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_launches_from_help_menu");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->newProject(); // clean slate, so the unsaved-changes guard stays out of the way
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Help/Tutorial");
+        ctx->Yield(2);
+
+        IM_CHECK(s_app->testTutorialState().isActive());
+        IM_CHECK_EQ(s_app->testTutorialState().stepIndex(), 0);
+        IM_CHECK(ImGui::FindWindowByName("Tutorial Guide") != nullptr);
+
+        ctx->SetRef("Tutorial Guide");
+        ctx->ItemClick("Exit");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!s_app->testTutorialState().isActive());
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_start_guards_unsaved_changes");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->newProject();
+        s_app->testMakeDirty();
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Help/Tutorial");
+        ctx->Yield(2);
+        // Dirty project — the tutorial must wait behind the unsaved-changes modal.
+        IM_CHECK(!s_app->testTutorialState().isActive());
+
+        ctx->SetRef("Unsaved Changes");
+        ctx->ItemClick("Discard");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(s_app->testTutorialState().isActive());
+
+        ctx->SetRef("Tutorial Guide");
+        ctx->ItemClick("Exit");
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_step_navigation");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->newProject();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Help/Tutorial");
+        ctx->Yield(2);
+
+        ctx->SetRef("Tutorial Guide");
+        IM_CHECK(s_app->testTutorialState().atFirstStep());
+
+        ctx->ItemClick("Next");
+        ctx->Yield();
+        IM_CHECK_EQ(s_app->testTutorialState().stepIndex(), 1);
+
+        ctx->ItemClick("Back");
+        ctx->Yield();
+        IM_CHECK_EQ(s_app->testTutorialState().stepIndex(), 0);
+
+        ctx->ItemClick("Skip");
+        ctx->Yield();
+        IM_CHECK(s_app->testTutorialState().atLastStep());
+        IM_CHECK(s_app->testTutorialState().isActive());
+
+        ctx->ItemClick("Exit");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!s_app->testTutorialState().isActive());
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_completes_and_persists");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        std::filesystem::path marker(s_app->testTutorialState().markerPath());
+        std::filesystem::remove(marker);
+
+        s_app->newProject();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Help/Tutorial");
+        ctx->Yield(2);
+
+        ctx->SetRef("Tutorial Guide");
+        // Bounded walk to the last step — never loop on the state alone.
+        for (int i = 0; i < s_app->testTutorialState().stepCount(); ++i) {
+            if (s_app->testTutorialState().atLastStep())
+                break;
+            ctx->ItemClick("Next");
+            ctx->Yield();
+        }
+        IM_CHECK(s_app->testTutorialState().atLastStep());
+        IM_CHECK(!std::filesystem::exists(marker)); // not marked until Finish
+
+        ctx->ItemClick("Finish");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK(!s_app->testTutorialState().isActive());
+        IM_CHECK(std::filesystem::exists(marker));
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_first_run_prompt_marks_completed");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        std::filesystem::path marker(s_app->testTutorialState().markerPath());
+        std::filesystem::remove(marker);
+
+        // Re-arm the prompt suppressed in RegisterUiTests.
+        s_app->m_show_tutorial_first_run_prompt = true;
+        ctx->Yield(2);
+
+        ctx->SetRef("Welcome to Tiny RF Simulator");
+        ctx->ItemClick("Not Now");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK(!s_app->m_show_tutorial_first_run_prompt);
+        IM_CHECK(!s_app->testTutorialState().isActive());
+        // Dismissing the offer counts as completed — it must never nag again.
+        IM_CHECK(std::filesystem::exists(marker));
     };
 }
