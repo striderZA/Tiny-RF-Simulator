@@ -145,21 +145,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
                                        &m_show_node_editor});
     m_inspector_panel->onParamChange = [this]() { markDirty(); };
 
-    // Initialize component library
-#ifdef _WIN32
-    const char *home = std::getenv("USERPROFILE");
-#else
-    const char *home = std::getenv("HOME");
-#endif
-    if (home) {
-        m_library.scan((std::filesystem::path(home) / ".rf-sim" / "libraries").string());
-    }
-    if (std::filesystem::exists("rf-sim-libraries")) {
-        m_library.scan("rf-sim-libraries");
-    }
-    if (std::filesystem::exists("component_data/library")) {
-        m_library.scan("component_data/library");
-    }
+    refreshExtensions();
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
@@ -290,12 +276,108 @@ void RfSimulatorApp::newProject() {
     m_next_component_id = 100;
     m_current_project_path.clear();
     m_graph_widget->clearPositionCache();
+    refreshExtensions();
+
     m_dirty = false;
 }
 
 void RfSimulatorApp::testMakeDirty() { markDirty(); }
 
 void RfSimulatorApp::markDirty() { m_dirty = true; }
+void RfSimulatorApp::refreshExtensions() {
+    namespace fs = std::filesystem;
+
+    fs::path project_root = m_current_project_path.empty()
+                                ? fs::current_path()
+                                : fs::path(m_current_project_path).parent_path();
+    if (project_root.empty())
+        project_root = fs::current_path();
+
+    m_extension_manager.rescan(project_root);
+    m_library = ComponentLibrary{};
+
+#ifdef _WIN32
+    const char *home = std::getenv("USERPROFILE");
+#else
+    const char *home = std::getenv("HOME");
+#endif
+    if (home) {
+        m_library.scan((fs::path(home) / ".rf-sim" / "libraries").string());
+    }
+    if (fs::exists("rf-sim-libraries")) {
+        m_library.scan("rf-sim-libraries");
+    }
+    if (fs::exists("component_data/library")) {
+        m_library.scan("component_data/library");
+    }
+
+    for (const auto *pack : m_extension_manager.dataPacks()) {
+        for (const auto &root : pack->library_roots)
+            m_library.scan(root.string());
+    }
+}
+
+void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest) {
+    namespace fs = std::filesystem;
+
+    const fs::path project_root = m_current_project_path.empty()
+                                      ? fs::current_path()
+                                      : fs::path(m_current_project_path).parent_path();
+    const fs::path selected_path =
+        m_current_project_path.empty() ? fs::path{} : fs::path(m_current_project_path);
+    const fs::path work_dir = fs::temp_directory_path() / "rf-sim-extension-run" / manifest.id;
+    const ExternalToolRequest request{"1",           manifest.name, project_root,
+                                      selected_path, work_dir,      work_dir / "result.json"};
+
+    const auto result = m_external_tool_runner.run(manifest, request);
+    m_extension_result_message = result.ok ? "Extension run succeeded: " + manifest.name
+                                           : "Extension run failed: " + result.message;
+    if (result.ok)
+        refreshExtensions();
+}
+
+void RfSimulatorApp::drawExtensionsPanel() {
+    if (!m_show_extensions)
+        return;
+
+    if (ImGui::Begin("Extensions", &m_show_extensions)) {
+        if (ImGui::Button("Refresh"))
+            refreshExtensions();
+        if (!m_extension_result_message.empty())
+            ImGui::TextWrapped("%s", m_extension_result_message.c_str());
+        else
+            ImGui::TextDisabled("No extension actions run yet.");
+
+        ImGui::Separator();
+
+        for (const auto &record : m_extension_manager.all()) {
+            const bool has_manifest = record.manifest.has_value();
+            const std::string label =
+                has_manifest ? record.manifest->name : record.manifest_path.filename().string();
+            const char *status = record.status == ExtensionStatusKind::Ok ? "Ok"
+                                 : record.status == ExtensionStatusKind::Incompatible
+                                     ? "Incompatible"
+                                     : "Invalid";
+
+            ImGui::Text("%s [%s]", label.c_str(), status);
+            if (has_manifest && record.status == ExtensionStatusKind::Ok &&
+                record.manifest->kind == ExtensionKind::ExternalTool) {
+                ImGui::SameLine();
+                const std::string run_label = "Run##" + record.manifest->id;
+                if (ImGui::Button(run_label.c_str()))
+                    runExternalTool(*record.manifest);
+            }
+
+            if (!record.issues.empty()) {
+                ImGui::Indent();
+                for (const auto &issue : record.issues)
+                    ImGui::TextWrapped("%s: %s", issue.field.c_str(), issue.message.c_str());
+                ImGui::Unindent();
+            }
+        }
+    }
+    ImGui::End();
+}
 
 void RfSimulatorApp::saveProject(const std::string &path) {
     nlohmann::json root;
@@ -628,6 +710,8 @@ void RfSimulatorApp::loadProject(const std::string &path) {
     }
 
     m_current_project_path = path;
+    refreshExtensions();
+
     m_dirty = false;
     LOG_INFO("Loaded project from %s", path.c_str());
 }
@@ -924,6 +1008,24 @@ void RfSimulatorApp::draw_ui() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Tools")) {
+            ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
+            ImGui::Separator();
+            for (const auto *tool : m_extension_manager.externalTools()) {
+                if (!tool)
+                    continue;
+                if (tool->menus.empty()) {
+                    if (ImGui::MenuItem(tool->name.c_str()))
+                        runExternalTool(*tool);
+                }
+                for (const auto &menu : tool->menus) {
+                    if (menu.location == "tools" && ImGui::MenuItem(menu.label.c_str()))
+                        runExternalTool(*tool);
+                }
+            }
+            ImGui::EndMenu();
+        }
+
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("How to Use", "F1"))
                 m_show_help = !m_show_help;
@@ -1156,6 +1258,7 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_library && m_library_browser) {
         m_library_browser->draw("Component Library", &m_show_library);
     }
+    drawExtensionsPanel();
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);

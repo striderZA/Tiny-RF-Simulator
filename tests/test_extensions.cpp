@@ -10,11 +10,28 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "imgui.h"
+#include "imnodes.h"
+#include "implot.h"
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <system_error>
 #include <vector>
+
+struct ImGuiFixture {
+    ImGuiFixture() {
+        ImGui::CreateContext();
+        ImPlot::CreateContext();
+        ImNodes::CreateContext();
+    }
+
+    ~ImGuiFixture() {
+        ImNodes::DestroyContext();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+    }
+};
 
 namespace fs = std::filesystem;
 
@@ -325,4 +342,79 @@ TEST_CASE("external tool runner reports missing result as failure", "[extensions
     REQUIRE(result.message == "result file missing");
     REQUIRE(fs::exists(request.work_dir / "request.json"));
     REQUIRE_FALSE(fs::exists(request.result_path));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "app refreshExtensions discovers project-local data packs",
+                 "[extensions][app]") {
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app";
+    ScopedRemove cleanup{project_root};
+
+    const fs::path manifest_path =
+        writeManifest(project_root / "rf-sim-extensions" / "project-pack",
+                      R"json({
+            "schema_version": 1,
+            "id": "project.pack",
+            "name": "Project Pack",
+            "version": "1.0.0",
+            "kind": "data-pack"
+        })json");
+
+    RfSimulatorApp app;
+    app.m_current_project_path = (project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const auto &records = app.testExtensionManager().all();
+    REQUIRE(std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+                return record.manifest_path == manifest_path;
+            }) != records.end());
+
+    const auto packs = app.testExtensionManager().dataPacks();
+    REQUIRE(std::find_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
+                return manifest->id == "project.pack";
+            }) != packs.end());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[extensions][app]") {
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool";
+    ScopedRemove cleanup{project_root};
+
+    const fs::path tool_dir = project_root / "rf-sim-extensions" / "echo-tool";
+    const fs::path script_path = tool_dir / "bin" / "echo_tool.py";
+    fs::create_directories(script_path.parent_path());
+    {
+        std::ofstream out(script_path);
+        out << "#!/usr/bin/env python3\n"
+            << "import json\n"
+            << "import pathlib\n"
+            << "import sys\n\n"
+            << "request = pathlib.Path(sys.argv[sys.argv.index(\"--request\") + 1])\n"
+            << "result = pathlib.Path(sys.argv[sys.argv.index(\"--result\") + 1])\n"
+            << "request_json = json.loads(request.read_text(encoding=\"utf-8\"))\n"
+            << "result.write_text(json.dumps({\"result_type\": \"report_created\", "
+               "\"message\": \"tool ok\", \"request\": request_json}, indent=2) + \"\\n\", "
+               "encoding=\"utf-8\")\n";
+    }
+
+    writeManifest(tool_dir,
+                  R"json({
+            "schema_version": 1,
+            "id": "project.echo",
+            "name": "Project Echo",
+            "version": "1.0.0",
+            "kind": "external-tool",
+            "capabilities": ["generator"],
+            "entry": "bin/echo_tool.py",
+            "menus": [{"location": "tools", "label": "Echo"}]
+        })json");
+
+    RfSimulatorApp app;
+    app.m_current_project_path = (project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const auto &tools = app.testExtensionManager().externalTools();
+    REQUIRE_FALSE(tools.empty());
+
+    app.runExternalTool(*tools.front());
+
+    REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
 }

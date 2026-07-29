@@ -10,6 +10,8 @@
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "equalizer_engine.h"
+#include "extension_manager.h"
+#include "external_tool_runner.h"
 
 #include "help_widget.h"
 #include "ideal_filter_engine.h"
@@ -40,6 +42,9 @@ class RfSimulatorApp {
     RfSimulatorApp();
     void draw_ui();
     void update_dsp();
+    void refreshExtensions();
+    void drawExtensionsPanel();
+    void runExternalTool(const ExtensionManifest &manifest);
 
     LoggingWidget m_log_widget;
     bool m_show_log = true;
@@ -54,6 +59,11 @@ class RfSimulatorApp {
     char m_layout_name_buf[128] = {};
     std::string m_rename_target;
     char m_rename_buf[128] = {};
+    ExtensionManager m_extension_manager;
+    ExternalToolRunner m_external_tool_runner;
+    bool m_show_extensions = false;
+    std::string m_extension_result_message;
+
     SessionState m_state;
     ~RfSimulatorApp();
 
@@ -72,6 +82,8 @@ class RfSimulatorApp {
     ComponentRegistry &testComponents() { return m_components; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
+    ExtensionManager &testExtensionManager() { return m_extension_manager; }
+    const std::string &testExtensionResultMessage() const { return m_extension_result_message; }
 
     void openFileDialog();
     void saveFileDialog();
