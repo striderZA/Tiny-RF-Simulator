@@ -208,7 +208,7 @@ TEST_CASE("extension manager prefers project-local copies over built-in copies",
     }) != packs.end());
 }
 
-TEST_CASE("extension manager excludes incompatible manifests from active queries",
+TEST_CASE("extension manager excludes malformed compatibility manifests from active queries",
           "[extensions][discovery]") {
     ExtensionManager mgr;
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_incompatible";
@@ -220,7 +220,7 @@ TEST_CASE("extension manager excludes incompatible manifests from active queries
             "name": "Future Pack",
             "version": "1.0.0",
             "kind": "data-pack",
-            "compat": {"min_app_version": "99.0.0"}
+            "compat": {"min_app_version": "99-beta"}
         })json");
 
     mgr.rescan(project_root);

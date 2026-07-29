@@ -11,14 +11,16 @@
 - Valid manifests are classified into `dataPacks()` and `externalTools()` based on manifest kind.
 - Compatibility-aware status tracking marks manifests with `compat.min_app_version` above the current app version as `ExtensionStatusKind::Incompatible`.
 - Added precedence shadowing by extension id so higher-precedence roots win and lower-precedence copies do not appear in `all()`.
-- Updated active query helpers so incompatible manifests stay visible in discovery/status but are excluded from `dataPacks()` and `externalTools()`.
+- Active query helpers return only compatible manifests; incompatible manifests stay visible in discovery/status but are excluded from `dataPacks()` and `externalTools()`.
+- Discovery is resilient to filesystem failures in a root; failed roots are skipped rather than aborting the whole scan.
+- Malformed `compat.min_app_version` strings are treated as incompatible so they do not leak into active query APIs.
 - Updated `app/CMakeLists.txt` so the new manager source is compiled into `simulator::app`.
 - Updated `app/AGENTS.md` with the ExtensionManager ownership/status note.
 - Added focused discovery tests in `tests/test_extensions.cpp` for:
   - a valid project-local data pack
   - a malformed manifest that remains visible as an invalid record
   - project-local precedence over built-in copies
-  - incompatible manifests remaining visible but excluded from active queries
+  - malformed compatibility strings remaining visible but excluded from active queries
 
 ## What I tested and results
 - `cmake --build build --target test_extensions`
@@ -46,6 +48,13 @@
 
 ## Reviewer-fix update
 - Re-ran the focused extension build and test command after adding precedence shadowing and active-query filtering.
+- Both commands still passed:
+  - `cmake --build build --target test_extensions`
+  - `ctest --test-dir build -R test_extensions --output-on-failure`
+
+## Reviewer-fix update 2
+- Reworked root scanning to avoid aborting on filesystem errors and updated compatibility parsing so malformed version strings are treated as incompatible.
+- Re-ran the focused extension build and test command again after that fix.
 - Both commands still passed:
   - `cmake --build build --target test_extensions`
   - `ctest --test-dir build -R test_extensions --output-on-failure`

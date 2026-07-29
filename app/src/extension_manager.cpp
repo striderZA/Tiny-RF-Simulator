@@ -13,37 +13,51 @@ namespace fs = std::filesystem;
 
 namespace {
 
-int parseVersionPart(std::string_view part) {
+std::optional<int> parseVersionPart(std::string_view part) {
+    if (part.empty())
+        return std::nullopt;
+
     int value = 0;
     const auto *begin = part.data();
     const auto *end = part.data() + part.size();
     const auto [ptr, ec] = std::from_chars(begin, end, value);
     if (ec != std::errc{} || ptr != end)
-        return 0;
+        return std::nullopt;
     return value;
 }
 
-std::vector<int> parseVersion(std::string_view version) {
+std::optional<std::vector<int>> parseVersion(std::string_view version) {
+    if (version.empty())
+        return std::nullopt;
+
     std::vector<int> parts;
     std::size_t start = 0;
     while (start <= version.size()) {
         const std::size_t dot = version.find('.', start);
         const std::size_t count = dot == std::string_view::npos ? version.size() - start : dot - start;
-        parts.push_back(parseVersionPart(version.substr(start, count)));
+        const auto part = parseVersionPart(version.substr(start, count));
+        if (!part)
+            return std::nullopt;
+        parts.push_back(*part);
         if (dot == std::string_view::npos)
             break;
         start = dot + 1;
+        if (start == version.size())
+            return std::nullopt;
     }
     return parts;
 }
 
-int compareVersions(std::string_view lhs, std::string_view rhs) {
+std::optional<int> compareVersions(std::string_view lhs, std::string_view rhs) {
     const auto lhs_parts = parseVersion(lhs);
     const auto rhs_parts = parseVersion(rhs);
-    const std::size_t count = std::max(lhs_parts.size(), rhs_parts.size());
+    if (!lhs_parts || !rhs_parts)
+        return std::nullopt;
+
+    const std::size_t count = std::max(lhs_parts->size(), rhs_parts->size());
     for (std::size_t i = 0; i < count; ++i) {
-        const int a = i < lhs_parts.size() ? lhs_parts[i] : 0;
-        const int b = i < rhs_parts.size() ? rhs_parts[i] : 0;
+        const int a = i < lhs_parts->size() ? (*lhs_parts)[i] : 0;
+        const int b = i < rhs_parts->size() ? (*rhs_parts)[i] : 0;
         if (a < b)
             return -1;
         if (a > b)
@@ -56,8 +70,11 @@ ExtensionStatusKind statusForManifest(const ExtensionManifest &manifest) {
     if (manifest.min_app_version.empty())
         return ExtensionStatusKind::Ok;
 
-    return compareVersions(manifest.min_app_version, APP_VERSION) > 0 ?
-        ExtensionStatusKind::Incompatible : ExtensionStatusKind::Ok;
+    const auto compat = compareVersions(manifest.min_app_version, APP_VERSION);
+    if (!compat)
+        return ExtensionStatusKind::Incompatible;
+
+    return *compat > 0 ? ExtensionStatusKind::Incompatible : ExtensionStatusKind::Ok;
 }
 
 std::optional<std::string> readManifestId(const fs::path &manifest_path) {
@@ -95,42 +112,58 @@ std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) 
 }
 
 void ExtensionManager::loadRoot(const fs::path &root) {
-    if (!fs::exists(root) || !fs::is_directory(root))
-        return;
+    try {
+        std::error_code ec;
+        if (!fs::exists(root, ec) || !fs::is_directory(root, ec))
+            return;
 
-    std::vector<fs::path> manifest_paths;
-    for (const auto &entry : fs::directory_iterator(root)) {
-        if (!entry.is_directory())
-            continue;
+        std::vector<fs::path> manifest_paths;
+        fs::directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+        if (ec)
+            return;
 
-        const fs::path manifest_path = entry.path() / "plugin.json";
-        if (fs::exists(manifest_path))
-            manifest_paths.push_back(manifest_path);
-    }
+        const fs::directory_iterator end;
+        while (it != end) {
+            const fs::directory_entry entry = *it;
+            it.increment(ec);
+            if (ec)
+                return;
 
-    std::sort(manifest_paths.begin(), manifest_paths.end());
-
-    for (const auto &manifest_path : manifest_paths) {
-        ExtensionRecord record;
-        record.manifest_path = manifest_path;
-        record.manifest = parseExtensionManifest(manifest_path, record.issues);
-        if (record.manifest)
-            record.status = statusForManifest(*record.manifest);
-
-        const std::optional<std::string> extension_id =
-            record.manifest ? std::optional<std::string>(record.manifest->id)
-                            : readManifestId(manifest_path);
-
-        if (extension_id) {
-            const auto existing = m_records_by_id.find(*extension_id);
-            if (existing != m_records_by_id.end()) {
-                m_records[existing->second] = std::move(record);
+            std::error_code entry_ec;
+            if (!entry.is_directory(entry_ec) || entry_ec)
                 continue;
-            }
-            m_records_by_id.emplace(*extension_id, m_records.size());
+
+            const fs::path manifest_path = entry.path() / "plugin.json";
+            if (fs::exists(manifest_path, entry_ec) && !entry_ec)
+                manifest_paths.push_back(manifest_path);
         }
 
-        m_records.push_back(std::move(record));
+        std::sort(manifest_paths.begin(), manifest_paths.end());
+
+        for (const auto &manifest_path : manifest_paths) {
+            ExtensionRecord record;
+            record.manifest_path = manifest_path;
+            record.manifest = parseExtensionManifest(manifest_path, record.issues);
+            if (record.manifest)
+                record.status = statusForManifest(*record.manifest);
+
+            const std::optional<std::string> extension_id =
+                record.manifest ? std::optional<std::string>(record.manifest->id)
+                                : readManifestId(manifest_path);
+
+            if (extension_id) {
+                const auto existing = m_records_by_id.find(*extension_id);
+                if (existing != m_records_by_id.end()) {
+                    m_records[existing->second] = std::move(record);
+                    continue;
+                }
+                m_records_by_id.emplace(*extension_id, m_records.size());
+            }
+
+            m_records.push_back(std::move(record));
+        }
+    } catch (const fs::filesystem_error &) {
+        return;
     }
 }
 
