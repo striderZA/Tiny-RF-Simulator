@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings regardless of core.autocrlf — CRLF breaks
+# their shebang line (bash: $'\r': command not found) when executed via bash
+# (git-bash/MSYS on Windows, or any POSIX shell).
+.githooks/* text eol=lf
+scripts/*.sh text eol=lf

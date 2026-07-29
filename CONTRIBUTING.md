@@ -28,6 +28,14 @@ cmake --build build
 
 The first build takes 60-90s while FetchContent clones dependencies. Subsequent builds are fast.
 
+**One-time setup — enable the format pre-commit hook** (blocks commits that would fail CI's `format` job):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+If `clang-format-18` isn't available via your system package manager (e.g. Windows, older macOS), install a pinned copy: `scripts/install-clang-format.sh` (requires Python/pip; installs to `~/.cache/clang-format-18`, auto-detected by the hook and `scripts/format.sh`).
+
 > **See also:** [Build & Operations guide](openwiki/operations/build-runbook.md) for release builds, clean builds, CI/CD, and troubleshooting.
 
 ## Testing
@@ -72,7 +80,8 @@ Release tags (`v*`) trigger binary packaging and draft GitHub Releases with auto
 ## Code Style
 
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
-  Run `clang-format -i <file>` on every changed file before committing. CI will reject PRs with formatting violations.
+  Run `scripts/format.sh` to reformat changed files, or `scripts/format.sh --check` to dry-run (CI-equivalent). CI will reject PRs with formatting violations.
+  Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
 - **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
