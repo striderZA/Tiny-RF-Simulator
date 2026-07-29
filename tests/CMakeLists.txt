@@ -75,3 +75,16 @@ target_link_libraries(test_combiner PRIVATE
 )
 target_compile_definitions(test_combiner PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_combiner COMMAND test_combiner WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Standalone executable for all new tests added by the component-library authoring UI
+# plan (docs/superpowers/plans/2026-07-28-component-library-authoring-ui.md). Kept out
+# of the main `tests` binary because this MinGW-w64 toolchain silently drops any
+# TEST_CASE registered beyond the ~217 already linked into tests.exe (confirmed via a
+# from-scratch clean rebuild).
+add_executable(test_component_authoring test_component_authoring.cpp)
+target_link_libraries(test_component_authoring PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_component_authoring PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_component_authoring COMMAND test_component_authoring WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

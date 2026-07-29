@@ -8,6 +8,7 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -15,6 +16,23 @@
 #include <portable-file-dialogs.h>
 #include <typeindex>
 #include <unordered_map>
+// Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
+// Strips everything else (incl. /, \\, and . which eliminates .. risks).
+// Trims leading/trailing spaces. Returns fallback if result is empty.
+static std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ')
+            out.push_back(c);
+    }
+    size_t start = out.find_first_not_of(' ');
+    if (start == std::string::npos)
+        return fallback;
+    size_t end = out.find_last_not_of(' ');
+    out = out.substr(start, end - start + 1);
+    return out.empty() ? fallback : out;
+}
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -149,6 +167,11 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
             m_library.instantiate(def, m_next_component_id++, m_components, m_graph_engine);
         if (engine)
             markDirty();
+    };
+
+    m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
+    m_library_browser->onEditComponent = [this](const ComponentDefinition &def) {
+        openEditComponentForm(def);
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
@@ -625,6 +648,159 @@ void RfSimulatorApp::saveFileDialog() {
         saveProject(result);
 }
 
+void RfSimulatorApp::openNewComponentForm(const std::string &type) {
+    const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor)
+        return;
+    m_component_form_is_edit = false;
+    m_component_form_destination_root.clear();
+    m_component_form_model = std::make_unique<ComponentFormModel>(*descriptor);
+    m_component_form_widget = std::make_unique<ComponentFormWidget>(*m_component_form_model);
+    m_component_form_error.clear();
+    m_show_component_form = true;
+}
+
+void RfSimulatorApp::openEditComponentForm(const ComponentDefinition &def) {
+    const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
+    if (!descriptor)
+        return;
+    m_component_form_is_edit = true;
+    m_component_form_model = std::make_unique<ComponentFormModel>(*descriptor);
+    m_component_form_model->loadFrom(def);
+    m_component_form_widget = std::make_unique<ComponentFormWidget>(*m_component_form_model);
+    m_component_form_error.clear();
+    m_show_component_form = true;
+}
+
+bool RfSimulatorApp::saveComponentForm() {
+    namespace fs = std::filesystem;
+    auto &model = *m_component_form_model;
+    auto def = model.buildDefinition();
+
+    std::string root;
+    if (m_component_form_is_edit) {
+        // Overwrite in place — no rename-on-identity-change.
+        def.source_path = model.sourcePath();
+    } else {
+        root = m_component_form_destination_root;
+        if (root.empty()) {
+            m_component_form_error = "Choose a destination (Project or Global) before saving.";
+            return false;
+        }
+        std::string safe_man = sanitizePathSegment(def.manufacturer, "unknown");
+        std::string safe_pn = sanitizePathSegment(def.part_number, "component");
+        fs::path dir = fs::path(root) / def.type / safe_man;
+        def.source_path = (dir / (safe_pn + ".json")).string();
+        if (fs::exists(def.source_path)) {
+            m_component_form_error = "A component already exists at " + def.source_path;
+            return false;
+        }
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        if (ec) {
+            m_component_form_error = "Could not create directory: " + dir.string();
+            return false;
+        }
+    }
+
+    // Copy S-param file into place next to the destination JSON, if one was picked.
+    if (!model.sparamSourcePath().empty()) {
+        fs::path dest_dir = fs::path(def.source_path).parent_path();
+        fs::path dest_sparam = dest_dir / def.data_files[0].path;
+        std::error_code ec;
+        fs::copy_file(model.sparamSourcePath(), dest_sparam, fs::copy_options::overwrite_existing,
+                      ec);
+        if (ec) {
+            m_component_form_error = "Failed to copy S-parameter file: " + ec.message();
+            return false;
+        }
+    }
+
+    nlohmann::json j;
+    j["schema_version"] = def.schema_version;
+    j["type"] = def.type;
+    j["part_number"] = def.part_number;
+    j["manufacturer"] = def.manufacturer;
+    j["description"] = def.description;
+    j["parameters"] = def.parameters;
+    if (!def.test_conditions.empty())
+        j["test_conditions"] = def.test_conditions;
+    j["notes"] = def.notes;
+    if (!def.data_files.empty()) {
+        j["data_files"] = nlohmann::json::array();
+        for (const auto &df : def.data_files)
+            j["data_files"].push_back({{"type", df.type}, {"path", df.path}});
+    }
+
+    std::ofstream out(def.source_path);
+    if (!out.is_open()) {
+        m_component_form_error = "Could not write " + def.source_path;
+        return false;
+    }
+    out << j.dump(2);
+    out.close();
+
+    def.issues = m_library.validate(def.type, def.parameters);
+    m_library.upsert(def);
+    return true;
+}
+
+void RfSimulatorApp::drawComponentFormModal() {
+    if (!m_show_component_form)
+        return;
+    ImGui::OpenPopup("Component Form");
+    ImGui::SetNextWindowSize(ImVec2(480, 520), ImGuiCond_Appearing);
+    if (ImGui::BeginPopupModal("Component Form", &m_show_component_form)) {
+        ImGui::TextUnformatted(m_component_form_is_edit ? "Edit Component" : "New Component");
+        ImGui::Separator();
+        if (!m_component_form_is_edit) {
+            const char *type_names[] = {"amplifier", "attenuator", "splitter", "filter",
+                                        "mixer",     "equalizer",  "combiner", "adc"};
+            static int type_idx = 0;
+            for (int i = 0; i < 8; ++i)
+                if (m_component_form_model->descriptor().type == type_names[i])
+                    type_idx = i;
+            if (ImGui::Combo("Type", &type_idx, type_names, 8))
+                openNewComponentForm(type_names[type_idx]);
+
+            const char *roots[] = {"Project (./rf-sim-libraries)", "Global (~/.rf-sim/libraries)"};
+            static int root_idx = 0;
+            ImGui::Combo("Save To", &root_idx, roots, 2);
+            const char *home = std::getenv(
+#ifdef _WIN32
+                "USERPROFILE"
+#else
+                "HOME"
+#endif
+            );
+            m_component_form_destination_root =
+                root_idx == 0 ? "rf-sim-libraries"
+                : home        ? (std::filesystem::path(home) / ".rf-sim" / "libraries").string()
+                              : "rf-sim-libraries";
+            ImGui::Separator();
+        }
+
+        bool save_clicked = m_component_form_widget->draw(m_library);
+        if (!m_component_form_error.empty())
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s",
+                               m_component_form_error.c_str());
+
+        if (save_clicked) {
+            if (saveComponentForm()) {
+                m_show_component_form = false;
+                markDirty();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            m_show_component_form = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 void RfSimulatorApp::update_dsp() {
     std::unordered_map<int, std::function<void()>> updates;
 
@@ -943,6 +1119,8 @@ void RfSimulatorApp::draw_ui() {
         }
         ImGui::EndPopup();
     }
+
+    drawComponentFormModal();
 
     if (m_show_node_editor)
         m_graph_widget->draw("Node Editor", &m_show_node_editor);

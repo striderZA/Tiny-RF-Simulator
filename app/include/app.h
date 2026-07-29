@@ -3,9 +3,14 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
+#include "component_form_model.h"
+#include "component_form_widget.h"
+
 #include "component_library.h"
 #include "component_registry.h"
+#include "component_type_registry.h"
 #include "equalizer_engine.h"
+
 #include "help_widget.h"
 #include "ideal_filter_engine.h"
 #include "inspector_panel.h"
@@ -26,8 +31,8 @@
 #include "splitter_engine.h"
 #include "view_manager.h"
 #include <memory>
+#include <optional>
 #include <vector>
-
 enum class PendingAction { None, New, Open, Exit };
 
 class RfSimulatorApp {
@@ -74,6 +79,10 @@ class RfSimulatorApp {
   private:
     void load_window_states();
     void duplicateComponent(int graph_node_id);
+    void openNewComponentForm(const std::string &type);
+    void openEditComponentForm(const ComponentDefinition &def);
+    void drawComponentFormModal();
+    bool saveComponentForm();
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
@@ -87,6 +96,12 @@ class RfSimulatorApp {
     ComponentLibrary m_library;
     std::unique_ptr<LibraryBrowserWidget> m_library_browser;
     bool m_show_library = false;
+    bool m_show_component_form = false;
+    bool m_component_form_is_edit = false;
+    std::string m_component_form_destination_root;
+    std::unique_ptr<ComponentFormModel> m_component_form_model;
+    std::unique_ptr<ComponentFormWidget> m_component_form_widget;
+    std::string m_component_form_error;
     std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 

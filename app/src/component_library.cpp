@@ -1,19 +1,82 @@
 #include "component_library.h"
+#include "component_type_registry.h"
 #include "logging_core.h"
 #include <filesystem>
 
-#include "adc_engine.h"
 #include "amplifier_engine.h"
-#include "attenuator_engine.h"
-#include "combiner_engine.h"
 #include "component_interface.h"
 #include "component_registry.h"
-#include "equalizer_engine.h"
-#include "ideal_filter_engine.h"
-#include "mixer_engine.h"
 #include "node_graph_engine.h"
-#include "splitter_engine.h"
 #include <fstream>
+
+std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
+                                                        const nlohmann::json &parameters) const {
+    std::vector<ValidationIssue> issues;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor) {
+        issues.push_back({"", "Unknown component type '" + type + "'"});
+        return issues;
+    }
+    for (const auto &field : descriptor->fields) {
+        bool present = parameters.contains(field.key);
+        if (!present) {
+            if (field.required)
+                issues.push_back({field.key, "'" + field.label + "' is required"});
+            continue;
+        }
+        const auto &v = parameters[field.key];
+        switch (field.kind) {
+        case FieldKind::Number: {
+            if (!v.is_number()) {
+                issues.push_back({field.key, "'" + field.label + "' must be a number"});
+                break;
+            }
+            double d = v.get<double>();
+            if (d < field.min || d > field.max) {
+                issues.push_back({field.key, "'" + field.label + "' must be between " +
+                                                 std::to_string(field.min) + " and " +
+                                                 std::to_string(field.max)});
+            }
+            break;
+        }
+        case FieldKind::String:
+        case FieldKind::FilePath:
+            if (!v.is_string())
+                issues.push_back({field.key, "'" + field.label + "' must be text"});
+            break;
+        case FieldKind::Bool:
+            if (!v.is_boolean())
+                issues.push_back({field.key, "'" + field.label + "' must be true/false"});
+            break;
+        case FieldKind::Enum: {
+            if (!v.is_string()) {
+                issues.push_back({field.key, "'" + field.label + "' must be text"});
+                break;
+            }
+            std::string s = v.get<std::string>();
+            bool valid = false;
+            for (const auto &ev : field.enum_values)
+                if (ev == s)
+                    valid = true;
+            if (!valid)
+                issues.push_back(
+                    {field.key, "'" + field.label + "' has an invalid value '" + s + "'"});
+            break;
+        }
+        }
+    }
+    return issues;
+}
+
+void ComponentLibrary::upsert(const ComponentDefinition &def) {
+    for (auto &existing : m_definitions) {
+        if (existing.source_path == def.source_path) {
+            existing = def;
+            return;
+        }
+    }
+    m_definitions.push_back(def);
+}
 
 void ComponentLibrary::loadFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
@@ -45,6 +108,7 @@ void ComponentLibrary::loadFile(const std::string &filepath) {
     def.test_conditions = j.value("test_conditions", nlohmann::json::object());
     def.notes = j.value("notes", "");
     def.source_path = filepath;
+    def.issues = validate(def.type, def.parameters);
 
     // Parse data_files array if present
     if (j.contains("data_files") && j["data_files"].is_array()) {
@@ -91,109 +155,39 @@ std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::str
 IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, int id,
                                                 ComponentRegistry &registry,
                                                 NodeGraphEngine &graph) {
-    IComponentEngine *result = nullptr;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
+    if (!descriptor) {
+        LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
+        return nullptr;
+    }
+
+    IComponentEngine *result = descriptor->factory(registry, graph, id, def.parameters);
+    if (!result)
+        return nullptr;
 
     if (def.type == "amplifier") {
-        auto &amp = registry.add<AmplifierEngine>(id, graph);
-        if (def.parameters.contains("gain_dB"))
-            amp.setGain_dB(def.parameters["gain_dB"].get<double>());
-        if (def.parameters.contains("nf_dB"))
-            amp.setNF_dB(def.parameters["nf_dB"].get<double>());
-        if (def.parameters.contains("oip2_dBm"))
-            amp.setOIP2_dBm(def.parameters["oip2_dBm"].get<double>());
-        if (def.parameters.contains("oip3_dBm"))
-            amp.setOIP3_dBm(def.parameters["oip3_dBm"].get<double>());
-        if (def.parameters.contains("p1db_dBm"))
-            amp.setP1dB_dBm(def.parameters["p1db_dBm"].get<double>());
-        bool has_nonlinear = def.parameters.contains("oip2_dBm") ||
-                             def.parameters.contains("oip3_dBm") ||
-                             def.parameters.contains("p1db_dBm");
-        if (has_nonlinear)
-            amp.setEnableNonlinear(true);
-        // Auto-load S-param file if available
+        auto *amp = dynamic_cast<AmplifierEngine *>(result);
         for (const auto &df : def.data_files) {
-            if (df.type == "s_parameters") {
+            if (df.type == "s_parameters" && amp) {
                 std::filesystem::path json_dir =
                     std::filesystem::path(def.source_path).parent_path();
                 std::filesystem::path sparam_path = json_dir / df.path;
-                amp.setSParamFilepath(sparam_path.string());
+                amp->setSParamFilepath(sparam_path.string());
 
-                if (amp.sparamLoaded()) {
+                if (amp->sparamLoaded()) {
                     LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
                              sparam_path.string().c_str());
                 } else {
-                    LOG_WARN("Failed to load S-param file for %s: %s (falling back to single-point "
-                             "params)",
+                    LOG_WARN("Failed to load S-param file for %s: %s (falling back to "
+                             "single-point params)",
                              def.part_number.c_str(), sparam_path.string().c_str());
                 }
                 break; // Only load first S-param file
             }
         }
-        result = &amp;
-    } else if (def.type == "attenuator") {
-        auto &att = registry.add<AttenuatorEngine>(id, graph);
-        if (def.parameters.contains("attenuation_dB"))
-            att.setAttenuation(def.parameters["attenuation_dB"].get<double>());
-        result = &att;
-    } else if (def.type == "splitter") {
-        auto &spl = registry.add<SplitterEngine>(id, graph);
-        result = &spl;
-    } else if (def.type == "filter") {
-        auto &flt = registry.add<IdealFilterEngine>(id, graph);
-        if (def.parameters.contains("filter_type")) {
-            std::string ft = def.parameters["filter_type"].get<std::string>();
-            if (ft == "LPF")
-                flt.setFilterType(FilterType::LPF);
-            else if (ft == "HPF")
-                flt.setFilterType(FilterType::HPF);
-            else if (ft == "BPF")
-                flt.setFilterType(FilterType::BPF);
-            else if (ft == "BSF")
-                flt.setFilterType(FilterType::BSF);
-        }
-        double fc_low = def.parameters.value("fc_low_Hz", 100e6);
-        double fc_high = def.parameters.value("fc_high_Hz", 200e6);
-        if (def.parameters.contains("fc_low_Hz") && def.parameters.contains("fc_high_Hz"))
-            flt.setCutoffs_Hz(fc_low, fc_high);
-        else if (def.parameters.contains("fc_low_Hz"))
-            flt.setCutoff_Hz(fc_low);
-        result = &flt;
-    } else if (def.type == "mixer") {
-        auto &mix = registry.add<MixerEngine>(id, graph);
-        if (def.parameters.contains("lo_freq_Hz"))
-            mix.setLoFreq_Hz(def.parameters["lo_freq_Hz"].get<double>());
-        if (def.parameters.contains("conversion_gain_dB"))
-            mix.setConversionGain_dB(def.parameters["conversion_gain_dB"].get<double>());
-        if (def.parameters.contains("nf_dB"))
-            mix.setNF_dB(def.parameters["nf_dB"].get<double>());
-        result = &mix;
-    } else if (def.type == "equalizer") {
-        auto &eq = registry.add<EqualizerEngine>(id, graph);
-        if (def.parameters.contains("ref_gain_dB"))
-            eq.setRefGain_dB(def.parameters["ref_gain_dB"].get<double>());
-        if (def.parameters.contains("ref_freq_Hz"))
-            eq.setRefFreq_Hz(def.parameters["ref_freq_Hz"].get<double>());
-        if (def.parameters.contains("slope_dB_per_decade"))
-            eq.setSlope_dBPerDecade(def.parameters["slope_dB_per_decade"].get<double>());
-        result = &eq;
-    } else if (def.type == "combiner") {
-        auto &comb = registry.add<CombinerEngine>(id, graph);
-        if (def.parameters.contains("manual_mode"))
-            comb.setManualMode(def.parameters["manual_mode"].get<bool>());
-        result = &comb;
-    } else if (def.type == "adc") {
-        auto &adc = registry.add<AdcEngine>(id, graph);
-        if (def.parameters.contains("fs_Hz"))
-            adc.setFs_Hz(def.parameters["fs_Hz"].get<double>());
-        if (def.parameters.contains("nsd_dBm_per_Hz"))
-            adc.setNsd_dBm_per_Hz(def.parameters["nsd_dBm_per_Hz"].get<double>());
-        result = &adc;
-    } else {
-        LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
-        return nullptr;
     }
 
-    if (result && !def.part_number.empty())
+    if (!def.part_number.empty())
         graph.setNodePartNumber(result->graphNodeId(), def.part_number);
     return result;
 }

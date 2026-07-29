@@ -25,6 +25,11 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
         ImGui::End();
         return;
     }
+    if (ImGui::Button("New Component...")) {
+        if (onNewComponent)
+            onNewComponent();
+    }
+    ImGui::Separator();
 
     ImGui::InputTextWithHint("##filter", "Filter by part number, manufacturer, or description",
                              m_filter_buffer, sizeof(m_filter_buffer));
@@ -53,6 +58,9 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                     if (ImGui::TreeNode(mfg_label.c_str())) {
                         for (auto *def : defs) {
                             std::string item_label;
+                            if (!def->issues.empty()) {
+                                item_label += "[!] ";
+                            }
                             if (!def->data_files.empty()) {
                                 item_label += "[DATA] ";
                             }
@@ -77,8 +85,27 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                                         tooltip += "  - " + df.path + " (" + df.type + ")\n";
                                     }
                                 }
+                                if (!def->issues.empty()) {
+                                    tooltip += "Issues:\n";
+                                    for (const auto &issue : def->issues) {
+                                        tooltip += "  - ";
+                                        if (!issue.field.empty())
+                                            tooltip += issue.field + ": ";
+                                        tooltip += issue.message + "\n";
+                                    }
+                                }
                                 tooltip += "Source: " + def->source_path;
                                 ImGui::SetTooltip("%s", tooltip.c_str());
+                            }
+                            bool is_builtin = def->source_path.find("component_data/library") !=
+                                              std::string::npos;
+                            if (!is_builtin) {
+                                ImGui::SameLine();
+                                std::string edit_label = "Edit##" + def->source_path;
+                                if (ImGui::SmallButton(edit_label.c_str())) {
+                                    if (onEditComponent)
+                                        onEditComponent(*def);
+                                }
                             }
                         }
                         ImGui::TreePop();
