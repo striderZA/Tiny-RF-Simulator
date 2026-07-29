@@ -8,8 +8,8 @@
 
 #include "component_library.h"
 #include "component_registry.h"
-#include "equalizer_engine.h"
 #include "component_type_registry.h"
+#include "equalizer_engine.h"
 
 #include "help_widget.h"
 #include "ideal_filter_engine.h"

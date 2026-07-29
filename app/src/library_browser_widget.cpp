@@ -97,9 +97,8 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                                 tooltip += "Source: " + def->source_path;
                                 ImGui::SetTooltip("%s", tooltip.c_str());
                             }
-                            bool is_builtin =
-                                def->source_path.find("component_data/library") !=
-                                std::string::npos;
+                            bool is_builtin = def->source_path.find("component_data/library") !=
+                                              std::string::npos;
                             if (!is_builtin) {
                                 ImGui::SameLine();
                                 std::string edit_label = "Edit##" + def->source_path;

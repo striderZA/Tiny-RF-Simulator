@@ -1,6 +1,6 @@
 #include "component_library.h"
-#include "logging_core.h"
 #include "component_type_registry.h"
+#include "logging_core.h"
 #include <filesystem>
 
 #include "amplifier_engine.h"
@@ -59,8 +59,8 @@ std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
                 if (ev == s)
                     valid = true;
             if (!valid)
-                issues.push_back({field.key, "'" + field.label + "' has an invalid value '" + s +
-                                                 "'"});
+                issues.push_back(
+                    {field.key, "'" + field.label + "' has an invalid value '" + s + "'"});
             break;
         }
         }

@@ -41,7 +41,6 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
 
     ImGui::Separator();
 
-
     for (const auto &field : m_model->descriptor().fields) {
         ImGui::PushID(field.key.c_str());
         std::string label = field.label;

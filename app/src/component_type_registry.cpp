@@ -93,8 +93,16 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     flt.type = "filter";
     flt.display_name = "Filter";
     flt.fields = {
-        {"filter_type", "Filter Type", "", FieldKind::Enum, true, 0, 0,
-         {"LPF", "HPF", "BPF", "BSF"}, {}, ""},
+        {"filter_type",
+         "Filter Type",
+         "",
+         FieldKind::Enum,
+         true,
+         0,
+         0,
+         {"LPF", "HPF", "BPF", "BSF"},
+         {},
+         ""},
         {"fc_low_Hz", "Low Cutoff", "Hz", FieldKind::Number, false, 0.0, 1e12, {}, {}, ""},
         {"fc_high_Hz", "High Cutoff", "Hz", FieldKind::Number, false, 0.0, 1e12, {}, {}, ""},
     };
@@ -127,8 +135,16 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     mix.display_name = "Mixer";
     mix.fields = {
         {"lo_freq_Hz", "LO Frequency", "Hz", FieldKind::Number, true, 0.0, 1e12, {}, {}, ""},
-        {"conversion_gain_dB", "Conversion Gain", "dB", FieldKind::Number, false, -60.0, 30.0, {},
-         {}, ""},
+        {"conversion_gain_dB",
+         "Conversion Gain",
+         "dB",
+         FieldKind::Number,
+         false,
+         -60.0,
+         30.0,
+         {},
+         {},
+         ""},
         {"nf_dB", "Noise Figure", "dB", FieldKind::Number, false, 0.0, 30.0, {}, {}, ""},
     };
     mix.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
@@ -149,10 +165,26 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     eq.display_name = "Equalizer";
     eq.fields = {
         {"ref_gain_dB", "Reference Gain", "dB", FieldKind::Number, false, -50.0, 50.0, {}, {}, ""},
-        {"ref_freq_Hz", "Reference Frequency", "Hz", FieldKind::Number, false, 0.0, 1e12, {}, {},
+        {"ref_freq_Hz",
+         "Reference Frequency",
+         "Hz",
+         FieldKind::Number,
+         false,
+         0.0,
+         1e12,
+         {},
+         {},
          ""},
-        {"slope_dB_per_decade", "Slope", "dB/decade", FieldKind::Number, false, -100.0, 100.0, {},
-         {}, ""},
+        {"slope_dB_per_decade",
+         "Slope",
+         "dB/decade",
+         FieldKind::Number,
+         false,
+         -100.0,
+         100.0,
+         {},
+         {},
+         ""},
     };
     eq.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
                     const nlohmann::json &parameters) -> IComponentEngine * {
@@ -187,8 +219,16 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     adc.display_name = "ADC";
     adc.fields = {
         {"fs_Hz", "Sample Rate", "Hz", FieldKind::Number, true, 0.0, 1e12, {}, {}, ""},
-        {"nsd_dBm_per_Hz", "Noise Spectral Density", "dBm/Hz", FieldKind::Number, false, -200.0,
-         0.0, {}, {}, ""},
+        {"nsd_dBm_per_Hz",
+         "Noise Spectral Density",
+         "dBm/Hz",
+         FieldKind::Number,
+         false,
+         -200.0,
+         0.0,
+         {},
+         {},
+         ""},
     };
     adc.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
                      const nlohmann::json &parameters) -> IComponentEngine * {

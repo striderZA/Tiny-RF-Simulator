@@ -8,11 +8,11 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <cctype>
 #include <portable-file-dialogs.h>
 #include <typeindex>
 #include <unordered_map>
@@ -33,7 +33,6 @@ static std::string sanitizePathSegment(const std::string &s, const std::string &
     out = out.substr(start, end - start + 1);
     return out.empty() ? fallback : out;
 }
-
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
@@ -170,9 +169,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
             markDirty();
     };
 
-    m_library_browser->onNewComponent = [this]() {
-        openNewComponentForm("amplifier");
-    };
+    m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
     m_library_browser->onEditComponent = [this](const ComponentDefinition &def) {
         openEditComponentForm(def);
     };
@@ -691,7 +688,7 @@ bool RfSimulatorApp::saveComponentForm() {
             return false;
         }
         std::string safe_man = sanitizePathSegment(def.manufacturer, "unknown");
-        std::string safe_pn  = sanitizePathSegment(def.part_number, "component");
+        std::string safe_pn = sanitizePathSegment(def.part_number, "component");
         fs::path dir = fs::path(root) / def.type / safe_man;
         def.source_path = (dir / (safe_pn + ".json")).string();
         if (fs::exists(def.source_path)) {
@@ -711,8 +708,8 @@ bool RfSimulatorApp::saveComponentForm() {
         fs::path dest_dir = fs::path(def.source_path).parent_path();
         fs::path dest_sparam = dest_dir / def.data_files[0].path;
         std::error_code ec;
-        fs::copy_file(model.sparamSourcePath(), dest_sparam,
-                      fs::copy_options::overwrite_existing, ec);
+        fs::copy_file(model.sparamSourcePath(), dest_sparam, fs::copy_options::overwrite_existing,
+                      ec);
         if (ec) {
             m_component_form_error = "Failed to copy S-parameter file: " + ec.message();
             return false;
@@ -778,8 +775,8 @@ void RfSimulatorApp::drawComponentFormModal() {
             );
             m_component_form_destination_root =
                 root_idx == 0 ? "rf-sim-libraries"
-                              : home ? (std::filesystem::path(home) / ".rf-sim" / "libraries").string()
-                                     : "rf-sim-libraries";
+                : home        ? (std::filesystem::path(home) / ".rf-sim" / "libraries").string()
+                              : "rf-sim-libraries";
             ImGui::Separator();
         }
 

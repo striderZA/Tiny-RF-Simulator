@@ -1,6 +1,6 @@
 // app/src/component_form_model.cpp
-#include <filesystem>
 #include "component_form_model.h"
+#include <filesystem>
 
 ComponentFormModel::ComponentFormModel(const ComponentTypeDescriptor &descriptor)
     : m_descriptor(descriptor) {

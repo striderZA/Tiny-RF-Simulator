@@ -14,7 +14,7 @@ struct DataFileRef {
 };
 
 struct ValidationIssue {
-    std::string field;   // empty = whole-definition issue (e.g. unknown type)
+    std::string field; // empty = whole-definition issue (e.g. unknown type)
     std::string message;
 };
 

@@ -15,9 +15,9 @@
 #include "component_library.h"
 #include "component_type_registry.h"
 #include <algorithm>
-#include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <random>
 
 // --- Task 1: ComponentTypeRegistry ---
@@ -128,7 +128,7 @@ static std::string write_temp_json(const std::string &content) {
 }
 
 TEST_CASE("ComponentLibrary loadFile attaches validation issues for out-of-range value",
-         "[library][validate]") {
+          "[library][validate]") {
     std::string json = R"({
         "schema_version": 1,
         "type": "amplifier",
@@ -216,7 +216,7 @@ TEST_CASE("ComponentFormModel loadFrom pre-fills fields for editing", "[form_mod
 }
 
 TEST_CASE("ComponentFormModel round-trips through ComponentLibrary loadFile/instantiate",
-         "[form_model]") {
+          "[form_model]") {
     const auto *descriptor = ComponentTypeRegistry::instance().find("attenuator");
     ComponentFormModel model(*descriptor);
     model.setPartNumber("ROUNDTRIP-ATT");
@@ -229,7 +229,7 @@ TEST_CASE("ComponentFormModel round-trips through ComponentLibrary loadFile/inst
 // --- Task 4 (cont'd): ComponentFormModel data_files preservation on edit ---
 
 TEST_CASE("ComponentFormModel preserves original data_files on edit without new S-param pick",
-         "[form_model]") {
+          "[form_model]") {
     const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
     REQUIRE(descriptor != nullptr);
 
