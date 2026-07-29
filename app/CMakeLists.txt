@@ -16,6 +16,7 @@ add_library(app STATIC
     src/component_form_widget.cpp
     src/extension_manifest.cpp
     src/extension_manager.cpp
+    src/external_tool_runner.cpp
 )
 add_library(simulator::app ALIAS app)
 

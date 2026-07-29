@@ -1,5 +1,10 @@
-#include "extension_manifest.h"
+#include "app.h"
 #include "extension_manager.h"
+#include "extension_manifest.h"
+
+#include "external_tool_runner.h"
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 
@@ -8,9 +13,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <vector>
 #include <system_error>
-
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -33,14 +37,12 @@ struct ScopedRemove {
     }
 };
 
-
 } // namespace
 
 TEST_CASE("extension manifest parses valid external-tool generator", "[extensions][manifest]") {
     const fs::path root = fs::temp_directory_path() / "rfsim_ext_manifest_ok";
-    const fs::path manifest_path = writeManifest(
-        root,
-        R"json({
+    const fs::path manifest_path = writeManifest(root,
+                                                 R"json({
             "schema_version": 1,
             "id": "vendor.amp-f-generator",
             "name": "AMP_F Generator",
@@ -58,7 +60,8 @@ TEST_CASE("extension manifest parses valid external-tool generator", "[extension
     REQUIRE(manifest.has_value());
     REQUIRE(issues.empty());
     REQUIRE(manifest->kind == ExtensionKind::ExternalTool);
-    REQUIRE(manifest->capabilities == std::vector<ExtensionCapability>{ExtensionCapability::Generator});
+    REQUIRE(manifest->capabilities ==
+            std::vector<ExtensionCapability>{ExtensionCapability::Generator});
     REQUIRE(manifest->entry_path == fs::weakly_canonical(root / "bin/adapter.py"));
     REQUIRE(manifest->menus.size() == 1);
     REQUIRE(manifest->menus.front().location == "tools");
@@ -67,9 +70,8 @@ TEST_CASE("extension manifest parses valid external-tool generator", "[extension
 
 TEST_CASE("extension manifest rejects entry escaping plugin root", "[extensions][manifest]") {
     const fs::path root = fs::temp_directory_path() / "rfsim_ext_manifest_escape";
-    const fs::path manifest_path = writeManifest(
-        root,
-        R"json({
+    const fs::path manifest_path = writeManifest(root,
+                                                 R"json({
             "schema_version": 1,
             "id": "vendor.bad",
             "name": "Bad Tool",
@@ -89,9 +91,8 @@ TEST_CASE("extension manifest rejects entry escaping plugin root", "[extensions]
 
 TEST_CASE("extension manifest rejects unsupported capability", "[extensions][manifest]") {
     const fs::path root = fs::temp_directory_path() / "rfsim_ext_manifest_cap";
-    const fs::path manifest_path = writeManifest(
-        root,
-        R"json({
+    const fs::path manifest_path = writeManifest(root,
+                                                 R"json({
             "schema_version": 1,
             "id": "vendor.viewer",
             "name": "Viewer",
@@ -112,9 +113,9 @@ TEST_CASE("extension manifest rejects unsupported capability", "[extensions][man
 TEST_CASE("extension manager discovers project-local data packs", "[extensions][discovery]") {
     ExtensionManager mgr;
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_project";
-    const fs::path manifest_path = writeManifest(
-        project_root / "rf-sim-extensions" / "project-pack",
-        R"json({
+    const fs::path manifest_path =
+        writeManifest(project_root / "rf-sim-extensions" / "project-pack",
+                      R"json({
             "schema_version": 1,
             "id": "project.pack",
             "name": "Project Pack",
@@ -142,9 +143,8 @@ TEST_CASE("extension manager discovers project-local data packs", "[extensions][
 TEST_CASE("extension manager keeps invalid manifests visible", "[extensions][discovery]") {
     ExtensionManager mgr;
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_invalid";
-    const fs::path manifest_path = writeManifest(
-        project_root / "rf-sim-extensions" / "bad",
-        R"json({"kind": "external-tool"})json");
+    const fs::path manifest_path = writeManifest(project_root / "rf-sim-extensions" / "bad",
+                                                 R"json({"kind": "external-tool"})json");
 
     mgr.rescan(project_root);
 
@@ -164,18 +164,17 @@ TEST_CASE("extension manager prefers project-local copies over built-in copies",
           "[extensions][discovery]") {
     const fs::path builtin_root = fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_shadow_case";
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_shadow";
-    const fs::path builtin_manifest = writeManifest(
-        builtin_root,
-        R"json({
+    const fs::path builtin_manifest = writeManifest(builtin_root,
+                                                    R"json({
             "schema_version": 1,
             "id": "shared.pack",
             "name": "Built-in Pack",
             "version": "1.0.0",
             "kind": "data-pack"
         })json");
-    const fs::path project_manifest = writeManifest(
-        project_root / "rf-sim-extensions" / "shared-pack",
-        R"json({
+    const fs::path project_manifest =
+        writeManifest(project_root / "rf-sim-extensions" / "shared-pack",
+                      R"json({
             "schema_version": 1,
             "id": "shared.pack",
             "name": "Project Pack",
@@ -190,31 +189,31 @@ TEST_CASE("extension manager prefers project-local copies over built-in copies",
     mgr.rescan(project_root);
 
     const auto &records = mgr.all();
-    const auto record_it = std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-        return record.manifest && record.manifest->id == "shared.pack";
-    });
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest && record.manifest->id == "shared.pack";
+        });
 
     REQUIRE(record_it != records.end());
     REQUIRE(record_it->manifest_path == project_manifest);
     REQUIRE(record_it->manifest->name == "Project Pack");
     REQUIRE(record_it->status == ExtensionStatusKind::Ok);
     REQUIRE(std::count_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-        return record.manifest && record.manifest->id == "shared.pack";
-    }) == 1);
+                return record.manifest && record.manifest->id == "shared.pack";
+            }) == 1);
 
     const auto packs = mgr.dataPacks();
     REQUIRE(std::find_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
-        return manifest->id == "shared.pack";
-    }) != packs.end());
+                return manifest->id == "shared.pack";
+            }) != packs.end());
 }
 
 TEST_CASE("extension manager excludes malformed compatibility manifests from active queries",
           "[extensions][discovery]") {
     ExtensionManager mgr;
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_incompatible";
-    const fs::path manifest_path = writeManifest(
-        project_root / "rf-sim-extensions" / "future-pack",
-        R"json({
+    const fs::path manifest_path = writeManifest(project_root / "rf-sim-extensions" / "future-pack",
+                                                 R"json({
             "schema_version": 1,
             "id": "future.pack",
             "name": "Future Pack",
@@ -226,24 +225,104 @@ TEST_CASE("extension manager excludes malformed compatibility manifests from act
     mgr.rescan(project_root);
 
     const auto &records = mgr.all();
-    const auto record_it = std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-        return record.manifest_path == manifest_path;
-    });
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest_path == manifest_path;
+        });
 
     REQUIRE(record_it != records.end());
     REQUIRE(record_it->status == ExtensionStatusKind::Incompatible);
     REQUIRE(record_it->manifest.has_value());
     REQUIRE(std::count_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-        return record.manifest && record.manifest->id == "future.pack";
-    }) == 1);
+                return record.manifest && record.manifest->id == "future.pack";
+            }) == 1);
 
     const auto packs = mgr.dataPacks();
     REQUIRE(std::find_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
-        return manifest->id == "future.pack";
-    }) == packs.end());
+                return manifest->id == "future.pack";
+            }) == packs.end());
 
     const auto tools = mgr.externalTools();
     REQUIRE(std::find_if(tools.begin(), tools.end(), [&](const ExtensionManifest *manifest) {
-        return manifest->id == "future.pack";
-    }) == tools.end());
+                return manifest->id == "future.pack";
+            }) == tools.end());
+}
+
+TEST_CASE("external tool runner writes request file and reads result file",
+          "[extensions][runner]") {
+    ExternalToolRunner runner;
+    const fs::path fixture_root =
+        fs::path(PROJECT_SOURCE_DIR) / "tests" / "fixtures" / "extensions";
+    const fs::path work_root = fs::temp_directory_path() / "rfsim_ext_runner_ok";
+    ScopedRemove cleanup{work_root};
+
+    ExtensionManifest manifest;
+    manifest.kind = ExtensionKind::ExternalTool;
+    manifest.id = "vendor.echo-generator";
+    manifest.name = "Echo Generator";
+    manifest.version = "1.0.0";
+    manifest.root_dir = fixture_root;
+    manifest.entry_path = fixture_root / "echo_tool.py";
+
+    const fs::path selected_path = work_root / "inputs" / "selection.s2p";
+    fs::create_directories(selected_path.parent_path());
+    std::ofstream(selected_path) << "touchstone input";
+
+    const ExternalToolRequest request{
+        "1",           "Generate",         work_root,
+        selected_path, work_root / "work", work_root / "work" / "result.json"};
+
+    const auto result = runner.run(manifest, request);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.exit_code == 0);
+    REQUIRE(result.message == "tool ok");
+    REQUIRE(result.work_dir == request.work_dir);
+    REQUIRE(fs::exists(request.work_dir / "request.json"));
+    REQUIRE(fs::exists(request.result_path));
+
+    const nlohmann::json request_json =
+        nlohmann::json::parse(std::ifstream(request.work_dir / "request.json"), nullptr, false);
+    REQUIRE_FALSE(request_json.is_discarded());
+    REQUIRE(request_json["action_label"] == "Generate");
+    REQUIRE(request_json["project_root"] == work_root.generic_string());
+    REQUIRE(request_json["selected_path"] == selected_path.generic_string());
+    REQUIRE(request_json["result_path"] == request.result_path.generic_string());
+
+    const nlohmann::json result_json =
+        nlohmann::json::parse(std::ifstream(request.result_path), nullptr, false);
+    REQUIRE_FALSE(result_json.is_discarded());
+    REQUIRE(result_json["result_type"] == "report_created");
+    REQUIRE(result_json["request"]["action_label"] == "Generate");
+}
+
+TEST_CASE("external tool runner reports missing result as failure", "[extensions][runner]") {
+    ExternalToolRunner runner;
+    const fs::path fixture_root =
+        fs::path(PROJECT_SOURCE_DIR) / "tests" / "fixtures" / "extensions";
+    const fs::path work_root = fs::temp_directory_path() / "rfsim_ext_runner_fail";
+    ScopedRemove cleanup{work_root};
+
+    ExtensionManifest manifest;
+    manifest.kind = ExtensionKind::ExternalTool;
+    manifest.id = "vendor.noop";
+    manifest.name = "Noop Tool";
+    manifest.version = "1.0.0";
+    manifest.root_dir = fixture_root;
+    manifest.entry_path = fixture_root / "noop_tool.py";
+
+    const ExternalToolRequest request{"1",
+                                      "Check",
+                                      work_root,
+                                      work_root / "input.txt",
+                                      work_root / "work",
+                                      work_root / "work" / "result.json"};
+
+    const auto result = runner.run(manifest, request);
+
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.exit_code == 0);
+    REQUIRE(result.message == "result file missing");
+    REQUIRE(fs::exists(request.work_dir / "request.json"));
+    REQUIRE_FALSE(fs::exists(request.result_path));
 }
