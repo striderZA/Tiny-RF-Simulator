@@ -1,4 +1,7 @@
 #include "extension_manifest.h"
+#include "extension_manager.h"
+
+#include <algorithm>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -92,4 +95,55 @@ TEST_CASE("extension manifest rejects unsupported capability", "[extensions][man
     REQUIRE_FALSE(manifest.has_value());
     REQUIRE_FALSE(issues.empty());
     REQUIRE(issues.front().field == "capabilities[0]");
+}
+
+TEST_CASE("extension manager discovers project-local data packs", "[extensions][discovery]") {
+    ExtensionManager mgr;
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_project";
+    const fs::path manifest_path = writeManifest(
+        project_root / "rf-sim-extensions" / "project-pack",
+        R"json({
+            "schema_version": 1,
+            "id": "project.pack",
+            "name": "Project Pack",
+            "version": "1.0.0",
+            "kind": "data-pack"
+        })json");
+
+    mgr.rescan(project_root);
+
+    const auto &records = mgr.all();
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest_path == manifest_path;
+        });
+
+    REQUIRE(record_it != records.end());
+    REQUIRE(record_it->status == ExtensionStatusKind::Ok);
+    REQUIRE(record_it->manifest.has_value());
+    REQUIRE(record_it->manifest->kind == ExtensionKind::DataPack);
+
+    const auto packs = mgr.dataPacks();
+    REQUIRE(std::find(packs.begin(), packs.end(), &*record_it->manifest) != packs.end());
+}
+
+TEST_CASE("extension manager keeps invalid manifests visible", "[extensions][discovery]") {
+    ExtensionManager mgr;
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_invalid";
+    const fs::path manifest_path = writeManifest(
+        project_root / "rf-sim-extensions" / "bad",
+        R"json({"kind": "external-tool"})json");
+
+    mgr.rescan(project_root);
+
+    const auto &records = mgr.all();
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest_path == manifest_path;
+        });
+
+    REQUIRE(record_it != records.end());
+    REQUIRE(record_it->status == ExtensionStatusKind::Invalid);
+    REQUIRE_FALSE(record_it->manifest.has_value());
+    REQUIRE_FALSE(record_it->issues.empty());
 }
