@@ -4,7 +4,10 @@
 #include <charconv>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string_view>
+
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
@@ -57,6 +60,24 @@ ExtensionStatusKind statusForManifest(const ExtensionManifest &manifest) {
         ExtensionStatusKind::Incompatible : ExtensionStatusKind::Ok;
 }
 
+std::optional<std::string> readManifestId(const fs::path &manifest_path) {
+    std::ifstream in(manifest_path);
+    if (!in)
+        return std::nullopt;
+
+    const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
+    if (j.is_discarded() || !j.is_object())
+        return std::nullopt;
+    if (!j.contains("id") || !j["id"].is_string())
+        return std::nullopt;
+
+    const std::string id = j["id"].get<std::string>();
+    if (id.empty())
+        return std::nullopt;
+
+    return id;
+}
+
 } // namespace
 
 std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) const {
@@ -95,12 +116,27 @@ void ExtensionManager::loadRoot(const fs::path &root) {
         record.manifest = parseExtensionManifest(manifest_path, record.issues);
         if (record.manifest)
             record.status = statusForManifest(*record.manifest);
+
+        const std::optional<std::string> extension_id =
+            record.manifest ? std::optional<std::string>(record.manifest->id)
+                            : readManifestId(manifest_path);
+
+        if (extension_id) {
+            const auto existing = m_records_by_id.find(*extension_id);
+            if (existing != m_records_by_id.end()) {
+                m_records[existing->second] = std::move(record);
+                continue;
+            }
+            m_records_by_id.emplace(*extension_id, m_records.size());
+        }
+
         m_records.push_back(std::move(record));
     }
 }
 
 void ExtensionManager::rescan(const fs::path &project_root) {
     m_records.clear();
+    m_records_by_id.clear();
     for (const auto &root : scanRoots(project_root))
         loadRoot(root);
 }
@@ -108,8 +144,10 @@ void ExtensionManager::rescan(const fs::path &project_root) {
 std::vector<const ExtensionManifest *> ExtensionManager::dataPacks() const {
     std::vector<const ExtensionManifest *> result;
     for (const auto &record : m_records) {
-        if (record.manifest && record.manifest->kind == ExtensionKind::DataPack)
+        if (record.status == ExtensionStatusKind::Ok && record.manifest &&
+            record.manifest->kind == ExtensionKind::DataPack) {
             result.push_back(&*record.manifest);
+        }
     }
     return result;
 }
@@ -117,8 +155,10 @@ std::vector<const ExtensionManifest *> ExtensionManager::dataPacks() const {
 std::vector<const ExtensionManifest *> ExtensionManager::externalTools() const {
     std::vector<const ExtensionManifest *> result;
     for (const auto &record : m_records) {
-        if (record.manifest && record.manifest->kind == ExtensionKind::ExternalTool)
+        if (record.status == ExtensionStatusKind::Ok && record.manifest &&
+            record.manifest->kind == ExtensionKind::ExternalTool) {
             result.push_back(&*record.manifest);
+        }
     }
     return result;
 }

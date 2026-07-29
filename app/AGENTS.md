@@ -10,7 +10,6 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ComponentTypeRegistry` — data-driven type schema table (field lists + factories) used by `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
-
 ## Local Contracts
 - `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks

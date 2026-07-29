@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 struct ExtensionRecord {
@@ -24,6 +25,7 @@ class ExtensionManager {
   private:
     std::vector<std::filesystem::path> scanRoots(const std::filesystem::path &project_root) const;
     void loadRoot(const std::filesystem::path &root);
+    std::unordered_map<std::string, std::size_t> m_records_by_id;
 
     std::vector<ExtensionRecord> m_records;
 };
