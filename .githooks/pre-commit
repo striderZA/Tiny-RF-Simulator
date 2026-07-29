@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Blocks commits that would fail CI's `format` job (see .github/workflows/build.yml).
+# Enable once per clone with:  git config core.hooksPath .githooks
+set -u
+
+# Directories/extensions must mirror the `format` job in .github/workflows/build.yml exactly.
+DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry ideal_filter attenuator combiner touchstone logging)
+
+# Staged, non-deleted .cpp/.h files under the CI-checked directories. Check this FIRST so
+# commits that touch no C++ (docs, scripts, CI config, ...) never require clang-format at all.
+mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR -- "${DIRS[@]}" \
+  | grep -E '\.(cpp|h)$' || true)
+
+if [ "${#FILES[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+# Resolve a clang-format binary pinned to major version 18 (CI uses clang-format-18).
+resolve_clang_format() {
+  for candidate in clang-format-18 clang-format; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if "$candidate" --version 2>/dev/null | grep -q "version 18\."; then
+        echo "$candidate"
+        return 0
+      fi
+    fi
+  done
+  # Portable fallback: a pip-installed clang-format==18.1.8 wheel, if present.
+  local pip_bin="$HOME/.cache/clang-format-18/clang_format/data/bin/clang-format"
+  [ -f "${pip_bin}.exe" ] && pip_bin="${pip_bin}.exe"
+  if [ -x "$pip_bin" ] || [ -f "$pip_bin" ]; then
+    echo "$pip_bin"
+    return 0
+  fi
+  return 1
+}
+
+CF="$(resolve_clang_format)"
+if [ -z "$CF" ]; then
+  cat >&2 <<EOF
+pre-commit: clang-format 18 not found on PATH, but this commit touches C++ files:
+$(printf '  %s\n' "${FILES[@]}")
+
+Install it, then retry the commit:
+  Linux (apt):    sudo apt-get install -y clang-format-18
+  macOS (brew):   brew install llvm@18   # ensure its bin/ is on PATH
+  Any platform:   scripts/install-clang-format.sh  (pip install clang-format==18.1.8)
+
+To skip this check for one commit (NOT recommended, CI will still enforce it):
+  git commit --no-verify
+EOF
+  exit 1
+fi
+
+BAD=()
+for f in "${FILES[@]}"; do
+  [ -f "$f" ] || continue
+  if ! "$CF" --dry-run --Werror "$f" >/dev/null 2>&1; then
+    BAD+=("$f")
+  fi
+done
+
+if [ "${#BAD[@]}" -gt 0 ]; then
+  echo "pre-commit: clang-format violations in ${#BAD[@]} file(s) (would fail CI's format job):" >&2
+  printf '  %s\n' "${BAD[@]}" >&2
+  echo "Fix with: ${CF} -i ${BAD[*]}" >&2
+  exit 1
+fi
+
+exit 0
