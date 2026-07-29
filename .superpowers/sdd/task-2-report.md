@@ -58,3 +58,10 @@
 - Both commands still passed:
   - `cmake --build build --target test_extensions`
   - `ctest --test-dir build -R test_extensions --output-on-failure`
+
+## Reviewer-fix update 3
+- Restructured directory iteration so each entry is processed before advancing, avoiding loss of the current manifest if an entry becomes unreadable mid-scan.
+- Re-ran the focused extension build and test command again after that fix.
+- Both commands still passed:
+  - `cmake --build build --target test_extensions`
+  - `ctest --test-dir build -R test_extensions --output-on-failure`

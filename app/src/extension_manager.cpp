@@ -125,17 +125,20 @@ void ExtensionManager::loadRoot(const fs::path &root) {
         const fs::directory_iterator end;
         while (it != end) {
             const fs::directory_entry entry = *it;
-            it.increment(ec);
-            if (ec)
-                return;
 
             std::error_code entry_ec;
-            if (!entry.is_directory(entry_ec) || entry_ec)
-                continue;
+            if (entry.is_directory(entry_ec) && !entry_ec) {
+                const fs::path manifest_path = entry.path() / "plugin.json";
+                if (fs::exists(manifest_path, entry_ec) && !entry_ec)
+                    manifest_paths.push_back(manifest_path);
+            }
 
-            const fs::path manifest_path = entry.path() / "plugin.json";
-            if (fs::exists(manifest_path, entry_ec) && !entry_ec)
-                manifest_paths.push_back(manifest_path);
+            it.increment(ec);
+            if (ec) {
+                ec.clear();
+                if (it == end)
+                    break;
+            }
         }
 
         std::sort(manifest_paths.begin(), manifest_paths.end());
