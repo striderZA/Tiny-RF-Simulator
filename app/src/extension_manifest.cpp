@@ -1,6 +1,7 @@
 #include "extension_manifest.h"
 
 #include <fstream>
+#include <limits>
 #include <system_error>
 
 #include <nlohmann/json.hpp>
@@ -12,6 +13,14 @@ namespace {
 
 void addIssue(std::vector<ExtensionValidationIssue> &issues, std::string field, std::string message) {
     issues.push_back({std::move(field), std::move(message)});
+}
+
+bool containsParentTraversal(const fs::path &path) {
+    for (const auto &part : path) {
+        if (part == "..")
+            return true;
+    }
+    return false;
 }
 
 bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
@@ -42,6 +51,11 @@ bool resolveWithinRoot(const fs::path &root,
                        const std::string &field) {
     if (input.empty()) {
         addIssue(issues, field, "Path must not be empty");
+        return false;
+    }
+
+    if (containsParentTraversal(input)) {
+        addIssue(issues, field, "Path must not contain '..'");
         return false;
     }
 
@@ -168,9 +182,34 @@ std::optional<ExtensionManifest> parseExtensionManifest(
     if (!j.contains("schema_version") || !j["schema_version"].is_number_integer()) {
         addIssue(issues, "schema_version", "Expected an integer");
     } else {
-        manifest.schema_version = j["schema_version"].get<int>();
-        if (manifest.schema_version != 1)
-            addIssue(issues, "schema_version", "Only schema_version=1 is supported");
+        const auto &schema_version_json = j["schema_version"];
+        int schema_version_value = 0;
+        bool schema_version_in_range = true;
+
+        if (schema_version_json.is_number_unsigned()) {
+            const auto raw = schema_version_json.get<unsigned long long>();
+            if (raw > static_cast<unsigned long long>(std::numeric_limits<int>::max())) {
+                addIssue(issues, "schema_version", "Integer value is out of range");
+                schema_version_in_range = false;
+            } else {
+                schema_version_value = static_cast<int>(raw);
+            }
+        } else {
+            const auto raw = schema_version_json.get<long long>();
+            if (raw < static_cast<long long>(std::numeric_limits<int>::min()) ||
+                raw > static_cast<long long>(std::numeric_limits<int>::max())) {
+                addIssue(issues, "schema_version", "Integer value is out of range");
+                schema_version_in_range = false;
+            } else {
+                schema_version_value = static_cast<int>(raw);
+            }
+        }
+
+        if (schema_version_in_range) {
+            manifest.schema_version = schema_version_value;
+            if (manifest.schema_version != 1)
+                addIssue(issues, "schema_version", "Only schema_version=1 is supported");
+        }
     }
 
     auto readRequiredString = [&](const char *field, std::string &out) {
