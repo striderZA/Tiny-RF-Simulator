@@ -602,3 +602,27 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool does not reuse stale result 
     REQUIRE(app.testExtensionResultMessage().find("Extension run failed") != std::string::npos);
     REQUIRE(app.testExtensionResultMessage().find("result file missing") != std::string::npos);
 }
+
+TEST_CASE("built-in amplifier-generator extension is discovered and valid",
+          "[extensions][amplifier-generator]") {
+    ExtensionManager mgr;
+    mgr.rescan(fs::temp_directory_path() / "rfsim_amp_gen_discovery_project");
+
+    const auto &records = mgr.all();
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest && record.manifest->id == "rf-sim.amplifier-generator";
+        });
+
+    REQUIRE(record_it != records.end());
+    REQUIRE(record_it->status == ExtensionStatusKind::Ok);
+    REQUIRE(record_it->manifest.has_value());
+    REQUIRE(record_it->manifest->kind == ExtensionKind::ExternalTool);
+    REQUIRE(record_it->manifest->capabilities ==
+            std::vector<ExtensionCapability>{ExtensionCapability::Generator});
+    REQUIRE(record_it->manifest->menus.size() == 2);
+    REQUIRE(record_it->manifest->menus[0].label == "Amplifier: New Params Template...");
+    REQUIRE(record_it->manifest->menus[0].location == "tools");
+    REQUIRE(record_it->manifest->menus[1].label == "Amplifier: Build from Params...");
+    REQUIRE(record_it->manifest->menus[1].location == "tools");
+}
