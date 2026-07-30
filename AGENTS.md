@@ -98,6 +98,7 @@ When the user requests a durable behavior change, record it here or in the relev
 - [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit + benchmark tests
 - [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
 - [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)
+- [extensions/amplifier-generator/AGENTS.md](extensions/amplifier-generator/AGENTS.md) — Built-in reference `generator` extension: synthesizes Touchstone .s2p + schema-v2 JSON for amplifiers from datasheet parameters
 
 <!-- OPENWIKI:START -->
 
