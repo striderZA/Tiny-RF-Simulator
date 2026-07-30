@@ -317,17 +317,31 @@ void RfSimulatorApp::refreshExtensions() {
     }
 }
 
-void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest) {
+std::vector<ExtensionMenuEntry>
+RfSimulatorApp::externalToolActions(const ExtensionManifest &manifest) const {
+    if (!manifest.menus.empty())
+        return manifest.menus;
+    return {ExtensionMenuEntry{"tools", manifest.name}};
+}
+
+void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest,
+                                     std::string_view action_label) {
     namespace fs = std::filesystem;
 
+    const std::string effective_action_label =
+        action_label.empty() ? manifest.name : std::string(action_label);
     const fs::path project_root = m_current_project_path.empty()
                                       ? fs::current_path()
                                       : fs::path(m_current_project_path).parent_path();
     const fs::path selected_path =
         m_current_project_path.empty() ? fs::path{} : fs::path(m_current_project_path);
     const fs::path work_dir = fs::temp_directory_path() / "rf-sim-extension-run" / manifest.id;
-    const ExternalToolRequest request{"1",           manifest.name, project_root,
-                                      selected_path, work_dir,      work_dir / "result.json"};
+    const fs::path result_path = work_dir / "result.json";
+    std::error_code ec;
+    fs::remove(result_path, ec);
+
+    const ExternalToolRequest request{
+        "1", effective_action_label, project_root, selected_path, work_dir, result_path};
 
     const auto result = m_external_tool_runner.run(manifest, request);
     m_extension_result_message = result.ok ? "Extension run succeeded: " + manifest.name
@@ -362,10 +376,17 @@ void RfSimulatorApp::drawExtensionsPanel() {
             ImGui::Text("%s [%s]", label.c_str(), status);
             if (has_manifest && record.status == ExtensionStatusKind::Ok &&
                 record.manifest->kind == ExtensionKind::ExternalTool) {
-                ImGui::SameLine();
-                const std::string run_label = "Run##" + record.manifest->id;
-                if (ImGui::Button(run_label.c_str()))
-                    runExternalTool(*record.manifest);
+                const auto actions = externalToolActions(*record.manifest);
+                for (std::size_t i = 0; i < actions.size(); ++i) {
+                    ImGui::SameLine();
+                    const std::string button_label = record.manifest->menus.empty()
+                                                         ? "Run##" + record.manifest->id
+                                                         : actions[i].label + "##" +
+                                                               record.manifest->id + "-" +
+                                                               std::to_string(i);
+                    if (ImGui::Button(button_label.c_str()))
+                        runExternalTool(*record.manifest, actions[i].label);
+                }
             }
 
             if (!record.issues.empty()) {
@@ -1014,13 +1035,9 @@ void RfSimulatorApp::draw_ui() {
             for (const auto *tool : m_extension_manager.externalTools()) {
                 if (!tool)
                     continue;
-                if (tool->menus.empty()) {
-                    if (ImGui::MenuItem(tool->name.c_str()))
-                        runExternalTool(*tool);
-                }
-                for (const auto &menu : tool->menus) {
-                    if (menu.location == "tools" && ImGui::MenuItem(menu.label.c_str()))
-                        runExternalTool(*tool);
+                for (const auto &action : externalToolActions(*tool)) {
+                    if (action.location == "tools" && ImGui::MenuItem(action.label.c_str()))
+                        runExternalTool(*tool, action.label);
                 }
             }
             ImGui::EndMenu();

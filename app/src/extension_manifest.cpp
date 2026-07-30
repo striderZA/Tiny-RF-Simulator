@@ -11,7 +11,8 @@ using json = nlohmann::json;
 
 namespace {
 
-void addIssue(std::vector<ExtensionValidationIssue> &issues, std::string field, std::string message) {
+void addIssue(std::vector<ExtensionValidationIssue> &issues, std::string field,
+              std::string message) {
     issues.push_back({std::move(field), std::move(message)});
 }
 
@@ -44,11 +45,8 @@ bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
     return true;
 }
 
-bool resolveWithinRoot(const fs::path &root,
-                       const fs::path &input,
-                       fs::path &resolved,
-                       std::vector<ExtensionValidationIssue> &issues,
-                       const std::string &field) {
+bool resolveWithinRoot(const fs::path &root, const fs::path &input, fs::path &resolved,
+                       std::vector<ExtensionValidationIssue> &issues, const std::string &field) {
     if (input.empty()) {
         addIssue(issues, field, "Path must not be empty");
         return false;
@@ -116,17 +114,15 @@ bool parseMenus(const json &value, std::vector<ExtensionMenuEntry> &menus,
             continue;
         }
 
-        menus.push_back({entry["location"].get<std::string>(), entry["label"].get<std::string>()});
+        const std::string location = entry["location"].get<std::string>();
+        menus.push_back({location, entry["label"].get<std::string>()});
     }
 
     return true;
 }
 
-bool parsePathList(const json &value,
-                   const fs::path &root,
-                   std::vector<fs::path> &paths,
-                   std::vector<ExtensionValidationIssue> &issues,
-                   const std::string &field) {
+bool parsePathList(const json &value, const fs::path &root, std::vector<fs::path> &paths,
+                   std::vector<ExtensionValidationIssue> &issues, const std::string &field) {
     if (value.is_null())
         return true;
     if (!value.is_array()) {
@@ -153,9 +149,9 @@ bool parsePathList(const json &value,
 
 } // namespace
 
-std::optional<ExtensionManifest> parseExtensionManifest(
-    const fs::path &manifest_path,
-    std::vector<ExtensionValidationIssue> &issues) {
+std::optional<ExtensionManifest>
+parseExtensionManifest(const fs::path &manifest_path,
+                       std::vector<ExtensionValidationIssue> &issues) {
     std::error_code ec;
     const fs::path canonical_manifest_path = fs::weakly_canonical(manifest_path, ec);
     if (ec) {

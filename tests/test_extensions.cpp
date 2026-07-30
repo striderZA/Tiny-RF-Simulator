@@ -127,6 +127,30 @@ TEST_CASE("extension manifest rejects unsupported capability", "[extensions][man
     REQUIRE(issues.front().field == "capabilities[0]");
 }
 
+TEST_CASE("extension manifest preserves non-tools menu locations", "[extensions][manifest]") {
+    const fs::path root = fs::temp_directory_path() / "rfsim_ext_manifest_menu";
+    const fs::path manifest_path = writeManifest(root,
+                                                 R"json({
+            "schema_version": 1,
+            "id": "vendor.bad-menu",
+            "name": "Bad Menu",
+            "version": "1.0.0",
+            "kind": "external-tool",
+            "capabilities": ["generator"],
+            "entry": "bin/tool.py",
+            "menus": [{"location": "toolbar", "label": "Run"}]
+        })json");
+
+    std::vector<ExtensionValidationIssue> issues;
+    const auto manifest = parseExtensionManifest(manifest_path, issues);
+
+    REQUIRE(manifest.has_value());
+    REQUIRE(issues.empty());
+    REQUIRE(manifest->menus.size() == 1);
+    REQUIRE(manifest->menus.front().location == "toolbar");
+    REQUIRE(manifest->menus.front().label == "Run");
+}
+
 TEST_CASE("extension manager discovers project-local data packs", "[extensions][discovery]") {
     ExtensionManager mgr;
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_project";
@@ -417,4 +441,164 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[
     app.runExternalTool(*tools.front());
 
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool passes selected menu label to the tool",
+                 "[extensions][app]") {
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool_action";
+    ScopedRemove cleanup{project_root};
+
+    const fs::path tool_dir = project_root / "rf-sim-extensions" / "multi-action-tool";
+    const fs::path script_path = tool_dir / "bin" / "action_tool.py";
+    const fs::path action_path = tool_dir / "last_action.txt";
+    fs::create_directories(script_path.parent_path());
+    {
+        std::ofstream out(script_path);
+        out << "#!/usr/bin/env python3\n"
+            << "import json\n"
+            << "import pathlib\n"
+            << "import sys\n\n"
+            << "request = pathlib.Path(sys.argv[sys.argv.index(\"--request\") + 1])\n"
+            << "result = pathlib.Path(sys.argv[sys.argv.index(\"--result\") + 1])\n"
+            << "request_json = json.loads(request.read_text(encoding=\"utf-8\"))\n"
+            << "pathlib.Path(r\"" << action_path.generic_string()
+            << "\").write_text("
+               "request_json[\"action_label\"], encoding=\"utf-8\")\n"
+            << "result.write_text(json.dumps({\"result_type\": \"report_created\", "
+               "\"message\": \"tool ok\"}) + \"\\n\", encoding=\"utf-8\")\n";
+    }
+
+    writeManifest(tool_dir,
+                  R"json({
+            "schema_version": 1,
+            "id": "project.multi-action",
+            "name": "Project Multi Action",
+            "version": "1.0.0",
+            "kind": "external-tool",
+            "capabilities": ["generator"],
+            "entry": "bin/action_tool.py",
+            "menus": [
+                {"location": "tools", "label": "Generate"},
+                {"location": "tools", "label": "Import"}
+            ]
+        })json");
+
+    RfSimulatorApp app;
+    app.m_current_project_path = (project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const auto &tools = app.testExtensionManager().externalTools();
+    REQUIRE(std::size(tools) == 1);
+
+    app.runExternalTool(*tools.front(), "Import");
+
+    REQUIRE(fs::exists(action_path));
+    REQUIRE(std::ifstream(action_path).good());
+    std::string action_label;
+    std::ifstream action_in(action_path);
+    std::getline(action_in, action_label);
+    REQUIRE(action_label == "Import");
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "app externalToolActions preserves declared menu actions",
+                 "[extensions][app]") {
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool_actions";
+    ScopedRemove cleanup{project_root};
+
+    const fs::path tool_dir = project_root / "rf-sim-extensions" / "multi-action-tool";
+    const fs::path script_path = tool_dir / "bin" / "action_tool.py";
+    fs::create_directories(script_path.parent_path());
+    {
+        std::ofstream out(script_path);
+        out << "#!/usr/bin/env python3\n"
+            << "import json\n"
+            << "import pathlib\n"
+            << "import sys\n\n"
+            << "result = pathlib.Path(sys.argv[sys.argv.index(\"--result\") + 1])\n"
+            << "result.write_text(json.dumps({\"result_type\": \"report_created\", "
+               "\"message\": \"tool ok\"}) + \"\\n\", encoding=\"utf-8\")\n";
+    }
+
+    writeManifest(tool_dir,
+                  R"json({
+            "schema_version": 1,
+            "id": "project.multi-action",
+            "name": "Project Multi Action",
+            "version": "1.0.0",
+            "kind": "external-tool",
+            "capabilities": ["generator"],
+            "entry": "bin/action_tool.py",
+            "menus": [
+                {"location": "tools", "label": "Generate"},
+                {"location": "toolbar", "label": "Import"}
+            ]
+        })json");
+
+    RfSimulatorApp app;
+    app.m_current_project_path = (project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const auto &tools = app.testExtensionManager().externalTools();
+    REQUIRE(std::size(tools) == 1);
+
+    const auto actions = app.externalToolActions(*tools.front());
+    REQUIRE(actions.size() == 2);
+    REQUIRE(actions[0].location == "tools");
+    REQUIRE(actions[0].label == "Generate");
+    REQUIRE(actions[1].location == "toolbar");
+    REQUIRE(actions[1].label == "Import");
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool does not reuse stale result files",
+                 "[extensions][app]") {
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool_stale";
+    ScopedRemove cleanup{project_root};
+
+    const fs::path tool_dir = project_root / "rf-sim-extensions" / "flaky-tool";
+    const fs::path script_path = tool_dir / "bin" / "flaky_tool.py";
+    fs::create_directories(script_path.parent_path());
+    {
+        std::ofstream out(script_path);
+        out << "#!/usr/bin/env python3\n"
+            << "import json\n"
+            << "import pathlib\n"
+            << "import sys\n\n"
+            << "result = pathlib.Path(sys.argv[sys.argv.index(\"--result\") + 1])\n"
+            << "result.write_text(json.dumps({\"result_type\": \"report_created\", "
+               "\"message\": \"first run ok\"}) + \"\\n\", encoding=\"utf-8\")\n";
+    }
+
+    writeManifest(tool_dir,
+                  R"json({
+            "schema_version": 1,
+            "id": "project.flaky-tool",
+            "name": "Project Flaky Tool",
+            "version": "1.0.0",
+            "kind": "external-tool",
+            "capabilities": ["generator"],
+            "entry": "bin/flaky_tool.py",
+            "menus": [{"location": "tools", "label": "Run"}]
+        })json");
+
+    RfSimulatorApp app;
+    app.m_current_project_path = (project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const auto &tools = app.testExtensionManager().externalTools();
+    REQUIRE(std::size(tools) == 1);
+
+    app.runExternalTool(*tools.front(), "Run");
+    REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
+
+    {
+        std::ofstream out(script_path);
+        out << "#!/usr/bin/env python3\n"
+            << "import sys\n"
+            << "sys.exit(0)\n";
+    }
+
+    app.runExternalTool(*tools.front(), "Run");
+
+    REQUIRE(app.testExtensionResultMessage().find("Extension run failed") != std::string::npos);
+    REQUIRE(app.testExtensionResultMessage().find("result file missing") != std::string::npos);
 }

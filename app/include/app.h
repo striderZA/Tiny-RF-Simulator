@@ -34,6 +34,7 @@
 #include "view_manager.h"
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 enum class PendingAction { None, New, Open, Exit };
 
@@ -44,8 +45,8 @@ class RfSimulatorApp {
     void update_dsp();
     void refreshExtensions();
     void drawExtensionsPanel();
-    void runExternalTool(const ExtensionManifest &manifest);
-
+    std::vector<ExtensionMenuEntry> externalToolActions(const ExtensionManifest &manifest) const;
+    void runExternalTool(const ExtensionManifest &manifest, std::string_view action_label = {});
     LoggingWidget m_log_widget;
     bool m_show_log = true;
     bool m_show_spectrum = true;
