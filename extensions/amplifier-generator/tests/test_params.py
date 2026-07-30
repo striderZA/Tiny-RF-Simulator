@@ -62,6 +62,18 @@ class LoadParamsTests(unittest.TestCase):
             with self.assertRaises(ParamsError):
                 load_params(path)
 
+    def test_unsupported_freq_unit_raises(self):
+        with TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            path = self.write(tmp, {
+                "part_number": "AM1143",
+                "manufacturer": "Anatech",
+                "gain_db_vs_freq": [[1.0, 20.0], [2.0, 21.0]],
+                "freq_unit": "THz",
+            })
+            with self.assertRaises(ParamsError):
+                load_params(path)
+
     def test_invalid_json_raises(self):
         with TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)

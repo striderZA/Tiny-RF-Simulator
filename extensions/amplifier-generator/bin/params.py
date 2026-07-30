@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from touchstone import FREQ_UNITS
+
 
 class ParamsError(ValueError):
     """Raised when a parameters JSON file fails validation."""
@@ -57,6 +59,8 @@ def load_params(path: Path) -> dict[str, Any]:
 
     raw["gain_db_vs_freq"] = parsed_points
     raw.setdefault("freq_unit", "GHz")
+    if raw["freq_unit"] not in FREQ_UNITS:
+        raise ParamsError(f"{path.name}: unsupported freq_unit '{raw['freq_unit']}'")
     raw.setdefault("input_return_loss_db", 20.0)
     raw.setdefault("output_return_loss_db", 20.0)
     return raw

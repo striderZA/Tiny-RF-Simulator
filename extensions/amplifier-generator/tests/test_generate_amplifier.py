@@ -75,6 +75,23 @@ class RunBuildActionTests(unittest.TestCase):
             # malformed file stays in place (not moved to processed/)
             self.assertTrue((input_dir(project_root) / "bad.json").exists())
 
+    def test_unsupported_freq_unit_is_skipped_not_fatal(self):
+        with TemporaryDirectory() as tmp_str:
+            project_root = Path(tmp_str)
+            self.write_params(project_root, "bad-freq-unit.json", {
+                "part_number": "AM1143",
+                "manufacturer": "Anatech Electronics",
+                "gain_db_vs_freq": [[1.0, 20.0], [2.0, 21.0]],
+                "freq_unit": "THz",
+            })
+            result = run_build_action(project_root)
+            self.assertEqual(result["built"], [])
+            self.assertEqual(len(result["skipped"]), 1)
+
+            vendor_dir = library_dir(project_root) / "Anatech Electronics"
+            if vendor_dir.exists():
+                self.assertNotIn("AM1143.json", [p.name for p in vendor_dir.glob("*.json")])
+
     def test_rerun_without_cleanup_increments_instead_of_overwriting(self):
         with TemporaryDirectory() as tmp_str:
             project_root = Path(tmp_str)
