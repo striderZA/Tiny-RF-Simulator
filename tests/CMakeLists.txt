@@ -96,3 +96,10 @@ target_link_libraries(test_extensions PRIVATE
 )
 target_compile_definitions(test_extensions PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_extensions COMMAND test_extensions WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+find_program(AMP_GEN_PYTHON_EXECUTABLE NAMES python3 python)
+if(AMP_GEN_PYTHON_EXECUTABLE)
+    add_test(NAME amplifier_generator_python_tests
+             COMMAND ${AMP_GEN_PYTHON_EXECUTABLE} -m unittest discover -s tests -v
+             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/extensions/amplifier-generator)
+endif()

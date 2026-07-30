@@ -66,7 +66,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 target_compile_definitions(app PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    APP_VERSION="${PROJECT_VERSION}"
+    APP_VERSION="${RFSIM_APP_VERSION}"
     APP_GIT_HASH="${GIT_COMMIT_HASH}"
 )
 
