@@ -26,10 +26,11 @@ class BuildDefinitionTests(unittest.TestCase):
         )
         self.assertNotIn("description", definition)
 
-    def test_omits_parameters_key_when_none_supplied(self):
+    def test_parameters_key_present_but_empty_when_no_optional_fields_supplied(self):
         params = {"part_number": "X", "manufacturer": "Y"}
         definition = build_definition(params, "X.s2p")
-        self.assertNotIn("parameters", definition)
+        self.assertIn("parameters", definition)
+        self.assertEqual(definition["parameters"], {})
 
 
 class NextAvailableStemTests(unittest.TestCase):

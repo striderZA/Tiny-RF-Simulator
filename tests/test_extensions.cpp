@@ -1,4 +1,5 @@
 #include "app.h"
+#include "component_library.h"
 #include "extension_manager.h"
 #include "extension_manifest.h"
 
@@ -690,4 +691,21 @@ TEST_CASE("amplifier-generator produces a template then builds a library entry e
     REQUIRE(fs::exists(sparam_path));
     REQUIRE(fs::exists(input_dir / "processed" / "params-1.json"));
     REQUIRE_FALSE(fs::exists(template_path));
+
+    // Close the exact gap the final review identified: a minimal build (only the three
+    // required fields, no optional datasheet fields) must still produce a JSON file that
+    // ComponentLibrary::loadFile() actually accepts, i.e. it must contain a "parameters"
+    // key (even if empty) — not just exist on disk.
+    const nlohmann::json saved_json =
+        nlohmann::json::parse(std::ifstream(json_path), nullptr, false);
+    REQUIRE_FALSE(saved_json.is_discarded());
+    REQUIRE(saved_json.contains("parameters"));
+    REQUIRE(saved_json["parameters"].is_object());
+    REQUIRE(saved_json["parameters"].empty());
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path.string());
+    const auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(defs.front()->part_number == "TESTAMP-1");
 }

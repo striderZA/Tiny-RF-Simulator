@@ -59,6 +59,9 @@ class RunBuildActionTests(unittest.TestCase):
             json_path = library_dir(project_root) / "Anatech Electronics" / "AM1143.json"
             sparam_path = library_dir(project_root) / "Anatech Electronics" / "AM1143.s2p"
             self.assertTrue(json_path.exists())
+            saved = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertIn("parameters", saved)
+            self.assertEqual(saved["parameters"], {})
             self.assertTrue(sparam_path.exists())
 
             processed = input_dir(project_root) / "processed" / "params-1.json"

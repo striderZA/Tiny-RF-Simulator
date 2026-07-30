@@ -17,9 +17,7 @@ def build_definition(params: dict[str, Any], sparam_filename: str) -> dict[str, 
     }
     if params.get("description"):
         definition["description"] = params["description"]
-    parameters = {k: params[k] for k in PARAM_FIELDS if k in params}
-    if parameters:
-        definition["parameters"] = parameters
+    definition["parameters"] = {k: params[k] for k in PARAM_FIELDS if k in params}
     definition["data_files"] = [{"type": "s_parameters", "path": sparam_filename}]
     if params.get("notes"):
         definition["notes"] = params["notes"]
