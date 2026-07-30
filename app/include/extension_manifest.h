@@ -49,6 +49,6 @@ struct ExtensionManifest {
     std::vector<std::filesystem::path> data_roots;
 };
 
-std::optional<ExtensionManifest> parseExtensionManifest(
-    const std::filesystem::path &manifest_path,
-    std::vector<ExtensionValidationIssue> &issues);
+std::optional<ExtensionManifest>
+parseExtensionManifest(const std::filesystem::path &manifest_path,
+                       std::vector<ExtensionValidationIssue> &issues);

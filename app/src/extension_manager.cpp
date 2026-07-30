@@ -34,7 +34,8 @@ std::optional<std::vector<int>> parseVersion(std::string_view version) {
     std::size_t start = 0;
     while (start <= version.size()) {
         const std::size_t dot = version.find('.', start);
-        const std::size_t count = dot == std::string_view::npos ? version.size() - start : dot - start;
+        const std::size_t count =
+            dot == std::string_view::npos ? version.size() - start : dot - start;
         const auto part = parseVersionPart(version.substr(start, count));
         if (!part)
             return std::nullopt;

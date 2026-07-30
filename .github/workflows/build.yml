@@ -120,6 +120,7 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python
 
       - name: ccache
         if: runner.os == 'Linux'
