@@ -5,6 +5,12 @@ cmake_minimum_required (VERSION 3.20)
 
 project (RfSimulator VERSION 0.14.0)
 
+# FetchContent'd dependencies below call their own project() commands, which
+# resets PROJECT_VERSION (and _MAJOR/_MINOR/_PATCH) for the remainder of this
+# configure run. Capture it now so downstream targets (e.g. app's APP_VERSION
+# compile definition) get the real project version instead of an empty string.
+set(RFSIM_APP_VERSION "${PROJECT_VERSION}")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
