@@ -39,6 +39,13 @@ class InspectorPanel {
         if (m_selected_pfb_index >= static_cast<int>(m_pfb_ptrs.size()))
             m_selected_pfb_index = std::max(0, static_cast<int>(m_pfb_ptrs.size()) - 1);
     }
+    // Vectors are owned by the caller (RfSimulatorApp) and stay stable across frames;
+    // only their contents are rebuilt on add/remove, so storing the vector pointers
+    // here is safe as long as we index into them fresh on every draw() call.
+    void setPFBWindowVisibility(std::vector<bool> *iq_visible, std::vector<bool> *grid_visible) {
+        m_pfb_iq_visible = iq_visible;
+        m_pfb_grid_visible = grid_visible;
+    }
 
     std::function<void(int graph_node_id)> onRemoveNode;
     std::function<void()> onParamChange;
@@ -51,6 +58,8 @@ class InspectorPanel {
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     int m_selected_pfb_index = 0;
     ViewToggles m_viewToggles;
+    std::vector<bool> *m_pfb_iq_visible = nullptr;
+    std::vector<bool> *m_pfb_grid_visible = nullptr;
 
     enum class ComponentType {
         None,

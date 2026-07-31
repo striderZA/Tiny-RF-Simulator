@@ -742,6 +742,19 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
         ImGui::Text("Noise: %.3e W", active.noise_W);
     }
 
+    if (m_pfb_iq_visible && m_selected_pfb_index >= 0 &&
+        m_selected_pfb_index < static_cast<int>(m_pfb_iq_visible->size())) {
+        bool show = (*m_pfb_iq_visible)[m_selected_pfb_index];
+        if (ImGui::Checkbox("Show IQ Plot", &show))
+            (*m_pfb_iq_visible)[m_selected_pfb_index] = show;
+    }
+    if (m_pfb_grid_visible && m_selected_pfb_index >= 0 &&
+        m_selected_pfb_index < static_cast<int>(m_pfb_grid_visible->size())) {
+        bool show = (*m_pfb_grid_visible)[m_selected_pfb_index];
+        if (ImGui::Checkbox("Show Channelizer Grid", &show))
+            (*m_pfb_grid_visible)[m_selected_pfb_index] = show;
+    }
+
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }
