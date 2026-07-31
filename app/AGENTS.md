@@ -25,6 +25,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `draw_ui()` and `drawExtensionsPanel()` both dispatch through `externalToolActions()`; the Tools menu renders only actions whose `location == "tools"`, while the Extensions panel shows every declared action (or a single fallback Run button)
 - App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
+- Per-PFB IQ Plot / Channelizer Grid window visibility (`m_show_iq_pfbs`/`m_show_pfb_grids`, indexed in lockstep with `m_pfb_ptrs`) has no View-menu entry since instances are dynamic; closed windows are reopened via "Show IQ Plot"/"Show Channelizer Grid" checkboxes in the PFB properties panel, wired each frame through `InspectorPanel::setPFBWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
 - Destructor saves window state via `SessionState`
 
 ## Work Guidance

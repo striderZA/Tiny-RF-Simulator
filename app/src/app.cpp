@@ -957,6 +957,7 @@ void RfSimulatorApp::update_dsp() {
     std::vector<PFBChannelizerEngine *> pfb_vec(pfb_ptrs.begin(), pfb_ptrs.end());
     m_spectrum_widget->setPFBs(pfb_vec);
     m_inspector_panel->setPFBs(pfb_vec);
+    m_inspector_panel->setPFBWindowVisibility(&m_show_iq_pfbs, &m_show_pfb_grids);
 }
 
 void RfSimulatorApp::draw_ui() {
