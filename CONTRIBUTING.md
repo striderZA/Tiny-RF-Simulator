@@ -57,7 +57,7 @@ build/bin/tests.exe [bench]   # Windows
 
 ## CI Pipeline
 
-Every push and pull request runs through:
+Every pull request runs through:
 
 - **Format check** — clang-format 18 enforces code style
 - **Conventional commits** — PR titles must follow conventional commit format
@@ -66,8 +66,7 @@ Every push and pull request runs through:
 - **AddressSanitizer** — memory safety checks on Linux
 - **Coverage** — gcov/lcov, uploaded to Codecov
 
-Release tags (`v*`) trigger binary packaging and draft GitHub Releases with auto-generated changelogs.
-
+Release tags (`v*`) trigger a separate packaging workflow that builds release binaries and drafts a GitHub Release.
 ## Architecture (Quick Reference)
 
 - **C++20** modular library.

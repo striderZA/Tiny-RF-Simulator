@@ -9,7 +9,7 @@ Additional references:
 - [README.md](README.md) — project overview, features, quick start
 - [Architecture overview](openwiki/architecture/overview.md) — full architecture deep-dive (engine+widget pattern, signal chain, subcircuit groups, dirty-flag caching)
 - [`.clang-format`](.clang-format) — code style rules
-- [`.github/workflows/build.yml`](.github/workflows/build.yml) — CI configuration
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) / [`.github/workflows/release.yml`](.github/workflows/release.yml) — PR CI and tag release configuration
 
 # DOX framework
 
