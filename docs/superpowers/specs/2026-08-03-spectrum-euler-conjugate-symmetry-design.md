@@ -68,49 +68,42 @@ propagation pattern already present in each of these files — mechanical, low-r
 when `!spec.is_complex_baseband`, before binning power into display bins. Post-ADC spectra
 (`is_complex_baseband == true`) render as today — already correctly one-sided.
 
-### 5. ADC/DDC expansion point (`adc/src/adc_engine.cpp`) — the real fix
+### 5. ADC/DDC — flag only, no power-math change
 
 Cross-checked against `docs/resources/rf_adc_info.md` (the project's own authoritative ADC/DDC
-model doc) before finalizing this section — it changed the design. Section 3 ("Image Rejection")
-and validation-checklist item 6 confirm: because the ADC input is real, the complex DDC mixer
-produces a wanted component and an unwanted image at the mirror frequency, and **the lowpass
-filter after mixing suppresses the image** — no explicit image-reject logic is needed in the
-digital domain. `alias_frequency` is deliberately unsigned/sign-blind (folds into `[0, Fs/2)`)
-because a real ADC's Nyquist folding genuinely cannot distinguish `+fc` from `-fc` — that
-ambiguity is only resolved afterward, by the fixed `-Fs/4` NCO shift + `[-Fs/4, Fs/4)` window
-already in the code: `f_a - Fs/4` always lands inside that window for `f_a in [0, Fs/2)`, while the
-mirror candidate `-f_a - Fs/4` always lands at or below `-Fs/4` (i.e. always outside, touching the
-boundary only at `f_a = 0`). So the existing single-branch tone loop already deterministically
-selects the correct surviving image and rejects the other — no change to `alias_frequency` or the
-aliasing/NCO-shift math is needed, and no per-mirror loop is needed.
+model doc), and re-derived the power arithmetic concretely (P = −20 dBm, Fs = 1 GHz, fc = 250 MHz)
+before finalizing this section — both passes changed the design from earlier drafts.
 
-The only thing missing is the power bookkeeping: since the real input tone is now understood as an
-Euler-split conjugate pair (each half at `P - 3.0103 dB`), the surviving image the loop already
-computes carries only `P - 3.0103 dB`, not `P`. The fix is one line: add **+3.0103 dB**
-(`10*log10(2)`, doubling linear power) to `t.power_dBm` in the existing tone-mapping loop before
-pushing, alongside setting `out.is_complex_baseband = true;` on both the empty-input early-return
-path and the main path. This compensation exactly cancels the split, so a tone that aliases
-cleanly produces a baseband tone at **the same `power_dBm` value ADC produces today** — the
-existing "ADC DDC preserves tone power and phase" test is a regression pin and should NOT need its
-expected numbers changed. DC-tone inputs are unaffected (the helper's DC exemption means no split
-happened upstream, so no compensation applies there either — but since interior tones stay
-positive-only per §2, the ADC never actually calls the shared helper; the DC case simply needs no
-special-casing in the ADC loop at all).
+`rf_adc_info.md` §3 ("Image Rejection") and validation-checklist item 6 confirm: because the ADC
+input is real, the complex DDC mixer produces a wanted component and an unwanted image at the
+mirror frequency, and **the lowpass filter after mixing suppresses the image** — no explicit
+image-reject logic is needed. `alias_frequency` is deliberately unsigned/sign-blind (folds into
+`[0, Fs/2)`) because real Nyquist folding genuinely cannot distinguish `+fc` from `-fc` — that
+ambiguity is resolved afterward by the fixed `-Fs/4` NCO shift + `[-Fs/4, Fs/4)` window already in
+the code: `f_a - Fs/4` always lands inside that window for `f_a in [0, Fs/2)`, while the mirror
+candidate `-f_a - Fs/4` always lands at or below `-Fs/4` (outside, touching the boundary only at
+`f_a = 0`). So the existing single-branch tone loop already deterministically selects the correct
+surviving image and rejects the other — no change to `alias_frequency` or the aliasing/NCO-shift
+math is needed.
+
+**Power math needs no change either — this is the correction from the previous draft.** Splitting
+a real tone of power `P` into ±fc conjugate pairs puts half the linear power (`P - 3.0103 dB`) on
+each mirror; only the surviving image carries that `P - 3.0103 dB` through the DDC. To match
+today's ADC convention (`power_dBm` numerically unchanged end-to-end), that surviving image needs
+`+3.0103 dB` of DDC gain compensation — and `-3.0103 dB` (split) `+ 3.0103 dB` (compensation) = 0
+dB net. Since interior tones are never actually split in code (§2 — they stay at full `P` the
+whole way to the ADC's input), applying that net-zero result means: **leave `t.power_dBm` exactly
+as copied from the input tone.** That is precisely what `adc_engine.cpp` already does today
+(`Spectrum::Tone t = tone;`, no power adjustment). Adding an explicit `+3.0103 dB` on top of the
+already-unsplit input power (as an earlier draft of this doc proposed) would double-apply the
+compensation and push ADC output 3 dB hot, breaking the "ADC DDC preserves tone power and phase"
+regression test. **The only required change in `adc_engine.cpp` is setting
+`out.is_complex_baseband = true;`** on both the empty-input early-return path and the main path.
 
 **Explicitly out of scope:** `docs/resources/rf_adc_info.md` §"Zone Inversion (Spectral Flip)"
 documents that even Nyquist zones need a spectral-inversion correction (NCO sign flip or output
 conjugation) that the current `adc_engine.cpp` does not implement. That's a pre-existing gap
 unrelated to Euler/conjugate-symmetry and is not touched by this fix.
-
-## Why +3.0103 dB and not +6 dB
-
-Splitting a real tone of power `P` into ±fc conjugate pairs puts half the linear power
-(`P - 3.0103 dB`) on each mirror. Only the `+fc` image survives the ADC's fixed `-Fs/4` NCO shift
-and windowing (see above — this is deterministic given this codebase's NCO convention, confirmed
-against `rf_adc_info.md`'s image-rejection description). To restore the original `P` (matching
-today's ADC output convention, where `power_dBm` passes through the ADC numerically unchanged),
-the compensation is `+3.0103 dB` (2x linear power) — not `+6 dB` (4x), which would overshoot by
-another 3 dB.
 
 ## Files changed
 
@@ -128,8 +121,8 @@ another 3 dB.
 - `pfb_channelizer/src/pfb_channelizer_engine.cpp` — flag propagation (true, inherited from ADC)
 - `spectrum_analyzer/src/spectrum_analyzer_engine.cpp` — render-time expansion in
   `integratePowerPerBin`
-- `adc/src/adc_engine.cpp` — `+3.0103 dB` compensation added to the existing tone-mapping loop,
-  `is_complex_baseband = true` (no change to `alias_frequency` or the NCO-shift/windowing math)
+- `adc/src/adc_engine.cpp` — `is_complex_baseband = true` on both output paths; no change to
+  `alias_frequency`, the NCO-shift/windowing math, or tone `power_dBm` (see §5 for why)
 - `tests/*` — new coverage (see Testing)
 
 ## Testing
@@ -140,9 +133,8 @@ another 3 dB.
   at `fc` renders two peaks at `±fc`, each `~3.0103 dB` below the tone's nominal `power_dBm`.
   Post-ADC spectrum (`is_complex_baseband == true`) with the same tone renders unchanged (single
   peak, no mirroring).
-- `adc_engine` regression test: existing "ADC DDC preserves tone power and phase" continues to pass
-  with unchanged expected values, and a new assertion pins the `+3.0103 dB` compensation value
-  itself (not just the net zero effect) so a future accidental change to the split or the
-  compensation is caught independently.
+- `adc_engine` regression test: existing "ADC DDC preserves tone power and phase" continues to
+  pass with unchanged expected values (proves the ADC's already-unmodified power math remains
+  correct), plus a new assertion that `out.is_complex_baseband == true` on that output.
 - Full existing suite (`build/bin/tests.exe`) run to confirm no regressions in nonlinear model,
   S-parameter interpolation, or pass-through gain/filter tests — none of that interior math changes.
