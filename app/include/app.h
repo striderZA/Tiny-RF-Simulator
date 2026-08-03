@@ -91,6 +91,7 @@ class RfSimulatorApp {
 
   private:
     void load_window_states();
+    void rewireInputs();
     void duplicateComponent(int graph_node_id);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);

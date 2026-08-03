@@ -113,6 +113,15 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget->onRemoveNode = [this](int id) {
         markDirty();
         m_components.remove(id);
+        // Immediately re-wire remaining components' inputs against the current graph
+        // topology. Node removal only strips graph links/pin bookkeeping; it does not
+        // touch SignalNode::inputs pointers held by surviving components, and the next
+        // scheduled rewire (update_dsp(), start of next frame) hasn't run yet. Any
+        // component downstream of the removed node still holds a raw Spectrum* into the
+        // just-destroyed engine's SignalNode. Widgets that dereference node().inputs[]
+        // directly during this same draw_ui() call (e.g. PFBChannelizerWidget::draw() /
+        // rebuildCache(), InspectorPanel) would otherwise use-after-free. See issue #37.
+        rewireInputs();
         auto pfb_vec = m_components.byType<PFBChannelizerEngine>();
         m_iq_widgets.clear();
         m_show_iq_pfbs.clear();
@@ -906,9 +915,7 @@ void RfSimulatorApp::drawComponentFormModal() {
     }
 }
 
-void RfSimulatorApp::update_dsp() {
-    std::unordered_map<int, std::function<void()>> updates;
-
+void RfSimulatorApp::rewireInputs() {
     for (auto *comp : m_components.all()) {
         int N = comp->numInputPins();
         for (int k = 0; k < N; ++k) {
@@ -920,6 +927,14 @@ void RfSimulatorApp::update_dsp() {
                 comp->node().inputs[k] = nullptr;
             }
         }
+    }
+}
+
+void RfSimulatorApp::update_dsp() {
+    rewireInputs();
+
+    std::unordered_map<int, std::function<void()>> updates;
+    for (auto *comp : m_components.all()) {
         updates[comp->graphNodeId()] = [comp]() { comp->update(0.0); };
     }
 
