@@ -96,3 +96,11 @@ target_link_libraries(test_extensions PRIVATE
 )
 target_compile_definitions(test_extensions PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_extensions COMMAND test_extensions WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_issue37_pfb_input_removal test_issue37_pfb_input_removal.cpp)
+target_link_libraries(test_issue37_pfb_input_removal PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_issue37_pfb_input_removal PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_issue37_pfb_input_removal COMMAND test_issue37_pfb_input_removal WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
