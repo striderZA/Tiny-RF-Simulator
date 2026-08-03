@@ -25,7 +25,8 @@ implementation for the plugin extension system's `generator` capability.
   `rf-sim-generator-input/amplifier/params-N.json`; "Build from Params..."
   batch-processes every pending file there into
   `rf-sim-libraries/amplifiers/<manufacturer>/<part_number>.json` + `.s2p`,
-  then moves the source into a `processed/` subfolder.
+  then moves the source into a `processed/` subfolder, suffixing
+  `-2`, `-3`, … on the processed filename if that slot already exists.
 - `parameters` field names in the generated JSON match
   `AmplifierEngine`'s factory in `app/src/component_type_registry.cpp`
   exactly: `nf_dB`, `oip3_dBm`, `p1db_dBm`, `oip2_dBm`, `gain_dB`.

@@ -55,6 +55,20 @@ def next_template_path(directory: Path) -> Path:
             return candidate
         n += 1
 
+def next_processed_path(directory: Path, filename: str) -> Path:
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+
+    original = Path(filename)
+    n = 2
+    while True:
+        candidate = directory / f"{original.stem}-{n}{original.suffix}"
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
 
 def run_template_action(project_root: Path) -> dict:
     target = next_template_path(input_dir(project_root))
@@ -93,7 +107,7 @@ def run_build_action(project_root: Path) -> dict:
         )
 
         processed_dir.mkdir(parents=True, exist_ok=True)
-        params_path.rename(processed_dir / params_path.name)
+        params_path.rename(next_processed_path(processed_dir, params_path.name))
         built.append(json_path.name)
 
     if not pending:

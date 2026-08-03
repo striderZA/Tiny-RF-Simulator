@@ -68,6 +68,26 @@ class RunBuildActionTests(unittest.TestCase):
             self.assertTrue(processed.exists())
             self.assertFalse((input_dir(project_root) / "params-1.json").exists())
 
+    def test_processed_name_collision_increments_instead_of_failing(self):
+        with TemporaryDirectory() as tmp_str:
+            project_root = Path(tmp_str)
+            processed_dir = input_dir(project_root) / "processed"
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            (processed_dir / "params-1.json").write_text("{\"old\": true}\n", encoding="utf-8")
+            self.write_params(project_root, "params-1.json", {
+                "part_number": "AM1143",
+                "manufacturer": "Anatech Electronics",
+                "gain_db_vs_freq": [[1.0, 20.0], [2.0, 21.0]],
+            })
+
+            result = run_build_action(project_root)
+
+            self.assertEqual(len(result["built"]), 1)
+            self.assertEqual(result["skipped"], [])
+            self.assertTrue((processed_dir / "params-1.json").exists())
+            self.assertTrue((processed_dir / "params-1-2.json").exists())
+            self.assertFalse((input_dir(project_root) / "params-1.json").exists())
+
     def test_malformed_file_is_skipped_not_fatal(self):
         with TemporaryDirectory() as tmp_str:
             project_root = Path(tmp_str)
