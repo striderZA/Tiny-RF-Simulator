@@ -26,6 +26,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Per-PFB IQ Plot / Channelizer Grid window visibility (`m_show_iq_pfbs`/`m_show_pfb_grids`, indexed in lockstep with `m_pfb_ptrs`) has no View-menu entry since instances are dynamic; closed windows are reopened via "Show IQ Plot"/"Show Channelizer Grid" checkboxes in the PFB properties panel, wired each frame through `InspectorPanel::setPFBWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
+- `update_dsp()`'s signal-routing pass is factored into `rewireInputs()` (sets every component's `node().inputs[k]` from current graph links, nulling severed ones); `onRemoveNode` calls it synchronously right after `ComponentRegistry::remove()` so no surviving component is left holding a dangling `Spectrum*` into the just-destroyed engine's `SignalNode` while the rest of that frame's `draw_ui()` still runs — widgets that dereference `node().inputs[]` directly during draw (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37)
 - Destructor saves window state via `SessionState`
 
 ## Work Guidance
