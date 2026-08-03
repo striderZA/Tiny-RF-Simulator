@@ -407,7 +407,8 @@ TEST_CASE_METHOD(ImGuiFixture, "app refreshExtensions discovers project-local da
             }) != packs.end());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[extensions][app]") {
+TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records tool success detail",
+                 "[extensions][app]") {
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool";
     ScopedRemove cleanup{project_root};
 
@@ -450,6 +451,7 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[
     app.runExternalTool(tool);
 
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
+    REQUIRE(app.testExtensionResultMessage().find("tool ok") != std::string::npos);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool passes selected menu label to the tool",

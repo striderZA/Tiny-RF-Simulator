@@ -344,10 +344,17 @@ void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest,
         "1", effective_action_label, project_root, selected_path, work_dir, result_path};
 
     const auto result = m_external_tool_runner.run(manifest, request);
-    m_extension_result_message = result.ok ? "Extension run succeeded: " + manifest.name
-                                           : "Extension run failed: " + result.message;
-    if (result.ok)
+    if (result.ok) {
+        m_extension_result_message =
+            "Extension run succeeded: " + manifest.name + " — " + result.message;
+        LOG_INFO("Extension '%s' action '%s' succeeded: %s", manifest.name.c_str(),
+                 effective_action_label.c_str(), result.message.c_str());
         refreshExtensions();
+    } else {
+        m_extension_result_message = "Extension run failed: " + result.message;
+        LOG_ERROR("Extension '%s' action '%s' failed: %s", manifest.name.c_str(),
+                  effective_action_label.c_str(), result.message.c_str());
+    }
 }
 
 void RfSimulatorApp::drawExtensionsPanel() {
