@@ -1,4 +1,5 @@
 #include "app.h"
+#include "component_library.h"
 #include "extension_manager.h"
 #include "extension_manifest.h"
 
@@ -43,6 +44,14 @@ fs::path writeManifest(const fs::path &dir, const std::string &body) {
     std::ofstream out(path);
     out << body;
     return path;
+}
+
+const ExtensionManifest &findToolById(const std::vector<const ExtensionManifest *> &tools,
+                                      const std::string &id) {
+    const auto it = std::find_if(tools.begin(), tools.end(),
+                                 [&](const ExtensionManifest *tool) { return tool->id == id; });
+    REQUIRE(it != tools.end());
+    return **it;
 }
 
 struct ScopedRemove {
@@ -398,7 +407,8 @@ TEST_CASE_METHOD(ImGuiFixture, "app refreshExtensions discovers project-local da
             }) != packs.end());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[extensions][app]") {
+TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records tool success detail",
+                 "[extensions][app]") {
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_app_tool";
     ScopedRemove cleanup{project_root};
 
@@ -436,11 +446,12 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[
     app.refreshExtensions();
 
     const auto &tools = app.testExtensionManager().externalTools();
-    REQUIRE_FALSE(tools.empty());
+    const ExtensionManifest &tool = findToolById(tools, "project.echo");
 
-    app.runExternalTool(*tools.front());
+    app.runExternalTool(tool);
 
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
+    REQUIRE(app.testExtensionResultMessage().find("tool ok") != std::string::npos);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool passes selected menu label to the tool",
@@ -488,9 +499,9 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool passes selected menu label t
     app.refreshExtensions();
 
     const auto &tools = app.testExtensionManager().externalTools();
-    REQUIRE(std::size(tools) == 1);
+    const ExtensionManifest &tool = findToolById(tools, "project.multi-action");
 
-    app.runExternalTool(*tools.front(), "Import");
+    app.runExternalTool(tool, "Import");
 
     REQUIRE(fs::exists(action_path));
     REQUIRE(std::ifstream(action_path).good());
@@ -539,9 +550,9 @@ TEST_CASE_METHOD(ImGuiFixture, "app externalToolActions preserves declared menu 
     app.refreshExtensions();
 
     const auto &tools = app.testExtensionManager().externalTools();
-    REQUIRE(std::size(tools) == 1);
+    const ExtensionManifest &tool = findToolById(tools, "project.multi-action");
 
-    const auto actions = app.externalToolActions(*tools.front());
+    const auto actions = app.externalToolActions(tool);
     REQUIRE(actions.size() == 2);
     REQUIRE(actions[0].location == "tools");
     REQUIRE(actions[0].label == "Generate");
@@ -585,9 +596,9 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool does not reuse stale result 
     app.refreshExtensions();
 
     const auto &tools = app.testExtensionManager().externalTools();
-    REQUIRE(std::size(tools) == 1);
+    const ExtensionManifest &tool = findToolById(tools, "project.flaky-tool");
 
-    app.runExternalTool(*tools.front(), "Run");
+    app.runExternalTool(tool, "Run");
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
 
     {
@@ -597,8 +608,106 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool does not reuse stale result 
             << "sys.exit(0)\n";
     }
 
-    app.runExternalTool(*tools.front(), "Run");
+    app.runExternalTool(tool, "Run");
 
     REQUIRE(app.testExtensionResultMessage().find("Extension run failed") != std::string::npos);
     REQUIRE(app.testExtensionResultMessage().find("result file missing") != std::string::npos);
+}
+
+TEST_CASE("built-in amplifier-generator extension is discovered and valid",
+          "[extensions][amplifier-generator]") {
+    ExtensionManager mgr;
+    mgr.rescan(fs::temp_directory_path() / "rfsim_amp_gen_discovery_project");
+
+    const auto &records = mgr.all();
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest && record.manifest->id == "rf-sim.amplifier-generator";
+        });
+
+    REQUIRE(record_it != records.end());
+    REQUIRE(record_it->status == ExtensionStatusKind::Ok);
+    REQUIRE(record_it->manifest.has_value());
+    REQUIRE(record_it->manifest->kind == ExtensionKind::ExternalTool);
+    REQUIRE(record_it->manifest->capabilities ==
+            std::vector<ExtensionCapability>{ExtensionCapability::Generator});
+    REQUIRE(record_it->manifest->menus.size() == 2);
+    REQUIRE(record_it->manifest->menus[0].label == "Amplifier: New Params Template...");
+    REQUIRE(record_it->manifest->menus[0].location == "tools");
+    REQUIRE(record_it->manifest->menus[1].label == "Amplifier: Build from Params...");
+    REQUIRE(record_it->manifest->menus[1].location == "tools");
+}
+
+TEST_CASE("amplifier-generator produces a template then builds a library entry end-to-end",
+          "[extensions][amplifier-generator][runner]") {
+    ExtensionManager mgr;
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_amp_gen_e2e";
+    std::error_code rm_ec;
+    fs::remove_all(project_root, rm_ec);
+    ScopedRemove cleanup{project_root};
+    fs::create_directories(project_root);
+
+    mgr.rescan(project_root);
+    const auto &records = mgr.all();
+    const auto record_it =
+        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
+            return record.manifest && record.manifest->id == "rf-sim.amplifier-generator";
+        });
+    REQUIRE(record_it != records.end());
+    REQUIRE(record_it->status == ExtensionStatusKind::Ok);
+    const ExtensionManifest &manifest = *record_it->manifest;
+
+    ExternalToolRunner runner;
+    const fs::path work_dir = project_root / "work";
+
+    // Phase 1: scaffold a template.
+    const ExternalToolRequest template_request{"1",          "Amplifier: New Params Template...",
+                                               project_root, project_root,
+                                               work_dir,     work_dir / "result.json"};
+    const auto template_result = runner.run(manifest, template_request);
+    REQUIRE(template_result.ok);
+
+    const fs::path input_dir = project_root / "rf-sim-generator-input" / "amplifier";
+    const fs::path template_path = input_dir / "params-1.json";
+    REQUIRE(fs::exists(template_path));
+
+    // Overwrite the template with real values (still the same path/filename).
+    std::ofstream(template_path) << R"json({
+        "part_number": "TESTAMP-1",
+        "manufacturer": "Test Vendor",
+        "gain_db_vs_freq": [[1.0, 20.0], [2.0, 21.0]]
+    })json";
+
+    // Phase 2: build from that params file.
+    const ExternalToolRequest build_request{"1",          "Amplifier: Build from Params...",
+                                            project_root, project_root,
+                                            work_dir,     work_dir / "result.json"};
+    const auto build_result = runner.run(manifest, build_request);
+    REQUIRE(build_result.ok);
+
+    const fs::path json_path =
+        project_root / "rf-sim-libraries" / "amplifiers" / "Test Vendor" / "TESTAMP-1.json";
+    const fs::path sparam_path =
+        project_root / "rf-sim-libraries" / "amplifiers" / "Test Vendor" / "TESTAMP-1.s2p";
+    REQUIRE(fs::exists(json_path));
+    REQUIRE(fs::exists(sparam_path));
+    REQUIRE(fs::exists(input_dir / "processed" / "params-1.json"));
+    REQUIRE_FALSE(fs::exists(template_path));
+
+    // Close the exact gap the final review identified: a minimal build (only the three
+    // required fields, no optional datasheet fields) must still produce a JSON file that
+    // ComponentLibrary::loadFile() actually accepts, i.e. it must contain a "parameters"
+    // key (even if empty) — not just exist on disk.
+    const nlohmann::json saved_json =
+        nlohmann::json::parse(std::ifstream(json_path), nullptr, false);
+    REQUIRE_FALSE(saved_json.is_discarded());
+    REQUIRE(saved_json.contains("parameters"));
+    REQUIRE(saved_json["parameters"].is_object());
+    REQUIRE(saved_json["parameters"].empty());
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path.string());
+    const auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(defs.front()->part_number == "TESTAMP-1");
 }
