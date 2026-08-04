@@ -36,8 +36,12 @@ std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum 
         }
     }
 
-    // Add tones as discrete impulses
-    for (const auto &t : spec.tones) {
+    // Add tones as discrete impulses. Real-domain spectra (pre-ADC) get expanded into their
+    // +-fc conjugate-symmetric half-power pair per Euler's formula before binning; post-ADC
+    // complex-baseband spectra are already correctly one-sided and render as-is.
+    const std::vector<Spectrum::Tone> &display_tones =
+        spec.is_complex_baseband ? spec.tones : conjugateSymmetricExpand(spec.tones);
+    for (const auto &t : display_tones) {
         if (n < 2) {
             continue;
         }

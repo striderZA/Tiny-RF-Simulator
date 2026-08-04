@@ -11,6 +11,7 @@
 #include "s_parameter_data.h"
 #include "signal_generator_engine.h"
 #include "spectrum.h"
+#include "spectrum_analyzer_engine.h"
 #include "splitter_engine.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -368,4 +369,52 @@ TEST_CASE("AdcEngine: output is_complex_baseband is true (empty input)", "[domai
 
     REQUIRE(adc.node().outputs[0].is_complex_baseband == true);
     REQUIRE(adc.node().outputs[0].frequencies.empty());
+}
+
+TEST_CASE("SpectrumAnalyzer: real-domain tone renders as +-fc half-power pair",
+          "[domain][spectrum_analyzer]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+
+    Spectrum spec;
+    spec.frequencies.resize(41);
+    for (int i = 0; i < 41; ++i)
+        spec.frequencies[i] = -100e6 + i * 5e6; // bin width 5 MHz, spans -100..+100 MHz
+    spec.tones = {{50e6, -20.0, 0.0}};
+    spec.noise_total_W.assign(41, 1e-21);
+    spec.is_complex_baseband = false;
+    spec.generation = 1;
+
+    auto trace = sa.renderSpectrum(spec);
+
+    // Bin for +50 MHz: index (50e6 - (-100e6)) / 5e6 = 30. Bin for -50 MHz: index 10.
+    REQUIRE(trace.size() == 41);
+    const double expected_power = -20.0 - 10.0 * std::log10(2.0); // ~-23.01 dBm
+    REQUIRE_THAT(trace[30], WithinAbs(expected_power, 1.0));
+    REQUIRE_THAT(trace[10], WithinAbs(expected_power, 1.0));
+    // Neither half-power bin should read the full -20 dBm (that would mean no split happened).
+    REQUIRE(trace[30] < -20.0 + 0.5);
+}
+
+TEST_CASE("SpectrumAnalyzer: complex-baseband tone renders unchanged (no mirroring)",
+          "[domain][spectrum_analyzer]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+
+    Spectrum spec;
+    spec.frequencies.resize(41);
+    for (int i = 0; i < 41; ++i)
+        spec.frequencies[i] = -100e6 + i * 5e6;
+    spec.tones = {{50e6, -20.0, 0.0}};
+    spec.noise_total_W.assign(41, 1e-21);
+    spec.is_complex_baseband = true;
+    spec.generation = 1;
+
+    auto trace = sa.renderSpectrum(spec);
+
+    REQUIRE(trace.size() == 41);
+    REQUIRE_THAT(trace[30], WithinAbs(-20.0, 1.0)); // full power at +50 MHz, unchanged
+    // -50 MHz bin should show only the noise floor, not a mirrored tone (well below the tone's
+    // own -20 dBm and below the would-be mirror power of ~-23 dBm).
+    REQUIRE(trace[10] < -50.0);
 }

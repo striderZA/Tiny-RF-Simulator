@@ -120,6 +120,7 @@ target_link_libraries(test_signal_domain PRIVATE
     simulator::pfb_channelizer_engine
     simulator::touchstone_parser
     simulator::adc_engine
+    simulator::spectrum_analyzer_engine
     Catch2::Catch2WithMain
 )
 target_compile_definitions(test_signal_domain PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
