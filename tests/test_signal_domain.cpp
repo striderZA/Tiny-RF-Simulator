@@ -1,3 +1,4 @@
+#include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
@@ -11,10 +12,12 @@
 #include "signal_generator_engine.h"
 #include "spectrum.h"
 #include "splitter_engine.h"
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 
+using Catch::Approx;
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Spectrum: is_complex_baseband defaults to false", "[spectrum][domain]") {
@@ -328,4 +331,41 @@ TEST_CASE("SParameterData::applyToSpectrum defaults is_complex_baseband when not
     Spectrum out;
     sparam.applyToSpectrum(in, out, 0); // early-return path, never reaches the propagation line
     REQUIRE(out.is_complex_baseband == false);
+}
+
+TEST_CASE("AdcEngine: output is_complex_baseband is true (populated input)", "[domain][adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(1e9);
+
+    Spectrum in;
+    in.frequencies.resize(101);
+    for (int i = 0; i < 101; ++i)
+        in.frequencies[i] = i * 5e6;
+    in.noise_W.assign(101, 1e-20);
+    in.noise_added_W.assign(101, 0.0);
+    in.noise_total_W.assign(101, 1e-20);
+    in.tones.push_back({250e6, -20.0, 45.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    REQUIRE(adc.node().outputs[0].is_complex_baseband == true);
+    // Regression pin (mirrors the existing "ADC DDC preserves tone power and phase" assertion in
+    // tests/test_adc.cpp — restated here to prove the flag addition didn't touch power math):
+    REQUIRE(adc.node().outputs[0].tones.size() == 1);
+    REQUIRE(adc.node().outputs[0].tones[0].power_dBm == Approx(-20.0));
+    REQUIRE(adc.node().outputs[0].tones[0].phase_deg == Approx(45.0));
+}
+
+TEST_CASE("AdcEngine: output is_complex_baseband is true (empty input)", "[domain][adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(1, graph);
+    adc.setFs_Hz(1e9);
+
+    adc.node().inputs[0] = nullptr;
+    adc.update(0.0);
+
+    REQUIRE(adc.node().outputs[0].is_complex_baseband == true);
+    REQUIRE(adc.node().outputs[0].frequencies.empty());
 }
