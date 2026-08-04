@@ -140,6 +140,8 @@ void CombinerEngine::update(double dt) {
         }
 
         out.tones = combined_tones;
+        out.is_complex_baseband =
+            (in0 && in0->is_complex_baseband) || (in1 && in1->is_complex_baseband);
 
         // Noise: scale by |S21|^2 and |S31|^2 respectively
         const double k = 1.3806e-23;
@@ -229,6 +231,8 @@ void CombinerEngine::update(double dt) {
     }
 
     out.tones = combined_tones;
+    out.is_complex_baseband =
+        (in0 && in0->is_complex_baseband) || (in1 && in1->is_complex_baseband);
 
     // Noise: incoherent power sum, then apply loss
     out.noise_W.assign(N, 0.0);

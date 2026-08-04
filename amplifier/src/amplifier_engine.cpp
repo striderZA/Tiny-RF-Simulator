@@ -53,6 +53,7 @@ void AmplifierEngine::update(double dt) {
             buildDefaultFrequencyGrid(out.frequencies);
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         const size_t N = out.frequencies.size();
 
         // Apply S21 complex gain to tones
@@ -136,6 +137,7 @@ void AmplifierEngine::update(double dt) {
     }
 
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
         t.power_dBm += m_gain_dB;
     }

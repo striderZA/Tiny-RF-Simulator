@@ -51,6 +51,7 @@ void AdcEngine::update(double /*dt*/) {
         out.noise_total_W.clear();
         out.phase_deg.clear();
         out.fs_Hz = m_fs_Hz / 2.0;
+        out.is_complex_baseband = true;
         out.bumpGeneration();
         return;
     }
@@ -67,6 +68,7 @@ void AdcEngine::update(double /*dt*/) {
     for (int i = 0; i < N; ++i)
         out.frequencies[i] = -m_fs_Hz / 4.0 + i * df_out;
     out.fs_Hz = m_fs_Hz / 2.0;
+    out.is_complex_baseband = true;
 
     // -- Noise mapping + NSD --
     double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);

@@ -51,6 +51,7 @@ void EqualizerEngine::update(double dt) {
         int idx = m_sparam_fwd_idx;
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -104,6 +105,7 @@ void EqualizerEngine::update(double dt) {
 
     // Apply gain vs frequency profile
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
         double f = std::max(t.freq_Hz, 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
