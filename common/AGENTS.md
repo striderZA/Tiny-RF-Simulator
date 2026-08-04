@@ -8,7 +8,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 
 - `common/common.h` — `MIN_FREQ`, `MAX_FREQ`, `MIN_POWER`, `MAX_POWER`, `DEFAULT_VBW`, `DEFAULT_RBW`, physical constants (`k`, `T`, `R`), `dbToLinear`, `calculateNoiseTemp`, `addedNoiseDensity_W_per_Hz`, `addedNoisePerBin_W`, `buildDefaultFrequencyGrid`
 - `common/signal_node.h` — `SignalNode` (input + output spectra + view_enabled)
-- `common/spectrum.h` — `Spectrum` (frequencies, tones, noise vectors, phase, generation counter, `fs_Hz`) and `Peak`
+- `common/spectrum.h` — `Spectrum` (frequencies, tones, noise vectors, phase, generation counter, `fs_Hz`, `is_complex_baseband`) and `Peak`; also the free helper `conjugateSymmetricExpand()` for expanding real-domain tones into +-fc conjugate-symmetric pairs
 - `common/component_interface.h` — `IComponentEngine` (DSP engine contract)
 - `common/view_manager.h` — `ViewManager` (registry of `SignalNode*`)
 - `common/include/group.h` — `Group` and `GroupBoundaryPin` (subcircuit grouping data)
@@ -26,6 +26,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 ## Work Guidance
 
 - Changes to `SignalNode` or `Spectrum` affect every engine. Update all engines' `update()` and tests.
+- `Spectrum::is_complex_baseband` (default `false`) marks spectra downstream of an ADC's DDC (complex baseband/IQ); every pass-through engine propagates it from its input exactly like `fs_Hz`. Only `AdcEngine`'s output sets it to `true`. `conjugateSymmetricExpand()` must stay render-only (used by the spectrum-analyzer render path for real-domain spectra) — never call it from interior DSP (generator, `nonlinear_model.h`, gain/filter/S-param stages, mixer), which must keep operating on the collapsed single-entry-per-tone representation.
 - New fields on `IComponentEngine` must keep a default implementation that preserves backward compat for all existing engines.
 - New files in `common/` or `common/include/` are automatically picked up by `common/CMakeLists.txt`'s glob.
 
