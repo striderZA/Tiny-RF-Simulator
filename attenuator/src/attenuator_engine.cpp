@@ -69,6 +69,7 @@ void AttenuatorEngine::update(double dt) {
         int idx = 1 * m_sparam.numPorts() + 0; // S21 index
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -132,6 +133,7 @@ void AttenuatorEngine::update(double dt) {
 
     // Attenuate tones
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
         t.power_dBm -= m_atten_dB;
         // Phase unchanged in manual mode

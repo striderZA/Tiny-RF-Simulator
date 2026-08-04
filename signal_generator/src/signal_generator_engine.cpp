@@ -70,6 +70,7 @@ void SignalGeneratorEngine::update(double) {
     }
 
     out.fs_Hz = m_fs_Hz;
+    out.is_complex_baseband = false;
     out.bumpGeneration();
 }
 
