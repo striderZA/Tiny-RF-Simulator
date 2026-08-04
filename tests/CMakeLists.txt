@@ -111,6 +111,9 @@ target_link_libraries(test_signal_domain PRIVATE
     simulator::amplifier_engine
     simulator::attenuator_engine
     simulator::node_graph_engine
+    simulator::combiner_engine
+    simulator::equalizer_engine
+    simulator::ideal_filter_engine
     Catch2::Catch2WithMain
 )
 target_compile_definitions(test_signal_domain PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

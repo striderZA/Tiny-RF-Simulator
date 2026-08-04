@@ -71,6 +71,7 @@ void IdealFilterEngine::update(double dt) {
 
         // Apply S21 to tones
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -123,6 +124,7 @@ void IdealFilterEngine::update(double dt) {
     const size_t N = out.frequencies.size();
 
     out.tones.clear();
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     if (in_ptr) {
         for (const auto &t : in_ptr->tones) {
             if (isInPassband(t.freq_Hz))

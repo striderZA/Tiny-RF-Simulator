@@ -1,5 +1,8 @@
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
+#include "combiner_engine.h"
+#include "equalizer_engine.h"
+#include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
 #include "spectrum.h"
@@ -172,4 +175,56 @@ TEST_CASE("SignalGenerator+Amplifier: false flag also propagates", "[domain][amp
     amp.update(0.0);
 
     REQUIRE(amp.node().outputs[0].is_complex_baseband == false);
+}
+
+TEST_CASE("Combiner: propagates is_complex_baseband (manual mode, either input)",
+          "[domain][combiner]") {
+    NodeGraphEngine graph;
+    CombinerEngine comb(0, graph);
+
+    Spectrum in0, in1;
+    in0.frequencies = {1e9, 2e9};
+    in0.noise_total_W.assign(2, 1e-21);
+    in0.is_complex_baseband = true;
+    in1.frequencies = {1e9, 2e9};
+    in1.noise_total_W.assign(2, 1e-21);
+    in1.is_complex_baseband = false;
+
+    comb.node().inputs[0] = &in0;
+    comb.node().inputs[1] = &in1;
+    comb.update(0.0);
+
+    REQUIRE(comb.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("Equalizer: propagates is_complex_baseband (ideal mode)", "[domain][equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    eq.node().inputs[0] = &in;
+    eq.update(0.0);
+
+    REQUIRE(eq.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("IdealFilter: propagates is_complex_baseband", "[domain][ideal_filter]") {
+    NodeGraphEngine graph;
+    IdealFilterEngine flt(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    flt.node().inputs[0] = &in;
+    flt.update(0.0);
+
+    REQUIRE(flt.node().outputs[0].is_complex_baseband == true);
 }
