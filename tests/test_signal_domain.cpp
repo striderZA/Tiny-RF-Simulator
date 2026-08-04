@@ -1,11 +1,16 @@
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
+#include "coax_cable_engine.h"
 #include "combiner_engine.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
+#include "mixer_engine.h"
 #include "node_graph_engine.h"
+#include "pfb_channelizer_engine.h"
+#include "s_parameter_data.h"
 #include "signal_generator_engine.h"
 #include "spectrum.h"
+#include "splitter_engine.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -227,4 +232,100 @@ TEST_CASE("IdealFilter: propagates is_complex_baseband", "[domain][ideal_filter]
     flt.update(0.0);
 
     REQUIRE(flt.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("CoaxCable: propagates is_complex_baseband", "[domain][coax]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine coax(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    coax.node().inputs[0] = &in;
+    coax.update(0.0);
+
+    REQUIRE(coax.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("Splitter: propagates is_complex_baseband to both outputs", "[domain][splitter]") {
+    NodeGraphEngine graph;
+    SplitterEngine splitter(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    splitter.node().inputs[0] = &in;
+    splitter.update(0.0);
+
+    REQUIRE(splitter.node().outputs[0].is_complex_baseband == true);
+    REQUIRE(splitter.node().outputs[1].is_complex_baseband == true);
+}
+
+TEST_CASE("Mixer: propagates is_complex_baseband", "[domain][mixer]") {
+    NodeGraphEngine graph;
+    MixerEngine mixer(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    mixer.node().inputs[0] = &in;
+    mixer.update(0.0);
+
+    REQUIRE(mixer.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("PFBChannelizer: propagates is_complex_baseband", "[domain][pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+    in.is_complex_baseband = true;
+
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    REQUIRE(pfb.node().outputs[0].is_complex_baseband == true);
+}
+
+TEST_CASE("SParameterData::applyToSpectrum propagates is_complex_baseband", "[domain][sparam]") {
+    SParameterData sparam;
+    bool loaded =
+        sparam.load(std::string(PROJECT_SOURCE_DIR) + "/component_data/amplifiers/adm-3844psm/"
+                                                      "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
+    REQUIRE(loaded);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.is_complex_baseband = true;
+
+    Spectrum out;
+    sparam.applyToSpectrum(in, out, 0); // loaded() == true -> reaches the propagation line
+
+    REQUIRE(out.is_complex_baseband == true);
+}
+
+TEST_CASE("SParameterData::applyToSpectrum defaults is_complex_baseband when not loaded",
+          "[domain][sparam]") {
+    SParameterData sparam; // not loaded()
+    Spectrum in;
+    in.is_complex_baseband = true;
+    Spectrum out;
+    sparam.applyToSpectrum(in, out, 0); // early-return path, never reaches the propagation line
+    REQUIRE(out.is_complex_baseband == false);
 }

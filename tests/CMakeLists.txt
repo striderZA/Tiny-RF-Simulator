@@ -114,6 +114,11 @@ target_link_libraries(test_signal_domain PRIVATE
     simulator::combiner_engine
     simulator::equalizer_engine
     simulator::ideal_filter_engine
+    simulator::coax_cable_engine
+    simulator::splitter_engine
+    simulator::mixer_engine
+    simulator::pfb_channelizer_engine
+    simulator::touchstone_parser
     Catch2::Catch2WithMain
 )
 target_compile_definitions(test_signal_domain PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

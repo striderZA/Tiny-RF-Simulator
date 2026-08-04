@@ -47,6 +47,7 @@ void SplitterEngine::update(double dt) {
         const size_t N = out.frequencies.size();
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             t.power_dBm -= SPLIT_LOSS_DB;
         }

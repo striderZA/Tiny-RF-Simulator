@@ -61,6 +61,7 @@ void SParameterData::applyToSpectrum(const Spectrum &in, Spectrum &out, int para
     const size_t N = out.frequencies.size();
 
     out.tones = in.tones;
+    out.is_complex_baseband = in.is_complex_baseband;
     for (auto &t : out.tones) {
         auto S = interpolate(t.freq_Hz, param_idx);
         double mag = std::max(std::abs(S), std::numeric_limits<double>::min());
