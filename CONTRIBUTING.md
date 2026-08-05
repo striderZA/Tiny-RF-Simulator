@@ -57,16 +57,20 @@ build/bin/tests.exe [bench]   # Windows
 
 ## CI Pipeline
 
-Every pull request runs through:
+Every pull request runs through a lightweight sanity pipeline:
 
 - **Format check** — clang-format 18 enforces code style
-- **Conventional commits** — PR titles must follow conventional commit format
-- **Build matrix** — GCC 14 (Debug + Release), Clang 18, MinGW-w64
-- **Tests** — unit tests + UI tests (Xvfb on Linux)
-- **AddressSanitizer** — memory safety checks on Linux
-- **Coverage** — gcov/lcov, uploaded to Codecov
+- **Linux Debug build** — verifies the project still configures and compiles
 
-Release tags (`v*`) trigger a separate packaging workflow that builds release binaries and drafts a GitHub Release.
+Minor and major release tags (`vX.Y.0`, including `vX.0.0`) trigger the stricter release validation flow:
+
+- **Packaging builds** — Linux and Windows artifacts
+- **Full validation matrix** — Linux GCC Debug/Release, Linux Clang, Windows MinGW
+- **Tests** — unit tests + UI tests where supported
+- **AddressSanitizer** — memory safety checks on Linux
+
+Patch release tags (`vX.Y.Z` where `Z > 0`) still build/package Linux and Windows artifacts, but skip the strict validation matrix.
+
 ## Architecture (Quick Reference)
 
 - **C++20** modular library.

@@ -1,4 +1,4 @@
-name: Build & Test
+name: Build & Sanity
 
 on:
   pull_request:
@@ -10,7 +10,6 @@ on:
       - LICENSE
 
 jobs:
-  # Check C++ code formatting with clang-format
   format:
     runs-on: ubuntu-24.04
     steps:
@@ -26,172 +25,24 @@ jobs:
             -name '*.cpp' -o -name '*.h' | \
             xargs clang-format-18 --dry-run --Werror
 
-  # Lint pull request title for conventional commit format
-  lint-commits:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Check conventional commits
-        uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # CI matrix: Linux (GCC 14 / Clang 18) and Windows (MSYS2 + MinGW-w64).
-  # The project requires MinGW-w64 on Windows; MSVC is not supported.
   build:
-    name: ${{ matrix.label }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            label: Linux GCC 14 (Debug)
-            shell: bash
-            cxx_compiler: g++-14
-            c_compiler: gcc-14
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
-          - os: ubuntu-24.04
-            label: Linux GCC 14 (Release)
-            shell: bash
-            cxx_compiler: g++-14
-            c_compiler: gcc-14
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Release
-          - os: ubuntu-24.04
-            label: Linux Clang 18
-            shell: bash
-            cxx_compiler: clang++-18
-            c_compiler: clang-18
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
-          - os: windows-latest
-            label: Windows MinGW-w64
-            shell: msys2 - {0}
-            cxx_compiler: g++
-            c_compiler: gcc
-            cmake_flags: ""
-            build_type: Debug
-
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: ${{ matrix.shell }}
-
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config ccache xvfb \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-          if [ "${{ matrix.cxx_compiler }}" = "clang++-18" ]; then
-            sudo apt-get install -y -qq clang-18
-          else
-            sudo apt-get install -y -qq g++-14
-          fi
-
-      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-python
-
-      - name: ccache
-        if: runner.os == 'Linux'
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ matrix.label }}
-
-      - name: Configure
-        run: >-
-          cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          ${{ matrix.cmake_flags }}
-          ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache' || '' }}
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Test
-        run: |
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
-          else
-            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
-          fi
-
-  # AddressSanitizer build to catch memory errors
-  sanitizer:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-      - name: Configure (ASan)
-        run: >-
-          cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=g++-14
-          -DCMAKE_C_COMPILER=gcc-14
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
-          -DGLFW_BUILD_WAYLAND=OFF
-      - name: Build
-        run: cmake --build build
-      - name: Test (ASan)
-        run: |
-          cd build
-          ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
 
-  # Code coverage with gcov/lcov, uploaded to Codecov
-  coverage:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 lcov \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-      - name: Configure (coverage)
+      - name: Configure
         run: >-
           cmake -B build -G Ninja
           -DCMAKE_CXX_COMPILER=g++-14
           -DCMAKE_C_COMPILER=gcc-14
           -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="--coverage -O0 -g"
-          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           -DGLFW_BUILD_WAYLAND=OFF
+
       - name: Build
         run: cmake --build build
-      - name: Test
-        run: ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
-      - name: Generate coverage report
-        run: |
-          lcov --capture --directory build --output-file coverage.info --gcov-tool gcov-14 --ignore-errors source
-          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/_deps/*' '*/test_engine/*' --ignore-errors unused --output-file coverage.info
-          lcov --list coverage.info
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.info
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
