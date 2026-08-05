@@ -214,20 +214,29 @@ void AmplifierEngine::update(double dt) {
 }
 
 nlohmann::json AmplifierEngine::serialize() const {
-    return {{"gain_dB", m_gain_dB},
-            {"nf_dB", m_nf_dB},
-            {"enable_nonlinear", m_nonlinear.enabled()},
-            {"oip2_dBm", m_nonlinear.oip2_dBm()},
-            {"oip3_dBm", m_nonlinear.oip3_dBm()},
-            {"p1db_dBm", m_nonlinear.p1db_dBm()},
-            {"sparam_mode", m_sparam_mode},
-            {"sparam_filepath", m_sparam_filepath},
-            {"sparam_fwd_idx", m_sparam_fwd_idx}};
+    nlohmann::json j = {{"gain_dB", m_gain_dB},
+                        {"nf_dB", m_nf_dB},
+                        {"enable_nonlinear", m_nonlinear.enabled()},
+                        {"oip2_dBm", m_nonlinear.oip2_dBm()},
+                        {"oip3_dBm", m_nonlinear.oip3_dBm()},
+                        {"p1db_dBm", m_nonlinear.p1db_dBm()},
+                        {"sparam_mode", m_sparam_mode},
+                        {"sparam_filepath", m_sparam_filepath},
+                        {"sparam_fwd_idx", m_sparam_fwd_idx}};
+    if (!m_nf_curve.empty()) {
+        j["nf_db_vs_freq"] = nlohmann::json::array();
+        for (const auto &[freq_Hz, nf_dB] : m_nf_curve)
+            j["nf_db_vs_freq"].push_back({freq_Hz, nf_dB});
+    }
+    return j;
 }
 
 void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_gain_dB = j.value("gain_dB", 0.0);
     m_nf_dB = j.value("nf_dB", 0.0);
+    m_nf_curve.clear();
+    if (j.contains("nf_db_vs_freq"))
+        setNfCurve(j["nf_db_vs_freq"]);
     m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
     m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
     m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
@@ -235,6 +244,8 @@ void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
+    if (!m_sparam_filepath.empty())
+        setSParamFilepath(m_sparam_filepath);
     m_dirty = true;
 }
 

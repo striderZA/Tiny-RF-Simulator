@@ -22,10 +22,13 @@ struct AxisCalibration {
 class AmplifierDigitizerModel {
   public:
     bool setImagePath(const std::filesystem::path &path);
+    const std::filesystem::path &imagePath() const { return m_image_path; }
     void setAxisMode(DigitizerCurveKind kind, bool x_log);
     bool setCalibration(DigitizerCurveKind kind,
                         std::pair<AxisReferencePoint, AxisReferencePoint> x_refs,
                         std::pair<AxisReferencePoint, AxisReferencePoint> y_refs);
+    bool hasCalibration(DigitizerCurveKind kind) const;
+    void clearCurve(DigitizerCurveKind kind);
     bool addPoint(DigitizerCurveKind kind, double pixel_x, double pixel_y);
     std::vector<std::pair<double, double>> curve(DigitizerCurveKind kind) const;
 

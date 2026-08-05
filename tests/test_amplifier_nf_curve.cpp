@@ -39,3 +39,15 @@ TEST_CASE("Amplifier S-parameter mode uses nf_db_vs_freq per bin", "[amp][sparam
 
     std::filesystem::remove(s2p);
 }
+
+TEST_CASE("Amplifier serialize/deserialize preserves nf_db_vs_freq", "[amp][sparam][nf_curve]") {
+    NodeGraphEngine graph;
+    AmplifierEngine original(100, graph);
+    original.setNfCurve(nlohmann::json::array({{1.0e8, 1.0}, {2.0e8, 6.0}, {3.0e8, 12.0}}));
+
+    NodeGraphEngine other_graph;
+    AmplifierEngine restored(101, other_graph);
+    restored.deserialize(original.serialize());
+
+    REQUIRE(restored.hasNfCurve());
+}

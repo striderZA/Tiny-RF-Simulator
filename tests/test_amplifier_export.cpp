@@ -28,6 +28,7 @@ TEST_CASE("exportAmplifier writes json and s2p with nf_db_vs_freq", "[amp_export
     const auto json = nlohmann::json::parse(std::ifstream(result.json_path), nullptr, false);
     REQUIRE_FALSE(json.is_discarded());
     REQUIRE(json["parameters"].contains("nf_db_vs_freq"));
+    REQUIRE(json["parameters"].contains("gain_dB"));
     REQUIRE(json["parameters"]["nf_db_vs_freq"].size() == 2);
 
     fs::remove_all(root, ec);

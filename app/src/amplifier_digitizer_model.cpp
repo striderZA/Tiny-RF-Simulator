@@ -40,6 +40,12 @@ bool AmplifierDigitizerModel::setCalibration(
     return true;
 }
 
+bool AmplifierDigitizerModel::hasCalibration(DigitizerCurveKind kind) const {
+    return state(kind).calibration.has_value();
+}
+
+void AmplifierDigitizerModel::clearCurve(DigitizerCurveKind kind) { state(kind).points.clear(); }
+
 bool AmplifierDigitizerModel::addPoint(DigitizerCurveKind kind, double pixel_x, double pixel_y) {
     auto &curve = state(kind);
     if (!curve.calibration)

@@ -7,6 +7,17 @@ namespace {
 
 double dbToLinearMag(double db) { return std::pow(10.0, db / 20.0); }
 
+double averageGainDb(const std::vector<std::pair<double, double>> &points) {
+    if (points.empty())
+        return 0.0;
+    double sum = 0.0;
+    for (const auto &[freq_Hz, gain_dB] : points) {
+        (void)freq_Hz;
+        sum += gain_dB;
+    }
+    return sum / static_cast<double>(points.size());
+}
+
 std::string nextAvailableStem(const std::filesystem::path &directory,
                               const std::string &part_number) {
     std::string candidate = part_number;
@@ -28,6 +39,8 @@ nlohmann::json buildDefinition(const AmplifierExportRequest &request, const std:
         j["description"] = request.description;
 
     j["parameters"] = nlohmann::json::object();
+    if (!request.gain_db_vs_freq.empty())
+        j["parameters"]["gain_dB"] = averageGainDb(request.gain_db_vs_freq);
     j["parameters"]["nf_db_vs_freq"] = nlohmann::json::array();
     for (const auto &[freq_Hz, nf_dB] : request.nf_db_vs_freq)
         j["parameters"]["nf_db_vs_freq"].push_back({freq_Hz, nf_dB});
