@@ -6,7 +6,50 @@ on:
       - "v*"
 
 jobs:
-  build:
+  classify-release:
+    runs-on: ubuntu-24.04
+    outputs:
+      is_patch: ${{ steps.classify.outputs.is_patch }}
+      is_minor_or_major: ${{ steps.classify.outputs.is_minor_or_major }}
+    steps:
+      - name: Classify tag
+        id: classify
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if [[ ! "$TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "ERROR: tag '$TAG' is not semantic version X.Y.Z"
+            exit 1
+          fi
+          PATCH="${BASH_REMATCH[3]}"
+          if [ "$PATCH" = "0" ]; then
+            echo "is_patch=false" >> "$GITHUB_OUTPUT"
+            echo "is_minor_or_major=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_patch=true" >> "$GITHUB_OUTPUT"
+            echo "is_minor_or_major=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate-version:
+    needs: classify-release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
+            exit 1
+          fi
+          echo "Version check passed: $TAG_VERSION == $CMAKE_VERSION"
+
+  strict-build:
+    needs: [classify-release, validate-version]
+    if: needs.classify-release.outputs.is_minor_or_major == 'true'
     name: ${{ matrix.label }}
     strategy:
       fail-fast: false
@@ -19,7 +62,20 @@ jobs:
             c_compiler: gcc-14
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
             build_type: Debug
-            upload_artifacts: true
+          - os: ubuntu-24.04
+            label: Linux GCC 14 (Release)
+            shell: bash
+            cxx_compiler: g++-14
+            c_compiler: gcc-14
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
+            build_type: Release
+          - os: ubuntu-24.04
+            label: Linux Clang 18
+            shell: bash
+            cxx_compiler: clang++-18
+            c_compiler: clang-18
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
+            build_type: Debug
           - os: windows-latest
             label: Windows MinGW-w64
             shell: msys2 - {0}
@@ -27,7 +83,6 @@ jobs:
             c_compiler: gcc
             cmake_flags: ""
             build_type: Debug
-            upload_artifacts: true
 
     runs-on: ${{ matrix.os }}
     defaults:
@@ -41,7 +96,112 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config ccache \
+          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+          if [ "${{ matrix.cxx_compiler }}" = "clang++-18" ]; then
+            sudo apt-get install -y -qq clang-18
+          else
+            sudo apt-get install -y -qq g++-14
+          fi
+
+      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python
+
+      - name: Configure
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          ${{ matrix.cmake_flags }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+          else
+            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+          fi
+
+  sanitizer:
+    needs: [classify-release, validate-version]
+    if: needs.classify-release.outputs.is_minor_or_major == 'true'
+    runs-on: ubuntu-24.04
+    name: AddressSanitizer
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+      - name: Configure (ASan)
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_C_COMPILER=gcc-14
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+          -DGLFW_BUILD_WAYLAND=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Test (ASan)
+        run: |
+          cd build
+          ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
+
+  package:
+    needs: [classify-release, validate-version]
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: Linux package build
+            shell: bash
+            cxx_compiler: g++-14
+            c_compiler: gcc-14
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
+            build_type: Debug
+            artifact_name: build-linux
+          - os: windows-latest
+            label: Windows package build
+            shell: msys2 - {0}
+            cxx_compiler: g++
+            c_compiler: gcc
+            cmake_flags: ""
+            build_type: Debug
+            artifact_name: build-windows
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake pkg-config \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
           sudo apt-get install -y -qq g++-14
 
@@ -59,12 +219,6 @@ jobs:
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-python
 
-      - name: ccache
-        if: runner.os == 'Linux'
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ matrix.label }}
-
       - name: Configure
         run: >-
           cmake -B build -G Ninja
@@ -72,7 +226,6 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           ${{ matrix.cmake_flags }}
-          ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache' || '' }}
 
       - name: Build
         run: cmake --build build
@@ -88,13 +241,19 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ runner.os == 'Windows' && 'windows' || 'linux' }}
+          name: ${{ matrix.artifact_name }}
           path: |
             build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
             mingw-dlls/
 
   release:
-    needs: build
+    needs: [classify-release, validate-version, strict-build, sanitizer, package]
+    if: >-
+      always() &&
+      needs.validate-version.result == 'success' &&
+      needs.package.result == 'success' &&
+      (needs.classify-release.outputs.is_minor_or_major != 'true' ||
+       (needs.strict-build.result == 'success' && needs.sanitizer.result == 'success'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -103,22 +262,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify version matches tag
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
-            echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
-            exit 1
-          fi
-          echo "Version check passed: $TAG_VERSION == $CMAKE_VERSION"
-
       - name: Generate release notes
         run: |
           npm install -g git-cliff --silent
           git-cliff --config cliff.toml --latest --strip header -o release-notes.md
-          echo "Release notes generated:"
-          cat release-notes.md
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
