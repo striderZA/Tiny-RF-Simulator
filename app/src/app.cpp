@@ -178,6 +178,13 @@ void RfSimulatorApp::load_window_states() {
     m_show_help = m_state.loadBool("WindowState", "Help", false);
 }
 
+std::filesystem::path RfSimulatorApp::projectRoot() const {
+    if (m_current_project_path.empty())
+        return std::filesystem::current_path();
+    const auto root = std::filesystem::path(m_current_project_path).parent_path();
+    return root.empty() ? std::filesystem::current_path() : root;
+}
+
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     IComponentEngine *src = m_components.find(graph_node_id);
     if (!src)
@@ -913,6 +920,38 @@ void RfSimulatorApp::drawComponentFormModal() {
     }
 }
 
+void RfSimulatorApp::openAmplifierImportWizard() {
+    if (!m_amplifier_digitizer_widget)
+        m_amplifier_digitizer_widget = std::make_unique<AmplifierDigitizerWidget>();
+    m_show_amplifier_digitizer = true;
+}
+
+void RfSimulatorApp::drawAmplifierImportWizard() {
+    if (!m_show_amplifier_digitizer || !m_amplifier_digitizer_widget)
+        return;
+    if (!m_amplifier_digitizer_widget->draw(&m_show_amplifier_digitizer))
+        return;
+    if (!m_amplifier_digitizer_widget->exportRequested())
+        return;
+
+    AmplifierExportRequest request;
+    request.project_root = projectRoot();
+    request.part_number = m_amplifier_digitizer_widget->model().partNumber();
+    request.manufacturer = m_amplifier_digitizer_widget->model().manufacturer();
+    request.gain_db_vs_freq = m_amplifier_digitizer_widget->model().curve(DigitizerCurveKind::Gain);
+    request.nf_db_vs_freq =
+        m_amplifier_digitizer_widget->model().curve(DigitizerCurveKind::NoiseFigure);
+
+    const auto result = exportAmplifier(request);
+    if (result.ok) {
+        refreshExtensions();
+        m_extension_result_message = "Amplifier imported: " + result.json_path.filename().string();
+    } else {
+        m_extension_result_message = "Amplifier import failed: " + result.message;
+    }
+    m_amplifier_digitizer_widget->clearExportRequest();
+}
+
 void RfSimulatorApp::update_dsp() {
     std::unordered_map<int, std::function<void()>> updates;
 
@@ -1038,6 +1077,9 @@ void RfSimulatorApp::draw_ui() {
         }
         if (ImGui::BeginMenu("Tools")) {
             ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Amplifier: Import From Datasheet..."))
+                openAmplifierImportWizard();
             ImGui::Separator();
             for (const auto *tool : m_extension_manager.externalTools()) {
                 if (!tool)
@@ -1247,6 +1289,7 @@ void RfSimulatorApp::draw_ui() {
     }
 
     drawComponentFormModal();
+    drawAmplifierImportWizard();
 
     if (m_show_node_editor)
         m_graph_widget->draw("Node Editor", &m_show_node_editor);

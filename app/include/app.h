@@ -1,7 +1,9 @@
 #pragma once
 
 #include "adc_engine.h"
+#include "amplifier_digitizer_widget.h"
 #include "amplifier_engine.h"
+#include "amplifier_export_service.h"
 #include "attenuator_engine.h"
 #include "component_form_model.h"
 #include "component_form_widget.h"
@@ -32,6 +34,7 @@
 #include "spectrum_analyzer_widget.h"
 #include "splitter_engine.h"
 #include "view_manager.h"
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -85,16 +88,24 @@ class RfSimulatorApp {
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
     const std::string &testExtensionResultMessage() const { return m_extension_result_message; }
+    AmplifierDigitizerWidget *testAmplifierDigitizerWidget() {
+        return m_amplifier_digitizer_widget.get();
+    }
+    bool testAmplifierImportOpen() const { return m_show_amplifier_digitizer; }
+
+    void openAmplifierImportWizard();
 
     void openFileDialog();
     void saveFileDialog();
 
   private:
+    std::filesystem::path projectRoot() const;
     void load_window_states();
     void duplicateComponent(int graph_node_id);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
+    void drawAmplifierImportWizard();
     bool saveComponentForm();
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
@@ -117,6 +128,8 @@ class RfSimulatorApp {
     std::string m_component_form_error;
     std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
+    bool m_show_amplifier_digitizer = false;
+    std::unique_ptr<AmplifierDigitizerWidget> m_amplifier_digitizer_widget;
 
     ComponentRegistry m_components;
     int m_next_component_id = 100;
