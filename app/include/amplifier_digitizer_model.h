@@ -39,6 +39,7 @@ class AmplifierDigitizerModel {
 
   private:
     struct CurveState {
+        bool x_log = false;
         std::optional<AxisCalibration> calibration;
         std::vector<std::pair<double, double>> points;
     };

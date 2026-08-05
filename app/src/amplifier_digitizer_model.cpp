@@ -20,10 +20,7 @@ bool AmplifierDigitizerModel::setImagePath(const std::filesystem::path &path) {
 }
 
 void AmplifierDigitizerModel::setAxisMode(DigitizerCurveKind kind, bool x_log) {
-    auto &curve = state(kind);
-    if (!curve.calibration)
-        curve.calibration = AxisCalibration{};
-    curve.calibration->x_log = x_log;
+    state(kind).x_log = x_log;
 }
 
 bool AmplifierDigitizerModel::setCalibration(
@@ -35,8 +32,7 @@ bool AmplifierDigitizerModel::setCalibration(
     }
 
     auto &curve = state(kind);
-    const bool x_log = curve.calibration ? curve.calibration->x_log : false;
-    curve.calibration = AxisCalibration{x_refs, y_refs, x_log};
+    curve.calibration = AxisCalibration{x_refs, y_refs, curve.x_log};
     return true;
 }
 

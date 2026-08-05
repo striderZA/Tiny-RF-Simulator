@@ -31,3 +31,12 @@ TEST_CASE("AmplifierDigitizerModel keeps points sorted by frequency", "[amp_digi
     REQUIRE(curve.size() == 2);
     REQUIRE(curve[0].first < curve[1].first);
 }
+
+TEST_CASE("AmplifierDigitizerModel refuses points before calibration is applied",
+          "[amp_digitizer_model]") {
+    AmplifierDigitizerModel model;
+    model.setAxisMode(DigitizerCurveKind::Gain, true);
+
+    REQUIRE_FALSE(model.hasCalibration(DigitizerCurveKind::Gain));
+    REQUIRE_FALSE(model.addPoint(DigitizerCurveKind::Gain, 50.0, 50.0));
+}

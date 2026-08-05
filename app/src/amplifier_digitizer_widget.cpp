@@ -80,9 +80,9 @@ bool AmplifierDigitizerWidget::draw(bool *open) {
             m_model.imagePath().empty() ? std::string("(none)") : m_model.imagePath().string();
         ImGui::TextWrapped("Image: %s", current_path.c_str());
         if (ImGui::Button("Choose Image...")) {
-            auto picked = pfd::open_file("Choose Datasheet Image", ".",
-                                         {"Image Files", "*.png *.jpg *.jpeg *.bmp"})
-                              .result();
+            auto picked =
+                pfd::open_file("Choose Datasheet Image", ".", {"Image Files", "*.png *.jpg *.jpeg"})
+                    .result();
             if (!picked.empty()) {
                 std::string error;
                 if (m_image.load(picked.front(), error)) {

@@ -52,6 +52,9 @@ nlohmann::json buildDefinition(const AmplifierExportRequest &request, const std:
 }
 
 bool writeS2p(const std::filesystem::path &path, const AmplifierExportRequest &request) {
+    if (request.gain_db_vs_freq.empty())
+        return false;
+
     std::ofstream out(path);
     if (!out.is_open())
         return false;
@@ -81,20 +84,21 @@ AmplifierExportResult exportAmplifier(const AmplifierExportRequest &request) {
     result.json_path = vendor_dir / (stem + ".json");
     result.s2p_path = vendor_dir / (stem + ".s2p");
 
-    const auto definition = buildDefinition(request, result.s2p_path.filename().string());
-    std::ofstream json_out(result.json_path);
-    if (!json_out.is_open()) {
-        result.message = "could not open output json";
-        return result;
-    }
-    json_out << definition.dump(2) << '\n';
-    json_out.close();
-
     if (!writeS2p(result.s2p_path, request)) {
         result.message = "could not write output s2p";
         return result;
     }
 
+    const auto definition = buildDefinition(request, result.s2p_path.filename().string());
+    std::ofstream json_out(result.json_path);
+    if (!json_out.is_open()) {
+        std::error_code ec;
+        std::filesystem::remove(result.s2p_path, ec);
+        result.message = "could not open output json";
+        return result;
+    }
+    json_out << definition.dump(2) << '\n';
+    json_out.close();
     result.ok = true;
     result.message = "ok";
     return result;

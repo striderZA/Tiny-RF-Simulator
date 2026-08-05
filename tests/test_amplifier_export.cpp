@@ -33,3 +33,24 @@ TEST_CASE("exportAmplifier writes json and s2p with nf_db_vs_freq", "[amp_export
 
     fs::remove_all(root, ec);
 }
+
+TEST_CASE("exportAmplifier is all-or-nothing when S2P writing fails", "[amp_export]") {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "rfsim_amp_export_fail";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root);
+
+    AmplifierExportRequest req;
+    req.project_root = root;
+    req.part_number = "BROKEN";
+    req.manufacturer = "Test Vendor";
+    req.nf_db_vs_freq = {{1.0e8, 1.2}, {2.0e8, 1.5}};
+
+    const auto result = exportAmplifier(req);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE_FALSE(fs::exists(result.json_path));
+    REQUIRE_FALSE(fs::exists(result.s2p_path));
+
+    fs::remove_all(root, ec);
+}
