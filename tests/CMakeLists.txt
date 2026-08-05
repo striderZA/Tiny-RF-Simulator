@@ -89,6 +89,15 @@ target_link_libraries(test_component_authoring PRIVATE
 target_compile_definitions(test_component_authoring PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_component_authoring COMMAND test_component_authoring WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+add_executable(test_component_library_curves test_component_library_curves.cpp)
+target_link_libraries(test_component_library_curves PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_component_library_curves PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_component_library_curves COMMAND test_component_library_curves
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 add_executable(test_extensions test_extensions.cpp)
 target_link_libraries(test_extensions PRIVATE
     simulator::app

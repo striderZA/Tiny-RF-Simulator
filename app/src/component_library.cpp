@@ -8,7 +8,25 @@
 #include "component_registry.h"
 #include "node_graph_engine.h"
 #include <fstream>
+#include <optional>
 
+static std::optional<std::string> validateNfCurve(const nlohmann::json &curve) {
+    if (!curve.is_array() || curve.size() < 2)
+        return "Expected an array with at least 2 [freq_Hz, nf_dB] points";
+
+    double prev_freq_Hz = -1.0;
+    for (const auto &point : curve) {
+        if (!point.is_array() || point.size() != 2 || !point[0].is_number() ||
+            !point[1].is_number()) {
+            return "Each point must be [freq_Hz, nf_dB]";
+        }
+        double freq_Hz = point[0].get<double>();
+        if (freq_Hz <= prev_freq_Hz)
+            return "Frequencies must be strictly increasing";
+        prev_freq_Hz = freq_Hz;
+    }
+    return std::nullopt;
+}
 std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
                                                         const nlohmann::json &parameters) const {
     std::vector<ValidationIssue> issues;
@@ -64,6 +82,10 @@ std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
             break;
         }
         }
+    }
+    if (type == "amplifier" && parameters.contains("nf_db_vs_freq")) {
+        if (auto issue = validateNfCurve(parameters["nf_db_vs_freq"]))
+            issues.push_back({"nf_db_vs_freq", *issue});
     }
     return issues;
 }

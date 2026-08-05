@@ -6,6 +6,8 @@
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 class AmplifierEngine : public IComponentEngine {
   public:
@@ -29,6 +31,20 @@ class AmplifierEngine : public IComponentEngine {
             m_dirty = true;
         }
     }
+    void setNfCurve(const nlohmann::json &curve) {
+        std::vector<std::pair<double, double>> next;
+        next.reserve(curve.size());
+        for (const auto &point : curve) {
+            if (!point.is_array() || point.size() != 2 || !point[0].is_number() ||
+                !point[1].is_number())
+                continue;
+            next.emplace_back(point[0].get<double>(), std::max(0.0, point[1].get<double>()));
+        }
+        if (next != m_nf_curve) {
+            m_nf_curve = std::move(next);
+            m_dirty = true;
+        }
+    }
     void update(double dt) override;
     nlohmann::json serialize() const override;
     void deserialize(const nlohmann::json &) override;
@@ -38,6 +54,7 @@ class AmplifierEngine : public IComponentEngine {
 
     double gain_dB() const { return m_gain_dB; }
     double nf_dB() const { return m_nf_dB; }
+    bool hasNfCurve() const { return !m_nf_curve.empty(); }
     bool enableNonlinear() const { return m_nonlinear.enabled(); }
     double oip2_dBm() const { return m_nonlinear.oip2_dBm(); }
     double oip3_dBm() const { return m_nonlinear.oip3_dBm(); }
@@ -84,6 +101,7 @@ class AmplifierEngine : public IComponentEngine {
     SignalNode m_node;
     double m_gain_dB = 0.0;
     double m_nf_dB = 0.0;
+    std::vector<std::pair<double, double>> m_nf_curve;
     bool m_dirty = true;
     const Spectrum *m_cached_input_ptr = nullptr;
     uint64_t m_cached_input_generation = 0;
