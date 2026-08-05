@@ -126,6 +126,15 @@ target_compile_definitions(test_amplifier_digitizer_model PRIVATE PROJECT_SOURCE
 add_test(NAME test_amplifier_digitizer_model COMMAND test_amplifier_digitizer_model
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+add_executable(test_amplifier_import_wizard test_amplifier_import_wizard.cpp)
+target_link_libraries(test_amplifier_import_wizard PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_amplifier_import_wizard PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_amplifier_import_wizard COMMAND test_amplifier_import_wizard
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 add_executable(test_extensions test_extensions.cpp)
 target_link_libraries(test_extensions PRIVATE
     simulator::app
