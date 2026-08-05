@@ -95,6 +95,8 @@ class AmplifierEngine : public IComponentEngine {
 
   private:
     int m_id;
+
+    double interpolatedNf_dB(double freq_Hz) const;
     int m_graph_node_id = -1;
     NodeGraphEngine *m_graph = nullptr;
 

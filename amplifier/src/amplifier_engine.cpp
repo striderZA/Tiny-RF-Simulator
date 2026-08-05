@@ -25,6 +25,25 @@ int AmplifierEngine::outputPinId() const {
     return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
+double AmplifierEngine::interpolatedNf_dB(double freq_Hz) const {
+    if (m_nf_curve.empty())
+        return m_nf_dB;
+    if (freq_Hz <= m_nf_curve.front().first)
+        return m_nf_curve.front().second;
+    if (freq_Hz >= m_nf_curve.back().first)
+        return m_nf_curve.back().second;
+
+    for (size_t i = 1; i < m_nf_curve.size(); ++i) {
+        const auto [f1, nf1] = m_nf_curve[i - 1];
+        const auto [f2, nf2] = m_nf_curve[i];
+        if (freq_Hz <= f2) {
+            const double t = (freq_Hz - f1) / (f2 - f1);
+            return nf1 + t * (nf2 - nf1);
+        }
+    }
+    return m_nf_curve.back().second;
+}
+
 void AmplifierEngine::update(double dt) {
     (void)dt;
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
@@ -94,24 +113,20 @@ void AmplifierEngine::update(double dt) {
             return;
         }
 
-        // Amplify input noise by |S21|^2
+        // Amplify input noise by |S21|^2 and add per-bin NF noise
         out.noise_W.assign(N, 0.0);
-        double sum_gain = 0.0;
-        int gain_count = 0;
+        out.noise_added_W.assign(N, 0.0);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], m_sparam_fwd_idx);
             double gain_linear = std::norm(S);
-            sum_gain += gain_linear;
-            ++gain_count;
             double nin =
                 (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = gain_linear * nin;
-        }
 
-        // Noise figure (scaled by average S21 gain)
-        double avg_gain = (gain_count > 0) ? (sum_gain / gain_count) : 1.0;
-        double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, avg_gain);
-        out.noise_added_W.assign(N, added_density <= 0.0 ? 0.0 : added_density);
+            double nf_dB = interpolatedNf_dB(out.frequencies[i]);
+            double added_density = addedNoiseDensity_W_per_Hz(nf_dB, gain_linear);
+            out.noise_added_W[i] = added_density <= 0.0 ? 0.0 : added_density;
+        }
 
         out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i)

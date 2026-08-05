@@ -6,6 +6,8 @@
 #include <cmath>
 #include <numbers>
 
+#include <filesystem>
+#include <fstream>
 using Catch::Approx;
 
 static std::string s2p_path() {
