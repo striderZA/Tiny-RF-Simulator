@@ -11,6 +11,8 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
 - `ExternalToolRunner` — structured request/result execution for approved external tools
+- `AmplifierDigitizerModel` / `AmplifierDigitizerWidget` — native datasheet image import wizard for amplifier library authoring
+- `AmplifierExportService` — collision-safe amplifier JSON + `.s2p` export from reviewed digitized data
 ## Local Contracts
 - `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks
@@ -23,6 +25,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `externalToolActions()` is the single policy for launchable tool actions: declared `menus[]` entries pass through unchanged; tools with no menus get one synthetic `"tools"` action using `manifest.name`
 - `refreshExtensions()` rescans built-in, global, and project-local roots for the current project path and rebuilds the component library before the browser/UI reads from it
 - `draw_ui()` and `drawExtensionsPanel()` both dispatch through `externalToolActions()`; the Tools menu renders only actions whose `location == "tools"`, while the Extensions panel shows every declared action (or a single fallback Run button)
+- `openAmplifierImportWizard()` / `drawAmplifierImportWizard()` own the native amplifier datasheet-import flow; export writes project-local amplifier library files and refreshes the library scan on success
 - App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Destructor saves window state via `SessionState`
