@@ -311,8 +311,9 @@ void RfSimulatorApp::refreshExtensions() {
     if (home) {
         m_library.scan((fs::path(home) / ".rf-sim" / "libraries").string());
     }
-    if (fs::exists("rf-sim-libraries")) {
-        m_library.scan("rf-sim-libraries");
+    const fs::path project_library_root = project_root / "rf-sim-libraries";
+    if (fs::exists(project_library_root)) {
+        m_library.scan(project_library_root.string());
     }
     if (fs::exists("component_data/library")) {
         m_library.scan("component_data/library");

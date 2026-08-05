@@ -72,9 +72,7 @@ TEST_CASE_METHOD(ImGuiFixture, "RfSimulatorApp exports imported amplifier and re
     REQUIRE_NOTHROW(app.draw_ui());
     ImGui::Render();
 
-    ComponentLibrary lib;
-    lib.scan((project / "rf-sim-libraries").string());
-    const auto defs = lib.all();
+    const auto defs = app.testLibrary().all();
     REQUIRE(std::any_of(defs.begin(), defs.end(), [](const ComponentDefinition *def) {
         return def->part_number == "APP-AMP";
     }));

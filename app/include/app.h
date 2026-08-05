@@ -84,6 +84,7 @@ class RfSimulatorApp {
     // Test helpers exposed for project file round-trip tests
     NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
     ComponentRegistry &testComponents() { return m_components; }
+    const ComponentLibrary &testLibrary() const { return m_library; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
