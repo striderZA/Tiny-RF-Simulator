@@ -43,6 +43,10 @@ int main() {
     ImGui_ImplOpenGL2_Init();
 
     RfSimulatorApp app;
+    app.m_show_node_editor = true;
+    app.m_show_properties = true;
+    app.m_show_spectrum = true;
+    app.m_show_log = false;
 
     ImGuiTestEngine *engine = ImGuiTestEngine_CreateContext();
     ImGuiTestEngineIO &test_io = ImGuiTestEngine_GetIO(engine);

@@ -56,8 +56,7 @@ target_link_libraries(tests PRIVATE
 target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 include(CTest)
-include(Catch)
-catch_discover_tests(tests)
+add_test(NAME tests_all COMMAND tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_executable(test_attenuator test_attenuator.cpp)
 target_link_libraries(test_attenuator PRIVATE
     simulator::attenuator_engine
