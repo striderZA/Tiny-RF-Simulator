@@ -30,6 +30,8 @@ class AmplifierDigitizerModel {
     bool hasCalibration(DigitizerCurveKind kind) const;
     void clearCurve(DigitizerCurveKind kind);
     bool addPoint(DigitizerCurveKind kind, double pixel_x, double pixel_y);
+    void updatePoint(DigitizerCurveKind kind, size_t index, double freq_Hz, double value);
+    void erasePoint(DigitizerCurveKind kind, size_t index);
     std::vector<std::pair<double, double>> curve(DigitizerCurveKind kind) const;
 
     void setPartNumber(const std::string &part_number) { m_part_number = part_number; }

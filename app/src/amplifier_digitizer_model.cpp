@@ -47,10 +47,36 @@ bool AmplifierDigitizerModel::addPoint(DigitizerCurveKind kind, double pixel_x, 
     if (!curve.calibration)
         return false;
 
-    curve.points.emplace_back(mapX(*curve.calibration, pixel_x), mapY(*curve.calibration, pixel_y));
+    const auto point =
+        std::make_pair(mapX(*curve.calibration, pixel_x), mapY(*curve.calibration, pixel_y));
+    const auto duplicate =
+        std::find_if(curve.points.begin(), curve.points.end(), [&](const auto &existing) {
+            return std::abs(existing.first - point.first) < 1e-9;
+        });
+    if (duplicate != curve.points.end())
+        return false;
+
+    curve.points.push_back(point);
     std::sort(curve.points.begin(), curve.points.end(),
               [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
     return true;
+}
+
+void AmplifierDigitizerModel::updatePoint(DigitizerCurveKind kind, size_t index, double freq_Hz,
+                                          double value) {
+    auto &curve = state(kind);
+    if (index >= curve.points.size())
+        return;
+    curve.points[index] = {freq_Hz, value};
+    std::sort(curve.points.begin(), curve.points.end(),
+              [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
+}
+
+void AmplifierDigitizerModel::erasePoint(DigitizerCurveKind kind, size_t index) {
+    auto &curve = state(kind);
+    if (index >= curve.points.size())
+        return;
+    curve.points.erase(curve.points.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
 std::vector<std::pair<double, double>>
