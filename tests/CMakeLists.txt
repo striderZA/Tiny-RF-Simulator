@@ -108,6 +108,15 @@ target_compile_definitions(test_amplifier_nf_curve PRIVATE PROJECT_SOURCE_DIR="$
 add_test(NAME test_amplifier_nf_curve COMMAND test_amplifier_nf_curve
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+add_executable(test_amplifier_export test_amplifier_export.cpp)
+target_link_libraries(test_amplifier_export PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_amplifier_export PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_amplifier_export COMMAND test_amplifier_export
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 add_executable(test_extensions test_extensions.cpp)
 target_link_libraries(test_extensions PRIVATE
     simulator::app
