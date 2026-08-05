@@ -48,10 +48,10 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
         auto &e = registry.add<AmplifierEngine>(id, graph);
         if (parameters.contains("gain_dB"))
             e.setGain_dB(parameters["gain_dB"].get<double>());
+        if (parameters.contains("nf_dB"))
+            e.setNF_dB(parameters["nf_dB"].get<double>());
         if (parameters.contains("nf_db_vs_freq"))
             e.setNfCurve(parameters["nf_db_vs_freq"]);
-        else if (parameters.contains("nf_dB"))
-            e.setNF_dB(parameters["nf_dB"].get<double>());
         if (parameters.contains("oip2_dBm"))
             e.setOIP2_dBm(parameters["oip2_dBm"].get<double>());
         if (parameters.contains("oip3_dBm"))

@@ -241,11 +241,12 @@ void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
     m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
     m_nonlinear.setP1dB_dBm(j.value("p1db_dBm", 100.0));
-    m_sparam_mode = j.value("sparam_mode", false);
+    const bool desired_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     if (!m_sparam_filepath.empty())
         setSParamFilepath(m_sparam_filepath);
+    m_sparam_mode = desired_sparam_mode;
     m_dirty = true;
 }
 

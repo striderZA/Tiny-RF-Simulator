@@ -18,6 +18,32 @@ double averageGainDb(const std::vector<std::pair<double, double>> &points) {
     return sum / static_cast<double>(points.size());
 }
 
+double averageValue(const std::vector<std::pair<double, double>> &points) {
+    if (points.empty())
+        return 0.0;
+    double sum = 0.0;
+    for (const auto &[x, y] : points) {
+        (void)x;
+        sum += y;
+    }
+    return sum / static_cast<double>(points.size());
+}
+
+std::string sanitizePathSegment(const std::string &input, const std::string &fallback) {
+    std::string out;
+    out.reserve(input.size());
+    for (unsigned char c : input) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == ' ')
+            out.push_back(static_cast<char>(c));
+    }
+    const auto start = out.find_first_not_of(' ');
+    if (start == std::string::npos)
+        return fallback;
+    const auto end = out.find_last_not_of(' ');
+    out = out.substr(start, end - start + 1);
+    return out.empty() ? fallback : out;
+}
+
 std::string nextAvailableStem(const std::filesystem::path &directory,
                               const std::string &part_number) {
     std::string candidate = part_number;
@@ -40,7 +66,9 @@ nlohmann::json buildDefinition(const AmplifierExportRequest &request, const std:
 
     j["parameters"] = nlohmann::json::object();
     if (!request.gain_db_vs_freq.empty())
-        j["parameters"]["gain_dB"] = averageGainDb(request.gain_db_vs_freq);
+        j["parameters"]["gain_dB"] = averageValue(request.gain_db_vs_freq);
+    if (!request.nf_db_vs_freq.empty())
+        j["parameters"]["nf_dB"] = averageValue(request.nf_db_vs_freq);
     j["parameters"]["nf_db_vs_freq"] = nlohmann::json::array();
     for (const auto &[freq_Hz, nf_dB] : request.nf_db_vs_freq)
         j["parameters"]["nf_db_vs_freq"].push_back({freq_Hz, nf_dB});
@@ -76,10 +104,11 @@ bool writeS2p(const std::filesystem::path &path, const AmplifierExportRequest &r
 AmplifierExportResult exportAmplifier(const AmplifierExportRequest &request) {
     AmplifierExportResult result;
 
-    const auto vendor_dir =
-        request.project_root / "rf-sim-libraries" / "amplifiers" / request.manufacturer;
+    const auto vendor_dir = request.project_root / "rf-sim-libraries" / "amplifiers" /
+                            sanitizePathSegment(request.manufacturer, "Unknown Vendor");
     std::filesystem::create_directories(vendor_dir);
-    const std::string stem = nextAvailableStem(vendor_dir, request.part_number);
+    const std::string stem =
+        nextAvailableStem(vendor_dir, sanitizePathSegment(request.part_number, "AMPLIFIER"));
 
     result.json_path = vendor_dir / (stem + ".json");
     result.s2p_path = vendor_dir / (stem + ".s2p");
