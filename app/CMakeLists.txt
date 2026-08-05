@@ -18,6 +18,7 @@ add_library(app STATIC
     src/extension_manager.cpp
     src/external_tool_runner.cpp
     src/amplifier_export_service.cpp
+    src/amplifier_digitizer_model.cpp
 )
 add_library(simulator::app ALIAS app)
 
