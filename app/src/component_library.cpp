@@ -161,9 +161,10 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, 
         return nullptr;
     }
 
-    IComponentEngine *result = descriptor->factory(registry, graph, id, def.parameters);
+    IComponentEngine *result = descriptor->create(registry, graph, id);
     if (!result)
         return nullptr;
+    result->deserialize(def.parameters);
 
     if (def.type == "amplifier") {
         auto *amp = dynamic_cast<AmplifierEngine *>(result);

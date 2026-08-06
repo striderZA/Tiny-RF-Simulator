@@ -181,7 +181,8 @@ nlohmann::json AttenuatorEngine::serialize() const {
 }
 
 void AttenuatorEngine::deserialize(const nlohmann::json &j) {
-    m_atten_dB = j.value("atten_dB", 0.0);
+    m_atten_dB =
+        j.contains("atten_dB") ? j["atten_dB"].get<double>() : j.value("attenuation_dB", 0.0);
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_path = j.value("sparam_path", "");
     m_dirty = true;

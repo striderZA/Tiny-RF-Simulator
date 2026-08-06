@@ -216,9 +216,16 @@ void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_gain_dB = j.value("gain_dB", 0.0);
     m_nf_dB = j.value("nf_dB", 0.0);
     m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
-    m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
-    m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
+    m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 100.0));
+    m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 100.0));
     m_nonlinear.setP1dB_dBm(j.value("p1db_dBm", 100.0));
+    // Library definitions (schema v1/v2) omit `enable_nonlinear` but include
+    // OIP/P1dB params. The old registry factory enabled nonlinearity whenever
+    // any of those were present; project files always serialize the explicit
+    // key, so only fall back when it is absent.
+    if (!j.contains("enable_nonlinear") &&
+        (j.contains("oip2_dBm") || j.contains("oip3_dBm") || j.contains("p1db_dBm")))
+        m_nonlinear.setEnabled(true);
     m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);

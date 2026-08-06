@@ -133,6 +133,13 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImGui::End();
 }
 
+NodeKind NodeGraphWidget::kindForLabel(const std::string &label) const {
+    for (const auto &[prefix, kind] : m_kind_prefixes)
+        if (label.rfind(prefix, 0) == 0)
+            return kind;
+    return NodeKind::Unknown;
+}
+
 void NodeGraphWidget::drawNodes() {
     // Clear screen position cache - will be repopulated for nodes drawn this frame.
     // This ensures detectNodeMoves() only checks nodes that were actually drawn,
@@ -167,7 +174,7 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
-        const NodeKind kind = nodeKindFromLabel(node.label);
+        const NodeKind kind = kindForLabel(node.label);
         const ImU32 color = static_cast<ImU32>(themeColor(kind));
         ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
         ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);
@@ -352,49 +359,11 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     }
 
     if (ImGui::BeginPopup("canvas_context_menu")) {
-        if (ImGui::MenuItem("Add Generator")) {
-            if (onAddGenerator)
-                onAddGenerator(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Amplifier")) {
-            if (onAddAmplifier)
-                onAddAmplifier(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Splitter")) {
-            if (onAddSplitter)
-                onAddSplitter(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Combiner")) {
-            if (onAddCombiner)
-                onAddCombiner(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Coax Cable")) {
-            if (onAddCoaxCable)
-                onAddCoaxCable(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Equalizer")) {
-            if (onAddEqualizer)
-                onAddEqualizer(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Mixer")) {
-            if (onAddMixer)
-                onAddMixer(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add RF ADC")) {
-            if (onAddAdc)
-                onAddAdc(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add PFB Channelizer")) {
-            if (onAddPFB)
-                onAddPFB(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Ideal Filter")) {
-            if (onAddIdealFilter)
-                onAddIdealFilter(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Attenuator")) {
-            if (onAddAttenuator)
-                onAddAttenuator(m_context_menu_pos);
+        for (const auto &addable : m_addable_components) {
+            if (ImGui::MenuItem(addable.menu_label.c_str())) {
+                if (addable.on_add)
+                    addable.on_add(m_context_menu_pos);
+            }
         }
         ImGui::EndPopup();
     }

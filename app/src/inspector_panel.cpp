@@ -23,69 +23,75 @@
 InspectorPanel::InspectorPanel(NodeGraphEngine &graph, ComponentRegistry &components)
     : m_graph(graph), m_components(&components) {}
 
+void InspectorPanel::registerDrawers(ComponentTypeRegistry &registry) {
+    for (auto *d : registry.all()) {
+        if (d->type == "generator") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawGeneratorProperties(static_cast<SignalGeneratorEngine &>(e), e.id());
+            };
+        } else if (d->type == "amplifier") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawAmplifierProperties(static_cast<AmplifierEngine &>(e), e.id());
+            };
+        } else if (d->type == "splitter") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawSplitterProperties(static_cast<SplitterEngine &>(e), e.id());
+            };
+        } else if (d->type == "mixer") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawMixerProperties(static_cast<MixerEngine &>(e), e.id());
+            };
+        } else if (d->type == "adc") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawAdcProperties(static_cast<AdcEngine &>(e), e.id());
+            };
+        } else if (d->type == "pfb") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawPFBProperties(static_cast<PFBChannelizerEngine &>(e));
+            };
+        } else if (d->type == "filter") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawIdealFilterProperties(static_cast<IdealFilterEngine &>(e), e.id());
+            };
+        } else if (d->type == "coax") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawCoaxCableProperties(static_cast<CoaxCableEngine &>(e), e.id());
+            };
+        } else if (d->type == "equalizer") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawEqualizerProperties(static_cast<EqualizerEngine &>(e), e.id());
+            };
+        } else if (d->type == "attenuator") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawAttenuatorProperties(static_cast<AttenuatorEngine &>(e), e.id());
+            };
+        } else if (d->type == "combiner") {
+            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
+                p.drawCombinerProperties(static_cast<CombinerEngine &>(e), e.id());
+            };
+        }
+    }
+}
+
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
     if (n != 1)
-        return {ComponentType::None, nullptr};
+        return {nullptr, nullptr};
 
     int selected_id = -1;
     ImNodes::GetSelectedNodes(&selected_id);
 
     auto *engine = m_components->find(selected_id);
     if (!engine)
-        return {ComponentType::None, nullptr};
+        return {nullptr, nullptr};
 
-    if (dynamic_cast<SignalGeneratorEngine *>(engine))
-        return {ComponentType::Generator, engine};
-    else if (dynamic_cast<AmplifierEngine *>(engine))
-        return {ComponentType::Amplifier, engine};
-    else if (dynamic_cast<SplitterEngine *>(engine))
-        return {ComponentType::Splitter, engine};
-    else if (dynamic_cast<MixerEngine *>(engine))
-        return {ComponentType::Mixer, engine};
-    else if (dynamic_cast<AdcEngine *>(engine))
-        return {ComponentType::Adc, engine};
-    else if (dynamic_cast<PFBChannelizerEngine *>(engine))
-        return {ComponentType::PFB, engine};
-    else if (dynamic_cast<IdealFilterEngine *>(engine))
-        return {ComponentType::IdealFilter, engine};
-    else if (dynamic_cast<CoaxCableEngine *>(engine))
-        return {ComponentType::CoaxCable, engine};
-    else if (dynamic_cast<EqualizerEngine *>(engine))
-        return {ComponentType::Equalizer, engine};
-    else if (dynamic_cast<AttenuatorEngine *>(engine))
-        return {ComponentType::Attenuator, engine};
-    else if (dynamic_cast<CombinerEngine *>(engine))
-        return {ComponentType::Combiner, engine};
-
-    return {ComponentType::None, nullptr};
+    return {ComponentTypeRegistry::instance().find(engine->type_name()), engine};
 }
 
 std::string InspectorPanel::labelForHit(const Hit &hit) const {
-    if (hit.type == ComponentType::None || !hit.engine)
+    if (!hit.desc || !hit.engine)
         return "";
-    if (hit.type == ComponentType::PFB)
-        return "PFB " + std::to_string(hit.engine->id());
-    switch (hit.type) {
-    case ComponentType::Amplifier:
-        return "Amplifier " + std::to_string(hit.engine->id());
-    case ComponentType::Mixer:
-        return "Mixer " + std::to_string(hit.engine->id());
-    case ComponentType::Splitter:
-        return "Splitter " + std::to_string(hit.engine->id());
-    case ComponentType::Adc:
-        return "ADC " + std::to_string(hit.engine->id());
-    case ComponentType::Generator:
-        return "Generator " + std::to_string(hit.engine->id());
-    case ComponentType::IdealFilter:
-        return "IdealFilter " + std::to_string(hit.engine->id());
-    case ComponentType::Attenuator:
-        return "Attenuator " + std::to_string(hit.engine->id());
-    case ComponentType::Combiner:
-        return "Combiner " + std::to_string(hit.engine->id());
-    default:
-        return "";
-    }
+    return hit.desc->display_name + " " + std::to_string(hit.engine->id());
 }
 
 void InspectorPanel::draw(const char *title, bool *p_open) {
@@ -102,7 +108,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
 
     auto hit = findSelected();
-    if (hit.type == ComponentType::None || !hit.engine) {
+    if (!hit.desc || !hit.engine) {
         ImGui::TextDisabled("Select a component in the Node Editor");
 
         ImGui::SeparatorText("View");
@@ -123,80 +129,53 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
 
     m_param_edited = false;
 
-    // Build label from graph node
-    int node_id = hit.engine->graphNodeId();
-
-    ImGui::SeparatorText(labelForHit(hit).c_str());
-
-    switch (hit.type) {
-    case ComponentType::Amplifier:
-        drawAmplifierProperties(*static_cast<AmplifierEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Mixer:
-        drawMixerProperties(*static_cast<MixerEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Splitter:
-        drawSplitterProperties(*static_cast<SplitterEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Adc:
-        drawAdcProperties(*static_cast<AdcEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Generator:
-        drawGeneratorProperties(*static_cast<SignalGeneratorEngine *>(hit.engine),
-                                hit.engine->id());
-        break;
-    case ComponentType::PFB: {
+    // The PFB multi-instance combo decides which PFB the panel edits. Keeping
+    // a single "edited engine" means the header, the property controls, and the
+    // Show-IQ-Plot / Show-Channelizer-Grid checkboxes always refer to the same
+    // PFB. The graph-selected PFB is the default until the combo is used.
+    IComponentEngine *edit_engine = hit.engine;
+    if (hit.desc->type == "pfb") {
         auto *pfb = static_cast<PFBChannelizerEngine *>(hit.engine);
-        for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
-            if (m_pfb_ptrs[i] == pfb) {
-                m_selected_pfb_index = i;
-                break;
-            }
-        }
-        if (!m_pfb_ptrs.empty()) {
-            int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
-                              m_pfb_ptrs[m_selected_pfb_index])
-                                 ? m_pfb_ptrs[m_selected_pfb_index]->id()
-                                 : m_selected_pfb_index;
-            std::string combo_label = "PFB##selector";
-            std::string preview = "PFB " + std::to_string(display_id);
-            if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
-                for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
-                    if (!m_pfb_ptrs[i])
-                        continue;
-                    bool selected = (i == m_selected_pfb_index);
-                    std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
-                    if (ImGui::Selectable(item.c_str(), &selected))
-                        m_selected_pfb_index = i;
-                    if (selected)
-                        ImGui::SetItemDefaultFocus();
+        if (m_pfb_combo_graph_id != pfb->id()) {
+            // Graph selection moved to a different PFB (or the anchor was
+            // dropped after an add/remove): follow the graph selection.
+            m_pfb_combo_graph_id = pfb->id();
+            m_selected_pfb_index = -1;
+            for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                if (m_pfb_ptrs[i] == pfb) {
+                    m_selected_pfb_index = i;
+                    break;
                 }
-                ImGui::EndCombo();
             }
-            if (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
-                m_pfb_ptrs[m_selected_pfb_index])
-                drawPFBProperties(*m_pfb_ptrs[m_selected_pfb_index]);
         }
-        break;
+        if (m_selected_pfb_index >= 0 &&
+            m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+            m_pfb_ptrs[m_selected_pfb_index])
+            edit_engine = m_pfb_ptrs[m_selected_pfb_index];
     }
-    case ComponentType::IdealFilter:
-        drawIdealFilterProperties(*static_cast<IdealFilterEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::CoaxCable:
-        drawCoaxCableProperties(*static_cast<CoaxCableEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Equalizer:
-        drawEqualizerProperties(*static_cast<EqualizerEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Attenuator:
-        drawAttenuatorProperties(*static_cast<AttenuatorEngine *>(hit.engine), hit.engine->id());
-        break;
-    case ComponentType::Combiner:
-        drawCombinerProperties(*static_cast<CombinerEngine *>(hit.engine), hit.engine->id());
-        break;
-    default:
-        break;
+
+    ImGui::SeparatorText(labelForHit(Hit{hit.desc, edit_engine}).c_str());
+
+    if (hit.desc->type == "pfb" && !m_pfb_ptrs.empty()) {
+        std::string combo_label = "PFB##selector";
+        std::string preview = "PFB " + std::to_string(edit_engine->id());
+        if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
+            for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                if (!m_pfb_ptrs[i])
+                    continue;
+                bool selected = (i == m_selected_pfb_index);
+                std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
+                if (ImGui::Selectable(item.c_str(), &selected))
+                    m_selected_pfb_index = i;
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
     }
+
+    if (hit.desc->draw_inspector)
+        hit.desc->draw_inspector(*this, *edit_engine);
 
     if (m_param_edited && onParamChange)
         onParamChange();

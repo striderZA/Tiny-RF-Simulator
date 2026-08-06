@@ -181,26 +181,6 @@ TEST_CASE("NodeGraphEngine group counter accessors", "[node_graph]") {
     REQUIRE(engine.nextBoundaryPinId() == 1999);
 }
 
-TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
-    REQUIRE(nodeKindFromLabel("Generator 1") == NodeKind::Generator);
-    REQUIRE(nodeKindFromLabel("Amplifier 2") == NodeKind::Amplifier);
-    REQUIRE(nodeKindFromLabel("Splitter 3") == NodeKind::Splitter);
-    REQUIRE(nodeKindFromLabel("Mixer 4") == NodeKind::Mixer);
-    REQUIRE(nodeKindFromLabel("ADC 6") == NodeKind::Adc);
-    REQUIRE(nodeKindFromLabel("PFB 7") == NodeKind::PFB);
-    REQUIRE(nodeKindFromLabel("IdealFilter 8") == NodeKind::IdealFilter);
-    REQUIRE(nodeKindFromLabel("Coax Cable 9") == NodeKind::CoaxCable);
-    REQUIRE(nodeKindFromLabel("Equalizer 10") == NodeKind::Equalizer);
-}
-
-TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_graph][appearance]") {
-    REQUIRE(nodeKindFromLabel("") == NodeKind::Unknown);
-    REQUIRE(nodeKindFromLabel("Subcircuit 1") == NodeKind::Unknown); // groups handled separately
-    REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);  // case-sensitive
-    REQUIRE(nodeKindFromLabel("Amplifier") ==
-            NodeKind::Amplifier); // no trailing space still matches
-}
-
 TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {
     REQUIRE(themeColor(NodeKind::Unknown) != 0u);
     REQUIRE(themeColor(NodeKind::Generator) != 0u);

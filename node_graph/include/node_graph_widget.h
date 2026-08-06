@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 struct ImVec2;
 
@@ -23,21 +24,27 @@ class NodeGraphWidget {
 
     // Callbacks for app to create/destroy components
     std::function<void()> onNodeMoved;
-    std::function<void(ImVec2 pos)> onAddGenerator;
-    std::function<void(ImVec2 pos)> onAddAmplifier;
-    std::function<void(ImVec2 pos)> onAddSplitter;
-    std::function<void(ImVec2 pos)> onAddMixer;
-    std::function<void(ImVec2 pos)> onAddAdc;
-    std::function<void(ImVec2 pos)> onAddPFB;
-    std::function<void(ImVec2 pos)> onAddIdealFilter;
-    std::function<void(ImVec2 pos)> onAddCoaxCable;
-    std::function<void(ImVec2 pos)> onAddEqualizer;
-    std::function<void(ImVec2 pos)> onAddAttenuator;
-    std::function<void(ImVec2 pos)> onAddCombiner;
     std::function<void(int node_id)> onRemoveNode;
     std::function<void(int node_id)> onDuplicateNode;
     std::function<void()> onLinkChanged;
     std::function<std::string(int graph_node_id)> onNodeHover;
+
+    // Data-driven canvas menu: app populates from ComponentTypeRegistry.
+    struct AddableComponent {
+        std::string menu_label;
+        std::function<void(ImVec2)> on_add;
+    };
+    void setAddableComponents(std::vector<AddableComponent> addable) {
+        m_addable_components = std::move(addable);
+    }
+    const std::vector<AddableComponent> &addableComponents() const { return m_addable_components; }
+
+    // Data-driven label-prefix → NodeKind mapping. The app feeds this from
+    // ComponentTypeRegistry (label_prefix + kind) at startup.
+    void registerNodeKind(std::string label_prefix, NodeKind kind) {
+        m_kind_prefixes.push_back({std::move(label_prefix), kind});
+    }
+    NodeKind kindForLabel(const std::string &label) const;
 
     ImNodesEditorContext *context() { return m_context; }
     void syncNodesFromEngine();
@@ -99,6 +106,8 @@ class NodeGraphWidget {
     // Set of node IDs registered in the ImNodes pool, so syncNodesFromEngine
     // can register new nodes without resetting existing positions.
     std::unordered_set<int> m_registered_in_pool;
+    std::vector<AddableComponent> m_addable_components;
+    std::vector<std::pair<std::string, NodeKind>> m_kind_prefixes;
     bool m_show_create_popup = false;
 
     // Internal rendering helpers

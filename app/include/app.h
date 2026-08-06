@@ -25,6 +25,8 @@
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
+#include "pfb_view_manager.h"
+#include "project_serializer.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -93,6 +95,7 @@ class RfSimulatorApp {
     void load_window_states();
     void rewireInputs();
     void duplicateComponent(int graph_node_id);
+    void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
@@ -104,9 +107,6 @@ class RfSimulatorApp {
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
-    std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
-    std::vector<bool> m_show_iq_pfbs;
-    std::vector<std::unique_ptr<PFBChannelizerWidget>> m_pfb_grid_widgets;
     ComponentLibrary m_library;
     std::unique_ptr<LibraryBrowserWidget> m_library_browser;
     bool m_show_library = false;
@@ -116,10 +116,15 @@ class RfSimulatorApp {
     std::unique_ptr<ComponentFormModel> m_component_form_model;
     std::unique_ptr<ComponentFormWidget> m_component_form_widget;
     std::string m_component_form_error;
-    std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     ComponentRegistry m_components;
+    // Declared after m_components so the manager (and its widget references to
+    // engines) is destroyed before the engines themselves.
+    PFBViewManager m_pfb_views;
+    // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
+    // so it is destroyed before them (it holds references to both).
+    std::unique_ptr<ProjectSerializer> m_serializer;
     int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
