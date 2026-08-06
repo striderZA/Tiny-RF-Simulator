@@ -28,7 +28,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 - Changes to `SignalNode` or `Spectrum` affect every engine. Update all engines' `update()` and tests.
 - `Spectrum::is_complex_baseband` (default `false`) marks spectra downstream of an ADC's DDC (complex baseband/IQ); every pass-through engine propagates it from its input exactly like `fs_Hz`. Only `AdcEngine`'s output sets it to `true`. `conjugateSymmetricExpand()` must stay render-only (used by the spectrum-analyzer render path for real-domain spectra) — never call it from interior DSP (generator, `nonlinear_model.h`, gain/filter/S-param stages, mixer), which must keep operating on the collapsed single-entry-per-tone representation.
 - New fields on `IComponentEngine` must keep a default implementation that preserves backward compat for all existing engines.
-- New files in `common/` or `common/include/` are automatically picked up by `common/CMakeLists.txt`'s glob.
+- New headers in `common/` or `common/include/` are exposed automatically through the `simulator::common` INTERFACE target's include directories (both directories are added explicitly; there is no glob) — no CMake edit is required for a new header.
 
 ## Verification
 

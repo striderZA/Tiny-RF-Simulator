@@ -124,4 +124,4 @@ Patch release tags (`vX.Y.Z` where `Z > 0`) still build/package Linux and Window
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [Apache-2.0 License](LICENSE).

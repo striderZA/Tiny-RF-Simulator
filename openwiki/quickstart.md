@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.12.0
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.16.0
 
 ---
 
@@ -72,9 +72,9 @@ build/bin/tests [bench]
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
-| `help/` | Help window — data-driven quick reference with collapsible sections, toggled via F1 or Help menu |
+| `layout/` | Exe-relative ImGui layout persistence (default + named presets) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (~210 test cases, 14 benchmarks) |
+| `tests/` | Catch2 unit tests (~270 test cases, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
 | `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
 | `src/` | `main.cpp` entry point |

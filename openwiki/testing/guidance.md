@@ -168,18 +168,21 @@ TEST_CASE("AmplifierEngine dirty/clean benchmark", "[bench][amplifier]") {
 
 ## CI Test Configuration
 
-From `.github/workflows/build.yml`:
+Tests run in `.github/workflows/release.yml` on minor/major release tags:
 
 ```yaml
-# CI runs on Linux (GCC 14) and Windows (MinGW-w64 via MSYS2)
-# Excludes:
-#   - Benchmark tests (too variable in CI)
-#   - test_ui (needs X display — Xvfb not configured)
-#   - "ADC DDC output grid spans" (Catch2 test concatenation quirk on Windows)
-ctest --test-dir build --output-on-fire -E "Benchmark|test_ui|ADC DDC output grid spans"
+# Linux (GCC/Clang, Debug/Release): full suite under Xvfb
+xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+
+# Windows (MinGW-w64): UI tests need a display; ADC DDC grid spans test excluded
+ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+
+# AddressSanitizer job (Linux):
+cd build
+ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
 ```
 
-The UI test engine requires a display server. For headless Linux CI, set up Xvfb:
+The UI test engine requires a display server. For headless Linux CI, Xvfb is used (`xvfb-run --auto-servernum`). Locally, run:
 
 ```bash
 xvfb-run build/bin/test_ui

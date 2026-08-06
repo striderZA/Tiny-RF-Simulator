@@ -100,24 +100,25 @@ build/bin/test_ui
 
 ## CI/CD
 
-### Build & Test (`build.yml`)
+### Build & Sanity (`ci.yml`)
 
-Runs on push to `v*` tags and PRs to `master`. Two-matrix strategy:
+Runs on pull requests to `master` (docs-only changes are skipped via `paths-ignore`):
 
-| OS | Compiler | Shell |
-|---|---|---|
-| ubuntu-24.04 | GCC 14 | bash |
-| windows-latest | MinGW-w64 (MSYS2) | msys2 |
+1. `format` — clang-format 18 dry-run over all source directories.
+2. `build` — Linux GCC 14 Debug configure + build.
 
-Steps:
-1. Checkout + install dependencies (apt on Linux, MSYS2 on Windows).
-2. Configure with CMake + Ninja.
-3. Build.
-4. Test with `ctest`, excluding benchmarks and UI tests.
+### Release (`release.yml`)
+
+Runs on `v*` tags. `classify-release` splits tags into patch vs minor/major:
+
+- **Minor/major tags** (`vX.Y.0`, `vX.0.0`): strict 4-way build matrix (Linux GCC Debug/Release, Linux Clang, Windows MinGW) with `ctest`, plus an AddressSanitizer job.
+- **Patch tags** (`vX.Y.Z`, `Z > 0`): Linux + Windows package builds only; the strict validation matrix is skipped.
+- `validate-version` enforces the tag matches `CMakeLists.txt`'s `project(... VERSION ...)`.
+- Release artifacts are published as a draft GitHub release.
 
 ### OpenWiki Update (`openwiki-update.yml`)
 
-Scheduled daily at 08:00 UTC, also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
+Scheduled weekly (Sunday 08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
 
 ---
 
