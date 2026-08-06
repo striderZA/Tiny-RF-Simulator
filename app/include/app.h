@@ -93,6 +93,7 @@ class RfSimulatorApp {
     void load_window_states();
     void rewireInputs();
     void duplicateComponent(int graph_node_id);
+    void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();

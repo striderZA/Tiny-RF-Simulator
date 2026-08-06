@@ -35,78 +35,12 @@ static std::string sanitizePathSegment(const std::string &s, const std::string &
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
-    m_graph_widget->onAddGenerator = [this](ImVec2 pos) {
-        auto &comp = m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddAmplifier = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddSplitter = [this](ImVec2 pos) {
-        auto &comp = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddMixer = [this](ImVec2 pos) {
-        auto &comp = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-
-    m_graph_widget->onAddAdc = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddPFB = [this](ImVec2 pos) {
-        auto &pfb = m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(pfb.graphNodeId(), pos);
-        m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(pfb));
-        m_show_iq_pfbs.push_back(
-            m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb.id())).c_str(), true));
-        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(pfb));
-        m_show_pfb_grids.push_back(
-            m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb.id())).c_str(), true));
-        markDirty();
-    };
-    m_graph_widget->onAddCoaxCable = [this](ImVec2 pos) {
-        auto &comp = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddEqualizer = [this](ImVec2 pos) {
-        auto &comp = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-    };
-    m_graph_widget->onAddIdealFilter = [this](ImVec2 pos) {
-        auto &comp = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddAttenuator = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddCombiner = [this](ImVec2 pos) {
-        auto &comp = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
+    std::vector<NodeGraphWidget::AddableComponent> addable;
+    for (const auto *desc : ComponentTypeRegistry::instance().all()) {
+        addable.push_back(
+            {desc->menu_label, [this, desc](ImVec2 pos) { addComponent(desc, pos); }});
+    }
+    m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
     m_graph_widget->onLinkChanged = [this]() { markDirty(); };
     m_graph_widget->onRemoveNode = [this](int id) {
@@ -178,6 +112,22 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     load_window_states();
 }
 
+void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
+    IComponentEngine *comp = desc->create(m_components, m_graph_engine, m_next_component_id++);
+    ImNodes::EditorContextSet(m_graph_widget->context());
+    ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
+    if (desc->type == "pfb") {
+        auto *pfb = static_cast<PFBChannelizerEngine *>(comp);
+        m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
+        m_show_iq_pfbs.push_back(
+            m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
+        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
+        m_show_pfb_grids.push_back(m_state.loadBool(
+            "WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
+    }
+    markDirty(); // unconditional — fixes the Equalizer missing-markDirty bug
+}
+
 void RfSimulatorApp::load_window_states() {
     m_show_log = m_state.loadBool("WindowState", "Log", true);
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
@@ -219,7 +169,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_engine.setNodePartNumber(new_nid, src_part_number);
-    // PFB also needs IQ plot widget and grid widget (same as onAddPFB)
+    // PFB also needs IQ plot widget and grid widget (same as addComponent)
     if (desc->type == "pfb") {
         auto *new_pfb = static_cast<PFBChannelizerEngine *>(copy);
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*new_pfb));

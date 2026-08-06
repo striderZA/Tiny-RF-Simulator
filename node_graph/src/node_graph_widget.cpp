@@ -352,49 +352,11 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
     }
 
     if (ImGui::BeginPopup("canvas_context_menu")) {
-        if (ImGui::MenuItem("Add Generator")) {
-            if (onAddGenerator)
-                onAddGenerator(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Amplifier")) {
-            if (onAddAmplifier)
-                onAddAmplifier(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Splitter")) {
-            if (onAddSplitter)
-                onAddSplitter(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Combiner")) {
-            if (onAddCombiner)
-                onAddCombiner(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Coax Cable")) {
-            if (onAddCoaxCable)
-                onAddCoaxCable(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Equalizer")) {
-            if (onAddEqualizer)
-                onAddEqualizer(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Mixer")) {
-            if (onAddMixer)
-                onAddMixer(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add RF ADC")) {
-            if (onAddAdc)
-                onAddAdc(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add PFB Channelizer")) {
-            if (onAddPFB)
-                onAddPFB(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Ideal Filter")) {
-            if (onAddIdealFilter)
-                onAddIdealFilter(m_context_menu_pos);
-        }
-        if (ImGui::MenuItem("Add Attenuator")) {
-            if (onAddAttenuator)
-                onAddAttenuator(m_context_menu_pos);
+        for (const auto &addable : m_addable_components) {
+            if (ImGui::MenuItem(addable.menu_label.c_str())) {
+                if (addable.on_add)
+                    addable.on_add(m_context_menu_pos);
+            }
         }
         ImGui::EndPopup();
     }
