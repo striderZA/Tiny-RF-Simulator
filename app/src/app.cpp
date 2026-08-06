@@ -742,14 +742,20 @@ void RfSimulatorApp::drawComponentFormModal() {
         ImGui::TextUnformatted(m_component_form_is_edit ? "Edit Component" : "New Component");
         ImGui::Separator();
         if (!m_component_form_is_edit) {
-            const char *type_names[] = {"amplifier", "attenuator", "splitter", "filter",
-                                        "mixer",     "equalizer",  "combiner", "adc"};
+            std::vector<const ComponentTypeDescriptor *> authorable;
+            for (auto *d : ComponentTypeRegistry::instance().all())
+                if (d->authorable)
+                    authorable.push_back(d);
             static int type_idx = 0;
-            for (int i = 0; i < 8; ++i)
-                if (m_component_form_model->descriptor().type == type_names[i])
-                    type_idx = i;
-            if (ImGui::Combo("Type", &type_idx, type_names, 8))
-                openNewComponentForm(type_names[type_idx]);
+            for (size_t i = 0; i < authorable.size(); ++i)
+                if (m_component_form_model->descriptor().type == authorable[i]->type)
+                    type_idx = static_cast<int>(i);
+            std::vector<const char *> type_names;
+            for (auto *d : authorable)
+                type_names.push_back(d->type.c_str());
+            if (ImGui::Combo("Type", &type_idx, type_names.data(),
+                             static_cast<int>(type_names.size())))
+                openNewComponentForm(authorable[type_idx]->type);
 
             const char *roots[] = {"Project (./rf-sim-libraries)", "Global (~/.rf-sim/libraries)"};
             static int root_idx = 0;
