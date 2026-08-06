@@ -38,6 +38,7 @@ void MixerEngine::update(double dt) {
     // Frequency conversion: each input tone produces sum and difference
     out.tones.clear();
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     if (in_ptr) {
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
