@@ -1,15 +1,17 @@
-// app/include/component_type_registry.h
 #pragma once
 
+#include "node_graph_engine.h"
 #include <functional>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class ComponentRegistry;
 class NodeGraphEngine;
 class IComponentEngine;
+class InspectorPanel;
 
 enum class FieldKind { Number, String, Enum, FilePath, Bool };
 
@@ -27,10 +29,25 @@ struct ParameterField {
 };
 
 struct ComponentTypeDescriptor {
-    std::string type;         // "amplifier"
-    std::string display_name; // "Amplifier"
-    std::vector<ParameterField> fields;
+    std::string type;         // canonical key, e.g. "amplifier"
+    std::string project_type; // .rfsim save/load name, e.g. "Amplifier"
+    std::string display_name; // e.g. "Amplifier"
+    std::string menu_label;   // canvas menu item, e.g. "Add Amplifier"
+    std::string label_prefix; // graph label prefix, e.g. "Amplifier"
+    NodeKind kind = NodeKind::Unknown;
+    bool authorable = false; // appears in New Component form combo
     bool supports_sparam_file = false;
+    std::vector<ParameterField> fields;
+
+    // Create a default engine of this type (no params). Callers apply params
+    // via engine->deserialize(). Replaces the old params-taking `factory`.
+    std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)> create;
+    // Inspector property draw. Receives the panel so PFB's multi-instance
+    // selector and dirty-flag state stay reachable.
+    std::function<void(InspectorPanel &, IComponentEngine &)> draw_inspector;
+
+    // Legacy params-taking factory; still used by ComponentLibrary until
+    // Task 2b migrates instantiate to create()+deserialize().
     std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int,
                                      const nlohmann::json &)>
         factory;
@@ -38,10 +55,11 @@ struct ComponentTypeDescriptor {
 
 class ComponentTypeRegistry {
   public:
-    static const ComponentTypeRegistry &instance();
+    static ComponentTypeRegistry &instance();
 
-    const ComponentTypeDescriptor *find(const std::string &type) const;
-    std::vector<const ComponentTypeDescriptor *> all() const;
+    const ComponentTypeDescriptor *find(std::string_view type) const;
+    const ComponentTypeDescriptor *findByProjectType(std::string_view name) const;
+    std::vector<ComponentTypeDescriptor *> all();
 
   private:
     ComponentTypeRegistry();
