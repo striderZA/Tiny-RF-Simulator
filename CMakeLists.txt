@@ -1,9 +1,9 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
+# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.20)
 
-project (RfSimulator VERSION 0.16.0)
+project (RfSimulator VERSION 0.16.1)
 
 # FetchContent'd dependencies below call their own project() commands, which
 # resets PROJECT_VERSION (and _MAJOR/_MINOR/_PATCH) for the remainder of this
