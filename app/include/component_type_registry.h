@@ -40,17 +40,11 @@ struct ComponentTypeDescriptor {
     std::vector<ParameterField> fields;
 
     // Create a default engine of this type (no params). Callers apply params
-    // via engine->deserialize(). Replaces the old params-taking `factory`.
+    // via engine->deserialize().
     std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)> create;
     // Inspector property draw. Receives the panel so PFB's multi-instance
     // selector and dirty-flag state stay reachable.
     std::function<void(InspectorPanel &, IComponentEngine &)> draw_inspector;
-
-    // Legacy params-taking factory; still used by ComponentLibrary until
-    // Task 2b migrates instantiate to create()+deserialize().
-    std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int,
-                                     const nlohmann::json &)>
-        factory;
 };
 
 class ComponentTypeRegistry {

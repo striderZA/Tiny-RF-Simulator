@@ -62,26 +62,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     amp.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AmplifierEngine>(id, graph));
     };
-    // Legacy factory: applied library params directly. Removed in Task 2b.
-    amp.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<AmplifierEngine>(id, graph);
-        if (parameters.contains("gain_dB"))
-            e.setGain_dB(parameters["gain_dB"].get<double>());
-        if (parameters.contains("nf_dB"))
-            e.setNF_dB(parameters["nf_dB"].get<double>());
-        if (parameters.contains("oip2_dBm"))
-            e.setOIP2_dBm(parameters["oip2_dBm"].get<double>());
-        if (parameters.contains("oip3_dBm"))
-            e.setOIP3_dBm(parameters["oip3_dBm"].get<double>());
-        if (parameters.contains("p1db_dBm"))
-            e.setP1dB_dBm(parameters["p1db_dBm"].get<double>());
-        bool has_nonlinear = parameters.contains("oip2_dBm") || parameters.contains("oip3_dBm") ||
-                             parameters.contains("p1db_dBm");
-        if (has_nonlinear)
-            e.setEnableNonlinear(true);
-        return &e;
-    };
     m_descriptors.push_back(amp);
 
     ComponentTypeDescriptor att;
@@ -98,13 +78,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     att.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AttenuatorEngine>(id, graph));
     };
-    att.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<AttenuatorEngine>(id, graph);
-        if (parameters.contains("attenuation_dB"))
-            e.setAttenuation(parameters["attenuation_dB"].get<double>());
-        return &e;
-    };
     m_descriptors.push_back(att);
 
     ComponentTypeDescriptor spl;
@@ -117,11 +90,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     spl.authorable = true;
     spl.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<SplitterEngine>(id, graph));
-    };
-    spl.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &) -> IComponentEngine * {
-        auto &e = registry.add<SplitterEngine>(id, graph);
-        return &e;
     };
     m_descriptors.push_back(spl);
 
@@ -150,28 +118,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     flt.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<IdealFilterEngine>(id, graph));
     };
-    flt.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<IdealFilterEngine>(id, graph);
-        if (parameters.contains("filter_type")) {
-            std::string ft = parameters["filter_type"].get<std::string>();
-            if (ft == "LPF")
-                e.setFilterType(FilterType::LPF);
-            else if (ft == "HPF")
-                e.setFilterType(FilterType::HPF);
-            else if (ft == "BPF")
-                e.setFilterType(FilterType::BPF);
-            else if (ft == "BSF")
-                e.setFilterType(FilterType::BSF);
-        }
-        double fc_low = parameters.value("fc_low_Hz", 100e6);
-        double fc_high = parameters.value("fc_high_Hz", 200e6);
-        if (parameters.contains("fc_low_Hz") && parameters.contains("fc_high_Hz"))
-            e.setCutoffs_Hz(fc_low, fc_high);
-        else if (parameters.contains("fc_low_Hz"))
-            e.setCutoff_Hz(fc_low);
-        return &e;
-    };
     m_descriptors.push_back(flt);
 
     ComponentTypeDescriptor mix;
@@ -198,17 +144,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     };
     mix.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<MixerEngine>(id, graph));
-    };
-    mix.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<MixerEngine>(id, graph);
-        if (parameters.contains("lo_freq_Hz"))
-            e.setLoFreq_Hz(parameters["lo_freq_Hz"].get<double>());
-        if (parameters.contains("conversion_gain_dB"))
-            e.setConversionGain_dB(parameters["conversion_gain_dB"].get<double>());
-        if (parameters.contains("nf_dB"))
-            e.setNF_dB(parameters["nf_dB"].get<double>());
-        return &e;
     };
     m_descriptors.push_back(mix);
 
@@ -246,17 +181,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     eq.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<EqualizerEngine>(id, graph));
     };
-    eq.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                    const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<EqualizerEngine>(id, graph);
-        if (parameters.contains("ref_gain_dB"))
-            e.setRefGain_dB(parameters["ref_gain_dB"].get<double>());
-        if (parameters.contains("ref_freq_Hz"))
-            e.setRefFreq_Hz(parameters["ref_freq_Hz"].get<double>());
-        if (parameters.contains("slope_dB_per_decade"))
-            e.setSlope_dBPerDecade(parameters["slope_dB_per_decade"].get<double>());
-        return &e;
-    };
     m_descriptors.push_back(eq);
 
     ComponentTypeDescriptor comb;
@@ -272,13 +196,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     };
     comb.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<CombinerEngine>(id, graph));
-    };
-    comb.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                      const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<CombinerEngine>(id, graph);
-        if (parameters.contains("manual_mode"))
-            e.setManualMode(parameters["manual_mode"].get<bool>());
-        return &e;
     };
     m_descriptors.push_back(comb);
 
@@ -305,15 +222,6 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     };
     adc.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AdcEngine>(id, graph));
-    };
-    adc.factory = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id,
-                     const nlohmann::json &parameters) -> IComponentEngine * {
-        auto &e = registry.add<AdcEngine>(id, graph);
-        if (parameters.contains("fs_Hz"))
-            e.setFs_Hz(parameters["fs_Hz"].get<double>());
-        if (parameters.contains("nsd_dBm_per_Hz"))
-            e.setNsd_dBm_per_Hz(parameters["nsd_dBm_per_Hz"].get<double>());
-        return &e;
     };
     m_descriptors.push_back(adc);
 
