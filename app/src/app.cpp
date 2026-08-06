@@ -56,19 +56,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         // directly during this same draw_ui() call (e.g. PFBChannelizerWidget::draw() /
         // rebuildCache(), InspectorPanel) would otherwise use-after-free. See issue #37.
         rewireInputs();
-        auto pfb_vec = m_components.byType<PFBChannelizerEngine>();
-        m_iq_widgets.clear();
-        m_show_iq_pfbs.clear();
-        m_pfb_grid_widgets.clear();
-        m_show_pfb_grids.clear();
-        for (auto *pfb : pfb_vec) {
-            m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
-            m_show_iq_pfbs.push_back(m_state.loadBool(
-                "WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
-            m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
-            m_show_pfb_grids.push_back(m_state.loadBool(
-                "WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
-        }
+        m_pfb_views.rebuild(m_components, m_state);
     };
     m_graph_widget->onNodeHover = [this](int id) { return m_components.hoverSummary(id); };
     m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
@@ -119,13 +107,7 @@ void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 po
     ImNodes::EditorContextSet(m_graph_widget->context());
     ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
     if (desc->type == "pfb") {
-        auto *pfb = static_cast<PFBChannelizerEngine *>(comp);
-        m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
-        m_show_iq_pfbs.push_back(
-            m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb->id())).c_str(), true));
-        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
-        m_show_pfb_grids.push_back(m_state.loadBool(
-            "WindowState", ("PFBGrid_" + std::to_string(pfb->id())).c_str(), true));
+        m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
     }
     markDirty(); // unconditional — fixes the Equalizer missing-markDirty bug
 }
@@ -173,13 +155,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
         m_graph_engine.setNodePartNumber(new_nid, src_part_number);
     // PFB also needs IQ plot widget and grid widget (same as addComponent)
     if (desc->type == "pfb") {
-        auto *new_pfb = static_cast<PFBChannelizerEngine *>(copy);
-        m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*new_pfb));
-        m_show_iq_pfbs.push_back(m_state.loadBool(
-            "WindowState", ("IQPlot_" + std::to_string(new_pfb->id())).c_str(), true));
-        m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*new_pfb));
-        m_show_pfb_grids.push_back(m_state.loadBool(
-            "WindowState", ("PFBGrid_" + std::to_string(new_pfb->id())).c_str(), true));
+        m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(copy), m_state);
     }
 
     markDirty();
@@ -202,10 +178,7 @@ void RfSimulatorApp::newProject() {
     m_spectrum_widget->setProbeLabels({});
 
     // Reset IQ / PFB widgets
-    m_iq_widgets.clear();
-    m_show_iq_pfbs.clear();
-    m_pfb_grid_widgets.clear();
-    m_show_pfb_grids.clear();
+    m_pfb_views.clear();
 
     // Reset graph counters
     m_graph_engine.setNextIds(1, 100, 1000);
@@ -511,12 +484,8 @@ void RfSimulatorApp::loadProject(const std::string &path) {
         IComponentEngine *comp = desc->create(m_components, m_graph_engine, m_next_component_id++);
         comp->deserialize(params);
         if (desc->type == "pfb") {
-            auto *pfb = static_cast<PFBChannelizerEngine *>(comp);
             // Restore IQ plot + PFB grid widgets for this PFB
-            m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
-            m_show_iq_pfbs.push_back(true);
-            m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
-            m_show_pfb_grids.push_back(true);
+            m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
         }
 
         new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
@@ -852,7 +821,8 @@ void RfSimulatorApp::update_dsp() {
     std::vector<PFBChannelizerEngine *> pfb_vec(pfb_ptrs.begin(), pfb_ptrs.end());
     m_spectrum_widget->setPFBs(pfb_vec);
     m_inspector_panel->setPFBs(pfb_vec);
-    m_inspector_panel->setPFBWindowVisibility(&m_show_iq_pfbs, &m_show_pfb_grids);
+    m_inspector_panel->setPFBWindowVisibility(&m_pfb_views.iqVisibility(),
+                                              &m_pfb_views.gridVisibility());
 }
 
 void RfSimulatorApp::draw_ui() {
@@ -1143,23 +1113,7 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
-    for (size_t i = 0; i < m_iq_widgets.size(); ++i) {
-        if (m_show_iq_pfbs[i]) {
-            std::string label = "IQ Plot - PFB " + std::to_string(i);
-            bool show = m_show_iq_pfbs[i];
-            m_iq_widgets[i]->draw(label.c_str(), &show);
-            m_show_iq_pfbs[i] = show;
-        }
-    }
-
-    for (size_t i = 0; i < m_pfb_grid_widgets.size(); ++i) {
-        if (m_show_pfb_grids[i]) {
-            std::string label = "Channelizer Grid - PFB " + std::to_string(i);
-            bool show = m_show_pfb_grids[i];
-            m_pfb_grid_widgets[i]->draw(label.c_str(), &show);
-            m_show_pfb_grids[i] = show;
-        }
-    }
+    m_pfb_views.draw();
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
@@ -1184,16 +1138,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Log", m_show_log);
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
-    auto pfb_vec = m_components.byType<PFBChannelizerEngine>();
-    for (size_t i = 0; i < m_show_iq_pfbs.size() && i < pfb_vec.size(); ++i) {
-        std::string key = "IQPlot_" + std::to_string(pfb_vec[i]->id());
-        m_state.saveBool("WindowState", key.c_str(), m_show_iq_pfbs[i]);
-    }
-    auto pfb_vec_save = m_components.byType<PFBChannelizerEngine>();
-    for (size_t i = 0; i < m_show_pfb_grids.size() && i < pfb_vec_save.size(); ++i) {
-        std::string key = "PFBGrid_" + std::to_string(pfb_vec_save[i]->id());
-        m_state.saveBool("WindowState", key.c_str(), m_show_pfb_grids[i]);
-    }
+    m_pfb_views.saveVisibility(m_components, m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
 }

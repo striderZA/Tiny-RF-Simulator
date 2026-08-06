@@ -17,6 +17,7 @@ add_library(app STATIC
     src/extension_manifest.cpp
     src/extension_manager.cpp
     src/external_tool_runner.cpp
+    src/pfb_view_manager.cpp
 )
 add_library(simulator::app ALIAS app)
 
