@@ -77,6 +77,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
 
     m_inspector_panel = std::make_unique<InspectorPanel>(m_graph_engine, m_components);
+    m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         if (m_graph_widget->onRemoveNode)
             m_graph_widget->onRemoveNode(graph_node_id);

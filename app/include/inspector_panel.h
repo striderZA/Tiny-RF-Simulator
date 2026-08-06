@@ -1,6 +1,7 @@
 #pragma once
 
 #include "component_interface.h"
+#include "component_type_registry.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include <functional>
@@ -52,35 +53,9 @@ class InspectorPanel {
     void setViewToggles(const ViewToggles &t) { m_viewToggles = t; }
     bool m_param_edited = false;
 
-  private:
-    NodeGraphEngine &m_graph;
-    ComponentRegistry *m_components = nullptr;
-    std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
-    int m_selected_pfb_index = 0;
-    ViewToggles m_viewToggles;
-    std::vector<bool> *m_pfb_iq_visible = nullptr;
-    std::vector<bool> *m_pfb_grid_visible = nullptr;
-
-    enum class ComponentType {
-        None,
-        Generator,
-        Amplifier,
-        Splitter,
-        Mixer,
-        Adc,
-        PFB,
-        IdealFilter,
-        CoaxCable,
-        Equalizer,
-        Attenuator,
-        Combiner
-    };
-    struct Hit {
-        ComponentType type;
-        IComponentEngine *engine = nullptr;
-    };
-    Hit findSelected() const;
-    std::string labelForHit(const Hit &hit) const;
+    // Called once at startup; wires ComponentTypeRegistry draw_inspector
+    // callbacks to this panel's property drawers.
+    void registerDrawers(ComponentTypeRegistry &registry);
 
     void drawAmplifierProperties(AmplifierEngine &engine, int index);
     void drawCoaxCableProperties(CoaxCableEngine &engine, int index);
@@ -94,4 +69,20 @@ class InspectorPanel {
     void drawAttenuatorProperties(AttenuatorEngine &engine, int index);
     void drawCombinerProperties(CombinerEngine &engine, int index);
     void drawGroupPanel(int group_id);
+
+  private:
+    NodeGraphEngine &m_graph;
+    ComponentRegistry *m_components = nullptr;
+    std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
+    int m_selected_pfb_index = 0;
+    ViewToggles m_viewToggles;
+    std::vector<bool> *m_pfb_iq_visible = nullptr;
+    std::vector<bool> *m_pfb_grid_visible = nullptr;
+
+    struct Hit {
+        const ComponentTypeDescriptor *desc = nullptr;
+        IComponentEngine *engine = nullptr;
+    };
+    Hit findSelected() const;
+    std::string labelForHit(const Hit &hit) const;
 };
