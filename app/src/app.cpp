@@ -37,77 +37,27 @@ static std::string sanitizePathSegment(const std::string &s, const std::string &
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_graph_widget->onAddGenerator = [this](ImVec2 pos) {
-        auto &comp = m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
+        addComponent<SignalGeneratorEngine>(pos);
     };
-    m_graph_widget->onAddAmplifier = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddSplitter = [this](ImVec2 pos) {
-        auto &comp = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddMixer = [this](ImVec2 pos) {
-        auto &comp = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
+    m_graph_widget->onAddAmplifier = [this](ImVec2 pos) { addComponent<AmplifierEngine>(pos); };
+    m_graph_widget->onAddSplitter = [this](ImVec2 pos) { addComponent<SplitterEngine>(pos); };
+    m_graph_widget->onAddMixer = [this](ImVec2 pos) { addComponent<MixerEngine>(pos); };
 
-    m_graph_widget->onAddAdc = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
+    m_graph_widget->onAddAdc = [this](ImVec2 pos) { addComponent<AdcEngine>(pos); };
     m_graph_widget->onAddPFB = [this](ImVec2 pos) {
-        auto &pfb = m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(pfb.graphNodeId(), pos);
+        auto &pfb = addComponent<PFBChannelizerEngine>(pos);
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(pfb));
         m_show_iq_pfbs.push_back(
             m_state.loadBool("WindowState", ("IQPlot_" + std::to_string(pfb.id())).c_str(), true));
         m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(pfb));
         m_show_pfb_grids.push_back(
             m_state.loadBool("WindowState", ("PFBGrid_" + std::to_string(pfb.id())).c_str(), true));
-        markDirty();
     };
-    m_graph_widget->onAddCoaxCable = [this](ImVec2 pos) {
-        auto &comp = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddEqualizer = [this](ImVec2 pos) {
-        auto &comp = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-    };
-    m_graph_widget->onAddIdealFilter = [this](ImVec2 pos) {
-        auto &comp = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddAttenuator = [this](ImVec2 pos) {
-        auto &comp = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
-    m_graph_widget->onAddCombiner = [this](ImVec2 pos) {
-        auto &comp = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
-        ImNodes::EditorContextSet(m_graph_widget->context());
-        ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
-        markDirty();
-    };
+    m_graph_widget->onAddCoaxCable = [this](ImVec2 pos) { addComponent<CoaxCableEngine>(pos); };
+    m_graph_widget->onAddEqualizer = [this](ImVec2 pos) { addComponent<EqualizerEngine>(pos); };
+    m_graph_widget->onAddIdealFilter = [this](ImVec2 pos) { addComponent<IdealFilterEngine>(pos); };
+    m_graph_widget->onAddAttenuator = [this](ImVec2 pos) { addComponent<AttenuatorEngine>(pos); };
+    m_graph_widget->onAddCombiner = [this](ImVec2 pos) { addComponent<CombinerEngine>(pos); };
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
     m_graph_widget->onLinkChanged = [this]() { markDirty(); };
     m_graph_widget->onRemoveNode = [this](int id) {
@@ -177,6 +127,14 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget->syncNodesFromEngine();
 
     load_window_states();
+}
+
+template <typename T> T &RfSimulatorApp::addComponent(ImVec2 pos) {
+    auto &comp = m_components.add<T>(m_next_component_id++, m_graph_engine);
+    ImNodes::EditorContextSet(m_graph_widget->context());
+    ImNodes::SetNodeEditorSpacePos(comp.graphNodeId(), pos);
+    markDirty();
+    return comp;
 }
 
 void RfSimulatorApp::load_window_states() {

@@ -97,6 +97,10 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     bool saveComponentForm();
+    // Shared body for the NodeGraphWidget onAdd* callbacks: create the engine,
+    // place it at the requested editor-space position, and mark the project
+    // dirty so unsaved-changes prompts (New/Open/Exit) are not suppressed.
+    template <typename T> T &addComponent(ImVec2 pos);
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;

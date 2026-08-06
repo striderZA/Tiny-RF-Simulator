@@ -104,6 +104,13 @@ target_link_libraries(test_issue37_pfb_input_removal PRIVATE
 )
 target_compile_definitions(test_issue37_pfb_input_removal PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_issue37_pfb_input_removal COMMAND test_issue37_pfb_input_removal WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_executable(test_add_component_dirty test_add_component_dirty.cpp)
+target_link_libraries(test_add_component_dirty PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_add_component_dirty PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_add_component_dirty COMMAND test_add_component_dirty WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 add_executable(test_signal_domain test_signal_domain.cpp)
 target_link_libraries(test_signal_domain PRIVATE
     common
