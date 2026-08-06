@@ -97,3 +97,22 @@ TEST_CASE_METHOD(ImGuiFixture, "Legacy .rfsim type strings still load (backward 
     REQUIRE(app.testComponents().byType<PFBChannelizerEngine>().size() == 1);
     std::remove(path);
 }
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Every registry descriptor has create and draw_inspector (issue #51)",
+                 "[dispatch]") {
+    // Constructing the app runs InspectorPanel::registerDrawers(), which is
+    // the only place draw_inspector is populated; a forgotten branch would
+    // otherwise pass CI silently.
+    RfSimulatorApp app;
+    int next_id = 1;
+    for (const auto *d : ComponentTypeRegistry::instance().all()) {
+        CAPTURE(d->type);
+        REQUIRE(bool(d->create));
+        REQUIRE(bool(d->draw_inspector));
+        IComponentEngine *engine =
+            d->create(app.testComponents(), app.testGraphEngine(), next_id++);
+        REQUIRE(engine != nullptr);
+        REQUIRE(engine->type_name() == d->type);
+    }
+}

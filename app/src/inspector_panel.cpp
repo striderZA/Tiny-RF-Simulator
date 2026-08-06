@@ -129,45 +129,53 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
 
     m_param_edited = false;
 
-    // Build label from graph node
-    int node_id = hit.engine->graphNodeId();
-
-    ImGui::SeparatorText(labelForHit(hit).c_str());
-
+    // The PFB multi-instance combo decides which PFB the panel edits. Keeping
+    // a single "edited engine" means the header, the property controls, and the
+    // Show-IQ-Plot / Show-Channelizer-Grid checkboxes always refer to the same
+    // PFB. The graph-selected PFB is the default until the combo is used.
+    IComponentEngine *edit_engine = hit.engine;
     if (hit.desc->type == "pfb") {
-        // PFB keeps its multi-instance selector combo (needs m_pfb_ptrs).
         auto *pfb = static_cast<PFBChannelizerEngine *>(hit.engine);
-        for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
-            if (m_pfb_ptrs[i] == pfb) {
-                m_selected_pfb_index = i;
-                break;
+        if (m_pfb_combo_graph_id != pfb->id()) {
+            // Graph selection moved to a different PFB (or the anchor was
+            // dropped after an add/remove): follow the graph selection.
+            m_pfb_combo_graph_id = pfb->id();
+            m_selected_pfb_index = -1;
+            for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                if (m_pfb_ptrs[i] == pfb) {
+                    m_selected_pfb_index = i;
+                    break;
+                }
             }
         }
-        if (!m_pfb_ptrs.empty()) {
-            int display_id = (m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
-                              m_pfb_ptrs[m_selected_pfb_index])
-                                 ? m_pfb_ptrs[m_selected_pfb_index]->id()
-                                 : m_selected_pfb_index;
-            std::string combo_label = "PFB##selector";
-            std::string preview = "PFB " + std::to_string(display_id);
-            if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
-                for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
-                    if (!m_pfb_ptrs[i])
-                        continue;
-                    bool selected = (i == m_selected_pfb_index);
-                    std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
-                    if (ImGui::Selectable(item.c_str(), &selected))
-                        m_selected_pfb_index = i;
-                    if (selected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
+        if (m_selected_pfb_index >= 0 &&
+            m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+            m_pfb_ptrs[m_selected_pfb_index])
+            edit_engine = m_pfb_ptrs[m_selected_pfb_index];
+    }
+
+    ImGui::SeparatorText(labelForHit(Hit{hit.desc, edit_engine}).c_str());
+
+    if (hit.desc->type == "pfb" && !m_pfb_ptrs.empty()) {
+        std::string combo_label = "PFB##selector";
+        std::string preview = "PFB " + std::to_string(edit_engine->id());
+        if (ImGui::BeginCombo(combo_label.c_str(), preview.c_str())) {
+            for (int i = 0; i < static_cast<int>(m_pfb_ptrs.size()); ++i) {
+                if (!m_pfb_ptrs[i])
+                    continue;
+                bool selected = (i == m_selected_pfb_index);
+                std::string item = "PFB " + std::to_string(m_pfb_ptrs[i]->id());
+                if (ImGui::Selectable(item.c_str(), &selected))
+                    m_selected_pfb_index = i;
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
             }
+            ImGui::EndCombo();
         }
     }
 
     if (hit.desc->draw_inspector)
-        hit.desc->draw_inspector(*this, *hit.engine);
+        hit.desc->draw_inspector(*this, *edit_engine);
 
     if (m_param_edited && onParamChange)
         onParamChange();

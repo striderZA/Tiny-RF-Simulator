@@ -36,9 +36,17 @@ class InspectorPanel {
 
     void draw(const char *title, bool *p_open = nullptr);
     void setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs) {
+        const bool selection_survives =
+            m_selected_pfb_index >= 0 && m_selected_pfb_index < static_cast<int>(pfbs.size()) &&
+            m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+            pfbs[m_selected_pfb_index] == m_pfb_ptrs[m_selected_pfb_index];
         m_pfb_ptrs = pfbs;
         if (m_selected_pfb_index >= static_cast<int>(m_pfb_ptrs.size()))
             m_selected_pfb_index = std::max(0, static_cast<int>(m_pfb_ptrs.size()) - 1);
+        // A PFB was added/removed and the combo selection did not survive the
+        // reshuffle: drop the anchor so draw() re-follows the graph selection.
+        if (!selection_survives)
+            m_pfb_combo_graph_id = -1;
     }
     // Vectors are owned by the caller (RfSimulatorApp) and stay stable across frames;
     // only their contents are rebuilt on add/remove, so storing the vector pointers
@@ -75,6 +83,10 @@ class InspectorPanel {
     ComponentRegistry *m_components = nullptr;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     int m_selected_pfb_index = 0;
+    // Graph-selected PFB id that the combo selection is anchored to; -1 means
+    // draw() must re-follow the graph selection (initial state, or after the
+    // PFB set changed underneath the selection).
+    int m_pfb_combo_graph_id = -1;
     ViewToggles m_viewToggles;
     std::vector<bool> *m_pfb_iq_visible = nullptr;
     std::vector<bool> *m_pfb_grid_visible = nullptr;
