@@ -14,7 +14,6 @@
 #include <fstream>
 #include <functional>
 #include <portable-file-dialogs.h>
-#include <typeindex>
 #include <unordered_map>
 // Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
 // Strips everything else (incl. /, \\, and . which eliminates .. risks).
@@ -206,50 +205,29 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
         }
     }
 
-    // Helper: create a new engine of type T, copy params via serialize/deserialize,
-    // position it offset from the source, and return a reference to the new engine.
-    auto dup = [&](auto *typed_src) -> decltype(typed_src) {
-        using T = std::remove_pointer_t<decltype(typed_src)>;
-        auto &new_eng = m_components.add<T>(m_next_component_id++, m_graph_engine);
-        new_eng.deserialize(typed_src->serialize());
-        int new_nid = new_eng.graphNodeId();
-        // Register with imnodes pool and set position
-        ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
-        // Copy library part number
-        if (!src_part_number.empty())
-            m_graph_engine.setNodePartNumber(new_nid, src_part_number);
-        return &new_eng;
-    };
-
-    if (auto *e = dynamic_cast<SignalGeneratorEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<AmplifierEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<SplitterEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<MixerEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<AdcEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<PFBChannelizerEngine *>(src)) {
-        auto *new_pfb = dup(e);
-        // PFB also needs IQ plot widget and grid widget (same as onAddPFB)
+    // Clone via the registry: create a default engine, then copy params through
+    // serialize/deserialize. Removes the 11-way dynamic_cast chain.
+    const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
+    if (!desc)
+        return;
+    IComponentEngine *copy = desc->create(m_components, m_graph_engine, m_next_component_id++);
+    copy->deserialize(src->serialize());
+    int new_nid = copy->graphNodeId();
+    // Register with imnodes pool and set position
+    ImNodes::EditorContextSet(m_graph_widget->context());
+    ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
+    // Copy library part number
+    if (!src_part_number.empty())
+        m_graph_engine.setNodePartNumber(new_nid, src_part_number);
+    // PFB also needs IQ plot widget and grid widget (same as onAddPFB)
+    if (desc->type == "pfb") {
+        auto *new_pfb = static_cast<PFBChannelizerEngine *>(copy);
         m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*new_pfb));
         m_show_iq_pfbs.push_back(m_state.loadBool(
             "WindowState", ("IQPlot_" + std::to_string(new_pfb->id())).c_str(), true));
         m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*new_pfb));
         m_show_pfb_grids.push_back(m_state.loadBool(
             "WindowState", ("PFBGrid_" + std::to_string(new_pfb->id())).c_str(), true));
-    } else if (auto *e = dynamic_cast<CoaxCableEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<EqualizerEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<IdealFilterEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<AttenuatorEngine *>(src)) {
-        dup(e);
-    } else if (auto *e = dynamic_cast<CombinerEngine *>(src)) {
-        dup(e);
     }
 
     markDirty();
@@ -418,21 +396,6 @@ void RfSimulatorApp::saveProject(const std::string &path) {
     auto dot = fname.find_last_of('.');
     root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
 
-    // Type to name mapping for readable type names
-    static const std::unordered_map<std::type_index, std::string> s_type_names = {
-        {std::type_index(typeid(SignalGeneratorEngine)), "SignalGenerator"},
-        {std::type_index(typeid(AmplifierEngine)), "Amplifier"},
-        {std::type_index(typeid(SplitterEngine)), "Splitter"},
-        {std::type_index(typeid(MixerEngine)), "Mixer"},
-        {std::type_index(typeid(AttenuatorEngine)), "Attenuator"},
-        {std::type_index(typeid(CombinerEngine)), "Combiner"},
-        {std::type_index(typeid(EqualizerEngine)), "Equalizer"},
-        {std::type_index(typeid(AdcEngine)), "ADC"},
-        {std::type_index(typeid(PFBChannelizerEngine)), "PFBChannelizer"},
-        {std::type_index(typeid(CoaxCableEngine)), "CoaxCable"},
-        {std::type_index(typeid(IdealFilterEngine)), "IdealFilter"},
-    };
-
     // Ensure all engine nodes are registered with the imnodes context
     // so GetNodeEditorSpacePos() doesn't assert on node IDs added without
     // a prior render frame (e.g. via newProject then programmatic add).
@@ -442,8 +405,8 @@ void RfSimulatorApp::saveProject(const std::string &path) {
     nlohmann::json comps_arr = nlohmann::json::array();
     for (auto *comp : m_components.all()) {
         nlohmann::json cj;
-        auto it = s_type_names.find(std::type_index(typeid(*comp)));
-        cj["type"] = (it != s_type_names.end()) ? it->second : "Unknown";
+        const auto *desc = ComponentTypeRegistry::instance().find(comp->type_name());
+        cj["type"] = desc ? desc->project_type : "Unknown";
         cj["params"] = comp->serialize();
 
         // Save node position via imnodes
@@ -587,62 +550,21 @@ void RfSimulatorApp::loadProject(const std::string &path) {
         std::string type = cj.value("type", "");
         auto &params = cj["params"];
 
-        IComponentEngine *comp = nullptr;
-        if (type == "SignalGenerator") {
-            auto &ref =
-                m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Amplifier") {
-            auto &ref = m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Mixer") {
-            auto &ref = m_components.add<MixerEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Splitter") {
-            auto &ref = m_components.add<SplitterEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Attenuator") {
-            auto &ref = m_components.add<AttenuatorEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Combiner") {
-            auto &ref = m_components.add<CombinerEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "Equalizer") {
-            auto &ref = m_components.add<EqualizerEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "ADC") {
-            auto &ref = m_components.add<AdcEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "PFBChannelizer") {
-            auto &ref =
-                m_components.add<PFBChannelizerEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            // Restore IQ plot + PFB grid widgets for this PFB
-            m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(ref));
-            m_show_iq_pfbs.push_back(true);
-            m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(ref));
-            m_show_pfb_grids.push_back(true);
-            comp = &ref;
-        } else if (type == "CoaxCable") {
-            auto &ref = m_components.add<CoaxCableEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else if (type == "IdealFilter") {
-            auto &ref = m_components.add<IdealFilterEngine>(m_next_component_id++, m_graph_engine);
-            ref.deserialize(params);
-            comp = &ref;
-        } else {
+        const auto *desc = ComponentTypeRegistry::instance().findByProjectType(type);
+        if (!desc) {
             LOG_WARN("Unknown component type in project file: %s", type.c_str());
             new_node_ids.push_back(-1);
             continue;
+        }
+        IComponentEngine *comp = desc->create(m_components, m_graph_engine, m_next_component_id++);
+        comp->deserialize(params);
+        if (desc->type == "pfb") {
+            auto *pfb = static_cast<PFBChannelizerEngine *>(comp);
+            // Restore IQ plot + PFB grid widgets for this PFB
+            m_iq_widgets.push_back(std::make_unique<IQPlotWidget>(*pfb));
+            m_show_iq_pfbs.push_back(true);
+            m_pfb_grid_widgets.push_back(std::make_unique<PFBChannelizerWidget>(*pfb));
+            m_show_pfb_grids.push_back(true);
         }
 
         new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
