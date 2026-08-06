@@ -3,6 +3,7 @@
 #include "signal_node.h"
 #include <nlohmann/json.hpp>
 #include <string>
+#include <string_view>
 
 class IComponentEngine {
   public:
@@ -24,6 +25,10 @@ class IComponentEngine {
     // Pin count (default: 1/1 for legacy single-pin engines)
     virtual int numInputPins() const { return 1; }
     virtual int numOutputPins() const { return 1; }
+
+    // Canonical type key (e.g. "amplifier"). Single source of truth for the
+    // component-type dispatch tables (save/load, duplicate, inspector, menu).
+    virtual std::string_view type_name() const = 0;
 
     // Serialization — default no-op
     virtual nlohmann::json serialize() const { return nlohmann::json::object(); }

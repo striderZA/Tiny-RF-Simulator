@@ -9,6 +9,7 @@ class SignalGeneratorEngine : public IComponentEngine {
 
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_node_id; }
+    std::string_view type_name() const override { return "generator"; }
     std::string hoverSummary() const override;
     int outputPinId() const override;
 
