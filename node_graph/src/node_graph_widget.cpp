@@ -133,6 +133,13 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImGui::End();
 }
 
+NodeKind NodeGraphWidget::kindForLabel(const std::string &label) const {
+    for (const auto &[prefix, kind] : m_kind_prefixes)
+        if (label.rfind(prefix, 0) == 0)
+            return kind;
+    return NodeKind::Unknown;
+}
+
 void NodeGraphWidget::drawNodes() {
     // Clear screen position cache - will be repopulated for nodes drawn this frame.
     // This ensures detectNodeMoves() only checks nodes that were actually drawn,
@@ -167,7 +174,7 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
-        const NodeKind kind = nodeKindFromLabel(node.label);
+        const NodeKind kind = kindForLabel(node.label);
         const ImU32 color = static_cast<ImU32>(themeColor(kind));
         ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
         ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);

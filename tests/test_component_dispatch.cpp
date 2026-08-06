@@ -7,6 +7,7 @@
 // from ComponentTypeRegistry::all()) calls markDirty() unconditionally, which
 // fixes the bug.
 #include "app.h"
+#include "component_type_registry.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -38,4 +39,12 @@ TEST_CASE_METHOD(ImGuiFixture, "Adding an Equalizer marks the project dirty (iss
     }
     REQUIRE(clicked);
     REQUIRE(app.isDirty() == true);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Every registry label_prefix maps to its kind", "[dispatch]") {
+    RfSimulatorApp app;
+    for (const auto *d : ComponentTypeRegistry::instance().all()) {
+        REQUIRE(app.testGraphWidget().kindForLabel(d->label_prefix + " 1") == d->kind);
+    }
+    REQUIRE(app.testGraphWidget().kindForLabel("UnknownThing 1") == NodeKind::Unknown);
 }

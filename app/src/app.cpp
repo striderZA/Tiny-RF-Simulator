@@ -39,6 +39,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
             {desc->menu_label, [this, desc](ImVec2 pos) { addComponent(desc, pos); }});
+        m_graph_widget->registerNodeKind(desc->label_prefix, desc->kind);
     }
     m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };

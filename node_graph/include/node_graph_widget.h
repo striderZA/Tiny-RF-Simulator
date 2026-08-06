@@ -39,6 +39,13 @@ class NodeGraphWidget {
     }
     const std::vector<AddableComponent> &addableComponents() const { return m_addable_components; }
 
+    // Data-driven label-prefix → NodeKind mapping. The app feeds this from
+    // ComponentTypeRegistry (label_prefix + kind) at startup.
+    void registerNodeKind(std::string label_prefix, NodeKind kind) {
+        m_kind_prefixes.push_back({std::move(label_prefix), kind});
+    }
+    NodeKind kindForLabel(const std::string &label) const;
+
     ImNodesEditorContext *context() { return m_context; }
     void syncNodesFromEngine();
     void clearPositionCache() {
@@ -100,6 +107,7 @@ class NodeGraphWidget {
     // can register new nodes without resetting existing positions.
     std::unordered_set<int> m_registered_in_pool;
     std::vector<AddableComponent> m_addable_components;
+    std::vector<std::pair<std::string, NodeKind>> m_kind_prefixes;
     bool m_show_create_popup = false;
 
     // Internal rendering helpers
