@@ -33,8 +33,9 @@ TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {
     engine.addLink(gen.output_pin_ids[0], amp.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
 
-    auto *source = engine.getSourceForInput(amp.input_pin_ids[0]);
-    REQUIRE(source == &gen_node);
+    auto source = engine.getSourceForInput(amp.input_pin_ids[0]);
+    REQUIRE(source.node == &gen_node);
+    REQUIRE(source.output_index == 0);
 }
 
 TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") {
@@ -52,7 +53,7 @@ TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") 
     engine.removeNode(engine.nodes()[0].node_id);
 
     REQUIRE(engine.links().empty());
-    REQUIRE(engine.getSourceForInput(amp_pin) == nullptr);
+    REQUIRE(engine.getSourceForInput(amp_pin).node == nullptr);
 }
 
 TEST_CASE("NodeGraphEngine multi-probe", "[node_graph]") {
@@ -121,8 +122,8 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
 
     auto sources = engine.getSourcesForInput(a.input_pin_ids[0]);
     REQUIRE(sources.size() == 2);
-    REQUIRE(sources[0] == &gen1);
-    REQUIRE(sources[1] == &gen2);
+    REQUIRE(sources[0].node == &gen1);
+    REQUIRE(sources[1].node == &gen2);
 }
 
 TEST_CASE("NodeGraphEngine setNextIds controls subsequent IDs", "[node_graph]") {

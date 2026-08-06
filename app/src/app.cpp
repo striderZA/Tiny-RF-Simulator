@@ -15,6 +15,7 @@
 #include <functional>
 #include <portable-file-dialogs.h>
 #include <unordered_map>
+#include <utility>
 // Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
 // Strips everything else (incl. /, \\, and . which eliminates .. risks).
 // Trims leading/trailing spaces. Returns fallback if result is empty.
@@ -486,8 +487,12 @@ void RfSimulatorApp::rewireInputs() {
         for (int k = 0; k < N; ++k) {
             int pid = comp->inputPinId(k);
             if (pid >= 0) {
-                auto *source = m_graph_engine.getSourceForInput(pid);
-                comp->node().inputs[k] = source ? &source->outputs[0] : nullptr;
+                auto source = m_graph_engine.getSourceForInput(pid);
+                comp->node().inputs[k] =
+                    (source.node && source.output_index >= 0 &&
+                     static_cast<size_t>(source.output_index) < source.node->outputs.size())
+                        ? &source.node->outputs[static_cast<size_t>(source.output_index)]
+                        : nullptr;
             } else if (static_cast<size_t>(k) < comp->node().inputs.size()) {
                 comp->node().inputs[k] = nullptr;
             }
@@ -510,25 +515,37 @@ void RfSimulatorApp::update_dsp() {
             it->second();
     }
 
-    // Update spectrum view based on first active probe
-    auto probed_nodes = m_graph_engine.probedSignalNodes();
+    // Update spectrum view based on probed pins. Each probe resolves to a
+    // (node, output-index) pair so OUT2 of a splitter/PFB probes the right
+    // Spectrum instead of always outputs[0].
+    auto probed_sources = m_graph_engine.probedSignalNodes();
     std::vector<std::string> probe_labels;
-    for (auto *pn : probed_nodes) {
+    std::vector<std::pair<SignalNode *, int>> probe_targets;
+    probe_targets.reserve(probed_sources.size());
+    for (const auto &ps : probed_sources) {
         std::string label;
-        for (const auto &node : m_graph_engine.nodes()) {
-            if (node.signal_node == pn) {
-                label = node.label + " OUT";
-                break;
+        if (ps.node) {
+            for (const auto &node : m_graph_engine.nodes()) {
+                if (node.signal_node == ps.node) {
+                    label = node.label + " OUT";
+                    if (ps.output_index > 0)
+                        label += std::to_string(ps.output_index + 1);
+                    break;
+                }
             }
+            probe_targets.emplace_back(ps.node, ps.output_index);
         }
         probe_labels.push_back(label);
     }
     m_spectrum_widget->setProbeLabels(probe_labels);
+    m_spectrum_widget->setProbeTargets(probe_targets);
 
     for (auto *node : m_view_manager.nodes()) {
         if (node) {
             node->view_enabled =
-                std::find(probed_nodes.begin(), probed_nodes.end(), node) != probed_nodes.end();
+                std::find_if(probed_sources.begin(), probed_sources.end(),
+                             [node](const SignalSource &ps) { return ps.node == node; }) !=
+                probed_sources.end();
         }
     }
 

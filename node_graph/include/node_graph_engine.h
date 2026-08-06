@@ -25,6 +25,13 @@ struct GraphLink {
     int end_pin_id;
 };
 
+// A resolved signal source: the owning node plus the output-port index whose
+// Spectrum the link/probe carries. output_index == -1 means "no port" (null).
+struct SignalSource {
+    SignalNode *node = nullptr;
+    int output_index = -1;
+};
+
 class NodeGraphEngine {
   public:
     int addNode(const std::string &label, SignalNode *signal_node, int num_inputs, int num_outputs);
@@ -40,8 +47,8 @@ class NodeGraphEngine {
     int inputPinId(int node_id) const;
     int outputPinId(int node_id) const;
 
-    SignalNode *getSourceForInput(int input_pin_id) const;
-    std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
+    SignalSource getSourceForInput(int input_pin_id) const;
+    std::vector<SignalSource> getSourcesForInput(int input_pin_id) const;
     std::vector<int> topologicalOrder() const;
 
     static constexpr int MAX_PROBES = 4;
@@ -51,7 +58,7 @@ class NodeGraphEngine {
     bool removeProbePin(int pin_id);
     void clearProbes();
     int probeSlotForPin(int pin_id) const;
-    std::vector<SignalNode *> probedSignalNodes() const;
+    std::vector<SignalSource> probedSignalNodes() const;
 
     const std::vector<GraphNode> &nodes() const { return m_nodes; }
     const std::vector<GraphLink> &links() const { return m_links; }
