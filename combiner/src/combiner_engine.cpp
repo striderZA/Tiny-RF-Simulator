@@ -63,8 +63,10 @@ nlohmann::json CombinerEngine::serialize() const {
 
 void CombinerEngine::deserialize(const nlohmann::json &j) {
     m_manual_mode = j.value("manual_mode", true);
-    m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_path = j.value("sparam_path", "");
+    if (!m_sparam_path.empty())
+        m_sparam.load(m_sparam_path);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam.loaded();
     m_dirty = true;
 }
 

@@ -542,10 +542,10 @@ void RfSimulatorApp::update_dsp() {
 
     for (auto *node : m_view_manager.nodes()) {
         if (node) {
-            node->view_enabled =
-                std::find_if(probed_sources.begin(), probed_sources.end(),
-                             [node](const SignalSource &ps) { return ps.node == node; }) !=
-                probed_sources.end();
+            node->view_enabled = std::find_if(probed_sources.begin(), probed_sources.end(),
+                                              [node](const SignalSource &ps) {
+                                                  return ps.node == node;
+                                              }) != probed_sources.end();
         }
     }
 

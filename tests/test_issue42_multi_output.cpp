@@ -49,8 +49,7 @@ static int outputPinFor(NodeGraphEngine &graph, SignalNode *node, int port) {
     return -1;
 }
 
-TEST_CASE_METHOD(ImGuiFixture,
-                 "Splitter OUT2 routes to Combiner IN1 with outputs[1] (issue #42)",
+TEST_CASE_METHOD(ImGuiFixture, "Splitter OUT2 routes to Combiner IN1 with outputs[1] (issue #42)",
                  "[app][issue42]") {
     RfSimulatorApp app;
     app.newProject();
