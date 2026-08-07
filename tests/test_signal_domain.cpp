@@ -418,3 +418,170 @@ TEST_CASE("SpectrumAnalyzer: complex-baseband tone renders unchanged (no mirrori
     // own -20 dBm and below the would-be mirror power of ~-23 dBm).
     REQUIRE(trace[10] < -50.0);
 }
+
+// ---- fs_Hz propagation (issue #43) ----
+
+TEST_CASE("Mixer: propagates fs_Hz", "[domain][mixer]") {
+    NodeGraphEngine graph;
+    MixerEngine mixer(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    mixer.node().inputs[0] = &in;
+    mixer.update(0.0);
+
+    REQUIRE(mixer.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Splitter: propagates fs_Hz to both outputs", "[domain][splitter]") {
+    NodeGraphEngine graph;
+    SplitterEngine splitter(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    splitter.node().inputs[0] = &in;
+    splitter.update(0.0);
+
+    REQUIRE(splitter.node().outputs[0].fs_Hz == Approx(500e6));
+    REQUIRE(splitter.node().outputs[1].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("CoaxCable: propagates fs_Hz", "[domain][coax]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine coax(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    coax.node().inputs[0] = &in;
+    coax.update(0.0);
+
+    REQUIRE(coax.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Amplifier: propagates fs_Hz (ideal gain mode)", "[domain][amplifier]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(10.0);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    amp.node().inputs[0] = &in;
+    amp.update(0.0);
+
+    REQUIRE(amp.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Amplifier: propagates fs_Hz (S-param mode)", "[domain][amplifier]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+    amp.setSParamFilepath(amplifierS2pPath());
+    REQUIRE(amp.sparamLoaded());
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    amp.node().inputs[0] = &in;
+    amp.update(0.0);
+
+    REQUIRE(amp.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+// Real multi-engine post-ADC chains: fs_Hz must reach the PFB and channels must be populated
+// without any manual setFs_Hz() (issue #43 regression tests).
+
+static bool anyChannelHasContent(const PFBChannelizerEngine &pfb) {
+    for (const auto &ch : pfb.channels()) {
+        if (!ch.tones.empty() || ch.noise_W > 0.0)
+            return true;
+    }
+    return false;
+}
+
+TEST_CASE("ADC+Mixer: fs_Hz reaches PFB and channels are populated", "[domain][adc][mixer][pfb]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(1e9);
+
+    Spectrum in;
+    in.frequencies.resize(101);
+    for (int i = 0; i < 101; ++i)
+        in.frequencies[i] = i * 5e6; // 0..500 MHz
+    in.noise_W.assign(101, 1e-20);
+    in.noise_added_W.assign(101, 0.0);
+    in.noise_total_W.assign(101, 1e-20);
+    in.tones.push_back({250e6, -20.0, 0.0}); // Fs/4 -> DDC maps to DC
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+    REQUIRE(adc.node().outputs[0].fs_Hz == Approx(500e6)); // Fs/2
+
+    MixerEngine mix(1, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &adc.node().outputs[0];
+    mix.update(0.0);
+    REQUIRE(mix.node().outputs[0].fs_Hz == Approx(500e6));
+
+    PFBChannelizerEngine pfb(2, graph);
+    pfb.setChannelCount(32);
+    pfb.node().inputs[0] = &mix.node().outputs[0];
+    pfb.update(0.0);
+
+    REQUIRE(pfb.fs_Hz() == Approx(500e6));
+    REQUIRE(!pfb.node().outputs[0].frequencies.empty());
+    REQUIRE(pfb.channels().size() == 32);
+    REQUIRE(anyChannelHasContent(pfb));
+}
+
+TEST_CASE("ADC+Amplifier(gain): fs_Hz reaches PFB and channels are populated",
+          "[domain][adc][amp][pfb]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(1e9);
+
+    Spectrum in;
+    in.frequencies.resize(101);
+    for (int i = 0; i < 101; ++i)
+        in.frequencies[i] = i * 5e6; // 0..500 MHz
+    in.noise_W.assign(101, 1e-20);
+    in.noise_added_W.assign(101, 0.0);
+    in.noise_total_W.assign(101, 1e-20);
+    in.tones.push_back({250e6, -20.0, 0.0}); // Fs/4 -> DDC maps to DC
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    AmplifierEngine amp(1, graph);
+    amp.setGain_dB(10.0);
+    amp.node().inputs[0] = &adc.node().outputs[0];
+    amp.update(0.0);
+    REQUIRE(amp.node().outputs[0].fs_Hz == Approx(500e6));
+
+    PFBChannelizerEngine pfb(2, graph);
+    pfb.setChannelCount(32);
+    pfb.node().inputs[0] = &amp.node().outputs[0];
+    pfb.update(0.0);
+
+    REQUIRE(pfb.fs_Hz() == Approx(500e6));
+    REQUIRE(!pfb.node().outputs[0].frequencies.empty());
+    REQUIRE(pfb.channels().size() == 32);
+    REQUIRE(anyChannelHasContent(pfb));
+}
