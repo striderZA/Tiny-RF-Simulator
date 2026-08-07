@@ -200,8 +200,10 @@ void IdealFilterEngine::deserialize(const nlohmann::json &j) {
     } else if (j.contains("fc_low_Hz")) {
         setCutoff_Hz(j["fc_low_Hz"].get<double>());
     }
-    m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
+    if (!m_sparam_filepath.empty())
+        m_sparam_data.load(m_sparam_filepath);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     m_dirty = true;
 }

@@ -438,3 +438,77 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: default component positions are (0,0
     }
     std::remove(path.c_str());
 }
+
+// ---------------------------------------------------------------------------
+// 13 — Issue #44: S-param mode survives save/load for amplifier, ideal filter,
+//      equalizer, attenuator, and combiner. Previously deserialize() restored
+//      sparam_mode/sparam_filepath but never reloaded the Touchstone file, so
+//      a reloaded project silently fell back to ideal/manual mode.
+// ---------------------------------------------------------------------------
+static std::string sparamFixturePath() {
+    return std::string(PROJECT_SOURCE_DIR) +
+           "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #44)",
+                 "[project_file][sparam]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    const std::string s2p = sparamFixturePath();
+    {
+        RfSimulatorApp app;
+        app.newProject();
+
+        auto &amp = app.testComponents().add<AmplifierEngine>(10001, app.testGraphEngine());
+        amp.setSParamFilepath(s2p);
+        REQUIRE(amp.sparamLoaded());
+
+        auto &flt = app.testComponents().add<IdealFilterEngine>(10002, app.testGraphEngine());
+        flt.setSParamFilepath(s2p);
+        REQUIRE(flt.sparamLoaded());
+
+        auto &eq = app.testComponents().add<EqualizerEngine>(10003, app.testGraphEngine());
+        eq.setSParamFilepath(s2p);
+        REQUIRE(eq.sparamLoaded());
+
+        auto &atten = app.testComponents().add<AttenuatorEngine>(10004, app.testGraphEngine());
+        atten.setSParamFile(s2p);
+        REQUIRE(atten.sParamMode());
+
+        auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
+        comb.setSParamFile(s2p);
+        REQUIRE(comb.sParamMode());
+
+        REQUIRE(app.componentCount() == 5);
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.componentCount() == 5);
+
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+        CHECK(amps[0]->sparamMode() == true);
+        CHECK(amps[0]->sparamLoaded() == true);
+
+        auto flts = app.testComponents().byType<IdealFilterEngine>();
+        REQUIRE(flts.size() == 1);
+        CHECK(flts[0]->sparamMode() == true);
+        CHECK(flts[0]->sparamLoaded() == true);
+
+        auto eqs = app.testComponents().byType<EqualizerEngine>();
+        REQUIRE(eqs.size() == 1);
+        CHECK(eqs[0]->sparamMode() == true);
+        CHECK(eqs[0]->sparamLoaded() == true);
+
+        auto attens = app.testComponents().byType<AttenuatorEngine>();
+        REQUIRE(attens.size() == 1);
+        CHECK(attens[0]->sParamMode() == true);
+
+        auto combs = app.testComponents().byType<CombinerEngine>();
+        REQUIRE(combs.size() == 1);
+        CHECK(combs[0]->sParamMode() == true);
+    }
+    std::remove(path.c_str());
+}
