@@ -51,6 +51,7 @@ void EqualizerEngine::update(double dt) {
         int idx = m_sparam_fwd_idx;
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -104,6 +105,7 @@ void EqualizerEngine::update(double dt) {
 
     // Apply gain vs frequency profile
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
         double f = std::max(t.freq_Hz, 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
@@ -159,14 +161,18 @@ nlohmann::json EqualizerEngine::serialize() const {
             {"ref_freq_Hz", m_ref_freq_Hz},
             {"slope_dB_per_decade", m_slope_dB_per_decade},
             {"sparam_mode", m_sparam_mode},
-            {"sparam_filepath", m_sparam_filepath}};
+            {"sparam_filepath", m_sparam_filepath},
+            {"sparam_fwd_idx", m_sparam_fwd_idx}};
 }
 
 void EqualizerEngine::deserialize(const nlohmann::json &j) {
     m_ref_gain_dB = j.value("ref_gain_dB", 0.0);
     m_ref_freq_Hz = j.value("ref_freq_Hz", 1e9);
     m_slope_dB_per_decade = j.value("slope_dB_per_decade", 0.0);
-    m_sparam_mode = j.value("sparam_mode", false);
     m_sparam_filepath = j.value("sparam_filepath", "");
+    if (!m_sparam_filepath.empty())
+        m_sparam_data.load(m_sparam_filepath);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
+    m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     m_dirty = true;
 }

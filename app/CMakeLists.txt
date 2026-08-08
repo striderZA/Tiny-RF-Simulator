@@ -5,7 +5,21 @@ project(app LANGUAGES CXX)
 # --------------------------------------------------
 # App library
 # --------------------------------------------------
-add_library(app STATIC src/app.cpp src/inspector_panel.cpp src/component_registry.cpp src/component_library.cpp src/library_browser_widget.cpp src/component_type_registry.cpp src/component_form_model.cpp src/component_form_widget.cpp)
+add_library(app STATIC
+    src/app.cpp
+    src/inspector_panel.cpp
+    src/component_registry.cpp
+    src/component_library.cpp
+    src/library_browser_widget.cpp
+    src/component_type_registry.cpp
+    src/component_form_model.cpp
+    src/component_form_widget.cpp
+    src/extension_manifest.cpp
+    src/extension_manager.cpp
+    src/external_tool_runner.cpp
+    src/pfb_view_manager.cpp
+    src/project_serializer.cpp
+)
 add_library(simulator::app ALIAS app)
 
 # --------------------------------------------------
@@ -55,7 +69,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 target_compile_definitions(app PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    APP_VERSION="${PROJECT_VERSION}"
+    APP_VERSION="${RFSIM_APP_VERSION}"
     APP_GIT_HASH="${GIT_COMMIT_HASH}"
 )
 

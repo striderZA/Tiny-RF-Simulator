@@ -28,7 +28,9 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 │  mixer/  splitter/  combiner/  coax/     │
 │  adc/  ideal_filter/  equalizer/         │
 │  pfb_channelizer/  spectrum_analyzer/    │
-│  iq_plot/                                │
+│  iq_plot/  touchstone/                   │
+│  logging/  help/  layout/                │
+│  icon_registry/                          │
 ├──────────┴──────────────────────────────┤
 │  Common Data Model (common/)            │
 │  IComponentEngine, SignalNode,          │
@@ -163,6 +165,7 @@ struct Spectrum {
     std::vector<double> noise_total_W;      // Total noise PSD (W/Hz)
     std::vector<double> phase_deg;          // Phase per bin (degrees)
     double fs_Hz = 0.0;                     // Sample rate (set by ADCs)
+    bool is_complex_baseband = false;       // True downstream of an ADC DDC (see below)
     uint64_t generation = 0;                // Dirty-flag counter
 };
 ```
@@ -172,6 +175,7 @@ struct Spectrum {
 - `generation` incremented by producers; consumers cache `(input*, generation)` for O(1) skip.
 - `fs_Hz` propagated through components, consumed by PFB channelizer.
 - `phase_deg` per bin (added recently for phase-aware processing).
+- `is_complex_baseband` set only by `AdcEngine` (DDC output) and propagated downstream by every pass-through engine; it decides whether the spectrum-analyzer render path applies `conjugateSymmetricExpand()`.
 
 ### SignalNode (`common/signal_node.h`)
 
@@ -224,7 +228,6 @@ class IComponentEngine {
 | `GraphNode::node_id` | 1..49999 |
 | `Group::id` | 50000..99999 |
 | `GroupBoundaryPin::id` | 100000+ |
-| Phantom node ids (workaround) | 200000+ |
 
 ### Topological Sort
 
@@ -265,7 +268,7 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 |---|---|
 | `core/src/core.cpp` | GLFW window, ImGui/ImPlot init, default dock layout |
 | `app/include/app.h` | `RfSimulatorApp` — orchestrator |
-| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring |
+| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring (largest file, ~1320 lines) |
 | `app/include/component_registry.h` | Type-erased engine container |
 | `app/include/component_library.h` | File-based component library manager |
 | `app/include/component_type_registry.h` | Component type schema table — field lists + factory per type |
@@ -274,6 +277,9 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/src/inspector_panel.cpp` | Per-component property editors (23KB) |
 | `app/include/component_form_model.h` | Pure-logic form state for New/Edit Component |
 | `app/include/component_form_widget.h` | ImGui renderer for New/Edit Component form |
+| `app/src/extension_manifest.cpp` | Extension manifest parsing + validation (root confinement) |
+| `app/src/extension_manager.cpp` | Extension discovery across built-in/global/project-local roots |
+| `app/src/external_tool_runner.cpp` | Structured request/result external-tool execution |
 | `common/include/component_interface.h` | `IComponentEngine` abstract base |
 | `common/include/spectrum.h` | `Spectrum` data structure |
 | `common/include/signal_node.h` | `SignalNode` structure |
@@ -283,5 +289,5 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `common/include/session_state.h` | `SessionState` — window state persistence |
 | `layout/include/layout_manager.h` | `LayoutManager` — window layout persistence (default + named presets) |
 | `node_graph/include/node_graph_engine.h` | `NodeGraphEngine` + `GraphNode`/`GraphLink` |
-| `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (40KB, largest file) |
+| `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (~1180 lines) |
 | `src/main.cpp` | Entry point (19 lines) |

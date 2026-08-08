@@ -1,9 +1,19 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
+# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
 cmake_minimum_required (VERSION 3.20)
 
-project (RfSimulator VERSION 0.14.0)
+project (RfSimulator VERSION 0.16.3)
+
+# FetchContent'd dependencies below call their own project() commands, which
+# resets PROJECT_VERSION (and _MAJOR/_MINOR/_PATCH) for the remainder of this
+# configure run. Capture it now so downstream targets (e.g. app's APP_VERSION
+# compile definition, CPack packaging metadata) get the real project version
+# instead of an empty string.
+set(RFSIM_APP_VERSION "${PROJECT_VERSION}")
+set(RFSIM_APP_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
+set(RFSIM_APP_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
+set(RFSIM_APP_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -227,10 +237,10 @@ install(DIRECTORY openwiki/ DESTINATION share/doc/rf-simulator/openwiki
 set(CPACK_PACKAGE_NAME "rf-simulator")
 set(CPACK_PACKAGE_VENDOR "RF Simulator Project")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Tiny RF Simulator")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
-set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
-set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION ${RFSIM_APP_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR ${RFSIM_APP_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${RFSIM_APP_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${RFSIM_APP_VERSION_PATCH})
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 
 # Platform-specific generators

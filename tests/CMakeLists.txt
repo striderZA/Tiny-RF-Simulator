@@ -100,3 +100,56 @@ target_link_libraries(test_tutorial_state PRIVATE
 )
 target_compile_definitions(test_tutorial_state PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_tutorial_state COMMAND test_tutorial_state WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_extensions test_extensions.cpp)
+target_link_libraries(test_extensions PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_extensions PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_extensions COMMAND test_extensions WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_issue37_pfb_input_removal test_issue37_pfb_input_removal.cpp)
+target_link_libraries(test_issue37_pfb_input_removal PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_issue37_pfb_input_removal PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_issue37_pfb_input_removal COMMAND test_issue37_pfb_input_removal WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_issue42_multi_output test_issue42_multi_output.cpp)
+target_link_libraries(test_issue42_multi_output PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_issue42_multi_output PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_issue42_multi_output COMMAND test_issue42_multi_output WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_component_dispatch test_component_dispatch.cpp)
+target_link_libraries(test_component_dispatch PRIVATE
+    simulator::app
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_component_dispatch PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_component_dispatch COMMAND test_component_dispatch WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_executable(test_signal_domain test_signal_domain.cpp)
+target_link_libraries(test_signal_domain PRIVATE
+    common
+    simulator::signal_generator_engine
+    simulator::amplifier_engine
+    simulator::attenuator_engine
+    simulator::node_graph_engine
+    simulator::combiner_engine
+    simulator::equalizer_engine
+    simulator::ideal_filter_engine
+    simulator::coax_cable_engine
+    simulator::splitter_engine
+    simulator::mixer_engine
+    simulator::pfb_channelizer_engine
+    simulator::touchstone_parser
+    simulator::adc_engine
+    simulator::spectrum_analyzer_engine
+    Catch2::Catch2WithMain
+)
+target_compile_definitions(test_signal_domain PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_signal_domain COMMAND test_signal_domain WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

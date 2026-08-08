@@ -53,6 +53,7 @@ void AmplifierEngine::update(double dt) {
             buildDefaultFrequencyGrid(out.frequencies);
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         const size_t N = out.frequencies.size();
 
         // Apply S21 complex gain to tones
@@ -136,6 +137,8 @@ void AmplifierEngine::update(double dt) {
     }
 
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     for (auto &t : out.tones) {
         t.power_dBm += m_gain_dB;
     }
@@ -214,11 +217,20 @@ void AmplifierEngine::deserialize(const nlohmann::json &j) {
     m_gain_dB = j.value("gain_dB", 0.0);
     m_nf_dB = j.value("nf_dB", 0.0);
     m_nonlinear.setEnabled(j.value("enable_nonlinear", false));
-    m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 50.0));
-    m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 50.0));
+    m_nonlinear.setOIP2_dBm(j.value("oip2_dBm", 100.0));
+    m_nonlinear.setOIP3_dBm(j.value("oip3_dBm", 100.0));
     m_nonlinear.setP1dB_dBm(j.value("p1db_dBm", 100.0));
-    m_sparam_mode = j.value("sparam_mode", false);
+    // Library definitions (schema v1/v2) omit `enable_nonlinear` but include
+    // OIP/P1dB params. The old registry factory enabled nonlinearity whenever
+    // any of those were present; project files always serialize the explicit
+    // key, so only fall back when it is absent.
+    if (!j.contains("enable_nonlinear") &&
+        (j.contains("oip2_dBm") || j.contains("oip3_dBm") || j.contains("p1db_dBm")))
+        m_nonlinear.setEnabled(true);
     m_sparam_filepath = j.value("sparam_filepath", "");
+    if (!m_sparam_filepath.empty())
+        m_sparam_data.load(m_sparam_filepath);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     m_dirty = true;
 }

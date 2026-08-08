@@ -51,6 +51,7 @@ void AdcEngine::update(double /*dt*/) {
         out.noise_total_W.clear();
         out.phase_deg.clear();
         out.fs_Hz = m_fs_Hz / 2.0;
+        out.is_complex_baseband = true;
         out.bumpGeneration();
         return;
     }
@@ -67,6 +68,7 @@ void AdcEngine::update(double /*dt*/) {
     for (int i = 0; i < N; ++i)
         out.frequencies[i] = -m_fs_Hz / 4.0 + i * df_out;
     out.fs_Hz = m_fs_Hz / 2.0;
+    out.is_complex_baseband = true;
 
     // -- Noise mapping + NSD --
     double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
@@ -118,7 +120,8 @@ nlohmann::json AdcEngine::serialize() const {
 }
 
 void AdcEngine::deserialize(const nlohmann::json &j) {
-    m_fs_Hz = j.value("sample_rate_Hz", 1e9);
+    m_fs_Hz =
+        j.contains("sample_rate_Hz") ? j["sample_rate_Hz"].get<double>() : j.value("fs_Hz", 1e9);
     m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
     m_dirty = true;
 }

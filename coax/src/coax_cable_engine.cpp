@@ -67,6 +67,8 @@ void CoaxCableEngine::update(double dt) {
     }
 
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
 
     const CableSpec &p = preset();
     const double max_f_Hz = p.max_freq_GHz * 1e9;

@@ -37,6 +37,8 @@ void MixerEngine::update(double dt) {
 
     // Frequency conversion: each input tone produces sum and difference
     out.tones.clear();
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     if (in_ptr) {
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
@@ -97,7 +99,8 @@ nlohmann::json MixerEngine::serialize() const {
 
 void MixerEngine::deserialize(const nlohmann::json &j) {
     m_lo_freq_Hz = j.value("lo_freq_Hz", 1e9);
-    m_conv_gain_dB = j.value("conv_gain_dB", -6.0);
+    m_conv_gain_dB = j.contains("conv_gain_dB") ? j["conv_gain_dB"].get<double>()
+                                                : j.value("conversion_gain_dB", -6.0);
     m_nf_dB = j.value("nf_dB", 0.0);
     m_dirty = true;
 }

@@ -71,6 +71,7 @@ void IdealFilterEngine::update(double dt) {
 
         // Apply S21 to tones
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam_data.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -123,6 +124,7 @@ void IdealFilterEngine::update(double dt) {
     const size_t N = out.frequencies.size();
 
     out.tones.clear();
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     if (in_ptr) {
         for (const auto &t : in_ptr->tones) {
             if (isInPassband(t.freq_Hz))
@@ -170,16 +172,38 @@ nlohmann::json IdealFilterEngine::serialize() const {
 }
 
 void IdealFilterEngine::deserialize(const nlohmann::json &j) {
-    int ft = j.value("filter_type", 0);
-    if (ft < 0)
-        ft = 0;
-    if (ft > 3)
-        ft = 3;
-    m_type = static_cast<FilterType>(ft);
-    m_fc_low_Hz = j.value("fc_low_Hz", 100e6);
-    m_fc_high_Hz = j.value("fc_high_Hz", 200e6);
-    m_sparam_mode = j.value("sparam_mode", false);
+    if (j.contains("filter_type")) {
+        if (j["filter_type"].is_string()) {
+            const std::string ft = j["filter_type"].get<std::string>();
+            if (ft == "LPF")
+                m_type = FilterType::LPF;
+            else if (ft == "HPF")
+                m_type = FilterType::HPF;
+            else if (ft == "BPF")
+                m_type = FilterType::BPF;
+            else if (ft == "BSF")
+                m_type = FilterType::BSF;
+        } else {
+            int ft = j.value("filter_type", 0);
+            if (ft < 0)
+                ft = 0;
+            if (ft > 3)
+                ft = 3;
+            m_type = static_cast<FilterType>(ft);
+        }
+    }
+    // Preserve the old registry factory's conditional cutoff semantics:
+    // both present -> setCutoffs; only fc_low -> setCutoff (mirrors high);
+    // neither -> keep constructor defaults.
+    if (j.contains("fc_low_Hz") && j.contains("fc_high_Hz")) {
+        setCutoffs_Hz(j["fc_low_Hz"].get<double>(), j["fc_high_Hz"].get<double>());
+    } else if (j.contains("fc_low_Hz")) {
+        setCutoff_Hz(j["fc_low_Hz"].get<double>());
+    }
     m_sparam_filepath = j.value("sparam_filepath", "");
+    if (!m_sparam_filepath.empty())
+        m_sparam_data.load(m_sparam_filepath);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
     m_dirty = true;
 }

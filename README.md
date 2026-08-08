@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/build.yml"><img src="https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/build.yml/badge.svg" alt="Build & Test"></a>
+  <a href="https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/ci.yml"><img src="https://github.com/striderZA/Tiny-RF-Simulator/actions/workflows/ci.yml/badge.svg" alt="Build & Test"></a>
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/C%2B%2B-20-blue.svg" alt="C++20">
 </p>

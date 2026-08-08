@@ -1,55 +1,55 @@
-name: Build & Test
+name: Release
 
 on:
   push:
     tags:
       - "v*"
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "openwiki/**"
-      - LICENSE
-  pull_request:
-    branches: [master]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "openwiki/**"
-      - LICENSE
 
 jobs:
-  # Check C++ code formatting with clang-format
-  format:
+  classify-release:
     runs-on: ubuntu-24.04
+    outputs:
+      is_patch: ${{ steps.classify.outputs.is_patch }}
+      is_minor_or_major: ${{ steps.classify.outputs.is_minor_or_major }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Install clang-format
-        run: sudo apt-get install -y -qq clang-format-18
-      - name: Check formatting
+      - name: Classify tag
+        id: classify
+        shell: bash
         run: |
-          find src app core common tests test_engine \
-            signal_generator amplifier spectrum_analyzer equalizer \
-            node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry \
-            ideal_filter attenuator combiner touchstone logging \
-            -name '*.cpp' -o -name '*.h' | \
-            xargs clang-format-18 --dry-run --Werror
+          TAG="${GITHUB_REF_NAME#v}"
+          if [[ ! "$TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "ERROR: tag '$TAG' is not semantic version X.Y.Z"
+            exit 1
+          fi
+          PATCH="${BASH_REMATCH[3]}"
+          if [ "$PATCH" = "0" ]; then
+            echo "is_patch=false" >> "$GITHUB_OUTPUT"
+            echo "is_minor_or_major=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_patch=true" >> "$GITHUB_OUTPUT"
+            echo "is_minor_or_major=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  # Lint pull request title for conventional commit format
-  lint-commits:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+  validate-version:
+    needs: classify-release
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Check conventional commits
-        uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
+            exit 1
+          fi
+          echo "Version check passed: $TAG_VERSION == $CMAKE_VERSION"
 
-  # CI matrix: Linux (GCC 14 / Clang 18) and Windows (MSYS2 + MinGW-w64).
-  # The project requires MinGW-w64 on Windows; MSVC is not supported.
-  build:
+  strict-build:
+    needs: [classify-release, validate-version]
+    if: needs.classify-release.outputs.is_minor_or_major == 'true'
     name: ${{ matrix.label }}
     strategy:
       fail-fast: false
@@ -62,7 +62,6 @@ jobs:
             c_compiler: gcc-14
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
             build_type: Debug
-            upload_artifacts: true
           - os: ubuntu-24.04
             label: Linux GCC 14 (Release)
             shell: bash
@@ -70,7 +69,6 @@ jobs:
             c_compiler: gcc-14
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
             build_type: Release
-            upload_artifacts: false
           - os: ubuntu-24.04
             label: Linux Clang 18
             shell: bash
@@ -78,7 +76,6 @@ jobs:
             c_compiler: clang-18
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
             build_type: Debug
-            upload_artifacts: false
           - os: windows-latest
             label: Windows MinGW-w64
             shell: msys2 - {0}
@@ -86,7 +83,6 @@ jobs:
             c_compiler: gcc
             cmake_flags: ""
             build_type: Debug
-            upload_artifacts: true
 
     runs-on: ${{ matrix.os }}
     defaults:
@@ -100,7 +96,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config ccache xvfb \
+          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
           if [ "${{ matrix.cxx_compiler }}" = "clang++-18" ]; then
             sudo apt-get install -y -qq clang-18
@@ -120,12 +116,7 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
-
-      - name: ccache
-        if: runner.os == 'Linux'
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ matrix.label }}
+            mingw-w64-x86_64-python
 
       - name: Configure
         run: >-
@@ -134,14 +125,11 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           ${{ matrix.cmake_flags }}
-          ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache' || '' }}
 
       - name: Build
         run: cmake --build build
 
       - name: Test
-        # On Linux, UI tests run under Xvfb. On Windows, exclude a
-        # catch_discover_tests concatenation quirk joining test cases with ";".
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
             xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
@@ -149,28 +137,11 @@ jobs:
             ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
           fi
 
-      # Collect MinGW runtime DLLs so the Windows binary is portable
-      - name: Collect MinGW runtime DLLs
-        if: runner.os == 'Windows'
-        run: |
-          mkdir -p mingw-dlls
-          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-            cp /mingw64/bin/$dll mingw-dlls/
-          done
-
-      # Upload build binaries as workflow artifacts (only on tag push, selected matrix entries)
-      - name: Upload build artifacts
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.upload_artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-${{ runner.os == 'Windows' && 'windows' || 'linux' }}
-          path: |
-            build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
-            mingw-dlls/
-
-  # AddressSanitizer build to catch memory errors
   sanitizer:
+    needs: [classify-release, validate-version]
+    if: needs.classify-release.outputs.is_minor_or_major == 'true'
     runs-on: ubuntu-24.04
+    name: AddressSanitizer
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
@@ -194,69 +165,107 @@ jobs:
           cd build
           ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
 
-  # Code coverage with gcov/lcov, uploaded to Codecov
-  coverage:
-    runs-on: ubuntu-24.04
+  package:
+    needs: [classify-release, validate-version]
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: Linux package build
+            shell: bash
+            cxx_compiler: g++-14
+            c_compiler: gcc-14
+            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
+            build_type: Debug
+            artifact_name: build-linux
+          - os: windows-latest
+            label: Windows package build
+            shell: msys2 - {0}
+            cxx_compiler: g++
+            c_compiler: gcc
+            cmake_flags: ""
+            build_type: Debug
+            artifact_name: build-windows
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
     steps:
       - uses: actions/checkout@v6
-      - name: Install dependencies
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 lcov \
+          sudo apt-get install -y -qq ninja-build cmake pkg-config \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-      - name: Configure (coverage)
+          sudo apt-get install -y -qq g++-14
+
+      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python
+
+      - name: Configure
         run: >-
           cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=g++-14
-          -DCMAKE_C_COMPILER=gcc-14
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="--coverage -O0 -g"
-          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
-          -DGLFW_BUILD_WAYLAND=OFF
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          ${{ matrix.cmake_flags }}
+
       - name: Build
         run: cmake --build build
-      - name: Test
-        run: ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
-      - name: Generate coverage report
-        run: |
-          lcov --capture --directory build --output-file coverage.info --gcov-tool gcov-14 --ignore-errors source
-          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/_deps/*' '*/test_engine/*' --ignore-errors unused --output-file coverage.info
-          lcov --list coverage.info
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.info
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # Create a GitHub Release (draft) with auto-generated changelog and binaries
+      - name: Collect MinGW runtime DLLs
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p mingw-dlls
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            cp /mingw64/bin/$dll mingw-dlls/
+          done
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
+            mingw-dlls/
+
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [classify-release, validate-version, strict-build, sanitizer, package]
+    if: >-
+      always() &&
+      needs.validate-version.result == 'success' &&
+      needs.package.result == 'success' &&
+      (needs.classify-release.outputs.is_minor_or_major != 'true' ||
+       (needs.strict-build.result == 'success' && needs.sanitizer.result == 'success'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # need full history + tags for git-cliff
-
-      - name: Verify version matches tag
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
-            echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
-            exit 1
-          fi
-          echo "Version check passed: $TAG_VERSION == $CMAKE_VERSION"
+          fetch-depth: 0
 
       - name: Generate release notes
         run: |
           npm install -g git-cliff --silent
           git-cliff --config cliff.toml --latest --strip header -o release-notes.md
-          echo "Release notes generated:"
-          cat release-notes.md
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4

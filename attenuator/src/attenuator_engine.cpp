@@ -69,6 +69,7 @@ void AttenuatorEngine::update(double dt) {
         int idx = 1 * m_sparam.numPorts() + 0; // S21 index
 
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         for (auto &t : out.tones) {
             auto S = m_sparam.interpolate(t.freq_Hz, idx);
             t.power_dBm += 20.0 * std::log10(std::abs(S));
@@ -132,6 +133,7 @@ void AttenuatorEngine::update(double dt) {
 
     // Attenuate tones
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
         t.power_dBm -= m_atten_dB;
         // Phase unchanged in manual mode
@@ -179,9 +181,12 @@ nlohmann::json AttenuatorEngine::serialize() const {
 }
 
 void AttenuatorEngine::deserialize(const nlohmann::json &j) {
-    m_atten_dB = j.value("atten_dB", 0.0);
-    m_sparam_mode = j.value("sparam_mode", false);
+    m_atten_dB =
+        j.contains("atten_dB") ? j["atten_dB"].get<double>() : j.value("attenuation_dB", 0.0);
     m_sparam_path = j.value("sparam_path", "");
+    if (!m_sparam_path.empty())
+        m_sparam.load(m_sparam_path);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam.loaded();
     m_dirty = true;
 }
 

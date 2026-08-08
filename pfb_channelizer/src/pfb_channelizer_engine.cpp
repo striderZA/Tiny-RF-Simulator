@@ -136,6 +136,7 @@ void PFBChannelizerEngine::update(double) {
     out.noise_total_W.resize(n, 0.0);
     out.phase_deg.resize(n, 0.0);
     out.tones = active.tones;
+    out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
 
     for (size_t i = 0; i < n; ++i) {
         int src_idx = active.bin_indices[i];

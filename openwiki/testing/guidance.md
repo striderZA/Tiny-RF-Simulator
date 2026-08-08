@@ -7,7 +7,7 @@ tags: [testing, catch2, unit-tests, ui-tests]
 
 # Testing Guide
 
-RF Simulator has **~210 test cases** (including 14 benchmarks) across **23 test source files** (plus 2 standalone executables), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~210 test cases** (including 14 benchmarks) across **28 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **7 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -38,12 +38,12 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-These test files are compiled into the main `tests` executable (20 files; 21 on Windows with `test_session_state.cpp`). Two additional standalone executables — `test_attenuator` and `test_combiner` — are built separately because they link only specific engine libraries.
+These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Seven standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~217 already linked into `tests.exe`).
 
 | Test File | Tags | What It Tests |
 |---|---|---|
 | `test_main.cpp` | `[common]`, `[generator]`, `[splitter]`, `[mixer]`, `[amplifier]`, `[phase]` | Core math utils, generator, splitter, mixer, basic amplifier |
-| `test_node_graph_engine.cpp` | `[node_graph]`, `[appearance]` | Topology, linking, probes, `nodeKindFromLabel`, `themeColor` |
+| `test_node_graph_engine.cpp` | `[node_graph]`, `[appearance]` | Topology, linking, probes, `themeColor` (label→`NodeKind` mapping is covered by `test_component_dispatch`, see standalone executables) |
 | `test_touchstone.cpp` | `[touchstone]` | .sNp parser: real files, synthetic files, error cases |
 | `test_adc.cpp` | `[adc]` | ADC DDC, aliasing, NSD noise, Fs clamping |
 | `test_nonlinear_p1db.cpp` | `[nonlinear]`, `[p1db]` | NonlinearModel P1dB default, setter, OIP3 derivation |
@@ -59,6 +59,7 @@ These test files are compiled into the main `tests` executable (20 files; 21 on 
 | `test_equalizer.cpp` | `[equalizer]`, `[sparam]` | Equalizer ideal mode, S-param mode, NaN guards |
 | `test_group.cpp` | `[group]`, `[integration]` | Group operations, boundary pins, signal flow through groups |
 | `test_iq_plot.cpp` | `[iq_plot]` | `build_iq_spectrum` IFFT, Parseval, empty/degenerate grids |
+| `test_layout_manager.cpp` | `[layout]` | Layout path derivation, name sanitization, named-preset save/load |
 | `test_project_file.cpp` | `[project_file]` | Save/load round-trip: empty project, linked components, newProject, parameter values, groups, invalid JSON |
 | `test_session_state.cpp` | `[session]` | Windows-only: INI save/load round-trip |
 | `test_bench_dsp.cpp` | `[bench]`, `[generator]`, `[amplifier]`, `[mixer]`, `[splitter]`, `[pfb]`, `[spectrum]` | Per-engine dirty/clean benchmarks |
@@ -70,6 +71,11 @@ These test files are compiled into the main `tests` executable (20 files; 21 on 
 |---|---|---|
 | `test_attenuator.cpp` | `test_attenuator` | Pass-through, flat attenuation, passive noise model, noise floor convergence, S-param, clamping, dirty-flag, hover |
 | `test_combiner.cpp` | `test_combiner` | Basic combination, single/both inputs, dirty-flag, S-param mode |
+| `test_component_authoring.cpp` | `test_component_authoring` | ComponentTypeRegistry descriptors, ComponentLibrary validate, ComponentFormModel build/validate/round-trip |
+| `test_extensions.cpp` | `test_extensions` | Extension manifest parsing/rejection, discovery across built-in/global/project-local roots, ExternalToolRunner request/result flow |
+| `test_issue37_pfb_input_removal.cpp` | `test_issue37_pfb_input_removal` | Issue #37 regression: removing an upstream node immediately nulls downstream dangling input pointers |
+| `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all 11 types round-trip through save/load, legacy `.rfsim` type strings backward compat |
+| `test_signal_domain.cpp` | `test_signal_domain` | `is_complex_baseband` defaults and propagation through every engine, `conjugateSymmetricExpand` expansion |
 
 ### UI Tests (`test_engine/`)
 
@@ -168,18 +174,21 @@ TEST_CASE("AmplifierEngine dirty/clean benchmark", "[bench][amplifier]") {
 
 ## CI Test Configuration
 
-From `.github/workflows/build.yml`:
+Tests run in `.github/workflows/release.yml` on minor/major release tags:
 
 ```yaml
-# CI runs on Linux (GCC 14) and Windows (MinGW-w64 via MSYS2)
-# Excludes:
-#   - Benchmark tests (too variable in CI)
-#   - test_ui (needs X display — Xvfb not configured)
-#   - "ADC DDC output grid spans" (Catch2 test concatenation quirk on Windows)
-ctest --test-dir build --output-on-fire -E "Benchmark|test_ui|ADC DDC output grid spans"
+# Linux (GCC/Clang, Debug/Release): full suite under Xvfb
+xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+
+# Windows (MinGW-w64): UI tests need a display; ADC DDC grid spans test excluded
+ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+
+# AddressSanitizer job (Linux):
+cd build
+ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
 ```
 
-The UI test engine requires a display server. For headless Linux CI, set up Xvfb:
+The UI test engine requires a display server. For headless Linux CI, Xvfb is used (`xvfb-run --auto-servernum`). Locally, run:
 
 ```bash
 xvfb-run build/bin/test_ui

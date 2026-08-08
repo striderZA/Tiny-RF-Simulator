@@ -14,6 +14,7 @@ struct TestEngineA : IComponentEngine {
     }
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_id; }
+    std::string_view type_name() const override { return "test_a"; }
     int outputPinId() const override { return 1; }
     std::string hoverSummary() const override { return "TestA(" + std::to_string(m_id) + ")"; }
     SignalNode &node() override { return m_node; }
@@ -30,6 +31,7 @@ struct TestEngineB : IComponentEngine {
     }
     int id() const override { return m_id; }
     int graphNodeId() const override { return m_graph_id; }
+    std::string_view type_name() const override { return "test_b"; }
     int outputPinId() const override { return 2; }
     int inputPinId() const override { return 10; }
     std::string hoverSummary() const override { return "TestB(" + std::to_string(m_id) + ")"; }

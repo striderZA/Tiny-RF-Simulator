@@ -25,6 +25,13 @@ struct GraphLink {
     int end_pin_id;
 };
 
+// A resolved signal source: the owning node plus the output-port index whose
+// Spectrum the link/probe carries. output_index == -1 means "no port" (null).
+struct SignalSource {
+    SignalNode *node = nullptr;
+    int output_index = -1;
+};
+
 class NodeGraphEngine {
   public:
     int addNode(const std::string &label, SignalNode *signal_node, int num_inputs, int num_outputs);
@@ -40,8 +47,8 @@ class NodeGraphEngine {
     int inputPinId(int node_id) const;
     int outputPinId(int node_id) const;
 
-    SignalNode *getSourceForInput(int input_pin_id) const;
-    std::vector<SignalNode *> getSourcesForInput(int input_pin_id) const;
+    SignalSource getSourceForInput(int input_pin_id) const;
+    std::vector<SignalSource> getSourcesForInput(int input_pin_id) const;
     std::vector<int> topologicalOrder() const;
 
     static constexpr int MAX_PROBES = 4;
@@ -51,7 +58,7 @@ class NodeGraphEngine {
     bool removeProbePin(int pin_id);
     void clearProbes();
     int probeSlotForPin(int pin_id) const;
-    std::vector<SignalNode *> probedSignalNodes() const;
+    std::vector<SignalSource> probedSignalNodes() const;
 
     const std::vector<GraphNode> &nodes() const { return m_nodes; }
     const std::vector<GraphLink> &links() const { return m_links; }
@@ -122,35 +129,6 @@ enum class NodeKind {
     Combiner,
     GroupCollapsed
 };
-
-// Maps a node label to a NodeKind by prefix matching. Each engine
-// constructor sets a unique, stable label prefix. First match wins.
-// Unrecognised input (empty, group names, future engines) returns Unknown.
-inline NodeKind nodeKindFromLabel(const std::string &label) {
-    if (label.rfind("Generator", 0) == 0)
-        return NodeKind::Generator;
-    if (label.rfind("Amplifier", 0) == 0)
-        return NodeKind::Amplifier;
-    if (label.rfind("Splitter", 0) == 0)
-        return NodeKind::Splitter;
-    if (label.rfind("Mixer", 0) == 0)
-        return NodeKind::Mixer;
-    if (label.rfind("ADC", 0) == 0)
-        return NodeKind::Adc;
-    if (label.rfind("PFB", 0) == 0)
-        return NodeKind::PFB;
-    if (label.rfind("IdealFilter", 0) == 0)
-        return NodeKind::IdealFilter;
-    if (label.rfind("Coax Cable", 0) == 0)
-        return NodeKind::CoaxCable;
-    if (label.rfind("Equalizer", 0) == 0)
-        return NodeKind::Equalizer;
-    if (label.rfind("Attenuator", 0) == 0)
-        return NodeKind::Attenuator;
-    if (label.rfind("Combiner", 0) == 0)
-        return NodeKind::Combiner;
-    return NodeKind::Unknown;
-}
 
 // Per-NodeKind ARGB color. Engine has no imgui include, so the return type
 // is plain uint32_t (same bit layout as IM_COL32: 0xAARRGGBB). The widget

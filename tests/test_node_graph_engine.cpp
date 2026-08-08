@@ -33,8 +33,9 @@ TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {
     engine.addLink(gen.output_pin_ids[0], amp.input_pin_ids[0]);
     REQUIRE(engine.links().size() == 1);
 
-    auto *source = engine.getSourceForInput(amp.input_pin_ids[0]);
-    REQUIRE(source == &gen_node);
+    auto source = engine.getSourceForInput(amp.input_pin_ids[0]);
+    REQUIRE(source.node == &gen_node);
+    REQUIRE(source.output_index == 0);
 }
 
 TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") {
@@ -52,7 +53,7 @@ TEST_CASE("NodeGraphEngine removes links when node is deleted", "[node_graph]") 
     engine.removeNode(engine.nodes()[0].node_id);
 
     REQUIRE(engine.links().empty());
-    REQUIRE(engine.getSourceForInput(amp_pin) == nullptr);
+    REQUIRE(engine.getSourceForInput(amp_pin).node == nullptr);
 }
 
 TEST_CASE("NodeGraphEngine multi-probe", "[node_graph]") {
@@ -121,8 +122,8 @@ TEST_CASE("NodeGraphEngine getSourcesForInput returns multiple sources", "[node_
 
     auto sources = engine.getSourcesForInput(a.input_pin_ids[0]);
     REQUIRE(sources.size() == 2);
-    REQUIRE(sources[0] == &gen1);
-    REQUIRE(sources[1] == &gen2);
+    REQUIRE(sources[0].node == &gen1);
+    REQUIRE(sources[1].node == &gen2);
 }
 
 TEST_CASE("NodeGraphEngine setNextIds controls subsequent IDs", "[node_graph]") {
@@ -179,26 +180,6 @@ TEST_CASE("NodeGraphEngine group counter accessors", "[node_graph]") {
 
     engine.setNextBoundaryPinId(1999);
     REQUIRE(engine.nextBoundaryPinId() == 1999);
-}
-
-TEST_CASE("nodeKindFromLabel maps known prefixes", "[node_graph][appearance]") {
-    REQUIRE(nodeKindFromLabel("Generator 1") == NodeKind::Generator);
-    REQUIRE(nodeKindFromLabel("Amplifier 2") == NodeKind::Amplifier);
-    REQUIRE(nodeKindFromLabel("Splitter 3") == NodeKind::Splitter);
-    REQUIRE(nodeKindFromLabel("Mixer 4") == NodeKind::Mixer);
-    REQUIRE(nodeKindFromLabel("ADC 6") == NodeKind::Adc);
-    REQUIRE(nodeKindFromLabel("PFB 7") == NodeKind::PFB);
-    REQUIRE(nodeKindFromLabel("IdealFilter 8") == NodeKind::IdealFilter);
-    REQUIRE(nodeKindFromLabel("Coax Cable 9") == NodeKind::CoaxCable);
-    REQUIRE(nodeKindFromLabel("Equalizer 10") == NodeKind::Equalizer);
-}
-
-TEST_CASE("nodeKindFromLabel returns Unknown for unrecognised input", "[node_graph][appearance]") {
-    REQUIRE(nodeKindFromLabel("") == NodeKind::Unknown);
-    REQUIRE(nodeKindFromLabel("Subcircuit 1") == NodeKind::Unknown); // groups handled separately
-    REQUIRE(nodeKindFromLabel("generator 1") == NodeKind::Unknown);  // case-sensitive
-    REQUIRE(nodeKindFromLabel("Amplifier") ==
-            NodeKind::Amplifier); // no trailing space still matches
 }
 
 TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {

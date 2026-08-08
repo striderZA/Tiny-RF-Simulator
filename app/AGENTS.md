@@ -1,28 +1,40 @@
 # app/AGENTS.md
 
 ## Purpose
-Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, and `InspectorPanel`.
+Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, and `ProjectSerializer`.
 
 ## Ownership
-- `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration, project save/load
+- `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration (project save/load logic lives in `ProjectSerializer`)
 - `ComponentRegistry` — polymorphic component lifecycle and type-indexed lookup
 - `InspectorPanel` — property editing panel with dirty tracking
-- `ComponentTypeRegistry` — data-driven type schema table (field lists + factories) used by `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
+- `ComponentTypeRegistry` — single dispatch table (11 rows) for canvas menu, add, duplicate, save/load, and inspector drawing: each row carries the canonical `type` + `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback; also drives `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
+- `PFBViewManager` — owns the per-PFB IQ Plot / Channelizer Grid widget lifecycle (replaces the app's four lockstep vectors `m_iq_widgets`/`m_show_iq_pfbs`/`m_pfb_grid_widgets`/`m_show_pfb_grids`, which were rebuilt by hand at six call sites and caused issue #37); all add/rebuild/clear/draw and visibility state funnel through this class
+- `ProjectSerializer` — owns the `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`, issue #51)
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
-
+- `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
+- `ExternalToolRunner` — structured request/result execution for approved external tools
 ## Local Contracts
-- `saveProject()` / `loadProject()` / `newProject()` handle full project serialization to `.rfsim` JSON format
+- `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`; all `.rfsim` JSON serialization lives in `ProjectSerializer`
 - Dirty tracking propagated via `markDirty()` / `onParamChange` / `onLinkChanged` callbacks
 - File menu bar in `draw_ui()` handles keyboard shortcuts (`Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) and unsaved-changes modal; Help menu provides the F1-toggled help window and `Help > Tutorial`
 - `Help > Tutorial` and the first-run "Welcome" modal both route through `requestTutorial()`, which runs the same `PendingAction`/unsaved-changes guard as New/Open/Exit (`PendingAction::Tutorial`) before `startTutorial()` resets to a seeded sandbox. Any new `PendingAction` value must be handled in both the Save and Discard branches of that modal.
 - The first-run offer is driven by `m_show_tutorial_first_run_prompt`, set on construction from `TutorialState::completed()` (see `tutorial/AGENTS.md`); either answer marks it completed so the prompt never repeats
 - View menu's `Layouts` submenu (Save As.../Load/Manage...) drives `LayoutManager` (see `layout/AGENTS.md`) for named window-layout presets; the exe-relative default layout is auto-managed by ImGui itself via `IniFilename`, set in `core/src/core.cpp`
 - Library browser's "New Component..."/"Edit" flow writes schema-v2 JSON via `ComponentFormModel::buildDefinition()`; new entries save to a user-chosen root (`rf-sim-libraries/` project-local or `~/.rf-sim/libraries/` global); built-in `component_data/library/` entries are read-only (no Edit button) and never a save target; edits always overwrite the original `source_path` (no rename-on-identity-change)
+- Extension discovery stays inside `app/` and scans built-in, global, and project-local roots; invalid manifests remain visible via `ExtensionManager::all()`
+- External tools run only through `ExternalToolRunner` on explicit user action; the runner writes a JSON request file, waits for the tool to finish, and treats a missing/invalid result file as failure
+- `runExternalTool()` serializes the clicked action label as `action_label`, clears any stale prior `result.json` before launch, refreshes discovery after a successful run, and updates `m_extension_result_message`
+- `externalToolActions()` is the single policy for launchable tool actions: declared `menus[]` entries pass through unchanged; tools with no menus get one synthetic `"tools"` action using `manifest.name`
+- `refreshExtensions()` rescans built-in, global, and project-local roots for the current project path and rebuilds the component library before the browser/UI reads from it
+- `draw_ui()` and `drawExtensionsPanel()` both dispatch through `externalToolActions()`; the Tools menu renders only actions whose `location == "tools"`, while the Extensions panel shows every declared action (or a single fallback Run button)
+- App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
+- Per-PFB IQ Plot / Channelizer Grid window visibility lives in `PFBViewManager::iqVisibility()`/`gridVisibility()` (indexed in lockstep with the manager's widgets) and has no View-menu entry since instances are dynamic; closed windows are reopened via "Show IQ Plot"/"Show Channelizer Grid" checkboxes in the PFB properties panel, wired each frame through `InspectorPanel::setPFBWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
+- `update_dsp()`'s signal-routing pass is factored into `rewireInputs()` (sets every component's `node().inputs[k]` from current graph links, binding the resolved output port's `Spectrum` — `&source->outputs[source.output_index]` — and nulling severed ones); `onRemoveNode` calls it synchronously right after `ComponentRegistry::remove()` so no surviving component is left holding a dangling `Spectrum*` into the just-destroyed engine's `SignalNode` while the rest of that frame's `draw_ui()` still runs — widgets that dereference `node().inputs[]` directly during draw (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37)
 - Destructor saves window state via `SessionState`
 
 ## Work Guidance
-- Add new component serialization in both `saveProject()` (dump to JSON) and `loadProject()` (read from JSON + create via `ComponentRegistry`)
+- Add a new component = one `ComponentTypeRegistry` row (`type`, `project_type`, `menu_label`, `label_prefix`, `kind`, `create`, `draw_inspector`) + a `NodeKind`/symbol entry in `node_graph` — the menu, add, duplicate, save/load, inspector, and form paths all dispatch through the registry, so no per-file edits in `RfSimulatorApp` are needed
 
 ## Verification
 - Round-trip tests in `tests/test_project_file.cpp`

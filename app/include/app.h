@@ -10,6 +10,8 @@
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "equalizer_engine.h"
+#include "extension_manager.h"
+#include "external_tool_runner.h"
 
 #include "help_widget.h"
 #include "ideal_filter_engine.h"
@@ -23,6 +25,8 @@
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
+#include "pfb_view_manager.h"
+#include "project_serializer.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -34,6 +38,7 @@
 #include "view_manager.h"
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 enum class PendingAction { None, New, Open, Exit, Tutorial };
 
@@ -42,7 +47,10 @@ class RfSimulatorApp {
     RfSimulatorApp();
     void draw_ui();
     void update_dsp();
-
+    void refreshExtensions();
+    void drawExtensionsPanel();
+    std::vector<ExtensionMenuEntry> externalToolActions(const ExtensionManifest &manifest) const;
+    void runExternalTool(const ExtensionManifest &manifest, std::string_view action_label = {});
     LoggingWidget m_log_widget;
     bool m_show_log = true;
     bool m_show_spectrum = true;
@@ -61,6 +69,11 @@ class RfSimulatorApp {
     char m_layout_name_buf[128] = {};
     std::string m_rename_target;
     char m_rename_buf[128] = {};
+    ExtensionManager m_extension_manager;
+    ExternalToolRunner m_external_tool_runner;
+    bool m_show_extensions = false;
+    std::string m_extension_result_message;
+
     SessionState m_state;
     TutorialState m_tutorial_state;
     ~RfSimulatorApp();
@@ -81,6 +94,8 @@ class RfSimulatorApp {
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
+    ExtensionManager &testExtensionManager() { return m_extension_manager; }
+    const std::string &testExtensionResultMessage() const { return m_extension_result_message; }
 
     void openFileDialog();
     void saveFileDialog();
@@ -92,7 +107,9 @@ class RfSimulatorApp {
     void requestTutorial();
     // Resets to a fresh seeded sandbox and activates the walkthrough.
     void startTutorial();
+    void rewireInputs();
     void duplicateComponent(int graph_node_id);
+    void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
@@ -104,9 +121,6 @@ class RfSimulatorApp {
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
-    std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
-    std::vector<bool> m_show_iq_pfbs;
-    std::vector<std::unique_ptr<PFBChannelizerWidget>> m_pfb_grid_widgets;
     ComponentLibrary m_library;
     std::unique_ptr<LibraryBrowserWidget> m_library_browser;
     bool m_show_library = false;
@@ -116,10 +130,15 @@ class RfSimulatorApp {
     std::unique_ptr<ComponentFormModel> m_component_form_model;
     std::unique_ptr<ComponentFormWidget> m_component_form_widget;
     std::string m_component_form_error;
-    std::vector<bool> m_show_pfb_grids;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     ComponentRegistry m_components;
+    // Declared after m_components so the manager (and its widget references to
+    // engines) is destroyed before the engines themselves.
+    PFBViewManager m_pfb_views;
+    // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
+    // so it is destroyed before them (it holds references to both).
+    std::unique_ptr<ProjectSerializer> m_serializer;
     int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;

@@ -125,33 +125,33 @@ int NodeGraphEngine::outputPinId(int node_id) const {
     return -1;
 }
 
-SignalNode *NodeGraphEngine::getSourceForInput(int input_pin_id) const {
+SignalSource NodeGraphEngine::getSourceForInput(int input_pin_id) const {
     if (input_pin_id < 0)
-        return nullptr;
+        return {};
     for (const auto &link : m_links) {
         if (link.end_pin_id == input_pin_id) {
             for (const auto &node : m_nodes) {
-                for (int pin : node.output_pin_ids) {
-                    if (pin == link.start_pin_id) {
-                        return node.signal_node;
+                for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+                    if (node.output_pin_ids[i] == link.start_pin_id) {
+                        return {node.signal_node, static_cast<int>(i)};
                     }
                 }
             }
         }
     }
-    return nullptr;
+    return {};
 }
 
-std::vector<SignalNode *> NodeGraphEngine::getSourcesForInput(int input_pin_id) const {
-    std::vector<SignalNode *> result;
+std::vector<SignalSource> NodeGraphEngine::getSourcesForInput(int input_pin_id) const {
+    std::vector<SignalSource> result;
     if (input_pin_id < 0)
         return result;
     for (const auto &link : m_links) {
         if (link.end_pin_id == input_pin_id) {
             for (const auto &node : m_nodes) {
-                for (int pin : node.output_pin_ids) {
-                    if (pin == link.start_pin_id) {
-                        result.push_back(node.signal_node);
+                for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+                    if (node.output_pin_ids[i] == link.start_pin_id) {
+                        result.push_back({node.signal_node, static_cast<int>(i)});
                         break;
                     }
                 }
@@ -194,16 +194,16 @@ int NodeGraphEngine::probeSlotForPin(int pin_id) const {
     return -1;
 }
 
-std::vector<SignalNode *> NodeGraphEngine::probedSignalNodes() const {
-    std::vector<SignalNode *> result;
+std::vector<SignalSource> NodeGraphEngine::probedSignalNodes() const {
+    std::vector<SignalSource> result;
     result.reserve(m_probe_pins.size());
     for (int pin_id : m_probe_pins) {
         bool found = false;
-        // Check output pins first
+        // Check output pins first — resolve the output-port index too.
         for (const auto &node : m_nodes) {
-            for (int pin : node.output_pin_ids) {
-                if (pin == pin_id) {
-                    result.push_back(node.signal_node);
+            for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
+                if (node.output_pin_ids[i] == pin_id) {
+                    result.push_back({node.signal_node, static_cast<int>(i)});
                     found = true;
                     break;
                 }
@@ -213,12 +213,11 @@ std::vector<SignalNode *> NodeGraphEngine::probedSignalNodes() const {
         }
         if (found)
             continue;
-        // Input pin — resolve to the upstream source's output
+        // Input pin — resolve to the upstream source's output (node + index)
         for (const auto &node : m_nodes) {
-            for (int pin : node.input_pin_ids) {
-                if (pin == pin_id) {
-                    auto *src = getSourceForInput(pin_id);
-                    result.push_back(src ? src : nullptr);
+            for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+                if (node.input_pin_ids[i] == pin_id) {
+                    result.push_back(getSourceForInput(pin_id));
                     found = true;
                     break;
                 }
@@ -227,7 +226,7 @@ std::vector<SignalNode *> NodeGraphEngine::probedSignalNodes() const {
                 break;
         }
         if (!found)
-            result.push_back(nullptr);
+            result.push_back({});
     }
     return result;
 }

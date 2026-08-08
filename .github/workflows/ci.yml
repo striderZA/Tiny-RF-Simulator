@@ -1,0 +1,48 @@
+name: Build & Sanity
+
+on:
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "openwiki/**"
+      - LICENSE
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install clang-format
+        run: sudo apt-get install -y -qq clang-format-18
+      - name: Check formatting
+        run: |
+          find src app core common tests test_engine \
+            signal_generator amplifier spectrum_analyzer equalizer \
+            node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry \
+            ideal_filter attenuator combiner touchstone logging \
+            -name '*.cpp' -o -name '*.h' | \
+            xargs clang-format-18 --dry-run --Werror
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+
+      - name: Configure
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_C_COMPILER=gcc-14
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGLFW_BUILD_WAYLAND=OFF
+
+      - name: Build
+        run: cmake --build build
