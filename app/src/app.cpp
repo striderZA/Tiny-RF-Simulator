@@ -104,6 +104,11 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget->syncNodesFromEngine();
 
     load_window_states();
+
+    // Offer the guided walkthrough once, on the first launch of a given build.
+    // Tutorial visibility itself is transient session state, so it is not
+    // persisted through SessionState — only the completion marker is durable.
+    m_show_tutorial_first_run_prompt = !m_tutorial_state.completed();
 }
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
@@ -171,6 +176,36 @@ void RfSimulatorApp::newProject() {
     m_current_project_path.clear();
     refreshExtensions();
     m_dirty = false;
+}
+
+void RfSimulatorApp::requestTutorial() {
+    // Same guard New/Open/Exit use — startTutorial() discards the current
+    // project, so the user must get the chance to save first.
+    if (m_dirty) {
+        m_pending_action = PendingAction::Tutorial;
+        m_show_unsaved_dialog = true;
+    } else
+        startTutorial();
+}
+
+void RfSimulatorApp::startTutorial() {
+    // Reset to the same Generator + Amplifier pair the app seeds on first launch,
+    // so every step's instruction matches what the user is actually looking at.
+    newProject();
+    m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)
+        .addTone(100e6, -20.0);
+    m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
+    m_graph_widget->syncNodesFromEngine();
+
+    // Every panel a step highlights must be on screen for the highlight to
+    // resolve — the Component Library in particular is hidden by default.
+    m_show_node_editor = true;
+    m_show_properties = true;
+    m_show_spectrum = true;
+    m_show_library = true;
+
+    m_tutorial_state.start();
+    m_show_tutorial = true;
 }
 
 void RfSimulatorApp::testMakeDirty() { markDirty(); }
@@ -645,6 +680,8 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("How to Use", "F1"))
                 m_show_help = !m_show_help;
+            if (ImGui::MenuItem("Tutorial"))
+                requestTutorial();
             ImGui::EndMenu();
         }
         // Title / project name on the right
@@ -693,6 +730,35 @@ void RfSimulatorApp::draw_ui() {
             m_show_help = !m_show_help;
     }
 
+    // First-run tutorial offer. Must stay ahead of the Unsaved Changes block so
+    // that "Start Tutorial" can raise that dialog within the same frame.
+    if (m_show_tutorial_first_run_prompt) {
+        ImGui::OpenPopup("Welcome to Tiny RF Simulator");
+    }
+    if (ImGui::BeginPopupModal("Welcome to Tiny RF Simulator", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("New here? A short guided tutorial walks you through building");
+        ImGui::Text("and probing your first signal chain.");
+        ImGui::Spacing();
+        ImGui::TextDisabled("Re-run it anytime from Help > Tutorial.");
+        ImGui::Separator();
+        // Either answer marks the tutorial completed: this prompt is a one-time
+        // offer, not a reminder that returns until the walkthrough is finished.
+        if (ImGui::Button("Start Tutorial", ImVec2(140, 0))) {
+            m_tutorial_state.markCompleted();
+            m_show_tutorial_first_run_prompt = false;
+            ImGui::CloseCurrentPopup();
+            requestTutorial();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Not Now", ImVec2(140, 0))) {
+            m_tutorial_state.markCompleted();
+            m_show_tutorial_first_run_prompt = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     // Unsaved Changes popup — use a bool flag instead of OpenPopup/BeginPopupModal,
     // which can be unreliable when called from inside a menu bar context.
     if (m_show_unsaved_dialog) {
@@ -726,6 +792,9 @@ void RfSimulatorApp::draw_ui() {
                 case PendingAction::Exit:
                     std::exit(0);
                     break;
+                case PendingAction::Tutorial:
+                    startTutorial();
+                    break;
                 default:
                     break;
                 }
@@ -747,6 +816,9 @@ void RfSimulatorApp::draw_ui() {
                 break;
             case PendingAction::Exit:
                 std::exit(0);
+                break;
+            case PendingAction::Tutorial:
+                startTutorial();
                 break;
             default:
                 break;
@@ -865,6 +937,13 @@ void RfSimulatorApp::draw_ui() {
 
     if (m_show_help)
         m_help_widget.draw("How to Use", &m_show_help);
+
+    if (m_show_tutorial) {
+        m_tutorial_widget.draw(m_tutorial_state);
+        // Finish/Exit deactivate TutorialState from inside the widget; mirror
+        // that back onto the app's visibility flag.
+        m_show_tutorial = m_tutorial_state.isActive();
+    }
 }
 
 RfSimulatorApp::~RfSimulatorApp() {

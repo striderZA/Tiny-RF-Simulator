@@ -22,6 +22,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 - Adding a new module? Add its test source to `TEST_SOURCES` in `CMakeLists.txt` and link the library target
 - **MinGW-w64 test-registration ceiling:** this toolchain silently drops any `TEST_CASE` registered beyond the ~217 already linked into the main `tests` executable (confirmed via a from-scratch clean rebuild; see the comment above `test_component_authoring` in `CMakeLists.txt`). Do not add new `TEST_CASE`s to `test_main.cpp` or any file already compiled into the `tests` target — give the new coverage its own standalone executable instead (`add_executable(test_<name> test_<name>.cpp)` + `target_link_libraries` + `add_test`, following `test_attenuator`/`test_combiner`/`test_component_authoring`/`test_extensions`/`test_signal_domain`), and run it directly (`build/bin/test_<name>.exe`) rather than relying on `ctest`.
 - Platform-specific tests (e.g., Windows-only session state) are gated with `#ifdef WIN32` in CMakeLists.txt
+- `test_component_authoring` and `test_tutorial_state` are standalone executables, not part of `TEST_SOURCES`: the MinGW-w64 toolchain silently drops `TEST_CASE`s registered beyond the ~217 already linked into `tests`. New test files that must run on Windows should follow that pattern.
 
 ## Work Guidance
 
