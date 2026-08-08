@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.16.0
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.17.0
 
 ---
 
@@ -71,12 +71,14 @@ build/bin/tests [bench]
 | `node_graph/` | Node graph topology engine + imnodes-based editor + subcircuit groups |
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
+| `tutorial/` | Interactive first-run guided walkthrough: data-driven step catalog, `TutorialState` (pure logic + completion marker), `TutorialWidget` (panel highlight) |
 | `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `layout/` | Exe-relative ImGui layout persistence (default + named presets) |
 | `logging/` | Singleton logger with ImGui viewer |
 | `tests/` | Catch2 unit tests (~270 test cases, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
 | `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
+| `extensions/` | Built-in extension payloads for the extension system (e.g. `device-generator` external tool) |
 | `src/` | `main.cpp` entry point |
 | `docs/` | Engineering docs (nonlinear model, PFB, ADC, Touchstone specs) |
 
@@ -107,7 +109,7 @@ build/bin/tests [bench]
 
 **S-parameter mode** — Five components (amplifier, ideal filter, equalizer, attenuator, combiner) support dual-mode operation: ideal parametric OR Touchstone .sNp file driven. S-parameter data files live in `component_data/`.
 
-**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 7 categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). One-click insert into the node graph via View menu.
+**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 7 categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). One-click insert into the node graph via View menu. In-app authoring (v0.16.0) adds a New/Edit Component form (`ComponentFormModel`/`ComponentFormWidget`) that writes schema-v2 JSON, validated against the [ComponentTypeRegistry](architecture/overview.md) schema; built-in `component_data/library/` entries are read-only.
 
 **P1dB parameter** — First-class 1-dB compression point support (v0.9.0) on `NonlinearModel` and `AmplifierEngine`. Automatic OIP3 ↔ P1dB derivation (OIP3 = P1dB + 9.6 dB) when OIP3 is at default. Persisted in project save/load.
 
@@ -115,7 +117,11 @@ build/bin/tests [bench]
 
 **Dirty-flag caching** — Each `Spectrum` has a `generation` counter. Engines cache `(input*, generation)` pairs and skip recomputation when nothing changed (~5 ns overhead for cached skip).
 
-**Node graph** — Components are wired visually in an imnodes-based editor. The `NodeGraphEngine` provides topological sort (Kahn's algorithm) for correct DAG evaluation order. Subcircuit groups provide visual-only collapse/expand.
+**Node graph** — Components are wired visually in an imnodes-based editor. The `NodeGraphEngine` provides topological sort (Kahn's algorithm) for correct DAG evaluation order. Subcircuit groups provide visual-only collapse/expand. Routing and probes resolve `SignalSource{node, output_index}` pairs so multi-output components (Splitter, PFB) connect to the correct port (`outputs[1]`, not always `outputs[0]`).
+
+**Guided tutorial** (v0.17.0) — New users get a one-time first-run "Welcome" modal offering a data-driven 6-step walkthrough (`tutorial/` module, sibling to `help/`/`layout/`). Each step highlights its target panel via a foreground-drawlist outline and a floating "Tutorial Guide" window with Back/Next/Skip/Exit. Completion persists to an exe-relative `.tutorial_completed` marker (mirrors `LayoutManager`; deliberately not `SessionState`, which is Windows-only), so the offer never repeats. `Help > Tutorial` re-runs it, routed through the same unsaved-changes guard as New/Open/Exit. See [architecture overview](architecture/overview.md) and [testing guide](testing/guidance.md).
+
+**Extension system** (v0.16.0) — Manifest-based plugins (`plugin.json`) for data packs and external tools. `ExtensionManager` discovers them across built-in (`extensions/`), global (`~/.rf-sim/extensions/`), and project-local (`<project>/rf-sim-extensions/`) roots; `ExternalToolRunner` executes approved tools via a JSON request/result file handshake. Surfaced through a Tools menu and an Extensions panel. See [architecture overview](architecture/overview.md).
 
 ---
 
@@ -123,6 +129,9 @@ build/bin/tests [bench]
 
 | Milestone | Date | Description | Git Ref |
 |---|---|---|---|
+| Interactive tutorial mode | v0.17.0 | Data-driven 6-step guided walkthrough with panel highlight, first-run "Welcome" offer, exe-relative `.tutorial_completed` marker; `Help > Tutorial` guarded by the unsaved-changes modal; `test_tutorial_state.cpp` + 5 UI tests | `bb7cefc` |
+| Extension system | v0.16.0 | `plugin.json` manifests for data packs + external tools, discovery across built-in/global/project-local roots, JSON request/result `ExternalToolRunner`, Tools menu + Extensions panel; `extensions/device-generator` sample | `da5a5ca` |
+| Component registry unification | v0.16.0 | Single `ComponentTypeRegistry` dispatch table for all 11 types (canvas menu, add, duplicate, save/load, inspector, NodeKind); `RfSimulatorApp` decomposed into `ProjectSerializer` + `PFBViewManager`; S-param modes now reload on project deserialize | `a4ccbf4`, `fa4710d` |
 | Spectrum analyzer trace modes | v0.11.0 | 4 trace modes (ClearWrite, MaxHold, MinHold, VideoAverage EWMA) with per-trace history buffers, auto-prune, mode-switch reset; UI controls for trace mode + video average count | `ab87552` |
 | Library S-param data file import | v0.10.0 | JSON schema v2 with `data_files` array for Touchstone references; auto-load S-param on library instantiation; graceful fallback to single-point params; `[DATA]` indicator in browser | `0934e8b` |
 | Part number display | v0.9.1 | Component blocks show library part number subtitle; 7 new component categories in library | `0934e8b` |

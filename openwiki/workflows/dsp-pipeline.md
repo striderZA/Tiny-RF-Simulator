@@ -37,8 +37,8 @@ src/main.cpp
 
 For every component in `m_components`:
 
-1. For each input pin, call `NodeGraphEngine::getSourceForInput(comp_node_id, input_pin_id)` to find the upstream node.
-2. Set `component->node().inputs[k] = &source->outputs[0]` — a raw pointer, zero-copy.
+1. For each input pin, call `NodeGraphEngine::getSourceForInput(input_pin_id)` to find the upstream node.
+2. Set `component->node().inputs[k] = &source.node->outputs[source.output_index]` — a raw pointer, zero-copy. Since v0.16.1 the lookup returns a `SignalSource{node, output_index}` pair, so splitter/PFB `OUT2` connects to `outputs[1]` instead of always `outputs[0]` (issue #42); severed inputs are nulled.
 
 ### Step 2 — Topological Sort
 
@@ -58,10 +58,11 @@ Iterate components in topological order and call `engine->update(0.0)` for each:
 
 ### Step 4 — Probe Sync
 
-Call `NodeGraphEngine::probedSignalNodes()` to get up to 4 probed `SignalNode*` references. Set `view_enabled` flags accordingly:
+Call `NodeGraphEngine::probedSignalNodes()` to get up to 4 probed `SignalSource{node, output_index}` pairs. Set `view_enabled` flags accordingly:
 
 - Each probed node gets `view_enabled = true`
 - Previously probed but no-longer-probed nodes get `view_enabled = false`
+- Probe labels carry an `OUT2`/`OUT3` suffix when the resolved output index > 0, and `SpectrumAnalyzerWidget::setProbeTargets()` renders the probed port's `Spectrum` (not always `outputs[0]`, issue #42)
 
 ### Step 5 — Spectrum Analyzer Update
 
@@ -84,9 +85,12 @@ Properties Panel    ← InspectorPanel::draw()  (selected component)
 Generator Widgets   ← SignalGeneratorWidget::draw()
 Log                 ← LoggingWidget::draw()
 Help (How to Use)   ← HelpWidget::draw()      (toggled via F1 or Help > How to Use)
+Tutorial Guide      ← TutorialWidget::draw()  (floating walkthrough window; inactive unless running)
 ```
 
-The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1, plus `Help > Tutorial`). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+
+A one-time first-run "Welcome to Tiny RF Simulator" modal (v0.17.0) offers the [guided tutorial](../architecture/overview.md) — either answer marks it completed via the exe-relative `.tutorial_completed` marker, so it never nags again.
 
 All windows are gated by boolean visibility flags persisted in `SessionState`, including the help window state (`m_show_help`, saved as `"WindowState.Help"`).
 
@@ -121,7 +125,7 @@ Probe colors (in order): teal (`#00CED1`), orange (`#FFA500`), purple (`#9370DB`
 
 1. User right-clicks node → "Remove" or selects node + Delete key.
 2. `RfSimulatorApp` removes node from `NodeGraphEngine` (cascading: removes links, auto-removes groups if membership drops below 2).
-3. Removes engine from `ComponentRegistry`.
+3. Removes engine from `ComponentRegistry`, then calls `rewireInputs()` **synchronously** so no surviving component keeps a dangling `Spectrum*` into the destroyed engine's `SignalNode` — widgets that dereference `node().inputs[]` during `draw_ui()` (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37).
 4. Probes on removed node are cleaned up.
 5. Next frame: node disappears from graph, signal chain re-routes.
 

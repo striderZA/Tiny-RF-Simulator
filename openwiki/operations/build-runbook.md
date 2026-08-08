@@ -7,7 +7,7 @@ tags: [build, ci, operations, runbook]
 
 # Build & Operations
 
-Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.12.0**.
+Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.17.0**.
 
 ---
 
@@ -118,7 +118,7 @@ Runs on `v*` tags. `classify-release` splits tags into patch vs minor/major:
 
 ### OpenWiki Update (`openwiki-update.yml`)
 
-Scheduled weekly (Sunday 08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
+Scheduled daily (08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
 
 ---
 
@@ -179,7 +179,7 @@ Major features follow a design → implementation → test → docs lifecycle:
 ### Code Style
 
 - **Clang-format:** LLVM-based (`PointerAlignment: Right`, 4-space indent, 100 cols).
-- Run `clang-format -i <file>` on every changed file before committing.
+- Run `clang-format -i <file>` on every changed file before committing. Enforced by the `.githooks/pre-commit` hook (clang-format-18 dry-run, install via `scripts/install-clang-format.sh`) and the CI `format` job.
 - Only widget `.cpp`/`.h` files may include `<imgui.h>` or `<implot.h>`.
 - Float comparisons in tests: `Catch::Approx` from `<catch2/catch_approx.hpp>`.
 

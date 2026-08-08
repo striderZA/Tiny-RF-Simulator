@@ -7,7 +7,7 @@ tags: [testing, catch2, unit-tests, ui-tests]
 
 # Testing Guide
 
-RF Simulator has **~210 test cases** (including 14 benchmarks) across **28 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **7 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~300 test cases** (including 14 benchmarks) across **30 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **9 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the guided tutorial, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -38,7 +38,7 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Seven standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~217 already linked into `tests.exe`).
+These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Nine standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~217 already linked into `tests.exe`).
 
 | Test File | Tags | What It Tests |
 |---|---|---|
@@ -75,7 +75,9 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 | `test_extensions.cpp` | `test_extensions` | Extension manifest parsing/rejection, discovery across built-in/global/project-local roots, ExternalToolRunner request/result flow |
 | `test_issue37_pfb_input_removal.cpp` | `test_issue37_pfb_input_removal` | Issue #37 regression: removing an upstream node immediately nulls downstream dangling input pointers |
 | `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all 11 types round-trip through save/load, legacy `.rfsim` type strings backward compat |
+| `test_issue42_multi_output.cpp` | `test_issue42_multi_output` | Issue #42 regression: Splitter OUT2 routes to Combiner IN1 via `outputs[1]`; probing Splitter/PFB OUT2 resolves output index 1 |
 | `test_signal_domain.cpp` | `test_signal_domain` | `is_complex_baseband` defaults and propagation through every engine, `conjugateSymmetricExpand` expansion |
+| `test_tutorial_state.cpp` | `test_tutorial_state` | TutorialState marker path derivation, completed/markCompleted round-trip, catalog non-empty and addressable, inactive until started, navigation stays within bounds |
 
 ### UI Tests (`test_engine/`)
 
@@ -108,6 +110,13 @@ The UI test suite uses a **test helper library** (`test_engine/test_helpers.h` /
 | `connection_duplicate_accepted` | Documents accepted duplicate links (validation gap — no deduplication) |
 | `navigation_pan_programmatic` | Programmatic pan offset via imnodes API |
 | `navigation_drag_node` | Programmatic node drag via imnodes API + mouse click to flush cache |
+| `layout_save_as_creates_file` | View > Layouts Save As writes a named preset file |
+| `layout_manage_delete_removes_file` | View > Layouts Manage deletes a preset file |
+| `tutorial_launches_from_help_menu` | Help > Tutorial starts the walkthrough, shows "Tutorial Guide"; Exit deactivates |
+| `tutorial_start_guards_unsaved_changes` | Dirty project: tutorial waits behind the Unsaved Changes modal (Discard then starts) |
+| `tutorial_step_navigation` | Next/Back/Skip navigation stays within bounds; Skip jumps to last step without finishing |
+| `tutorial_completes_and_persists` | Walking to the last step + Finish writes the `.tutorial_completed` marker (not before Finish) |
+| `tutorial_first_run_prompt_marks_completed` | Dismissing the first-run "Welcome" offer ("Not Now") marks completed so it never nags again |
 
 ---
 

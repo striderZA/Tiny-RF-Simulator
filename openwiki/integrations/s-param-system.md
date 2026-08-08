@@ -134,6 +134,12 @@ The InspectorPanel (`app/src/inspector_panel.cpp`) provides S-param controls for
 
 ---
 
+## Project Save/Load Integration
+
+`.rfsim` files persist `sparam_mode` and `sparam_filepath` per engine. Since v0.16.3 (fix #56/#44), `deserialize()` **reloads the Touchstone data immediately** from the persisted path (`m_sparam_data.load(filepath)`) instead of waiting for the user to re-toggle the mode, and only re-enables `sparam_mode` if the file actually loads (`j.value("sparam_mode", false) && m_sparam_data.loaded()`). This applies to all five S-param-capable engines (amplifier, ideal filter, equalizer, attenuator, combiner). Covered by the "Round-trip: S-param mode survives save/load (issue #44)" test in `tests/test_project_file.cpp`.
+
+---
+
 ## Historical Context
 
 The S-parameter system evolved through several phases:

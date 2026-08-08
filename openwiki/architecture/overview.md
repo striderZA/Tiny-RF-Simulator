@@ -29,7 +29,7 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 │  adc/  ideal_filter/  equalizer/         │
 │  pfb_channelizer/  spectrum_analyzer/    │
 │  iq_plot/  touchstone/                   │
-│  logging/  help/  layout/                │
+│  logging/  help/  layout/  tutorial/     │
 │  icon_registry/                          │
 ├──────────┴──────────────────────────────┤
 │  Common Data Model (common/)            │
@@ -66,9 +66,13 @@ The core uses a PIMPL pattern (`struct Impl`) to hide GLFW/OpenGL types from all
 **`RfSimulatorApp`** is the central coordinator, instantiated by `main.cpp`. It owns:
 
 - **All DSP engines** — stored in a `ComponentRegistry` (type-erased, indexable by `std::type_index`)
-- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget` (data-driven "How to Use" panel, toggled via F1 or menu bar)
+- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget` (data-driven "How to Use" panel, toggled via F1 or menu bar), `TutorialWidget` (guided first-run walkthrough, see below)
 - **`NodeGraphEngine`** — the topology manager
 - **`ViewManager`** — registry of all `SignalNode*` instances
+- **`PFBViewManager`** — owns the per-PFB IQ Plot / Channelizer Grid widget lifecycle (extracted from `RfSimulatorApp` in v0.16.0, issue #51; fixes issue #37 where four lockstep vectors were rebuilt by hand at six call sites)
+- **`ProjectSerializer`** — owns `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp` in v0.16.0, issue #51)
+- **`ExtensionManager` / `ExternalToolRunner`** — plugin discovery and external-tool execution (see [Extension System](#extension-system))
+- **`TutorialState` / `TutorialWidget`** — first-run guided walkthrough (v0.17.0): a one-time "Welcome" modal offers a data-driven 6-step tour; each step highlights its target panel via `ImGui::GetForegroundDrawList()` and a floating "Tutorial Guide" window. Completion persists to an exe-relative `.tutorial_completed` marker (mirroring `LayoutManager`, since `SessionState` is a Windows-only no-op). `Help > Tutorial` re-runs it via the same unsaved-changes guard as New/Open/Exit (`PendingAction::Tutorial`).
 
 Two methods are called every frame:
 
@@ -97,7 +101,16 @@ Added in v0.9.0. Defined in `app/include/component_library.h`. A file-based comp
 - **One-click insert** creates a fully configured component in the node graph, sets `part_number` on the graph node for subtitle display (v0.9.1)
 - Supports 8 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
 - **Data file support** (v0.10.0): JSON schema version 2 adds `data_files` array for referencing external data files (S-parameters, etc.). Relative paths resolved against the JSON file's directory. When a library amplifier with S-param data files is instantiated, the engine auto-loads the Touchstone file via `setSParamFilepath()` for frequency-dependent simulation. Falls back to single-point parameters if the file is missing or invalid. Library browser shows `[DATA]` indicator on components with data files.
-- **ComponentTypeRegistry** (v0.11.0, `app/include/component_type_registry.h`): static table mapping each component type to its field schema and factory — `ComponentLibrary::instantiate()` dispatches through this table instead of a hardcoded if/else; the same table powers `ComponentLibrary::validate()` and the library browser's New/Edit Component form
+- **ComponentTypeRegistry** (v0.11.0 → unified in v0.16.0, `app/include/component_type_registry.h`): a single 11-row dispatch table — each row carries the canonical `type` + legacy `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback. Canvas menu add, duplicate, save/load, and inspector drawing all dispatch through it (issue #51), it drives `ComponentLibrary::instantiate()`/`validate()` and the New/Edit Component form, and the node graph widget maps label → `NodeKind` from it. Adding a component type is one registry row plus a `NodeKind`/symbol entry — no `RfSimulatorApp` edits.
+
+### Extension System
+
+Added in v0.16.0 (`app/include/extension_manager.h`, `extension_manifest.h`, `external_tool_runner.h`). Extensions are directories containing a `plugin.json` manifest, categorized by `ExtensionKind` (DataPack, ExternalTool) with capabilities (Generator, Importer).
+
+- **`ExtensionManager`** — discovers manifests across three roots (in priority order, later roots shadow earlier IDs): built-in `<source_dir>/extensions/`, global `~/.rf-sim/extensions/`, and project-local `<project>/rf-sim-extensions/`. Invalid or incompatible manifests remain visible in `ExtensionManager::all()` with status + validation issues rather than being silently dropped.
+- **`ExtensionManifest`** — schema-versioned; declares `menus[]` actions, `library_roots`, `data_roots`, and `min_app_version`. Paths are confined to the extension root on parse.
+- **`ExternalToolRunner`** — executes an external tool on explicit user action: writes a JSON request file, waits for the tool, and reads a result file; a missing/invalid result is treated as failure. `externalToolActions()` is the single policy for launchable actions (declared `menus[]` pass through; tools without menus get one synthetic `"tools"` action).
+- **UI** — a Tools menu renders actions with `location == "tools"`; an Extensions panel shows every declared action (or a fallback Run button). `extensions/device-generator/` ships a built sample tool.
 
 ### Project Save/Load
 
@@ -106,10 +119,9 @@ Save/load (v0.8.0) provides full circuit persistence to `.rfsim` JSON files:
 - **File menu** — New (Ctrl+N), Open (Ctrl+O), Save (Ctrl+S), Save As
 - **Unsaved-changes dialog** — prompts Save/Discard/Cancel when closing or opening a new project with unsaved changes
 - **Dirty tracking** — `RfSimulatorApp::markDirty()` called on parameter edits, node moves, link changes, component add/remove. Dirty flag cleared on save.
-- **Serialization** — Every engine implements `serialize()`/`deserialize()` via `nlohmann::json`. `saveProject()`/`loadProject()` orchestrates engine state, graph topology (node positions, links, probes), and component registry reconstruction.
-- **Graph state helpers** — `setNextIds()`, `removeAllLinks()` for clean project init and link restoration.
+- **Serialization** — Every engine implements `serialize()`/`deserialize()` via `nlohmann::json`. Since v0.16.0 the `.rfsim` save/load/new logic lives in **`ProjectSerializer`** (`app/include/project_serializer.h`, extracted from the ~1320-line `RfSimulatorApp` god-object, issue #51); `RfSimulatorApp::saveProject()`/`loadProject()`/`newProject()` are thin wrappers. It orchestrates engine state, graph topology (node positions, links, probes), and component registry reconstruction, using `setNextIds()`/`removeAllLinks()` for clean project init and link restoration.
 
-Test coverage: 9 round-trip tests in `tests/test_project_file.cpp` (55 assertions).
+Test coverage: 13 round-trip/regression tests in `tests/test_project_file.cpp` (including S-param mode reload on deserialize, issue #44/#56).
 
 ### SessionState
 
@@ -219,6 +231,7 @@ class IComponentEngine {
 
 - **Nodes** — `GraphNode{node_id, input_pin_ids, output_pin_ids, signal_node*, label}`
 - **Links** — `GraphLink{link_id, start_pin_id, end_pin_id}`
+- **`SignalSource`** (v0.16.1) — pin lookups (`getSourceForInput()`, `probedSignalNodes()`) return `{node, output_index}` pairs instead of bare `SignalNode*`, so multi-output components (Splitter, PFB) route and probe the correct output port (`outputs[1]`, not always `outputs[0]`); probe labels get an `OUT2` suffix (issue #42)
 - **Probes** — Up to 4 output pins can be probed for spectrum display with distinct colors (teal, orange, purple, blue)
 
 ### ID Space Partitioning
@@ -268,7 +281,7 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 |---|---|
 | `core/src/core.cpp` | GLFW window, ImGui/ImPlot init, default dock layout |
 | `app/include/app.h` | `RfSimulatorApp` — orchestrator |
-| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring (largest file, ~1320 lines) |
+| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring (~950 lines; save/load and PFB view management extracted to `ProjectSerializer`/`PFBViewManager` in v0.16.0) |
 | `app/include/component_registry.h` | Type-erased engine container |
 | `app/include/component_library.h` | File-based component library manager |
 | `app/include/component_type_registry.h` | Component type schema table — field lists + factory per type |
@@ -280,6 +293,12 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/src/extension_manifest.cpp` | Extension manifest parsing + validation (root confinement) |
 | `app/src/extension_manager.cpp` | Extension discovery across built-in/global/project-local roots |
 | `app/src/external_tool_runner.cpp` | Structured request/result external-tool execution |
+| `app/include/project_serializer.h` | `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`) |
+| `app/include/pfb_view_manager.h` | Per-PFB IQ Plot / Channelizer Grid widget lifecycle |
+| `app/include/extension_manifest.h` | Extension manifest schema + validation (root confinement) |
+| `tutorial/include/tutorial_state.h` | `TutorialState` — walkthrough navigation + `.tutorial_completed` marker (pure logic, unit-testable) |
+| `tutorial/include/tutorial_steps.h` | Data-driven step catalog (`TutorialStep`, `TutorialTarget`) |
+| `tutorial/src/tutorial_widget.cpp` | Foreground-drawlist panel highlight + "Tutorial Guide" window |
 | `common/include/component_interface.h` | `IComponentEngine` abstract base |
 | `common/include/spectrum.h` | `Spectrum` data structure |
 | `common/include/signal_node.h` | `SignalNode` structure |
