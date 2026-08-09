@@ -116,6 +116,8 @@ Runs on `v*` tags. `classify-release` splits tags into patch vs minor/major:
 - `validate-version` enforces the tag matches `CMakeLists.txt`'s `project(... VERSION ...)`.
 - Release artifacts are published as a draft GitHub release.
 
+> **CHANGELOG.md lags the codebase:** the latest entry is 0.11.0 while `CMakeLists.txt` declares 0.17.0. Treat the CMake version and the [quickstart milestones](../quickstart.md) (grounded in source) as authoritative; `CHANGELOG.md` has not been updated for v0.12.0–v0.17.0.
+
 ### OpenWiki Update (`openwiki-update.yml`)
 
 Scheduled daily (08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
