@@ -248,9 +248,10 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
         ImGui::EndDisabled();
     } else {
         double gain = engine.gain_dB();
-        if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0))
+        if (utils::inputDouble("Gain (dB)", gain, 1, 10, "%.1f", -10.0, 40.0)) {
             engine.setGain_dB(gain);
-        m_param_edited = true;
+            m_param_edited = true;
+        }
     }
 
     double nf = engine.nf_dB();
@@ -483,6 +484,7 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
     int eq_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##eq_mode", &eq_mode_idx, eq_modes, IM_ARRAYSIZE(eq_modes))) {
         engine.setSParamMode(eq_mode_idx == 1);
+        m_param_edited = true;
     }
 
     if (engine.sparamMode()) {
@@ -493,6 +495,7 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
+                m_param_edited = true;
             }
         }
         if (engine.sparamLoaded()) {
@@ -505,16 +508,22 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
     }
 
     double ref_gain = engine.refGain_dB();
-    if (utils::inputDouble("Ref Gain (dB)", ref_gain, 1, 10, "%.1f", -40.0, 40.0))
+    if (utils::inputDouble("Ref Gain (dB)", ref_gain, 1, 10, "%.1f", -40.0, 40.0)) {
         engine.setRefGain_dB(ref_gain);
+        m_param_edited = true;
+    }
 
     double ref_freq = engine.refFreq_Hz();
-    if (utils::inputFrequency("Ref Freq (MHz)", ref_freq, 1.0, 100.0, "%.0f", 1.0, 100e9))
+    if (utils::inputFrequency("Ref Freq (MHz)", ref_freq, 1.0, 100.0, "%.0f", 1.0, 100e9)) {
         engine.setRefFreq_Hz(ref_freq);
+        m_param_edited = true;
+    }
 
     double slope = engine.slope_dBPerDecade();
-    if (utils::inputDouble("Slope (dB/dec)", slope, 0.1, 1.0, "%.1f", -100.0, 100.0))
+    if (utils::inputDouble("Slope (dB/dec)", slope, 0.1, 1.0, "%.1f", -100.0, 100.0)) {
         engine.setSlope_dBPerDecade(slope);
+        m_param_edited = true;
+    }
 
     if (engine.sparamMode())
         ImGui::EndDisabled();
@@ -539,6 +548,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
     int f_mode_idx = engine.sparamMode() ? 1 : 0;
     if (ImGui::Combo("##filter_mode", &f_mode_idx, filter_modes, IM_ARRAYSIZE(filter_modes))) {
         engine.setSParamMode(f_mode_idx == 1);
+        m_param_edited = true;
     }
 
     if (engine.sparamMode()) {
@@ -549,6 +559,7 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
+                m_param_edited = true;
             }
         }
         if (engine.sparamLoaded()) {
@@ -602,11 +613,13 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
     float atten_f = static_cast<float>(engine.attenuation());
     if (ImGui::DragFloat("Atten (dB)", &atten_f, 0.1f, 0.0f, 200.0f)) {
         engine.setAttenuation(static_cast<double>(atten_f));
+        m_param_edited = true;
     }
 
     bool sparam_mode = engine.sparamMode();
     if (ImGui::Checkbox("S-param mode", &sparam_mode)) {
         engine.setSParamMode(sparam_mode);
+        m_param_edited = true;
     }
 
     if (sparam_mode) {
@@ -616,6 +629,7 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
         path_buf[sizeof(path_buf) - 1] = '\0';
         if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
             engine.setSParamFilepath(path_buf);
+            m_param_edited = true;
         }
     }
 
@@ -633,6 +647,7 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     bool sparam_mode = engine.sparamMode();
     if (ImGui::Checkbox("S-parameter mode", &sparam_mode)) {
         engine.setSParamMode(sparam_mode);
+        m_param_edited = true;
     }
 
     if (sparam_mode) {
@@ -642,6 +657,7 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
         path_buf[sizeof(path_buf) - 1] = '\0';
         if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
             engine.setSParamFilepath(path_buf);
+            m_param_edited = true;
         }
     }
 
