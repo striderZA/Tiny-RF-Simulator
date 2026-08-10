@@ -130,7 +130,7 @@ The InspectorPanel (`app/src/inspector_panel.cpp`) provides S-param controls for
 2. **File browser button** — click to open native file dialog (via portable-file-dialogs)
 3. **Status indicator** — shows loaded file path or "None" with error state
 4. **Gain control** — disabled when in S-param mode (amplifier)
-5. **S-param mode switching** — recent fix (`f82b274`) ensures the mode combo actually triggers the switch
+5. **S-param mode switching** — the mode combo triggers the switch to S-param mode and back (fixed after the original S-param rework)
 
 ---
 

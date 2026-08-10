@@ -107,7 +107,7 @@ User clicks output pin in NodeGraphWidget
                     └─ SpectrumAnalyzerWidget shows probed node spectrum
 ```
 
-Probe colors (in order): teal (`#00CED1`), orange (`#FFA500`), purple (`#9370DB`), blue (`#00BFFF`).
+Probe colors (in order): teal (`#16C79A`), orange (`#E69628`), purple (`#7832AA`), blue (`#3C8CDC`).
 
 ---
 
@@ -133,7 +133,7 @@ Probe colors (in order): teal (`#00CED1`), orange (`#FFA500`), purple (`#9370DB`
 
 ## Session State Persistence
 
-`SessionState` (`common/include/session_state.h`) reads/writes `app.ini` using Windows INI APIs (no-op on other platforms). Persists:
+`SessionState` (`common/session_state.h`) reads/writes `app.ini` using Windows INI APIs (no-op on other platforms). Persists:
 
 - Window position and size
 - Visibility flags for sub-windows (Log, IQ Plot, etc.)
