@@ -472,12 +472,12 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         REQUIRE(eq.sparamLoaded());
 
         auto &atten = app.testComponents().add<AttenuatorEngine>(10004, app.testGraphEngine());
-        atten.setSParamFile(s2p);
-        REQUIRE(atten.sParamMode());
+        atten.setSParamFilepath(s2p);
+        REQUIRE(atten.sparamMode());
 
         auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
-        comb.setSParamFile(s2p);
-        REQUIRE(comb.sParamMode());
+        comb.setSParamFilepath(s2p);
+        REQUIRE(comb.sparamMode());
 
         REQUIRE(app.componentCount() == 5);
         app.saveProject(path);
@@ -504,11 +504,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
 
         auto attens = app.testComponents().byType<AttenuatorEngine>();
         REQUIRE(attens.size() == 1);
-        CHECK(attens[0]->sParamMode() == true);
+        CHECK(attens[0]->sparamMode() == true);
 
         auto combs = app.testComponents().byType<CombinerEngine>();
         REQUIRE(combs.size() == 1);
-        CHECK(combs[0]->sParamMode() == true);
+        CHECK(combs[0]->sparamMode() == true);
     }
     std::remove(path.c_str());
 }

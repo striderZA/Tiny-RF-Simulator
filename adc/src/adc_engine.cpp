@@ -19,26 +19,14 @@ static double alias_frequency(double f_RF, double Fs) {
 
 // ---- Engine methods ----
 
-AdcEngine::AdcEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = m_graph->addNode("ADC " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
+AdcEngine::AdcEngine(int id, NodeGraphEngine &graph) : ComponentEngineBase(id, graph, "ADC", 1, 1) {
     LOG_INFO("ADC [adc%d] added.", id);
 }
 
-int AdcEngine::inputPinId() const { return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1; }
-
-int AdcEngine::outputPinId() const { return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1; }
-
 void AdcEngine::update(double /*dt*/) {
     const Spectrum *input = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && input == m_cached_input_ptr &&
-        (!input || input->generation == m_cached_input_generation))
+    if (!beginUpdate(input))
         return;
-    m_dirty = false;
-    m_cached_input_ptr = input;
-    if (input)
-        m_cached_input_generation = input->generation;
 
     auto &out = m_node.outputs[0];
 

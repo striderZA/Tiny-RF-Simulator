@@ -4,19 +4,8 @@
 #include <nlohmann/json.hpp>
 #include <numbers>
 
-EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Equalizer " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
-}
-
-int EqualizerEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
-
-int EqualizerEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
-}
+EqualizerEngine::EqualizerEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Equalizer", 1, 1) {}
 
 void EqualizerEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
@@ -86,13 +75,8 @@ void EqualizerEngine::update(double dt) {
     }
 
     // --- Ideal mode ---
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    if (!beginUpdate(in_ptr))
         return;
-    m_dirty = false;
-    m_cached_input_ptr = in_ptr;
-    if (in_ptr)
-        m_cached_input_generation = in_ptr->generation;
 
     auto &out = m_node.outputs[0];
 

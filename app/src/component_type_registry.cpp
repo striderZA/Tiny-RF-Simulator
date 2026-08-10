@@ -72,6 +72,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     att.label_prefix = "Attenuator";
     att.kind = NodeKind::Attenuator;
     att.authorable = true;
+    att.supports_sparam_file = true;
     att.fields = {
         {"attenuation_dB", "Attenuation", "dB", FieldKind::Number, true, 0.0, 100.0, {}, {}, ""},
     };
@@ -101,6 +102,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     flt.label_prefix = "IdealFilter";
     flt.kind = NodeKind::IdealFilter;
     flt.authorable = true;
+    flt.supports_sparam_file = true;
     flt.fields = {
         {"filter_type",
          "Filter Type",
@@ -155,6 +157,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     eq.label_prefix = "Equalizer";
     eq.kind = NodeKind::Equalizer;
     eq.authorable = true;
+    eq.supports_sparam_file = true;
     eq.fields = {
         {"ref_gain_dB", "Reference Gain", "dB", FieldKind::Number, false, -50.0, 50.0, {}, {}, ""},
         {"ref_freq_Hz",
@@ -191,6 +194,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     comb.label_prefix = "Combiner";
     comb.kind = NodeKind::Combiner;
     comb.authorable = true;
+    comb.supports_sparam_file = true;
     comb.fields = {
         {"manual_mode", "Manual Mode", "", FieldKind::Bool, false, 0, 0, {}, false, ""},
     };

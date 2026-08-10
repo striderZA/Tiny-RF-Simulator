@@ -5,11 +5,8 @@
 #include <nlohmann/json.hpp>
 #include <numbers>
 
-CombinerEngine::CombinerEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Combiner " + std::to_string(id), &m_node, 2, 1);
-    m_node.inputs.resize(2);
-    m_node.outputs.resize(1);
-}
+CombinerEngine::CombinerEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Combiner", 2, 1) {}
 
 int CombinerEngine::inputPinId(int port) const {
     if (!m_graph || m_graph_node_id < 0 || port < 0 || port >= 2)
@@ -47,9 +44,9 @@ void CombinerEngine::setSParamMode(bool enabled) {
     m_dirty = true;
 }
 
-void CombinerEngine::setSParamFile(const std::string &path) {
-    m_sparam_path = path;
-    m_sparam_mode = m_sparam.load(path);
+void CombinerEngine::setSParamFilepath(const std::string &path) {
+    m_sparam_filepath = path;
+    m_sparam_mode = m_sparam_data.load(path);
     m_dirty = true;
 }
 
@@ -58,15 +55,15 @@ std::string CombinerEngine::hoverSummary() const { return "Combiner: 2→1, -3 d
 nlohmann::json CombinerEngine::serialize() const {
     return {{"manual_mode", m_manual_mode},
             {"sparam_mode", m_sparam_mode},
-            {"sparam_path", m_sparam_path}};
+            {"sparam_filepath", m_sparam_filepath}};
 }
 
 void CombinerEngine::deserialize(const nlohmann::json &j) {
     m_manual_mode = j.value("manual_mode", true);
-    m_sparam_path = j.value("sparam_path", "");
-    if (!m_sparam_path.empty())
-        m_sparam.load(m_sparam_path);
-    m_sparam_mode = j.value("sparam_mode", false) && m_sparam.loaded();
+    m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
+    if (!m_sparam_filepath.empty())
+        m_sparam_data.load(m_sparam_filepath);
+    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
     m_dirty = true;
 }
 
@@ -76,7 +73,7 @@ void CombinerEngine::update(double dt) {
     const Spectrum *in1 = m_node.inputs.size() > 1 ? m_node.inputs[1] : nullptr;
 
     // --- S-parameter mode ---
-    if (m_sparam_mode && m_sparam.loaded()) {
+    if (m_sparam_mode && m_sparam_data.loaded()) {
         if (!m_dirty && in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
             (!in0 || in0->generation == m_cached_input0_generation) &&
             (!in1 || in1->generation == m_cached_input1_generation))
@@ -114,15 +111,15 @@ void CombinerEngine::update(double dt) {
 
         // 3-port device: port 0 = input 0, port 1 = input 1, port 2 = output
         // S21: input 0 -> output, S31: input 1 -> output
-        int idx_S21 = 2 * m_sparam.numPorts() + 0;
-        int idx_S31 = 2 * m_sparam.numPorts() + 1;
+        int idx_S21 = 2 * m_sparam_data.numPorts() + 0;
+        int idx_S31 = 2 * m_sparam_data.numPorts() + 1;
 
         std::vector<Spectrum::Tone> combined_tones;
 
         // Apply S21 to input 0 tones
         if (in0) {
             for (const auto &t : in0->tones) {
-                auto S = m_sparam.interpolate(t.freq_Hz, idx_S21);
+                auto S = m_sparam_data.interpolate(t.freq_Hz, idx_S21);
                 Spectrum::Tone t_out = t;
                 t_out.power_dBm += 20.0 * std::log10(std::abs(S));
                 t_out.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
@@ -133,7 +130,7 @@ void CombinerEngine::update(double dt) {
         // Apply S31 to input 1 tones
         if (in1) {
             for (const auto &t : in1->tones) {
-                auto S = m_sparam.interpolate(t.freq_Hz, idx_S31);
+                auto S = m_sparam_data.interpolate(t.freq_Hz, idx_S31);
                 Spectrum::Tone t_out = t;
                 t_out.power_dBm += 20.0 * std::log10(std::abs(S));
                 t_out.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
@@ -154,8 +151,8 @@ void CombinerEngine::update(double dt) {
         out.noise_total_W.resize(N);
 
         for (size_t i = 0; i < N; ++i) {
-            auto S21 = m_sparam.interpolate(out.frequencies[i], idx_S21);
-            auto S31 = m_sparam.interpolate(out.frequencies[i], idx_S31);
+            auto S21 = m_sparam_data.interpolate(out.frequencies[i], idx_S21);
+            auto S31 = m_sparam_data.interpolate(out.frequencies[i], idx_S31);
             double mag_sq_S21 = std::norm(S21);
             double mag_sq_S31 = std::norm(S31);
 

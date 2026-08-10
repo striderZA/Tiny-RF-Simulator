@@ -154,7 +154,7 @@ TEST_CASE("Attenuator: propagates is_complex_baseband (manual mode)", "[domain][
 TEST_CASE("Attenuator: propagates is_complex_baseband (S-param mode)", "[domain][attenuator]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(0, graph);
-    atten.setSParamFile(attenuatorS2pPath());
+    atten.setSParamFilepath(attenuatorS2pPath());
 
     Spectrum in;
     in.frequencies = {1e9, 2e9};
@@ -503,6 +503,24 @@ TEST_CASE("Amplifier: propagates fs_Hz (S-param mode)", "[domain][amplifier]") {
     amp.update(0.0);
 
     REQUIRE(amp.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Attenuator: propagates fs_Hz (S-param mode)", "[domain][attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(0, graph);
+    atten.setSParamFilepath(attenuatorS2pPath());
+    REQUIRE(atten.sparamMode());
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    atten.node().inputs[0] = &in;
+    atten.update(0.0);
+
+    REQUIRE(atten.node().outputs[0].fs_Hz == Approx(500e6));
 }
 
 // Real multi-engine post-ADC chains: fs_Hz must reach the PFB and channels must be populated

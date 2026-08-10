@@ -1,17 +1,14 @@
 #pragma once
-#include "component_interface.h"
+#include "component_engine_base.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 
-class SignalGeneratorEngine : public IComponentEngine {
+class SignalGeneratorEngine : public ComponentEngineBase {
   public:
     SignalGeneratorEngine(int id, NodeGraphEngine &graph);
 
-    int id() const override { return m_id; }
-    int graphNodeId() const override { return m_graph_node_id; }
     std::string_view type_name() const override { return "generator"; }
     std::string hoverSummary() const override;
-    int outputPinId() const override;
 
     void addTone(double freq_Hz, double power_dBm, double phase_deg = 0.0) {
         m_tones.push_back({freq_Hz, power_dBm, phase_deg});
@@ -37,19 +34,12 @@ class SignalGeneratorEngine : public IComponentEngine {
     double fs_Hz() const { return m_fs_Hz; }
     void setFs_Hz(double fs) { m_fs_Hz = fs; }
 
-    SignalNode &node() override { return m_node; }
-    const SignalNode &node() const override { return m_node; }
     void update(double dt) override;
     nlohmann::json serialize() const override;
     void deserialize(const nlohmann::json &) override;
 
   private:
-    int m_id;
-    int m_graph_node_id = -1;
-    NodeGraphEngine *m_graph = nullptr;
     std::vector<Spectrum::Tone> m_tones;
-    SignalNode m_node;
-    bool m_dirty = true;
     double m_fs_Hz = 0.0;
 
     void rebuildFrequencyGrid();

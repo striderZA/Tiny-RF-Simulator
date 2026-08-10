@@ -16,6 +16,7 @@
 #include "splitter_engine.h"
 #include "utils.h"
 #include <cstring>
+#include <map>
 #include <portable-file-dialogs.h>
 
 #include "component_registry.h"
@@ -23,55 +24,81 @@
 InspectorPanel::InspectorPanel(NodeGraphEngine &graph, ComponentRegistry &components)
     : m_graph(graph), m_components(&components) {}
 
+namespace {
+
+using DrawerFn = std::function<void(InspectorPanel &, IComponentEngine &)>;
+
+// Canonical type key -> property drawer. Built once; registerDrawers() copies
+// each entry onto the matching ComponentTypeRegistry row, and hasDrawer()
+// lets tests assert every registered type has inspector coverage.
+const std::map<std::string_view, DrawerFn> &drawerMap() {
+    static const std::map<std::string_view, DrawerFn> drawers = {
+        {"generator",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawGeneratorProperties(static_cast<SignalGeneratorEngine &>(e), e.id());
+         }},
+        {"amplifier",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawAmplifierProperties(static_cast<AmplifierEngine &>(e), e.id());
+         }},
+        {"splitter",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawSplitterProperties(static_cast<SplitterEngine &>(e), e.id());
+         }},
+        {"mixer",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawMixerProperties(static_cast<MixerEngine &>(e), e.id());
+         }},
+        {"adc",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawAdcProperties(static_cast<AdcEngine &>(e), e.id());
+         }},
+        {"pfb",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawPFBProperties(static_cast<PFBChannelizerEngine &>(e));
+         }},
+        {"filter",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawIdealFilterProperties(static_cast<IdealFilterEngine &>(e), e.id());
+         }},
+        {"coax",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawCoaxCableProperties(static_cast<CoaxCableEngine &>(e), e.id());
+         }},
+        {"equalizer",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawEqualizerProperties(static_cast<EqualizerEngine &>(e), e.id());
+         }},
+        {"attenuator",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawAttenuatorProperties(static_cast<AttenuatorEngine &>(e), e.id());
+         }},
+        {"combiner",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawCombinerProperties(static_cast<CombinerEngine &>(e), e.id());
+         }},
+    };
+    return drawers;
+}
+
+} // namespace
+
 void InspectorPanel::registerDrawers(ComponentTypeRegistry &registry) {
+    const auto &drawers = drawerMap();
     for (auto *d : registry.all()) {
-        if (d->type == "generator") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawGeneratorProperties(static_cast<SignalGeneratorEngine &>(e), e.id());
-            };
-        } else if (d->type == "amplifier") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawAmplifierProperties(static_cast<AmplifierEngine &>(e), e.id());
-            };
-        } else if (d->type == "splitter") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawSplitterProperties(static_cast<SplitterEngine &>(e), e.id());
-            };
-        } else if (d->type == "mixer") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawMixerProperties(static_cast<MixerEngine &>(e), e.id());
-            };
-        } else if (d->type == "adc") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawAdcProperties(static_cast<AdcEngine &>(e), e.id());
-            };
-        } else if (d->type == "pfb") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawPFBProperties(static_cast<PFBChannelizerEngine &>(e));
-            };
-        } else if (d->type == "filter") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawIdealFilterProperties(static_cast<IdealFilterEngine &>(e), e.id());
-            };
-        } else if (d->type == "coax") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawCoaxCableProperties(static_cast<CoaxCableEngine &>(e), e.id());
-            };
-        } else if (d->type == "equalizer") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawEqualizerProperties(static_cast<EqualizerEngine &>(e), e.id());
-            };
-        } else if (d->type == "attenuator") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawAttenuatorProperties(static_cast<AttenuatorEngine &>(e), e.id());
-            };
-        } else if (d->type == "combiner") {
-            d->draw_inspector = [](InspectorPanel &p, IComponentEngine &e) {
-                p.drawCombinerProperties(static_cast<CombinerEngine &>(e), e.id());
-            };
+        auto it = drawers.find(d->type);
+        if (it != drawers.end()) {
+            d->draw_inspector = it->second;
+        } else {
+            // A registry row with no drawer used to end up with an empty
+            // properties panel silently; fail loudly so adding a component
+            // type also registers a drawer here.
+            LOG_ERROR("No inspector drawer registered for component type '%s'", d->type.c_str());
         }
     }
 }
+
+bool InspectorPanel::hasDrawer(std::string_view type) { return drawerMap().count(type) > 0; }
 
 InspectorPanel::Hit InspectorPanel::findSelected() const {
     int n = ImNodes::NumSelectedNodes();
@@ -577,18 +604,18 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
         engine.setAttenuation(static_cast<double>(atten_f));
     }
 
-    bool sparam_mode = engine.sParamMode();
+    bool sparam_mode = engine.sparamMode();
     if (ImGui::Checkbox("S-param mode", &sparam_mode)) {
         engine.setSParamMode(sparam_mode);
     }
 
     if (sparam_mode) {
-        std::string path = engine.sParamFile();
+        std::string path = engine.sparamFilepath();
         char path_buf[512];
         strncpy(path_buf, path.c_str(), sizeof(path_buf) - 1);
         path_buf[sizeof(path_buf) - 1] = '\0';
         if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
-            engine.setSParamFile(path_buf);
+            engine.setSParamFilepath(path_buf);
         }
     }
 
@@ -603,18 +630,18 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
 
     ImGui::TextDisabled("Combiner: 2 inputs → 1 output");
 
-    bool sparam_mode = engine.sParamMode();
+    bool sparam_mode = engine.sparamMode();
     if (ImGui::Checkbox("S-parameter mode", &sparam_mode)) {
         engine.setSParamMode(sparam_mode);
     }
 
     if (sparam_mode) {
-        std::string path = engine.sParamFile();
+        std::string path = engine.sparamFilepath();
         char path_buf[512];
         strncpy(path_buf, path.c_str(), sizeof(path_buf) - 1);
         path_buf[sizeof(path_buf) - 1] = '\0';
         if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
-            engine.setSParamFile(path_buf);
+            engine.setSParamFilepath(path_buf);
         }
     }
 
