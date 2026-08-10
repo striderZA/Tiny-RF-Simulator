@@ -139,6 +139,28 @@ TEST_CASE("Coax cable length 0 leaves only connector loss", "[coax][edge]") {
     REQUIRE(with_zero_len == Approx(-1.0).margin(0.001));
 }
 
+TEST_CASE("Coax cable deserialize clamps out-of-range preset index", "[coax][deserialize]") {
+    NodeGraphEngine graph;
+    CoaxCableEngine cable(0, graph);
+
+    // Corrupted/hand-edited .rfsim with an out-of-range preset index must be
+    // clamped to a valid preset instead of indexing out of bounds.
+    cable.deserialize({{"preset_index", 99}, {"length_m", 1.0}, {"connectors_loss_dB", 0.0}});
+    REQUIRE(cable.presetIndex() >= 0);
+    REQUIRE(static_cast<size_t>(cable.presetIndex()) < kCoaxCablePresets.size());
+    REQUIRE(cable.preset().name == kCoaxCablePresets[cable.presetIndex()].name);
+
+    cable.deserialize({{"preset_index", -1}, {"length_m", 1.0}, {"connectors_loss_dB", 0.0}});
+    REQUIRE(cable.presetIndex() >= 0);
+    REQUIRE(static_cast<size_t>(cable.presetIndex()) < kCoaxCablePresets.size());
+    REQUIRE(cable.preset().name == kCoaxCablePresets[cable.presetIndex()].name);
+
+    // Clamped length / connector-loss values must match the setter ranges.
+    cable.deserialize({{"preset_index", 4}, {"length_m", 5000.0}, {"connectors_loss_dB", 99.0}});
+    REQUIRE(cable.lengthM() == Approx(1000.0));
+    REQUIRE(cable.connectorsLossDB() == Approx(30.0));
+}
+
 TEST_CASE("Coax cable clamps negative length to 0", "[coax][edge]") {
     NodeGraphEngine graph;
     CoaxCableEngine cable(0, graph);

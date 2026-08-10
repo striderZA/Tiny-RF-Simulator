@@ -5,19 +5,7 @@
 #include <nlohmann/json.hpp>
 
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine &graph)
-    : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("PFB " + std::to_string(id), &m_node, 1, 2);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(2);
-}
-
-int PFBChannelizerEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
-
-int PFBChannelizerEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
-}
+    : ComponentEngineBase(id, graph, "PFB", 1, 2) {}
 
 void PFBChannelizerEngine::setChannelCount(int M) {
     if (M < 2)
@@ -67,18 +55,12 @@ void PFBChannelizerEngine::setActiveChannel(int ch) {
 
 void PFBChannelizerEngine::update(double) {
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    if (!beginUpdate(in_ptr))
         return;
-    m_dirty = false;
 
     if (in_ptr && in_ptr->fs_Hz > 0.0) {
         m_cfg.Fs_Hz = in_ptr->fs_Hz;
     }
-
-    m_cached_input_ptr = in_ptr;
-    if (in_ptr)
-        m_cached_input_generation = in_ptr->generation;
 
     auto &out = m_node.outputs[0];
 
@@ -87,17 +69,34 @@ void PFBChannelizerEngine::update(double) {
         out.tones.clear();
         out.noise_W.clear();
         out.noise_total_W.clear();
-        if (!out.frequencies.empty())
-            out.bumpGeneration();
+        out.bumpGeneration();
+        // Sever the full-band output too: it previously retained the last
+        // computed spectrum, so consumers caching on (pointer, generation)
+        // kept serving stale data after the input was cut.
+        auto &out_full = m_node.outputs[1];
+        out_full.frequencies.clear();
+        out_full.tones.clear();
+        out_full.noise_W.clear();
+        out_full.noise_total_W.clear();
+        out_full.noise_added_W.clear();
+        out_full.phase_deg.clear();
+        out_full.bumpGeneration();
         return;
     }
 
-    // Only recompute channels when frequency grid, Fs, or M changes
+    // Only recompute channels when frequency grid, Fs, M, K, or beta changes.
+    // bin_weights depend on prototypeResponse(), which is a function of both K
+    // and beta — a stale guard here would leave the noise path using filter
+    // weights from the last grid/Fs/M change while the tone path calls
+    // prototypeResponse() live, producing an internally inconsistent spectrum.
     if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz ||
+        m_cfg.K != m_cached_K || m_cfg.beta != m_cached_beta ||
         m_channels.size() != static_cast<size_t>(m_cfg.M)) {
         recomputeChannels(in_ptr->frequencies);
         m_cached_freqs = in_ptr->frequencies;
         m_cached_Fs_Hz = m_cfg.Fs_Hz;
+        m_cached_K = m_cfg.K;
+        m_cached_beta = m_cfg.beta;
     }
 
     double bin_width =

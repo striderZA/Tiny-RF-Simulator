@@ -52,7 +52,7 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 | `test_ideal_filter_sparam.cpp` | `[filter]`, `[sparam]` | Filter S-param mode |
 | `test_amplifier_p1db.cpp` | `[amplifier]`, `[p1db]` | P1dB default, setter, serialize/deserialize |
 | `test_amplifier_sparam.cpp` | `[amp]`, `[sparam]`, `[nf]`, `[nonlinear]` | Amp S-param mode, NF, nonlinearity |
-| `test_component_library.cpp` | `[library]` | JSON loading, directory scanning, instantiation for 7 component types, part number |
+| `test_component_library.cpp` | `[library]` | JSON loading, directory scanning, instantiation for 8 component types, part number |
 | `test_component_registry.cpp` | `[registry]` | ComponentRegistry add/find/remove |
 | `test_coax_cable_engine.cpp` | `[coax]`, `[datasheet]`, `[noise]`, `[phase]`, `[connectors]`, `[edge]`, `[caching]` | Coax loss, phase, noise, connectors, clamping, caching |
 | `test_coax_cable_presets.cpp` | `[coax]`, `[presets]` | Cable preset table validation |

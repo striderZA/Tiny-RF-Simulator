@@ -1,15 +1,8 @@
 #include "splitter_engine.h"
 #include <nlohmann/json.hpp>
 
-SplitterEngine::SplitterEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Splitter " + std::to_string(id), &m_node, 1, 2);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(2);
-}
-
-int SplitterEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
+SplitterEngine::SplitterEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Splitter", 1, 2) {}
 
 int SplitterEngine::outputPinId(int index) const {
     if (!m_graph || m_graph_node_id < 0)
@@ -27,13 +20,8 @@ int SplitterEngine::outputPinId(int index) const {
 void SplitterEngine::update(double dt) {
     (void)dt;
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    if (!beginUpdate(in_ptr))
         return;
-    m_dirty = false;
-    m_cached_input_ptr = in_ptr;
-    if (in_ptr)
-        m_cached_input_generation = in_ptr->generation;
 
     for (size_t out_idx = 0; out_idx < m_node.outputs.size(); ++out_idx) {
         auto &out = m_node.outputs[out_idx];

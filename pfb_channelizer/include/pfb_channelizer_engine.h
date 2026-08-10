@@ -1,6 +1,6 @@
 #pragma once
 
-#include "component_interface.h"
+#include "component_engine_base.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include "spectrum.h"
@@ -25,16 +25,12 @@ struct PFBConfig {
     double beta = 8.0;
 };
 
-class PFBChannelizerEngine : public IComponentEngine {
+class PFBChannelizerEngine : public ComponentEngineBase {
   public:
     PFBChannelizerEngine(int id, NodeGraphEngine &graph);
 
-    int id() const override { return m_id; }
-    int graphNodeId() const override { return m_graph_node_id; }
     std::string_view type_name() const override { return "pfb"; }
     std::string hoverSummary() const override;
-    int inputPinId() const override;
-    int outputPinId() const override;
 
     void setChannelCount(int M);
     void setTapsPerBranch(int K);
@@ -68,23 +64,15 @@ class PFBChannelizerEngine : public IComponentEngine {
     void update(double dt) override;
     nlohmann::json serialize() const override;
     void deserialize(const nlohmann::json &) override;
-    SignalNode &node() override { return m_node; }
-    const SignalNode &node() const override { return m_node; }
 
   private:
-    int m_id;
-    int m_graph_node_id = -1;
-    NodeGraphEngine *m_graph = nullptr;
-    SignalNode m_node;
-
     PFBConfig m_cfg;
     int m_active_channel = 0;
     std::vector<PFBChannel> m_channels;
-    bool m_dirty = true;
-    const Spectrum *m_cached_input_ptr = nullptr;
-    uint64_t m_cached_input_generation = 0;
     std::vector<double> m_cached_freqs;
     double m_cached_Fs_Hz = 0;
+    int m_cached_K = 0;
+    double m_cached_beta = 0.0;
 
     void recomputeChannels(const std::vector<double> &freqs);
     double prototypeResponse(double offset_Hz) const;

@@ -223,3 +223,117 @@ TEST_CASE("PFB channelizer recomputes channels when M increases", "[pfb]") {
     REQUIRE(out.tones.size() <= 1);
     REQUIRE(out.frequencies.size() > 0);
 }
+
+TEST_CASE("PFB channelizer recomputes bin weights when K changes", "[pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    // Copy: a reference into channels() would alias the live vector and see
+    // the recomputed weights regardless.
+    const auto before = pfb.channels()[0].bin_weights;
+    REQUIRE(!before.empty());
+
+    // K enters prototypeResponse() via the sinc argument and the Kaiser window
+    // support, so a K change must re-derive the cached bin_weights that the
+    // noise path applies. Without the fix the guard only watches the frequency
+    // grid/Fs/M and the noise path keeps the old weights.
+    pfb.setTapsPerBranch(16);
+    pfb.update(0.0);
+
+    const auto after = pfb.channels()[0].bin_weights;
+    REQUIRE(after.size() == before.size());
+    bool any_changed = false;
+    for (size_t i = 0; i < before.size(); ++i) {
+        if (after[i] != before[i]) {
+            any_changed = true;
+            break;
+        }
+    }
+    REQUIRE(any_changed);
+}
+
+TEST_CASE("PFB channelizer recomputes bin weights when beta changes", "[pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    // Copy: a reference into channels() would alias the live vector and see
+    // the recomputed weights regardless.
+    const auto before = pfb.channels()[0].bin_weights;
+    REQUIRE(!before.empty());
+
+    // beta shapes the Kaiser window in prototypeResponse(); a beta change must
+    // also re-derive the cached bin_weights used by the noise path.
+    pfb.setKaiserBeta(2.0);
+    pfb.update(0.0);
+
+    const auto after = pfb.channels()[0].bin_weights;
+    REQUIRE(after.size() == before.size());
+    bool any_changed = false;
+    for (size_t i = 0; i < before.size(); ++i) {
+        if (after[i] != before[i]) {
+            any_changed = true;
+            break;
+        }
+    }
+    REQUIRE(any_changed);
+}
+
+TEST_CASE("PFB channelizer severed input clears both outputs and bumps generation", "[pfb]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+    in.fs_Hz = 400e6;
+
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    auto &out0 = pfb.node().outputs[0];
+    auto &out1 = pfb.node().outputs[1];
+    REQUIRE(!out0.frequencies.empty());
+    REQUIRE(!out1.frequencies.empty());
+    const uint64_t gen0 = out0.generation;
+    const uint64_t gen1 = out1.generation;
+
+    // Sever the input (empty spectrum): both outputs must empty out and their
+    // generations must advance so downstream (pointer, generation) caches
+    // observe the change instead of serving stale full-band data.
+    Spectrum empty;
+    pfb.node().inputs[0] = &empty;
+    pfb.update(0.0);
+
+    REQUIRE(out0.frequencies.empty());
+    REQUIRE(out0.tones.empty());
+    REQUIRE(out0.noise_W.empty());
+    REQUIRE(out0.noise_total_W.empty());
+    REQUIRE(out1.frequencies.empty());
+    REQUIRE(out1.tones.empty());
+    REQUIRE(out1.noise_W.empty());
+    REQUIRE(out1.noise_total_W.empty());
+    REQUIRE(out0.generation > gen0);
+    REQUIRE(out1.generation > gen1);
+}

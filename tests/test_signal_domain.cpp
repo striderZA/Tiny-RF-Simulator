@@ -154,7 +154,7 @@ TEST_CASE("Attenuator: propagates is_complex_baseband (manual mode)", "[domain][
 TEST_CASE("Attenuator: propagates is_complex_baseband (S-param mode)", "[domain][attenuator]") {
     NodeGraphEngine graph;
     AttenuatorEngine atten(0, graph);
-    atten.setSParamFile(attenuatorS2pPath());
+    atten.setSParamFilepath(attenuatorS2pPath());
 
     Spectrum in;
     in.frequencies = {1e9, 2e9};
@@ -419,7 +419,7 @@ TEST_CASE("SpectrumAnalyzer: complex-baseband tone renders unchanged (no mirrori
     REQUIRE(trace[10] < -50.0);
 }
 
-// ---- fs_Hz propagation (issue #43) ----
+// ---- fs_Hz propagation (issues #43/#54) ----
 
 TEST_CASE("Mixer: propagates fs_Hz", "[domain][mixer]") {
     NodeGraphEngine graph;
@@ -505,8 +505,26 @@ TEST_CASE("Amplifier: propagates fs_Hz (S-param mode)", "[domain][amplifier]") {
     REQUIRE(amp.node().outputs[0].fs_Hz == Approx(500e6));
 }
 
+TEST_CASE("Attenuator: propagates fs_Hz (S-param mode)", "[domain][attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(0, graph);
+    atten.setSParamFilepath(attenuatorS2pPath());
+    REQUIRE(atten.sparamMode());
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    atten.node().inputs[0] = &in;
+    atten.update(0.0);
+
+    REQUIRE(atten.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
 // Real multi-engine post-ADC chains: fs_Hz must reach the PFB and channels must be populated
-// without any manual setFs_Hz() (issue #43 regression tests).
+// without any manual setFs_Hz() (issues #43/#54 regression tests).
 
 static bool anyChannelHasContent(const PFBChannelizerEngine &pfb) {
     for (const auto &ch : pfb.channels()) {

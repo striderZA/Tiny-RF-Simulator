@@ -11,10 +11,13 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "inspector_panel.h"
 #include "pfb_channelizer_engine.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
 #include <fstream>
+#include <map>
+#include <string_view>
 
 struct ImGuiFixture {
     ImGuiFixture() {
@@ -114,5 +117,56 @@ TEST_CASE_METHOD(ImGuiFixture,
             d->create(app.testComponents(), app.testGraphEngine(), next_id++);
         REQUIRE(engine != nullptr);
         REQUIRE(engine->type_name() == d->type);
+    }
+}
+
+// Data-driven consistency across the three places a component type is
+// declared: ComponentTypeRegistry rows, InspectorPanel drawers, and the
+// NodeKind enum. A new type that forgets any one of them fails here loudly
+// instead of silently rendering an empty properties panel or an unknown node
+// kind. The expected tables are compiled against the enum's current values,
+// so dropping a NodeKind or forgetting to register a drawer breaks the build
+// or the test.
+TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[dispatch]") {
+    // Canonical type key -> NodeKind, mirroring ComponentTypeRegistry rows.
+    const std::map<std::string_view, NodeKind> expected_kind = {
+        {"generator", NodeKind::Generator},
+        {"amplifier", NodeKind::Amplifier},
+        {"splitter", NodeKind::Splitter},
+        {"mixer", NodeKind::Mixer},
+        {"adc", NodeKind::Adc},
+        {"pfb", NodeKind::PFB},
+        {"filter", NodeKind::IdealFilter},
+        {"coax", NodeKind::CoaxCable},
+        {"equalizer", NodeKind::Equalizer},
+        {"attenuator", NodeKind::Attenuator},
+        {"combiner", NodeKind::Combiner},
+    };
+    // supports_sparam_file must be true exactly for the engines that
+    // implement the Touchstone S-param API (verified against
+    // AmplifierEngine, IdealFilterEngine, EqualizerEngine, AttenuatorEngine,
+    // CombinerEngine).
+    const std::map<std::string_view, bool> expected_sparam = {
+        {"amplifier", true}, {"attenuator", true}, {"combiner", true},  {"equalizer", true},
+        {"filter", true},    {"adc", false},       {"coax", false},     {"generator", false},
+        {"mixer", false},    {"pfb", false},       {"splitter", false},
+    };
+
+    for (const auto *d : ComponentTypeRegistry::instance().all()) {
+        CAPTURE(d->type);
+        // (a) Every registered type must have an inspector drawer.
+        CHECK(InspectorPanel::hasDrawer(d->type));
+
+        // (b) Every type must map to a real NodeKind matching the canonical
+        // table; a table miss means the enum doesn't cover the type yet.
+        auto kind_it = expected_kind.find(d->type);
+        REQUIRE(kind_it != expected_kind.end());
+        CHECK(kind_it->second != NodeKind::Unknown);
+        CHECK(d->kind == kind_it->second);
+
+        // (c) The S-param capability flag must match engine reality.
+        auto sparam_it = expected_sparam.find(d->type);
+        REQUIRE(sparam_it != expected_sparam.end());
+        CHECK(d->supports_sparam_file == sparam_it->second);
     }
 }

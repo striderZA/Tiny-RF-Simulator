@@ -2,13 +2,8 @@
 #include <nlohmann/json.hpp>
 
 SignalGeneratorEngine::SignalGeneratorEngine(int id, NodeGraphEngine &graph)
-    : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Generator " + std::to_string(id), &m_node, 0, 1);
+    : ComponentEngineBase(id, graph, "Generator", 0, 1) {
     rebuildFrequencyGrid();
-}
-
-int SignalGeneratorEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 void SignalGeneratorEngine::rebuildFrequencyGrid() {

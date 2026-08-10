@@ -3,11 +3,8 @@
 #include <nlohmann/json.hpp>
 #include <numbers>
 
-AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Amplifier " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
-}
+AmplifierEngine::AmplifierEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Amplifier", 1, 1) {}
 
 void AmplifierEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
@@ -15,14 +12,6 @@ void AmplifierEngine::setSParamFilepath(const std::string &path) {
     if (m_sparam_data.loaded())
         m_sparam_fwd_idx = 1 * m_sparam_data.numPorts() + 0; // S21
     m_dirty = true;
-}
-
-int AmplifierEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
-
-int AmplifierEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 void AmplifierEngine::update(double dt) {

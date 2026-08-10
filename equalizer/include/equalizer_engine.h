@@ -1,24 +1,18 @@
 #pragma once
 
-#include "component_interface.h"
+#include "component_engine_base.h"
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include <algorithm>
 #include <string>
 
-class EqualizerEngine : public IComponentEngine {
+class EqualizerEngine : public ComponentEngineBase {
   public:
     EqualizerEngine(int id, NodeGraphEngine &graph);
 
-    int id() const override { return m_id; }
-    int graphNodeId() const override { return m_graph_node_id; }
     std::string_view type_name() const override { return "equalizer"; }
     std::string hoverSummary() const override;
-    int inputPinId() const override;
-    int outputPinId() const override;
-    SignalNode &node() override { return m_node; }
-    const SignalNode &node() const override { return m_node; }
     void update(double dt) override;
     nlohmann::json serialize() const override;
     void deserialize(const nlohmann::json &) override;
@@ -52,14 +46,6 @@ class EqualizerEngine : public IComponentEngine {
     const SParameterData &sparamData() const { return m_sparam_data; }
 
   private:
-    int m_id;
-    int m_graph_node_id = -1;
-    NodeGraphEngine *m_graph = nullptr;
-    SignalNode m_node;
-    bool m_dirty = true;
-    const Spectrum *m_cached_input_ptr = nullptr;
-    uint64_t m_cached_input_generation = 0;
-
     // Ideal mode
     double m_ref_gain_dB = 0.0;
     double m_ref_freq_Hz = 1e9;

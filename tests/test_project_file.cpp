@@ -6,10 +6,13 @@
 #include "implot.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <complex>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <numbers>
 #include <string>
 
 using Catch::Approx;
@@ -167,6 +170,72 @@ TEST_CASE_METHOD(ImGuiFixture, "Load invalid JSON does not crash", "[project_fil
         REQUIRE(app.componentCount() == 2);
     }
     std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// 6b — Loading valid JSON with the wrong shape must not crash: either it loads
+//      as an empty project or it fails gracefully, leaving a usable app.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Load empty object JSON is a valid empty project",
+                 "[project_file]") {
+    auto path = tempPath("_empty");
+    std::remove(path.c_str());
+    {
+        std::ofstream out(path);
+        out << "{}";
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path); // must not crash (regression: shape access was unguarded)
+        REQUIRE(app.componentCount() == 0); // {} is a valid (empty) project
+    }
+    std::remove(path.c_str());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Load wrong-shape JSON fails gracefully, no crash",
+                 "[project_file]") {
+    SECTION("components is not an array") {
+        auto path = tempPath("_comp5");
+        std::remove(path.c_str());
+        {
+            std::ofstream out(path);
+            out << R"({"components": 5})";
+        }
+        {
+            RfSimulatorApp app;
+            app.loadProject(path); // must not crash; load fails, project cleared
+            REQUIRE(app.componentCount() == 0);
+        }
+        std::remove(path.c_str());
+    }
+    SECTION("component entry wrong-typed (type is a number)") {
+        auto path = tempPath("_typed");
+        std::remove(path.c_str());
+        {
+            std::ofstream out(path);
+            out << R"({"components": [{"type": 42}]})";
+        }
+        {
+            RfSimulatorApp app;
+            app.loadProject(path);              // must not crash; bad component is skipped
+            REQUIRE(app.componentCount() == 0); // skipped, nothing else to load
+        }
+        std::remove(path.c_str());
+    }
+    SECTION("window_state wrong-typed") {
+        auto path = tempPath("_ws");
+        std::remove(path.c_str());
+        {
+            std::ofstream out(path);
+            out << R"({"window_state": 5})";
+        }
+        {
+            RfSimulatorApp app;
+            app.loadProject(path); // must not crash; load fails, project cleared
+            REQUIRE(app.componentCount() == 0);
+        }
+        std::remove(path.c_str());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +509,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: default component positions are (0,0
 }
 
 // ---------------------------------------------------------------------------
-// 13 — Issue #44: S-param mode survives save/load for amplifier, ideal filter,
+// 13 — Issue #56: S-param mode survives save/load for amplifier, ideal filter,
 //      equalizer, attenuator, and combiner. Previously deserialize() restored
 //      sparam_mode/sparam_filepath but never reloaded the Touchstone file, so
 //      a reloaded project silently fell back to ideal/manual mode.
@@ -450,34 +519,40 @@ static std::string sparamFixturePath() {
            "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #44)",
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #56)",
                  "[project_file][sparam]") {
     auto path = tempPath();
     std::remove(path.c_str());
     const std::string s2p = sparamFixturePath();
+    // S1 containment (2026-08-09): S-param paths in project files resolve
+    // against the project file's directory and must stay inside it, so the
+    // fixture is staged next to the project file and referenced by its
+    // relative name (the project file itself lives in the CWD).
+    const std::string local_s2p = tempPath("_fixture.s2p");
+    std::filesystem::copy_file(s2p, local_s2p, std::filesystem::copy_options::overwrite_existing);
     {
         RfSimulatorApp app;
         app.newProject();
 
         auto &amp = app.testComponents().add<AmplifierEngine>(10001, app.testGraphEngine());
-        amp.setSParamFilepath(s2p);
+        amp.setSParamFilepath(local_s2p);
         REQUIRE(amp.sparamLoaded());
 
         auto &flt = app.testComponents().add<IdealFilterEngine>(10002, app.testGraphEngine());
-        flt.setSParamFilepath(s2p);
+        flt.setSParamFilepath(local_s2p);
         REQUIRE(flt.sparamLoaded());
 
         auto &eq = app.testComponents().add<EqualizerEngine>(10003, app.testGraphEngine());
-        eq.setSParamFilepath(s2p);
+        eq.setSParamFilepath(local_s2p);
         REQUIRE(eq.sparamLoaded());
 
         auto &atten = app.testComponents().add<AttenuatorEngine>(10004, app.testGraphEngine());
-        atten.setSParamFile(s2p);
-        REQUIRE(atten.sParamMode());
+        atten.setSParamFilepath(local_s2p);
+        REQUIRE(atten.sparamMode());
 
         auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
-        comb.setSParamFile(s2p);
-        REQUIRE(comb.sParamMode());
+        comb.setSParamFilepath(local_s2p);
+        REQUIRE(comb.sparamMode());
 
         REQUIRE(app.componentCount() == 5);
         app.saveProject(path);
@@ -492,6 +567,32 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         CHECK(amps[0]->sparamMode() == true);
         CHECK(amps[0]->sparamLoaded() == true);
 
+        // Issue #56 regression: sparamMode()/sparamLoaded() are necessary but
+        // not sufficient — the old deserialize() restored the mode flags and
+        // filepath without reloading the Touchstone file, so a reloaded
+        // amplifier reported sparamMode()==true but applied ideal gain. Drive
+        // a tone through the loaded amplifier via the app DSP chain and
+        // compare the output against the S21-derived expectation (mirrors
+        // tests/test_amplifier_sparam.cpp).
+        auto &gen = app.testComponents().add<SignalGeneratorEngine>(20001, app.testGraphEngine());
+        gen.addTone(1e9, -20.0);
+        gen.update(0.0);
+
+        int gen_pin = gen.outputPinId();
+        int amp_pin = amps[0]->inputPinId();
+        int link_id = app.testGraphEngine().addLink(gen_pin, amp_pin);
+        REQUIRE(link_id > 0);
+
+        app.update_dsp();
+
+        const auto &amp_out = amps[0]->node().outputs[0];
+        REQUIRE(amp_out.tones.size() == 1);
+        auto S21 = amps[0]->sparamData().interpolate(1e9, 2);
+        double expected_gain = 20.0 * std::log10(std::abs(S21));
+        REQUIRE(amp_out.tones[0].power_dBm == Approx(-20.0 + expected_gain).margin(0.5));
+        double expected_phase = std::arg(S21) * 180.0 / std::numbers::pi;
+        REQUIRE(amp_out.tones[0].phase_deg == Approx(expected_phase).margin(1.0));
+
         auto flts = app.testComponents().byType<IdealFilterEngine>();
         REQUIRE(flts.size() == 1);
         CHECK(flts[0]->sparamMode() == true);
@@ -504,11 +605,12 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
 
         auto attens = app.testComponents().byType<AttenuatorEngine>();
         REQUIRE(attens.size() == 1);
-        CHECK(attens[0]->sParamMode() == true);
+        CHECK(attens[0]->sparamMode() == true);
 
         auto combs = app.testComponents().byType<CombinerEngine>();
         REQUIRE(combs.size() == 1);
-        CHECK(combs[0]->sParamMode() == true);
+        CHECK(combs[0]->sparamMode() == true);
     }
     std::remove(path.c_str());
+    std::filesystem::remove(local_s2p);
 }

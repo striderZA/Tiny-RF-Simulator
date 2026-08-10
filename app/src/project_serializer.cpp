@@ -9,11 +9,120 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_view_manager.h"
 #include "session_state.h"
+#include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace {
+
+namespace fs = std::filesystem;
+
+// --- S-param path containment (S1) -----------------------------------------
+// Mirrors extension_manifest.cpp's resolveWithinRoot discipline: an S-param
+// path read from an untrusted project file is only honored if its canonical
+// form stays inside the project file's directory. Absolute paths outside the
+// project dir, '..' traversal, and unresolvable paths are neutralized at the
+// load boundary before any engine deserializes them.
+
+bool containsParentTraversal(const fs::path &path) {
+    for (const auto &part : path) {
+        if (part == "..")
+            return true;
+    }
+    return false;
+}
+
+bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
+    std::error_code ec;
+    const fs::path canonical_root = fs::weakly_canonical(root, ec);
+    if (ec)
+        return false;
+
+    ec.clear();
+    const fs::path canonical_candidate = fs::weakly_canonical(candidate, ec);
+    if (ec)
+        return false;
+
+    auto root_it = canonical_root.begin();
+    auto candidate_it = canonical_candidate.begin();
+    for (; root_it != canonical_root.end(); ++root_it, ++candidate_it) {
+        if (candidate_it == canonical_candidate.end() || *root_it != *candidate_it)
+            return false;
+    }
+    return true;
+}
+
+// Resolve an S-param path from an untrusted project file against the project
+// directory. Returns the canonical absolute path on success, or nullopt when
+// the path must be neutralized (absolute outside the project dir, '..'
+// traversal, or unresolvable).
+std::optional<std::string> resolveSparamPath(const fs::path &project_dir,
+                                             const std::string &input) {
+    const fs::path p(input);
+    if (p.empty())
+        return std::nullopt;
+    if (containsParentTraversal(p))
+        return std::nullopt;
+
+    const fs::path candidate = p.is_absolute() ? p : (project_dir / p);
+    if (!pathWithinRoot(project_dir, candidate))
+        return std::nullopt;
+
+    std::error_code ec;
+    const fs::path resolved = fs::weakly_canonical(candidate, ec);
+    if (ec)
+        return std::nullopt;
+    return resolved.string();
+}
+
+// Load boundary: rewrite S-param path params in-place. Contained paths are
+// resolved to their canonical absolute form (the engine loads them, and the
+// save boundary re-relativizes them for round-trip); paths that escape the
+// project dir are neutralized to "" with a warning.
+void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
+    if (!params.is_object())
+        return;
+    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+        if (!params.contains(key) || !params[key].is_string())
+            continue;
+        const std::string value = params[key].get<std::string>();
+        if (value.empty())
+            continue;
+        if (const auto resolved = resolveSparamPath(project_dir, value)) {
+            params[key] = *resolved;
+        } else {
+            LOG_WARN("Project S-param path rejected (outside project dir): %s", value.c_str());
+            params[key] = "";
+        }
+    }
+}
+
+// Save boundary: keep the project file portable by persisting S-param paths
+// relative to the project directory. Absolute paths the user configured that
+// stay inside the project dir are re-written relative; anything else is left
+// untouched (load-side containment already guards untrusted project files).
+void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir) {
+    if (!params.is_object())
+        return;
+    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+        if (!params.contains(key) || !params[key].is_string())
+            continue;
+        const fs::path p(params[key].get<std::string>());
+        if (!p.is_absolute() || !pathWithinRoot(project_dir, p))
+            continue;
+        std::error_code ec;
+        const fs::path rel = fs::relative(p, project_dir, ec);
+        if (ec)
+            continue;
+        params[key] = rel.generic_string();
+    }
+}
+
+} // namespace
 
 ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
@@ -41,11 +150,14 @@ void ProjectSerializer::save(const std::string &path) {
 
     // Save components by iterating the registry
     nlohmann::json comps_arr = nlohmann::json::array();
+    // S1: S-param paths are persisted relative to the project dir for portability.
+    const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
     for (auto *comp : m_components.all()) {
         nlohmann::json cj;
         const auto *desc = ComponentTypeRegistry::instance().find(comp->type_name());
         cj["type"] = desc ? desc->project_type : "Unknown";
         cj["params"] = comp->serialize();
+        relativizeSparamParams(cj["params"], save_project_dir);
 
         // Save node position via imnodes
         int nid = comp->graphNodeId();
@@ -163,6 +275,21 @@ bool ProjectSerializer::load(const std::string &path) {
         LOG_ERROR("Failed to open project file: %s", path.c_str());
         return false;
     }
+    // Reject oversized files before parsing (e.g. a truncated or corrupted
+    // file could otherwise balloon memory during parse).
+    in.seekg(0, std::ios::end);
+    const std::streamoff file_size = in.tellg();
+    if (file_size > 64 * 1024 * 1024) {
+        LOG_ERROR("Project file too large to load (%lld bytes): %s",
+                  static_cast<long long>(file_size), path.c_str());
+        return false;
+    }
+    in.seekg(0, std::ios::beg);
+
+    // S1: the project file's directory is the containment root for S-param
+    // paths referenced from this project.
+    const fs::path project_dir = fs::absolute(fs::path(path)).parent_path();
+
     nlohmann::json root;
     try {
         in >> root;
@@ -170,126 +297,154 @@ bool ProjectSerializer::load(const std::string &path) {
         LOG_ERROR("Invalid project file: %s", e.what());
         return false;
     }
-
-    reset();
-
-    // Map: type string \u2192 factory lambda
-    std::vector<nlohmann::json::iterator> comp_order;
-    auto &comps = root["components"];
-    for (auto it = comps.begin(); it != comps.end(); ++it)
-        comp_order.push_back(it);
-
-    // Create components in saved order
-    std::vector<int> new_node_ids; // maps saved index \u2192 new graph node ID
-    for (auto &it : comp_order) {
-        auto &cj = *it;
-        std::string type = cj.value("type", "");
-        auto &params = cj["params"];
-
-        const auto *desc = ComponentTypeRegistry::instance().findByProjectType(type);
-        if (!desc) {
-            LOG_WARN("Unknown component type in project file: %s", type.c_str());
-            new_node_ids.push_back(-1);
-            continue;
-        }
-        IComponentEngine *comp = desc->create(m_components, m_graph, m_next_component_id++);
-        comp->deserialize(params);
-        if (desc->type == "pfb") {
-            // Restore IQ plot + PFB grid widgets for this PFB
-            m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
-        }
-
-        new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
-
-        // Restore position
-        if (comp && cj.contains("pos")) {
-            ImNodes::EditorContextSet(m_graph_widget.context());
-            ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), ImVec2(cj["pos"].value("x", 0.0f),
-                                                                       cj["pos"].value("y", 0.0f)));
-        }
-
-        // Restore library part number
-        if (comp && cj.contains("part_number"))
-            m_graph.setNodePartNumber(comp->graphNodeId(), cj["part_number"].get<std::string>());
-    }
-    // After restoring all positions, inform the widget so subsequent
-    // syncNodesFromEngine calls (e.g. from saveProject) don't reset them.
-    m_graph_widget.markNodesRegistered();
-
-    // Restore links (saved as component-index + port pairs)
-    auto &saved_links = root["links"];
-    for (const auto &lj : saved_links) {
-        int from_idx = lj.value("from", -1);
-        int to_idx = lj.value("to", -1);
-        int from_port = lj.value("from_port", 0);
-        int to_port = lj.value("to_port", 0);
-        if (from_idx < 0 || to_idx < 0 || static_cast<size_t>(from_idx) >= new_node_ids.size() ||
-            static_cast<size_t>(to_idx) >= new_node_ids.size())
-            continue;
-
-        int from_node = new_node_ids[from_idx];
-        int to_node = new_node_ids[to_idx];
-        if (from_node < 0 || to_node < 0)
-            continue;
-
-        auto *from_comp = m_components.find(from_node);
-        auto *to_comp = m_components.find(to_node);
-        if (!from_comp || !to_comp)
-            continue;
-
-        int start_pin = from_comp->outputPinId(from_port);
-        int end_pin = to_comp->inputPinId(to_port);
-        if (start_pin >= 0 && end_pin >= 0)
-            m_graph.addLink(start_pin, end_pin);
+    if (!root.is_object()) {
+        LOG_ERROR("Invalid project file (root is not a JSON object): %s", path.c_str());
+        return false;
     }
 
-    // Restore probes
-    auto &saved_probes = root["probe_pins"];
-    for (const auto &pj : saved_probes) {
-        int comp_idx = pj.value("comp", -1);
-        int port = pj.value("port", 0);
-        bool is_output = pj.value("is_output", true);
-        if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= m_components.size())
-            continue;
-        auto *comp = m_components.all()[comp_idx];
-        int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
-        if (pin >= 0)
-            m_graph.addProbePin(pin);
-    }
+    try {
+        reset();
 
-    // Restore groups
-    auto &saved_groups = root["groups"];
-    for (const auto &gj : saved_groups) {
-        std::string name = gj.value("name", "Group");
-        std::vector<int> member_ids;
-        for (const auto &mj : gj["member_components"]) {
-            int comp_idx = mj.get<int>();
-            if (comp_idx >= 0 && static_cast<size_t>(comp_idx) < new_node_ids.size() &&
-                new_node_ids[comp_idx] >= 0) {
-                member_ids.push_back(new_node_ids[comp_idx]);
+        // Map: type string \u2192 factory lambda
+        std::vector<nlohmann::json::iterator> comp_order;
+        auto &comps = root["components"];
+        for (auto it = comps.begin(); it != comps.end(); ++it)
+            comp_order.push_back(it);
+
+        // Create components in saved order
+        std::vector<int> new_node_ids; // maps saved index \u2192 new graph node ID
+        size_t comp_index = 0;
+        for (auto &it : comp_order) {
+            auto &cj = *it;
+            const size_t current_index = comp_index++;
+            // One malformed component must not abort the whole load: log it and
+            // skip it (new_node_ids keeps the saved-index \u2192 node mapping intact
+            // with -1 so link/probe/group restoration stays in step).
+            try {
+                std::string type = cj.value("type", "");
+                auto &params = cj["params"];
+
+                const auto *desc = ComponentTypeRegistry::instance().findByProjectType(type);
+                if (!desc) {
+                    LOG_WARN("Unknown component type in project file: %s", type.c_str());
+                    new_node_ids.push_back(-1);
+                    continue;
+                }
+                IComponentEngine *comp = desc->create(m_components, m_graph, m_next_component_id++);
+                // S1: resolve S-param paths against the project file's
+                // directory and neutralize any path that escapes it (the
+                // engine's deserialize() only sees the raw params JSON and
+                // cannot know the project dir).
+                resolveSparamParams(params, project_dir);
+                comp->deserialize(params);
+                if (desc->type == "pfb") {
+                    // Restore IQ plot + PFB grid widgets for this PFB
+                    m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
+                }
+
+                new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
+
+                // Restore position
+                if (comp && cj.contains("pos")) {
+                    ImNodes::EditorContextSet(m_graph_widget.context());
+                    ImNodes::SetNodeEditorSpacePos(
+                        comp->graphNodeId(),
+                        ImVec2(cj["pos"].value("x", 0.0f), cj["pos"].value("y", 0.0f)));
+                }
+
+                // Restore library part number
+                if (comp && cj.contains("part_number"))
+                    m_graph.setNodePartNumber(comp->graphNodeId(),
+                                              cj["part_number"].get<std::string>());
+            } catch (const std::exception &e) {
+                LOG_ERROR("Skipping malformed component %zu in project file %s: %s", current_index,
+                          path.c_str(), e.what());
+                new_node_ids.push_back(-1);
             }
         }
-        if (member_ids.size() >= 2) {
-            int gid = m_graph.addGroup(name, member_ids);
-            bool collapsed = gj.value("collapsed", true);
-            if (gid >= 0)
-                m_graph.setGroupCollapsed(gid, collapsed);
+        // After restoring all positions, inform the widget so subsequent
+        // syncNodesFromEngine calls (e.g. from saveProject) don't reset them.
+        m_graph_widget.markNodesRegistered();
+
+        // Restore links (saved as component-index + port pairs)
+        auto &saved_links = root["links"];
+        for (const auto &lj : saved_links) {
+            int from_idx = lj.value("from", -1);
+            int to_idx = lj.value("to", -1);
+            int from_port = lj.value("from_port", 0);
+            int to_port = lj.value("to_port", 0);
+            if (from_idx < 0 || to_idx < 0 ||
+                static_cast<size_t>(from_idx) >= new_node_ids.size() ||
+                static_cast<size_t>(to_idx) >= new_node_ids.size())
+                continue;
+
+            int from_node = new_node_ids[from_idx];
+            int to_node = new_node_ids[to_idx];
+            if (from_node < 0 || to_node < 0)
+                continue;
+
+            auto *from_comp = m_components.find(from_node);
+            auto *to_comp = m_components.find(to_node);
+            if (!from_comp || !to_comp)
+                continue;
+
+            int start_pin = from_comp->outputPinId(from_port);
+            int end_pin = to_comp->inputPinId(to_port);
+            if (start_pin >= 0 && end_pin >= 0)
+                m_graph.addLink(start_pin, end_pin);
         }
-    }
 
-    // Restore window state
-    auto &ws = root["window_state"];
-    if (!ws.is_null()) {
-        m_show_log = ws.value("log", true);
-        m_show_spectrum = ws.value("spectrum_analyzer", true);
-        m_show_properties = ws.value("properties", true);
-        m_show_node_editor = ws.value("node_editor", true);
-    }
+        // Restore probes
+        auto &saved_probes = root["probe_pins"];
+        for (const auto &pj : saved_probes) {
+            int comp_idx = pj.value("comp", -1);
+            int port = pj.value("port", 0);
+            bool is_output = pj.value("is_output", true);
+            if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= m_components.size())
+                continue;
+            auto *comp = m_components.all()[comp_idx];
+            int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
+            if (pin >= 0)
+                m_graph.addProbePin(pin);
+        }
 
-    // Restore graph state counters
-    auto &gs = root["graph_state"];
-    if (!gs.is_null()) {
-        m_next_component_id = gs.value("next_component_id", m_next_component_id);
+        // Restore groups
+        auto &saved_groups = root["groups"];
+        for (const auto &gj : saved_groups) {
+            std::string name = gj.value("name", "Group");
+            std::vector<int> member_ids;
+            for (const auto &mj : gj["member_components"]) {
+                int comp_idx = mj.get<int>();
+                if (comp_idx >= 0 && static_cast<size_t>(comp_idx) < new_node_ids.size() &&
+                    new_node_ids[comp_idx] >= 0) {
+                    member_ids.push_back(new_node_ids[comp_idx]);
+                }
+            }
+            if (member_ids.size() >= 2) {
+                int gid = m_graph.addGroup(name, member_ids);
+                bool collapsed = gj.value("collapsed", true);
+                if (gid >= 0)
+                    m_graph.setGroupCollapsed(gid, collapsed);
+            }
+        }
+
+        // Restore window state
+        auto &ws = root["window_state"];
+        if (!ws.is_null()) {
+            m_show_log = ws.value("log", true);
+            m_show_spectrum = ws.value("spectrum_analyzer", true);
+            m_show_properties = ws.value("properties", true);
+            m_show_node_editor = ws.value("node_editor", true);
+        }
+
+        // Restore graph state counters
+        auto &gs = root["graph_state"];
+        if (!gs.is_null()) {
+            m_next_component_id = gs.value("next_component_id", m_next_component_id);
+        }
+    } catch (const nlohmann::json::exception &e) {
+        LOG_ERROR("Malformed project file %s: %s", path.c_str(), e.what());
+        return false;
     }
 
     LOG_INFO("Loaded project from %s", path.c_str());
