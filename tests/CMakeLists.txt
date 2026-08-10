@@ -85,6 +85,12 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+add_standalone_test(test_network_analyzer
+    SOURCES test_network_analyzer.cpp
+    LIBS simulator::network_analyzer_engine simulator::attenuator_engine
+         simulator::amplifier_engine simulator::mixer_engine simulator::node_graph_engine
+)
+
 # Standalone executable for all new tests added by the component-library authoring UI
 # plan (docs/superpowers/plans/2026-07-28-component-library-authoring-ui.md). Kept out
 # of the main `tests` binary because this MinGW-w64 toolchain silently drops any
