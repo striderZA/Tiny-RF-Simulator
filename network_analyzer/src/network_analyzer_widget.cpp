@@ -16,6 +16,8 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
+    m_param_edited = false;
+
     // Point pickers: every real output pin currently in the graph, rebuilt
     // each frame so add/remove/link edits show up immediately. Index 0 = unset.
     struct PinEntry {
@@ -43,8 +45,10 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
     }
     if (ImGui::Combo("Point A (Reference)", &a_idx, items.data(),
-                     static_cast<int>(items.size())))
+                     static_cast<int>(items.size()))) {
         m_engine.setPointA(a_idx == 0 ? -1 : pins[static_cast<size_t>(a_idx - 1)].pin_id);
+        m_param_edited = true;
+    }
 
     int b_idx = 0;
     for (size_t i = 0; i < pins.size(); ++i) {
@@ -54,22 +58,32 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
     }
     if (ImGui::Combo("Point B (Measured)", &b_idx, items.data(),
-                     static_cast<int>(items.size())))
+                     static_cast<int>(items.size()))) {
         m_engine.setPointB(b_idx == 0 ? -1 : pins[static_cast<size_t>(b_idx - 1)].pin_id);
+        m_param_edited = true;
+    }
 
     // Sweep parameters — same widgets/ranges as the v1/v2 Inspector fields.
     double f0 = m_engine.startFrequency();
-    if (utils::inputDouble("Start Freq (Hz)", f0, 1e6, 1e7, "%.0f", 0.0, 20e9))
+    if (utils::inputDouble("Start Freq (Hz)", f0, 1e6, 1e7, "%.0f", 0.0, 20e9)) {
         m_engine.setStartFrequency(f0);
+        m_param_edited = true;
+    }
     double f1 = m_engine.stopFrequency();
-    if (utils::inputDouble("Stop Freq (Hz)", f1, 1e6, 1e7, "%.0f", 0.0, 20e9))
+    if (utils::inputDouble("Stop Freq (Hz)", f1, 1e6, 1e7, "%.0f", 0.0, 20e9)) {
         m_engine.setStopFrequency(f1);
+        m_param_edited = true;
+    }
     int pts = m_engine.points();
-    if (ImGui::InputInt("Points", &pts))
+    if (ImGui::InputInt("Points", &pts)) {
         m_engine.setPoints(pts);
+        m_param_edited = true;
+    }
     double power = m_engine.stimulusPower();
-    if (utils::inputDouble("Stimulus Power (dBm)", power, 1, 10, "%.1f", -60.0, 10.0))
+    if (utils::inputDouble("Stimulus Power (dBm)", power, 1, 10, "%.1f", -60.0, 10.0)) {
         m_engine.setStimulusPower(power);
+        m_param_edited = true;
+    }
 
     ImGui::Separator();
 
@@ -112,6 +126,9 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
         ImGui::Text("Avg NF: %.2f dB", nf_sum / nf_n);
     else
         ImGui::TextDisabled("Avg NF: no data");
+
+    if (m_param_edited && onParamChange)
+        onParamChange();
 
     ImGui::End();
 }

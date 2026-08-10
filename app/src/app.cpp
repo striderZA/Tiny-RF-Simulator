@@ -78,7 +78,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_serializer = std::make_unique<ProjectSerializer>(
         m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
-        m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor);
+        m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor, m_na_engine);
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
@@ -138,6 +138,10 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_graph_engine);
+    // Sweep-param/Point A/B edits in the Network Analyzer panel are project
+    // state (persisted by ProjectSerializer) — mark the project dirty exactly
+    // like InspectorPanel::onParamChange does for component params.
+    m_na_widget->onParamChange = [this]() { markDirty(); };
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without
