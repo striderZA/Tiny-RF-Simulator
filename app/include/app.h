@@ -21,6 +21,7 @@
 #include "library_browser_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
+#include "network_analyzer_view_manager.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
@@ -136,6 +137,9 @@ class RfSimulatorApp {
     // Declared after m_components so the manager (and its widget references to
     // engines) is destroyed before the engines themselves.
     PFBViewManager m_pfb_views;
+    // Same destruction-order comment applies — it also holds widget references
+    // to engines owned by m_components.
+    NetworkAnalyzerViewManager m_na_views;
     // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
     // so it is destroyed before them (it holds references to both).
     std::unique_ptr<ProjectSerializer> m_serializer;

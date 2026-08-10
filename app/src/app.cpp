@@ -6,6 +6,7 @@
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
+#include "network_analyzer_engine.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <cctype>
@@ -77,8 +78,8 @@ static std::string appExeDir() {
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_serializer = std::make_unique<ProjectSerializer>(
-        m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
-        m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor);
+        m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_na_views, m_state,
+        m_next_component_id, m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor);
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
@@ -101,6 +102,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         // rebuildCache(), InspectorPanel) would otherwise use-after-free. See issue #37.
         rewireInputs();
         m_pfb_views.rebuild(m_components, m_state);
+        m_na_views.rebuild(m_components, m_state);
     };
     m_graph_widget->onNodeHover = [this](int id) { return m_components.hoverSummary(id); };
     m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
@@ -158,6 +160,9 @@ void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 po
     if (desc->type == "pfb") {
         m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
     }
+    if (desc->type == "network_analyzer") {
+        m_na_views.addFor(*static_cast<NetworkAnalyzerEngine *>(comp), m_state);
+    }
     markDirty(); // unconditional — fixes the Equalizer missing-markDirty bug
 }
 
@@ -205,6 +210,9 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // PFB also needs IQ plot widget and grid widget (same as addComponent)
     if (desc->type == "pfb") {
         m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(copy), m_state);
+    }
+    if (desc->type == "network_analyzer") {
+        m_na_views.addFor(*static_cast<NetworkAnalyzerEngine *>(copy), m_state);
     }
 
     markDirty();
@@ -640,6 +648,8 @@ void RfSimulatorApp::update_dsp() {
     m_inspector_panel->setPFBs(pfb_vec);
     m_inspector_panel->setPFBWindowVisibility(&m_pfb_views.iqVisibility(),
                                               &m_pfb_views.gridVisibility());
+    m_inspector_panel->setNetworkAnalyzerWindowVisibility(&m_na_views.visibility(),
+                                                          &m_na_views.engines());
 }
 
 void RfSimulatorApp::draw_ui() {
@@ -968,6 +978,7 @@ void RfSimulatorApp::draw_ui() {
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
     m_pfb_views.draw();
+    m_na_views.draw();
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
@@ -1000,6 +1011,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_components, m_state);
+    m_na_views.saveVisibility(m_components, m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
 }

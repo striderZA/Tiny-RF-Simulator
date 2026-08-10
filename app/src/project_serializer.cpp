@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
+#include "network_analyzer_engine.h"
+#include "network_analyzer_view_manager.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
@@ -126,13 +128,13 @@ void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir)
 
 ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     SessionState &state, int &next_component_id, bool &show_log,
-                                     bool &show_spectrum, bool &show_properties,
-                                     bool &show_node_editor)
+                                     NetworkAnalyzerViewManager &na_views, SessionState &state,
+                                     int &next_component_id, bool &show_log, bool &show_spectrum,
+                                     bool &show_properties, bool &show_node_editor)
     : m_components(components), m_graph(graph), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_state(state), m_next_component_id(next_component_id),
-      m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
-      m_show_node_editor(show_node_editor) {}
+      m_pfb_views(pfb_views), m_na_views(na_views), m_state(state),
+      m_next_component_id(next_component_id), m_show_log(show_log), m_show_spectrum(show_spectrum),
+      m_show_properties(show_properties), m_show_node_editor(show_node_editor) {}
 
 void ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
@@ -341,6 +343,9 @@ bool ProjectSerializer::load(const std::string &path) {
                     // Restore IQ plot + PFB grid widgets for this PFB
                     m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
                 }
+                if (desc->type == "network_analyzer") {
+                    m_na_views.addFor(*static_cast<NetworkAnalyzerEngine *>(comp), m_state);
+                }
 
                 new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
 
@@ -468,6 +473,7 @@ void ProjectSerializer::reset() {
 
     // Reset IQ / PFB widgets
     m_pfb_views.clear();
+    m_na_views.clear();
 
     // Reset graph counters
     m_graph.setNextIds(1, 100, 1000);

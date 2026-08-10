@@ -249,3 +249,60 @@ TEST_CASE("NetworkAnalyzer: widget draws without crashing", "[network_analyzer][
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
 }
+
+#include "app.h"
+#include "imnodes.h"
+#include <cstdio>
+
+namespace {
+struct AppFixture {
+    AppFixture() {
+        ImGui::CreateContext();
+        ImPlot::CreateContext();
+        ImNodes::CreateContext();
+    }
+    ~AppFixture() {
+        ImNodes::DestroyContext();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+    }
+};
+} // namespace
+
+TEST_CASE_METHOD(AppFixture, "NetworkAnalyzer: added via canvas menu wires into the app",
+                 "[network_analyzer][app]") {
+    RfSimulatorApp app;
+    app.newProject();
+    bool clicked = false;
+    for (const auto &addable : app.testGraphWidget().addableComponents()) {
+        if (addable.menu_label == "Add Network Analyzer") {
+            addable.on_add(ImVec2(0, 0));
+            clicked = true;
+        }
+    }
+    REQUIRE(clicked);
+    REQUIRE(app.testComponents().byType<NetworkAnalyzerEngine>().size() == 1);
+    REQUIRE(InspectorPanel::hasDrawer("network_analyzer"));
+}
+
+TEST_CASE_METHOD(AppFixture, "NetworkAnalyzer: round-trips through project save/load",
+                 "[network_analyzer][app]") {
+    auto path = "test_na_roundtrip.rfsim";
+    std::remove(path);
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        for (const auto &addable : app.testGraphWidget().addableComponents()) {
+            if (addable.menu_label == "Add Network Analyzer")
+                addable.on_add(ImVec2(0, 0));
+        }
+        REQUIRE(app.testComponents().byType<NetworkAnalyzerEngine>().size() == 1);
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.testComponents().byType<NetworkAnalyzerEngine>().size() == 1);
+    }
+    std::remove(path);
+}

@@ -10,6 +10,7 @@
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
+#include "network_analyzer_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -264,4 +265,33 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
         return static_cast<IComponentEngine *>(&registry.add<PFBChannelizerEngine>(id, graph));
     };
     m_descriptors.push_back(pfb);
+
+    ComponentTypeDescriptor na;
+    na.type = "network_analyzer";
+    na.project_type = "NetworkAnalyzer";
+    na.display_name = "Network Analyzer";
+    na.menu_label = "Add Network Analyzer";
+    na.label_prefix = "Network Analyzer";
+    na.kind = NodeKind::NetworkAnalyzer;
+    na.authorable = false;
+    na.supports_sparam_file = false;
+    na.fields = {
+        {"start_freq_hz", "Start Frequency", "Hz", FieldKind::Number, true, 0.0, 20e9, {}, {}, ""},
+        {"stop_freq_hz", "Stop Frequency", "Hz", FieldKind::Number, true, 0.0, 20e9, {}, {}, ""},
+        {"points", "Points", "", FieldKind::Number, false, 2.0, 2001.0, {}, {}, ""},
+        {"stimulus_power_dBm",
+         "Stimulus Power",
+         "dBm",
+         FieldKind::Number,
+         false,
+         -60.0,
+         10.0,
+         {},
+         {},
+         ""},
+    };
+    na.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
+        return static_cast<IComponentEngine *>(&registry.add<NetworkAnalyzerEngine>(id, graph));
+    };
+    m_descriptors.push_back(na);
 }

@@ -20,6 +20,7 @@ class IdealFilterEngine;
 class AttenuatorEngine;
 class CombinerEngine;
 class PFBChannelizerEngine;
+class NetworkAnalyzerEngine;
 class ComponentRegistry;
 
 struct ViewToggles {
@@ -55,6 +56,11 @@ class InspectorPanel {
         m_pfb_iq_visible = iq_visible;
         m_pfb_grid_visible = grid_visible;
     }
+    void setNetworkAnalyzerWindowVisibility(std::vector<bool> *visible,
+                                            const std::vector<NetworkAnalyzerEngine *> *engines) {
+        m_na_visible = visible;
+        m_na_engines = engines;
+    }
 
     std::function<void(int graph_node_id)> onRemoveNode;
     std::function<void()> onParamChange;
@@ -83,6 +89,7 @@ class InspectorPanel {
     void drawIdealFilterProperties(IdealFilterEngine &engine, int index);
     void drawAttenuatorProperties(AttenuatorEngine &engine, int index);
     void drawCombinerProperties(CombinerEngine &engine, int index);
+    void drawNetworkAnalyzerProperties(NetworkAnalyzerEngine &engine, int index);
     void drawGroupPanel(int group_id);
 
   private:
@@ -97,6 +104,8 @@ class InspectorPanel {
     ViewToggles m_viewToggles;
     std::vector<bool> *m_pfb_iq_visible = nullptr;
     std::vector<bool> *m_pfb_grid_visible = nullptr;
+    std::vector<bool> *m_na_visible = nullptr;
+    const std::vector<NetworkAnalyzerEngine *> *m_na_engines = nullptr;
 
     struct Hit {
         const ComponentTypeDescriptor *desc = nullptr;

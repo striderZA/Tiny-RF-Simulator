@@ -127,6 +127,7 @@ enum class NodeKind {
     Equalizer,
     Attenuator,
     Combiner,
+    NetworkAnalyzer,
     GroupCollapsed
 };
 
@@ -157,6 +158,8 @@ inline uint32_t themeColor(NodeKind k) {
         return 0xFF64B48C; // muted green
     case NodeKind::Combiner:
         return 0xFFF87171; // red
+    case NodeKind::NetworkAnalyzer:
+        return 0xFFE879F9; // fuchsia
     case NodeKind::GroupCollapsed:
         return 0xFF818CF8;  // indigo
     case NodeKind::Unknown: // fallthrough

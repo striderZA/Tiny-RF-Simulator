@@ -6,6 +6,7 @@ class ComponentRegistry;
 class NodeGraphEngine;
 class NodeGraphWidget;
 class PFBViewManager;
+class NetworkAnalyzerViewManager;
 class SessionState;
 
 // Owns the .rfsim JSON save/load/new logic previously inlined in
@@ -13,7 +14,8 @@ class SessionState;
 class ProjectSerializer {
   public:
     ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
-                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views, SessionState &state,
+                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
+                      NetworkAnalyzerViewManager &na_views, SessionState &state,
                       int &next_component_id, bool &show_log, bool &show_spectrum,
                       bool &show_properties, bool &show_node_editor);
 
@@ -26,6 +28,7 @@ class ProjectSerializer {
     NodeGraphEngine &m_graph;
     NodeGraphWidget &m_graph_widget;
     PFBViewManager &m_pfb_views;
+    NetworkAnalyzerViewManager &m_na_views;
     SessionState &m_state;
     int &m_next_component_id;
     bool &m_show_log;

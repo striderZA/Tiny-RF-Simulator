@@ -18,6 +18,7 @@ add_library(app STATIC
     src/extension_manager.cpp
     src/external_tool_runner.cpp
     src/pfb_view_manager.cpp
+    src/network_analyzer_view_manager.cpp
     src/project_serializer.cpp
 )
 add_library(simulator::app ALIAS app)
@@ -52,6 +53,8 @@ target_link_libraries(app
         simulator::ideal_filter_engine
         simulator::attenuator_engine
         simulator::combiner_engine
+        simulator::network_analyzer_engine
+        simulator::network_analyzer_widget
         simulator::node_graph_engine
         simulator::node_graph_widget
         simulator::help_widget

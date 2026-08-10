@@ -1,14 +1,15 @@
 # app/AGENTS.md
 
 ## Purpose
-Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, and `ProjectSerializer`.
+Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `NetworkAnalyzerViewManager`, and `ProjectSerializer`.
 
 ## Ownership
 - `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration (project save/load logic lives in `ProjectSerializer`)
 - `ComponentRegistry` — polymorphic component lifecycle and type-indexed lookup
 - `InspectorPanel` — property editing panel with dirty tracking
-- `ComponentTypeRegistry` — single dispatch table (11 rows) for canvas menu, add, duplicate, save/load, and inspector drawing: each row carries the canonical `type` + `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback; also drives `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
+- `ComponentTypeRegistry` — single dispatch table (12 rows) for canvas menu, add, duplicate, save/load, and inspector drawing: each row carries the canonical `type` + `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback; also drives `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
 - `PFBViewManager` — owns the per-PFB IQ Plot / Channelizer Grid widget lifecycle (replaces the app's four lockstep vectors `m_iq_widgets`/`m_show_iq_pfbs`/`m_pfb_grid_widgets`/`m_show_pfb_grids`, which were rebuilt by hand at six call sites and caused issue #37); all add/rebuild/clear/draw and visibility state funnel through this class
+- `NetworkAnalyzerViewManager` — owns the per-Network-Analyzer result-plot widget lifecycle (mirrors `PFBViewManager`'s shape but stays a separate class since `PFBViewManager` is explicitly PFB-scoped); add/rebuild/clear/draw/visibility-save funnel through this class
 - `ProjectSerializer` — owns the `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`, issue #51)
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
@@ -30,6 +31,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Per-PFB IQ Plot / Channelizer Grid window visibility lives in `PFBViewManager::iqVisibility()`/`gridVisibility()` (indexed in lockstep with the manager's widgets) and has no View-menu entry since instances are dynamic; closed windows are reopened via "Show IQ Plot"/"Show Channelizer Grid" checkboxes in the PFB properties panel, wired each frame through `InspectorPanel::setPFBWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
+- Per-Network-Analyzer result window visibility lives in `NetworkAnalyzerViewManager::visibility()` (indexed in lockstep with `engines()`) and has no View-menu entry since instances are dynamic; closed windows are reopened via the "Show Plot" checkbox in the Network Analyzer properties panel, wired each frame through `InspectorPanel::setNetworkAnalyzerWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
 - `update_dsp()`'s signal-routing pass is factored into `rewireInputs()` (sets every component's `node().inputs[k]` from current graph links, binding the resolved output port's `Spectrum` — `&source->outputs[source.output_index]` — and nulling severed ones); `onRemoveNode` calls it synchronously right after `ComponentRegistry::remove()` so no surviving component is left holding a dangling `Spectrum*` into the just-destroyed engine's `SignalNode` while the rest of that frame's `draw_ui()` still runs — widgets that dereference `node().inputs[]` directly during draw (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37)
 - Destructor saves window state via `SessionState`
 
