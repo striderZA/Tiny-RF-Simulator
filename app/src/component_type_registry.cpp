@@ -27,6 +27,13 @@ const ComponentTypeDescriptor *ComponentTypeRegistry::find(std::string_view type
     return nullptr;
 }
 
+const ComponentTypeDescriptor *ComponentTypeRegistry::findByType(std::string_view type) const {
+    for (const auto &d : m_descriptors)
+        if (d.type == type)
+            return &d;
+    return nullptr;
+}
+
 const ComponentTypeDescriptor *
 ComponentTypeRegistry::findByProjectType(std::string_view name) const {
     for (const auto &d : m_descriptors)
