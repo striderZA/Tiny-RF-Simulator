@@ -115,17 +115,24 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
     };
 
     // DFS enumerating distinct simple paths, bailing out as soon as a second
-    // one is found (only "unique or not" matters — no exhaustive enumeration,
-    // so large graphs cannot blow up).
+    // one is found (only "unique or not" matters). Also capped by total
+    // visited steps: `path_count >= 2` alone only bounds successful paths, not
+    // wasted exploration of branches that never reach end_node — a graph with
+    // many dead-end branches could otherwise still visit an exponential
+    // number of simple-path prefixes. 100000 is far beyond any plausible
+    // project size; hitting it degrades to "no unique path" (no-data),
+    // consistent with every other ambiguous/unsupported topology here.
+    constexpr int kMaxDfsSteps = 100000;
     std::vector<int> path;
     std::vector<int> path_out_idx; // path_out_idx[j] = output port path[j] used
                                    // to reach path[j+1]; size = path.size()-1
     std::vector<int> found_path;
     std::vector<int> found_out_idx;
     int path_count = 0;
+    int steps = 0;
 
     std::function<void(int)> dfs = [&](int node) {
-        if (path_count >= 2)
+        if (path_count >= 2 || ++steps > kMaxDfsSteps)
             return;
         if (node == end_node) {
             ++path_count;
@@ -137,7 +144,7 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
         if (it == next_of.end())
             return;
         for (const auto &[oi, nxt] : it->second) {
-            if (path_count >= 2)
+            if (path_count >= 2 || steps > kMaxDfsSteps)
                 return;
             if (crosses_combiner(nxt))
                 continue;
