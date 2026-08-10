@@ -8,6 +8,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <unordered_map>
 
 NetworkAnalyzerEngine::NetworkAnalyzerEngine(NodeGraphEngine &graph, INetworkAnalyzerHost &host)
@@ -263,38 +264,70 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     // Match tones by frequency value against the last clone's output, exactly
     // like the prior gain/NF formula (k/T/dbToLinear reused from common.h; no
     // Friis math re-derived). A dropped/mistranslated point degrades to NaN.
+    //
+    // response->tones/frequencies can carry a few thousand entries once
+    // harmonics/IMD tones from a nonlinear stage are appended, and N (the
+    // sweep point count) goes up to 2001 -- linearly rescanning both arrays
+    // for EVERY stimulus point was O(N*M): measured ~22ms per update() at
+    // 2001 points (vs. ~0.03ms at 21), run unconditionally every ImGui frame
+    // while the panel is open. This was the "serious performance
+    // degradation when enabled" regression. Bucket both arrays once into
+    // 1 Hz cells (O(M)) so each of the N lookups below is O(1) amortized;
+    // checking a cell plus its two neighbors preserves exact-epsilon
+    // matching across cell boundaries, and picking the lowest tone/frequency
+    // index within range keeps the same "first match in array order"
+    // tie-break as the old linear scan.
     const Spectrum *response = &final_outputs[static_cast<size_t>(point_b_port)];
     constexpr double kFreqEpsilonHz = 1.0;
+    const auto cell_of = [](double f) {
+        return static_cast<long long>(std::floor(f / kFreqEpsilonHz));
+    };
+
+    std::unordered_multimap<long long, size_t> tone_cells;
+    tone_cells.reserve(response->tones.size());
+    for (size_t t = 0; t < response->tones.size(); ++t)
+        tone_cells.emplace(cell_of(response->tones[t].freq_Hz), t);
+
+    std::unordered_multimap<long long, size_t> freq_cells;
+    freq_cells.reserve(response->frequencies.size());
+    for (size_t j = 0; j < response->frequencies.size(); ++j)
+        freq_cells.emplace(cell_of(response->frequencies[j]), j);
+
     for (size_t i = 0; i < N; ++i) {
         const double f = m_stimulus_freqs[i];
+        const long long c = cell_of(f);
 
-        const Spectrum::Tone *matched_tone = nullptr;
-        for (const auto &t : response->tones) {
-            if (std::abs(t.freq_Hz - f) <= kFreqEpsilonHz) {
-                matched_tone = &t;
-                break;
+        std::optional<size_t> tone_idx;
+        for (long long cc = c - 1; cc <= c + 1; ++cc) {
+            auto range = tone_cells.equal_range(cc);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (std::abs(response->tones[it->second].freq_Hz - f) <= kFreqEpsilonHz &&
+                    (!tone_idx || it->second < *tone_idx))
+                    tone_idx = it->second;
             }
         }
-        if (!matched_tone)
+        if (!tone_idx)
             continue;
 
-        const double gain_dB = matched_tone->power_dBm - m_stimulus_power_dBm;
+        const double gain_dB = response->tones[*tone_idx].power_dBm - m_stimulus_power_dBm;
         if (gain_dB < -100.0)
             continue; // indistinguishable from noise floor -> no data
 
-        size_t noise_idx = response->frequencies.size();
-        for (size_t j = 0; j < response->frequencies.size(); ++j) {
-            if (std::abs(response->frequencies[j] - f) <= kFreqEpsilonHz) {
-                noise_idx = j;
-                break;
+        std::optional<size_t> noise_idx;
+        for (long long cc = c - 1; cc <= c + 1; ++cc) {
+            auto range = freq_cells.equal_range(cc);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (std::abs(response->frequencies[it->second] - f) <= kFreqEpsilonHz &&
+                    (!noise_idx || it->second < *noise_idx))
+                    noise_idx = it->second;
             }
         }
 
         m_gain_dB[i] = gain_dB;
 
-        if (noise_idx < response->noise_total_W.size()) {
+        if (noise_idx && *noise_idx < response->noise_total_W.size()) {
             const double gain_linear = dbToLinear(gain_dB);
-            const double noise_out_W = response->noise_total_W[noise_idx];
+            const double noise_out_W = response->noise_total_W[*noise_idx];
             const double nf_linear = (noise_out_W / gain_linear) / (k * T);
             if (nf_linear > 0.0)
                 m_nf_dB[i] = 10.0 * std::log10(nf_linear);
