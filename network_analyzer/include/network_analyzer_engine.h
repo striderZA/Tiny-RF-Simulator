@@ -4,6 +4,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -90,9 +91,18 @@ class NetworkAnalyzerEngine {
     const std::vector<double> &noiseFigureDb() const { return m_nf_dB; }
 
     // Called once per frame from RfSimulatorApp's update loop while the panel
-    // is visible. Recomputes unconditionally: the private clone-and-cascade of
-    // a handful of components across <=2001 points is microseconds, and there
-    // is no cheap dirty-check left (no wired input to compare against).
+    // is visible. findUniquePath() (a DFS over the live graph) and a cheap
+    // signature of the discovered chain (each path node's live serialize()
+    // dump + the sweep params) run every frame regardless -- both are O(graph
+    // size)/O(chain length), independent of the sweep point count. The
+    // expensive part -- cloning the chain and re-running each clone's DSP
+    // across up to 2001 points -- is SKIPPED when that signature matches the
+    // last recompute (the common case: panel open, nothing being edited);
+    // see computeMeasurement()'s dirty-check. A prior version of this
+    // comment claimed the full recompute was "microseconds" unconditionally;
+    // measurement showed ~22ms/update() at 2001 points before an O(N*M)
+    // tone-matching fix, and several ms remained afterward for a chain with
+    // a nonlinear stage -- hence the signature-gated skip below.
     void update();
 
     // Project-level state (this class is not an IComponentEngine).
@@ -114,6 +124,7 @@ class NetworkAnalyzerEngine {
     std::vector<double> m_stimulus_freqs; // == m_stimulus.frequencies
     std::vector<double> m_gain_dB;
     std::vector<double> m_nf_dB;
+    std::string m_cached_signature; // see computeMeasurement()'s dirty-check
     Spectrum m_stimulus; // private tone-comb stimulus, not attached to any node
 
     void rebuildStimulus();

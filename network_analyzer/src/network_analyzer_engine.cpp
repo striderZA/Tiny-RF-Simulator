@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <limits>
 #include <optional>
@@ -179,15 +180,52 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
 
 void NetworkAnalyzerEngine::computeMeasurement() {
     const size_t N = m_stimulus_freqs.size();
-    m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
-    m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
 
     auto path = findUniquePath();
     // No path, ambiguous path, or Point A == Point B -> all-NaN. The chain
     // must contain at least one component: the stimulus is injected at Point
     // A's output, which replaces the start node's own output.
-    if (!path || path->nodes.size() < 2)
+    if (!path || path->nodes.size() < 2) {
+        m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+        m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+        m_cached_signature.clear();
         return;
+    }
+
+    // Dirty-check: everything below here re-runs each path component's full
+    // DSP across up to 2001 points -- real, non-trivial work (a nonlinear
+    // stage's harmonics/IMD generation scales with tone count) -- and this
+    // function runs unconditionally every ImGui frame the panel is visible.
+    // This instrument has no wired input to compare a cached pointer +
+    // generation against (every other engine's dirty-check), since it reads
+    // a chain of REAL, externally-owned components it gets no change
+    // notification from. Stand in with a signature of the discovered chain
+    // (each node's live serialize() dump -- %.17g-precise doubles round-trip
+    // exactly, so this only changes when a value actually changes) plus the
+    // sweep params and both probe pins; skip the clone-and-cascade below,
+    // reusing last frame's m_gain_dB/m_nf_dB, when nothing in it moved.
+    std::string signature;
+    signature.reserve(256);
+    for (size_t i = 0; i < path->nodes.size(); ++i) {
+        signature += path->nodes[i]->type_name();
+        signature += ':';
+        signature += std::to_string(path->nodes[i]->id());
+        signature += path->nodes[i]->serialize().dump();
+        if (i < path->out_index.size())
+            signature += ':' + std::to_string(path->out_index[i]);
+        signature += '|';
+    }
+    char sweep_buf[192];
+    std::snprintf(sweep_buf, sizeof(sweep_buf), "%.17g,%.17g,%d,%.17g,%d,%d", m_start_freq,
+                  m_stop_freq, m_points, m_stimulus_power_dBm, m_point_a_pin, m_point_b_pin);
+    signature += sweep_buf;
+
+    if (signature == m_cached_signature)
+        return; // unchanged since last frame -- m_gain_dB/m_nf_dB already hold the answer
+    m_cached_signature = std::move(signature);
+
+    m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+    m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
 
     // Private, throwaway clone chain: a fresh scratch graph+registry for this
     // pass only, destroyed at function exit. The real graph/registry are never
