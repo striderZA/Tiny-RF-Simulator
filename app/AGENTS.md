@@ -34,7 +34,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - Destructor saves window state via `SessionState`
 
 ## Work Guidance
-- Add a new component = one `ComponentTypeRegistry` row (`type`, `project_type`, `menu_label`, `label_prefix`, `kind`, `create`, `draw_inspector`) + a `NodeKind`/symbol entry in `node_graph` — the menu, add, duplicate, save/load, inspector, and form paths all dispatch through the registry, so no per-file edits in `RfSimulatorApp` are needed
+- Add a new component = one `ComponentTypeRegistry` row (`type`, `project_type`, `menu_label`, `label_prefix`, `kind`, `create`, `draw_inspector`) + a `NodeKind`/symbol entry in `node_graph` + a drawer-map entry in `InspectorPanel::drawerMap()` (app/src/inspector_panel.cpp) — the menu, add, duplicate, save/load, and form paths all dispatch through the registry, so no per-file edits in `RfSimulatorApp` are needed. Missing drawers are logged at startup and caught by the registry/drawer consistency test in `test_component_dispatch.cpp`.
 
 ## Verification
 - Round-trip tests in `tests/test_project_file.cpp`

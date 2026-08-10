@@ -2,28 +2,14 @@
 #include <cmath>
 #include <nlohmann/json.hpp>
 
-MixerEngine::MixerEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Mixer " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
-}
-
-int MixerEngine::inputPinId() const { return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1; }
-
-int MixerEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
-}
+MixerEngine::MixerEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Mixer", 1, 1) {}
 
 void MixerEngine::update(double dt) {
     (void)dt;
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    if (!beginUpdate(in_ptr))
         return;
-    m_dirty = false;
-    m_cached_input_ptr = in_ptr;
-    if (in_ptr)
-        m_cached_input_generation = in_ptr->generation;
 
     auto &out = m_node.outputs[0];
 

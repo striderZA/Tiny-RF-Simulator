@@ -65,6 +65,13 @@ class InspectorPanel {
     // callbacks to this panel's property drawers.
     void registerDrawers(ComponentTypeRegistry &registry);
 
+    // True if a property drawer is registered for the given canonical type
+    // key (e.g. "amplifier"). Exposed so tests can assert that every
+    // ComponentTypeRegistry row has inspector coverage; a registry type with
+    // no drawer logs an error from registerDrawers() instead of silently
+    // rendering an empty properties panel.
+    static bool hasDrawer(std::string_view type);
+
     void drawAmplifierProperties(AmplifierEngine &engine, int index);
     void drawCoaxCableProperties(CoaxCableEngine &engine, int index);
     void drawEqualizerProperties(EqualizerEngine &engine, int index);

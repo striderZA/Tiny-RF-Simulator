@@ -4,19 +4,8 @@
 #include <cmath>
 #include <nlohmann/json.hpp>
 
-CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("Coax Cable " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
-}
-
-int CoaxCableEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
-
-int CoaxCableEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
-}
+CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "Coax Cable", 1, 1) {}
 
 void CoaxCableEngine::setPresetIndex(int idx) {
     if (idx < 0 || static_cast<size_t>(idx) >= kCoaxCablePresets.size())
@@ -47,14 +36,8 @@ void CoaxCableEngine::setConnectorsLossDB(double db) {
 void CoaxCableEngine::update(double dt) {
     (void)dt;
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation)) {
+    if (!beginUpdate(in_ptr))
         return;
-    }
-    m_dirty = false;
-    m_cached_input_ptr = in_ptr;
-    if (in_ptr)
-        m_cached_input_generation = in_ptr->generation;
 
     auto &out = m_node.outputs[0];
 
@@ -130,9 +113,13 @@ nlohmann::json CoaxCableEngine::serialize() const {
 }
 
 void CoaxCableEngine::deserialize(const nlohmann::json &j) {
-    m_preset_index = j.value("preset_index", 4);
-    m_length_m = j.value("length_m", 1.0);
-    m_connectors_loss_dB = j.value("connectors_loss_dB", 0.0);
+    // Clamp to the same ranges the setters enforce: a corrupted/hand-edited
+    // .rfsim with an out-of-range preset index must not reach preset()'s
+    // kCoaxCablePresets[] indexing (OOB/UB).
+    m_preset_index =
+        std::clamp(j.value("preset_index", 4), 0, static_cast<int>(kCoaxCablePresets.size()) - 1);
+    m_length_m = std::clamp(j.value("length_m", 1.0), 0.0, 1000.0);
+    m_connectors_loss_dB = std::clamp(j.value("connectors_loss_dB", 0.0), 0.0, 30.0);
     m_dirty = true;
 }
 
