@@ -6,7 +6,6 @@
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
-#include "network_analyzer_engine.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <cctype>
@@ -78,8 +77,8 @@ static std::string appExeDir() {
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
     m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
     m_serializer = std::make_unique<ProjectSerializer>(
-        m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_na_views, m_state,
-        m_next_component_id, m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor);
+        m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
+        m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor);
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
@@ -102,7 +101,6 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         // rebuildCache(), InspectorPanel) would otherwise use-after-free. See issue #37.
         rewireInputs();
         m_pfb_views.rebuild(m_components, m_state);
-        m_na_views.rebuild(m_components, m_state);
     };
     m_graph_widget->onNodeHover = [this](int id) { return m_components.hoverSummary(id); };
     m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
@@ -139,6 +137,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
+    m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_graph_engine);
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without
@@ -153,6 +152,32 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_show_tutorial_first_run_prompt = !m_tutorial_state.completed();
 }
 
+// --- Network Analyzer host adapter -----------------------------------------
+// RfSimulatorApp implements the engine's injected lookups (see app.h and
+// network_analyzer_engine.h's layering comment): componentForNode wraps
+// ComponentRegistry::find; beginScratchPass hands out one throwaway scratch
+// graph+registry per measurement pass, destroyed (RAII) at pass end so the
+// real graph/registry are never touched by the clone-chain measurement.
+
+RfSimulatorApp::NaHost::NaHost(ComponentRegistry &components) : m_components(components) {}
+
+IComponentEngine *RfSimulatorApp::NaHost::componentForNode(int graph_node_id) const {
+    return m_components.find(graph_node_id);
+}
+
+std::unique_ptr<INetworkAnalyzerScratch> RfSimulatorApp::NaHost::beginScratchPass() const {
+    return std::make_unique<RfSimulatorApp::NaScratch>();
+}
+
+RfSimulatorApp::NaScratch::NaScratch() : m_registry(m_graph, m_view) {}
+
+IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, int id) {
+    const auto *desc = ComponentTypeRegistry::instance().findByType(type);
+    if (!desc)
+        return nullptr;
+    return desc->create(m_registry, m_graph, id);
+}
+
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
     IComponentEngine *comp = desc->create(m_components, m_graph_engine, m_next_component_id++);
     ImNodes::EditorContextSet(m_graph_widget->context());
@@ -160,15 +185,13 @@ void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 po
     if (desc->type == "pfb") {
         m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
     }
-    if (desc->type == "network_analyzer") {
-        m_na_views.addFor(*static_cast<NetworkAnalyzerEngine *>(comp), m_state);
-    }
     markDirty(); // unconditional — fixes the Equalizer missing-markDirty bug
 }
 
 void RfSimulatorApp::load_window_states() {
     m_show_log = m_state.loadBool("WindowState", "Log", true);
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
+    m_show_na = m_state.loadBool("WindowState", "NetworkAnalyzer", false);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
@@ -210,9 +233,6 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // PFB also needs IQ plot widget and grid widget (same as addComponent)
     if (desc->type == "pfb") {
         m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(copy), m_state);
-    }
-    if (desc->type == "network_analyzer") {
-        m_na_views.addFor(*static_cast<NetworkAnalyzerEngine *>(copy), m_state);
     }
 
     markDirty();
@@ -648,8 +668,6 @@ void RfSimulatorApp::update_dsp() {
     m_inspector_panel->setPFBs(pfb_vec);
     m_inspector_panel->setPFBWindowVisibility(&m_pfb_views.iqVisibility(),
                                               &m_pfb_views.gridVisibility());
-    m_inspector_panel->setNetworkAnalyzerWindowVisibility(&m_na_views.visibility(),
-                                                          &m_na_views.engines());
 }
 
 void RfSimulatorApp::draw_ui() {
@@ -699,6 +717,7 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Log", nullptr, &m_show_log);
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
+            ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
@@ -977,8 +996,12 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
+    if (m_show_na) {
+        m_na_engine.update();
+        m_na_widget->draw("Network Analyzer", &m_show_na);
+    }
+
     m_pfb_views.draw();
-    m_na_views.draw();
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
         m_generator_widgets[i]->draw("Generators");
@@ -1009,9 +1032,9 @@ void RfSimulatorApp::draw_ui() {
 RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Log", m_show_log);
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
+    m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_components, m_state);
-    m_na_views.saveVisibility(m_components, m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
 }

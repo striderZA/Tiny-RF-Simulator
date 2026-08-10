@@ -18,7 +18,6 @@ add_library(app STATIC
     src/extension_manager.cpp
     src/external_tool_runner.cpp
     src/pfb_view_manager.cpp
-    src/network_analyzer_view_manager.cpp
     src/project_serializer.cpp
 )
 add_library(simulator::app ALIAS app)

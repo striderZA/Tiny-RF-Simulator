@@ -11,7 +11,6 @@
 #include "imnodes.h"
 #include "logging_core.h"
 #include "mixer_engine.h"
-#include "network_analyzer_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -77,10 +76,6 @@ const std::map<std::string_view, DrawerFn> &drawerMap() {
         {"combiner",
          [](InspectorPanel &p, IComponentEngine &e) {
              p.drawCombinerProperties(static_cast<CombinerEngine &>(e), e.id());
-         }},
-        {"network_analyzer",
-         [](InspectorPanel &p, IComponentEngine &e) {
-             p.drawNetworkAnalyzerProperties(static_cast<NetworkAnalyzerEngine &>(e), e.id());
          }},
     };
     return drawers;
@@ -667,45 +662,6 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     }
 
     ImGui::Text("Loss: -3 dB per input");
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
-}
-
-void InspectorPanel::drawNetworkAnalyzerProperties(NetworkAnalyzerEngine &engine, int index) {
-    (void)index;
-
-    double f0 = engine.startFrequency();
-    if (utils::inputDouble("Start Freq (Hz)", f0, 1e6, 1e7, "%.0f", 0.0, 20e9)) {
-        engine.setStartFrequency(f0);
-        m_param_edited = true;
-    }
-    double f1 = engine.stopFrequency();
-    if (utils::inputDouble("Stop Freq (Hz)", f1, 1e6, 1e7, "%.0f", 0.0, 20e9)) {
-        engine.setStopFrequency(f1);
-        m_param_edited = true;
-    }
-    int pts = engine.points();
-    if (ImGui::InputInt("Points", &pts)) {
-        engine.setPoints(pts);
-        m_param_edited = true;
-    }
-    double power = engine.stimulusPower();
-    if (utils::inputDouble("Stimulus Power (dBm)", power, 1, 10, "%.1f", -60.0, 10.0)) {
-        engine.setStimulusPower(power);
-        m_param_edited = true;
-    }
-
-    if (m_na_visible && m_na_engines) {
-        for (size_t i = 0; i < m_na_engines->size(); ++i) {
-            if ((*m_na_engines)[i] == &engine && i < m_na_visible->size()) {
-                bool show = (*m_na_visible)[i];
-                if (ImGui::Checkbox("Show Plot", &show))
-                    (*m_na_visible)[i] = show;
-                break;
-            }
-        }
-    }
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

@@ -119,16 +119,6 @@ static void drawPfbSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     dl->AddText(ImVec2(c.x - 4, c.y - 18), color, "M");
 }
 
-static void drawNetworkAnalyzerSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
-    dl->AddRect(ImVec2(c.x - 20, c.y - 14), ImVec2(c.x + 20, c.y + 14), color, 2.0f,
-                ImDrawFlags_None, 2.0f);
-    dl->AddCircleFilled(ImVec2(c.x - 20, c.y), 2.5f, color);
-    dl->AddCircleFilled(ImVec2(c.x + 20, c.y), 2.5f, color);
-    const char *label = "NA";
-    ImVec2 ts = ImGui::CalcTextSize(label);
-    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), color, label);
-}
-
 static void drawGroupCollapsedSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 a(c.x - 18, c.y - 6);
     ImVec2 b(c.x, c.y);
@@ -177,9 +167,6 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKin
         break;
     case NodeKind::Combiner:
         drawCombinerSymbol(dl, center, color);
-        break;
-    case NodeKind::NetworkAnalyzer:
-        drawNetworkAnalyzerSymbol(dl, center, color);
         break;
     case NodeKind::GroupCollapsed:
         drawGroupCollapsedSymbol(dl, center, color);

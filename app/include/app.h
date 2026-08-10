@@ -21,7 +21,8 @@
 #include "library_browser_widget.h"
 #include "logging_widget.h"
 #include "mixer_engine.h"
-#include "network_analyzer_view_manager.h"
+#include "network_analyzer_engine.h"
+#include "network_analyzer_widget.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
@@ -55,6 +56,7 @@ class RfSimulatorApp {
     LoggingWidget m_log_widget;
     bool m_show_log = true;
     bool m_show_spectrum = true;
+    bool m_show_na = false;
     bool m_show_properties = true;
     bool m_show_node_editor = true;
     bool m_show_help = false;
@@ -115,10 +117,40 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     bool saveComponentForm();
+
+    // --- Network Analyzer host adapter --------------------------------------
+    // The engine lives in the DSP-engines layer below app/ and never sees app
+    // types; RfSimulatorApp implements its two injected lookups (see
+    // network_analyzer_engine.h's layering comment). componentForNode wraps
+    // ComponentRegistry::find; beginScratchPass hands out one private,
+    // throwaway scratch graph+registry per measurement pass whose clones are
+    // destroyed with it (RAII), so a pass never touches the real graph/registry.
+    class NaScratch;
+    class NaHost final : public INetworkAnalyzerHost {
+      public:
+        explicit NaHost(ComponentRegistry &components);
+        IComponentEngine *componentForNode(int graph_node_id) const override;
+        std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override;
+
+      private:
+        ComponentRegistry &m_components;
+    };
+    class NaScratch final : public INetworkAnalyzerScratch {
+      public:
+        NaScratch();
+        IComponentEngine *createClone(std::string_view type, int id) override;
+
+      private:
+        NodeGraphEngine m_graph;
+        ViewManager m_view;
+        ComponentRegistry m_registry; // constructed with (m_graph, m_view)
+    };
+
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
+    std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
@@ -137,12 +169,16 @@ class RfSimulatorApp {
     // Declared after m_components so the manager (and its widget references to
     // engines) is destroyed before the engines themselves.
     PFBViewManager m_pfb_views;
-    // Same destruction-order comment applies — it also holds widget references
-    // to engines owned by m_components.
-    NetworkAnalyzerViewManager m_na_views;
-    // Owns .rfsim save/load/new; declared after m_graph_widget, m_pfb_views,
-    // and m_na_views so it is destroyed before all three (it holds references
-    // to all of them).
+    // Adapter implementing the engine's injected lookups; declared after
+    // m_components (which it references) and before m_na_engine (which holds a
+    // reference to it — the adapter must outlive the engine).
+    NaHost m_na_host{m_components};
+    // Singleton Network Analyzer instrument engine — a plain value member
+    // exactly like m_spectrum_engine (not an IComponentEngine, no registry
+    // row, no graph node).
+    NetworkAnalyzerEngine m_na_engine{m_graph_engine, m_na_host};
+    // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
+    // so it is destroyed before both (it holds references to them).
     std::unique_ptr<ProjectSerializer> m_serializer;
     int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
