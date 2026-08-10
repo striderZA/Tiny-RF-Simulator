@@ -27,7 +27,7 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 
 **Design decisions:**
 - Output noise floor is **thermal noise** `k*T = 4.00e-21 W/Hz` (~ -174 dBm/Hz at 290 K).
-- Frequency grid is fixed at 10 MHz spacing across [-20 GHz, 20 GHz] (4001 bins).
+- Frequency grid is fixed at 10 MHz spacing across [-20 GHz, 20 GHz] (4000 bins).
 - Has no input pins — cannot receive signals.
 
 **Widget:** `SignalGeneratorWidget` — table UI with add/delete tone rows, "Measure" checkbox for probe.
@@ -58,7 +58,7 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 **Design decisions:**
 - Noise figure model: `N_added = k * T * (10^(NF/10) - 1) * G_linear`
 - Nonlinearity computed on tones only: 2nd/3rd harmonics, IM2/IM3 for up to 3 fundamentals, gain compression.
-- `NonlinearModel` (`common/include/nonlinear_model.h`) is a reusable class extracted from the amplifier.
+- `NonlinearModel` (`common/nonlinear_model.h`) is a reusable class extracted from the amplifier.
 - OIP2/OIP3 clamped to >= -30 dBm.
 - **P1dB** (v0.9.0): first-class 1-dB compression point with automatic OIP3 derivation (`OIP3 = P1dB + 9.6 dB`) when OIP3 is at default value (100 dBm). Explicit OIP3 setting is preserved when P1dB changes. Serialized in project save/load.
 - **Library data file import** (v0.10.0): when instantiated from a library JSON definition with `data_files` referencing an S-param file, the amplifier auto-loads the Touchstone file via `setSParamFilepath()` during `ComponentLibrary::instantiate()`. Falls back to single-point parameters if the file is missing or invalid.
@@ -248,11 +248,11 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 - `connectors_loss_dB` — additional connector loss
 
 **Preset cables (MilTech):**
-Only **MT 340** is fully populated. Others (MT 210, 230, 265, 300, 480) are stubbed with `TODO`.
+Only **MT 340** is fully populated. Others (MT 210, 230, 265, 300, 480) are stubbed as uncalibrated (`Uncalibrated — datasheet values needed`).
 
 | Preset | K1 | K2 | Delay (ns/m) | Max Freq |
 |---|---|---|---|---|
-| MT 340 | 0.000375 | 0.0 | 3.95 | 18 GHz |
+| MT 340 | 0.004710 | 0.000004 | 4.76 | 18.5 GHz |
 
 **Design decisions:**
 - Loss model: `loss_dB = (K1 * sqrt(f) + K2 * f) * length_m + connectors_loss_dB`

@@ -79,7 +79,13 @@ TEST_CASE("ADC DDC tone at 0 Hz maps to -Fs/4", "[adc]") {
     REQUIRE(out.tones[0].freq_Hz == Approx(-Fs / 4.0).margin(1.0));
 }
 
-TEST_CASE("ADC DDC output grid spans [-Fs/4, Fs/4)", "[adc]") {
+// Name avoids the "[-Fs/4, Fs/4)" bracket-paren pattern: catch_discover_tests
+// (Catch2 v3.4.0) expands the discovered name list unquoted, and an unclosed
+// '[' followed by ')' breaks CMake's list splitting, merging this test and
+// every name after it into one ';'-joined CTest entry that Catch2 rejects as
+// an "Invalid Filter" (observed on CMake 4.x; the test otherwise passes on
+// MinGW).
+TEST_CASE("ADC DDC output grid spans from -Fs/4 to Fs/4", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(3, graph);
     adc.setFs_Hz(Fs);

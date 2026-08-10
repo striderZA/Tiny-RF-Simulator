@@ -44,7 +44,7 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 
 ## Platform Core (`core/`)
 
-**`RfSimulatorCore`** (recently inlined — previously had its own class, now the logic resides directly in `core/src/core.cpp`) owns the GLFW window, OpenGL2 backend, and the main ImGui/ImPlot context. It provides:
+**`RfSimulatorCore`** (declared in `core/include/core.h`, implemented in `core/src/core.cpp`) owns the GLFW window, OpenGL2 backend, and the main ImGui/ImPlot context. It provides:
 
 ```cpp
 void Run(const std::function<void()>& onGui);
@@ -110,7 +110,7 @@ Added in v0.16.0 (`app/include/extension_manager.h`, `extension_manifest.h`, `ex
 - **`ExtensionManager`** — discovers manifests across three roots (in priority order, later roots shadow earlier IDs): built-in `<source_dir>/extensions/`, global `~/.rf-sim/extensions/`, and project-local `<project>/rf-sim-extensions/`. Invalid or incompatible manifests remain visible in `ExtensionManager::all()` with status + validation issues rather than being silently dropped.
 - **`ExtensionManifest`** — schema-versioned; declares `menus[]` actions, `library_roots`, `data_roots`, and `min_app_version`. Paths are confined to the extension root on parse.
 - **`ExternalToolRunner`** — executes an external tool on explicit user action: writes a JSON request file, waits for the tool, and reads a result file; a missing/invalid result is treated as failure. `externalToolActions()` is the single policy for launchable actions (declared `menus[]` pass through; tools without menus get one synthetic `"tools"` action).
-- **UI** — a Tools menu renders actions with `location == "tools"`; an Extensions panel shows every declared action (or a fallback Run button). `extensions/device-generator/` ships a built sample tool.
+- **UI** — a Tools menu renders actions with `location == "tools"`; an Extensions panel shows every declared action (or a fallback Run button). The repo ships no built-in extension payload (the built-in `<source>/extensions/` root is scanned only if present); extension tests use fixtures in `tests/fixtures/extensions/`.
 
 ### Project Save/Load
 
@@ -287,7 +287,7 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/include/component_type_registry.h` | Component type schema table — field lists + factory per type |
 | `app/include/library_browser_widget.h` | Library browser tree-view widget |
 | `app/include/inspector_panel.h` | Properties panel header |
-| `app/src/inspector_panel.cpp` | Per-component property editors (23KB) |
+| `app/src/inspector_panel.cpp` | Per-component property editors (26KB) |
 | `app/include/component_form_model.h` | Pure-logic form state for New/Edit Component |
 | `app/include/component_form_widget.h` | ImGui renderer for New/Edit Component form |
 | `app/src/extension_manifest.cpp` | Extension manifest parsing + validation (root confinement) |
@@ -299,14 +299,14 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `tutorial/include/tutorial_state.h` | `TutorialState` — walkthrough navigation + `.tutorial_completed` marker (pure logic, unit-testable) |
 | `tutorial/include/tutorial_steps.h` | Data-driven step catalog (`TutorialStep`, `TutorialTarget`) |
 | `tutorial/src/tutorial_widget.cpp` | Foreground-drawlist panel highlight + "Tutorial Guide" window |
-| `common/include/component_interface.h` | `IComponentEngine` abstract base |
-| `common/include/spectrum.h` | `Spectrum` data structure |
-| `common/include/signal_node.h` | `SignalNode` structure |
+| `common/component_interface.h` | `IComponentEngine` abstract base |
+| `common/spectrum.h` | `Spectrum` data structure |
+| `common/signal_node.h` | `SignalNode` structure |
 | `common/include/group.h` | `Group` + `GroupBoundaryPin` |
-| `common/include/nonlinear_model.h` | `NonlinearModel` (OIP2/OIP3) |
-| `common/include/view_manager.h` | `ViewManager` — node visibility tracking |
-| `common/include/session_state.h` | `SessionState` — window state persistence |
+| `common/nonlinear_model.h` | `NonlinearModel` (OIP2/OIP3) |
+| `common/view_manager.h` | `ViewManager` — node visibility tracking |
+| `common/session_state.h` | `SessionState` — window state persistence |
 | `layout/include/layout_manager.h` | `LayoutManager` — window layout persistence (default + named presets) |
 | `node_graph/include/node_graph_engine.h` | `NodeGraphEngine` + `GraphNode`/`GraphLink` |
-| `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (~1180 lines) |
-| `src/main.cpp` | Entry point (19 lines) |
+| `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (~1150 lines) |
+| `src/main.cpp` | Entry point (15 lines) |

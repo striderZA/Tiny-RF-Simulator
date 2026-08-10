@@ -419,7 +419,7 @@ TEST_CASE("SpectrumAnalyzer: complex-baseband tone renders unchanged (no mirrori
     REQUIRE(trace[10] < -50.0);
 }
 
-// ---- fs_Hz propagation (issue #43) ----
+// ---- fs_Hz propagation (issues #43/#54) ----
 
 TEST_CASE("Mixer: propagates fs_Hz", "[domain][mixer]") {
     NodeGraphEngine graph;
@@ -524,7 +524,7 @@ TEST_CASE("Attenuator: propagates fs_Hz (S-param mode)", "[domain][attenuator]")
 }
 
 // Real multi-engine post-ADC chains: fs_Hz must reach the PFB and channels must be populated
-// without any manual setFs_Hz() (issue #43 regression tests).
+// without any manual setFs_Hz() (issues #43/#54 regression tests).
 
 static bool anyChannelHasContent(const PFBChannelizerEngine &pfb) {
     for (const auto &ch : pfb.channels()) {

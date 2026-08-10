@@ -141,17 +141,25 @@ TEST_CASE("IdealFilter passes noise density unchanged in passband", "[filter]") 
 
 TEST_CASE("IdealFilter preserves fs_Hz from input", "[filter]") {
     NodeGraphEngine graph;
-    SignalGeneratorEngine gen(0, graph);
-    gen.addTone(100e6, -20.0);
-    gen.update(0.0);
+
+    // Drive from a synthetic spectrum with a NONZERO fs_Hz. The generator's
+    // output fs_Hz is 0.0, so the old version of this test compared 0.0 == 0.0
+    // and could never catch a dropped fs_Hz (issues #43/#54).
+    Spectrum in;
+    in.frequencies = {100e6, 200e6};
+    in.tones = {{100e6, -20.0, 0.0}};
+    in.noise_W.assign(2, 1e-20);
+    in.noise_added_W.assign(2, 0.0);
+    in.noise_total_W.assign(2, 1e-20);
+    in.fs_Hz = 500e6;
 
     IdealFilterEngine filt(0, graph);
     filt.setFilterType(FilterType::LPF);
     filt.setCutoff_Hz(200e6);
-    filt.node().inputs[0] = &gen.node().outputs[0];
+    filt.node().inputs[0] = &in;
     filt.update(0.0);
 
-    REQUIRE(filt.node().outputs[0].fs_Hz == gen.node().outputs[0].fs_Hz);
+    REQUIRE(filt.node().outputs[0].fs_Hz == Approx(500e6));
 }
 
 TEST_CASE("IdealFilter dirty flag skips when input unchanged", "[filter]") {
