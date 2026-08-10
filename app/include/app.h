@@ -140,8 +140,9 @@ class RfSimulatorApp {
     // Same destruction-order comment applies — it also holds widget references
     // to engines owned by m_components.
     NetworkAnalyzerViewManager m_na_views;
-    // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
-    // so it is destroyed before them (it holds references to both).
+    // Owns .rfsim save/load/new; declared after m_graph_widget, m_pfb_views,
+    // and m_na_views so it is destroyed before all three (it holds references
+    // to all of them).
     std::unique_ptr<ProjectSerializer> m_serializer;
     int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
