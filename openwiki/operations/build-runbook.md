@@ -7,7 +7,7 @@ tags: [build, ci, operations, runbook]
 
 # Build & Operations
 
-Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.17.0**.
+Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.19.0**.
 
 ---
 
