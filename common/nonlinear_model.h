@@ -79,12 +79,14 @@ class NonlinearModel {
             double Pout_dBm = tone.power_dBm + 20.0 * std::log10(g_linear);
             double Vp1 = dbmToV(Pout_dBm);
 
-            double V_h2 = m_k1 * Vp1 / std::sqrt(2.0);
+            // H2: v_in^2 term -> RMS k1*A^2/(2*sqrt(2)) = k1*Vp1^2/sqrt(2), A = sqrt(2)*Vp1
+            double V_h2 = m_k1 * Vp1 * Vp1 / std::sqrt(2.0);
             double H2_dBm = vToDbm(V_h2);
             r.extra_tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
             total_distortion_mW += dbmToW(H2_dBm);
 
-            double V_h3 = m_k2 * Vp1 * Vp1 * Vp1 / 4.0;
+            // H3: v_in^3 term -> RMS k2*A^3/(4*sqrt(2)) = k2*Vp1^3/2, A = sqrt(2)*Vp1
+            double V_h3 = m_k2 * Vp1 * Vp1 * Vp1 / 2.0;
             double H3_dBm = vToDbm(V_h3);
             r.extra_tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
             total_distortion_mW += dbmToW(H3_dBm);

@@ -736,11 +736,23 @@ TEST_CASE("Amplifier generates 2nd and 3rd harmonics", "[amplifier][nonlinear]")
     REQUIRE(out.tones[0].freq_Hz == 100e6);
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0).epsilon(0.001));
 
+    // Expected harmonics from the corrected formulas (see nonlinear_model.h):
+    //   H2 (RMS) = k1 * Vp1^2 / sqrt(2)   (v_in^2 term: peak k1*A^2/2 at 2w, A = sqrt(2)*Vp1)
+    //   H3 (RMS) = k2 * Vp1^3 / 2         (v_in^3 term: peak k2*A^3/4 at 3w, A = sqrt(2)*Vp1)
+    // with k1 = 1/V_oip2, k2 = 4/(3*V_oip3^2) and Vp1 the output-referred RMS voltage.
+    const double Vp1 = std::sqrt(std::pow(10.0, -20.0 / 10.0) * 0.001 * 50.0);
+    const double V_oip2 = std::sqrt(std::pow(10.0, 40.0 / 10.0) * 0.001 * 50.0);
+    const double V_oip3 = std::sqrt(std::pow(10.0, 30.0 / 10.0) * 0.001 * 50.0);
+    const double h2_v = (1.0 / V_oip2) * Vp1 * Vp1 / std::sqrt(2.0);
+    const double h3_v = (4.0 / (3.0 * V_oip3 * V_oip3)) * Vp1 * Vp1 * Vp1 / 2.0;
+    const double h2_expected = 10.0 * std::log10((h2_v * h2_v / 50.0) / 0.001);
+    const double h3_expected = 10.0 * std::log10((h3_v * h3_v / 50.0) / 0.001);
+
     REQUIRE(out.tones[1].freq_Hz == 200e6);
-    REQUIRE(out.tones[1].power_dBm == Approx(-50.0).epsilon(0.01));
+    REQUIRE(out.tones[1].power_dBm == Approx(h2_expected).epsilon(0.01));
 
     REQUIRE(out.tones[2].freq_Hz == 300e6);
-    REQUIRE(out.tones[2].power_dBm == Approx(-129.5).epsilon(0.1));
+    REQUIRE(out.tones[2].power_dBm == Approx(h3_expected).epsilon(0.1));
 }
 
 TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]") {
