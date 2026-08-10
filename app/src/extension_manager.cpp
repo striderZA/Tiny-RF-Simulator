@@ -2,16 +2,56 @@
 
 #include <algorithm>
 #include <charconv>
+#include <climits>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string_view>
+
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
 namespace {
+
+// Directory of the running executable, for exe-relative installed payloads.
+// Falls back to the current working directory if exe-path detection fails.
+// Same convention as layout/ (LayoutManager) and tutorial/ (TutorialState).
+std::string detectExeDir() {
+    std::string exe_path;
+#ifdef _WIN32
+    char buf[MAX_PATH] = {};
+    DWORD n = GetModuleFileNameA(nullptr, buf, sizeof(buf));
+    if (n > 0 && n < sizeof(buf))
+        exe_path = buf;
+#elif defined(__APPLE__)
+    char buf[PATH_MAX] = {};
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) == 0)
+        exe_path = buf;
+#else
+    char buf[PATH_MAX] = {};
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        exe_path = buf;
+    }
+#endif
+    if (exe_path.empty())
+        return fs::current_path().string();
+    fs::path parent = fs::path(exe_path).parent_path();
+    if (parent.empty())
+        return fs::current_path().string();
+    return parent.string();
+}
 
 std::optional<int> parseVersionPart(std::string_view part) {
     if (part.empty())
@@ -101,6 +141,14 @@ std::optional<std::string> readManifestId(const fs::path &manifest_path) {
 std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) const {
     std::vector<fs::path> roots;
     roots.push_back(fs::path(PROJECT_SOURCE_DIR) / "extensions");
+    // Installed built-in payloads live next to the executable
+    // (<exe_dir>/extensions), matching the install rules and the layout/ +
+    // SessionState exe-relative convention. Nonexistent in dev/build-tree
+    // layouts (loadRoot skips missing roots), so discovery is unchanged
+    // there. Placed right after the source-tree root and before the
+    // global/project-local roots, so later-root shadowing precedence is
+    // preserved (built-in > global > project-local).
+    roots.push_back(fs::path(detectExeDir()) / "extensions");
 #ifdef _WIN32
     if (const char *home = std::getenv("USERPROFILE"))
         roots.push_back(fs::path(home) / ".rf-sim" / "extensions");

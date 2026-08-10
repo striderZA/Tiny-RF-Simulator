@@ -9,7 +9,6 @@ target_include_directories(pfb_channelizer_engine PUBLIC ${PROJECT_SOURCE_DIR}/i
 
 target_link_libraries(pfb_channelizer_engine
     PUBLIC
-        simulator::core
         simulator::node_graph_engine
         common
 )

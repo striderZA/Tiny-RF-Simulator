@@ -1,4 +1,5 @@
-project(logging)
+cmake_minimum_required(VERSION 3.20)
+project(logging LANGUAGES CXX)
 
 # Backend
 add_library(logging_core STATIC
