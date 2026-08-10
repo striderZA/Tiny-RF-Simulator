@@ -134,7 +134,35 @@ jobs:
           if [ "${{ runner.os }}" = "Linux" ]; then
             xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
           else
-            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
+            # test_ui is excluded on Windows: it drives an interactive ImGui
+            # window and needs a display, so it cannot run headless in CI.
+            # ("ADC DDC output grid spans [-Fs/4, Fs/4)" was previously excluded
+            # by name too. Root cause: the bracket-paren pattern in that name
+            # broke catch_discover_tests' unquoted list parsing, merging it and
+            # every later test into one ';'-joined CTest entry that Catch2
+            # rejects as "Invalid Filter". The test was renamed to "ADC DDC
+            # output grid spans from -Fs/4 to Fs/4" (tests/test_adc.cpp) and now
+            # registers as its own CTest entry, so the exclusion is removed.)
+            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
+          fi
+
+      - name: Verify MinGW TEST_CASE registration count
+        if: runner.os == 'Windows'
+        run: |
+          # The MinGW-w64 toolchain silently drops TEST_CASEs registered beyond
+          # a ceiling in the main `tests` binary (see tests/AGENTS.md). Count
+          # the registered cases (each emits one indented tag line) and fail if
+          # the count ever falls below the verified floor, so a silent drop is
+          # caught in CI instead of shipping unrun tests. Bump EXPECTED when the
+          # registered count changes; new coverage that must run on Windows goes
+          # in a standalone executable (e.g. test_signal_domain), not the main
+          # tests binary.
+          EXPECTED=223
+          COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
+          echo "registered TEST_CASEs: $COUNT (expected >= $EXPECTED)"
+          if [ "$COUNT" -lt "$EXPECTED" ]; then
+            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $EXPECTED"
+            exit 1
           fi
 
   sanitizer:
