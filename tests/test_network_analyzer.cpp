@@ -213,3 +213,39 @@ TEST_CASE("NetworkAnalyzer: hover summary", "[network_analyzer]") {
     std::string summary = na.hoverSummary();
     REQUIRE(summary.find("Network Analyzer") != std::string::npos);
 }
+
+#include "imgui.h"
+#include "implot.h"
+#include "network_analyzer_widget.h"
+
+TEST_CASE("NetworkAnalyzer: widget draws without crashing", "[network_analyzer][widget]") {
+    ImGui::CreateContext();
+    ImPlot::CreateContext();
+    // A bare ImGui context starts with a (-1,-1) DisplaySize sentinel and a
+    // default imgui.ini path; give the widget a real frame to draw into and
+    // keep the test run pristine (CWD is the repo root).
+    ImGui::GetIO().DisplaySize = ImVec2(1920, 1080);
+    ImGui::GetIO().IniFilename = nullptr;
+    // No renderer backend here, so the font atlas must be built explicitly
+    // (NewFrame() asserts TexIsBuilt when RendererHasTextures is not set).
+    unsigned char *atlas_pixels = nullptr;
+    int atlas_w = 0, atlas_h = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&atlas_pixels, &atlas_w, &atlas_h);
+
+    NodeGraphEngine graph;
+    NetworkAnalyzerEngine na(1, graph);
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(11);
+    na.update(0.016);
+
+    NetworkAnalyzerWidget widget(na);
+    bool open = true;
+    ImGui::NewFrame();
+    widget.draw("Network Analyzer Test", &open);
+    REQUIRE(open);
+    ImGui::EndFrame();
+
+    ImPlot::DestroyContext();
+    ImGui::DestroyContext();
+}

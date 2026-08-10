@@ -87,8 +87,9 @@ add_standalone_test(test_combiner
 
 add_standalone_test(test_network_analyzer
     SOURCES test_network_analyzer.cpp
-    LIBS simulator::network_analyzer_engine simulator::attenuator_engine
-         simulator::amplifier_engine simulator::mixer_engine simulator::node_graph_engine
+    LIBS simulator::network_analyzer_engine simulator::network_analyzer_widget
+         simulator::attenuator_engine simulator::amplifier_engine simulator::mixer_engine
+         simulator::node_graph_engine
 )
 
 # Standalone executable for all new tests added by the component-library authoring UI
