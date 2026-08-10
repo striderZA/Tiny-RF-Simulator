@@ -3,11 +3,8 @@
 #include <nlohmann/json.hpp>
 #include <numbers>
 
-IdealFilterEngine::IdealFilterEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
-    m_graph_node_id = graph.addNode("IdealFilter " + std::to_string(id), &m_node, 1, 1);
-    m_node.inputs.resize(1);
-    m_node.outputs.resize(1);
-}
+IdealFilterEngine::IdealFilterEngine(int id, NodeGraphEngine &graph)
+    : ComponentEngineBase(id, graph, "IdealFilter", 1, 1) {}
 
 void IdealFilterEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
@@ -15,14 +12,6 @@ void IdealFilterEngine::setSParamFilepath(const std::string &path) {
     if (m_sparam_data.loaded())
         m_sparam_fwd_idx = 1 * m_sparam_data.numPorts() + 0;
     m_dirty = true;
-}
-
-int IdealFilterEngine::inputPinId() const {
-    return m_graph ? m_graph->inputPinId(m_graph_node_id) : -1;
-}
-
-int IdealFilterEngine::outputPinId() const {
-    return m_graph ? m_graph->outputPinId(m_graph_node_id) : -1;
 }
 
 bool IdealFilterEngine::isInPassband(double freq_Hz) const {
@@ -148,15 +137,22 @@ void IdealFilterEngine::update(double dt) {
     }
 
     out.noise_W.resize(N, 0.0);
-    for (size_t i = 0; i < N; ++i) {
-        if (isInPassband(out.frequencies[i]))
-            out.noise_W[i] = (in_ptr && i < in_ptr->noise_W.size()) ? in_ptr->noise_W[i] : 0.0;
-    }
-
     out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W.resize(N);
-    for (size_t i = 0; i < N; ++i)
-        out.noise_total_W[i] = out.noise_W[i];
+    out.noise_total_W.resize(N, 0.0);
+    for (size_t i = 0; i < N; ++i) {
+        if (isInPassband(out.frequencies[i])) {
+            // Propagate the input's TOTAL noise (input noise + upstream added
+            // noise), exactly as the amplifier/attenuator engines do. Copying
+            // only in_ptr->noise_W silently drops upstream added noise: for a
+            // 0 dB ideal filter the in-band noise_total must equal the input's
+            // noise_total, otherwise the noise floor drops discontinuously
+            // across the filter when an amplifier sits upstream.
+            double nin =
+                (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
+            out.noise_W[i] = nin;
+            out.noise_total_W[i] = nin;
+        }
+    }
 
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     out.bumpGeneration();
