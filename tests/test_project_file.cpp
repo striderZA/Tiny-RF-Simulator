@@ -72,7 +72,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with 
         auto comps = app.testComponents().all();
         REQUIRE(comps.size() == 2);
 
-        int start_pin = comps[0]->outputPinId(0);
+        int start_pin = comps[0]->outputPinId();
         int end_pin = comps[1]->inputPinId(0);
         int link_id = app.testGraphEngine().addLink(start_pin, end_pin);
         REQUIRE(link_id > 0);
@@ -613,4 +613,93 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
     }
     std::remove(path.c_str());
     std::filesystem::remove(local_s2p);
+}
+
+// ---------------------------------------------------------------------------
+// Round-trip: the singleton Network Analyzer instrument state (four sweep
+// params + Point A/B as {comp, port, is_output} pairs) survives save/load.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Network Analyzer sweep params and probe points",
+                 "[project_file][network_analyzer]") {
+    auto path = tempPath();
+    std::remove(path.c_str());
+    {
+        RfSimulatorApp app;
+        auto &na = app.testNetworkAnalyzerEngine();
+        na.setStartFrequency(2.4e9);
+        na.setStopFrequency(2.5e9);
+        na.setPoints(51);
+        na.setStimulusPower(-15.0);
+        const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        const auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(gens.size() == 1);
+        REQUIRE(amps.size() == 1);
+        na.setPointA(gens[0]->outputPinId());
+        na.setPointB(amps[0]->outputPinId());
+        app.saveProject(path);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        auto &na = app.testNetworkAnalyzerEngine();
+        REQUIRE(na.startFrequency() == Approx(2.4e9));
+        REQUIRE(na.stopFrequency() == Approx(2.5e9));
+        REQUIRE(na.points() == 51);
+        REQUIRE(na.stimulusPower() == Approx(-15.0));
+        // Points restore to the reloaded components' output pins (the raw pin
+        // ids are regenerated on load; the {comp, port} mapping must resolve).
+        const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        const auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(gens.size() == 1);
+        REQUIRE(amps.size() == 1);
+        REQUIRE(na.pointAPin() == gens[0]->outputPinId());
+        REQUIRE(na.pointBPin() == amps[0]->outputPinId());
+    }
+    std::remove(path.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// Regression: loading a second project (with no Network Analyzer points set)
+// into an app that already had Point A/B set from a prior project must clear
+// them, not leave a stale pin id that could alias an unrelated pin in the
+// new project (pin ids are reallocated deterministically from the same base
+// counters on every reset()/load()).
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Network Analyzer probe points clear when a project without them loads",
+                 "[project_file][network_analyzer]") {
+    auto path_with_points = tempPath();
+    auto path_without_points = tempPath();
+    std::remove(path_with_points.c_str());
+    std::remove(path_without_points.c_str());
+
+    {
+        RfSimulatorApp app;
+        auto &na = app.testNetworkAnalyzerEngine();
+        const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        const auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(gens.size() == 1);
+        REQUIRE(amps.size() == 1);
+        na.setPointA(gens[0]->outputPinId());
+        na.setPointB(amps[0]->outputPinId());
+        app.saveProject(path_with_points);
+    }
+    {
+        // A second project, saved with the Network Analyzer's points left
+        // unset (default state).
+        RfSimulatorApp app;
+        app.saveProject(path_without_points);
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(path_with_points);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointAPin() >= 0);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointBPin() >= 0);
+
+    app.loadProject(path_without_points);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointAPin() == -1);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointBPin() == -1);
+
+    std::remove(path_with_points.c_str());
+    std::remove(path_without_points.c_str());
 }

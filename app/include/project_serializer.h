@@ -3,6 +3,7 @@
 #include <string>
 
 class ComponentRegistry;
+class NetworkAnalyzerEngine;
 class NodeGraphEngine;
 class NodeGraphWidget;
 class PFBViewManager;
@@ -15,7 +16,8 @@ class ProjectSerializer {
     ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
                       NodeGraphWidget &graph_widget, PFBViewManager &pfb_views, SessionState &state,
                       int &next_component_id, bool &show_log, bool &show_spectrum,
-                      bool &show_properties, bool &show_node_editor);
+                      bool &show_properties, bool &show_node_editor,
+                      NetworkAnalyzerEngine &na_engine);
 
     void save(const std::string &path);
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
@@ -32,4 +34,5 @@ class ProjectSerializer {
     bool &m_show_spectrum;
     bool &m_show_properties;
     bool &m_show_node_editor;
+    NetworkAnalyzerEngine &m_na_engine;
 };

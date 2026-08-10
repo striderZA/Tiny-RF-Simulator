@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
+#include "network_analyzer_engine.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_channelizer_engine.h"
@@ -128,11 +129,11 @@ ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEng
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
                                      SessionState &state, int &next_component_id, bool &show_log,
                                      bool &show_spectrum, bool &show_properties,
-                                     bool &show_node_editor)
+                                     bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
     : m_components(components), m_graph(graph), m_graph_widget(graph_widget),
       m_pfb_views(pfb_views), m_state(state), m_next_component_id(next_component_id),
       m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
-      m_show_node_editor(show_node_editor) {}
+      m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
 void ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
@@ -227,6 +228,29 @@ void ProjectSerializer::save(const std::string &path) {
         }
     }
     root["probe_pins"] = probes_arr;
+
+    // Save the singleton Network Analyzer instrument state: the four sweep
+    // params plus Point A/B as {comp, port, is_output} pairs, using the same
+    // pin_map machinery as probe_pins (the engine-level serialize() stores raw
+    // pin ids, which are not portable across graph rebuilds on load).
+    nlohmann::json na_json;
+    na_json["start_freq_hz"] = m_na_engine.startFrequency();
+    na_json["stop_freq_hz"] = m_na_engine.stopFrequency();
+    na_json["points"] = m_na_engine.points();
+    na_json["stimulus_power_dBm"] = m_na_engine.stimulusPower();
+    const auto pin_as_comp_port = [&](int pin_id) -> nlohmann::json {
+        auto it = pin_map.find(pin_id);
+        if (it == pin_map.end())
+            return nullptr;
+        nlohmann::json pj;
+        pj["comp"] = it->second.comp;
+        pj["port"] = it->second.port;
+        pj["is_output"] = it->second.is_output;
+        return pj;
+    };
+    na_json["point_a"] = pin_as_comp_port(m_na_engine.pointAPin());
+    na_json["point_b"] = pin_as_comp_port(m_na_engine.pointBPin());
+    root["network_analyzer"] = na_json;
 
     // Save groups
     nlohmann::json groups_arr = nlohmann::json::array();
@@ -408,6 +432,46 @@ bool ProjectSerializer::load(const std::string &path) {
                 m_graph.addProbePin(pin);
         }
 
+        // Restore the singleton Network Analyzer instrument state: the four
+        // sweep params plus Point A/B {comp, port, is_output} pairs. Points
+        // resolve through new_node_ids (like the links pass) so a skipped
+        // component elsewhere in the file cannot shift the index mapping.
+        // Absent keys keep the engine's current (default or last-set) value.
+        auto &saved_na = root["network_analyzer"];
+        if (!saved_na.is_null()) {
+            m_na_engine.setStartFrequency(
+                saved_na.value("start_freq_hz", m_na_engine.startFrequency()));
+            m_na_engine.setStopFrequency(
+                saved_na.value("stop_freq_hz", m_na_engine.stopFrequency()));
+            m_na_engine.setPoints(saved_na.value("points", m_na_engine.points()));
+            m_na_engine.setStimulusPower(
+                saved_na.value("stimulus_power_dBm", m_na_engine.stimulusPower()));
+            const auto restore_point = [&](const nlohmann::json &pj,
+                                           void (NetworkAnalyzerEngine::*set)(int)) {
+                if (!pj.is_object())
+                    return; // unset point (saved as JSON null)
+                int comp_idx = pj.value("comp", -1);
+                int port = pj.value("port", 0);
+                bool is_output = pj.value("is_output", true);
+                if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= new_node_ids.size())
+                    return;
+                const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
+                if (node_id < 0)
+                    return;
+                auto *comp = m_components.find(node_id);
+                if (!comp)
+                    return;
+                const int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
+                if (pin >= 0)
+                    (m_na_engine.*set)(pin);
+            };
+            const nlohmann::json no_pin = nullptr;
+            restore_point(saved_na.contains("point_a") ? saved_na["point_a"] : no_pin,
+                          &NetworkAnalyzerEngine::setPointA);
+            restore_point(saved_na.contains("point_b") ? saved_na["point_b"] : no_pin,
+                          &NetworkAnalyzerEngine::setPointB);
+        }
+
         // Restore groups
         auto &saved_groups = root["groups"];
         for (const auto &gj : saved_groups) {
@@ -465,6 +529,16 @@ void ProjectSerializer::reset() {
 
     // Clear probes
     m_graph.clearProbes();
+
+    // Clear the Network Analyzer's probe points too — otherwise a stale pin
+    // id survives into the next project, and since pin ids are reallocated
+    // deterministically from the same base below, it can silently alias an
+    // unrelated pin belonging to a different component (issue found in
+    // review: load()'s restore only *sets* Point A/B when present in the
+    // save file, so an absent/unset point left the previous project's pin
+    // id in place).
+    m_na_engine.setPointA(-1);
+    m_na_engine.setPointB(-1);
 
     // Reset IQ / PFB widgets
     m_pfb_views.clear();

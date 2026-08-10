@@ -52,6 +52,8 @@ target_link_libraries(app
         simulator::ideal_filter_engine
         simulator::attenuator_engine
         simulator::combiner_engine
+        simulator::network_analyzer_engine
+        simulator::network_analyzer_widget
         simulator::node_graph_engine
         simulator::node_graph_widget
         simulator::help_widget
