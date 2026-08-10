@@ -52,7 +52,6 @@ class ComponentTypeRegistry {
     static ComponentTypeRegistry &instance();
 
     const ComponentTypeDescriptor *find(std::string_view type) const;
-    const ComponentTypeDescriptor *findByType(std::string_view type) const;
     const ComponentTypeDescriptor *findByProjectType(std::string_view name) const;
     std::vector<ComponentTypeDescriptor *> all();
 

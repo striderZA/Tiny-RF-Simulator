@@ -176,7 +176,7 @@ std::unique_ptr<INetworkAnalyzerScratch> RfSimulatorApp::NaHost::beginScratchPas
 RfSimulatorApp::NaScratch::NaScratch() : m_registry(m_graph, m_view) {}
 
 IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, int id) {
-    const auto *desc = ComponentTypeRegistry::instance().findByType(type);
+    const auto *desc = ComponentTypeRegistry::instance().find(type);
     if (!desc)
         return nullptr;
     return desc->create(m_registry, m_graph, id);

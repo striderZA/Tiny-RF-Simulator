@@ -16,7 +16,7 @@ class NodeGraphEngine;
 // NetworkAnalyzerEngine lives in the DSP-engines layer (network_analyzer/),
 // which sits BELOW app/ in the dependency graph. The two lookups the engine
 // needs — resolving a graph node to its live engine (ComponentRegistry::find)
-// and cloning a component type (ComponentTypeRegistry::findByType + create) —
+// and cloning a component type (ComponentTypeRegistry::find + create) —
 // are app-layer concerns. Rather than make a lower layer depend on app/ (a
 // CMake/link cycle, since app already links network_analyzer_engine), the app
 // layer implements these interfaces and injects them; the engine only ever
