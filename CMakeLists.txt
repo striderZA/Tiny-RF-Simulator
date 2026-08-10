@@ -99,14 +99,6 @@ FetchContent_Declare(
 )
 FetchContent_Populate(kissfft)
 
-# Fetch stb for PNG loading in icon registry (single-header, no build needed)
-FetchContent_Declare(
-    stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
-)
-FetchContent_Populate(stb)
-
 # Fetch nlohmann/json for serialization (header-only)
 FetchContent_Declare(
     nlohmann_json
@@ -213,7 +205,6 @@ add_subdirectory("adc")
 add_subdirectory("coax")
 add_subdirectory("pfb_channelizer")
 add_subdirectory("iq_plot")
-add_subdirectory("icon_registry")
 add_subdirectory("ideal_filter")
 add_subdirectory("attenuator")
 add_subdirectory("combiner")
@@ -224,6 +215,14 @@ add_subdirectory("tutorial")
 # Install targets
 # =============================================================================
 install(TARGETS tiny-rf-simulator RUNTIME DESTINATION bin)
+# Install component data (JSON library definitions + S-parameter files) and
+# built-in extension payloads next to the executable. The app resolves both
+# scan roots exe-relative (refreshExtensions in app.cpp, scanRoots in
+# extension_manager.cpp), matching the layout/ + SessionState exe-relative
+# convention.
+install(DIRECTORY component_data DESTINATION bin)
+install(DIRECTORY extensions DESTINATION bin)
+
 
 # Install documentation
 install(FILES README.md LICENSE DESTINATION share/doc/rf-simulator)

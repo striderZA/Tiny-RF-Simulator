@@ -16,6 +16,15 @@
 #include <portable-file-dialogs.h>
 #include <unordered_map>
 #include <utility>
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <climits>
+#include <mach-o/dyld.h>
+#else
+#include <climits>
+#include <unistd.h>
+#endif
 // Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
 // Strips everything else (incl. /, \\, and . which eliminates .. risks).
 // Trims leading/trailing spaces. Returns fallback if result is empty.
@@ -32,6 +41,37 @@ static std::string sanitizePathSegment(const std::string &s, const std::string &
     size_t end = out.find_last_not_of(' ');
     out = out.substr(start, end - start + 1);
     return out.empty() ? fallback : out;
+}
+
+// Directory of the running executable, for exe-relative data/layout lookup.
+// Falls back to the current working directory if exe-path detection fails.
+// Same convention as layout/ (LayoutManager) and tutorial/ (TutorialState).
+static std::string appExeDir() {
+    std::string exe_path;
+#ifdef _WIN32
+    char buf[MAX_PATH] = {};
+    DWORD n = GetModuleFileNameA(nullptr, buf, sizeof(buf));
+    if (n > 0 && n < sizeof(buf))
+        exe_path = buf;
+#elif defined(__APPLE__)
+    char buf[PATH_MAX] = {};
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) == 0)
+        exe_path = buf;
+#else
+    char buf[PATH_MAX] = {};
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        exe_path = buf;
+    }
+#endif
+    if (exe_path.empty())
+        return std::filesystem::current_path().string();
+    std::filesystem::path parent = std::filesystem::path(exe_path).parent_path();
+    if (parent.empty())
+        return std::filesystem::current_path().string();
+    return parent.string();
 }
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
@@ -234,7 +274,16 @@ void RfSimulatorApp::refreshExtensions() {
     if (fs::exists("rf-sim-libraries")) {
         m_library.scan("rf-sim-libraries");
     }
-    if (fs::exists("component_data/library")) {
+    // Built-in examples: prefer the exe-relative install location
+    // (<exe_dir>/component_data/library) so installed binaries find their
+    // shipped data; fall back to the source-tree-relative path (CWD == repo
+    // root) when running from a build tree. Same exe-relative convention as
+    // layout/ and SessionState.
+    const std::filesystem::path exe_builtin_library =
+        std::filesystem::path(appExeDir()) / "component_data" / "library";
+    if (std::filesystem::exists(exe_builtin_library)) {
+        m_library.scan(exe_builtin_library.string());
+    } else if (std::filesystem::exists("component_data/library")) {
         m_library.scan("component_data/library");
     }
 

@@ -17,6 +17,9 @@ add_library(simulator::node_graph_engine ALIAS node_graph_engine)
 # ---- UI Widget ----
 add_library(node_graph_widget STATIC
     src/node_graph_widget.cpp
+    src/node_graph_widget_groups.cpp
+    src/node_graph_widget_tooltips.cpp
+    src/schematic_symbols.cpp
 )
 
 target_include_directories(node_graph_widget
@@ -28,7 +31,6 @@ target_link_libraries(node_graph_widget
         simulator::node_graph_engine
         imnodes
         simulator::core
-        simulator::icon_registry
 )
 
 add_library(simulator::node_graph_widget ALIAS node_graph_widget)

@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(common LANGUAGES CXX)
+
 add_library(common INTERFACE)
 
 target_include_directories(common
