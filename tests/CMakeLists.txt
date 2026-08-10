@@ -30,10 +30,9 @@ if(WIN32)
     list(APPEND TEST_SOURCES test_session_state.cpp)
 endif()
 
-add_executable(tests ${TEST_SOURCES})
-
-target_link_libraries(tests PRIVATE
-    Catch2::Catch2WithMain
+# Pure-DSP engine libraries shared by the main `tests` binary and the
+# standalone test_signal_domain executable.
+set(TEST_ENGINE_LIBS
     common
     simulator::signal_generator_engine
     simulator::amplifier_engine
@@ -49,6 +48,13 @@ target_link_libraries(tests PRIVATE
     simulator::attenuator_engine
     simulator::combiner_engine
     simulator::pfb_channelizer_engine
+)
+
+add_executable(tests ${TEST_SOURCES})
+
+target_link_libraries(tests PRIVATE
+    Catch2::Catch2WithMain
+    ${TEST_ENGINE_LIBS}
     simulator::iq_plot_widget
     simulator::app
     simulator::layout
@@ -58,98 +64,77 @@ target_compile_definitions(tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}
 include(CTest)
 include(Catch)
 catch_discover_tests(tests)
-add_executable(test_attenuator test_attenuator.cpp)
-target_link_libraries(test_attenuator PRIVATE
-    simulator::attenuator_engine
-    simulator::node_graph_engine
-    Catch2::Catch2WithMain
-)
-target_compile_definitions(test_attenuator PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_attenuator COMMAND test_attenuator WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_executable(test_combiner test_combiner.cpp)
-target_link_libraries(test_combiner PRIVATE
-    simulator::combiner_engine
-    simulator::node_graph_engine
-    Catch2::Catch2WithMain
+# Registers a standalone test executable with the standard per-test boilerplate
+# (Catch2 link, PROJECT_SOURCE_DIR compile definition, CTest registration).
+function(add_standalone_test NAME)
+    cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
+    add_executable(${NAME} ${ARG_SOURCES})
+    target_link_libraries(${NAME} PRIVATE ${ARG_LIBS} Catch2::Catch2WithMain)
+    target_compile_definitions(${NAME} PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    add_test(NAME ${NAME} COMMAND ${NAME} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endfunction()
+
+add_standalone_test(test_attenuator
+    SOURCES test_attenuator.cpp
+    LIBS simulator::attenuator_engine simulator::node_graph_engine
 )
-target_compile_definitions(test_combiner PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_combiner COMMAND test_combiner WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_standalone_test(test_combiner
+    SOURCES test_combiner.cpp
+    LIBS simulator::combiner_engine simulator::node_graph_engine
+)
 
 # Standalone executable for all new tests added by the component-library authoring UI
 # plan (docs/superpowers/plans/2026-07-28-component-library-authoring-ui.md). Kept out
 # of the main `tests` binary because this MinGW-w64 toolchain silently drops any
-# TEST_CASE registered beyond the ~217 already linked into tests.exe (confirmed via a
-# from-scratch clean rebuild).
-add_executable(test_component_authoring test_component_authoring.cpp)
-target_link_libraries(test_component_authoring PRIVATE
-    simulator::app
-    Catch2::Catch2WithMain
+# TEST_CASE registered beyond a ceiling in tests.exe (verified 2026-08-09: 223
+# registered of ~460+ in source; earlier docs said ~217). The release.yml Windows
+# job guards this floor with `tests.exe --list-tests` count >= 223.
+add_standalone_test(test_component_authoring
+    SOURCES test_component_authoring.cpp
+    LIBS simulator::app
 )
-target_compile_definitions(test_component_authoring PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_component_authoring COMMAND test_component_authoring WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Standalone for the same reason as test_component_authoring: TEST_CASEs appended
 # to the main `tests` binary are silently dropped by the MinGW-w64 toolchain, and
 # these must actually run on every CI platform (TutorialState is cross-platform,
 # unlike SessionState).
-add_executable(test_tutorial_state test_tutorial_state.cpp)
-target_link_libraries(test_tutorial_state PRIVATE
-    simulator::tutorial
-    Catch2::Catch2WithMain
+add_standalone_test(test_tutorial_state
+    SOURCES test_tutorial_state.cpp
+    LIBS simulator::tutorial
 )
-target_compile_definitions(test_tutorial_state PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_tutorial_state COMMAND test_tutorial_state WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_executable(test_extensions test_extensions.cpp)
-target_link_libraries(test_extensions PRIVATE
-    simulator::app
-    Catch2::Catch2WithMain
+add_standalone_test(test_extensions
+    SOURCES test_extensions.cpp
+    LIBS simulator::app
 )
-target_compile_definitions(test_extensions PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_extensions COMMAND test_extensions WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_executable(test_issue37_pfb_input_removal test_issue37_pfb_input_removal.cpp)
-target_link_libraries(test_issue37_pfb_input_removal PRIVATE
-    simulator::app
-    Catch2::Catch2WithMain
+add_standalone_test(test_issue37_pfb_input_removal
+    SOURCES test_issue37_pfb_input_removal.cpp
+    LIBS simulator::app
 )
-target_compile_definitions(test_issue37_pfb_input_removal PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_issue37_pfb_input_removal COMMAND test_issue37_pfb_input_removal WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_executable(test_issue42_multi_output test_issue42_multi_output.cpp)
-target_link_libraries(test_issue42_multi_output PRIVATE
-    simulator::app
-    Catch2::Catch2WithMain
+add_standalone_test(test_issue42_multi_output
+    SOURCES test_issue42_multi_output.cpp
+    LIBS simulator::app
 )
-target_compile_definitions(test_issue42_multi_output PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_issue42_multi_output COMMAND test_issue42_multi_output WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-add_executable(test_component_dispatch test_component_dispatch.cpp)
-target_link_libraries(test_component_dispatch PRIVATE
-    simulator::app
-    Catch2::Catch2WithMain
+add_standalone_test(test_component_dispatch
+    SOURCES test_component_dispatch.cpp
+    LIBS simulator::app
 )
-target_compile_definitions(test_component_dispatch PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_component_dispatch COMMAND test_component_dispatch WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-add_executable(test_signal_domain test_signal_domain.cpp)
-target_link_libraries(test_signal_domain PRIVATE
-    common
-    simulator::signal_generator_engine
-    simulator::amplifier_engine
-    simulator::attenuator_engine
-    simulator::node_graph_engine
-    simulator::combiner_engine
-    simulator::equalizer_engine
-    simulator::ideal_filter_engine
-    simulator::coax_cable_engine
-    simulator::splitter_engine
-    simulator::mixer_engine
-    simulator::pfb_channelizer_engine
-    simulator::touchstone_parser
-    simulator::adc_engine
-    simulator::spectrum_analyzer_engine
-    Catch2::Catch2WithMain
+
+add_standalone_test(test_signal_domain
+    SOURCES test_signal_domain.cpp
+    LIBS ${TEST_ENGINE_LIBS}
 )
-target_compile_definitions(test_signal_domain PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME test_signal_domain COMMAND test_signal_domain WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Standalone for the S1/S2 security-fix tests (S-param path containment at the
+# project-file and library boundaries + touchstone parser size/point guards).
+# Kept out of the main `tests` binary for the same MinGW-w64 registration
+# ceiling reason as test_component_authoring above.
+add_standalone_test(test_path_containment
+    SOURCES test_path_containment.cpp
+    LIBS simulator::app simulator::touchstone_parser
+)
