@@ -121,12 +121,8 @@ void NetworkAnalyzerEngine::update(double dt) {
     }
 
     const Spectrum *in_ptr = m_node.inputs.empty() ? nullptr : m_node.inputs[0];
-    if (!m_dirty && in_ptr == m_cached_input_ptr &&
-        (!in_ptr || in_ptr->generation == m_cached_input_generation))
+    if (!beginUpdate(in_ptr))
         return;
-    m_dirty = false;
-    m_cached_input_ptr = in_ptr;
-    m_cached_input_generation = in_ptr ? in_ptr->generation : 0;
 
     computeMeasurement(in_ptr);
 }
