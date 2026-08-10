@@ -79,15 +79,66 @@ std::complex<double> TouchstoneParser::parsePair(double a, double b, TouchstoneD
 }
 
 std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepath) {
-    std::ifstream file(filepath);
+    // R2: Cap the file size before reading anything. A legitimate Touchstone
+    // dataset at the frequency-point cap below (10M points x 9 values/point x
+    // ~10 bytes/value) stays far under 256 MiB, so anything larger cannot
+    // parse successfully and would otherwise be buffered whole into
+    // raw_values (up to ~960 MB at the point cap). Binary mode keeps tellg()
+    // exact; the read loop below already strips '\r' from line endings, so
+    // CRLF files parse identically to text mode.
+    constexpr std::streamoff MAX_FILE_BYTES = 256LL * 1024 * 1024; // 256 MiB
+    std::ifstream file(filepath, std::ios::binary);
     if (!file.is_open())
         return std::nullopt;
+
+    file.seekg(0, std::ios::end);
+    const std::streamoff file_size = file.tellg();
+    if (file_size < 0 || file_size > MAX_FILE_BYTES)
+        return std::nullopt;
+    file.seekg(0, std::ios::beg);
 
     TouchstoneData data;
     bool option_line_found = false;
     bool has_version_keyword = false;
     std::string line;
     std::vector<double> raw_values; // all numeric values from data lines
+
+    // Infer port count from file extension if not explicitly known
+    // .s1p -> 1 port, .s2p -> 2 ports, etc. (Hoisted ahead of the read loop
+    // so the in-loop frequency-point cap below knows the values per point.)
+    size_t dot = filepath.rfind('.');
+    if (dot != std::string::npos && dot + 2 < filepath.size() && filepath[dot + 1] == 's') {
+        char port_char = filepath[dot + 2];
+        if (port_char >= '1' && port_char <= '9') {
+            data.num_ports = port_char - '0';
+        }
+    }
+    if (data.num_ports == 0) {
+        // Try to infer from data density
+        // v1.0 2-port: 9 values per point (freq + 4 pairs)
+        // v1.0 1-port: 3 values per point (freq + 1 pair)
+        // We can't reliably infer without hints, so default to 2 for .s2p files
+        data.num_ports = 2;
+    }
+
+    int pairs_per_freq = 0;
+    if (data.num_ports == 1) {
+        pairs_per_freq = 1;
+    } else if (data.num_ports == 2) {
+        pairs_per_freq = 4; // N11, N21, N12, N22
+    } else {
+        pairs_per_freq = data.num_ports * data.num_ports;
+    }
+    int values_per_freq = 1 + pairs_per_freq * 2;
+
+    // R2: Upper bound on frequency points to prevent OOM. Enforced DURING the
+    // read loop: once more than MAX_FREQ_POINTS * values_per_freq raw values
+    // are buffered, the point count provably exceeds the cap, so bail out
+    // before allocating any more. (The post-loop check below is retained as
+    // defense-in-depth.)
+    constexpr size_t MAX_FREQ_POINTS = 10000000;
+    const size_t max_raw_values =
+        static_cast<size_t>(MAX_FREQ_POINTS) * static_cast<size_t>(values_per_freq);
 
     while (std::getline(file, line)) {
         // Normalize line endings (CR, LF, CRLF)
@@ -131,37 +182,14 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         while (iss >> val) {
             raw_values.push_back(val);
         }
+
+        // R2 in-loop: bail out as soon as the cap is provably exceeded.
+        if (raw_values.size() > max_raw_values)
+            return std::nullopt;
     }
 
     if (!option_line_found)
         return std::nullopt;
-
-    // Infer port count from file extension if not explicitly known
-    // .s1p -> 1 port, .s2p -> 2 ports, etc.
-    size_t dot = filepath.rfind('.');
-    if (dot != std::string::npos && dot + 2 < filepath.size() && filepath[dot + 1] == 's') {
-        char port_char = filepath[dot + 2];
-        if (port_char >= '1' && port_char <= '9') {
-            data.num_ports = port_char - '0';
-        }
-    }
-    if (data.num_ports == 0) {
-        // Try to infer from data density
-        // v1.0 2-port: 9 values per point (freq + 4 pairs)
-        // v1.0 1-port: 3 values per point (freq + 1 pair)
-        // We can't reliably infer without hints, so default to 2 for .s2p files
-        data.num_ports = 2;
-    }
-
-    int pairs_per_freq = 0;
-    if (data.num_ports == 1) {
-        pairs_per_freq = 1;
-    } else if (data.num_ports == 2) {
-        pairs_per_freq = 4; // N11, N21, N12, N22
-    } else {
-        pairs_per_freq = data.num_ports * data.num_ports;
-    }
-    int values_per_freq = 1 + pairs_per_freq * 2;
 
     if (raw_values.size() % values_per_freq != 0) {
         // Mismatch: try to be lenient or return null
@@ -170,8 +198,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
 
     size_t num_freq_points = raw_values.size() / values_per_freq;
 
-    // R2: Upper bound on frequency points to prevent OOM
-    constexpr size_t MAX_FREQ_POINTS = 10000000;
+    // R2: Defense-in-depth cap (the in-loop check above already bounds the
+    // buffer, but keep the explicit check for clarity and safety).
     if (num_freq_points > MAX_FREQ_POINTS)
         return std::nullopt;
 
