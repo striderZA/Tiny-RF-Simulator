@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <unordered_map>
 
 NetworkAnalyzerEngine::NetworkAnalyzerEngine(NodeGraphEngine &graph, INetworkAnalyzerHost &host)
@@ -178,15 +180,52 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
 
 void NetworkAnalyzerEngine::computeMeasurement() {
     const size_t N = m_stimulus_freqs.size();
-    m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
-    m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
 
     auto path = findUniquePath();
     // No path, ambiguous path, or Point A == Point B -> all-NaN. The chain
     // must contain at least one component: the stimulus is injected at Point
     // A's output, which replaces the start node's own output.
-    if (!path || path->nodes.size() < 2)
+    if (!path || path->nodes.size() < 2) {
+        m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+        m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+        m_cached_signature.clear();
         return;
+    }
+
+    // Dirty-check: everything below here re-runs each path component's full
+    // DSP across up to 2001 points -- real, non-trivial work (a nonlinear
+    // stage's harmonics/IMD generation scales with tone count) -- and this
+    // function runs unconditionally every ImGui frame the panel is visible.
+    // This instrument has no wired input to compare a cached pointer +
+    // generation against (every other engine's dirty-check), since it reads
+    // a chain of REAL, externally-owned components it gets no change
+    // notification from. Stand in with a signature of the discovered chain
+    // (each node's live serialize() dump -- %.17g-precise doubles round-trip
+    // exactly, so this only changes when a value actually changes) plus the
+    // sweep params and both probe pins; skip the clone-and-cascade below,
+    // reusing last frame's m_gain_dB/m_nf_dB, when nothing in it moved.
+    std::string signature;
+    signature.reserve(256);
+    for (size_t i = 0; i < path->nodes.size(); ++i) {
+        signature += path->nodes[i]->type_name();
+        signature += ':';
+        signature += std::to_string(path->nodes[i]->id());
+        signature += path->nodes[i]->serialize().dump();
+        if (i < path->out_index.size())
+            signature += ':' + std::to_string(path->out_index[i]);
+        signature += '|';
+    }
+    char sweep_buf[192];
+    std::snprintf(sweep_buf, sizeof(sweep_buf), "%.17g,%.17g,%d,%.17g,%d,%d", m_start_freq,
+                  m_stop_freq, m_points, m_stimulus_power_dBm, m_point_a_pin, m_point_b_pin);
+    signature += sweep_buf;
+
+    if (signature == m_cached_signature)
+        return; // unchanged since last frame -- m_gain_dB/m_nf_dB already hold the answer
+    m_cached_signature = std::move(signature);
+
+    m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
+    m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
 
     // Private, throwaway clone chain: a fresh scratch graph+registry for this
     // pass only, destroyed at function exit. The real graph/registry are never
@@ -263,38 +302,70 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     // Match tones by frequency value against the last clone's output, exactly
     // like the prior gain/NF formula (k/T/dbToLinear reused from common.h; no
     // Friis math re-derived). A dropped/mistranslated point degrades to NaN.
+    //
+    // response->tones/frequencies can carry a few thousand entries once
+    // harmonics/IMD tones from a nonlinear stage are appended, and N (the
+    // sweep point count) goes up to 2001 -- linearly rescanning both arrays
+    // for EVERY stimulus point was O(N*M): measured ~22ms per update() at
+    // 2001 points (vs. ~0.03ms at 21), run unconditionally every ImGui frame
+    // while the panel is open. This was the "serious performance
+    // degradation when enabled" regression. Bucket both arrays once into
+    // 1 Hz cells (O(M)) so each of the N lookups below is O(1) amortized;
+    // checking a cell plus its two neighbors preserves exact-epsilon
+    // matching across cell boundaries, and picking the lowest tone/frequency
+    // index within range keeps the same "first match in array order"
+    // tie-break as the old linear scan.
     const Spectrum *response = &final_outputs[static_cast<size_t>(point_b_port)];
     constexpr double kFreqEpsilonHz = 1.0;
+    const auto cell_of = [](double f) {
+        return static_cast<long long>(std::floor(f / kFreqEpsilonHz));
+    };
+
+    std::unordered_multimap<long long, size_t> tone_cells;
+    tone_cells.reserve(response->tones.size());
+    for (size_t t = 0; t < response->tones.size(); ++t)
+        tone_cells.emplace(cell_of(response->tones[t].freq_Hz), t);
+
+    std::unordered_multimap<long long, size_t> freq_cells;
+    freq_cells.reserve(response->frequencies.size());
+    for (size_t j = 0; j < response->frequencies.size(); ++j)
+        freq_cells.emplace(cell_of(response->frequencies[j]), j);
+
     for (size_t i = 0; i < N; ++i) {
         const double f = m_stimulus_freqs[i];
+        const long long c = cell_of(f);
 
-        const Spectrum::Tone *matched_tone = nullptr;
-        for (const auto &t : response->tones) {
-            if (std::abs(t.freq_Hz - f) <= kFreqEpsilonHz) {
-                matched_tone = &t;
-                break;
+        std::optional<size_t> tone_idx;
+        for (long long cc = c - 1; cc <= c + 1; ++cc) {
+            auto range = tone_cells.equal_range(cc);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (std::abs(response->tones[it->second].freq_Hz - f) <= kFreqEpsilonHz &&
+                    (!tone_idx || it->second < *tone_idx))
+                    tone_idx = it->second;
             }
         }
-        if (!matched_tone)
+        if (!tone_idx)
             continue;
 
-        const double gain_dB = matched_tone->power_dBm - m_stimulus_power_dBm;
+        const double gain_dB = response->tones[*tone_idx].power_dBm - m_stimulus_power_dBm;
         if (gain_dB < -100.0)
             continue; // indistinguishable from noise floor -> no data
 
-        size_t noise_idx = response->frequencies.size();
-        for (size_t j = 0; j < response->frequencies.size(); ++j) {
-            if (std::abs(response->frequencies[j] - f) <= kFreqEpsilonHz) {
-                noise_idx = j;
-                break;
+        std::optional<size_t> noise_idx;
+        for (long long cc = c - 1; cc <= c + 1; ++cc) {
+            auto range = freq_cells.equal_range(cc);
+            for (auto it = range.first; it != range.second; ++it) {
+                if (std::abs(response->frequencies[it->second] - f) <= kFreqEpsilonHz &&
+                    (!noise_idx || it->second < *noise_idx))
+                    noise_idx = it->second;
             }
         }
 
         m_gain_dB[i] = gain_dB;
 
-        if (noise_idx < response->noise_total_W.size()) {
+        if (noise_idx && *noise_idx < response->noise_total_W.size()) {
             const double gain_linear = dbToLinear(gain_dB);
-            const double noise_out_W = response->noise_total_W[noise_idx];
+            const double noise_out_W = response->noise_total_W[*noise_idx];
             const double nf_linear = (noise_out_W / gain_linear) / (k * T);
             if (nf_linear > 0.0)
                 m_nf_dB[i] = 10.0 * std::log10(nf_linear);
