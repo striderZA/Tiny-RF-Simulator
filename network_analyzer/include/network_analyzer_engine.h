@@ -117,12 +117,25 @@ class NetworkAnalyzerEngine {
     Spectrum m_stimulus; // private tone-comb stimulus, not attached to any node
 
     void rebuildStimulus();
+
+    // A discovered chain: nodes[0] is Point A's own node (never cloned — its
+    // signal is replaced by the stimulus), nodes[1..] are the components to
+    // clone and measure, in order, ending at Point B's node. out_index[i] is
+    // the output PORT that nodes[i] actually used on the real graph to reach
+    // nodes[i+1] (size == nodes.size()-1) — required because some components
+    // (e.g. the PFB Channelizer) have multiple, structurally different
+    // outputs; hardcoding port 0 would silently clone the wrong signal.
+    struct PathResult {
+        std::vector<IComponentEngine *> nodes;
+        std::vector<int> out_index;
+    };
+
     // DFS over m_graph's real links from Point A's owning node forward,
     // enumerating simple paths to Point B's owning node. Returns nullopt for
     // zero or more-than-one distinct path, or for any path that would cross a
     // Combiner's combined signal input (the start node is exempt: its output
     // is the injection point, replaced by the stimulus). Bail out early once 2
     // distinct paths are found — only "unique or not" matters.
-    std::optional<std::vector<IComponentEngine *>> findUniquePath() const;
+    std::optional<PathResult> findUniquePath() const;
     void computeMeasurement();
 };

@@ -86,7 +86,6 @@ class TestNaHost final : public INetworkAnalyzerHost {
   private:
     std::map<int, IComponentEngine *> m_by_node;
 };
-
 namespace {
 // Local copies of NonlinearModel's dBm<->linear unit helpers (detail::).
 double dbmToW(double dBm) { return std::pow(10.0, dBm / 10.0) * 0.001; }

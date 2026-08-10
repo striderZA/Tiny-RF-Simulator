@@ -72,24 +72,29 @@ void NetworkAnalyzerEngine::rebuildStimulus() {
     m_nf_dB.assign(m_stimulus_freqs.size(), std::numeric_limits<double>::quiet_NaN());
 }
 
-std::optional<std::vector<IComponentEngine *>> NetworkAnalyzerEngine::findUniquePath() const {
+std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniquePath() const {
     const int start_node = m_graph.nodeIdForPin(m_point_a_pin);
     const int end_node = m_graph.nodeIdForPin(m_point_b_pin);
     if (start_node < 0 || end_node < 0 || start_node == end_node)
         return std::nullopt;
 
-    // Forward adjacency: node -> nodes reachable via one real output link.
-    // Duplicate links (same start pin -> same end pin, which the graph allows)
-    // collapse into a single edge so they cannot fake an ambiguous path.
-    std::unordered_map<int, std::vector<int>> next_of;
+    // Forward adjacency: node -> [(output port index, node reachable via that
+    // port's real link)]. The port index is kept (not just the next node) so
+    // the clone chain later reads the SAME output a multi-output component
+    // (e.g. a PFB Channelizer's two structurally different outputs) actually
+    // used on the real graph, instead of guessing port 0. Duplicate links
+    // (same start pin -> same end pin, which the graph allows) collapse into
+    // a single edge so they cannot fake an ambiguous path.
+    std::unordered_map<int, std::vector<std::pair<int, int>>> next_of;
     for (const auto &node : m_graph.nodes()) {
-        std::vector<int> nexts;
-        for (int out_pin : node.output_pin_ids) {
+        std::vector<std::pair<int, int>> nexts;
+        for (size_t oi = 0; oi < node.output_pin_ids.size(); ++oi) {
+            const int out_pin = node.output_pin_ids[oi];
             for (const auto &link : m_graph.links()) {
                 if (link.start_pin_id == out_pin) {
-                    int nxt = m_graph.nodeIdForPin(link.end_pin_id);
+                    const int nxt = m_graph.nodeIdForPin(link.end_pin_id);
                     if (nxt >= 0)
-                        nexts.push_back(nxt);
+                        nexts.emplace_back(static_cast<int>(oi), nxt);
                 }
             }
         }
@@ -113,7 +118,10 @@ std::optional<std::vector<IComponentEngine *>> NetworkAnalyzerEngine::findUnique
     // one is found (only "unique or not" matters — no exhaustive enumeration,
     // so large graphs cannot blow up).
     std::vector<int> path;
+    std::vector<int> path_out_idx; // path_out_idx[j] = output port path[j] used
+                                   // to reach path[j+1]; size = path.size()-1
     std::vector<int> found_path;
+    std::vector<int> found_out_idx;
     int path_count = 0;
 
     std::function<void(int)> dfs = [&](int node) {
@@ -122,12 +130,13 @@ std::optional<std::vector<IComponentEngine *>> NetworkAnalyzerEngine::findUnique
         if (node == end_node) {
             ++path_count;
             found_path = path;
+            found_out_idx = path_out_idx;
             return;
         }
         auto it = next_of.find(node);
         if (it == next_of.end())
             return;
-        for (int nxt : it->second) {
+        for (const auto &[oi, nxt] : it->second) {
             if (path_count >= 2)
                 return;
             if (crosses_combiner(nxt))
@@ -135,7 +144,9 @@ std::optional<std::vector<IComponentEngine *>> NetworkAnalyzerEngine::findUnique
             if (std::find(path.begin(), path.end(), nxt) != path.end())
                 continue; // simple paths only (no revisits)
             path.push_back(nxt);
+            path_out_idx.push_back(oi);
             dfs(nxt);
+            path_out_idx.pop_back();
             path.pop_back();
         }
     };
@@ -146,14 +157,15 @@ std::optional<std::vector<IComponentEngine *>> NetworkAnalyzerEngine::findUnique
     if (path_count != 1)
         return std::nullopt; // no path, or more than one distinct path
 
-    std::vector<IComponentEngine *> result;
-    result.reserve(found_path.size());
+    PathResult result;
+    result.nodes.reserve(found_path.size());
     for (int node_id : found_path) {
         auto *comp = m_host.componentForNode(node_id);
         if (!comp)
             return std::nullopt; // unregistered node — cannot clone it
-        result.push_back(comp);
+        result.nodes.push_back(comp);
     }
+    result.out_index = std::move(found_out_idx);
     return result;
 }
 
@@ -166,7 +178,7 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     // No path, ambiguous path, or Point A == Point B -> all-NaN. The chain
     // must contain at least one component: the stimulus is injected at Point
     // A's output, which replaces the start node's own output.
-    if (!path || path->size() < 2)
+    if (!path || path->nodes.size() < 2)
         return;
 
     // Private, throwaway clone chain: a fresh scratch graph+registry for this
@@ -179,9 +191,9 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     // Chain = path nodes after Point A's node, through Point B's node (the
     // stimulus replaces Point A's signal, so A's own node is not measured).
     std::vector<IComponentEngine *> clones;
-    clones.reserve(path->size() - 1);
-    for (size_t i = 1; i < path->size(); ++i) {
-        IComponentEngine *real = (*path)[i];
+    clones.reserve(path->nodes.size() - 1);
+    for (size_t i = 1; i < path->nodes.size(); ++i) {
+        IComponentEngine *real = path->nodes[i];
         IComponentEngine *clone = scratch->createClone(real->type_name(), real->id());
         if (!clone)
             return; // unknown type -> no data
@@ -190,19 +202,31 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     }
 
     // Wire by directly assigning SignalNode* pointers (no scratch-graph links
-    // needed), the same technique RfSimulatorApp::rewireInputs() uses.
+    // needed), the same technique RfSimulatorApp::rewireInputs() uses. Each
+    // clone's input reads the SPECIFIC output port that node actually used on
+    // the real graph (path->out_index[i]) — not hardcoded port 0, which would
+    // silently clone the wrong signal for a multi-output component like a PFB
+    // Channelizer whose two outputs carry structurally different spectra.
     for (size_t i = 0; i < clones.size(); ++i) {
         auto &inputs = clones[i]->node().inputs;
         if (inputs.empty())
             return; // a chain component must have an input to feed
-        inputs[0] = (i == 0) ? &m_stimulus : &clones[i - 1]->node().outputs[0];
+        if (i == 0) {
+            inputs[0] = &m_stimulus;
+        } else {
+            const int out_port = path->out_index[i];
+            auto &prev_outputs = clones[i - 1]->node().outputs;
+            if (out_port < 0 || static_cast<size_t>(out_port) >= prev_outputs.size())
+                return; // defensive: should never happen, same type = same pin counts
+            inputs[0] = &prev_outputs[static_cast<size_t>(out_port)];
+        }
         // Mixer clones borrow the real, live LO input (read-only). The current
         // MixerEngine has a single RF input (the LO is the lo_freq_Hz
         // parameter, already copied exactly by deserialize(real->serialize())),
         // so this is a no-op today; it keeps the clone faithful if a mixer
         // model with a separate LO signal input appears.
         if (clones[i]->type_name() == "mixer" && inputs.size() > 1) {
-            const auto &real_inputs = (*path)[i + 1]->node().inputs;
+            const auto &real_inputs = path->nodes[i + 1]->node().inputs;
             if (real_inputs.size() > 1)
                 inputs[1] = real_inputs[1];
         }
@@ -211,10 +235,28 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     for (auto *clone : clones)
         clone->update(0.0);
 
+    // Read the response from Point B's OWN output port — resolved directly
+    // against the graph's raw output_pin_ids (not IComponentEngine::
+    // outputPinId(port), which several multi-output engines, e.g. the PFB
+    // Channelizer, do not override — relying on it would silently fall back
+    // to port 0 exactly like the bug this function fixes). Point B may be
+    // wired to any of its node's output pins (e.g. a PFB Channelizer's OUT2).
+    int point_b_port = 0;
+    for (const auto &node : m_graph.nodes()) {
+        auto it = std::find(node.output_pin_ids.begin(), node.output_pin_ids.end(), m_point_b_pin);
+        if (it != node.output_pin_ids.end()) {
+            point_b_port = static_cast<int>(std::distance(node.output_pin_ids.begin(), it));
+            break;
+        }
+    }
+    auto &final_outputs = clones.back()->node().outputs;
+    if (point_b_port < 0 || static_cast<size_t>(point_b_port) >= final_outputs.size())
+        return;
+
     // Match tones by frequency value against the last clone's output, exactly
     // like the prior gain/NF formula (k/T/dbToLinear reused from common.h; no
     // Friis math re-derived). A dropped/mistranslated point degrades to NaN.
-    const Spectrum *response = &clones.back()->node().outputs[0];
+    const Spectrum *response = &final_outputs[static_cast<size_t>(point_b_port)];
     constexpr double kFreqEpsilonHz = 1.0;
     for (size_t i = 0; i < N; ++i) {
         const double f = m_stimulus_freqs[i];
