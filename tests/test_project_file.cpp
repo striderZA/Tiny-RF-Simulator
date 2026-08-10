@@ -6,10 +6,13 @@
 #include "implot.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <complex>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <numbers>
 #include <string>
 
 using Catch::Approx;
@@ -440,7 +443,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: default component positions are (0,0
 }
 
 // ---------------------------------------------------------------------------
-// 13 — Issue #44: S-param mode survives save/load for amplifier, ideal filter,
+// 13 — Issue #56: S-param mode survives save/load for amplifier, ideal filter,
 //      equalizer, attenuator, and combiner. Previously deserialize() restored
 //      sparam_mode/sparam_filepath but never reloaded the Touchstone file, so
 //      a reloaded project silently fell back to ideal/manual mode.
@@ -450,7 +453,7 @@ static std::string sparamFixturePath() {
            "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #44)",
+TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #56)",
                  "[project_file][sparam]") {
     auto path = tempPath();
     std::remove(path.c_str());
@@ -491,6 +494,32 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         REQUIRE(amps.size() == 1);
         CHECK(amps[0]->sparamMode() == true);
         CHECK(amps[0]->sparamLoaded() == true);
+
+        // Issue #56 regression: sparamMode()/sparamLoaded() are necessary but
+        // not sufficient — the old deserialize() restored the mode flags and
+        // filepath without reloading the Touchstone file, so a reloaded
+        // amplifier reported sparamMode()==true but applied ideal gain. Drive
+        // a tone through the loaded amplifier via the app DSP chain and
+        // compare the output against the S21-derived expectation (mirrors
+        // tests/test_amplifier_sparam.cpp).
+        auto &gen = app.testComponents().add<SignalGeneratorEngine>(20001, app.testGraphEngine());
+        gen.addTone(1e9, -20.0);
+        gen.update(0.0);
+
+        int gen_pin = gen.outputPinId();
+        int amp_pin = amps[0]->inputPinId();
+        int link_id = app.testGraphEngine().addLink(gen_pin, amp_pin);
+        REQUIRE(link_id > 0);
+
+        app.update_dsp();
+
+        const auto &amp_out = amps[0]->node().outputs[0];
+        REQUIRE(amp_out.tones.size() == 1);
+        auto S21 = amps[0]->sparamData().interpolate(1e9, 2);
+        double expected_gain = 20.0 * std::log10(std::abs(S21));
+        REQUIRE(amp_out.tones[0].power_dBm == Approx(-20.0 + expected_gain).margin(0.5));
+        double expected_phase = std::arg(S21) * 180.0 / std::numbers::pi;
+        REQUIRE(amp_out.tones[0].phase_deg == Approx(expected_phase).margin(1.0));
 
         auto flts = app.testComponents().byType<IdealFilterEngine>();
         REQUIRE(flts.size() == 1);
