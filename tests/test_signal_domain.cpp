@@ -523,6 +523,73 @@ TEST_CASE("Attenuator: propagates fs_Hz (S-param mode)", "[domain][attenuator]")
     REQUIRE(atten.node().outputs[0].fs_Hz == Approx(500e6));
 }
 
+TEST_CASE("Combiner: propagates fs_Hz", "[domain][combiner]") {
+    NodeGraphEngine graph;
+    CombinerEngine comb(0, graph);
+
+    Spectrum in0, in1;
+    in0.frequencies = {1e9, 2e9};
+    in0.noise_total_W.assign(2, 1e-21);
+    in0.fs_Hz = 500e6;
+    in1.frequencies = {1e9, 2e9};
+    in1.noise_total_W.assign(2, 1e-21);
+    in1.fs_Hz = 500e6;
+
+    comb.node().inputs[0] = &in0;
+    comb.node().inputs[1] = &in1;
+    comb.update(0.0);
+
+    REQUIRE(comb.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Attenuator: propagates fs_Hz (manual mode)", "[domain][attenuator]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    atten.node().inputs[0] = &in;
+    atten.update(0.0);
+
+    REQUIRE(atten.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("Equalizer: propagates fs_Hz", "[domain][equalizer]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    eq.node().inputs[0] = &in;
+    eq.update(0.0);
+
+    REQUIRE(eq.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
+TEST_CASE("IdealFilter: propagates fs_Hz", "[domain][ideal_filter]") {
+    NodeGraphEngine graph;
+    IdealFilterEngine flt(0, graph);
+
+    Spectrum in;
+    in.frequencies = {1e9, 2e9};
+    in.tones = {{1e9, -10.0, 0.0}};
+    in.noise_total_W.assign(2, 1e-21);
+    in.fs_Hz = 500e6;
+
+    flt.node().inputs[0] = &in;
+    flt.update(0.0);
+
+    REQUIRE(flt.node().outputs[0].fs_Hz == Approx(500e6));
+}
+
 // Real multi-engine post-ADC chains: fs_Hz must reach the PFB and channels must be populated
 // without any manual setFs_Hz() (issues #43/#54 regression tests).
 
