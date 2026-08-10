@@ -657,3 +657,49 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Network Analyzer sweep params and pr
     }
     std::remove(path.c_str());
 }
+
+// ---------------------------------------------------------------------------
+// Regression: loading a second project (with no Network Analyzer points set)
+// into an app that already had Point A/B set from a prior project must clear
+// them, not leave a stale pin id that could alias an unrelated pin in the
+// new project (pin ids are reallocated deterministically from the same base
+// counters on every reset()/load()).
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Network Analyzer probe points clear when a project without them loads",
+                 "[project_file][network_analyzer]") {
+    auto path_with_points = tempPath();
+    auto path_without_points = tempPath();
+    std::remove(path_with_points.c_str());
+    std::remove(path_without_points.c_str());
+
+    {
+        RfSimulatorApp app;
+        auto &na = app.testNetworkAnalyzerEngine();
+        const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+        const auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(gens.size() == 1);
+        REQUIRE(amps.size() == 1);
+        na.setPointA(gens[0]->outputPinId());
+        na.setPointB(amps[0]->outputPinId());
+        app.saveProject(path_with_points);
+    }
+    {
+        // A second project, saved with the Network Analyzer's points left
+        // unset (default state).
+        RfSimulatorApp app;
+        app.saveProject(path_without_points);
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(path_with_points);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointAPin() >= 0);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointBPin() >= 0);
+
+    app.loadProject(path_without_points);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointAPin() == -1);
+    REQUIRE(app.testNetworkAnalyzerEngine().pointBPin() == -1);
+
+    std::remove(path_with_points.c_str());
+    std::remove(path_without_points.c_str());
+}

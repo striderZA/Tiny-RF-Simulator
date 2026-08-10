@@ -530,6 +530,16 @@ void ProjectSerializer::reset() {
     // Clear probes
     m_graph.clearProbes();
 
+    // Clear the Network Analyzer's probe points too — otherwise a stale pin
+    // id survives into the next project, and since pin ids are reallocated
+    // deterministically from the same base below, it can silently alias an
+    // unrelated pin belonging to a different component (issue found in
+    // review: load()'s restore only *sets* Point A/B when present in the
+    // save file, so an absent/unset point left the previous project's pin
+    // id in place).
+    m_na_engine.setPointA(-1);
+    m_na_engine.setPointB(-1);
+
     // Reset IQ / PFB widgets
     m_pfb_views.clear();
 
