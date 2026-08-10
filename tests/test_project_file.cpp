@@ -547,11 +547,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         REQUIRE(eq.sparamLoaded());
 
         auto &atten = app.testComponents().add<AttenuatorEngine>(10004, app.testGraphEngine());
-        atten.setSParamFilepath(s2p);
+        atten.setSParamFilepath(local_s2p);
         REQUIRE(atten.sparamMode());
 
         auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
-        comb.setSParamFilepath(s2p);
+        comb.setSParamFilepath(local_s2p);
         REQUIRE(comb.sparamMode());
 
         REQUIRE(app.componentCount() == 5);
