@@ -69,6 +69,16 @@ Touchstone stores data in **column-major** format (`S11, S21, S12, S22` for 2-po
 - Enforces 10 million point maximum.
 - Missing option line returns `nullopt`.
 - Recent fix: uses `lower_bound` for interpolation, clamps `log10(0)`.
+- **S2 hardening (2026-08-09 codebase review):** the parser now refuses files > 256 MiB before reading anything (`MAX_FILE_BYTES`, enforced with `tellg()` in binary mode) and caps buffered frequency points at 10M **in-loop** (`MAX_FREQ_POINTS` × values-per-point), so an oversized file bails out before allocating a ~960 MB `raw_values` buffer. Post-loop defense-in-depth check retained.
+
+### S-param Path Containment (S1, 2026-08-09 codebase review)
+
+Untrusted S-param paths are confined to their owning root at both load boundaries:
+
+- **Project load** (`app/src/project_serializer.cpp`): `resolveSparamPath()`/`resolveSparamParams()` rewrite `sparam_filepath`/`sparam_path` in-place. Absolute paths outside the project dir, `..` traversal, or unresolvable paths are neutralized to `""` with a warning. On **save**, `relativizeSparamParams()` re-writes in-project absolute paths as project-relative for portability.
+- **Library instantiate** (`app/src/component_library.cpp`): `resolveDataFilePath()` only honors `data_files` entries whose canonical form stays inside the library JSON's directory — escaping entries are skipped, and instantiation falls back when every data file escapes.
+
+Shared helper discipline mirrors `extension_manifest.cpp`'s `pathWithinRoot()`/`resolveWithinRoot()` (canonical-path prefix comparison via `std::filesystem::weakly_canonical`). Covered by the standalone `test_path_containment` executable (5 tests).
 
 ### Data File Repository
 
@@ -159,7 +169,7 @@ The rework was motivated by the observation that a generic SParamEngine duplicat
 
 | File | Role |
 |---|---|
-| `touchstone/src/touchstone_parser.cpp` | File format parser |
+| `touchstone/src/touchstone_parser.cpp` | File format parser (256 MiB size guard + 10M point cap) |
 | `touchstone/src/s_parameter_data.cpp` | Data storage + interpolation |
 | `amplifier/src/amplifier_engine.cpp` | Amplifier S-param mode |
 | `ideal_filter/src/ideal_filter_engine.cpp` | Filter S-param mode |
@@ -167,6 +177,9 @@ The rework was motivated by the observation that a generic SParamEngine duplicat
 | `attenuator/src/attenuator_engine.cpp` | Attenuator S-param mode |
 | `combiner/src/combiner_engine.cpp` | Combiner 3-port S-param mode |
 | `app/src/inspector_panel.cpp` | S-param file browser UI |
+| `app/src/project_serializer.cpp` | S1 load/save path containment (`resolveSparamPath`/`relativizeSparamParams`) |
+| `app/src/component_library.cpp` | S1 library `data_files` containment (`resolveDataFilePath`) |
+| `tests/test_path_containment.cpp` | S1/S2 regression tests (standalone executable) |
 | `component_data/` | Touchstone data files for testing |
 
 ---
@@ -176,4 +189,5 @@ The rework was motivated by the observation that a generic SParamEngine duplicat
 - **Forward param is always S21** (index `1 * numPorts + 0`). For 3-port combiner, S31 (`2 * numPorts + 1`) is also used.
 - **NF and nonlinearity stay with the amplifier** — these are physical device properties not derivable from S-parameters.
 - To add S-param mode to a new component: add `SParameterData` member + `bool m_sparam_mode`, branch on `update()`, add inspector UI in `draw*Properties()`, add file browser support.
+- **Contain any S-param path read from an untrusted file** at the load boundary (project load or library instantiate) using the `pathWithinRoot()`/`weakly_canonical` discipline documented in the [S1 containment](#s-param-path-containment-s1-2026-08-09-codebase-review) section; save-side should relativize in-project paths for portability.
 - The `touchstone/` data layer should remain untouched — it's the stable shared library.

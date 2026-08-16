@@ -7,7 +7,7 @@ tags: [testing, catch2, unit-tests, ui-tests]
 
 # Testing Guide
 
-RF Simulator has **~300 test cases** (including 14 benchmarks) across **30 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **9 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the guided tutorial, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~340 test cases** (306 `TEST_CASE` + 34 `TEST_CASE_METHOD`, including 14 benchmarks) across **33 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **11 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the network analyzer instrument, the guided tutorial, S-param path containment, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -38,7 +38,7 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Nine standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~217 already linked into `tests.exe`).
+These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Eleven standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~223 already linked into `tests.exe`).
 
 | Test File | Tags | What It Tests |
 |---|---|---|
@@ -60,7 +60,7 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 | `test_group.cpp` | `[group]`, `[integration]` | Group operations, boundary pins, signal flow through groups |
 | `test_iq_plot.cpp` | `[iq_plot]` | `build_iq_spectrum` IFFT, Parseval, empty/degenerate grids |
 | `test_layout_manager.cpp` | `[layout]` | Layout path derivation, name sanitization, named-preset save/load |
-| `test_project_file.cpp` | `[project_file]` | Save/load round-trip: empty project, linked components, newProject, parameter values, groups, invalid JSON |
+| `test_project_file.cpp` | `[project_file]` | Save/load round-trip: empty project, linked components, newProject, parameter values, groups, invalid JSON, S-param mode reload, Network Analyzer sweep params + probe points, stale-probe clearing |
 | `test_session_state.cpp` | `[session]` | Windows-only: INI save/load round-trip |
 | `test_bench_dsp.cpp` | `[bench]`, `[generator]`, `[amplifier]`, `[mixer]`, `[splitter]`, `[pfb]`, `[spectrum]` | Per-engine dirty/clean benchmarks |
 | `test_bench_groups.cpp` | `[benchmark]`, `[group]` | Group operation benchmarks |
@@ -76,6 +76,8 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 | `test_issue37_pfb_input_removal.cpp` | `test_issue37_pfb_input_removal` | Issue #37 regression: removing an upstream node immediately nulls downstream dangling input pointers |
 | `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all 11 types round-trip through save/load, legacy `.rfsim` type strings backward compat |
 | `test_issue42_multi_output.cpp` | `test_issue42_multi_output` | Issue #42 regression: Splitter OUT2 routes to Combiner IN1 via `outputs[1]`; probing Splitter/PFB OUT2 resolves output index 1 |
+| `test_network_analyzer.cpp` | `test_network_analyzer` | Network Analyzer v3 instrument: stimulus power reaches the isolated chain, gain accuracy (attenuator chain), NF accuracy (amplifier chain), probing does not perturb a real consumer, disconnected/ambiguous/combiner-crossing paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw with/without probe points |
+| `test_path_containment.cpp` | `test_path_containment` | S1/S2 security fixes (2026-08-09 codebase review): project load neutralizes S-param paths outside the project dir, save relativizes in-project paths, library `data_files` confined to the JSON's dir, TouchstoneParser 256 MiB size guard + 10M frequency-point cap |
 | `test_signal_domain.cpp` | `test_signal_domain` | `is_complex_baseband` defaults and propagation through every engine, `conjugateSymmetricExpand` expansion |
 | `test_tutorial_state.cpp` | `test_tutorial_state` | TutorialState marker path derivation, completed/markCompleted round-trip, catalog non-empty and addressable, inactive until started, navigation stays within bounds |
 
@@ -197,6 +199,8 @@ cd build
 ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
 ```
 
+The Windows job also verifies the MinGW-w64 TEST_CASE registration floor: `tests.exe --list-tests` must register ≥ 223 cases (the toolchain silently drops any TEST_CASE beyond that ceiling in the main `tests` binary; new coverage that must run on Windows goes in a standalone executable instead). See `tests/AGENTS.md` and the `Verify MinGW TEST_CASE registration count` step in `release.yml`.
+
 The UI test engine requires a display server. For headless Linux CI, Xvfb is used (`xvfb-run --auto-servernum`). Locally, run:
 
 ```bash
@@ -210,7 +214,7 @@ xvfb-run build/bin/test_ui
 ### Adding a New Test
 
 1. Create `tests/test_<component>.cpp`.
-2. Add the file to `tests/CMakeLists.txt`.
+2. Add the file to `tests/CMakeLists.txt` — **prefer a new standalone executable** (`add_standalone_test(test_<name> SOURCES ... LIBS ...)`) unless the main `tests` binary is far below the MinGW registration ceiling (~223 registered cases; new coverage that must run on Windows goes in a standalone executable — see `tests/AGENTS.md`).
 3. Choose descriptive tags: `[component]`, `[feature]` (e.g., `[coax][phase]`).
 4. Use meaningful section names that describe the scenario.
 

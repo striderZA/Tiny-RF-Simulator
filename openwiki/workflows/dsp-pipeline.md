@@ -21,6 +21,7 @@ src/main.cpp
   │     ├─ Constructs NodeGraphWidget (canvas context menu wiring)
   │     ├─ Adds default SignalGenerator + Amplifier
   │     ├─ Constructs SpectrumAnalyzerWidget
+  │     ├─ Constructs NetworkAnalyzerWidget (singleton instrument)
   │     ├─ Constructs IQPlotWidget(s), PFBChannelizerWidget(s)
   │     └─ Constructs InspectorPanel (callback wiring)
   └─ core.Run(lambda)
@@ -79,6 +80,7 @@ Call `NodeGraphEngine::probedSignalNodes()` to get up to 4 probed `SignalSource{
 Main Menu Bar        ← File / View / Help menus with keyboard shortcuts
 Node Editor         ← NodeGraphWidget::draw()
 Spectrum Analyzer   ← SpectrumAnalyzerWidget::draw()
+Network Analyzer    ← NetworkAnalyzerEngine::update() + NetworkAnalyzerWidget::draw() (only while m_show_na)
 IQ Plot (per PFB)   ← IQPlotWidget::draw()
 Channelizer Grid    ← PFBChannelizerWidget::draw()
 Properties Panel    ← InspectorPanel::draw()  (selected component)
@@ -88,7 +90,9 @@ Help (How to Use)   ← HelpWidget::draw()      (toggled via F1 or Help > How to
 Tutorial Guide      ← TutorialWidget::draw()  (floating walkthrough window; inactive unless running)
 ```
 
-The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1, plus `Help > Tutorial`). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Network Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1, plus `Help > Tutorial`). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+
+The **Network Analyzer** panel is a singleton instrument (like the Spectrum Analyzer): while visible, `RfSimulatorApp::draw_ui()` first calls `m_na_engine.update()` — which finds the unique path between Point A and Point B over the real graph, gates on a serialize-dump signature, and runs the clone-chain measurement — then renders `m_na_widget->draw()`. Its sweep/point edits fire `onParamChange` → `markDirty()` like component params. See [Network Analyzer Instrument](../architecture/overview.md#network-analyzer-instrument) and [RF Components](../domains/rf-components.md#network-analyzer-network_analyzer).
 
 A one-time first-run "Welcome to Tiny RF Simulator" modal (v0.17.0) offers the [guided tutorial](../architecture/overview.md) — either answer marks it completed via the exe-relative `.tutorial_completed` marker, so it never nags again.
 
@@ -136,7 +140,7 @@ Probe colors (in order): teal (`#16C79A`), orange (`#E69628`), purple (`#7832AA`
 `SessionState` (`common/session_state.h`) reads/writes `app.ini` using Windows INI APIs (no-op on other platforms). Persists:
 
 - Window position and size
-- Visibility flags for sub-windows (Log, IQ Plot, etc.)
+- Visibility flags for sub-windows (Log, IQ Plot, Spectrum Analyzer, **Network Analyzer**, etc.)
 - PFB active channel selections
 
 ---
@@ -149,6 +153,5 @@ Probe colors (in order): teal (`#16C79A`), orange (`#E69628`), purple (`#7832AA`
 | Time-domain view improvements | 📋 Planned | Beyond current IQ plot |
 | Spectrum analyzer enhancements | ✅ Completed (v0.11.0) | MaxHold, MinHold, VideoAverage trace modes with per-trace history |
 | RF-accurate node-graph components | 📋 Planned | Improved RF representation |
-| Ponytail cleanup | Partially planned | ~1100–1330 line reduction |
 
 See [ROADMAP.md](/ROADMAP.md) for full feature tracking.
