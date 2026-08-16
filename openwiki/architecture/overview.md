@@ -30,7 +30,7 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 │  pfb_channelizer/  spectrum_analyzer/    │
 │  iq_plot/  touchstone/                   │
 │  logging/  help/  layout/  tutorial/     │
-│  icon_registry/                          │
+│  icon_registry/  network_analyzer/       │
 ├──────────┴──────────────────────────────┤
 │  Common Data Model (common/)            │
 │  IComponentEngine, SignalNode,          │
@@ -66,7 +66,7 @@ The core uses a PIMPL pattern (`struct Impl`) to hide GLFW/OpenGL types from all
 **`RfSimulatorApp`** is the central coordinator, instantiated by `main.cpp`. It owns:
 
 - **All DSP engines** — stored in a `ComponentRegistry` (type-erased, indexable by `std::type_index`)
-- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget` (data-driven "How to Use" panel, toggled via F1 or menu bar), `TutorialWidget` (guided first-run walkthrough, see below)
+- **All widgets** — `NodeGraphWidget`, `SpectrumAnalyzerWidget`, `InspectorPanel`, `IQPlotWidget`s, `PFBChannelizerWidget`s, `LoggingWidget`, `SignalGeneratorWidget`s, `HelpWidget` (data-driven "How to Use" panel, toggled via F1 or menu bar), `TutorialWidget` (guided first-run walkthrough, see below), `NetworkAnalyzerWidget` (instrument panel, see below)
 - **`NodeGraphEngine`** — the topology manager
 - **`ViewManager`** — registry of all `SignalNode*` instances
 - **`PFBViewManager`** — owns the per-PFB IQ Plot / Channelizer Grid widget lifecycle (extracted from `RfSimulatorApp` in v0.16.0, issue #51; fixes issue #37 where four lockstep vectors were rebuilt by hand at six call sites)
@@ -79,7 +79,7 @@ Two methods are called every frame:
 | Method | When | What it does |
 |---|---|---|
 | `update_dsp()` | Before `draw_ui()` each frame | Wires inputs from graph topology, computes topological sort, calls each engine's `update()`, updates probe labels and view states |
-| `draw_ui()` | Inside the ImGui frame | Renders all ImGui windows: node editor, spectrum analyzer, IQ plots, PFB grids, properties panel, log, help window |
+| `draw_ui()` | Inside the ImGui frame | Renders all ImGui windows: node editor, spectrum analyzer, network analyzer (engine update + widget draw while visible), IQ plots, PFB grids, properties panel, log, help window |
 
 ### ComponentRegistry
 
@@ -112,6 +112,21 @@ Added in v0.16.0 (`app/include/extension_manager.h`, `extension_manifest.h`, `ex
 - **`ExternalToolRunner`** — executes an external tool on explicit user action: writes a JSON request file, waits for the tool, and reads a result file; a missing/invalid result is treated as failure. `externalToolActions()` is the single policy for launchable actions (declared `menus[]` pass through; tools without menus get one synthetic `"tools"` action).
 - **UI** — a Tools menu renders actions with `location == "tools"`; an Extensions panel shows every declared action (or a fallback Run button). The repo ships no built-in extension payload (the built-in `<source>/extensions/` root is scanned only if present); extension tests use fixtures in `tests/fixtures/extensions/`.
 
+### Network Analyzer Instrument
+
+Added v0.19.x (`network_analyzer/`, `NetworkAnalyzerEngine` + `NetworkAnalyzerWidget`). A singleton floating instrument panel modeled on the Spectrum Analyzer, **not** an `IComponentEngine`: no graph node, no pins, no `ComponentRegistry` row. `View > Network Analyzer` toggles `m_show_na` (persisted in `SessionState` as `WindowState.NetworkAnalyzer`), and while visible the app calls `m_na_engine.update()` then `m_na_widget->draw(...)` each frame (see [DSP pipeline](../workflows/dsp-pipeline.md)).
+
+The v3 engine replaces earlier v1/v2 wired-pin prototypes entirely. Measurement semantics:
+
+- **Probe points** — Point A (reference/upstream) and Point B (measured/downstream) are real output pin ids in the same identifier space `NodeGraphEngine`'s probe mechanism uses; the widget rebuilds the picker list from `graph.nodes()` each frame.
+- **Unique-path requirement** — `findUniquePath()` runs a DFS over the real graph's links from A's owning node to B's owning node, enumerating simple paths and bailing out as soon as a second distinct path is found. It returns no measurement for zero or multiple paths, for `A == B`, or for any path crossing a Combiner's combined signal input (the start node is exempt — its output is the injection point). A 100 000-step DFS cap degrades pathological topologies to "no data" rather than exponential search.
+- **"Cheat" measurement** — the discovered chain is cloned onto a **private, throwaway scratch graph** (`INetworkAnalyzerScratch::createClone`), fed a synthetic tone-comb stimulus at the configured power, and cascaded via direct `SignalNode*` wiring that follows the *actual output port* each node used on the real graph (`out_index`), so multi-output components like the PFB Channelizer measure the right signal. The real graph/registry and every real component's state are never read for signal purposes and never written to (RAII-scoped per pass; `RfSimulatorApp::NaHost`/`NaScratch` implement the interfaces).
+- **Signature-gated dirty check** — since the instrument has no wired input to compare a cached `(input*, generation)` against, `computeMeasurement()` builds a signature from each chain node's live `serialize()` dump (%.17g-exact doubles) plus the sweep params and probe pins, and skips the expensive clone-and-cascade when it matches the last recompute. v0.19.1 additionally replaced the O(N*M) tone-matching loop with 1 Hz cell bucketing (`unordered_multimap`), fixing a ~22 ms/frame regression at 2001 points.
+- **Results** — per-point gain (dB) and noise figure (dB) arrays; NaN at an index means no path, ambiguous path, or no matching tone at the chain's end. Gain below −100 dB is treated as indistinguishable from the noise floor.
+- **Persistence** — not an engine, so `ProjectSerializer` carries the state directly under `root["network_analyzer"]`: the four sweep params plus Point A/B as `{comp, port, is_output}` pairs (raw pin ids are not portable across graph rebuilds on load). Loading a project without points clears stale pins. See the [project save/load](#project-saveload) section.
+
+Focused tests live in the `test_network_analyzer` standalone executable (`tests/test_network_analyzer.cpp`, 12 cases) and the Network Analyzer round-trip cases in `tests/test_project_file.cpp`.
+
 ### Project Save/Load
 
 Save/load (v0.8.0) provides full circuit persistence to `.rfsim` JSON files:
@@ -121,7 +136,7 @@ Save/load (v0.8.0) provides full circuit persistence to `.rfsim` JSON files:
 - **Dirty tracking** — `RfSimulatorApp::markDirty()` called on parameter edits, node moves, link changes, component add/remove. Dirty flag cleared on save.
 - **Serialization** — Every engine implements `serialize()`/`deserialize()` via `nlohmann::json`. Since v0.16.0 the `.rfsim` save/load/new logic lives in **`ProjectSerializer`** (`app/include/project_serializer.h`, extracted from the ~1320-line `RfSimulatorApp` god-object, issue #51); `RfSimulatorApp::saveProject()`/`loadProject()`/`newProject()` are thin wrappers. It orchestrates engine state, graph topology (node positions, links, probes), and component registry reconstruction, using `setNextIds()`/`removeAllLinks()` for clean project init and link restoration.
 
-Test coverage: 13 round-trip/regression tests in `tests/test_project_file.cpp` (including S-param mode reload on deserialize, issue #44/#56).
+Test coverage: 17 round-trip/regression tests in `tests/test_project_file.cpp` (including S-param mode reload on deserialize, issue #44/#56, Network Analyzer sweep params + probe points round-trip, and stale-probe-point clearing on load).
 
 ### SessionState
 
@@ -134,6 +149,8 @@ Test coverage: 13 round-trip/regression tests in `tests/test_project_file.cpp` (
 ### Component Data Files
 
 S-parameter data files live in `component_data/` at the repository root, organized by type: `amplifiers/`, `filters/`, `equalizers/`, `fixed_attenuators/`, `splitters/`, `step_attenuators/`. Each directory contains `.s2p`/`.sNp` Touchstone-formatted files that feed the per-component S-param modes.
+
+Paths into these files are confined at every load boundary (S1 containment, 2026-08-09 review): `ProjectSerializer::resolveSparamPath()` keeps `.rfsim` S-param paths inside the project dir and `relativizeSparamParams()` re-writes in-project absolute paths as relative on save; `ComponentLibrary::resolveDataFilePath()` keeps library `data_files` inside the JSON's directory. See [S-Parameter System](../integrations/s-param-system.md).
 
 `common/session_state.h` — Persists window state (open/closed) to `app.ini` using Win32 `WritePrivateProfileStringA`/`GetPrivateProfileStringA`. On non-Windows platforms the load/save methods are no-ops.
 
@@ -281,21 +298,25 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 |---|---|
 | `core/src/core.cpp` | GLFW window, ImGui/ImPlot init, default dock layout |
 | `app/include/app.h` | `RfSimulatorApp` — orchestrator |
-| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring (~950 lines; save/load and PFB view management extracted to `ProjectSerializer`/`PFBViewManager` in v0.16.0) |
+| `app/src/app.cpp` | update_dsp, draw_ui, component lifecycle wiring (~1040 lines; save/load and PFB view management extracted to `ProjectSerializer`/`PFBViewManager` in v0.16.0; network analyzer host adapter `NaHost`/`NaScratch` defined here) |
 | `app/include/component_registry.h` | Type-erased engine container |
 | `app/include/component_library.h` | File-based component library manager |
 | `app/include/component_type_registry.h` | Component type schema table — field lists + factory per type |
 | `app/include/library_browser_widget.h` | Library browser tree-view widget |
 | `app/include/inspector_panel.h` | Properties panel header |
-| `app/src/inspector_panel.cpp` | Per-component property editors (26KB) |
+| `app/src/inspector_panel.cpp` | Per-component property editors (28KB) |
 | `app/include/component_form_model.h` | Pure-logic form state for New/Edit Component |
 | `app/include/component_form_widget.h` | ImGui renderer for New/Edit Component form |
 | `app/src/extension_manifest.cpp` | Extension manifest parsing + validation (root confinement) |
 | `app/src/extension_manager.cpp` | Extension discovery across built-in/global/project-local roots |
 | `app/src/external_tool_runner.cpp` | Structured request/result external-tool execution |
-| `app/include/project_serializer.h` | `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`) |
+| `app/include/project_serializer.h` | `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`); S-param path containment (`resolveSparamPath`/`relativizeSparamParams`) + Network Analyzer state |
+| `app/src/component_library.cpp` | Library scanning + instantiation; data-file path containment (`resolveDataFilePath`) |
 | `app/include/pfb_view_manager.h` | Per-PFB IQ Plot / Channelizer Grid widget lifecycle |
 | `app/include/extension_manifest.h` | Extension manifest schema + validation (root confinement) |
+| `network_analyzer/include/network_analyzer_engine.h` | `NetworkAnalyzerEngine` + `INetworkAnalyzerHost`/`INetworkAnalyzerScratch` (injected lookups, layering note) |
+| `network_analyzer/src/network_analyzer_engine.cpp` | DFS path finding, signature dirty-check, clone-chain measurement (401 lines) |
+| `network_analyzer/include/network_analyzer_widget.h` | `NetworkAnalyzerWidget` — Point A/B pickers + sweep fields + gain/NF plot |
 | `tutorial/include/tutorial_state.h` | `TutorialState` — walkthrough navigation + `.tutorial_completed` marker (pure logic, unit-testable) |
 | `tutorial/include/tutorial_steps.h` | Data-driven step catalog (`TutorialStep`, `TutorialTarget`) |
 | `tutorial/src/tutorial_widget.cpp` | Foreground-drawlist panel highlight + "Tutorial Guide" window |
@@ -308,5 +329,5 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `common/session_state.h` | `SessionState` — window state persistence |
 | `layout/include/layout_manager.h` | `LayoutManager` — window layout persistence (default + named presets) |
 | `node_graph/include/node_graph_engine.h` | `NodeGraphEngine` + `GraphNode`/`GraphLink` |
-| `node_graph/src/node_graph_widget.cpp` | Full imnodes rendering (~1150 lines) |
+| `node_graph/src/node_graph_widget.cpp` | imnodes rendering; split across `node_graph_widget_groups.cpp` (group/boundary pins), `node_graph_widget_tooltips.cpp`, `schematic_symbols.cpp` |
 | `src/main.cpp` | Entry point (15 lines) |

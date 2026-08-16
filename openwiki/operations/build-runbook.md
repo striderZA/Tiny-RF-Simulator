@@ -7,7 +7,7 @@ tags: [build, ci, operations, runbook]
 
 # Build & Operations
 
-Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.19.0**.
+Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.19.1**.
 
 ---
 
@@ -104,7 +104,7 @@ build/bin/test_ui
 
 Runs on pull requests to `master` (docs-only changes are skipped via `paths-ignore`):
 
-1. `format` — clang-format 18 dry-run over all source directories.
+1. `format` — clang-format 18 dry-run over the module list hardcoded in `ci.yml` (`src app core common tests test_engine` + the DSP/UI modules). **Note:** `network_analyzer/`, `help/`, `layout/`, and `tutorial/` are not in that list — new files there are not format-checked by CI, so run `clang-format -i` manually before committing.
 2. `build` — Linux GCC 14 Debug configure + build.
 
 ### Release (`release.yml`)
@@ -114,13 +114,14 @@ Runs on `v*` tags. `classify-release` splits tags into patch vs minor/major:
 - **Minor/major tags** (`vX.Y.0`, `vX.0.0`): strict 4-way build matrix (Linux GCC Debug/Release, Linux Clang, Windows MinGW) with `ctest`, plus an AddressSanitizer job.
 - **Patch tags** (`vX.Y.Z`, `Z > 0`): Linux + Windows package builds only; the strict validation matrix is skipped.
 - `validate-version` enforces the tag matches `CMakeLists.txt`'s `project(... VERSION ...)`.
+- The Windows strict-build job also verifies the MinGW TEST_CASE registration floor (`tests.exe --list-tests` ≥ 223) so silently dropped TEST_CASEs fail CI instead of shipping unrun tests.
 - Release artifacts are published as a draft GitHub release.
 
-> **CHANGELOG.md lags the codebase:** the latest entry is 0.11.0 while `CMakeLists.txt` declares 0.17.0. Treat the CMake version and the [quickstart milestones](../quickstart.md) (grounded in source) as authoritative; `CHANGELOG.md` has not been updated for v0.12.0–v0.17.0.
+> **CHANGELOG.md lags the codebase:** the latest entry is 0.11.0 while `CMakeLists.txt` declares 0.19.1. Treat the CMake version and the [quickstart milestones](../quickstart.md) (grounded in source) as authoritative; `CHANGELOG.md` has not been updated for v0.12.0–v0.19.1.
 
 ### OpenWiki Update (`openwiki-update.yml`)
 
-Scheduled daily (08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
+Scheduled weekly (Sundays 08:00 UTC), also supports `workflow_dispatch`. Uses OpenWiki CLI to regenerate documentation and creates a PR.
 
 ---
 
@@ -148,24 +149,16 @@ The single most common bug class in the codebase is NaN propagation from `log10(
 
 ### Git Worktree Workflow
 
-The repository uses **git worktrees** for parallel feature development. Each worktree maps to a feature branch:
+The repository currently lives on a single `master` branch whose history was squashed into one commit; there is no active `git worktree` setup (`git worktree list` shows only the main checkout). The worktree pattern below is **optional** guidance for developers who want parallel feature branches with separate build directories — it is not an enforced or currently active repository layout:
 
 ```bash
-.git/worktrees/
-├── adc/          # fix/adc-dead-params
-├── amplifier/    # feat/amplifier-sparam
-├── coax/         # fix/coax-phase-and-presets
-├── equalizer/    # feat/equalizer
-├── iq-plot/      # fix/iq-plot-bugs
-├── pfb/          # feat/pfb-channelizer
-├── shared-helpers/
-├── signal-generator/
-├── spectrum-analyzer/
-├── splitter/
-└── touchstone/   # fix/touchstone-validation
+# Example pattern (not present in the repo today):
+git worktree add ../rf-sim-adc fix/adc-dead-params
+cd ../rf-sim-adc
+mkdir build-adc && cmake -S . -B build-adc -G Ninja
 ```
 
-Each worktree has its own `build-<name>/` directory for parallel compilation without cache conflicts.
+Each worktree gets its own `build-<name>/` directory for parallel compilation without cache conflicts. The earlier per-module worktree listing (`fix/adc-dead-params`, `feat/equalizer`, etc.) reflected a historical snapshot of long-merged feature branches and is no longer accurate.
 
 ### Design-First Methodology
 
@@ -246,6 +239,8 @@ build/
 
 ### Adding a New Component
 
+Since the v0.16.0 [ComponentTypeRegistry unification](../architecture/overview.md#componentlibrary) the menu, add, duplicate, save/load, inspector, and authoring-form paths all dispatch through one registry row — the old flow of hand-editing `RfSimulatorApp`/`node_graph_widget.cpp` context menus is gone:
+
 1. Create directory `new_component/` with:
    - `CMakeLists.txt` — define `simulator::new_component_engine` target.
    - `include/new_component_engine.h` — engine class inheriting `IComponentEngine`.
@@ -253,14 +248,12 @@ build/
    - `include/new_component_widget.h` (optional) — ImGui widget.
    - `src/new_component_widget.cpp` (optional) — UI rendering.
 2. Add `add_subdirectory("new_component")` to root `CMakeLists.txt`.
-3. Add `NodeKind` enum value in `node_graph/include/node_graph_engine.h`.
-4. Add schematic symbol in `node_graph/src/node_graph_widget.cpp`.
-5. Add context menu item in `node_graph/src/node_graph_widget.cpp`.
-6. Add property editor in `app/src/inspector_panel.cpp`.
-7. Wire constructor + callbacks in `app/src/app.cpp`.
-8. Add tests in `tests/test_new_component.cpp`.
+3. Add a `ComponentTypeDescriptor` row in `app/src/component_type_registry.cpp` (`type`, `project_type`, `menu_label`, `label_prefix`, `kind`, `create`, `draw_inspector`).
+4. Add the `NodeKind` enum value + schematic symbol + label→kind mapping in `node_graph/` (`node_graph_engine.h`, `schematic_symbols.cpp`, `node_graph_widget.cpp`).
+5. Add a property drawer entry in `app/src/inspector_panel.cpp`'s `drawerMap()` (missing drawers are logged at startup and caught by the registry/drawer consistency test in `test_component_dispatch.cpp`).
+6. Add tests in `tests/test_new_component.cpp` (as a standalone executable if the main `tests` binary is near the MinGW registration ceiling).
 
-See existing components (amplifier, coax, equalizer) as reference.
+See existing components (amplifier, attenuator, filter) as reference, and the [RF Components](../domains/rf-components.md) page for per-component patterns. Instruments that are **not** graph components (Spectrum Analyzer, Network Analyzer) skip steps 3–5 and instead follow the singleton-panel pattern owned by `RfSimulatorApp`.
 
 ---
 

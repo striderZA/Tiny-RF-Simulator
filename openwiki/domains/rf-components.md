@@ -1,7 +1,7 @@
 ---
 type: Domain Guide
 title: RF Components — DSP Engine Modules
-description: Detailed reference for every RF signal-processing component in the simulator, including design decisions, parameters, dual-mode operation, and test coverage.
+description: Detailed reference for every RF signal-processing component in the simulator plus the network analyzer instrument, including design decisions, parameters, dual-mode operation, and test coverage.
 tags: [rf-components, dsp-engine, reference]
 ---
 
@@ -379,6 +379,35 @@ Each trace mode uses per-trace history buffers (keyed on `Spectrum*`) stored in 
 - Drag-to-zoom, reset-zoom, auto-scale buttons.
 
 **Tests:** `test_iq_plot.cpp`.
+
+---
+
+## Network Analyzer (`network_analyzer/`)
+
+| Property | Value |
+|---|---|
+| Headers | `include/network_analyzer_engine.h`, `include/network_analyzer_widget.h` |
+| Type | **Instrument** (singleton floating panel, like the Spectrum Analyzer) — *not* an `IComponentEngine`, no graph node, no pins, no ComponentRegistry row |
+| CMake targets | `simulator::network_analyzer_engine`, `simulator::network_analyzer_widget` |
+| Added | v0.19.x (v3 rewrite of earlier wired-pin prototypes) |
+
+**Purpose:** Measures gain and noise figure of the signal chain between two probe points (Point A = reference/upstream, Point B = measured/downstream), swept across a frequency range.
+
+**Parameters:**
+- `start_freq` / `stop_freq` (default 1 GHz / 6 GHz)
+- `points` (default 201, clamped to [2, 2001])
+- `stimulus_power_dBm` (default −30 dBm, small-signal/linear)
+- `point_a_pin` / `point_b_pin` — real output pin ids from the graph (-1 = unset)
+
+**Design decisions:**
+- Requires **exactly one distinct simple path** from A's node to B's node; ambiguous paths (splitter fan-out), a Combiner crossing, `A == B`, or an unregistered node all yield NaN results (no data). Duplicate graph links collapse so they cannot fake an ambiguity.
+- **"Cheat" measurement:** the real chain is cloned onto a private, throwaway scratch graph and fed a synthetic tone-comb stimulus; the live simulation is never read for signal purposes and never written to. Clones are wired to the *actual output port* each node used (`out_index`), so multi-output components (e.g. PFB Channelizer OUT2) measure the right signal.
+- Gain = response tone power − stimulus power; points below −100 dB are treated as noise-floor-indistinguishable (NaN). Noise figure from `noise_out / gain_linear / (k·T)`.
+- **Signature-gated dirty check:** since the instrument has no wired input, a signature over each chain node's `serialize()` dump + sweep params gates recompute; v0.19.1 added 1 Hz cell bucketing for tone matching (O(N*M) → ~O(N+M)), fixing a ~22 ms/frame regression at 2001 points.
+- Not a component: state persists through `ProjectSerializer` under `root["network_analyzer"]` (sweep params + Point A/B as `{comp, port, is_output}`), and window visibility via `SessionState`.
+- Toggled via `View > Network Analyzer`; the widget's Point A/B pickers enumerate every real output pin in the graph each frame.
+
+**Tests:** `test_network_analyzer.cpp` (standalone executable, 12 cases: stimulus power reaches the chain, gain accuracy on attenuator chains, NF accuracy on amplifier chains, probing does not perturb a real consumer, disconnected/ambiguous/combiner paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw). Project round-trip tests in `test_project_file.cpp`.
 
 ---
 
