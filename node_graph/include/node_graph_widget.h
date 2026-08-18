@@ -66,6 +66,7 @@ class NodeGraphWidget {
     int m_clicked_pin = -1;
     int m_clicked_node = -1;
     int m_context_menu_node = -1;
+    int m_context_menu_link_id = -1;
     bool m_link_created = false;
     float m_click_mouse_x = 0.0f;
     float m_click_mouse_y = 0.0f;
@@ -79,6 +80,9 @@ class NodeGraphWidget {
     void handleLinkDeletion();
     void handleNodeDeletion();
     void handleProbeClick();
+    // Removes a link from the engine and performs the follow-up the editor
+    // needs: group boundary-pin rebuild + onLinkChanged notification.
+    void removeLinkFromEngine(int link_id);
 
     // Subcircuit state
     std::unordered_map<int, int> m_synth_pin_to_real_pin; // rebuilt every frame
