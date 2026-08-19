@@ -87,6 +87,132 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Properties"); };
 
     // =========================================================================
+
+    // Issue #67: selecting a link and pressing Delete must remove it (previously
+    // only selected *nodes* were handled by the Delete key). Runs early, before
+    // the subcircuit tests group/collapse anything, so the seeded Generator
+    // (node 1) and Amplifier (node 2) are still visible and ungrouped.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "link_delete_key_deletes_selected_link");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+        ImNodes::EditorContextResetPanning(ImVec2(0, 0));
+        ctx->Yield(2);
+
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int gen_out = graph.outputPinId(1);
+        int amp_in = graph.inputPinId(2);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(amp_in >= 0);
+        int link_id = graph.addLink(gen_out, amp_in);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+
+        ctx->Yield(4); // let imnodes draw + register the new link
+        ImNodes::ClearNodeSelection();
+        ImNodes::ClearLinkSelection();
+        ImNodes::SelectLink(link_id);
+        ctx->Yield(2);
+        IM_CHECK(ImNodes::IsLinkSelected(link_id));
+
+        ctx->KeyDown(ImGuiKey_Delete);
+        ctx->Yield(2);
+
+        IM_CHECK_EQ(graph.links().size(), initial_links);
+        IM_CHECK_EQ(ImNodes::NumSelectedLinks(), 0);
+    };
+
+    // Issue #67: right-clicking a link must offer a Remove entry (previously the
+    // right-click fell through to the canvas "add component" menu). Uses the
+    // seeded Generator/Amplifier (nodes 1/2), which are visible this early in
+    // the run.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "link_context_menu_remove");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+        ImNodes::EditorContextResetPanning(ImVec2(0, 0));
+        ctx->Yield(2);
+
+        auto &graph = s_app->testGraphEngine();
+        size_t initial_links = graph.links().size();
+        int gen_out = graph.outputPinId(1);
+        int amp_in = graph.inputPinId(2);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(amp_in >= 0);
+
+        // The editor window can be docked anywhere, including mostly below the
+        // viewport, so anchor the node pair to the window's visible top-left
+        // region (inside both the window and the viewport).
+        ImVec2 vp = ImGui::GetIO().DisplaySize;
+        auto info = ctx->WindowInfo("Node Editor");
+        ImVec2 vis_min = info.RectFull.Min;
+        ImVec2 vis_max =
+            ImVec2(std::min(info.RectFull.Max.x, vp.x), std::min(info.RectFull.Max.y, vp.y));
+        float anchor_x = std::min(vis_min.x + 180.0f, vis_max.x - 120.0f);
+        float anchor_y = std::min(vis_min.y + 120.0f, vis_max.y - 120.0f);
+        ImNodes::SetNodeScreenSpacePos(1, ImVec2(anchor_x - 140.0f, anchor_y - 60.0f));
+        ImNodes::SetNodeScreenSpacePos(2, ImVec2(anchor_x + 140.0f, anchor_y + 40.0f));
+        ctx->Yield(4);
+
+        int link_id = graph.addLink(gen_out, amp_in);
+        IM_CHECK(link_id >= 0);
+        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        ctx->Yield(4); // let imnodes draw the link
+
+        // Re-focus so the editor window stays the hovered/focused one during
+        // the mouse sweep below.
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(1);
+
+        // The link's rendered position depends on the node layout (title bar,
+        // body, pin offsets), so locate it by sweeping a 2D grid between the
+        // two nodes until the mouse hovers exactly over our link. The grid is
+        // clamped to the viewport so every point is reachable.
+        ImVec2 n1 = ImNodes::GetNodeScreenSpacePos(1);
+        ImVec2 n2 = ImNodes::GetNodeScreenSpacePos(2);
+        ImVec2 dims1 = ImNodes::GetNodeDimensions(1);
+        float x_min = std::max(n1.x + dims1.x + 8.0f, 10.0f);
+        float x_max = std::min(n2.x - 8.0f, vp.x - 10.0f);
+        float y_min = std::max(n1.y + 55.0f, 10.0f);
+        float y_max = std::min(n2.y + 130.0f, vp.y - 10.0f);
+
+        int hit_x = -1;
+        int hit_y = -1;
+        for (float y = y_min; y < y_max && hit_y < 0; y += 3.0f) {
+            for (float x = x_min; x < x_max && hit_y < 0; x += 10.0f) {
+                ctx->MouseMoveToPos(ImVec2(x, y));
+                ctx->Yield(1);
+                int h = -1;
+                if (ImNodes::IsLinkHovered(&h) && h == link_id) {
+                    hit_x = static_cast<int>(x);
+                    hit_y = static_cast<int>(y);
+                }
+            }
+        }
+        IM_CHECK(hit_y >= 0);
+
+        ctx->MouseClick(ImGuiMouseButton_Right);
+        ctx->Yield(2);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemClick("Remove");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK_EQ(graph.links().size(), initial_links);
+
+        // Restore the seeded nodes to their default origin positions so the
+        // subcircuit tests' "stacked at canvas origin" assumptions hold.
+        ImNodes::SetNodeGridSpacePos(1, ImVec2(0, 0));
+        ImNodes::SetNodeGridSpacePos(2, ImVec2(0, 0));
+        ctx->Yield(2);
+    };
+
+    // =========================================================================
     // Subcircuit Group UI Tests
     // =========================================================================
 
@@ -330,7 +456,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
 
-    // =========================================================================
     // Validation gap documentation tests
     // These tests document that the engine currently accepts invalid connections.
     // They encode known behavioral gaps — not desired behavior — so they should

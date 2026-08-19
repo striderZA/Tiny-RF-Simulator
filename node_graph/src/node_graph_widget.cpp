@@ -314,6 +314,8 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
                 ImGui::OpenPopup("node_context_menu");
                 m_context_menu_node = hovered_node;
             }
+        } else if (ImNodes::IsLinkHovered(&m_context_menu_link_id)) {
+            ImGui::OpenPopup("link_context_menu");
         } else {
             // Capture mouse position in editor space for component placement
             ImVec2 mouse_screen = ImGui::GetMousePos();
@@ -351,6 +353,13 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         if (ImGui::MenuItem("Remove")) {
             if (onRemoveNode)
                 onRemoveNode(m_context_menu_node);
+        }
+        ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopup("link_context_menu")) {
+        if (ImGui::MenuItem("Remove")) {
+            removeLinkFromEngine(m_context_menu_link_id);
         }
         ImGui::EndPopup();
     }
@@ -406,19 +415,33 @@ void NodeGraphWidget::handleLinkCreation() {
 
 void NodeGraphWidget::handleLinkDeletion() {
     int link_id;
-    if (ImNodes::IsLinkDestroyed(&link_id)) {
-        m_engine.removeLink(link_id);
-        // Rebuild boundary pins for all groups to reflect the removed link
-        for (const auto &g : m_engine.groups()) {
-            m_engine.rebuildGroupBoundaryPins(g.id);
-        }
-        if (onLinkChanged)
-            onLinkChanged();
+    if (ImNodes::IsLinkDestroyed(&link_id))
+        removeLinkFromEngine(link_id);
+}
+
+void NodeGraphWidget::removeLinkFromEngine(int link_id) {
+    m_engine.removeLink(link_id);
+    // Rebuild boundary pins for all groups to reflect the removed link
+    for (const auto &g : m_engine.groups()) {
+        m_engine.rebuildGroupBoundaryPins(g.id);
     }
+    if (onLinkChanged)
+        onLinkChanged();
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        // Deleting selected links takes priority over nodes (imnodes clears the
+        // other selection on click, but both may be selected programmatically).
+        int num_selected_links = ImNodes::NumSelectedLinks();
+        if (num_selected_links > 0) {
+            std::vector<int> selected_links(num_selected_links);
+            ImNodes::GetSelectedLinks(selected_links.data());
+            for (int link_id : selected_links)
+                removeLinkFromEngine(link_id);
+            ImNodes::ClearLinkSelection();
+        }
+
         int num_selected = ImNodes::NumSelectedNodes();
         if (num_selected > 0) {
             std::vector<int> selected_nodes(num_selected);
