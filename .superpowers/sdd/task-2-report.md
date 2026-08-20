@@ -202,4 +202,3 @@ Full executable (sanity, same binary): all 6 test cases / 29 assertions passed.
 - None. In-range integers still flow through `get<int>()` unchanged; only out-of-range
   values take the warn-and-default-1 path.
 - Only the `[library]`-scoped suite was run, per the assignment; project-wide suites skipped.
-
