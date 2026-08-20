@@ -10,8 +10,10 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_view_manager.h"
 #include "session_state.h"
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -121,6 +123,26 @@ void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir)
             continue;
         params[key] = rel.generic_string();
     }
+}
+
+// Checked conversion of a JSON integer to int. is_number_integer() alone
+// only guarantees the value is stored as an integer type: a number_unsigned
+// larger than INT_MAX (or a number_integer below INT_MIN) would silently
+// truncate/wrap in get<int>(). Verify representability against int limits
+// with the nlohmann signed/unsigned integer APIs before converting; returns
+// nullopt for non-integers and out-of-range values (callers log and skip).
+std::optional<int> checkedJsonInt(const nlohmann::json &j) {
+    if (j.is_number_unsigned()) {
+        const std::uint64_t v = j.get<std::uint64_t>();
+        if (v <= static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(v);
+    } else if (j.is_number_integer()) {
+        const std::int64_t v = j.get<std::int64_t>();
+        if (v >= static_cast<std::int64_t>(std::numeric_limits<int>::min()) &&
+            v <= static_cast<std::int64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(v);
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -456,11 +478,13 @@ bool ProjectSerializer::load(const std::string &path) {
                 continue;
             }
             const auto index_field = [&](const char *key, int fallback) {
-                if (lj.contains(key) && !lj[key].is_number_integer()) {
+                if (lj.contains(key)) {
+                    if (const auto v = checkedJsonInt(lj[key]))
+                        return *v;
                     malformed = true;
                     return fallback;
                 }
-                return lj.contains(key) ? lj[key].get<int>() : fallback;
+                return fallback;
             };
             const int from_idx = index_field("from", -1);
             const int to_idx = index_field("to", -1);
@@ -502,17 +526,21 @@ bool ProjectSerializer::load(const std::string &path) {
                 continue;
             }
             const auto index_field = [&](const char *key, int fallback) {
-                if (pj.contains(key) && !pj[key].is_number_integer()) {
+                if (pj.contains(key)) {
+                    if (const auto v = checkedJsonInt(pj[key]))
+                        return *v;
                     malformed = true;
                     return fallback;
                 }
-                return pj.contains(key) ? pj[key].get<int>() : fallback;
+                return fallback;
             };
             const int comp_idx = index_field("comp", -1);
             const int port = index_field("port", 0);
             if (pj.contains("is_output") && !pj["is_output"].is_boolean())
                 malformed = true;
-            const bool is_output = pj.contains("is_output") ? pj["is_output"].get<bool>() : true;
+            const bool is_output = pj.contains("is_output") && pj["is_output"].is_boolean()
+                                       ? pj["is_output"].get<bool>()
+                                       : true;
             if (malformed) {
                 LOG_WARN("Skipping malformed probe in project file %s", path.c_str());
                 continue;
@@ -543,8 +571,18 @@ bool ProjectSerializer::load(const std::string &path) {
             m_na_engine.setStartFrequency(
                 number_field("start_freq_hz", m_na_engine.startFrequency()));
             m_na_engine.setStopFrequency(number_field("stop_freq_hz", m_na_engine.stopFrequency()));
-            m_na_engine.setPoints(static_cast<int>(
-                number_field("points", static_cast<double>(m_na_engine.points()))));
+            // 'points' must be an integer representable in int: a fractional
+            // value would silently truncate and an oversized integer would
+            // wrap, so both leave the engine's current value untouched.
+            if (saved_na.contains("points")) {
+                if (const auto n = checkedJsonInt(saved_na["points"])) {
+                    m_na_engine.setPoints(*n);
+                } else {
+                    LOG_WARN("Ignoring malformed 'points' in project file %s: expected an integer "
+                             "within int range; keeping current value (%d)",
+                             path.c_str(), m_na_engine.points());
+                }
+            }
             m_na_engine.setStimulusPower(
                 number_field("stimulus_power_dBm", m_na_engine.stimulusPower()));
             const auto restore_point = [&](const nlohmann::json &pj,
@@ -553,18 +591,21 @@ bool ProjectSerializer::load(const std::string &path) {
                     return; // unset point (saved as JSON null)
                 bool malformed = false;
                 const auto index_field = [&](const char *key, int fallback) {
-                    if (pj.contains(key) && !pj[key].is_number_integer()) {
+                    if (pj.contains(key)) {
+                        if (const auto v = checkedJsonInt(pj[key]))
+                            return *v;
                         malformed = true;
                         return fallback;
                     }
-                    return pj.contains(key) ? pj[key].get<int>() : fallback;
+                    return fallback;
                 };
                 const int comp_idx = index_field("comp", -1);
                 const int port = index_field("port", 0);
                 if (pj.contains("is_output") && !pj["is_output"].is_boolean())
                     malformed = true;
-                const bool is_output =
-                    pj.contains("is_output") ? pj["is_output"].get<bool>() : true;
+                const bool is_output = pj.contains("is_output") && pj["is_output"].is_boolean()
+                                           ? pj["is_output"].get<bool>()
+                                           : true;
                 if (malformed) {
                     LOG_WARN("Skipping malformed network analyzer point in project file %s",
                              path.c_str());
@@ -611,14 +652,14 @@ bool ProjectSerializer::load(const std::string &path) {
                 malformed = true;
             } else {
                 for (const auto &mj : gj["member_components"]) {
-                    if (!mj.is_number_integer()) {
+                    const auto comp_idx = checkedJsonInt(mj);
+                    if (!comp_idx) {
                         malformed = true;
                         continue;
                     }
-                    const int comp_idx = mj.get<int>();
-                    if (comp_idx >= 0 && static_cast<size_t>(comp_idx) < new_node_ids.size() &&
-                        new_node_ids[comp_idx] >= 0) {
-                        member_ids.push_back(new_node_ids[comp_idx]);
+                    if (*comp_idx >= 0 && static_cast<size_t>(*comp_idx) < new_node_ids.size() &&
+                        new_node_ids[*comp_idx] >= 0) {
+                        member_ids.push_back(new_node_ids[*comp_idx]);
                     }
                 }
             }

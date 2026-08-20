@@ -111,6 +111,111 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(app.componentCount() == 0);
 }
 
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project loader skips malformed probe, network analyzer point, and group entries",
+                 "[issue48][project]") {
+    const auto path = uniqueTempPath("issue48_project_probe_na_group");
+    writeText(path, R"({
+        "components": [
+            {"type": "SignalGenerator", "params": {}},
+            {"type": "Amplifier", "params": {"gain_dB": 12.0}}
+        ],
+        "probe_pins": [
+            {"comp": 0, "port": 0, "is_output": "yes"},
+            {"comp": 0, "port": 0, "is_output": true}
+        ],
+        "network_analyzer": {
+            "points": 51,
+            "point_a": {"comp": 0, "port": 0, "is_output": 1},
+            "point_b": {"comp": 1, "port": 0, "is_output": true}
+        },
+        "groups": [
+            {"name": "BAD-GROUP", "member_components": [0, 1], "collapsed": "yes"},
+            {"name": "GOOD-GROUP", "member_components": [0, 1], "collapsed": false}
+        ]
+    })");
+
+    RfSimulatorApp app;
+    app.loadProject(path.string());
+
+    REQUIRE(app.componentCount() == 2);
+    const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+    const auto amps = app.testComponents().byType<AmplifierEngine>();
+    REQUIRE(gens.size() == 1);
+    REQUIRE(amps.size() == 1);
+
+    // Only the well-formed probe survives: a non-boolean is_output used to
+    // reach get<bool>() and throw, aborting the whole load instead of
+    // skipping the entry.
+    const auto &probes = app.testGraphEngine().probePins();
+    REQUIRE(probes.size() == 1);
+    REQUIRE(probes[0] == gens[0]->outputPinId());
+
+    // Point A (non-boolean is_output) is skipped; Point B still restores.
+    auto &na = app.testNetworkAnalyzerEngine();
+    REQUIRE(na.points() == 51);
+    REQUIRE(na.pointAPin() == -1);
+    REQUIRE(na.pointBPin() == amps[0]->outputPinId());
+
+    // Only the well-formed group survives; the non-boolean collapsed is
+    // logged and skipped with the entry.
+    const auto &groups = app.testGraphEngine().groups();
+    REQUIRE(groups.size() == 1);
+    REQUIRE(groups[0].name == "GOOD-GROUP");
+    REQUIRE(!groups[0].collapsed);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Project loader rejects fractional and oversized integer fields",
+                 "[issue48][project]") {
+    const auto path = uniqueTempPath("issue48_project_numeric");
+    writeText(path, R"({
+        "components": [
+            {"type": "SignalGenerator", "params": {}},
+            {"type": "Amplifier", "params": {"gain_dB": 12.0}}
+        ],
+        "links": [
+            {"from": 4294967296, "to": 1, "from_port": 0, "to_port": 0},
+            {"from": -2147483649, "to": 1, "from_port": 0, "to_port": 0},
+            {"from": 0, "to": 1, "from_port": 0, "to_port": 0}
+        ],
+        "probe_pins": [
+            {"comp": 1, "port": 4294967296, "is_output": true},
+            {"comp": 0, "port": 0, "is_output": true}
+        ],
+        "network_analyzer": {
+            "points": 12.5
+        },
+        "groups": [
+            {"name": "BAD-GROUP", "member_components": [0, 1, 4294967296], "collapsed": false}
+        ]
+    })");
+
+    RfSimulatorApp app;
+    app.loadProject(path.string());
+
+    REQUIRE(app.componentCount() == 2);
+    const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+    REQUIRE(gens.size() == 1);
+
+    // Out-of-int-range integers (unsigned 2^32 and signed below INT_MIN) must
+    // not wrap/truncate into a bogus link; only the well-formed link survives.
+    REQUIRE(app.testGraphEngine().links().size() == 1);
+
+    // An oversized probe port must not truncate to port 0 (which would probe
+    // the amplifier output and duplicate the valid generator probe); only the
+    // well-formed probe survives.
+    const auto &probes = app.testGraphEngine().probePins();
+    REQUIRE(probes.size() == 1);
+    REQUIRE(probes[0] == gens[0]->outputPinId());
+
+    // Fractional points must not truncate to 12; the engine's current value
+    // (default 201) is kept.
+    REQUIRE(app.testNetworkAnalyzerEngine().points() == 201);
+
+    // One out-of-int-range member marks the group malformed, so it is skipped.
+    REQUIRE(app.testGraphEngine().numGroups() == 0);
+}
+
 TEST_CASE("Component library skips wrong-typed required fields", "[issue48][library]") {
     const auto path = uniqueTempPath("issue48_library_required");
     writeText(path, R"({
