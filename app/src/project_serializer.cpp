@@ -413,19 +413,21 @@ bool ProjectSerializer::load(const std::string &path) {
                 new_node_ids.push_back(-1);
                 continue;
             }
+            const ComponentTypeDescriptor *desc = nullptr;
+            IComponentEngine *comp = nullptr;
             try {
                 std::string type = cj["type"].get<std::string>();
                 // Absent 'params' keeps the existing behavior: operator[] yields
                 // a JSON null, which the engine deserialize() treats as defaults.
                 auto &params = cj["params"];
 
-                const auto *desc = ComponentTypeRegistry::instance().findByProjectType(type);
+                desc = ComponentTypeRegistry::instance().findByProjectType(type);
                 if (!desc) {
                     LOG_WARN("Unknown component type in project file: %s", type.c_str());
                     new_node_ids.push_back(-1);
                     continue;
                 }
-                IComponentEngine *comp = desc->create(m_components, m_graph, m_next_component_id++);
+                comp = desc->create(m_components, m_graph, m_next_component_id++);
                 // S1: resolve S-param paths against the project file's
                 // directory and neutralize any path that escapes it (the
                 // engine's deserialize() only sees the raw params JSON and
@@ -437,12 +439,10 @@ bool ProjectSerializer::load(const std::string &path) {
                     m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
                 }
 
-                new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
-
                 // Restore position. Malformed optional metadata must not abort
                 // an otherwise valid component, so only read the numeric fields
                 // when their shapes actually match.
-                if (comp && cj.contains("pos") && cj["pos"].is_object()) {
+                if (cj.contains("pos") && cj["pos"].is_object()) {
                     const auto &pos = cj["pos"];
                     const float pos_x =
                         pos.contains("x") && pos["x"].is_number() ? pos["x"].get<float>() : 0.0f;
@@ -453,12 +453,28 @@ bool ProjectSerializer::load(const std::string &path) {
                 }
 
                 // Restore library part number (only when it is a string)
-                if (comp && cj.contains("part_number") && cj["part_number"].is_string())
+                if (cj.contains("part_number") && cj["part_number"].is_string())
                     m_graph.setNodePartNumber(comp->graphNodeId(),
                                               cj["part_number"].get<std::string>());
+
+                // Record the saved-index → node mapping only after every step
+                // that can throw, so the saved index stays in step with the
+                // file and the catch below pushes exactly one -1 per record.
+                new_node_ids.push_back(comp->graphNodeId());
             } catch (const std::exception &e) {
                 LOG_ERROR("Skipping malformed component %zu in project file %s: %s", current_index,
                           path.c_str(), e.what());
+                // Exception-safe rollback: desc->create() already registered
+                // the component (and its graph node) before nested
+                // deserialization or metadata restoration threw. Remove the
+                // partially created component and any PFB view state created
+                // for it, so a malformed record is neither counted nor linked
+                // while valid sibling components still load.
+                if (comp) {
+                    m_components.remove(comp->graphNodeId());
+                    if (desc && desc->type == "pfb")
+                        m_pfb_views.rebuild(m_components, m_state);
+                }
                 new_node_ids.push_back(-1);
             }
         }
@@ -545,9 +561,19 @@ bool ProjectSerializer::load(const std::string &path) {
                 LOG_WARN("Skipping malformed probe in project file %s", path.c_str());
                 continue;
             }
-            if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= m_components.size())
+            // Resolve the saved component index through new_node_ids (the same
+            // mapping the links and network-analyzer passes use) instead of the
+            // compact registry: a component skipped earlier in the file must
+            // not shift a later valid probe onto the wrong component or drop it
+            // because the compacted registry has fewer entries.
+            if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= new_node_ids.size())
                 continue;
-            auto *comp = m_components.all()[comp_idx];
+            const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
+            if (node_id < 0)
+                continue; // saved index maps to a skipped/malformed record
+            auto *comp = m_components.find(node_id);
+            if (!comp)
+                continue; // no component for this mapping; nothing to probe
             int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
             if (pin >= 0)
                 m_graph.addProbePin(pin);

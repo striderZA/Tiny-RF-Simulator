@@ -216,6 +216,81 @@ TEST_CASE_METHOD(ImGuiFixture, "Project loader rejects fractional and oversized 
     REQUIRE(app.testGraphEngine().numGroups() == 0);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "Project loader rolls back component whose nested params throw",
+                 "[issue48][project]") {
+    // A component record whose nested 'params' content makes engine
+    // deserialize() throw must be removed again: the partially created
+    // component must not remain counted in the registry or linked in the
+    // graph, and the saved-index mapping must stay in step with the file so
+    // later sibling records still resolve.
+    const auto path = uniqueTempPath("issue48_project_nested_params");
+    writeText(path, R"({
+        "components": [
+            {"type": "SignalGenerator", "params": {}},
+            {"type": "Amplifier", "params": {"gain_dB": "not-a-number"}},
+            {"type": "Amplifier", "params": {"gain_dB": 12.0}}
+        ],
+        "links": [{"from": 0, "to": 2, "from_port": 0, "to_port": 0}],
+        "probe_pins": [{"comp": 0, "port": 0, "is_output": true}],
+        "window_state": {"log": true}
+    })");
+
+    RfSimulatorApp app;
+    app.loadProject(path.string());
+
+    // The record whose params threw is rolled back: only the two valid
+    // components survive (a leftover would count 3).
+    REQUIRE(app.componentCount() == 2);
+    REQUIRE(app.testComponents().byType<SignalGeneratorEngine>().size() == 1);
+    REQUIRE(app.testComponents().byType<AmplifierEngine>().size() == 1);
+
+    // Saved index 2 (the valid amplifier after the skipped record) must still
+    // resolve through the preserved mapping, and the generator probe must hit
+    // the generator's output pin.
+    REQUIRE(app.testGraphEngine().links().size() == 1);
+    const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+    const auto &probes = app.testGraphEngine().probePins();
+    REQUIRE(probes.size() == 1);
+    REQUIRE(probes[0] == gens[0]->outputPinId());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Project loader resolves probes through skipped components",
+                 "[issue48][project]") {
+    // Saved probe indices are component indices in the file, not positions in
+    // the compacted registry: a skipped earlier record must not shift a later
+    // valid probe onto the wrong component or drop it as out of range.
+    const auto path = uniqueTempPath("issue48_project_probe_skip");
+    writeText(path, R"({
+        "components": [
+            {"type": 42, "params": {}},
+            {"type": "SignalGenerator", "params": {}},
+            {"type": "Amplifier", "params": {"gain_dB": 12.0}}
+        ],
+        "probe_pins": [
+            {"comp": 1, "port": 0, "is_output": true},
+            {"comp": 2, "port": 0, "is_output": true}
+        ],
+        "window_state": {"log": true}
+    })");
+
+    RfSimulatorApp app;
+    app.loadProject(path.string());
+
+    REQUIRE(app.componentCount() == 2);
+    const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+    const auto amps = app.testComponents().byType<AmplifierEngine>();
+    REQUIRE(gens.size() == 1);
+    REQUIRE(amps.size() == 1);
+
+    // comp 1 (generator) restores to the generator's output pin, not the
+    // amplifier's; comp 2 (amplifier) restores instead of being dropped
+    // because the compacted registry has only two entries.
+    const auto &probes = app.testGraphEngine().probePins();
+    REQUIRE(probes.size() == 2);
+    REQUIRE(probes[0] == gens[0]->outputPinId());
+    REQUIRE(probes[1] == amps[0]->outputPinId());
+}
+
 TEST_CASE("Component library skips wrong-typed required fields", "[issue48][library]") {
     const auto path = uniqueTempPath("issue48_library_required");
     writeText(path, R"({
