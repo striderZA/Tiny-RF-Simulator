@@ -235,8 +235,12 @@ std::vector<const ComponentDefinition *> ComponentLibrary::all() const {
 
 void ComponentLibrary::scan(const std::string &directory) {
     std::error_code ec;
-    if (!fs::exists(directory, ec) || ec)
+    if (!fs::exists(directory, ec) || ec) {
+        if (ec)
+            LOG_WARN("ComponentLibrary: cannot access scan root %s: %s", directory.c_str(),
+                     ec.message().c_str());
         return;
+    }
     try {
         fs::recursive_directory_iterator it(directory,
                                             fs::directory_options::skip_permission_denied, ec);
@@ -253,8 +257,13 @@ void ComponentLibrary::scan(const std::string &directory) {
                 ec.clear();
                 continue;
             }
-            if (it->is_regular_file() && it->path().extension() == ".json") {
+            std::error_code entry_ec;
+            if (it->is_regular_file(entry_ec) && it->path().extension() == ".json") {
                 loadFile(it->path().string());
+            }
+            if (entry_ec) {
+                LOG_WARN("ComponentLibrary: status error for %s: %s", it->path().string().c_str(),
+                         entry_ec.message().c_str());
             }
         }
         if (ec) {
