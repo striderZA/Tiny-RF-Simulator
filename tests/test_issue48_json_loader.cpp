@@ -153,6 +153,26 @@ TEST_CASE("Component library keeps a definition with malformed optional entries"
     REQUIRE(definitions.front()->data_files.front().path == "good.s2p");
 }
 
+TEST_CASE("Component library retains definition when schema_version is out of int range",
+          "[issue48][library]") {
+    const auto path = uniqueTempPath("issue48_library_schema_version_range");
+    writeText(path, R"({
+        "schema_version": 2147483648,
+        "type": "amplifier",
+        "part_number": "RANGE-AMP",
+        "parameters": {"gain_dB": 15.0}
+    })");
+
+    ComponentLibrary library;
+    library.loadFile(path.string());
+
+    const auto definitions = library.all();
+    REQUIRE(definitions.size() == 1);
+    REQUIRE(definitions.front()->type == "amplifier");
+    REQUIRE(definitions.front()->part_number == "RANGE-AMP");
+    REQUIRE(definitions.front()->schema_version == 1);
+}
+
 TEST_CASE("Component library scan continues after malformed files", "[issue48][library]") {
     const auto tree = uniqueTempDirectory("issue48_scan");
     writeText(tree.root / "bad.json", R"({"type": [], "part_number": 4, "parameters": 9})");

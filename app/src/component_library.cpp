@@ -3,6 +3,7 @@
 #include "logging_core.h"
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <system_error>
 
@@ -164,7 +165,25 @@ void ComponentLibrary::loadFile(const std::string &filepath) {
 
         ComponentDefinition def;
         if (j.contains("schema_version") && j["schema_version"].is_number_integer()) {
-            def.schema_version = j["schema_version"].get<int>();
+            // A JSON integer can exceed int range; verify representability
+            // before get<int>(), which would throw and discard an
+            // otherwise-valid definition. Mirrors extension_manifest.cpp.
+            const auto in_range = [&]() {
+                if (j["schema_version"].is_number_unsigned()) {
+                    return j["schema_version"].get<unsigned long long>() <=
+                           static_cast<unsigned long long>(std::numeric_limits<int>::max());
+                }
+                const auto raw = j["schema_version"].get<long long>();
+                return raw >= static_cast<long long>(std::numeric_limits<int>::min()) &&
+                       raw <= static_cast<long long>(std::numeric_limits<int>::max());
+            }();
+            if (in_range) {
+                def.schema_version = j["schema_version"].get<int>();
+            } else {
+                LOG_WARN("ComponentLibrary: schema_version is out of int range in %s",
+                         filepath.c_str());
+                def.schema_version = 1;
+            }
         } else {
             if (j.contains("schema_version")) {
                 LOG_WARN("ComponentLibrary: schema_version is not an integer in %s",
