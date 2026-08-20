@@ -1,8 +1,10 @@
 #include "component_library.h"
 #include "component_type_registry.h"
 #include "logging_core.h"
+#include <exception>
 #include <filesystem>
 #include <optional>
+#include <system_error>
 
 #include "amplifier_engine.h"
 #include "component_interface.h"
@@ -151,27 +153,57 @@ void ComponentLibrary::loadFile(const std::string &filepath) {
     try {
         ifs >> j;
 
-        if (!j.contains("type") || !j.contains("part_number") || !j.contains("parameters")) {
-            LOG_WARN("ComponentLibrary: missing required fields in %s", filepath.c_str());
+        // Explicit required-field validation: a syntactically valid but
+        // wrong-typed required field is a malformed entry, not a definition.
+        if (!j.is_object() || !j.contains("type") || !j["type"].is_string() ||
+            !j.contains("part_number") || !j["part_number"].is_string() ||
+            !j.contains("parameters") || !j["parameters"].is_object()) {
+            LOG_WARN("ComponentLibrary: invalid required field types in %s", filepath.c_str());
             return;
         }
 
         ComponentDefinition def;
-        def.schema_version = j.value("schema_version", 1);
+        if (j.contains("schema_version") && j["schema_version"].is_number_integer()) {
+            def.schema_version = j["schema_version"].get<int>();
+        } else {
+            if (j.contains("schema_version")) {
+                LOG_WARN("ComponentLibrary: schema_version is not an integer in %s",
+                         filepath.c_str());
+            }
+            def.schema_version = 1;
+        }
         def.type = j["type"].get<std::string>();
         def.part_number = j["part_number"].get<std::string>();
-        def.manufacturer = j.value("manufacturer", "");
-        def.description = j.value("description", "");
+
+        // Optional string fields: leave the default empty string when the
+        // value is present but not a string.
+        const auto optionalString = [&](const char *key) {
+            return j.contains(key) && j[key].is_string() ? j[key].get<std::string>()
+                                                         : std::string{};
+        };
+        def.manufacturer = optionalString("manufacturer");
+        def.description = optionalString("description");
+        def.notes = optionalString("notes");
+
         def.parameters = j["parameters"];
         def.test_conditions = j.value("test_conditions", nlohmann::json::object());
-        def.notes = j.value("notes", "");
         def.source_path = filepath;
         def.issues = validate(def.type, def.parameters);
 
-        // Parse data_files array if present
-        if (j.contains("data_files") && j["data_files"].is_array()) {
-            for (const auto &df : j["data_files"]) {
-                if (df.contains("type") && df.contains("path")) {
+        // Parse data_files, isolating malformed entries: only array entries
+        // that are objects with string type/path are kept.
+        if (j.contains("data_files")) {
+            if (!j["data_files"].is_array()) {
+                LOG_WARN("ComponentLibrary: data_files is not an array in %s", filepath.c_str());
+            } else {
+                for (std::size_t i = 0; i < j["data_files"].size(); ++i) {
+                    const auto &df = j["data_files"][i];
+                    if (!df.is_object() || !df.contains("type") || !df["type"].is_string() ||
+                        !df.contains("path") || !df["path"].is_string()) {
+                        LOG_WARN("ComponentLibrary: skipping malformed data_files[%zu] in %s", i,
+                                 filepath.c_str());
+                        continue;
+                    }
                     def.data_files.push_back(
                         {df["type"].get<std::string>(), df["path"].get<std::string>()});
                 }
@@ -183,6 +215,11 @@ void ComponentLibrary::loadFile(const std::string &filepath) {
         // Covers parse_error AND type_error (e.g. a required field present but
         // wrong-typed). A malformed library entry is skipped, not fatal.
         LOG_WARN("ComponentLibrary: invalid JSON in %s: %s", filepath.c_str(), e.what());
+        return;
+    } catch (const std::exception &e) {
+        // A non-JSON exception (e.g. from the parser or filesystem layer)
+        // stays inside the file boundary so sibling files are still visited.
+        LOG_WARN("ComponentLibrary: failed to load %s: %s", filepath.c_str(), e.what());
         return;
     }
 }
@@ -197,14 +234,32 @@ std::vector<const ComponentDefinition *> ComponentLibrary::all() const {
 }
 
 void ComponentLibrary::scan(const std::string &directory) {
-    namespace fs = std::filesystem;
-    if (!fs::exists(directory))
+    std::error_code ec;
+    if (!fs::exists(directory, ec) || ec)
         return;
     try {
-        for (const auto &entry : fs::recursive_directory_iterator(directory)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                loadFile(entry.path().string());
+        fs::recursive_directory_iterator it(directory,
+                                            fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        if (ec) {
+            LOG_WARN("ComponentLibrary: cannot scan %s: %s", directory.c_str(),
+                     ec.message().c_str());
+            return;
+        }
+        for (; it != end; it.increment(ec)) {
+            if (ec) {
+                LOG_WARN("ComponentLibrary: scan error in %s: %s", it->path().string().c_str(),
+                         ec.message().c_str());
+                ec.clear();
+                continue;
             }
+            if (it->is_regular_file() && it->path().extension() == ".json") {
+                loadFile(it->path().string());
+            }
+        }
+        if (ec) {
+            LOG_WARN("ComponentLibrary: scan ended with error in %s: %s", directory.c_str(),
+                     ec.message().c_str());
         }
     } catch (const fs::filesystem_error &e) {
         // An unreadable subtree (e.g. permission denied) must not abort the
