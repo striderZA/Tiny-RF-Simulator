@@ -10,8 +10,10 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_view_manager.h"
 #include "session_state.h"
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -121,6 +123,26 @@ void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir)
             continue;
         params[key] = rel.generic_string();
     }
+}
+
+// Checked conversion of a JSON integer to int. is_number_integer() alone
+// only guarantees the value is stored as an integer type: a number_unsigned
+// larger than INT_MAX (or a number_integer below INT_MIN) would silently
+// truncate/wrap in get<int>(). Verify representability against int limits
+// with the nlohmann signed/unsigned integer APIs before converting; returns
+// nullopt for non-integers and out-of-range values (callers log and skip).
+std::optional<int> checkedJsonInt(const nlohmann::json &j) {
+    if (j.is_number_unsigned()) {
+        const std::uint64_t v = j.get<std::uint64_t>();
+        if (v <= static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(v);
+    } else if (j.is_number_integer()) {
+        const std::int64_t v = j.get<std::int64_t>();
+        if (v >= static_cast<std::int64_t>(std::numeric_limits<int>::min()) &&
+            v <= static_cast<std::int64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(v);
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -327,6 +349,37 @@ bool ProjectSerializer::load(const std::string &path) {
     }
 
     try {
+        // Validate optional top-level section shapes before resetting any
+        // state: a wrong-shaped section (e.g. "components": 5) must fail the
+        // load cleanly instead of throwing mid-restore. Missing fields and
+        // explicit nulls retain their existing defaults.
+        const auto require_array = [&](const char *key) -> bool {
+            if (root.contains(key) && !root[key].is_null() && !root[key].is_array()) {
+                LOG_ERROR("Invalid project file %s: '%s' must be an array", path.c_str(), key);
+                return false;
+            }
+            return true;
+        };
+        const auto require_object = [&](const char *key) -> bool {
+            if (root.contains(key) && !root[key].is_null() && !root[key].is_object()) {
+                LOG_ERROR("Invalid project file %s: '%s' must be an object", path.c_str(), key);
+                return false;
+            }
+            return true;
+        };
+        if (!require_array("components") || !require_array("links") ||
+            !require_array("probe_pins") || !require_array("groups") ||
+            !require_object("network_analyzer") || !require_object("window_state") ||
+            !require_object("graph_state")) {
+            // A wrong-shaped top-level section makes the file unusable. Reset
+            // to the empty state a normal load would produce (regression tests
+            // assert a fresh app ends with zero components), then fail. The
+            // checks above ran before any reset, so restoration never sees a
+            // partially validated file.
+            reset();
+            return false;
+        }
+
         reset();
 
         // Map: type string \u2192 factory lambda
@@ -341,20 +394,40 @@ bool ProjectSerializer::load(const std::string &path) {
         for (auto &it : comp_order) {
             auto &cj = *it;
             const size_t current_index = comp_index++;
-            // One malformed component must not abort the whole load: log it and
-            // skip it (new_node_ids keeps the saved-index \u2192 node mapping intact
-            // with -1 so link/probe/group restoration stays in step).
+            // One malformed component must not abort the whole load: validate
+            // the record shape before any typed access (must be an object with
+            // a string 'type' and, if present, object 'params'), log the saved
+            // index, and skip it — new_node_ids keeps the saved-index → node
+            // mapping intact with -1 so link/probe/group restoration stays in
+            // step and valid sibling components still load.
+            if (!cj.is_object() || !cj.contains("type") || !cj["type"].is_string()) {
+                LOG_WARN("Skipping component %zu in project file %s: record must be an object "
+                         "with a string 'type'",
+                         current_index, path.c_str());
+                new_node_ids.push_back(-1);
+                continue;
+            }
+            if (cj.contains("params") && !cj["params"].is_object()) {
+                LOG_WARN("Skipping component %zu in project file %s: 'params' must be an object",
+                         current_index, path.c_str());
+                new_node_ids.push_back(-1);
+                continue;
+            }
+            const ComponentTypeDescriptor *desc = nullptr;
+            IComponentEngine *comp = nullptr;
             try {
-                std::string type = cj.value("type", "");
+                std::string type = cj["type"].get<std::string>();
+                // Absent 'params' keeps the existing behavior: operator[] yields
+                // a JSON null, which the engine deserialize() treats as defaults.
                 auto &params = cj["params"];
 
-                const auto *desc = ComponentTypeRegistry::instance().findByProjectType(type);
+                desc = ComponentTypeRegistry::instance().findByProjectType(type);
                 if (!desc) {
                     LOG_WARN("Unknown component type in project file: %s", type.c_str());
                     new_node_ids.push_back(-1);
                     continue;
                 }
-                IComponentEngine *comp = desc->create(m_components, m_graph, m_next_component_id++);
+                comp = desc->create(m_components, m_graph, m_next_component_id++);
                 // S1: resolve S-param paths against the project file's
                 // directory and neutralize any path that escapes it (the
                 // engine's deserialize() only sees the raw params JSON and
@@ -366,23 +439,42 @@ bool ProjectSerializer::load(const std::string &path) {
                     m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
                 }
 
-                new_node_ids.push_back(comp ? comp->graphNodeId() : -1);
-
-                // Restore position
-                if (comp && cj.contains("pos")) {
+                // Restore position. Malformed optional metadata must not abort
+                // an otherwise valid component, so only read the numeric fields
+                // when their shapes actually match.
+                if (cj.contains("pos") && cj["pos"].is_object()) {
+                    const auto &pos = cj["pos"];
+                    const float pos_x =
+                        pos.contains("x") && pos["x"].is_number() ? pos["x"].get<float>() : 0.0f;
+                    const float pos_y =
+                        pos.contains("y") && pos["y"].is_number() ? pos["y"].get<float>() : 0.0f;
                     ImNodes::EditorContextSet(m_graph_widget.context());
-                    ImNodes::SetNodeEditorSpacePos(
-                        comp->graphNodeId(),
-                        ImVec2(cj["pos"].value("x", 0.0f), cj["pos"].value("y", 0.0f)));
+                    ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), ImVec2(pos_x, pos_y));
                 }
 
-                // Restore library part number
-                if (comp && cj.contains("part_number"))
+                // Restore library part number (only when it is a string)
+                if (cj.contains("part_number") && cj["part_number"].is_string())
                     m_graph.setNodePartNumber(comp->graphNodeId(),
                                               cj["part_number"].get<std::string>());
+
+                // Record the saved-index → node mapping only after every step
+                // that can throw, so the saved index stays in step with the
+                // file and the catch below pushes exactly one -1 per record.
+                new_node_ids.push_back(comp->graphNodeId());
             } catch (const std::exception &e) {
                 LOG_ERROR("Skipping malformed component %zu in project file %s: %s", current_index,
                           path.c_str(), e.what());
+                // Exception-safe rollback: desc->create() already registered
+                // the component (and its graph node) before nested
+                // deserialization or metadata restoration threw. Remove the
+                // partially created component and any PFB view state created
+                // for it, so a malformed record is neither counted nor linked
+                // while valid sibling components still load.
+                if (comp) {
+                    m_components.remove(comp->graphNodeId());
+                    if (desc && desc->type == "pfb")
+                        m_pfb_views.rebuild(m_components, m_state);
+                }
                 new_node_ids.push_back(-1);
             }
         }
@@ -390,13 +482,34 @@ bool ProjectSerializer::load(const std::string &path) {
         // syncNodesFromEngine calls (e.g. from saveProject) don't reset them.
         m_graph_widget.markNodesRegistered();
 
-        // Restore links (saved as component-index + port pairs)
+        // Restore links (saved as component-index + port pairs). A malformed
+        // entry is logged and skipped so one bad link cannot abort restoration
+        // of the remaining links (and everything after them).
         auto &saved_links = root["links"];
         for (const auto &lj : saved_links) {
-            int from_idx = lj.value("from", -1);
-            int to_idx = lj.value("to", -1);
-            int from_port = lj.value("from_port", 0);
-            int to_port = lj.value("to_port", 0);
+            bool malformed = !lj.is_object();
+            if (malformed) {
+                LOG_WARN("Skipping malformed link in project file %s: entry is not an object",
+                         path.c_str());
+                continue;
+            }
+            const auto index_field = [&](const char *key, int fallback) {
+                if (lj.contains(key)) {
+                    if (const auto v = checkedJsonInt(lj[key]))
+                        return *v;
+                    malformed = true;
+                    return fallback;
+                }
+                return fallback;
+            };
+            const int from_idx = index_field("from", -1);
+            const int to_idx = index_field("to", -1);
+            const int from_port = index_field("from_port", 0);
+            const int to_port = index_field("to_port", 0);
+            if (malformed) {
+                LOG_WARN("Skipping malformed link in project file %s", path.c_str());
+                continue;
+            }
             if (from_idx < 0 || to_idx < 0 ||
                 static_cast<size_t>(from_idx) >= new_node_ids.size() ||
                 static_cast<size_t>(to_idx) >= new_node_ids.size())
@@ -418,15 +531,49 @@ bool ProjectSerializer::load(const std::string &path) {
                 m_graph.addLink(start_pin, end_pin);
         }
 
-        // Restore probes
+        // Restore probes. Malformed entries are logged and skipped so valid
+        // probes (and all later sections) still restore.
         auto &saved_probes = root["probe_pins"];
         for (const auto &pj : saved_probes) {
-            int comp_idx = pj.value("comp", -1);
-            int port = pj.value("port", 0);
-            bool is_output = pj.value("is_output", true);
-            if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= m_components.size())
+            bool malformed = !pj.is_object();
+            if (malformed) {
+                LOG_WARN("Skipping malformed probe in project file %s: entry is not an object",
+                         path.c_str());
                 continue;
-            auto *comp = m_components.all()[comp_idx];
+            }
+            const auto index_field = [&](const char *key, int fallback) {
+                if (pj.contains(key)) {
+                    if (const auto v = checkedJsonInt(pj[key]))
+                        return *v;
+                    malformed = true;
+                    return fallback;
+                }
+                return fallback;
+            };
+            const int comp_idx = index_field("comp", -1);
+            const int port = index_field("port", 0);
+            if (pj.contains("is_output") && !pj["is_output"].is_boolean())
+                malformed = true;
+            const bool is_output = pj.contains("is_output") && pj["is_output"].is_boolean()
+                                       ? pj["is_output"].get<bool>()
+                                       : true;
+            if (malformed) {
+                LOG_WARN("Skipping malformed probe in project file %s", path.c_str());
+                continue;
+            }
+            // Resolve the saved component index through new_node_ids (the same
+            // mapping the links and network-analyzer passes use) instead of the
+            // compact registry: a component skipped earlier in the file must
+            // not shift a later valid probe onto the wrong component or drop it
+            // because the compacted registry has fewer entries.
+            if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= new_node_ids.size())
+                continue;
+            const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
+            if (node_id < 0)
+                continue; // saved index maps to a skipped/malformed record
+            auto *comp = m_components.find(node_id);
+            if (!comp)
+                continue; // no component for this mapping; nothing to probe
             int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
             if (pin >= 0)
                 m_graph.addProbePin(pin);
@@ -439,20 +586,57 @@ bool ProjectSerializer::load(const std::string &path) {
         // Absent keys keep the engine's current (default or last-set) value.
         auto &saved_na = root["network_analyzer"];
         if (!saved_na.is_null()) {
+            // Step 1 guarantees 'network_analyzer' is an object; guard each
+            // field so a wrong-typed value cannot abort restoration (absent
+            // keys keep the engine's current value).
+            const auto number_field = [&](const char *key, double fallback) {
+                return saved_na.contains(key) && saved_na[key].is_number()
+                           ? saved_na[key].get<double>()
+                           : fallback;
+            };
             m_na_engine.setStartFrequency(
-                saved_na.value("start_freq_hz", m_na_engine.startFrequency()));
-            m_na_engine.setStopFrequency(
-                saved_na.value("stop_freq_hz", m_na_engine.stopFrequency()));
-            m_na_engine.setPoints(saved_na.value("points", m_na_engine.points()));
+                number_field("start_freq_hz", m_na_engine.startFrequency()));
+            m_na_engine.setStopFrequency(number_field("stop_freq_hz", m_na_engine.stopFrequency()));
+            // 'points' must be an integer representable in int: a fractional
+            // value would silently truncate and an oversized integer would
+            // wrap, so both leave the engine's current value untouched.
+            if (saved_na.contains("points")) {
+                if (const auto n = checkedJsonInt(saved_na["points"])) {
+                    m_na_engine.setPoints(*n);
+                } else {
+                    LOG_WARN("Ignoring malformed 'points' in project file %s: expected an integer "
+                             "within int range; keeping current value (%d)",
+                             path.c_str(), m_na_engine.points());
+                }
+            }
             m_na_engine.setStimulusPower(
-                saved_na.value("stimulus_power_dBm", m_na_engine.stimulusPower()));
+                number_field("stimulus_power_dBm", m_na_engine.stimulusPower()));
             const auto restore_point = [&](const nlohmann::json &pj,
                                            void (NetworkAnalyzerEngine::*set)(int)) {
                 if (!pj.is_object())
                     return; // unset point (saved as JSON null)
-                int comp_idx = pj.value("comp", -1);
-                int port = pj.value("port", 0);
-                bool is_output = pj.value("is_output", true);
+                bool malformed = false;
+                const auto index_field = [&](const char *key, int fallback) {
+                    if (pj.contains(key)) {
+                        if (const auto v = checkedJsonInt(pj[key]))
+                            return *v;
+                        malformed = true;
+                        return fallback;
+                    }
+                    return fallback;
+                };
+                const int comp_idx = index_field("comp", -1);
+                const int port = index_field("port", 0);
+                if (pj.contains("is_output") && !pj["is_output"].is_boolean())
+                    malformed = true;
+                const bool is_output = pj.contains("is_output") && pj["is_output"].is_boolean()
+                                           ? pj["is_output"].get<bool>()
+                                           : true;
+                if (malformed) {
+                    LOG_WARN("Skipping malformed network analyzer point in project file %s",
+                             path.c_str());
+                    return;
+                }
                 if (comp_idx < 0 || static_cast<size_t>(comp_idx) >= new_node_ids.size())
                     return;
                 const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
@@ -472,21 +656,52 @@ bool ProjectSerializer::load(const std::string &path) {
                           &NetworkAnalyzerEngine::setPointB);
         }
 
-        // Restore groups
+        // Restore groups. Malformed entries are logged and skipped so one bad
+        // group cannot discard valid groups (or components restored earlier).
         auto &saved_groups = root["groups"];
         for (const auto &gj : saved_groups) {
-            std::string name = gj.value("name", "Group");
+            bool malformed = !gj.is_object();
+            if (malformed) {
+                LOG_WARN("Skipping malformed group in project file %s: entry is not an object",
+                         path.c_str());
+                continue;
+            }
+            std::string name = "Group";
+            if (gj.contains("name")) {
+                if (!gj["name"].is_string())
+                    malformed = true;
+                else
+                    name = gj["name"].get<std::string>();
+            }
             std::vector<int> member_ids;
-            for (const auto &mj : gj["member_components"]) {
-                int comp_idx = mj.get<int>();
-                if (comp_idx >= 0 && static_cast<size_t>(comp_idx) < new_node_ids.size() &&
-                    new_node_ids[comp_idx] >= 0) {
-                    member_ids.push_back(new_node_ids[comp_idx]);
+            if (!gj.contains("member_components") || !gj["member_components"].is_array()) {
+                malformed = true;
+            } else {
+                for (const auto &mj : gj["member_components"]) {
+                    const auto comp_idx = checkedJsonInt(mj);
+                    if (!comp_idx) {
+                        malformed = true;
+                        continue;
+                    }
+                    if (*comp_idx >= 0 && static_cast<size_t>(*comp_idx) < new_node_ids.size() &&
+                        new_node_ids[*comp_idx] >= 0) {
+                        member_ids.push_back(new_node_ids[*comp_idx]);
+                    }
                 }
+            }
+            bool collapsed = true;
+            if (gj.contains("collapsed")) {
+                if (!gj["collapsed"].is_boolean())
+                    malformed = true;
+                else
+                    collapsed = gj["collapsed"].get<bool>();
+            }
+            if (malformed) {
+                LOG_WARN("Skipping malformed group in project file %s", path.c_str());
+                continue;
             }
             if (member_ids.size() >= 2) {
                 int gid = m_graph.addGroup(name, member_ids);
-                bool collapsed = gj.value("collapsed", true);
                 if (gid >= 0)
                     m_graph.setGroupCollapsed(gid, collapsed);
             }
@@ -506,7 +721,12 @@ bool ProjectSerializer::load(const std::string &path) {
         if (!gs.is_null()) {
             m_next_component_id = gs.value("next_component_id", m_next_component_id);
         }
-    } catch (const nlohmann::json::exception &e) {
+    } catch (const std::exception &e) {
+        // Broadened from nlohmann::json::exception: any exception escaping
+        // restoration (including non-JSON engine/container errors on
+        // malformed input) is converted into a logged false result instead of
+        // propagating. Deliberately not catch (...) — std::exception covers
+        // the expected failure modes and keeps the failure observable.
         LOG_ERROR("Malformed project file %s: %s", path.c_str(), e.what());
         return false;
     }

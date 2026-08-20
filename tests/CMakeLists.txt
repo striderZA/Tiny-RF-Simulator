@@ -147,3 +147,11 @@ add_standalone_test(test_path_containment
     SOURCES test_path_containment.cpp
     LIBS simulator::app simulator::touchstone_parser
 )
+
+# Standalone issue #48 coverage for malformed-but-valid project and component
+# library JSON. Kept outside tests.exe because MinGW silently drops registrations
+# beyond its test ceiling.
+add_standalone_test(test_issue48_json_loader
+    SOURCES test_issue48_json_loader.cpp
+    LIBS simulator::app
+)
