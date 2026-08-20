@@ -38,10 +38,22 @@ TempTree uniqueTempDirectory(std::string_view stem) {
     return tree;
 }
 
-std::filesystem::path uniqueTempPath(std::string_view stem) {
+// RAII guard for individual temp files: removes the file on scope exit so an
+// assertion failure unwinding the test never leaks issue48_*.json.
+struct TempFile {
+    std::filesystem::path path;
+    operator const std::filesystem::path &() const { return path; }
+    std::string string() const { return path.string(); }
+    ~TempFile() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+};
+
+TempFile uniqueTempPath(std::string_view stem) {
     static std::atomic<unsigned> sequence = 0;
-    return std::filesystem::temp_directory_path() /
-           (std::string(stem) + "_" + std::to_string(++sequence) + ".json");
+    return TempFile{std::filesystem::temp_directory_path() /
+                    (std::string(stem) + "_" + std::to_string(++sequence) + ".json")};
 }
 
 void writeText(const std::filesystem::path &path, std::string_view contents) {
@@ -85,7 +97,6 @@ TEST_CASE_METHOD(ImGuiFixture, "Project loader skips malformed component and kee
     REQUIRE(app.componentCount() == 2);
     REQUIRE(app.testComponents().byType<SignalGeneratorEngine>().size() == 1);
     REQUIRE(app.testComponents().byType<AmplifierEngine>().size() == 1);
-    std::filesystem::remove(path);
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -98,7 +109,6 @@ TEST_CASE_METHOD(ImGuiFixture,
     app.loadProject(path.string());
 
     REQUIRE(app.componentCount() == 0);
-    std::filesystem::remove(path);
 }
 
 TEST_CASE("Component library skips wrong-typed required fields", "[issue48][library]") {
@@ -113,7 +123,6 @@ TEST_CASE("Component library skips wrong-typed required fields", "[issue48][libr
     library.loadFile(path.string());
 
     REQUIRE(library.all().empty());
-    std::filesystem::remove(path);
 }
 
 TEST_CASE("Component library keeps a definition with malformed optional entries",
@@ -142,7 +151,6 @@ TEST_CASE("Component library keeps a definition with malformed optional entries"
     REQUIRE(definitions.front()->part_number == "GOOD-AMP");
     REQUIRE(definitions.front()->data_files.size() == 1);
     REQUIRE(definitions.front()->data_files.front().path == "good.s2p");
-    std::filesystem::remove(path);
 }
 
 TEST_CASE("Component library scan continues after malformed files", "[issue48][library]") {
