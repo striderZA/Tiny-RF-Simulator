@@ -59,7 +59,19 @@ void PFBChannelizerEngine::update(double) {
         return;
 
     if (in_ptr && in_ptr->fs_Hz > 0.0) {
-        m_cfg.Fs_Hz = in_ptr->fs_Hz;
+        if (m_cfg.Fs_Hz != in_ptr->fs_Hz || !m_fs_from_input) {
+            m_cfg.Fs_Hz = in_ptr->fs_Hz;
+            m_fs_from_input = true;
+            m_cached_freqs.clear();
+            m_cached_Fs_Hz = 0.0;
+            m_channels.clear();
+        }
+    } else if (m_fs_from_input) {
+        m_cfg.Fs_Hz = 0.0;
+        m_fs_from_input = false;
+        m_cached_freqs.clear();
+        m_cached_Fs_Hz = 0.0;
+        m_channels.clear();
     }
 
     auto &out = m_node.outputs[0];
