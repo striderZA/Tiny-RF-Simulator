@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 
 #include "adc_engine.h"
 #include "node_graph_engine.h"
@@ -45,6 +46,7 @@ TEST_CASE("ADC DDC tone at Fs/4 maps to DC", "[adc]") {
     const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0 - 10.0 * std::log10(2.0)));
 }
 
 TEST_CASE("ADC DDC tone at 3Fs/4 aliases to DC", "[adc]") {
@@ -57,10 +59,10 @@ TEST_CASE("ADC DDC tone at 3Fs/4 aliases to DC", "[adc]") {
 
     adc.node().inputs[0] = &in;
     adc.update(0.0);
-
     const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0 - 10.0 * std::log10(2.0)));
 }
 
 TEST_CASE("ADC DDC tone at 0 Hz maps to -Fs/4", "[adc]") {
@@ -162,7 +164,7 @@ TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
     REQUIRE(out.noise_total_W.empty());
 }
 
-TEST_CASE("ADC DDC preserves tone power and phase", "[adc]") {
+TEST_CASE("ADC DDC retains selected real tone phase with physical half-power", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(7, graph);
     adc.setFs_Hz(Fs);
@@ -175,8 +177,45 @@ TEST_CASE("ADC DDC preserves tone power and phase", "[adc]") {
 
     const auto &out = adc.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
+    REQUIRE(out.tones[0].phase_deg == Approx(45.0));
+}
+
+TEST_CASE("ADC DDC leaves complex input tones unexpanded", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(8, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.is_complex_baseband = true;
+    in.tones.push_back({Fs / 4.0, -20.0, 45.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0));
     REQUIRE(out.tones[0].phase_deg == Approx(45.0));
+}
+
+TEST_CASE("ADC DDC coherently combines real-tone images at one output frequency", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(9, graph);
+    adc.setFs_Hz(Fs);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({Fs / 4.0, -20.0, 0.0});
+    in.tones.push_back({3.0 * Fs / 4.0, -20.0, 0.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)));
 }
 
 TEST_CASE("ADC setFs_Hz clamps invalid values", "[adc]") {

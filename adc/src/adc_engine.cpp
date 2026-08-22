@@ -3,7 +3,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
+#include <map>
+#include <numbers>
 
 #include "common.h"
 #include "logging_core.h"
@@ -12,9 +15,39 @@
 
 static double alias_frequency(double f_RF, double Fs) {
     double f = std::fmod(f_RF, Fs);
-    if (f > Fs / 2.0)
-        f = Fs - f;
+    if (f >= Fs / 2.0)
+        f -= Fs;
+    if (f < -Fs / 2.0)
+        f += Fs;
     return f;
+}
+
+static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, double Fs) {
+    const auto source_tones =
+        input.is_complex_baseband ? input.tones : conjugateSymmetricExpand(input.tones);
+    std::map<double, std::complex<double>> accumulated;
+    const double output_edge = Fs / 4.0;
+    for (const auto &tone : source_tones) {
+        const double f_complex = alias_frequency(tone.freq_Hz, Fs) - output_edge;
+        if (f_complex < -output_edge || f_complex >= output_edge)
+            continue;
+
+        const double power_W = 0.001 * std::pow(10.0, tone.power_dBm / 10.0);
+        const double phase_rad = tone.phase_deg * std::numbers::pi / 180.0;
+        accumulated[f_complex] += std::polar(std::sqrt(power_W), phase_rad);
+    }
+
+    std::vector<Spectrum::Tone> result;
+    result.reserve(accumulated.size());
+    for (const auto &[freq_Hz, amplitude] : accumulated) {
+        const double power_W = std::norm(amplitude);
+        if (power_W <= 0.0)
+            continue;
+        result.push_back(
+            {freq_Hz, 10.0 * std::log10(power_W / 0.001),
+             std::atan2(amplitude.imag(), amplitude.real()) * 180.0 / std::numbers::pi});
+    }
+    return result;
 }
 
 // ---- Engine methods ----
@@ -88,17 +121,8 @@ void AdcEngine::update(double /*dt*/) {
 
     out.computeTotalNoise();
 
-    // -- Tone mapping: alias -> NCO shift -> filter --
-    out.tones.clear();
-    for (const auto &tone : input->tones) {
-        double f_a = alias_frequency(tone.freq_Hz, m_fs_Hz);
-        double f_complex = f_a - m_fs_Hz / 4.0;
-        if (f_complex < m_fs_Hz / 4.0) {
-            Spectrum::Tone t = tone;
-            t.freq_Hz = f_complex;
-            out.tones.push_back(t);
-        }
-    }
+    // -- Tone mapping: real-domain conjugate expansion -> signed alias -> DDC -> LPF --
+    out.tones = map_tones_to_complex(*input, m_fs_Hz);
 
     out.bumpGeneration();
 }
