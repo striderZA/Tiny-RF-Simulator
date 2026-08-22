@@ -25,6 +25,10 @@ class IQPlotWidget {
     std::deque<double> m_stream_q;
     double m_time_step_s = 0.0;
     bool m_time_inited = false;
+    const Spectrum *m_cached_input = nullptr;
+    double m_cached_fs_Hz = 0.0;
+    size_t m_cached_output_bins = 0;
+    int m_cached_channel_count = 0;
 
     ZoomState m_zoom;
     bool m_zoom_locked = false;
@@ -44,4 +48,5 @@ class IQPlotWidget {
     static constexpr size_t kMaxSamples = 4096;
 
     void runIDFT();
+    void resetDomainState();
 };
