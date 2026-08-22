@@ -25,6 +25,8 @@ class NodeGraphWidget {
     std::function<void(int node_id)> onRemoveNode;
     std::function<void(int node_id)> onDuplicateNode;
     std::function<void()> onLinkChanged;
+    // Return false to reject a user-created link before it reaches the topology engine.
+    std::function<bool(int start_pin_id, int end_pin_id)> onLinkCreating;
     std::function<std::string(int graph_node_id)> onNodeHover;
 
     // Data-driven canvas menu: app populates from ComponentTypeRegistry.

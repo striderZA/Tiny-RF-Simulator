@@ -39,15 +39,13 @@ TEST_CASE_METHOD(Issue70ImGuiFixture, "PFB enforces ADC-only input across reconn
     auto &adc = app.testComponents().add<AdcEngine>(10002, app.testGraphEngine());
     auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10003, app.testGraphEngine());
 
-    int direct_link = app.testGraphEngine().addLink(gen.outputPinId(), pfb.inputPinId());
-    REQUIRE(direct_link == -1);
-    REQUIRE(app.testGraphEngine().links().empty());
+    REQUIRE(app.testGraphWidget().onLinkCreating);
+    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), pfb.inputPinId()));
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == nullptr);
     REQUIRE(pfb.fs_Hz() == 0.0);
     REQUIRE(pfb.node().outputs[0].frequencies.empty());
 
-    app.testGraphEngine().removeLink(direct_link);
     app.testGraphEngine().addLink(gen.outputPinId(), adc.inputPinId());
     app.testGraphEngine().addLink(adc.outputPinId(), pfb.inputPinId());
     app.update_dsp();
@@ -59,10 +57,8 @@ TEST_CASE_METHOD(Issue70ImGuiFixture, "PFB enforces ADC-only input across reconn
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == nullptr);
 
-    int invalid_reconnect = app.testGraphEngine().addLink(gen.outputPinId(), pfb.inputPinId());
-    REQUIRE(invalid_reconnect == -1);
+    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), pfb.inputPinId()));
     app.update_dsp();
-
     REQUIRE(pfb.node().inputs[0] == nullptr);
     REQUIRE(pfb.fs_Hz() == 0.0);
     REQUIRE(pfb.node().outputs[0].frequencies.empty());

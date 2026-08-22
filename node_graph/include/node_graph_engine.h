@@ -2,10 +2,8 @@
 
 #include "group.h"
 #include "signal_node.h"
-#include <functional>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 struct GraphNode {
@@ -42,8 +40,6 @@ class NodeGraphEngine {
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);
     void removeAllLinks();
-    using LinkValidator = std::function<bool(int start_pin_id, int end_pin_id)>;
-    void setLinkValidator(LinkValidator validator) { m_link_validator = std::move(validator); }
 
     // Set internal ID counters for project save/load
     void setNextIds(int node_id, int pin_id, int link_id);
@@ -110,7 +106,6 @@ class NodeGraphEngine {
     std::vector<GraphNode> m_nodes;
     std::vector<GraphLink> m_links;
     std::vector<Group> m_groups;
-    LinkValidator m_link_validator;
     std::unordered_map<int, std::vector<int>> m_node_to_group_cache;
 
     void rebuildNodeToGroupCache();

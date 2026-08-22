@@ -1,6 +1,7 @@
 #include "project_serializer.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
+#include "graph_link_policy.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -527,8 +528,12 @@ bool ProjectSerializer::load(const std::string &path) {
 
             int start_pin = from_comp->outputPinId(from_port);
             int end_pin = to_comp->inputPinId(to_port);
-            if (start_pin >= 0 && end_pin >= 0)
+            if (start_pin >= 0 && end_pin >= 0 &&
+                graphLinkAllowed(from_comp, to_comp, start_pin, end_pin)) {
                 m_graph.addLink(start_pin, end_pin);
+            } else if (start_pin >= 0 && end_pin >= 0) {
+                LOG_WARN("Skipping physically invalid link in project file %s", path.c_str());
+            }
         }
 
         // Restore probes. Malformed entries are logged and skipped so valid

@@ -79,11 +79,6 @@ void NodeGraphEngine::removeNode(int node_id) {
 }
 
 int NodeGraphEngine::addLink(int start_pin, int end_pin) {
-    if (m_link_validator && !m_link_validator(start_pin, end_pin)) {
-        LOG_WARN("Rejected link: %d -> %d", start_pin, end_pin);
-        return -1;
-    }
-
     GraphLink link;
     link.link_id = m_next_link_id++;
     link.start_pin_id = start_pin;
