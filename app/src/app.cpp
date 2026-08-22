@@ -79,6 +79,18 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_serializer = std::make_unique<ProjectSerializer>(
         m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
         m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor, m_na_engine);
+    m_graph_engine.setLinkValidator([this](int start_pin, int end_pin) {
+        const int target_node_id = m_graph_engine.nodeIdForPin(end_pin);
+        auto *target = m_components.find(target_node_id);
+        if (!target || target->type_name() != "pfb")
+            return true;
+
+        const int source_node_id = m_graph_engine.nodeIdForPin(start_pin);
+        auto *source = m_components.find(source_node_id);
+        return source && source->type_name() == "adc" && source->outputPinId(0) == start_pin &&
+               target->inputPinId(0) == end_pin;
+    });
+
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
