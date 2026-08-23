@@ -14,6 +14,8 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
 - `ExternalToolRunner` — structured request/result execution for approved external tools
+- `app/include/graph_link_policy.h` — app-level physical link policy shared by canvas link creation, DSP rewiring, and project-load restoration; currently enforces ADC-only inputs for PFB channelizers
+
 ## Local Contracts
 - `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`; all `.rfsim` JSON serialization lives in `ProjectSerializer`
 - `ProjectSerializer::load()` validates top-level `.rfsim` shapes (arrays for `components`/`links`/`probe_pins`/`groups`, objects for `network_analyzer`/`window_state`/`graph_state`) and isolates malformed records: a wrong top-level shape aborts the load with a logged error (state reset to empty), while malformed component/graph entries are logged and skipped so valid siblings still restore; JSON and non-JSON exceptions are caught and surfaced as a logged `false` result, never thrown to the caller
