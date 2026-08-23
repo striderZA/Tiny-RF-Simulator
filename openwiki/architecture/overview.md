@@ -30,7 +30,7 @@ The RF Simulator is structured in four layers, each with strict dependency direc
 │  pfb_channelizer/  spectrum_analyzer/    │
 │  iq_plot/  touchstone/                   │
 │  logging/  help/  layout/  tutorial/     │
-│  icon_registry/  network_analyzer/       │
+│  network_analyzer/                       │
 ├──────────┴──────────────────────────────┤
 │  Common Data Model (common/)            │
 │  IComponentEngine, SignalNode,          │
@@ -102,6 +102,7 @@ Added in v0.9.0. Defined in `app/include/component_library.h`. A file-based comp
 - Supports 8 component categories: amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs
 - **Data file support** (v0.10.0): JSON schema version 2 adds `data_files` array for referencing external data files (S-parameters, etc.). Relative paths resolved against the JSON file's directory. When a library amplifier with S-param data files is instantiated, the engine auto-loads the Touchstone file via `setSParamFilepath()` for frequency-dependent simulation. Falls back to single-point parameters if the file is missing or invalid. Library browser shows `[DATA]` indicator on components with data files.
 - **ComponentTypeRegistry** (v0.11.0 → unified in v0.16.0, `app/include/component_type_registry.h`): a single 11-row dispatch table — each row carries the canonical `type` + legacy `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback. Canvas menu add, duplicate, save/load, and inspector drawing all dispatch through it (issue #51), it drives `ComponentLibrary::instantiate()`/`validate()` and the New/Edit Component form, and the node graph widget maps label → `NodeKind` from it. Adding a component type is one registry row plus a `NodeKind`/symbol entry — no `RfSimulatorApp` edits.
+- **Malformed library JSON isolation** (v0.19.2, issue #48): `ComponentLibrary::loadFile()` treats every file as untrusted input. Required fields are validated explicitly (`type`, `part_number`, `parameters` must be strings/object), `schema_version` is range-checked against `int` before `get<int>()` (an out-of-range integer defaults to 1 with a warning instead of throwing), non-string optional metadata (`manufacturer`, `description`, `notes`) defaults to `""`, malformed `data_files` entries are logged and skipped individually so valid siblings are kept, and `scan()` uses `std::error_code` filesystem overloads with `skip_permission_denied` so an unreadable root or subtree never aborts discovery of later files. A broad `std::exception` catch keeps every failure inside the file boundary. See [JSON loader hardening](#json-loader-hardening-issue-48) below.
 
 ### Extension System
 
@@ -138,6 +139,47 @@ Save/load (v0.8.0) provides full circuit persistence to `.rfsim` JSON files:
 
 Test coverage: 17 round-trip/regression tests in `tests/test_project_file.cpp` (including S-param mode reload on deserialize, issue #44/#56, Network Analyzer sweep params + probe points round-trip, and stale-probe-point clearing on load).
 
+### JSON Loader Hardening (issue #48)
+
+Since v0.19.2 the project and component-library loaders treat JSON as untrusted input and validate at their boundaries instead of relying on typed access to throw. See [Testing Guide](../testing/guidance.md) for the focused `test_issue48_json_loader` coverage.
+
+**`ProjectSerializer::load()`** (`app/src/project_serializer.cpp`) — the load flow now:
+
+```mermaid
+flowchart TD
+    A["ProjectSerializer::load(path)"] --> B{"root is JSON object?"}
+    B -- no --> FAIL["reset() and log error, return false"]
+    B -- yes --> C{"optional top-level sections have expected shapes?"}
+    C -- no --> FAIL
+    C -- yes --> D["reset() and iterate saved component records"]
+    D --> E{"record is object with string type?"}
+    E -- no --> SKIPCOMP["log index, map to -1, skip"]
+    E -- yes --> F{"params present and is object?"}
+    F -- no --> SKIPCOMP
+    F -- yes --> G["create via ComponentTypeRegistry, resolve S-param paths, deserialize"]
+    G --> H{"nested deserialize or metadata throws?"}
+    H -- yes --> ROLLBACK["remove partially created component and PFB views, log, map to -1"]
+    H -- no --> I["map saved index to new graph node id"]
+    SKIPCOMP --> J["restore links, probes, Network Analyzer points, groups"]
+    ROLLBACK --> J
+    I --> J
+    J --> K["integer fields via checkedJsonInt, booleans verified, malformed entries logged and skipped"]
+    K --> L["return true"]
+    FAIL --> M["catch std::exception anywhere in restoration: log and return false"]
+    L --> M2["done"]
+    M --> M2
+```
+
+*Project load flow after issue #48: shape checks, per-record validation, integer-representability guards, and skip/rollback keep a single malformed entry from aborting restoration of valid siblings.*
+
+- **Top-level shape checks** — before any state is reset, each optional section must be an array (`components`, `links`, `probe_pins`, `groups`) or object (`network_analyzer`, `window_state`, `graph_state`); a wrong shape (e.g. `"components": 5`) resets to the empty state and fails cleanly instead of throwing mid-restore (missing fields and explicit nulls keep defaults).
+- **Per-record validation** — each component record must be an object with a string `type` and, if present, object `params`; malformed records are logged with their saved index and skipped, with `-1` recorded in the saved-index → node-ID mapping so later links/probes/groups stay in step (a skipped earlier record never shifts a later valid probe onto the wrong component — regression-covered by `test_issue48_json_loader.cpp`).
+- **`checkedJsonInt`** — a representability guard around `get<int>()`: `is_number_unsigned()`/`is_number_integer()` are checked against `INT_MIN`/`INT_MAX` before conversion, so a `2^32` value cannot wrap/truncate into a bogus link or probe port and a fractional `points` value cannot truncate. Used for every integer field in links, probes, Network Analyzer points, and group members.
+- **Exception-safe rollback** — if a component's nested `params` makes `deserialize()` (or metadata restoration) throw, the partially created component is removed from the registry (and PFB widget state rebuilt) so it is neither counted nor linked; the saved-index mapping still records exactly one `-1` so later sibling records resolve.
+- **Broadened catch** — the outer restoration catch is now `catch (const std::exception &)` (converting non-JSON engine/container errors into a logged `false` result too); deliberately not `catch (...)`.
+
+**`ComponentLibrary::loadFile()` / `scan()`** (`app/src/component_library.cpp`) — required-field validation (`type`, `part_number`, `parameters`), `schema_version` range check (out-of-range integers default to 1), non-string optional metadata defaulted to empty, malformed `data_files` entries skipped individually, and error-code-based traversal so bad files/subtrees never abort discovery of valid siblings. See [ComponentLibrary](#componentlibrary) above.
+
 ### SessionState
 
 **`SessionState`** (Windows-only; no-op on other platforms) persists window visibility toggles to INI files via `save()`/`load()`. Not used for project data (use `.rfsim` files for that) or for window docking/layout geometry (that's `LayoutManager`, see below).
@@ -153,6 +195,10 @@ S-parameter data files live in `component_data/` at the repository root, organiz
 Paths into these files are confined at every load boundary (S1 containment, 2026-08-09 review): `ProjectSerializer::resolveSparamPath()` keeps `.rfsim` S-param paths inside the project dir and `relativizeSparamParams()` re-writes in-project absolute paths as relative on save; `ComponentLibrary::resolveDataFilePath()` keeps library `data_files` inside the JSON's directory. See [S-Parameter System](../integrations/s-param-system.md).
 
 `common/session_state.h` — Persists window state (open/closed) to `app.ini` using Win32 `WritePrivateProfileStringA`/`GetPrivateProfileStringA`. On non-Windows platforms the load/save methods are no-ops.
+
+### Vector Node Icons
+
+Node icons are drawn with per-name ImGui draw-list vector symbols (`node_graph/src/schematic_symbols.cpp`, one-shot `static` helpers per component kind: generator sine, amplifier triangle, mixer circle, splitter/combiner branches, etc.). The earlier `icon_registry/` PNG → OpenGL texture module was removed from the repository — there is no icon texture loading path anymore, so node rendering depends only on `schematic_symbols.cpp` (plus the ranged `NodeKind` label mapping in the widget).
 
 ## Engine/Widget Pattern
 
@@ -310,8 +356,8 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `app/src/extension_manifest.cpp` | Extension manifest parsing + validation (root confinement) |
 | `app/src/extension_manager.cpp` | Extension discovery across built-in/global/project-local roots |
 | `app/src/external_tool_runner.cpp` | Structured request/result external-tool execution |
-| `app/include/project_serializer.h` | `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`); S-param path containment (`resolveSparamPath`/`relativizeSparamParams`) + Network Analyzer state |
-| `app/src/component_library.cpp` | Library scanning + instantiation; data-file path containment (`resolveDataFilePath`) |
+| `app/include/project_serializer.h` | `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`); S-param path containment (`resolveSparamPath`/`relativizeSparamParams`) + Network Analyzer state + issue #48 malformed-JSON isolation |
+| `app/src/component_library.cpp` | Library scanning + instantiation; data-file path containment (`resolveDataFilePath`); issue #48 required-field/`data_files` validation |
 | `app/include/pfb_view_manager.h` | Per-PFB IQ Plot / Channelizer Grid widget lifecycle |
 | `app/include/extension_manifest.h` | Extension manifest schema + validation (root confinement) |
 | `network_analyzer/include/network_analyzer_engine.h` | `NetworkAnalyzerEngine` + `INetworkAnalyzerHost`/`INetworkAnalyzerScratch` (injected lookups, layering note) |
@@ -329,5 +375,5 @@ This adds ~5 ns overhead for the cached skip path. Additional caches include:
 | `common/session_state.h` | `SessionState` — window state persistence |
 | `layout/include/layout_manager.h` | `LayoutManager` — window layout persistence (default + named presets) |
 | `node_graph/include/node_graph_engine.h` | `NodeGraphEngine` + `GraphNode`/`GraphLink` |
-| `node_graph/src/node_graph_widget.cpp` | imnodes rendering; split across `node_graph_widget_groups.cpp` (group/boundary pins), `node_graph_widget_tooltips.cpp`, `schematic_symbols.cpp` |
+| `node_graph/src/node_graph_widget.cpp` | imnodes rendering; split across `node_graph_widget_groups.cpp` (group/boundary pins), `node_graph_widget_tooltips.cpp`, `schematic_symbols.cpp` (per-name vector node icons) |
 | `src/main.cpp` | Entry point (15 lines) |
