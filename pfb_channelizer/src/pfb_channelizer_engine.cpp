@@ -82,6 +82,7 @@ void PFBChannelizerEngine::update(double) {
         out.noise_W.clear();
         out.noise_total_W.clear();
         out.bumpGeneration();
+        out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         // Sever the full-band output too: it previously retained the last
         // computed spectrum, so consumers caching on (pointer, generation)
         // kept serving stale data after the input was cut.
@@ -92,6 +93,7 @@ void PFBChannelizerEngine::update(double) {
         out_full.noise_total_W.clear();
         out_full.noise_added_W.clear();
         out_full.phase_deg.clear();
+        out_full.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         out_full.bumpGeneration();
         return;
     }
@@ -200,11 +202,22 @@ void PFBChannelizerEngine::update(double) {
         }
     }
     out_full.phase_deg = in_ptr->phase_deg;
-
-    // Collect tones from all channels (channel-weighted)
+    out_full.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    // Each input tone should appear once in the full-band output. Overlapping
+    // channel filters produce multiple representations of the same tone; keep
+    // the strongest filtered representation rather than exposing duplicates.
     out_full.tones.clear();
     for (const auto &ch : m_channels) {
-        out_full.tones.insert(out_full.tones.end(), ch.tones.begin(), ch.tones.end());
+        for (const auto &tone : ch.tones) {
+            auto existing = std::find_if(out_full.tones.begin(), out_full.tones.end(),
+                                         [&tone](const Spectrum::Tone &candidate) {
+                                             return candidate.freq_Hz == tone.freq_Hz;
+                                         });
+            if (existing == out_full.tones.end())
+                out_full.tones.push_back(tone);
+            else if (tone.power_dBm > existing->power_dBm)
+                *existing = tone;
+        }
     }
 
     out_full.bumpGeneration();

@@ -661,6 +661,13 @@ TEST_CASE("ADC to PFB carries one selected complex tone", "[domain][adc][pfb]") 
     REQUIRE(pfb.node().outputs[0].tones[0].freq_Hz == Approx(7.8125e6).margin(1.0));
     REQUIRE(pfb.node().outputs[0].tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
     REQUIRE(pfb.node().outputs[0].tones[0].phase_deg == Approx(30.0));
+
+    const auto &full = pfb.node().outputs[1];
+    REQUIRE(full.is_complex_baseband);
+    REQUIRE(full.tones.size() == 1);
+    REQUIRE(full.tones[0].freq_Hz == Approx(7.8125e6).margin(1.0));
+    REQUIRE(full.tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
+    REQUIRE(full.tones[0].phase_deg == Approx(30.0));
 }
 
 TEST_CASE("ADC+Amplifier(gain): fs_Hz reaches PFB and channels are populated",
