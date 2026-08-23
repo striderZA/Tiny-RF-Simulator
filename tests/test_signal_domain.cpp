@@ -46,7 +46,7 @@ TEST_CASE("conjugateSymmetricExpand: splits a real tone into +-fc half-power pai
             found_neg = true;
             REQUIRE_THAT(t.freq_Hz, WithinAbs(-250e6, 1e-6));
             REQUIRE_THAT(t.power_dBm, WithinAbs(expected_power, 1e-9));
-            REQUIRE_THAT(t.phase_deg, WithinAbs(45.0, 1e-9));
+            REQUIRE_THAT(t.phase_deg, WithinAbs(-45.0, 1e-9));
         }
     }
     REQUIRE(found_pos);
@@ -352,10 +352,10 @@ TEST_CASE("AdcEngine: output is_complex_baseband is true (populated input)", "[d
     adc.update(0.0);
 
     REQUIRE(adc.node().outputs[0].is_complex_baseband == true);
-    // Regression pin (mirrors the existing "ADC DDC preserves tone power and phase" assertion in
-    // tests/test_adc.cpp — restated here to prove the flag addition didn't touch power math):
+    // A real tone is split into conjugate half-power components at the ADC boundary; the
+    // selected DDC component therefore carries the physical -3.0103 dB conversion loss.
     REQUIRE(adc.node().outputs[0].tones.size() == 1);
-    REQUIRE(adc.node().outputs[0].tones[0].power_dBm == Approx(-20.0));
+    REQUIRE(adc.node().outputs[0].tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
     REQUIRE(adc.node().outputs[0].tones[0].phase_deg == Approx(45.0));
 }
 
@@ -634,6 +634,40 @@ TEST_CASE("ADC+Mixer: fs_Hz reaches PFB and channels are populated", "[domain][a
     REQUIRE(!pfb.node().outputs[0].frequencies.empty());
     REQUIRE(pfb.channels().size() == 32);
     REQUIRE(anyChannelHasContent(pfb));
+}
+
+TEST_CASE("ADC to PFB carries one selected complex tone", "[domain][adc][pfb]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(3, graph);
+    adc.setFs_Hz(1e9);
+
+    Spectrum in;
+    in.frequencies.resize(101);
+    for (int i = 0; i < 101; ++i)
+        in.frequencies[i] = i * 5e6;
+    in.noise_total_W.assign(101, 0.0);
+    in.tones.push_back({257.8125e6, -20.0, 30.0}); // DDC -> +7.8125 MHz, PFB channel 16
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    PFBChannelizerEngine pfb(4, graph);
+    pfb.setActiveChannel(16); // center = +7.8125 MHz for M=32, Fs=500 MHz
+    pfb.node().inputs[0] = &adc.node().outputs[0];
+    pfb.update(0.0);
+
+    REQUIRE(pfb.node().outputs[0].is_complex_baseband);
+    REQUIRE(pfb.node().outputs[0].tones.size() == 1);
+    REQUIRE(pfb.node().outputs[0].tones[0].freq_Hz == Approx(7.8125e6).margin(1.0));
+    REQUIRE(pfb.node().outputs[0].tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
+    REQUIRE(pfb.node().outputs[0].tones[0].phase_deg == Approx(30.0));
+
+    const auto &full = pfb.node().outputs[1];
+    REQUIRE(full.is_complex_baseband);
+    REQUIRE(full.tones.size() == 1);
+    REQUIRE(full.tones[0].freq_Hz == Approx(7.8125e6).margin(1.0));
+    REQUIRE(full.tones[0].power_dBm == Approx(-20.0 - 10.0 * std::log10(2.0)));
+    REQUIRE(full.tones[0].phase_deg == Approx(30.0));
 }
 
 TEST_CASE("ADC+Amplifier(gain): fs_Hz reaches PFB and channels are populated",

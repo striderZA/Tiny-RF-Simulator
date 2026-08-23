@@ -57,8 +57,8 @@ struct Spectrum {
 // Expands real-domain tones into their conjugate-symmetric (+-fc) representation per Euler's
 // formula: cos(2*pi*fc*t) = 0.5*(exp(j*2*pi*fc*t) + exp(-j*2*pi*fc*t)). Each non-DC tone becomes
 // two entries at +freq_Hz and -freq_Hz, each at half the linear power (-3.0103 dB = 10*log10(2)
-// below the input). DC tones (freq_Hz == 0) are self-conjugate and pass through unchanged (no
-// mirror, no power split).
+// below the input). The negative-frequency phase is the complex conjugate (-phase_deg). DC tones
+// (freq_Hz == 0) are self-conjugate and pass through unchanged (no mirror, no power split).
 //
 // Used only where +-fc content is physically meaningful: rendering a real-domain (pre-ADC)
 // spectrum. NOT used by interior DSP (generator, nonlinear_model.h, gain/filter/S-param stages,
@@ -78,6 +78,7 @@ conjugateSymmetricExpand(const std::vector<Spectrum::Tone> &tones) {
         Spectrum::Tone at_f = half;
         at_f.freq_Hz = t.freq_Hz;
         Spectrum::Tone at_negf = half;
+        at_negf.phase_deg = -t.phase_deg;
         at_negf.freq_Hz = -t.freq_Hz;
         out.push_back(at_f);
         out.push_back(at_negf);

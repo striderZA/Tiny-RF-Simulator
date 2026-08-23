@@ -89,7 +89,8 @@ Default section order:
 
 ## User Preferences
 
-When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
+- The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
+- When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
 ## Child DOX Index
 

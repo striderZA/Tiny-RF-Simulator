@@ -51,21 +51,33 @@ f_low  = (Z-1) · Fs/2
 f_high =  Z    · Fs/2
 ```
 
-The aliased digital frequency `f_alias` for an analog tone at `f_RF`:
+The real sampled waveform's magnitude alias can be described by:
 
 ```python
 def alias_frequency(f_RF, Fs):
     """
-    Returns the baseband alias of f_RF after sampling at Fs.
-    Works for any Nyquist zone. Returns value in [0, Fs/2).
+    Returns the positive magnitude alias in [0, Fs/2).
     """
-    # Fold into [0, Fs): fold around Fs
     f = f_RF % Fs
-    # Fold into [0, Fs/2): mirror upper half
     if f > Fs / 2:
         f = Fs - f
     return f
 ```
+
+For the complex DDC path, the simulator expands a real RF tone into its `+f` and `-f`
+exponentials first, then maps each component with a signed alias:
+
+```python
+def signed_alias_frequency(f_RF, Fs):
+    """Return the signed sampled frequency in [-Fs/2, Fs/2)."""
+    f = f_RF % Fs
+    if f >= Fs / 2:
+        f -= Fs
+    return f
+```
+
+This preserves the distinction between the desired component and its image after the complex
+NCO shift. The DDC low-pass then keeps only the selected complex-baseband component.
 
 ### Zone Inversion (Spectral Flip)
 

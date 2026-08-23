@@ -37,8 +37,9 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     void setKaiserBeta(double beta);
     void setActiveChannel(int ch);
     void setFs_Hz(double fs) {
-        if (fs != m_cfg.Fs_Hz) {
+        if (fs != m_cfg.Fs_Hz || m_fs_from_input) {
             m_cfg.Fs_Hz = fs;
+            m_fs_from_input = false;
             m_dirty = true;
         }
     }
@@ -73,6 +74,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     double m_cached_Fs_Hz = 0;
     int m_cached_K = 0;
     double m_cached_beta = 0.0;
+    bool m_fs_from_input = false;
 
     void recomputeChannels(const std::vector<double> &freqs);
     double prototypeResponse(double offset_Hz) const;

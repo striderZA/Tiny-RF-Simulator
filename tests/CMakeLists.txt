@@ -123,6 +123,10 @@ add_standalone_test(test_issue37_pfb_input_removal
     SOURCES test_issue37_pfb_input_removal.cpp
     LIBS simulator::app
 )
+add_standalone_test(test_issue70_pfb_reconnect
+    SOURCES test_issue70_pfb_reconnect.cpp
+    LIBS simulator::app
+)
 
 add_standalone_test(test_issue42_multi_output
     SOURCES test_issue42_multi_output.cpp

@@ -391,8 +391,9 @@ void NodeGraphWidget::handleLinkCreation() {
                 end_pin = it->second;
         }
         if (start_pin < 100000 && end_pin < 100000) {
+            if (onLinkCreating && !onLinkCreating(start_pin, end_pin))
+                return;
             m_engine.addLink(start_pin, end_pin);
-
             // Find which node owns each pin
             int start_node = m_engine.nodeIdForPin(start_pin);
             int end_node = m_engine.nodeIdForPin(end_pin);

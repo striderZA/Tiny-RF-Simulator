@@ -2,6 +2,7 @@
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
+#include "graph_link_policy.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -79,6 +80,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_serializer = std::make_unique<ProjectSerializer>(
         m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
         m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor, m_na_engine);
+
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
         addable.push_back(
@@ -88,6 +90,13 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
     m_graph_widget->onLinkChanged = [this]() { markDirty(); };
+    m_graph_widget->onLinkCreating = [this](int start_pin, int end_pin) {
+        const int target_node_id = m_graph_engine.nodeIdForPin(end_pin);
+        auto *target = m_components.find(target_node_id);
+        const int source_node_id = m_graph_engine.nodeIdForPin(start_pin);
+        auto *source = m_components.find(source_node_id);
+        return graphLinkAllowed(source, target, start_pin, end_pin);
+    };
     m_graph_widget->onRemoveNode = [this](int id) {
         markDirty();
         m_components.remove(id);
@@ -604,9 +613,22 @@ void RfSimulatorApp::rewireInputs() {
             int pid = comp->inputPinId(k);
             if (pid >= 0) {
                 auto source = m_graph_engine.getSourceForInput(pid);
+                IComponentEngine *source_comp = nullptr;
+                if (source.node) {
+                    for (auto *candidate : m_components.all()) {
+                        if (&candidate->node() == source.node) {
+                            source_comp = candidate;
+                            break;
+                        }
+                    }
+                }
+                const int source_pin = source_comp && source.output_index >= 0
+                                           ? source_comp->outputPinId(source.output_index)
+                                           : -1;
+                const bool allowed = graphLinkAllowed(source_comp, comp, source_pin, pid);
                 comp->node().inputs[k] =
-                    (source.node && source.output_index >= 0 &&
-                     static_cast<size_t>(source.output_index) < source.node->outputs.size())
+                    allowed && source.node && source.output_index >= 0 &&
+                            static_cast<size_t>(source.output_index) < source.node->outputs.size()
                         ? &source.node->outputs[static_cast<size_t>(source.output_index)]
                         : nullptr;
             } else if (static_cast<size_t>(k) < comp->node().inputs.size()) {

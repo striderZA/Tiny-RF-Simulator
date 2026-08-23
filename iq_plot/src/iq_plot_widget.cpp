@@ -12,6 +12,24 @@ IQPlotWidget::~IQPlotWidget() {
     if (m_ifft)
         kiss_fft_free(m_ifft);
 }
+void IQPlotWidget::resetDomainState() {
+    m_stream_i.clear();
+    m_stream_q.clear();
+    m_time_step_s = 0.0;
+    m_time_inited = false;
+    m_zoom = {};
+    m_zoom_locked = false;
+    m_zoom_locked_xmin = 0.0;
+    m_zoom_locked_xmax = 0.0;
+    m_smooth_y_min = 0.0;
+    m_smooth_y_max = 0.0;
+    m_y_inited = false;
+    if (m_ifft) {
+        kiss_fft_free(m_ifft);
+        m_ifft = nullptr;
+    }
+    m_ifft_N = 0;
+}
 
 void IQPlotWidget::draw(const char *title, bool *p_open) {
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
@@ -20,14 +38,25 @@ void IQPlotWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
+    const Spectrum *input = m_pfb.node().inputs.empty() ? nullptr : m_pfb.node().inputs[0];
+    size_t output_bins =
+        m_pfb.node().outputs.empty() ? 0 : m_pfb.node().outputs[0].frequencies.size();
+    double Fs = m_pfb.fs_Hz();
+    int M = m_pfb.channelCount();
+    if (input != m_cached_input || Fs != m_cached_fs_Hz || output_bins != m_cached_output_bins ||
+        M != m_cached_channel_count) {
+        resetDomainState();
+        m_cached_input = input;
+        m_cached_fs_Hz = Fs;
+        m_cached_output_bins = output_bins;
+        m_cached_channel_count = M;
+    }
+
     if (m_pfb.channels().empty()) {
         ImGui::Text("No PFB channels available");
         ImGui::End();
         return;
     }
-
-    double Fs = m_pfb.fs_Hz();
-    int M = m_pfb.channelCount();
 
     if (Fs <= 0.0) {
         ImGui::Text("Waiting for sample rate...");

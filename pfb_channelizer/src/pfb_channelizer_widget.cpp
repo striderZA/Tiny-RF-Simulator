@@ -9,8 +9,10 @@ PFBChannelizerWidget::PFBChannelizerWidget(PFBChannelizerEngine &engine) : m_eng
 
 void PFBChannelizerWidget::rebuildCache() {
     const Spectrum *in = m_engine.node().inputs[0];
+    m_cached_input = in;
     if (!in || in->frequencies.size() < 2) {
         m_cells.clear();
+        m_cached_gen = in ? in->generation : 0;
         return;
     }
 
@@ -77,6 +79,8 @@ void PFBChannelizerWidget::draw(const char *title, bool *p_open) {
     int M = static_cast<int>(m_engine.channels().size());
 
     if (!in || M == 0) {
+        m_cached_input = nullptr;
+        m_cells.clear();
         ImGui::TextDisabled("No PFB data available");
         ImGui::End();
         return;
@@ -90,7 +94,7 @@ void PFBChannelizerWidget::draw(const char *title, bool *p_open) {
         m_grid_offset = 0;
     }
 
-    if (in->generation != m_cached_gen)
+    if (in != m_cached_input || in->generation != m_cached_gen)
         rebuildCache();
 
     ImDrawList *dl = ImGui::GetWindowDrawList();

@@ -16,6 +16,7 @@ class PFBChannelizerWidget {
     PFBChannelizerEngine &m_engine;
     int m_grid_offset = 0;
     uint64_t m_cached_gen = 0;
+    const Spectrum *m_cached_input = nullptr;
 
     struct CellCache {
         std::vector<double> freqs;
