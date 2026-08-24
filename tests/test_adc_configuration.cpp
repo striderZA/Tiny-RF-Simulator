@@ -1,11 +1,18 @@
-// Focused standalone tests for the configurable ADC DDC (decimation + NCO).
-// These encode the contract from
+// docs/superpowers/specs/2026-08-24-adc-ddc-configuration-design.md:
+// decimation snaps to {1, 2, 4, 8} (nearest, ties downward) and sets
+// fs_out = Fs/D; the NCO fraction clamps to [-0.5, +0.5] and tunes tones to
+// alias(f_in - f_NCO) inside the +/-Fs/(2D) complex passband; input noise is
+// sampled from the single-sided [0, Fs/2) grid with negative alias
+// frequencies mirrored to |f|. Legacy JSON without DDC keys keeps the
+// compatibility defaults D=2, NCO=+0.25.
 // docs/superpowers/specs/2026-08-24-adc-ddc-configuration-design.md before the
 // production implementation exists: they currently fail to compile because
 // AdcEngine does not yet expose decimation()/setDecimation()/
 // ncoFsFraction()/setNcoFsFraction(). Do not weaken them to make them pass.
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 #include "adc_engine.h"
@@ -169,4 +176,75 @@ TEST_CASE("ADC DDC invalid JSON values normalize", "[adc][config]") {
     // Documented normalization: D=6 -> 4 (nearest, tie toward lower), NCO=0.7 -> 0.5.
     REQUIRE(adc.decimation() == 4);
     REQUIRE(adc.ncoFsFraction() == Approx(0.5));
+}
+
+TEST_CASE("ADC DDC wrapped complex tone re-aliases after NCO mixing", "[adc][config]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(11, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(2);
+    adc.setNcoFsFraction(0.4); // f_NCO = 400 MHz
+
+    Spectrum in = makeInput(101);
+    in.is_complex_baseband = true;
+    // -400 MHz - 400 MHz = -800 MHz wraps to +200 MHz, inside the D=2 passband.
+    in.tones.push_back({-400e6, -10.0, 30.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(200e6).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0));
+    REQUIRE(out.tones[0].phase_deg == Approx(30.0));
+}
+
+TEST_CASE("ADC DDC negative NCO tunes negative tone to DC", "[adc][config]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(12, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(4);
+    adc.setNcoFsFraction(-0.125); // f_NCO = -125 MHz
+
+    Spectrum in = makeInput(101);
+    in.is_complex_baseband = true;
+    in.tones.push_back({-125e6, -10.0, 30.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(0.0).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-10.0));
+    REQUIRE(out.tones[0].phase_deg == Approx(30.0));
+}
+
+TEST_CASE("ADC DDC negative alias mirrors single-sided noise lookup", "[adc][config]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(13, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(2);
+    adc.setNcoFsFraction(-0.25); // f_NCO = -250 MHz
+
+    Spectrum in = makeInput(101); // single-sided grid 0..500 MHz, df = 5 MHz
+    in.noise_total_W.assign(in.noise_total_W.size(), 1e-20);
+    in.noise_total_W[20] = 1e-9; // shaped bump at +100 MHz
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    // Output bin at +150 MHz samples f_a = 150 - 250 = -100 MHz, mirrored to
+    // +100 MHz: it must see the bump. Without the mirror it lands on the 0 Hz bin.
+    int bin_150 = 0;
+    double best = std::numeric_limits<double>::max();
+    for (size_t i = 0; i < out.frequencies.size(); ++i) {
+        if (std::abs(out.frequencies[i] - 150e6) < best) {
+            best = std::abs(out.frequencies[i] - 150e6);
+            bin_150 = static_cast<int>(i);
+        }
+    }
+    REQUIRE(out.noise_W[bin_150] == Approx(1e-9));
 }

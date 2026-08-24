@@ -30,7 +30,7 @@ static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, d
     const double nco_Hz = nco_fs_fraction * Fs;
     const double output_edge = Fs / (2.0 * decimation);
     for (const auto &tone : source_tones) {
-        const double f_complex = alias_frequency(tone.freq_Hz, Fs) - nco_Hz;
+        const double f_complex = alias_frequency(tone.freq_Hz - nco_Hz, Fs);
         if (f_complex < -output_edge || f_complex >= output_edge)
             continue;
 
@@ -107,6 +107,10 @@ void AdcEngine::update(double /*dt*/) {
     for (int i = 0; i < N; ++i) {
         double f_out = out.frequencies[i];
         double f_a = alias_frequency(f_out + nco_Hz, m_fs_Hz);
+        // Input noise grid is single-sided [0, Fs/2); real-input noise is
+        // conjugate-symmetric, so sample the mirrored |f_a| bin when negative.
+        if (f_a < 0.0)
+            f_a = -f_a;
 
         double noise_psd = 0.0;
         if (!input->noise_total_W.empty() && !input->frequencies.empty()) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdlib>
 
 #include "component_engine_base.h"
 #include "node_graph_engine.h"
@@ -35,6 +36,7 @@ class AdcEngine : public ComponentEngineBase {
     int decimation() const { return m_decimation; }
     void setDecimation(int decimation) {
         static const int supported[] = {1, 2, 4, 8};
+        decimation = std::clamp(decimation, 1, 8); // INT_MIN/INT_MAX-safe distance math below
         int nearest = supported[0];
         int best_dist = std::abs(decimation - supported[0]);
         for (int s : supported) {
