@@ -335,6 +335,24 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
         m_param_edited = true;
     }
 
+    static const char *decimation_choices[] = {"1", "2", "4", "8"};
+    int decimation_idx = 0;
+    for (int i = 0; i < IM_ARRAYSIZE(decimation_choices); ++i) {
+        if (engine.decimation() == (1 << i))
+            decimation_idx = i;
+    }
+    if (ImGui::Combo("Decimation", &decimation_idx, decimation_choices,
+                     IM_ARRAYSIZE(decimation_choices))) {
+        engine.setDecimation(1 << decimation_idx);
+        m_param_edited = true;
+    }
+
+    double nco = engine.ncoFsFraction();
+    if (utils::inputDouble("NCO (×Fs)", nco, 0.01, 0.1, "%.3f", -0.5, 0.5)) {
+        engine.setNcoFsFraction(nco);
+        m_param_edited = true;
+    }
+
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
 }
