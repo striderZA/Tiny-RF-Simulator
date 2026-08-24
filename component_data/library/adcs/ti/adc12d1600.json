@@ -6,7 +6,9 @@
   "description": "12-bit, 3.2 GSPS RF sampling ADC",
   "parameters": {
     "fs_Hz": 3.2e9,
-    "nsd_dBm_per_Hz": -155.0
+    "nsd_dBm_per_Hz": -155.0,
+    "decimation": 2,
+    "nco_fs_fraction": 0.25
   },
   "test_conditions": {
     "temperature_C": 25,

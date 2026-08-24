@@ -6,7 +6,9 @@
   "description": "12-bit, 65 MSPS ADC",
   "parameters": {
     "fs_Hz": 65e6,
-    "nsd_dBm_per_Hz": -153.2
+    "nsd_dBm_per_Hz": -153.2,
+    "decimation": 2,
+    "nco_fs_fraction": 0.25
   },
   "test_conditions": {
     "temperature_C": 25,

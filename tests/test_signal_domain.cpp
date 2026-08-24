@@ -704,3 +704,35 @@ TEST_CASE("ADC+Amplifier(gain): fs_Hz reaches PFB and channels are populated",
     REQUIRE(pfb.channels().size() == 32);
     REQUIRE(anyChannelHasContent(pfb));
 }
+
+TEST_CASE("ADC decimation: Fs/D output rate propagates to PFB", "[domain][adc][pfb]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(1e9);
+    adc.setDecimation(4);
+
+    Spectrum in;
+    in.frequencies.resize(101);
+    for (int i = 0; i < 101; ++i)
+        in.frequencies[i] = i * 5e6; // 0..500 MHz
+    in.noise_W.assign(101, 1e-20);
+    in.noise_added_W.assign(101, 0.0);
+    in.noise_total_W.assign(101, 1e-20);
+    in.tones.push_back({250e6, -20.0, 0.0}); // Fs/4 -> DDC maps to DC
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+    REQUIRE(adc.node().outputs[0].fs_Hz == Approx(250e6)); // Fs / decimation
+
+    PFBChannelizerEngine pfb(1, graph);
+    pfb.setChannelCount(32);
+    pfb.node().inputs[0] = &adc.node().outputs[0];
+    pfb.update(0.0);
+
+    // PFB consumes the propagated 250e6 input rate without manual setFs_Hz().
+    REQUIRE(pfb.fs_Hz() == Approx(250e6));
+    REQUIRE(pfb.node().outputs[0].is_complex_baseband == true);
+    REQUIRE(!pfb.node().outputs[0].frequencies.empty());
+    REQUIRE(pfb.channels().size() == 32);
+    REQUIRE(anyChannelHasContent(pfb));
+}
