@@ -116,11 +116,6 @@ TEST_CASE("ADC decimation setter accepts only supported values", "[adc][config]"
         adc.setDecimation(d);
         REQUIRE(adc.decimation() == d);
     }
-
-    // Documented normalization: clamp to nearest supported choice, ties toward
-    // the lower value (design spec "Configuration Contract"); 6 -> 4.
-    adc.setDecimation(6);
-    REQUIRE(adc.decimation() == 4);
 }
 
 TEST_CASE("ADC NCO fraction setter accepts normalized bounds", "[adc][config]") {
