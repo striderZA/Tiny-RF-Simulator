@@ -9,7 +9,7 @@ tags: [quickstart, entrypoint, rf-simulator]
 
 RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.19.1
+**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.19.2
 
 ---
 
@@ -73,10 +73,9 @@ build/bin/tests [bench]
 | `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
 | `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
 | `tutorial/` | Interactive first-run guided walkthrough: data-driven step catalog, `TutorialState` (pure logic + completion marker), `TutorialWidget` (panel highlight) |
-| `icon_registry/` | Node icon texture management (PNG → OpenGL) |
 | `layout/` | Exe-relative ImGui layout persistence (default + named presets) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (~340 test cases, 14 benchmarks) |
+| `tests/` | Catch2 unit tests (~340 test cases, 12 standalone executables incl. `test_issue48_json_loader`, 14 benchmarks) |
 | `test_engine/` | ImGui test engine UI tests |
 | `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
 | `src/` | `main.cpp` entry point |
@@ -106,7 +105,8 @@ build/bin/tests [bench]
 | Add / modify a DSP engine component | [RF Components](domains/rf-components.md), [Architecture](architecture/overview.md) | `app/src/component_type_registry.cpp`, `<component>/src/*_engine.cpp`, `app/src/inspector_panel.cpp` (`drawerMap()`) | `IComponentEngine`, `ComponentTypeDescriptor`, `ComponentRegistry` | `tests/test_<component>.cpp` | `ctest --test-dir build -R <component> --output-on-failure` |
 | Change the node graph / topology / probes | [DSP Pipeline](workflows/dsp-pipeline.md) | `node_graph/src/node_graph_engine.cpp`, `node_graph/src/node_graph_widget.cpp` | `NodeGraphEngine`, `GraphNode`, `GraphLink`, `SignalSource` | `test_node_graph_engine.cpp`, `test_issue42_multi_output.cpp` | `ctest --test-dir build -R "node_graph|issue42" --output-on-failure` |
 | S-parameter / Touchstone work | [S-Parameter System](integrations/s-param-system.md) | `touchstone/src/touchstone_parser.cpp`, `touchstone/src/s_parameter_data.cpp`, `app/src/project_serializer.cpp`, `app/src/component_library.cpp` | `TouchstoneParser`, `SParameterData`, `resolveSparamPath` | `test_touchstone.cpp`, `test_*_sparam.cpp`, `test_path_containment.cpp` | `ctest --test-dir build -R "touchstone|sparam|path_containment" --output-on-failure` |
-| Project save/load (`.rfsim`) | [Architecture](architecture/overview.md) | `app/src/project_serializer.cpp`, engine `serialize()`/`deserialize()` | `ProjectSerializer` | `test_project_file.cpp` (17 cases) | `build/bin/test_project_file` or `ctest --test-dir build -R test_project_file --output-on-failure` |
+| Project save/load (`.rfsim`) | [Architecture](architecture/overview.md) | `app/src/project_serializer.cpp`, engine `serialize()`/`deserialize()` | `ProjectSerializer`, `checkedJsonInt` | `test_project_file.cpp` (17 cases), `test_issue48_json_loader.cpp` (project cases) | `build/bin/test_project_file` or `ctest --test-dir build -R test_project_file --output-on-failure` |
+| Malformed project / library JSON (issue #48) | [Architecture](architecture/overview.md#json-loader-hardening-issue-48) | `app/src/project_serializer.cpp` (`load()`), `app/src/component_library.cpp` (`loadFile()`/`scan()`) | `ProjectSerializer::load`, `ComponentLibrary::loadFile`, `checkedJsonInt` | `tests/test_issue48_json_loader.cpp` (11 cases) | `build/bin/test_issue48_json_loader` |
 | Network Analyzer instrument | [Architecture](architecture/overview.md#network-analyzer-instrument), [RF Components](domains/rf-components.md#network-analyzer-network_analyzer) | `network_analyzer/src/network_analyzer_engine.cpp`, `network_analyzer/src/network_analyzer_widget.cpp`, `app/src/app.cpp` (`NaHost`/`NaScratch`) | `NetworkAnalyzerEngine`, `INetworkAnalyzerHost`, `INetworkAnalyzerScratch` | `test_network_analyzer.cpp`, NA round-trip cases in `test_project_file.cpp` | `build/bin/test_network_analyzer` |
 | Extensions / external tools | [Architecture](architecture/overview.md) | `app/src/extension_manager.cpp`, `app/src/extension_manifest.cpp`, `app/src/external_tool_runner.cpp` | `ExtensionManager`, `ExtensionManifest`, `ExternalToolRunner` | `test_extensions.cpp` | `build/bin/test_extensions` |
 | Tutorial / first-run flow | [Architecture](architecture/overview.md) | `tutorial/src/tutorial_widget.cpp`, `tutorial/include/tutorial_state.h`, `app/src/app.cpp` | `TutorialState`, `TutorialWidget` | `test_tutorial_state.cpp`, UI tests `tutorial_*` | `build/bin/test_tutorial_state`; `xvfb-run build/bin/test_ui` |
@@ -145,6 +145,8 @@ build/bin/tests [bench]
 
 **S-param path containment** (v0.19.x, 2026-08-09 codebase review) — Two security hardenings: S1 confines S-parameter file paths to the project directory on `.rfsim` load (`ProjectSerializer::resolveSparamPath`) and to the library JSON's directory on instantiation (`ComponentLibrary::resolveDataFilePath`), relativizing in-project paths on save; S2 caps Touchstone input at 256 MiB and 10M frequency points enforced during the parse loop. Covered by the `test_path_containment` standalone suite. See [S-parameter system](integrations/s-param-system.md).
 
+**JSON loader hardening** (v0.19.2, issue #48) — Project and component-library JSON are treated as untrusted input at their two load boundaries. `ProjectSerializer::load()` validates every optional top-level section shape before resetting state, validates each component record (object → string `type` → object `params`) before typed access, uses `checkedJsonInt` (an int-representability guard) for all integer fields in links/probes/Network Analyzer points/groups, rolls back a partially created component when nested `deserialize()` throws, and resolves saved indexes through a preserved mapping so skipped records never shift later valid entries. `ComponentLibrary::loadFile()`/`scan()` validate required fields, range-check `schema_version`, default malformed optional strings, skip malformed `data_files` entries individually, and keep scanning across bad files/subtrees. Malformed entries are logged and skipped; the load returns a bounded, logged failure instead of throwing. Covered by the standalone `test_issue48_json_loader` executable (must be run directly — outside the MinGW `tests.exe` registration ceiling). See [architecture overview](architecture/overview.md) and [testing guide](testing/guidance.md).
+
 ---
 
 ## Recent Milestones
@@ -152,6 +154,7 @@ build/bin/tests [bench]
 | Milestone | Date | Description |
 |---|---|---|
 | Network Analyzer v3 + perf fix | v0.19.x | Singleton gain/NF instrument with Point A/B probe pins and private clone-chain sweep; `View > Network Analyzer`; `.rfsim` round-trip of sweep params + points; v0.19.1 fixes O(N*M) tone matching with 1 Hz cell bucketing + signature-gated dirty check; `test_network_analyzer.cpp` (12 cases) |
+| JSON loader hardening | v0.19.2 | Malformed-but-valid project/library JSON is isolated at the two load boundaries: top-level shape checks, per-record type validation, `checkedJsonInt` representability guard, exception-safe rollback of partially created components, per-entry skipping in `data_files`/links/probes/NA points/groups; standalone `test_issue48_json_loader` (11 cases) |
 | S-param path containment | v0.19.x | S1: `.rfsim` load confines `sparam_filepath` to the project dir, save relativizes in-project paths; library `data_files` confined to the JSON's dir. S2: Touchstone parser 256 MiB size cap + 10M in-loop frequency-point cap. `test_path_containment.cpp` |
 | Interactive tutorial mode | v0.17.0 | Data-driven 6-step guided walkthrough with panel highlight, first-run "Welcome" offer, exe-relative `.tutorial_completed` marker; `Help > Tutorial` guarded by the unsaved-changes modal; `test_tutorial_state.cpp` + 5 UI tests |
 | Extension system | v0.16.0 | `plugin.json` manifests for data packs + external tools, discovery across built-in/global/project-local roots, JSON request/result `ExternalToolRunner`, Tools menu + Extensions panel; test fixtures in `tests/fixtures/extensions/` (repo ships no built-in extension payload) |
@@ -177,7 +180,7 @@ build/bin/tests [bench]
 | Coax cable | June 18 | MilTech cable presets with K1/K2 loss model |
 | v0.3.0 | June 22 | Project save/load (JSON serialization) |
 
-> Note: the repository history was squashed into a single commit, so per-milestone commit refs are no longer available. Milestone dates/descriptions come from `CHANGELOG.md` and source evidence; note that `CHANGELOG.md` itself lags the app version (latest entry 0.11.0 vs current v0.19.1) — the v0.12.0–v0.19.1 rows above are grounded in source (e.g. `network_analyzer/`, `tutorial/`, `app/include/extension_manager.h`, `component_type_registry.h`, `tests/test_path_containment.cpp`).
+> Note: the repository history was squashed into a single commit, so per-milestone commit refs are no longer available. Milestone dates/descriptions come from `CHANGELOG.md` and source evidence; note that `CHANGELOG.md` itself lags the app version (latest entry 0.11.0 vs current v0.19.2) — the v0.12.0–v0.19.2 rows above are grounded in source (e.g. `network_analyzer/`, `tutorial/`, `app/include/extension_manager.h`, `component_type_registry.h`, `tests/test_path_containment.cpp`, `tests/test_issue48_json_loader.cpp`).
 
 ---
 

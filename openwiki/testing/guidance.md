@@ -7,7 +7,7 @@ tags: [testing, catch2, unit-tests, ui-tests]
 
 # Testing Guide
 
-RF Simulator has **~340 test cases** (306 `TEST_CASE` + 34 `TEST_CASE_METHOD`, including 14 benchmarks) across **33 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **11 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the network analyzer instrument, the guided tutorial, S-param path containment, and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+RF Simulator has **~340 test cases** (306 `TEST_CASE` + 34 `TEST_CASE_METHOD`, including 14 benchmarks) across **34 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **12 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the network analyzer instrument, the guided tutorial, S-param path containment, malformed-JSON loader isolation (issue #48), and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
 
 ---
 
@@ -38,7 +38,7 @@ build/bin/test_ui
 
 **Build target:** `tests` (links against `Catch2::Catch2WithMain`).
 
-These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Eleven standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~223 already linked into `tests.exe`).
+These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Twelve standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~223 already linked into `tests.exe`).
 
 | Test File | Tags | What It Tests |
 |---|---|---|
@@ -78,6 +78,7 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 | `test_issue42_multi_output.cpp` | `test_issue42_multi_output` | Issue #42 regression: Splitter OUT2 routes to Combiner IN1 via `outputs[1]`; probing Splitter/PFB OUT2 resolves output index 1 |
 | `test_network_analyzer.cpp` | `test_network_analyzer` | Network Analyzer v3 instrument: stimulus power reaches the isolated chain, gain accuracy (attenuator chain), NF accuracy (amplifier chain), probing does not perturb a real consumer, disconnected/ambiguous/combiner-crossing paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw with/without probe points |
 | `test_path_containment.cpp` | `test_path_containment` | S1/S2 security fixes (2026-08-09 codebase review): project load neutralizes S-param paths outside the project dir, save relativizes in-project paths, library `data_files` confined to the JSON's dir, TouchstoneParser 256 MiB size guard + 10M frequency-point cap |
+| `test_issue48_json_loader.cpp` | `test_issue48_json_loader` | Issue #48 regression (v0.19.2 JSON loader hardening): project loader skips malformed components and keeps valid siblings, rejects wrong-shaped top-level sections (zero components) without throwing, skips malformed probe/NA-point/group entries, rejects fractional and oversized integer fields (`checkedJsonInt`), rolls back a component whose nested `params` throw, resolves probes through skipped components; library loader skips wrong-typed required fields, keeps definitions with malformed optional entries and out-of-int-range `schema_version`, and scan continues after malformed files |
 | `test_signal_domain.cpp` | `test_signal_domain` | `is_complex_baseband` defaults and propagation through every engine, `conjugateSymmetricExpand` expansion |
 | `test_tutorial_state.cpp` | `test_tutorial_state` | TutorialState marker path derivation, completed/markCompleted round-trip, catalog non-empty and addressable, inactive until started, navigation stays within bounds |
 
@@ -214,7 +215,7 @@ xvfb-run build/bin/test_ui
 ### Adding a New Test
 
 1. Create `tests/test_<component>.cpp`.
-2. Add the file to `tests/CMakeLists.txt` — **prefer a new standalone executable** (`add_standalone_test(test_<name> SOURCES ... LIBS ...)`) unless the main `tests` binary is far below the MinGW registration ceiling (~223 registered cases; new coverage that must run on Windows goes in a standalone executable — see `tests/AGENTS.md`).
+2. Add the file to `tests/CMakeLists.txt` — **prefer a new standalone executable** (`add_standalone_test(test_<name> SOURCES ... LIBS ...)`) unless the main `tests` binary is far below the MinGW registration ceiling (~223 registered cases; new coverage that must run on Windows goes in a standalone executable — see `tests/AGENTS.md`). Follow the `test_issue48_json_loader` example for boundary-facing loader changes: standalone executable, `<atomic>`/`<filesystem>`/`<fstream>` RAII temp helpers (unique temp paths, scope-exit removal on assertion failure), and `RfSimulatorApp`/`ComponentLibrary` integration through the ImGui/ImPlot/ImNodes fixture.
 3. Choose descriptive tags: `[component]`, `[feature]` (e.g., `[coax][phase]`).
 4. Use meaningful section names that describe the scenario.
 
