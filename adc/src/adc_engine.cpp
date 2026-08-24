@@ -22,13 +22,15 @@ static double alias_frequency(double f_RF, double Fs) {
     return f;
 }
 
-static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, double Fs) {
+static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, double Fs,
+                                                        int decimation, double nco_fs_fraction) {
     const auto source_tones =
         input.is_complex_baseband ? input.tones : conjugateSymmetricExpand(input.tones);
     std::map<double, std::complex<double>> accumulated;
-    const double output_edge = Fs / 4.0;
+    const double nco_Hz = nco_fs_fraction * Fs;
+    const double output_edge = Fs / (2.0 * decimation);
     for (const auto &tone : source_tones) {
-        const double f_complex = alias_frequency(tone.freq_Hz, Fs) - output_edge;
+        const double f_complex = alias_frequency(tone.freq_Hz, Fs) - nco_Hz;
         if (f_complex < -output_edge || f_complex >= output_edge)
             continue;
 
@@ -63,6 +65,9 @@ void AdcEngine::update(double /*dt*/) {
 
     auto &out = m_node.outputs[0];
 
+    const double output_fs = m_fs_Hz / static_cast<double>(m_decimation);
+    const double output_edge = output_fs / 2.0;
+
     // Empty input -> empty output
     if (!input || input->frequencies.empty()) {
         out.frequencies.clear();
@@ -71,24 +76,24 @@ void AdcEngine::update(double /*dt*/) {
         out.noise_added_W.clear();
         out.noise_total_W.clear();
         out.phase_deg.clear();
-        out.fs_Hz = m_fs_Hz / 2.0;
+        out.fs_Hz = output_fs;
         out.is_complex_baseband = true;
         out.bumpGeneration();
         return;
     }
 
-    // -- Compute output grid: N bins on [-Fs/4, Fs/4) --
+    // -- Compute output grid: N bins on [-output_edge, output_edge) --
     int N = 201;
     if (input->frequencies.size() >= 2) {
         double span = input->frequencies.back() - input->frequencies.front();
         double df_in = span / (input->frequencies.size() - 1);
-        N = std::max(2, static_cast<int>(std::ceil((m_fs_Hz / 2.0) / df_in)));
+        N = std::max(2, static_cast<int>(std::ceil(output_fs / df_in)));
     }
-    double df_out = m_fs_Hz / (2.0 * N);
+    double df_out = output_fs / N;
     out.frequencies.resize(N);
     for (int i = 0; i < N; ++i)
-        out.frequencies[i] = -m_fs_Hz / 4.0 + i * df_out;
-    out.fs_Hz = m_fs_Hz / 2.0;
+        out.frequencies[i] = -output_edge + i * df_out;
+    out.fs_Hz = output_fs;
     out.is_complex_baseband = true;
 
     // -- Noise mapping + NSD --
@@ -98,9 +103,10 @@ void AdcEngine::update(double /*dt*/) {
     out.noise_total_W.resize(N, 0.0);
     out.phase_deg.assign(N, 0.0);
 
+    const double nco_Hz = m_nco_fs_fraction * m_fs_Hz;
     for (int i = 0; i < N; ++i) {
         double f_out = out.frequencies[i];
-        double f_a = f_out + m_fs_Hz / 4.0; // always in [0, Fs/2)
+        double f_a = alias_frequency(f_out + nco_Hz, m_fs_Hz);
 
         double noise_psd = 0.0;
         if (!input->noise_total_W.empty() && !input->frequencies.empty()) {
@@ -122,19 +128,26 @@ void AdcEngine::update(double /*dt*/) {
     out.computeTotalNoise();
 
     // -- Tone mapping: real-domain conjugate expansion -> signed alias -> DDC -> LPF --
-    out.tones = map_tones_to_complex(*input, m_fs_Hz);
+    out.tones = map_tones_to_complex(*input, m_fs_Hz, m_decimation, m_nco_fs_fraction);
 
     out.bumpGeneration();
 }
 
 nlohmann::json AdcEngine::serialize() const {
-    return {{"sample_rate_Hz", m_fs_Hz}, {"nsd_dBm_per_Hz", m_nsd_dBm_per_Hz}};
+    return {{"sample_rate_Hz", m_fs_Hz},
+            {"nsd_dBm_per_Hz", m_nsd_dBm_per_Hz},
+            {"decimation", m_decimation},
+            {"nco_fs_fraction", m_nco_fs_fraction}};
 }
 
 void AdcEngine::deserialize(const nlohmann::json &j) {
     m_fs_Hz =
         j.contains("sample_rate_Hz") ? j["sample_rate_Hz"].get<double>() : j.value("fs_Hz", 1e9);
     m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
+    if (j.contains("decimation"))
+        setDecimation(j["decimation"].get<int>());
+    if (j.contains("nco_fs_fraction"))
+        setNcoFsFraction(j["nco_fs_fraction"].get<double>());
     m_dirty = true;
 }
 
