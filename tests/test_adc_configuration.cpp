@@ -1,14 +1,9 @@
-// docs/superpowers/specs/2026-08-24-adc-ddc-configuration-design.md:
+// ADC DDC configuration contract:
 // decimation snaps to {1, 2, 4, 8} (nearest, ties downward) and sets
 // fs_out = Fs/D; the NCO fraction clamps to [-0.5, +0.5] and tunes tones to
 // alias(f_in - f_NCO) inside the +/-Fs/(2D) complex passband; input noise is
-// sampled from the single-sided [0, Fs/2) grid with negative alias
-// frequencies mirrored to |f|. Legacy JSON without DDC keys keeps the
-// compatibility defaults D=2, NCO=+0.25.
-// docs/superpowers/specs/2026-08-24-adc-ddc-configuration-design.md before the
-// production implementation exists: they currently fail to compile because
-// AdcEngine does not yet expose decimation()/setDecimation()/
-// ncoFsFraction()/setNcoFsFraction(). Do not weaken them to make them pass.
+// sampled from the single-sided [0, Fs/2) grid with negative aliases mirrored.
+// Legacy JSON without DDC keys keeps compatibility defaults D=2, NCO=+0.25.
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
