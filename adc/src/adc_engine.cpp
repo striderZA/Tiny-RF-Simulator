@@ -145,13 +145,12 @@ nlohmann::json AdcEngine::serialize() const {
 }
 
 void AdcEngine::deserialize(const nlohmann::json &j) {
-    m_fs_Hz =
+    const double fs =
         j.contains("sample_rate_Hz") ? j["sample_rate_Hz"].get<double>() : j.value("fs_Hz", 1e9);
+    setFs_Hz(fs);
     m_nsd_dBm_per_Hz = j.value("nsd_dBm_per_Hz", -155.0);
-    if (j.contains("decimation"))
-        setDecimation(j["decimation"].get<int>());
-    if (j.contains("nco_fs_fraction"))
-        setNcoFsFraction(j["nco_fs_fraction"].get<double>());
+    setDecimation(j.value("decimation", 2));
+    setNcoFsFraction(j.value("nco_fs_fraction", 0.25));
     m_dirty = true;
 }
 

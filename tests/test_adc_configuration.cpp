@@ -160,6 +160,29 @@ TEST_CASE("ADC DDC legacy JSON gets compatibility defaults", "[adc][config]") {
     REQUIRE(adc.ncoFsFraction() == Approx(0.25));
 }
 
+TEST_CASE("ADC DDC legacy JSON resets compatibility defaults", "[adc][config]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(14, graph);
+    adc.setDecimation(8);
+    adc.setNcoFsFraction(-0.4);
+
+    adc.deserialize(nlohmann::json{{"sample_rate_Hz", Fs}, {"nsd_dBm_per_Hz", -150.0}});
+
+    REQUIRE(adc.decimation() == 2);
+    REQUIRE(adc.ncoFsFraction() == Approx(0.25));
+}
+
+TEST_CASE("ADC DDC persisted sample rate uses setter validation", "[adc][config]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(15, graph);
+
+    adc.deserialize(nlohmann::json{{"sample_rate_Hz", 0.0}});
+    REQUIRE(adc.fs_Hz() == Approx(1.0));
+
+    adc.deserialize(nlohmann::json{{"sample_rate_Hz", -1e9}});
+    REQUIRE(adc.fs_Hz() == Approx(1.0));
+}
+
 TEST_CASE("ADC DDC invalid JSON values normalize", "[adc][config]") {
     NodeGraphEngine graph;
     AdcEngine adc(10, graph);
