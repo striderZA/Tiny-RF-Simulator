@@ -51,6 +51,35 @@ TEST_CASE("ComponentTypeRegistry amplifier descriptor has expected fields", "[ty
     REQUIRE(has_field("p1db_dBm"));
 }
 
+TEST_CASE("ComponentTypeRegistry adc descriptor has expected fields", "[type_registry]") {
+    const auto *d = ComponentTypeRegistry::instance().find("adc");
+    REQUIRE(d != nullptr);
+    REQUIRE(d->display_name == "ADC");
+
+    auto has_field = [&](const std::string &key) {
+        return std::any_of(d->fields.begin(), d->fields.end(),
+                           [&](const ParameterField &f) { return f.key == key; });
+    };
+    REQUIRE(has_field("fs_Hz"));
+    REQUIRE(has_field("nsd_dBm_per_Hz"));
+    REQUIRE(has_field("decimation"));
+    REQUIRE(has_field("nco_fs_fraction"));
+
+    auto it = std::find_if(d->fields.begin(), d->fields.end(),
+                           [](const ParameterField &f) { return f.key == "decimation"; });
+    REQUIRE(it != d->fields.end());
+    REQUIRE(it->kind == FieldKind::Number);
+    REQUIRE(it->min == 1.0);
+    REQUIRE(it->max == 8.0);
+
+    auto nco_it = std::find_if(d->fields.begin(), d->fields.end(),
+                               [](const ParameterField &f) { return f.key == "nco_fs_fraction"; });
+    REQUIRE(nco_it != d->fields.end());
+    REQUIRE(nco_it->kind == FieldKind::Number);
+    REQUIRE(nco_it->min == -0.5);
+    REQUIRE(nco_it->max == 0.5);
+}
+
 TEST_CASE("ComponentTypeRegistry filter descriptor has enum filter_type", "[type_registry]") {
     const auto *d = ComponentTypeRegistry::instance().find("filter");
     REQUIRE(d != nullptr);

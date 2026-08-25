@@ -86,10 +86,11 @@ Default section order:
 4. Remove stale or contradictory text
 5. Run existing verification when relevant
 6. Report any docs intentionally left unchanged and why
-
 ## User Preferences
 
 - The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
+
+- ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
 ## Child DOX Index

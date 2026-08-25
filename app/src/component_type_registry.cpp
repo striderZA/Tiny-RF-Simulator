@@ -223,6 +223,8 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
          {},
          {},
          ""},
+        {"decimation", "DDC Decimation", "", FieldKind::Number, false, 1.0, 8.0, {}, {}, ""},
+        {"nco_fs_fraction", "NCO (×Fs)", "", FieldKind::Number, false, -0.5, 0.5, {}, {}, ""},
     };
     adc.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AdcEngine>(id, graph));

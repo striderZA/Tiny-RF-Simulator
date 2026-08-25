@@ -159,3 +159,7 @@ add_standalone_test(test_issue48_json_loader
     SOURCES test_issue48_json_loader.cpp
     LIBS simulator::app
 )
+add_standalone_test(test_adc_configuration
+    SOURCES test_adc_configuration.cpp
+    LIBS simulator::adc_engine simulator::node_graph_engine
+)
