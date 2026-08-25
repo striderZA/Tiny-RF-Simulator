@@ -133,6 +133,10 @@ Probe colors (in order): teal (`#16C79A`), orange (`#E69628`), purple (`#7832AA`
 4. Probes on removed node are cleaned up.
 5. Next frame: node disappears from graph, signal chain re-routes.
 
+### Loading a Project (malformed-JSON isolation)
+
+`RfSimulatorApp::loadProject()` delegates to `ProjectSerializer::load()` (see [Project Save/Load](../architecture/overview.md#project-saveload)). Since v0.19.2 (issue #48) the load path validates each `.rfsim` section shape and every component/link/probe/Network Analyzer point/group record before typed access, using `checkedJsonInt` for integer fields and rolling back partially created components; a malformed record is logged and skipped so valid siblings still restore. See [JSON Loader Hardening](../architecture/overview.md#json-loader-hardening-issue-48) and the `test_issue48_json_loader` standalone suite in the [Testing Guide](../testing/guidance.md).
+
 ---
 
 ## Session State Persistence

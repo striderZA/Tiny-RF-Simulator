@@ -7,7 +7,7 @@ tags: [build, ci, operations, runbook]
 
 # Build & Operations
 
-Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.19.1**.
+Build system, CI/CD, debugging tips, and operational notes for the RF Simulator project. **Current version: v0.19.2**.
 
 ---
 
@@ -116,8 +116,9 @@ Runs on `v*` tags. `classify-release` splits tags into patch vs minor/major:
 - `validate-version` enforces the tag matches `CMakeLists.txt`'s `project(... VERSION ...)`.
 - The Windows strict-build job also verifies the MinGW TEST_CASE registration floor (`tests.exe --list-tests` ≥ 223) so silently dropped TEST_CASEs fail CI instead of shipping unrun tests.
 - Release artifacts are published as a draft GitHub release.
+- **Install layout** (root `CMakeLists.txt:218-232`): `tiny-rf-simulator`, `component_data/` (library JSON definitions + S-param files), and the `extensions/` payload are installed next to the executable (both are resolved exe-relative, matching the layout/`SessionState` convention); `README.md`/`LICENSE` and the `openwiki/` docs are installed to `share/doc/rf-simulator` (excluding `.git` and `.last-update.json`).
 
-> **CHANGELOG.md lags the codebase:** the latest entry is 0.11.0 while `CMakeLists.txt` declares 0.19.1. Treat the CMake version and the [quickstart milestones](../quickstart.md) (grounded in source) as authoritative; `CHANGELOG.md` has not been updated for v0.12.0–v0.19.1.
+> **CHANGELOG.md lags the codebase:** the latest entry is 0.11.0 while `CMakeLists.txt` declares 0.19.2. Treat the CMake version and the [quickstart milestones](../quickstart.md) (grounded in source) as authoritative; `CHANGELOG.md` has not been updated for v0.12.0–v0.19.2.
 
 ### OpenWiki Update (`openwiki-update.yml`)
 
