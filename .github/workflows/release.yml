@@ -289,10 +289,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Generate release notes
         run: |
-          npm install -g git-cliff --silent
+          npm install -g --ignore-scripts git-cliff@2.13.1 --silent
           git-cliff --config cliff.toml --latest --strip header -o release-notes.md
 
       - name: Download all build artifacts
