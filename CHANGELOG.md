@@ -1,3 +1,9 @@
+## [0.20.1] - 2026-08-28
+
+### Security
+
+- Harden privileged npm workflow installs with exact package versions, disabled install scripts, and checkout credential isolation.
+
 ## [0.11.0] - 2026-07-23
 
 ### Documentation
