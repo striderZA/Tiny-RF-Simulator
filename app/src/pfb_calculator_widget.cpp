@@ -128,7 +128,8 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     }
     ImGui::Separator();
 
-    ImGui::SliderInt("Channels M", &m_M, 2, 2048);
+    if (ImGui::InputInt("Channels M", &m_M, 1, 100))
+        m_M = std::clamp(m_M, 2, 2048);
     ImGui::SliderInt("Taps/branch K", &m_K, 1, 64);
     ImGui::SliderFloat("Kaiser beta", &m_beta, 0.0f, 20.0f, "%.2f");
     ImGui::SliderFloat("Target rejection (dB)", &m_target_db, 20.0f, 140.0f, "%.0f");
