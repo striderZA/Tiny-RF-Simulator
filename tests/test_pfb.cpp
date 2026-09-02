@@ -245,9 +245,10 @@ TEST_CASE("PFB channelizer recomputes bin weights when K changes", "[pfb]") {
     const auto before = pfb.channels()[0].bin_weights;
     REQUIRE(!before.empty());
 
-    // K enters prototypeResponse() via the sinc argument and the Kaiser window
-    // support, so a K change must re-derive the cached bin_weights that the
-    // noise path applies. Without the fix the guard only watches the frequency
+    // K enters the shared prototype (PfbFilterDesign::responseAt) through the
+    // sinc argument and the Kaiser window support, so a K change must
+    // re-derive the cached bin_weights that the noise path applies. Without
+    // the fix the guard only watches the frequency
     // grid/Fs/M and the noise path keeps the old weights.
     pfb.setTapsPerBranch(16);
     pfb.update(0.0);
@@ -283,7 +284,7 @@ TEST_CASE("PFB channelizer recomputes bin weights when beta changes", "[pfb]") {
     const auto before = pfb.channels()[0].bin_weights;
     REQUIRE(!before.empty());
 
-    // beta shapes the Kaiser window in prototypeResponse(); a beta change must
+    // beta shapes the Kaiser window in the shared prototype; a beta change must
     // also re-derive the cached bin_weights used by the noise path.
     pfb.setKaiserBeta(2.0);
     pfb.update(0.0);
