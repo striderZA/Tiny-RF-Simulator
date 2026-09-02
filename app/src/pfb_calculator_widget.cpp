@@ -6,7 +6,6 @@
 #include "pfb_filter_design.h"
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -98,7 +97,8 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     PFBChannelizerEngine *target = resolveTarget(pfbs);
 
     // Pull-on-retarget: whenever the bound target changes, load its current
-    // M/K/beta so the panel shows reality, not last-edited values.
+    // M/K/beta so the panel shows reality, not last-edited values. Inspector
+    // edits to the bound PFB do NOT re-pull (reselect the node to resync).
     const int target_id = target ? target->id() : -1;
     if (target_id != m_bound_pfb_id) {
         if (target)
@@ -108,9 +108,13 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     if (!target)
         m_bound_pfb_id = -1;
 
-    // Refresh the design/metric cache up front (no-op while M/K/beta are
-    // unchanged) so both columns can read one set of readouts.
-    refreshDesignCache();
+    // Refresh the design/metric cache (no-op while M/K/beta are unchanged).
+    // While any control is active — slider held mid-drag, InputInt being
+    // typed — its value changes every frame and a refresh would re-synthesize
+    // the prototype per step (hundreds of ms at worst-case M/K). Defer to the
+    // frame after release so only the settled value pays the cost.
+    if (!ImGui::IsAnyItemActive())
+        refreshDesignCache();
     const RejectionStatus st =
         compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
     const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
