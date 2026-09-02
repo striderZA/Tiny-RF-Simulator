@@ -151,6 +151,8 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     // state (persisted by ProjectSerializer) — mark the project dirty exactly
     // like InspectorPanel::onParamChange does for component params.
     m_na_widget->onParamChange = [this]() { markDirty(); };
+    m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_components);
+    m_calculator_widget->onParamChange = [this]() { markDirty(); };
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without
@@ -208,6 +210,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
+    m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
 }
 
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -747,6 +750,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
+            ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
             ImGui::Separator();
             if (ImGui::BeginMenu("Layouts")) {
                 if (ImGui::MenuItem("Save As...")) {
@@ -1039,6 +1043,9 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_library && m_library_browser) {
         m_library_browser->draw("Component Library", &m_show_library);
     }
+    if (m_show_calculator && m_calculator_widget) {
+        m_calculator_widget->draw("Filter Calculator", &m_show_calculator);
+    }
     drawExtensionsPanel();
 
     if (m_show_log)
@@ -1063,4 +1070,5 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_pfb_views.saveVisibility(m_components, m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
+    m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
 }
