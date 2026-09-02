@@ -230,7 +230,12 @@ void PfbCalculatorWidget::drawPlot(ImDrawList *dl, const ImVec2 &origin, float w
 
     std::vector<ImVec2> pts;
     pts.reserve(n);
+    // Clip the curve to the plot box: stopband nulls fall below the y-floor
+    // and would otherwise paint over the Separator/metrics drawn after.
+    dl->PushClipRect(ImVec2(origin.x + kLeft, origin.y + kTop),
+                     ImVec2(origin.x + w - kRight, origin.y + h - kBottom), true);
     for (int i = 0; i < n; ++i)
         pts.emplace_back(x_px(1.5 * i / (n - 1)), y_px(db[i]));
     dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), curve_col, 0, 1.6f);
+    dl->PopClipRect();
 }
