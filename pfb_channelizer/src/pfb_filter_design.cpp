@@ -54,3 +54,64 @@ double PfbFilterDesign::responseAt(double x) const {
     }
     return std::hypot(re, im);
 }
+
+PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
+    PfbFilterMetrics m;
+    m.total_taps = design.tapCount();
+    m.edge_loss_db = toDb(design.responseAt(0.5));
+    m.adjacent_rejection_db = toDb(design.responseAt(1.0));
+
+    // Far-adjacent floor: worst response over x in [1.0, 1.5].
+    double floor_db = -1e300;
+    for (int i = 0; i <= 50; ++i) {
+        floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
+    }
+    m.far_floor_db = floor_db;
+
+    // -3 dB half width: first crossing scanning outward from DC. The response
+    // is monotonically decreasing through the main lobe, so the first sample
+    // at or below -3 dB is the crossing.
+    m.passband_halfwidth_ch = 1.0; // degenerate fallback (not reached for sane K)
+    for (int i = 1; i <= 1000; ++i) {
+        const double x = 0.001 * i;
+        if (toDb(design.responseAt(x)) <= -3.0) {
+            m.passband_halfwidth_ch = x;
+            break;
+        }
+    }
+
+    // Flat-noise tilt: integral of H(x)^2 over the |x| <= 1 slice the engine
+    // integrates. ~ -0.6 dB for the corrected model (old narrow model: -9 dB).
+    const int steps = 1000;
+    double acc = 0.0;
+    for (int i = 0; i <= steps; ++i) {
+        const double h = design.responseAt(-1.0 + 2.0 * i / steps);
+        acc += h * h;
+    }
+    acc *= 2.0 / steps;
+    m.flat_noise_tilt_db = 10.0 * std::log10(std::max(acc, 1e-300));
+    return m;
+}
+
+RejectionStatus compareRejection(double rejection_db, double target_db) {
+    const double achieved = -rejection_db; // positive magnitude
+    if (achieved >= target_db)
+        return RejectionStatus::Meets;
+    if (achieved >= target_db - 10.0)
+        return RejectionStatus::Within10Db;
+    return RejectionStatus::Misses;
+}
+
+std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
+                            double target_db) {
+    if (compareRejection(metrics.adjacent_rejection_db, target_db) == RejectionStatus::Meets)
+        return {};
+    char buf[192];
+    std::snprintf(buf, sizeof(buf),
+                  "Adjacent rejection %.1f dB is short of the %.0f dB target. "
+                  "Raise K (%d -> more) to narrow the transition band so the "
+                  "stopband starts closer to the channel edge, or raise beta "
+                  "(%.1f -> up to 20) to deepen the stopband floor.",
+                  -metrics.adjacent_rejection_db, target_db, design.tapsPerBranch(), design.beta());
+    return buf;
+}

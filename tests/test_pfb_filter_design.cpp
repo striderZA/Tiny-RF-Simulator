@@ -55,3 +55,38 @@ TEST_CASE("PfbFilterDesign response: band edge and adjacent center", "[pfb_filte
     PfbFilterDesign b(32, 16, 12.0);
     REQUIRE(db(b.responseAt(1.0)) < -100.0); // deeper stopband
 }
+
+TEST_CASE("PfbFilterMetrics reference configs", "[pfb_filter_design]") {
+    auto m = computePfbMetrics(PfbFilterDesign(32, 8, 8.0));
+    REQUIRE(m.passband_halfwidth_ch > 0.30);
+    REQUIRE(m.passband_halfwidth_ch < 0.49);
+    REQUIRE(m.edge_loss_db == Approx(-6.0).margin(1.0));
+    REQUIRE(m.adjacent_rejection_db < -40.0);
+    REQUIRE(m.far_floor_db < -40.0);
+    REQUIRE(m.total_taps == 256);
+    REQUIRE(m.flat_noise_tilt_db > -1.5);
+    REQUIRE(m.flat_noise_tilt_db < -0.1);
+
+    // Deeper stopband with more taps/branch and a stronger window.
+    auto m2 = computePfbMetrics(PfbFilterDesign(32, 16, 12.0));
+    REQUIRE(m2.adjacent_rejection_db < -100.0);
+}
+
+TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_design]") {
+    PfbFilterDesign d(32, 8, 8.0);
+    auto m = computePfbMetrics(d);
+    const double achieved = -m.adjacent_rejection_db; // positive magnitude
+
+    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved) == RejectionStatus::Meets);
+    REQUIRE(pfbGuidanceText(d, m, achieved).empty());
+
+    // A much harder target must produce a non-empty, K/beta-referencing hint.
+    REQUIRE(compareRejection(m.adjacent_rejection_db, 140.0) == RejectionStatus::Misses);
+    std::string hint = pfbGuidanceText(d, m, 140.0);
+    REQUIRE(!hint.empty());
+    REQUIRE(hint.find("K") != std::string::npos);
+
+    // A target 6 dB above achieved is Within10Db.
+    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 6.0) ==
+            RejectionStatus::Within10Db);
+}
