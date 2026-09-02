@@ -40,6 +40,6 @@ class PfbCalculatorWidget {
     int m_cached_K = 0;
     double m_cached_beta = -1.0;
     std::vector<float> m_plot_db; // 151 samples over x in [0, 1.5]
-    double m_plot_ymin = 0.0;
+    double m_plot_ymin_raw = 0.0; // raw sampled-data floor; target clamps run per frame in draw()
     double m_plot_ymax = 0.0;
 };

@@ -71,18 +71,16 @@ void PfbCalculatorWidget::refreshDesignCache() {
     const int kSamples = 151;
     m_plot_db.assign(kSamples, 0.0f);
     m_plot_ymax = 5.0;
-    m_plot_ymin = -160.0;
+    m_plot_ymin_raw = -160.0;
     for (int i = 0; i < kSamples; ++i) {
         const double x = 1.5 * i / (kSamples - 1);
         const double v = 20.0 * std::log10(std::max(design.responseAt(x), 1e-300));
         m_plot_db[i] = static_cast<float>(v);
-        m_plot_ymin = std::min(m_plot_ymin, v);
+        m_plot_ymin_raw = std::min(m_plot_ymin_raw, v);
     }
-    // Keep the target line and stopband in view but bound the floor.
-    const double target_db = std::max(0.0, static_cast<double>(m_target_db));
-    m_plot_ymin = std::max(m_plot_ymin, -std::max(target_db + 12.0, 60.0));
-    // The target-rejection line must stay visible even when the design misses badly.
-    m_plot_ymin = std::min(m_plot_ymin, -target_db - 4.0);
+    // The cache holds ONLY the raw sampled floor: the two target-dependent
+    // clamps run per frame in draw() against the live m_target_db, so dragging
+    // the target slider re-floors the plot without re-sampling the design.
 
     m_cached_M = m_M;
     m_cached_K = m_K;
@@ -161,11 +159,17 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
 
     refreshDesignCache();
 
+    // Per-frame floor: the target slider mutates m_target_db during a drag, so
+    // the two target-dependent y clamps run every frame against the live value
+    // (O(1) arithmetic, no resample); m_plot_ymin_raw is the cached raw floor.
+    const double target_db = std::max(0.0, static_cast<double>(m_target_db));
+    double y_min = std::max(m_plot_ymin_raw, -std::max(target_db + 12.0, 60.0));
+    y_min = std::min(y_min, -target_db - 4.0);
+
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     const float plot_h = std::max(avail.y - 190.0f, 80.0f);
-    drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, m_plot_db, m_plot_ymin,
-             m_plot_ymax);
+    drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, m_plot_db, y_min, m_plot_ymax);
     ImGui::Dummy(ImVec2(avail.x, plot_h));
 
     ImGui::Separator();
