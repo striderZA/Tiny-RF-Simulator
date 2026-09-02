@@ -44,15 +44,19 @@ void PfbFilterDesign::synthesize() {
 
 double PfbFilterDesign::responseAt(double x) const {
     // DTFT magnitude of the real taps: H(x) = sum_n h[n] * exp(-j*2*pi*(x/M)*n).
-    const double norm = x / m_M; // frequency in cycles/sample
-    double re = 0.0;
-    double im = 0.0;
-    for (int n = 0; n < static_cast<int>(m_taps.size()); ++n) {
-        const double ph = 2.0 * M_PI * norm * n;
-        re += m_taps[n] * std::cos(ph);
-        im += m_taps[n] * std::sin(ph);
-    }
-    return std::hypot(re, im);
+    // The taps are symmetric about (N-1)/2 (linear phase), so the mirrored
+    // terms of sum h[n]*cos(w*(n-center)) are equal: pair them and evaluate a
+    // half-length cosine sum instead of a full complex sum (~4x fewer trigs).
+    const int N = static_cast<int>(m_taps.size());
+    const double w = 2.0 * M_PI * x / m_M; // rad/sample
+    const double center = (N - 1) / 2.0;
+    double acc = 0.0;
+    const int half = N / 2;
+    for (int i = 0; i < half; ++i)
+        acc += 2.0 * m_taps[i] * std::cos(w * (i - center));
+    if (N % 2 != 0)
+        acc += m_taps[half]; // center tap of an odd-length filter, cos(0) = 1
+    return std::abs(acc);
 }
 
 PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
@@ -72,8 +76,8 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
     // is monotonically decreasing through the main lobe, so the first sample
     // at or below -3 dB is the crossing.
     m.passband_halfwidth_ch = 1.0; // degenerate fallback (not reached for sane K)
-    for (int i = 1; i <= 1000; ++i) {
-        const double x = 0.001 * i;
+    for (int i = 1; i <= 500; ++i) {
+        const double x = 0.002 * i;
         if (toDb(design.responseAt(x)) <= -3.0) {
             m.passband_halfwidth_ch = x;
             break;
@@ -82,7 +86,7 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
 
     // Flat-noise tilt: integral of H(x)^2 over the |x| <= 1 slice the engine
     // integrates. ~ -0.6 dB for the corrected model (old narrow model: -9 dB).
-    const int steps = 1000;
+    const int steps = 400; // H^2 is a smooth bell; 0.005-ch sampling is ample
     double acc = 0.0;
     for (int i = 0; i <= steps; ++i) {
         const double h = design.responseAt(-1.0 + 2.0 * i / steps);
