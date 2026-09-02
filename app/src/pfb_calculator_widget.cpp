@@ -108,6 +108,13 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     if (!target)
         m_bound_pfb_id = -1;
 
+    // Refresh the design/metric cache up front (no-op while M/K/beta are
+    // unchanged) so both columns can read one set of readouts.
+    refreshDesignCache();
+    const RejectionStatus st =
+        compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
+    const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
+
     // --- Left column: controls -------------------------------------------
     ImGui::BeginGroup();
     ImGui::BeginChild("##calc_controls", ImVec2(300, 0), false);
@@ -151,14 +158,19 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     } else {
         ImGui::TextDisabled("Design only: add a PFB to the graph to enable Apply.");
     }
+
+    // The guidance hint lives here (left column) so it costs the plot no
+    // vertical space; it can wrap to several lines without squeezing the plot.
+    if (!hint.empty()) {
+        ImGui::Separator();
+        ImGui::TextWrapped("Hint: %s", hint.c_str());
+    }
     ImGui::EndChild();
     ImGui::EndGroup();
 
     // --- Right column: plot + metrics -------------------------------------
     ImGui::SameLine();
     ImGui::BeginChild("##calc_analysis", ImVec2(0, 0), true);
-
-    refreshDesignCache();
 
     // Per-frame floor: the target slider mutates m_target_db during a drag, so
     // the two target-dependent y clamps run every frame against the live value
@@ -167,32 +179,30 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     double y_min = std::max(m_plot_ymin_raw, -std::max(target_db + 12.0, 60.0));
     y_min = std::min(y_min, -target_db - 4.0);
 
+    // The plot owns most of the child height; readouts below are compact
+    // two-per-row lines (the guidance hint lives in the left column).
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
-    const float plot_h = std::max(avail.y - 190.0f, 80.0f);
+    const float plot_h = std::max(avail.y - 116.0f, 100.0f);
     drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, m_plot_db, y_min, m_plot_ymax);
     ImGui::Dummy(ImVec2(avail.x, plot_h));
 
     ImGui::Separator();
-    const RejectionStatus st =
-        compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
-    ImGui::Text("Adjacent rejection (H at x=1.0):  ");
-    ImGui::SameLine();
-    ImGui::TextColored(statusColor(st), "%.1f dB  (target %.0f dB)",
+    ImGui::TextColored(statusColor(st), "Adjacent rejection: %.1f dB (target %.0f dB)",
                        -m_cached_metrics.adjacent_rejection_db, m_target_db);
 
     ImGui::Text("-3 dB half-width:  %.3f channel", m_cached_metrics.passband_halfwidth_ch);
-    ImGui::Text("Band-edge loss (H at x=0.5):  %.1f dB", m_cached_metrics.edge_loss_db);
-    ImGui::Text("Far-adjacent floor (x in 1.0..1.5):  %.1f dB", m_cached_metrics.far_floor_db);
-    ImGui::Text("Prototype taps N = M*K:  %d", m_cached_metrics.total_taps);
-    ImGui::Text("Flat-noise tilt:  %.2f dB", m_cached_metrics.flat_noise_tilt_db);
+    ImGui::SameLine(250.0f);
+    ImGui::Text("Band-edge loss: %.1f dB", m_cached_metrics.edge_loss_db);
 
-    const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
-    if (!hint.empty()) {
-        ImGui::TextWrapped("Hint: %s", hint.c_str());
-    } else {
+    ImGui::Text("Far floor (x in 1.0..1.5): %.1f dB", m_cached_metrics.far_floor_db);
+    ImGui::SameLine(250.0f);
+    ImGui::Text("Taps N = M*K: %d", m_cached_metrics.total_taps);
+
+    ImGui::Text("Flat-noise tilt: %.2f dB", m_cached_metrics.flat_noise_tilt_db);
+
+    if (hint.empty())
         ImGui::TextColored(statusColor(st), "Rejection target met.");
-    }
     ImGui::EndChild();
 
     ImGui::End();
