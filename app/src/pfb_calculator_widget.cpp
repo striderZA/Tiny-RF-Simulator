@@ -24,8 +24,8 @@ ImVec4 statusColor(RejectionStatus s) {
 }
 } // namespace
 
-PfbCalculatorWidget::PfbCalculatorWidget(NodeGraphEngine &graph, ComponentRegistry &components)
-    : m_graph(&graph), m_components(&components) {}
+PfbCalculatorWidget::PfbCalculatorWidget(ComponentRegistry &components)
+    : m_components(&components) {}
 
 PFBChannelizerEngine *
 PfbCalculatorWidget::resolveTarget(const std::vector<PFBChannelizerEngine *> &pfbs) {
@@ -55,6 +55,38 @@ void PfbCalculatorWidget::pullFrom(PFBChannelizerEngine &pfb) {
     m_M = pfb.channelCount();
     m_K = pfb.tapsPerBranch();
     m_beta = pfb.kaiserBeta();
+}
+
+// Rebuild the (expensive) prototype synthesis, metrics, and plot samples only
+// when M/K/beta actually changed; draw() then reuses the cache each frame.
+void PfbCalculatorWidget::refreshDesignCache() {
+    if (m_M == m_cached_M && m_K == m_cached_K && m_beta == m_cached_beta)
+        return;
+
+    const PfbFilterDesign design(m_M, m_K, m_beta);
+    m_cached_design = design;
+    m_cached_metrics = computePfbMetrics(design);
+
+    // Sample |H| in dB over x in [0, 1.5].
+    const int kSamples = 151;
+    m_plot_db.assign(kSamples, 0.0f);
+    m_plot_ymax = 5.0;
+    m_plot_ymin = -160.0;
+    for (int i = 0; i < kSamples; ++i) {
+        const double x = 1.5 * i / (kSamples - 1);
+        const double v = 20.0 * std::log10(std::max(design.responseAt(x), 1e-300));
+        m_plot_db[i] = static_cast<float>(v);
+        m_plot_ymin = std::min(m_plot_ymin, v);
+    }
+    // Keep the target line and stopband in view but bound the floor.
+    const double target_db = std::max(0.0, static_cast<double>(m_target_db));
+    m_plot_ymin = std::max(m_plot_ymin, -std::max(target_db + 12.0, 60.0));
+    // The target-rejection line must stay visible even when the design misses badly.
+    m_plot_ymin = std::min(m_plot_ymin, -target_db - 4.0);
+
+    m_cached_M = m_M;
+    m_cached_K = m_K;
+    m_cached_beta = m_beta;
 }
 
 void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
@@ -98,12 +130,10 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     }
     ImGui::Separator();
 
-    bool edited = false;
-    edited |= ImGui::SliderInt("Channels M", &m_M, 2, 2048);
-    edited |= ImGui::SliderInt("Taps/branch K", &m_K, 1, 64);
-    edited |= ImGui::SliderFloat("Kaiser beta", &m_beta, 0.0f, 20.0f, "%.2f");
-    edited |= ImGui::SliderFloat("Target rejection (dB)", &m_target_db, 20.0f, 140.0f, "%.0f");
-    (void)edited;
+    ImGui::SliderInt("Channels M", &m_M, 2, 2048);
+    ImGui::SliderInt("Taps/branch K", &m_K, 1, 64);
+    ImGui::SliderFloat("Kaiser beta", &m_beta, 0.0f, 20.0f, "%.2f");
+    ImGui::SliderFloat("Target rejection (dB)", &m_target_db, 20.0f, 140.0f, "%.0f");
 
     if (target) {
         if (ImGui::Button("Apply to PFB")) {
@@ -129,29 +159,30 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     ImGui::SameLine();
     ImGui::BeginChild("##calc_analysis", ImVec2(0, 0), true);
 
-    const PfbFilterDesign design(m_M, m_K, m_beta);
-    const PfbFilterMetrics metrics = computePfbMetrics(design);
+    refreshDesignCache();
 
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     const float plot_h = std::max(avail.y - 190.0f, 80.0f);
-    drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, design);
+    drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, m_plot_db, m_plot_ymin,
+             m_plot_ymax);
     ImGui::Dummy(ImVec2(avail.x, plot_h));
 
     ImGui::Separator();
-    const RejectionStatus st = compareRejection(metrics.adjacent_rejection_db, m_target_db);
+    const RejectionStatus st =
+        compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
     ImGui::Text("Adjacent rejection (H at x=1.0):  ");
     ImGui::SameLine();
-    ImGui::TextColored(statusColor(st), "%.1f dB  (target %.0f dB)", -metrics.adjacent_rejection_db,
-                       m_target_db);
+    ImGui::TextColored(statusColor(st), "%.1f dB  (target %.0f dB)",
+                       -m_cached_metrics.adjacent_rejection_db, m_target_db);
 
-    ImGui::Text("-3 dB half-width:  %.3f channel", metrics.passband_halfwidth_ch);
-    ImGui::Text("Band-edge loss (H at x=0.5):  %.1f dB", metrics.edge_loss_db);
-    ImGui::Text("Far-adjacent floor (x in 1.0..1.5):  %.1f dB", metrics.far_floor_db);
-    ImGui::Text("Prototype taps N = M*K:  %d", metrics.total_taps);
-    ImGui::Text("Flat-noise tilt:  %.2f dB", metrics.flat_noise_tilt_db);
+    ImGui::Text("-3 dB half-width:  %.3f channel", m_cached_metrics.passband_halfwidth_ch);
+    ImGui::Text("Band-edge loss (H at x=0.5):  %.1f dB", m_cached_metrics.edge_loss_db);
+    ImGui::Text("Far-adjacent floor (x in 1.0..1.5):  %.1f dB", m_cached_metrics.far_floor_db);
+    ImGui::Text("Prototype taps N = M*K:  %d", m_cached_metrics.total_taps);
+    ImGui::Text("Flat-noise tilt:  %.2f dB", m_cached_metrics.flat_noise_tilt_db);
 
-    const std::string hint = pfbGuidanceText(design, metrics, m_target_db);
+    const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
     if (!hint.empty()) {
         ImGui::TextWrapped("Hint: %s", hint.c_str());
     } else {
@@ -163,24 +194,11 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
 }
 
 void PfbCalculatorWidget::drawPlot(ImDrawList *dl, const ImVec2 &origin, float w, float h,
-                                   const PfbFilterDesign &design) {
+                                   const std::vector<float> &db, double y_min, double y_max) {
     const float kTop = 8.0f, kBottom = 20.0f, kLeft = 12.0f, kRight = 8.0f;
-    if (w <= kLeft + kRight || h <= kTop + kBottom)
+    const int n = static_cast<int>(db.size());
+    if (w <= kLeft + kRight || h <= kTop + kBottom || n < 2)
         return;
-
-    // Sample |H| in dB over x in [0, 1.5].
-    const int kSamples = 151;
-    std::vector<float> db(kSamples);
-    double y_max = 5.0, y_min = -160.0;
-    for (int i = 0; i < kSamples; ++i) {
-        const double x = 1.5 * i / (kSamples - 1);
-        const double v = 20.0 * std::log10(std::max(design.responseAt(x), 1e-300));
-        db[i] = static_cast<float>(v);
-        y_min = std::min(y_min, v);
-    }
-    // Keep the target line and stopband in view but bound the floor.
-    const double target_db = std::max(0.0, static_cast<double>(m_target_db));
-    y_min = std::max(y_min, -std::max(target_db + 12.0, 60.0));
 
     auto x_px = [&](double x) {
         return origin.x + kLeft + static_cast<float>((x / 1.5) * (w - kLeft - kRight));
@@ -207,8 +225,8 @@ void PfbCalculatorWidget::drawPlot(ImDrawList *dl, const ImVec2 &origin, float w
     dl->AddText(ImVec2(x_px(1.0) - 10.0f, origin.y + h - kBottom + 2.0f), edge_col, "1.0 adj");
 
     std::vector<ImVec2> pts;
-    pts.reserve(kSamples);
-    for (int i = 0; i < kSamples; ++i)
-        pts.emplace_back(x_px(1.5 * i / (kSamples - 1)), y_px(db[i]));
+    pts.reserve(n);
+    for (int i = 0; i < n; ++i)
+        pts.emplace_back(x_px(1.5 * i / (n - 1)), y_px(db[i]));
     dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), curve_col, 0, 1.6f);
 }
