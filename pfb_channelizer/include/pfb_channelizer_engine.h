@@ -2,6 +2,7 @@
 
 #include "component_engine_base.h"
 #include "node_graph_engine.h"
+#include "pfb_filter_design.h"
 #include "signal_node.h"
 #include "spectrum.h"
 #include <string>
@@ -77,6 +78,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     bool m_fs_from_input = false;
 
     void recomputeChannels(const std::vector<double> &freqs);
-    double prototypeResponse(double offset_Hz) const;
-    double kaiserWindow(double x) const;
+    // Shared real prototype; rebuilt whenever M/K/beta change. The single
+    // source of truth for channel weights (also used by the Filter Calculator).
+    PfbFilterDesign m_design{32, 8, 8.0};
 };

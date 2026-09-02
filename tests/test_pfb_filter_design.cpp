@@ -2,7 +2,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
+#include <vector>
 
+#include "node_graph_engine.h"
+#include "pfb_channelizer_engine.h"
 #include "pfb_filter_design.h"
 
 using Catch::Approx;
@@ -94,4 +97,57 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
     // Exact lower boundary: achieved == target_db - 10 is still Within10Db.
     REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 10.0) ==
             RejectionStatus::Within10Db);
+}
+
+TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filter_design]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &out = pfb.node().outputs[1];
+    REQUIRE(out.noise_W.size() == in.frequencies.size());
+    double sum = 0.0;
+    for (double v : out.noise_W)
+        sum += v;
+    const double mean = sum / out.noise_W.size();
+    // Corrected prototype tiles to within ~1 dB of the input PSD.
+    // The old narrow model produced ~0.12 * 1e-20 and fails this bound.
+    REQUIRE(mean > 0.5e-20);
+    REQUIRE(mean < 1.5e-20);
+}
+
+TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_design]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph); // defaults M=32, K=8, beta=8
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    in.noise_total_W.assign(401, 1e-20);
+
+    pfb.setFs_Hz(400e6); // channel_bw = 12.5 MHz; ch16 center = 6.25 MHz
+    in.tones.push_back({6.25e6, -30.0, 0.0});
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &chs = pfb.channels();
+    // Center tone passes at unity gain...
+    REQUIRE(chs[16].tones.size() == 1);
+    REQUIRE(chs[16].tones[0].power_dBm == Approx(-30.0).margin(0.5));
+    // ...and leaks into the adjacent channels at the prototype's |H(1.0)|
+    // (~ -83 dB relative to the tone, i.e. ~ -113 dBm here), not at the old
+    // model's exact -300 dB null.
+    REQUIRE(chs[15].tones.size() == 1);
+    REQUIRE(chs[15].tones[0].power_dBm > -118.0);
+    REQUIRE(chs[15].tones[0].power_dBm < -108.0);
 }

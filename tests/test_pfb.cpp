@@ -189,7 +189,9 @@ TEST_CASE("PFB outputs[1] noise floor flatness at overlap boundaries", "[pfb]") 
     double mean = sum / static_cast<double>(n_bins);
     double ripple_pct = 100.0 * (max_val - min_val) / mean;
 
-    REQUIRE(ripple_pct < 1.0);
+    // Corrected real prototype: edge-channel windows are truncated at the
+    // band ends, leaving ~1.27% ripple (was < 1% under the old narrow model).
+    REQUIRE(ripple_pct < 2.0);
 }
 
 TEST_CASE("PFB channelizer recomputes channels when M increases", "[pfb]") {
