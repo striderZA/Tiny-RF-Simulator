@@ -85,8 +85,13 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
     std::string hint = pfbGuidanceText(d, m, 140.0);
     REQUIRE(!hint.empty());
     REQUIRE(hint.find("K") != std::string::npos);
+    REQUIRE(hint.find("beta") != std::string::npos);
 
     // A target 6 dB above achieved is Within10Db.
     REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 6.0) ==
+            RejectionStatus::Within10Db);
+
+    // Exact lower boundary: achieved == target_db - 10 is still Within10Db.
+    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 10.0) ==
             RejectionStatus::Within10Db);
 }

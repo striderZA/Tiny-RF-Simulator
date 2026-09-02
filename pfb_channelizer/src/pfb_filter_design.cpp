@@ -106,7 +106,7 @@ std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetric
                             double target_db) {
     if (compareRejection(metrics.adjacent_rejection_db, target_db) == RejectionStatus::Meets)
         return {};
-    char buf[192];
+    char buf[256];
     std::snprintf(buf, sizeof(buf),
                   "Adjacent rejection %.1f dB is short of the %.0f dB target. "
                   "Raise K (%d -> more) to narrow the transition band so the "
