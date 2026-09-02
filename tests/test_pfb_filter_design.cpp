@@ -37,3 +37,21 @@ TEST_CASE("PfbFilterDesign constructor clamps parameters", "[pfb_filter_design]"
     REQUIRE(e.tapsPerBranch() == 64);
     REQUIRE(e.beta() == 20.0);
 }
+
+TEST_CASE("PfbFilterDesign response: normalization and symmetry", "[pfb_filter_design]") {
+    PfbFilterDesign d(32, 8, 8.0);
+    REQUIRE(d.responseAt(0.0) == Approx(1.0).margin(1e-9));
+    REQUIRE(d.responseAt(0.3) == Approx(d.responseAt(-0.3)).margin(1e-9));
+    REQUIRE(d.responseAt(1.2) == Approx(d.responseAt(-1.2)).margin(1e-9));
+}
+
+TEST_CASE("PfbFilterDesign response: band edge and adjacent center", "[pfb_filter_design]") {
+    auto db = [](double v) { return 20.0 * std::log10(v); };
+
+    PfbFilterDesign a(32, 8, 8.0);
+    REQUIRE(db(a.responseAt(0.5)) == Approx(-6.02).margin(0.2)); // band edge
+    REQUIRE(db(a.responseAt(1.0)) < -40.0);                      // adjacent center
+
+    PfbFilterDesign b(32, 16, 12.0);
+    REQUIRE(db(b.responseAt(1.0)) < -100.0); // deeper stopband
+}

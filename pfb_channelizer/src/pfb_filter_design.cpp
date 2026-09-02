@@ -42,5 +42,15 @@ void PfbFilterDesign::synthesize() {
     }
 }
 
-// responseAt is declared now and completed in Task 2.
-double PfbFilterDesign::responseAt(double) const { return 1.0; }
+double PfbFilterDesign::responseAt(double x) const {
+    // DTFT magnitude of the real taps: H(x) = sum_n h[n] * exp(-j*2*pi*(x/M)*n).
+    const double norm = x / m_M; // frequency in cycles/sample
+    double re = 0.0;
+    double im = 0.0;
+    for (int n = 0; n < static_cast<int>(m_taps.size()); ++n) {
+        const double ph = 2.0 * M_PI * norm * n;
+        re += m_taps[n] * std::cos(ph);
+        im += m_taps[n] * std::sin(ph);
+    }
+    return std::hypot(re, im);
+}
