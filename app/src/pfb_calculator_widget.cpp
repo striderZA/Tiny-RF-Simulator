@@ -88,7 +88,7 @@ void PfbCalculatorWidget::refreshDesignCache() {
 }
 
 void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
-    ImGui::SetNextWindowSize(ImVec2(820, 600), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(880, 760), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;
@@ -179,11 +179,12 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     double y_min = std::max(m_plot_ymin_raw, -std::max(target_db + 12.0, 60.0));
     y_min = std::min(y_min, -target_db - 4.0);
 
-    // The plot owns most of the child height; readouts below are compact
-    // two-per-row lines (the guidance hint lives in the left column).
+    // The plot owns most of the child height: reserve the compact two-per-row
+    // readouts, but never let the plot shrink below ~2/3 of the column even in
+    // a short window (the guidance hint lives in the left column).
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
-    const float plot_h = std::max(avail.y - 116.0f, 100.0f);
+    const float plot_h = std::max({avail.y - 116.0f, avail.y * 0.66f, 120.0f});
     drawPlot(ImGui::GetWindowDrawList(), origin, avail.x, plot_h, m_plot_db, y_min, m_plot_ymax);
     ImGui::Dummy(ImVec2(avail.x, plot_h));
 
