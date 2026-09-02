@@ -8,6 +8,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 
 - **test_main.cpp** — Catch2 test runner (Catch2::Catch2WithMain linked)
 - **test_*.cpp** — Per-module test files, one per engine/component under test
+- **test_pfb_filter_design.cpp** — standalone executable: real-prototype core + metric tests and PFB engine flat-noise/tone-weight regressions (kept out of the main `tests` binary for the MinGW registration ceiling)
 - **test_bench_dsp.cpp** — Dirty/clean performance benchmarks for DSP engines
 - **test_signal_domain.cpp** — cross-engine `Spectrum` propagation tests (`is_complex_baseband`, `fs_Hz`) and post-ADC chain integration tests (ADC → mixer/amp → PFB) (spans modules, so it doesn't fit the one-file-per-component pattern)
 - **CMakeLists.txt** — Links all simulator module targets; test files listed explicitly, plus several standalone executables (see below)
