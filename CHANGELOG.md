@@ -1,3 +1,16 @@
+## [0.21.0] - 2026-09-04
+
+### Features
+
+- **PFB filter calculator and real-prototype model** — add a dockable filter-design tool that plots the synthesized Kaiser prototype, reports achieved filter metrics against the rejection target, and applies designs to selected PFB channelizers.
+  - Share one real windowed-sinc Kaiser prototype implementation between the calculator and PFB engine.
+  - Add tap synthesis, DTFT response evaluation, filter metrics, rejection comparison, and design guidance.
+  - Add integer channel-count entry, target-aware plot scaling, and graph-ID-safe Apply behavior.
+
+### Testing
+
+- Add standalone PFB filter-design and calculator test coverage, including guidance and prototype metric regressions.
+
 ## [0.20.1] - 2026-08-28
 
 ### Security
