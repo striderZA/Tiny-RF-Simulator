@@ -151,3 +151,13 @@ TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_des
     REQUIRE(chs[15].tones[0].power_dBm > -118.0);
     REQUIRE(chs[15].tones[0].power_dBm < -108.0);
 }
+
+TEST_CASE("PFB deserialize clamps filter parameters", "[pfb_filter_design]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    pfb.deserialize({{"taps_per_branch", 0}, {"kaiser_beta", 99.0}});
+
+    REQUIRE(pfb.tapsPerBranch() == 1);
+    REQUIRE(pfb.kaiserBeta() == Approx(20.0));
+}

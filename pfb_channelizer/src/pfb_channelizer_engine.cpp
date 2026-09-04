@@ -262,8 +262,8 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
         m_cfg.M = 2;
     if (m_cfg.M > 2048)
         m_cfg.M = 2048;
-    m_cfg.K = j.value("taps_per_branch", 8);
-    m_cfg.beta = j.value("kaiser_beta", 8.0);
+    m_cfg.K = std::clamp(j.value("taps_per_branch", 8), 1, 64);
+    m_cfg.beta = std::clamp(j.value("kaiser_beta", 8.0), 0.0, 20.0);
     m_active_channel = j.value("active_channel", 0);
     if (m_active_channel < 0)
         m_active_channel = 0;
