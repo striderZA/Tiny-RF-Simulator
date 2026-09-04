@@ -98,11 +98,11 @@ void PFBChannelizerEngine::update(double) {
         return;
     }
 
-    // Only recompute channels when frequency grid, Fs, M, K, or beta changes.
-    // bin_weights depend on prototypeResponse(), which is a function of both K
-    // and beta — a stale guard here would leave the noise path using filter
-    // weights from the last grid/Fs/M change while the tone path calls
-    // prototypeResponse() live, producing an internally inconsistent spectrum.
+    // bin_weights depend on the shared prototype response, which is a function
+    // of both K and beta — a stale guard here would leave the noise path using
+    // filter weights from the last grid/Fs/M change while the tone path
+    // evaluates the response live, producing an internally inconsistent
+    // spectrum.
     if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz ||
         m_cfg.K != m_cached_K || m_cfg.beta != m_cached_beta ||
         m_channels.size() != static_cast<size_t>(m_cfg.M)) {
@@ -134,7 +134,7 @@ void PFBChannelizerEngine::update(double) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
             if (std::abs(offset) <= ch.bandwidth_Hz) {
                 Spectrum::Tone t = tone;
-                double w = prototypeResponse(offset);
+                double w = m_design.responseAt(offset / (m_cfg.Fs_Hz / m_cfg.M));
                 double power_lin = std::pow(10.0, tone.power_dBm / 10.0) * w * w;
                 t.power_dBm = 10.0 * std::log10(power_lin + 1e-300);
                 ch.tones.push_back(t);
@@ -224,6 +224,7 @@ void PFBChannelizerEngine::update(double) {
 }
 
 void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
+    m_design = PfbFilterDesign(m_cfg.M, m_cfg.K, m_cfg.beta);
     double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
     double nyquist = m_cfg.Fs_Hz / 2.0;
     m_channels.resize(m_cfg.M);
@@ -242,25 +243,10 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
             double offset = freqs[i] - ch.center_freq_Hz;
             if (std::abs(offset) <= channel_bw) {
                 ch.bin_indices.push_back(i);
-                ch.bin_weights.push_back(prototypeResponse(offset));
+                ch.bin_weights.push_back(m_design.responseAt(offset / channel_bw));
             }
         }
     }
-}
-
-double PFBChannelizerEngine::prototypeResponse(double offset_Hz) const {
-    double x = offset_Hz / (m_cfg.Fs_Hz / m_cfg.M);
-    double arg = m_cfg.K * M_PI * x;
-    double sinc = (std::abs(arg) < 1e-12) ? 1.0 : std::sin(arg) / arg;
-    return std::abs(kaiserWindow(x) * sinc);
-}
-
-double PFBChannelizerEngine::kaiserWindow(double x) const {
-    double r = 2.0 * x / m_cfg.K;
-    if (std::abs(r) > 1.0)
-        return 0.0;
-    double arg = 1.0 - r * r;
-    return std::cyl_bessel_i(0, m_cfg.beta * std::sqrt(arg)) / std::cyl_bessel_i(0, m_cfg.beta);
 }
 
 nlohmann::json PFBChannelizerEngine::serialize() const {
@@ -276,8 +262,8 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
         m_cfg.M = 2;
     if (m_cfg.M > 2048)
         m_cfg.M = 2048;
-    m_cfg.K = j.value("taps_per_branch", 8);
-    m_cfg.beta = j.value("kaiser_beta", 8.0);
+    m_cfg.K = std::clamp(j.value("taps_per_branch", 8), 1, 64);
+    m_cfg.beta = std::clamp(j.value("kaiser_beta", 8.0), 0.0, 20.0);
     m_active_channel = j.value("active_channel", 0);
     if (m_active_channel < 0)
         m_active_channel = 0;

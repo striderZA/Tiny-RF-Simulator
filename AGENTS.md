@@ -92,6 +92,7 @@ Default section order:
 
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
+- Superpowers plan/spec documents are working materials and must not be committed.
 
 ## Child DOX Index
 

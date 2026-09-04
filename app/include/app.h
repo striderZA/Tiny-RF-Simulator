@@ -25,6 +25,7 @@
 #include "network_analyzer_widget.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
+#include "pfb_calculator_widget.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
 #include "pfb_view_manager.h"
@@ -157,7 +158,9 @@ class RfSimulatorApp {
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
     ComponentLibrary m_library;
     std::unique_ptr<LibraryBrowserWidget> m_library_browser;
+    std::unique_ptr<PfbCalculatorWidget> m_calculator_widget;
     bool m_show_library = false;
+    bool m_show_calculator = false;
     bool m_show_component_form = false;
     bool m_component_form_is_edit = false;
     std::string m_component_form_destination_root;

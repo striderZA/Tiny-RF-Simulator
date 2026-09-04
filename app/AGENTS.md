@@ -1,7 +1,7 @@
 # app/AGENTS.md
 
 ## Purpose
-Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, and `ProjectSerializer`.
+Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `PfbCalculatorWidget`, and `ProjectSerializer`.
 
 ## Ownership
 - `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration (project save/load logic lives in `ProjectSerializer`)
@@ -10,6 +10,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ComponentTypeRegistry` — single dispatch table (11 rows) for canvas menu, add, duplicate, save/load, and inspector drawing: each row carries the canonical `type` + `.rfsim` `project_type` keys, `menu_label`/`label_prefix`, `NodeKind`, a `create()` factory, and a `draw_inspector` callback; also drives `ComponentLibrary::instantiate()`/`validate()` and the component authoring form
 - `PFBViewManager` — owns the per-PFB IQ Plot / Channelizer Grid widget lifecycle (replaces the app's four lockstep vectors `m_iq_widgets`/`m_show_iq_pfbs`/`m_pfb_grid_widgets`/`m_show_pfb_grids`, which were rebuilt by hand at six call sites and caused issue #37); all add/rebuild/clear/draw and visibility state funnel through this class
 - `NetworkAnalyzerEngine` / `NetworkAnalyzerWidget` — singleton instrument panel owned directly by `RfSimulatorApp` (like `m_spectrum_engine`/`m_spectrum_widget`): the engine is a plain value member (not an `IComponentEngine`, no registry row, no graph node) constructed with `m_graph_engine` and a small app-owned `INetworkAnalyzerHost` adapter (`NaHost`, see `network_analyzer_engine.h`'s layering comment) that resolves live engines via `ComponentRegistry::find` and builds private, throwaway scratch clone passes; `m_na_widget` renders the Point A/B pickers + sweep fields + gain/NF plot
+- `PfbCalculatorWidget` — dockable PFB filter calculator owned directly by `RfSimulatorApp` (`m_calculator_widget`): binds M/K/beta + rejection target to the graph-selected (or combo-picked) PFB and applies them through the engine's setters; all response math comes from `PfbFilterDesign` in `pfb_channelizer/` so tool and engine can never drift
 - `ProjectSerializer` — owns the `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`, issue #51)
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots
@@ -36,6 +37,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `load_window_states()` runs on construction to restore persisted window visibility toggles
 - Per-PFB IQ Plot / Channelizer Grid window visibility lives in `PFBViewManager::iqVisibility()`/`gridVisibility()` (indexed in lockstep with the manager's widgets) and has no View-menu entry since instances are dynamic; closed windows are reopened via "Show IQ Plot"/"Show Channelizer Grid" checkboxes in the PFB properties panel, wired each frame through `InspectorPanel::setPFBWindowVisibility()` (stores the stable vector pointers, not element pointers, since the vectors are rebuilt on add/remove)
 - The Network Analyzer panel is a singleton like the Spectrum Analyzer: `View > Network Analyzer` toggles `m_show_na`, which persists through `SessionState` (`WindowState`/`NetworkAnalyzer`) and drives `m_na_engine.update()` + `m_na_widget->draw(...)` each frame while visible
+- The Filter Calculator window is toggled by `View > Filter Calculator` (`m_show_calculator`, persisted through `SessionState` `WindowState`/`FilterCalculator`); its design/metrics cache is rebuilt only after the control being dragged/typed releases (`IsAnyItemActive` gate), since a full resynthesis costs seconds at worst-case M=2048/K=64
 - `update_dsp()`'s signal-routing pass is factored into `rewireInputs()` (sets every component's `node().inputs[k]` from current graph links, binding the resolved output port's `Spectrum` — `&source->outputs[source.output_index]` — and nulling severed ones); `onRemoveNode` calls it synchronously right after `ComponentRegistry::remove()` so no surviving component is left holding a dangling `Spectrum*` into the just-destroyed engine's `SignalNode` while the rest of that frame's `draw_ui()` still runs — widgets that dereference `node().inputs[]` directly during draw (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37)
 - `RfSimulatorApp` installs the app-level ADC-only link policy for canvas creation, DSP rewiring, and project-load restoration; the generic `NodeGraphEngine` remains topology-only.
 - Destructor saves window state via `SessionState`
