@@ -169,3 +169,7 @@ add_standalone_test(test_pfb_filter_design
     SOURCES test_pfb_filter_design.cpp
     LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
 )
+add_standalone_test(test_pfb_calculator
+    SOURCES test_pfb_calculator.cpp
+    LIBS simulator::app
+)

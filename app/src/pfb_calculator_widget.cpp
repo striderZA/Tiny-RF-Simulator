@@ -29,13 +29,17 @@ PfbCalculatorWidget::PfbCalculatorWidget(ComponentRegistry &components)
 PFBChannelizerEngine *
 PfbCalculatorWidget::resolveTarget(const std::vector<PFBChannelizerEngine *> &pfbs) {
     if (pfbs.empty()) {
-        m_target_index = -1;
+        m_target_node_id = -1;
         return nullptr;
     }
-    // Explicit combo choice wins.
-    if (m_target_index >= 0 && m_target_index < static_cast<int>(pfbs.size()))
-        return pfbs[m_target_index];
-    m_target_index = -1;
+    // Explicit combo choice stores the selected graph node ID.
+    if (m_target_node_id >= 0) {
+        for (auto *p : pfbs) {
+            if (p->graphNodeId() == m_target_node_id)
+                return p;
+        }
+        m_target_node_id = -1;
+    }
     // Auto: a single graph-selected node that is a PFB.
     if (ImNodes::NumSelectedNodes() == 1) {
         int selected_id = -1;
@@ -43,7 +47,7 @@ PfbCalculatorWidget::resolveTarget(const std::vector<PFBChannelizerEngine *> &pf
         auto *engine = m_components->find(selected_id);
         if (engine && engine->type_name() == "pfb") {
             for (auto *p : pfbs)
-                if (p->id() == selected_id)
+                if (p->graphNodeId() == selected_id)
                     return p;
         }
     }
@@ -99,7 +103,7 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     // Pull-on-retarget: whenever the bound target changes, load its current
     // M/K/beta so the panel shows reality, not last-edited values. Inspector
     // edits to the bound PFB do NOT re-pull (reselect the node to resync).
-    const int target_id = target ? target->id() : -1;
+    const int target_id = target ? target->graphNodeId() : -1;
     if (target_id != m_bound_pfb_id) {
         if (target)
             pullFrom(*target);
@@ -124,16 +128,22 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     ImGui::BeginChild("##calc_controls", ImVec2(300, 0), false);
 
     std::string preview = "Auto (graph selection)";
-    if (m_target_index >= 0 && m_target_index < static_cast<int>(pfbs.size()))
-        preview = "PFB " + std::to_string(pfbs[m_target_index]->id());
+    if (m_target_node_id >= 0) {
+        for (auto *pfb : pfbs) {
+            if (pfb->graphNodeId() == m_target_node_id) {
+                preview = "PFB " + std::to_string(pfb->id());
+                break;
+            }
+        }
+    }
     if (ImGui::BeginCombo("Target PFB", preview.c_str())) {
-        if (ImGui::Selectable("Auto (graph selection)", m_target_index < 0))
-            m_target_index = -1;
-        for (int i = 0; i < static_cast<int>(pfbs.size()); ++i) {
-            const bool selected = (m_target_index == i);
-            const std::string label = "PFB " + std::to_string(pfbs[i]->id());
+        if (ImGui::Selectable("Auto (graph selection)", m_target_node_id < 0))
+            m_target_node_id = -1;
+        for (auto *pfb : pfbs) {
+            const bool selected = (m_target_node_id == pfb->graphNodeId());
+            const std::string label = "PFB " + std::to_string(pfb->id());
             if (ImGui::Selectable(label.c_str(), selected))
-                m_target_index = i;
+                m_target_node_id = pfb->graphNodeId();
         }
         ImGui::EndCombo();
     }

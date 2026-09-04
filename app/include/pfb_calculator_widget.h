@@ -32,8 +32,8 @@ class PfbCalculatorWidget {
     int m_K = 8;
     float m_beta = 8.0f; // float for ImGui::SliderFloat
     float m_target_db = 80.0f;
-    int m_target_index = -1; // -1 = auto: follow a single graph-selected PFB
-    int m_bound_pfb_id = -1; // graph node id the controls were pulled from
+    int m_target_node_id = -1; // selected graph node ID; -1 = auto
+    int m_bound_pfb_id = -1;   // graph node ID the controls were pulled from
     PfbFilterDesign m_cached_design;
     PfbFilterMetrics m_cached_metrics;
     int m_cached_M = 0;
