@@ -291,10 +291,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Generate release notes
+      - name: Generate release notes from changelog
         run: |
-          npm install -g --ignore-scripts git-cliff@2.13.1 --silent
-          git-cliff --config cliff.toml --latest --strip header -o release-notes.md
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v version="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "## [" version "]") == 1) found=1
+            }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "ERROR: CHANGELOG.md has no section for [$VERSION]"
+            exit 1
+          fi
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4

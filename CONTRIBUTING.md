@@ -71,6 +71,16 @@ Minor and major release tags (`vX.Y.0`, including `vX.0.0`) trigger the stricter
 
 Patch release tags (`vX.Y.Z` where `Z > 0`) still build/package Linux and Windows artifacts, but skip the strict validation matrix.
 
+### Release Process
+
+Release tags are pushed only after the version commit is on `master`:
+
+1. Update `CMakeLists.txt` and add the matching `## [X.Y.Z]` section at the top of `CHANGELOG.md`.
+2. Push `master`, then create and push the annotated `vX.Y.Z` tag.
+3. The release workflow validates the tag against `CMakeLists.txt`, runs the applicable build/test matrix, and packages Linux and Windows binaries.
+4. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth; `cliff.toml` is for standalone git-cliff generation only.
+5. Review and publish the generated GitHub draft after the workflow succeeds.
+
 ## Architecture (Quick Reference)
 
 - **C++20** modular library.
