@@ -73,7 +73,7 @@ Patch release tags (`vX.Y.Z` where `Z > 0`) still build/package Linux and Window
 
 ### Release Process
 
-Release tags are pushed only after the version commit is on `master`:
+Every release tag, including patch tags, requires a matching changelog entry before it is pushed:
 
 1. Update `CMakeLists.txt` and add the matching `## [X.Y.Z]` section at the top of `CHANGELOG.md`.
 2. Push `master`, then create and push the annotated `vX.Y.Z` tag.

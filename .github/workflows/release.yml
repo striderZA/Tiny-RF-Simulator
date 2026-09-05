@@ -45,7 +45,13 @@ jobs:
             echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
             exit 1
           fi
-          if ! grep -qE "^## \[$TAG_VERSION\]([[:space:]]|$)" CHANGELOG.md; then
+          if ! awk -v version="$TAG_VERSION" '
+            /^## \[/ && index($0, "## [" version "]") == 1 {
+              found=1
+              exit
+            }
+            END { exit !found }
+          ' CHANGELOG.md; then
             echo "ERROR: CHANGELOG.md has no section for [$TAG_VERSION]"
             exit 1
           fi

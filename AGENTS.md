@@ -96,7 +96,7 @@ Default section order:
 
 ## Release Contract
 
-- `.github/workflows/release.yml` validates tag versions, runs the release matrix, and creates a draft with the matching top-level `CHANGELOG.md` section.
+- `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
 
 ## Child DOX Index
