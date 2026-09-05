@@ -4,18 +4,18 @@
 [changelog]
 body = """
 {% if version %}\
-    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
-    ## [unreleased]
+## [unreleased]
 {% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
-    ### {{ group | striptags | trim | upper_first }}
-    {% for commit in commits %}
-        - {% if commit.scope %}_({{ commit.scope }})_{% endif %}\
-            {% if commit.breaking %}[**breaking**] {% endif %}\
-            {{ commit.message | upper_first }}\
-    {% endfor %}
-{% endfor %}
+{% for group, commits in commits | group_by(attribute="group") -%}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits -%}
+- {% if commit.scope %}_({{ commit.scope }})_{% endif %}\
+    {% if commit.breaking %}[**breaking**] {% endif %}\
+    {{ commit.message | upper_first }}\
+{% endfor -%}
+{% endfor -%}
 """
 trim = true
 render_always = true

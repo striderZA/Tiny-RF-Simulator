@@ -94,6 +94,11 @@ Default section order:
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 - Superpowers plan/spec documents are working materials and must not be committed.
 
+## Release Contract
+
+- `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
+- `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
+
 ## Child DOX Index
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
