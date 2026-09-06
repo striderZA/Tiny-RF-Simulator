@@ -189,3 +189,10 @@ add_standalone_test(test_issue79_component_validation
     SOURCES test_issue79_component_validation.cpp
     LIBS simulator::app
 )
+# Standalone issue #78 coverage: splitter/PFB multi-output pin API reporting
+# and OUT2 link/probe project round trips. Kept outside tests.exe for the
+# MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue78_multi_output
+    SOURCES test_issue78_multi_output.cpp
+    LIBS simulator::app
+)

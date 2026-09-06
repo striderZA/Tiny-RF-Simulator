@@ -32,6 +32,9 @@ class PFBChannelizerEngine : public ComponentEngineBase {
 
     std::string_view type_name() const override { return "pfb"; }
     std::string hoverSummary() const override;
+    int outputPinId() const override { return outputPinId(0); }
+    int outputPinId(int index) const override;
+    int numOutputPins() const override { return 2; }
 
     void setChannelCount(int M);
     void setTapsPerBranch(int K);
