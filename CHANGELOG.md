@@ -1,3 +1,15 @@
+## [0.21.1] - 2026-09-06
+
+### Fixed
+
+- **Component-library definitions** — reject invalid types and parameters before instantiation, prevent deserialization failures from leaving partial graph nodes, and keep S-parameter paths within the library root.
+- **Signal-generator noise accounting** — distinguish source-generated thermal noise (`noise_added_W`) from input noise while preserving total output noise.
+- **PFB channelizer tone handling** — reduce duplicate-tone processing while preserving strongest representations and ordering.
+
+### Changed
+
+- Pin dependency fetches to immutable commits and expand pull-request CI and formatting coverage.
+
 ## [0.21.0] - 2026-09-04
 
 ### Features
