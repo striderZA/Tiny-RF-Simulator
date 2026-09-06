@@ -309,29 +309,31 @@ TEST_CASE("external tool runner writes request file and reads result file",
     fs::create_directories(selected_path.parent_path());
     std::ofstream(selected_path) << "touchstone input";
 
-    const ExternalToolRequest request{
-        "1",           "Generate",         work_root,
-        selected_path, work_root / "work", work_root / "work" / "result.json"};
+    const ExternalToolRequest request{"1", "Generate", work_root, selected_path,
+                                      work_root / "work"};
 
     const auto result = runner.run(manifest, request);
 
     REQUIRE(result.ok);
     REQUIRE(result.exit_code == 0);
     REQUIRE(result.message == "tool ok");
-    REQUIRE(result.work_dir == request.work_dir);
-    REQUIRE(fs::exists(request.work_dir / "request.json"));
-    REQUIRE(fs::exists(request.result_path));
+    // The runner executes inside a fresh per-invocation workspace below the
+    // requested root instead of reusing the requested directory itself.
+    REQUIRE(result.work_dir != request.work_dir);
+    REQUIRE(result.work_dir.parent_path() == request.work_dir);
+    REQUIRE(fs::exists(result.work_dir / "request.json"));
+    REQUIRE(fs::exists(result.result_path));
 
     const nlohmann::json request_json =
-        nlohmann::json::parse(std::ifstream(request.work_dir / "request.json"), nullptr, false);
+        nlohmann::json::parse(std::ifstream(result.work_dir / "request.json"), nullptr, false);
     REQUIRE_FALSE(request_json.is_discarded());
     REQUIRE(request_json["action_label"] == "Generate");
     REQUIRE(request_json["project_root"] == work_root.generic_string());
     REQUIRE(request_json["selected_path"] == selected_path.generic_string());
-    REQUIRE(request_json["result_path"] == request.result_path.generic_string());
+    REQUIRE(request_json["result_path"] == result.result_path.generic_string());
 
     const nlohmann::json result_json =
-        nlohmann::json::parse(std::ifstream(request.result_path), nullptr, false);
+        nlohmann::json::parse(std::ifstream(result.result_path), nullptr, false);
     REQUIRE_FALSE(result_json.is_discarded());
     REQUIRE(result_json["result_type"] == "report_created");
     REQUIRE(result_json["request"]["action_label"] == "Generate");
@@ -352,20 +354,16 @@ TEST_CASE("external tool runner reports missing result as failure", "[extensions
     manifest.root_dir = fixture_root;
     manifest.entry_path = fixture_root / "noop_tool.py";
 
-    const ExternalToolRequest request{"1",
-                                      "Check",
-                                      work_root,
-                                      work_root / "input.txt",
-                                      work_root / "work",
-                                      work_root / "work" / "result.json"};
+    const ExternalToolRequest request{"1", "Check", work_root, work_root / "input.txt",
+                                      work_root / "work"};
 
     const auto result = runner.run(manifest, request);
 
     REQUIRE_FALSE(result.ok);
     REQUIRE(result.exit_code == 0);
     REQUIRE(result.message == "result file missing");
-    REQUIRE(fs::exists(request.work_dir / "request.json"));
-    REQUIRE_FALSE(fs::exists(request.result_path));
+    REQUIRE(fs::exists(result.work_dir / "request.json"));
+    REQUIRE_FALSE(fs::exists(result.result_path));
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "app refreshExtensions discovers project-local data packs",

@@ -1,5 +1,6 @@
 #include "extension_manifest.h"
 
+#include <algorithm>
 #include <fstream>
 #include <limits>
 #include <system_error>
@@ -24,25 +25,18 @@ bool containsParentTraversal(const fs::path &path) {
     return false;
 }
 
-bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
-    std::error_code ec;
-    const fs::path canonical_root = fs::weakly_canonical(root, ec);
-    if (ec)
+// Extension ids become workspace path segments at run time (see
+// RfSimulatorApp::runExternalTool), so only plain-name characters are
+// acceptable: letters, digits, '.', '_' and '-'. In particular this rejects
+// path separators and "." / "..", which could otherwise redirect the
+// workspace out of its temporary root.
+bool isValidExtensionId(const std::string &id) {
+    if (id == "." || id == "..")
         return false;
-
-    ec.clear();
-    const fs::path canonical_candidate = fs::weakly_canonical(candidate, ec);
-    if (ec)
-        return false;
-
-    auto root_it = canonical_root.begin();
-    auto candidate_it = canonical_candidate.begin();
-    for (; root_it != canonical_root.end(); ++root_it, ++candidate_it) {
-        if (candidate_it == canonical_candidate.end() || *root_it != *candidate_it)
-            return false;
-    }
-
-    return true;
+    return std::all_of(id.begin(), id.end(), [](const char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+               c == '.' || c == '_' || c == '-';
+    });
 }
 
 bool resolveWithinRoot(const fs::path &root, const fs::path &input, fs::path &resolved,
@@ -58,7 +52,7 @@ bool resolveWithinRoot(const fs::path &root, const fs::path &input, fs::path &re
     }
 
     fs::path candidate = input.is_absolute() ? input : (root / input);
-    if (!pathWithinRoot(root, candidate)) {
+    if (!canonicalPathWithinRoot(root, candidate)) {
         addIssue(issues, field, "Path must stay within the extension root");
         return false;
     }
@@ -149,6 +143,27 @@ bool parsePathList(const json &value, const fs::path &root, std::vector<fs::path
 
 } // namespace
 
+bool canonicalPathWithinRoot(const fs::path &root, const fs::path &candidate) {
+    std::error_code ec;
+    const fs::path canonical_root = fs::weakly_canonical(root, ec);
+    if (ec)
+        return false;
+
+    ec.clear();
+    const fs::path canonical_candidate = fs::weakly_canonical(candidate, ec);
+    if (ec)
+        return false;
+
+    auto root_it = canonical_root.begin();
+    auto candidate_it = canonical_candidate.begin();
+    for (; root_it != canonical_root.end(); ++root_it, ++candidate_it) {
+        if (candidate_it == canonical_candidate.end() || *root_it != *candidate_it)
+            return false;
+    }
+
+    return true;
+}
+
 std::optional<ExtensionManifest>
 parseExtensionManifest(const fs::path &manifest_path,
                        std::vector<ExtensionValidationIssue> &issues) {
@@ -219,6 +234,8 @@ parseExtensionManifest(const fs::path &manifest_path,
     };
 
     readRequiredString("id", manifest.id);
+    if (!manifest.id.empty() && !isValidExtensionId(manifest.id))
+        addIssue(issues, "id", "Must contain only letters, digits, '.', '_' or '-'");
     readRequiredString("name", manifest.name);
     readRequiredString("version", manifest.version);
 
