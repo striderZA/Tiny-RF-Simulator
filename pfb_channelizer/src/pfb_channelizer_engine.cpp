@@ -7,6 +7,19 @@
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "PFB", 1, 2) {}
 
+int PFBChannelizerEngine::outputPinId(int index) const {
+    if (!m_graph || m_graph_node_id < 0)
+        return -1;
+    for (const auto &node : m_graph->nodes()) {
+        if (node.node_id == m_graph_node_id) {
+            if (index < 0 || static_cast<size_t>(index) >= node.output_pin_ids.size())
+                return -1;
+            return node.output_pin_ids[index];
+        }
+    }
+    return -1;
+}
+
 void PFBChannelizerEngine::setChannelCount(int M) {
     if (M < 2)
         M = 2;

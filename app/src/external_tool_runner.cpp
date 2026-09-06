@@ -1,6 +1,8 @@
 #include "external_tool_runner.h"
 
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <system_error>
@@ -39,19 +41,37 @@ fs::path makeWorkDir(const fs::path &requested) {
     return fs::temp_directory_path() / ("rfsim_external_tool_" + std::to_string(stamp));
 }
 
+fs::path createUniqueWorkDir(const fs::path &base, std::error_code &ec) {
+    // Never reuse a caller-designated workspace: each invocation gets its own
+    // directory so concurrent or repeated runs cannot clobber each other's
+    // request/result files.
+    static std::atomic<std::uint64_t> sequence{0};
+    for (int attempt = 0; attempt < 32; ++attempt) {
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        const fs::path candidate =
+            base / ("run-" + std::to_string(stamp) + "-" + std::to_string(sequence.fetch_add(1)));
+        if (fs::create_directories(candidate, ec))
+            return candidate;
+        if (ec)
+            return {};
+    }
+    ec = std::make_error_code(std::errc::file_exists);
+    return {};
+}
+
 std::string manifestKindToString(const ExtensionManifest &manifest) {
     return manifest.kind == ExtensionKind::ExternalTool ? "external-tool" : "data-pack";
 }
 
 json buildRequestJson(const ExtensionManifest &manifest, const ExternalToolRequest &request,
-                      const fs::path &request_path) {
+                      const fs::path &request_path, const fs::path &result_path) {
     return json{{"contract_version", request.contract_version},
                 {"action_label", request.action_label},
                 {"project_root", request.project_root.generic_string()},
                 {"selected_path", request.selected_path.generic_string()},
                 {"work_dir", request_path.parent_path().generic_string()},
                 {"request_path", request_path.generic_string()},
-                {"result_path", request.result_path.generic_string()},
+                {"result_path", result_path.generic_string()},
                 {"manifest",
                  {{"id", manifest.id},
                   {"name", manifest.name},
@@ -138,15 +158,39 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     if (!working_dir.empty())
         working_dir_w = working_dir.wstring();
 
+    // Keep the tool inside a job object so a timeout can terminate the whole
+    // descendant tree, not just the direct child.
+    HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (job == nullptr)
+        return {.launched = false, .exit_code = -1, .error = "CreateJobObjectW failed"};
+
     STARTUPINFOW startup_info{};
     startup_info.cb = sizeof(startup_info);
     PROCESS_INFORMATION process_info{};
 
+    // Start suspended so the process can be placed in the job before it (or
+    // anything it spawns) can run.
     const BOOL created = CreateProcessW(
-        nullptr, command_line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+        nullptr, command_line.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED, nullptr,
         working_dir.empty() ? nullptr : working_dir_w.c_str(), &startup_info, &process_info);
-    if (!created)
+    if (!created) {
+        CloseHandle(job);
         return {.launched = false, .exit_code = -1, .error = "CreateProcessW failed"};
+    }
+
+    // Refuse to run without descendant-kill control: if the child cannot be
+    // placed in the job, terminate it while still suspended and report launch
+    // failure instead of executing with only direct-child termination.
+    if (!AssignProcessToJobObject(job, process_info.hProcess)) {
+        TerminateProcess(process_info.hProcess, 124);
+        WaitForSingleObject(process_info.hProcess, INFINITE);
+        CloseHandle(process_info.hThread);
+        CloseHandle(process_info.hProcess);
+        CloseHandle(job);
+        return {.launched = false, .exit_code = -1, .error = "could not assign process to job"};
+    }
+
+    ResumeThread(process_info.hThread);
 
     const auto deadline = std::chrono::steady_clock::now() + kProcessTimeout;
     while (true) {
@@ -156,13 +200,15 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         if (wait != WAIT_TIMEOUT) {
             CloseHandle(process_info.hThread);
             CloseHandle(process_info.hProcess);
+            CloseHandle(job);
             return {.launched = true, .exit_code = -1, .error = "WaitForSingleObject failed"};
         }
         if (std::chrono::steady_clock::now() >= deadline) {
-            TerminateProcess(process_info.hProcess, 124);
+            TerminateJobObject(job, 124);
             WaitForSingleObject(process_info.hProcess, INFINITE);
             CloseHandle(process_info.hThread);
             CloseHandle(process_info.hProcess);
+            CloseHandle(job);
             return {.launched = true, .exit_code = 124, .error = "process timed out"};
         }
     }
@@ -171,11 +217,13 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     if (!GetExitCodeProcess(process_info.hProcess, &exit_code)) {
         CloseHandle(process_info.hThread);
         CloseHandle(process_info.hProcess);
+        CloseHandle(job);
         return {.launched = true, .exit_code = -1, .error = "GetExitCodeProcess failed"};
     }
 
     CloseHandle(process_info.hThread);
     CloseHandle(process_info.hProcess);
+    CloseHandle(job);
     return {.launched = true, .exit_code = static_cast<int>(exit_code), .error = {}};
 }
 #else
@@ -188,6 +236,9 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         return {.launched = false, .exit_code = -1, .error = "fork failed"};
 
     if (pid == 0) {
+        // Own process group so the parent can signal the whole tree on timeout.
+        setpgid(0, 0);
+
         if (!working_dir.empty() && chdir(working_dir.c_str()) != 0)
             _exit(127);
 
@@ -206,6 +257,11 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         _exit(127);
     }
 
+    // Parent-side group creation closes the window before the child's own
+    // setpgid(0, 0) runs; whichever lands first wins, so the group exists by
+    // the time a timeout kill is needed.
+    setpgid(pid, pid);
+
     const auto deadline = std::chrono::steady_clock::now() + kProcessTimeout;
     int status = 0;
     while (true) {
@@ -216,7 +272,8 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
             return {.launched = true, .exit_code = -1, .error = "waitpid failed"};
         if (wait_result == 0) {
             if (std::chrono::steady_clock::now() >= deadline) {
-                kill(pid, SIGKILL);
+                // Negative pid = whole process group (tool + descendants).
+                kill(-pid, SIGKILL);
                 waitpid(pid, &status, 0);
                 return {.launched = true, .exit_code = 124, .error = "process timed out"};
             }
@@ -235,9 +292,8 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
 }
 #endif
 
-std::vector<fs::path> buildCommand(const ExtensionManifest &manifest,
-                                   const ExternalToolRequest &request,
-                                   const fs::path &request_path) {
+std::vector<fs::path> buildCommand(const ExtensionManifest &manifest, const fs::path &request_path,
+                                   const fs::path &result_path) {
     std::vector<fs::path> argv;
 #ifdef _WIN32
     const bool is_python_script = manifest.entry_path.extension() == ".py";
@@ -259,7 +315,7 @@ std::vector<fs::path> buildCommand(const ExtensionManifest &manifest,
     argv.emplace_back("--request");
     argv.push_back(request_path);
     argv.emplace_back("--result");
-    argv.push_back(request.result_path);
+    argv.push_back(result_path);
     return argv;
 }
 
@@ -282,7 +338,6 @@ std::string readJsonMessage(const fs::path &path) {
 ExternalToolRunResult ExternalToolRunner::run(const ExtensionManifest &manifest,
                                               const ExternalToolRequest &request) const {
     ExternalToolRunResult result;
-    result.result_path = request.result_path;
     result.work_dir = makeWorkDir(request.work_dir);
 
     if (manifest.kind != ExtensionKind::ExternalTool) {
@@ -305,23 +360,26 @@ ExternalToolRunResult ExternalToolRunner::run(const ExtensionManifest &manifest,
         return result;
     }
 
-    if (!request.result_path.parent_path().empty()) {
-        fs::create_directories(request.result_path.parent_path(), ec);
-        if (ec) {
-            result.message = "could not create result directory";
-            return result;
-        }
+    // Isolate each invocation in its own fresh workspace so repeated or
+    // concurrent runs never share (and clobber) request/result files.
+    result.work_dir = createUniqueWorkDir(result.work_dir, ec);
+    if (ec) {
+        result.message = "could not create work directory";
+        return result;
     }
 
     const fs::path request_path = result.work_dir / "request.json";
-    const json request_json = buildRequestJson(manifest, request, request_path);
+    const fs::path result_path = result.work_dir / "result.json";
+    result.result_path = result_path;
+
+    const json request_json = buildRequestJson(manifest, request, request_path, result_path);
     std::string error;
     if (!writeJsonFile(request_path, request_json, error)) {
         result.message = error;
         return result;
     }
 
-    const std::vector<fs::path> argv = buildCommand(manifest, request, request_path);
+    const std::vector<fs::path> argv = buildCommand(manifest, request_path, result_path);
     const ProcessResult process = launchProcess(argv, result.work_dir);
     result.exit_code = process.exit_code;
     if (!process.launched) {
@@ -335,12 +393,24 @@ ExternalToolRunResult ExternalToolRunner::run(const ExtensionManifest &manifest,
         return result;
     }
 
-    if (!fs::exists(request.result_path)) {
+    if (!fs::exists(result_path)) {
         result.message = "result file missing";
         return result;
     }
 
-    const std::string message = readJsonMessage(request.result_path);
+    // Bound the result file before parsing: a runaway tool must not be able
+    // to force unbounded JSON parsing of a huge output.
+    const std::uintmax_t size_bytes = fs::file_size(result_path, ec);
+    if (ec) {
+        result.message = "could not read result file";
+        return result;
+    }
+    if (size_bytes > maxResultFileBytes) {
+        result.message = "result file too large";
+        return result;
+    }
+
+    const std::string message = readJsonMessage(result_path);
     if (message.empty()) {
         result.message = "result file is not valid JSON";
         return result;

@@ -355,13 +355,24 @@ void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest,
                                       : fs::path(m_current_project_path).parent_path();
     const fs::path selected_path =
         m_current_project_path.empty() ? fs::path{} : fs::path(m_current_project_path);
-    const fs::path work_dir = fs::temp_directory_path() / "rf-sim-extension-run" / manifest.id;
-    const fs::path result_path = work_dir / "result.json";
-    std::error_code ec;
-    fs::remove(result_path, ec);
 
-    const ExternalToolRequest request{
-        "1", effective_action_label, project_root, selected_path, work_dir, result_path};
+    // Extension workspaces live under a canonical temp root. Manifest ids are
+    // allowlist-validated at parse time, but a hand-built manifest could still
+    // smuggle traversal into the workspace path, so refuse unless the
+    // canonical workspace stays inside the run root (issue #80).
+    const fs::path workspace_root = fs::temp_directory_path() / "rf-sim-extension-run";
+    std::error_code ec;
+    fs::create_directories(workspace_root, ec);
+    if (ec || !canonicalPathWithinRoot(workspace_root, workspace_root / manifest.id)) {
+        m_extension_result_message =
+            "Extension run failed: extension id is not allowed for execution";
+        return;
+    }
+
+    // The runner derives a fresh per-invocation workspace below this root, so
+    // no stale-result cleanup is needed here (issue #80).
+    const ExternalToolRequest request{"1", effective_action_label, project_root, selected_path,
+                                      workspace_root / manifest.id};
 
     const auto result = m_external_tool_runner.run(manifest, request);
     m_extension_result_message = result.ok ? "Extension run succeeded: " + manifest.name
@@ -421,7 +432,11 @@ void RfSimulatorApp::drawExtensionsPanel() {
 }
 
 void RfSimulatorApp::saveProject(const std::string &path) {
-    m_serializer->save(path);
+    // Only a successful write may clear dirty state or adopt the path: a
+    // failed save must leave the project dirty on its previous path so the
+    // user keeps the chance to retry (issue #77).
+    if (!m_serializer->save(path))
+        return;
     m_current_project_path = path;
     m_dirty = false;
 }
