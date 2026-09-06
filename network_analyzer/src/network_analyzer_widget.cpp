@@ -27,8 +27,7 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
     std::vector<PinEntry> pins;
     for (const auto &node : m_graph.nodes()) {
         for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
-            pins.push_back(
-                {node.output_pin_ids[i], node.label + " OUT" + std::to_string(i + 1)});
+            pins.push_back({node.output_pin_ids[i], node.label + " OUT" + std::to_string(i + 1)});
         }
     }
     std::vector<const char *> items;
@@ -44,8 +43,7 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
             break;
         }
     }
-    if (ImGui::Combo("Point A (Reference)", &a_idx, items.data(),
-                     static_cast<int>(items.size()))) {
+    if (ImGui::Combo("Point A (Reference)", &a_idx, items.data(), static_cast<int>(items.size()))) {
         m_engine.setPointA(a_idx == 0 ? -1 : pins[static_cast<size_t>(a_idx - 1)].pin_id);
         m_param_edited = true;
     }
@@ -57,8 +55,7 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
             break;
         }
     }
-    if (ImGui::Combo("Point B (Measured)", &b_idx, items.data(),
-                     static_cast<int>(items.size()))) {
+    if (ImGui::Combo("Point B (Measured)", &b_idx, items.data(), static_cast<int>(items.size()))) {
         m_engine.setPointB(b_idx == 0 ? -1 : pins[static_cast<size_t>(b_idx - 1)].pin_id);
         m_param_edited = true;
     }

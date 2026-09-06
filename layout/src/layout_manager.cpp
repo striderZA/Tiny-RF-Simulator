@@ -56,9 +56,7 @@ std::string LayoutManager::defaultLayoutPath() const {
     return (fs::path(m_exe_dir) / "rf_simulator_layout.ini").string();
 }
 
-std::string LayoutManager::layoutsDir() const {
-    return (fs::path(m_exe_dir) / "layouts").string();
-}
+std::string LayoutManager::layoutsDir() const { return (fs::path(m_exe_dir) / "layouts").string(); }
 
 bool LayoutManager::defaultLayoutExists() const {
     std::error_code ec;
@@ -120,7 +118,8 @@ bool LayoutManager::deleteNamedLayout(const std::string &name) const {
     return fs::remove(namedLayoutPath(name), ec);
 }
 
-bool LayoutManager::renameNamedLayout(const std::string &old_name, const std::string &new_name) const {
+bool LayoutManager::renameNamedLayout(const std::string &old_name,
+                                      const std::string &new_name) const {
     if (!namedLayoutExists(old_name))
         return false;
     if (namedLayoutExists(new_name))

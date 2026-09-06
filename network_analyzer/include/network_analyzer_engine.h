@@ -125,7 +125,7 @@ class NetworkAnalyzerEngine {
     std::vector<double> m_gain_dB;
     std::vector<double> m_nf_dB;
     std::string m_cached_signature; // see computeMeasurement()'s dirty-check
-    Spectrum m_stimulus; // private tone-comb stimulus, not attached to any node
+    Spectrum m_stimulus;            // private tone-comb stimulus, not attached to any node
 
     void rebuildStimulus();
 
