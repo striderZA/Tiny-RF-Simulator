@@ -44,7 +44,7 @@ If `clang-format-18` isn't available via your system package manager (e.g. Windo
 ctest --test-dir build --output-on-failure
 ```
 
-22+ test source files (including benchmark suites) cover all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, and UI. CI runs these with Xvfb for UI tests, AddressSanitizer for memory safety, and tracks coverage via gcov/lcov (uploaded to Codecov).
+Test sources live in `tests/` (Catch2 unit + benchmark suites) and `test_engine/` (ImGui UI tests). The main `tests` binary compiles `TEST_SOURCES` from `tests/CMakeLists.txt` (plus `test_session_state.cpp` on Windows); coverage that must run on every platform — or would push past the MinGW-w64 registration ceiling — goes in standalone executables registered there via `add_standalone_test` (`tests/CMakeLists.txt` is the authoritative inventory). PR and release CI run these under Xvfb for UI tests and with AddressSanitizer for memory safety.
 
 For per-engine dirty/clean benchmarks:
 
@@ -57,10 +57,14 @@ build/bin/tests.exe [bench]   # Windows
 
 ## CI Pipeline
 
-Every pull request runs through a lightweight sanity pipeline:
+Every pull request runs a sanity pipeline (`.github/workflows/ci.yml`):
 
-- **Format check** — clang-format 18 enforces code style
-- **Linux Debug build** — verifies the project still configures and compiles
+- **Format check** — clang-format 18 enforces code style across all source modules
+- **Linux GCC 14 Debug build + full test suite** (Xvfb for UI tests)
+- **Linux GCC 14 Release build + full test suite**
+- **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
+
+The remaining strict-release legs — Linux Clang 18, Windows MinGW-w64, and packaging — intentionally run only on minor/major release tags (`release.yml`) to keep PR feedback cheap; PR CI covers the Linux GCC Debug/Release and ASan configurations where most failures surface.
 
 Minor and major release tags (`vX.Y.0`, including `vX.0.0`) trigger the stricter release validation flow:
 

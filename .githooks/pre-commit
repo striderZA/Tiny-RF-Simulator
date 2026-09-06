@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Blocks commits that would fail CI's `format` job (see .github/workflows/build.yml).
+# Blocks commits that would fail CI's `format` job (see .github/workflows/ci.yml).
 # Enable once per clone with:  git config core.hooksPath .githooks
 set -u
 
-# Directories/extensions must mirror the `format` job in .github/workflows/build.yml exactly.
-DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry ideal_filter attenuator combiner touchstone logging)
-
+# Directories/extensions must mirror the `format` job in .github/workflows/ci.yml
+# and scripts/format.sh exactly.
+DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner touchstone help layout tutorial logging)
 # Staged, non-deleted .cpp/.h files under the CI-checked directories. Check this FIRST so
 # commits that touch no C++ (docs, scripts, CI config, ...) never require clang-format at all.
 mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR -- "${DIRS[@]}" \
