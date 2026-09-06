@@ -12,6 +12,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 - **test_pfb_calculator.cpp** — standalone calculator target-selection regressions; kept out of the main `tests` binary because the MinGW-w64 registration ceiling can silently drop later `TEST_CASE`s.
 - **test_bench_dsp.cpp** — Dirty/clean performance benchmarks for DSP engines
 - **test_signal_domain.cpp** — cross-engine `Spectrum` propagation tests (`is_complex_baseband`, `fs_Hz`) and post-ADC chain integration tests (ADC → mixer/amp → PFB) (spans modules, so it doesn't fit the one-file-per-component pattern)
+- **test_issue79_component_validation.cpp** — standalone executable: issue #79 component-library definition validation (load/upsert/instantiate rejection, deserialize rollback, S-param path-parameter containment); kept out of the main `tests` binary for the MinGW registration ceiling
 - **CMakeLists.txt** — Links all simulator module targets; test files listed explicitly, plus several standalone executables (see below)
 
 ## Local Contracts
@@ -21,7 +22,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 - Benchmark cases use `Catch::Benchmark::BENCHMARK` from `<catch2/benchmark/catch_benchmark_all.hpp>`
 - Test files are named `test_<component>.cpp` matching the module name
 - Build via `cmake --build build && ctest --test-dir build` or direct `build/bin/tests`
-- Adding a new module? Add its test source to `TEST_SOURCES` in `CMakeLists.txt` and link the library target
+- Adding a new test file? Register it in `tests/CMakeLists.txt` via `add_standalone_test(test_<name> SOURCES test_<name>.cpp LIBS ...)` (the standard helper; preferred for new coverage — see the MinGW ceiling below). Add to the main `tests` binary's `TEST_SOURCES` only for a pure extension of an existing component already compiled into it.
 - **MinGW-w64 test-registration ceiling:** this toolchain silently drops any `TEST_CASE` registered beyond the ~223 already linked into the main `tests` executable (verified 2026-08-09; the release.yml Windows job enforces the 223 floor with a `--list-tests` count guard). Do not add new `TEST_CASE`s to `test_main.cpp` or any file already compiled into the `tests` target — give the new coverage its own standalone executable instead (`add_executable(test_<name> test_<name>.cpp)` + `target_link_libraries` + `add_test`, following `test_attenuator`, `test_combiner`, `test_network_analyzer`, `test_component_authoring`, `test_tutorial_state`, `test_extensions`, `test_issue37_pfb_input_removal`, `test_issue70_pfb_reconnect`, `test_issue42_multi_output`, `test_component_dispatch`, `test_signal_domain`, `test_path_containment`, and `test_issue48_json_loader`), and run it directly (`build/bin/test_<name>.exe`) rather than relying on `ctest`. `test_issue48_json_loader` covers malformed project/library input via `TEST_CASE`s in its own standalone executable, outside the main `tests` registration ceiling, so it must be run directly (`build/bin/test_issue48_json_loader.exe`).
 - Platform-specific tests (e.g., Windows-only session state) are gated with `#ifdef WIN32` in CMakeLists.txt
 

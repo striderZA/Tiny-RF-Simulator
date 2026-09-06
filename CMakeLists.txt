@@ -29,27 +29,33 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Include FetchContent module
 include(FetchContent)
 
-# Fetch imgui (docking branch)
+# Fetch imgui (docking branch), pinned to an immutable commit (docking branch
+# HEAD on 2026-09-06) so dependency fetches are reproducible. imgui tags
+# docking-branch releases as vX.Y.Z-docking (e.g. v1.92.9b-docking); prefer the
+# next such tag on upgrade.
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG docking
+    GIT_TAG 7e1b65d26d52e9dd199d889c148c72184de647b4
 )
 FetchContent_MakeAvailable(imgui)
 
-# Fetch implot
+# Fetch implot, pinned to an immutable commit (master HEAD on 2026-06-08).
+# implot tags its releases (v0.17, v1.0); prefer the latest tag on upgrade.
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot.git
-    GIT_TAG master
+    GIT_TAG 7eeb9168d2e5e6b14e266d8782ecf7e649dfc3a4
 )
 FetchContent_MakeAvailable(implot)
 
-# Fetch GLFW
+# Fetch GLFW, pinned to an immutable commit (master HEAD on 2026-08-03).
+# The 3.5.1 release tag (2026-07-30) is the closest official tag; prefer it on
+# upgrade.
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG master
+    GIT_TAG 92dcf4ce74f2e2554a98fea09be7c705c17daa5a
 )
 FetchContent_MakeAvailable(glfw)
 
@@ -61,19 +67,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
-# Fetch imgui_test_engine
+# Fetch imgui_test_engine, pinned to an immutable commit (main HEAD on
+# 2026-08-07). Kept in lockstep with the pinned imgui commit above; imgui_test_engine
+# tags releases as v1.92.x (e.g. v1.92.9b) — prefer the next such tag on upgrade,
+# moving imgui and imgui_test_engine together.
 FetchContent_Declare(
     imgui_test_engine
     GIT_REPOSITORY https://github.com/ocornut/imgui_test_engine.git
-    GIT_TAG main
+    GIT_TAG fdc1cb0930fa9bc2bef1d884bf2c10b570d29170
 )
 FetchContent_MakeAvailable(imgui_test_engine)
 
-# Fetch imnodes
+# Fetch imnodes, pinned to an immutable commit (master HEAD on 2026-05-13).
+# imnodes has no recent release tag (v0.5 is from 2022), so the master HEAD
+# commit is the usable immutable ref.
 FetchContent_Declare(
     imnodes
     GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
-    GIT_TAG master
+    GIT_TAG eb36902c892548ef94f88f51ad7e7c9c7058a71c
 )
 # Using Populate (not MakeAvailable) because imnodes ships its own CMakeLists.txt
 # that defines an 'imnodes' target; we define the target manually below to ensure
@@ -84,10 +95,12 @@ FetchContent_Populate(imnodes)
 # Use Populate (not MakeAvailable) because PFD ships its own CMakeLists.txt
 # with an older cmake_minimum_required that is incompatible with CMake 4.x.
 # Since PFD is header-only, we only need the source directory for includes.
+# Pinned to an immutable commit (main HEAD on 2025-03-21); the only release tag
+# (0.1.0, 2020) predates required fixes.
 FetchContent_Declare(
     pfd
     GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs.git
-    GIT_TAG main
+    GIT_TAG c12ea8c9a727f5320a2b4570aee863bbede2a204
 )
 FetchContent_Populate(pfd)
 

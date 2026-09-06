@@ -17,16 +17,27 @@ jobs:
       - name: Install clang-format
         run: sudo apt-get install -y -qq clang-format-18
       - name: Check formatting
+        # Directory list must mirror scripts/format.sh and .githooks/pre-commit.
         run: |
           find src app core common tests test_engine \
             signal_generator amplifier spectrum_analyzer equalizer \
-            node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry \
-            ideal_filter attenuator combiner touchstone logging \
+            node_graph splitter mixer adc coax pfb_channelizer iq_plot \
+            network_analyzer ideal_filter attenuator combiner touchstone \
+            help layout tutorial logging \
             -name '*.cpp' -o -name '*.h' | \
             xargs clang-format-18 --dry-run --Werror
 
+  # PR CI covers the two most failure-prone Linux configurations (GCC Debug and
+  # Release) plus an AddressSanitizer pass. The remaining release-matrix legs
+  # (Linux Clang 18, Windows MinGW-w64, packaging) intentionally run only on
+  # minor/major release tags in release.yml to keep PR feedback cheap.
   build:
+    name: Linux GCC 14 (${{ matrix.build_type }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
     steps:
       - uses: actions/checkout@v6
 
@@ -41,7 +52,7 @@ jobs:
           cmake -B build -G Ninja
           -DCMAKE_CXX_COMPILER=g++-14
           -DCMAKE_C_COMPILER=gcc-14
-          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DGLFW_BUILD_WAYLAND=OFF
 
       - name: Build
@@ -51,3 +62,29 @@ jobs:
       # release.yml strict-build invocation; xvfb-run gives test_ui a display.
       - name: Test
         run: xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+
+  asan:
+    runs-on: ubuntu-24.04
+    name: AddressSanitizer
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake pkg-config g++-14 \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+      - name: Configure (ASan)
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_C_COMPILER=gcc-14
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+          -DGLFW_BUILD_WAYLAND=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Test (ASan)
+        run: |
+          cd build
+          ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"

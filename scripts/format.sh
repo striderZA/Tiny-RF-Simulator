@@ -11,7 +11,9 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot icon_registry ideal_filter attenuator combiner touchstone logging)
+# Must mirror the `format` job in .github/workflows/ci.yml and the DIRS list in
+# .githooks/pre-commit.
+DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner touchstone help layout tutorial logging)
 
 resolve_clang_format() {
   for candidate in clang-format-18 clang-format; do

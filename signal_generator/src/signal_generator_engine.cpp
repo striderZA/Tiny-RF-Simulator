@@ -48,14 +48,12 @@ void SignalGeneratorEngine::update(double) {
         return;
     }
 
-    // Unity gain for noise density (clean source)
+    // Source-vs-added noise contract: with no RF input nothing can pass
+    // through, so noise_W stays zero and the k*T thermal floor this source
+    // emits is accounted entirely as self-added noise (noise_added_W). The
+    // numeric noise_total_W is unchanged (0 + k*T).
     out.noise_W.assign(N, 0.0);
-    for (size_t i = 0; i < N; ++i) {
-        out.noise_W[i] = k * T;
-    }
-
-    // Generator adds no noise of its own
-    out.noise_added_W.assign(N, 0.0);
+    out.noise_added_W.assign(N, k * T);
 
     out.phase_deg.assign(N, 0.0);
 

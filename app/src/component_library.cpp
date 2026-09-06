@@ -134,6 +134,18 @@ std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
 }
 
 void ComponentLibrary::upsert(const ComponentDefinition &def) {
+    // Issue #79: an invalid definition must never enter the in-memory library,
+    // where it would surface in the browser (insertion UI). loadFile() drops
+    // issue-ful files and the authoring form refuses to save them, so this
+    // guards direct callers. Validation is recomputed from type/parameters:
+    // the caller-maintained `issues` cache is untrusted — a hand-built
+    // definition can carry an empty list for a definition that is not valid.
+    const auto issues = validate(def.type, def.parameters);
+    if (!issues.empty()) {
+        LOG_WARN("ComponentLibrary: refusing to upsert %s (%s): %zu validation issue(s)",
+                 def.part_number.c_str(), def.type.c_str(), issues.size());
+        return;
+    }
     for (auto &existing : m_definitions) {
         if (existing.source_path == def.source_path) {
             existing = def;
@@ -229,6 +241,21 @@ void ComponentLibrary::loadFile(const std::string &filepath) {
             }
         }
 
+        // Issue #79: reject, don't retain, definitions whose parameters fail
+        // type/range/enum validation (or whose type is unknown). They must
+        // never reach the insertion UI or engine factory; the file is logged
+        // and skipped so valid siblings still load.
+        if (!def.issues.empty()) {
+            LOG_WARN("ComponentLibrary: rejecting definition '%s' in %s (%zu validation "
+                     "issue(s))",
+                     def.part_number.c_str(), filepath.c_str(), def.issues.size());
+            for (const auto &issue : def.issues) {
+                const std::string location = issue.field.empty() ? "definition" : issue.field;
+                LOG_WARN("ComponentLibrary:   - %s: %s", location.c_str(), issue.message.c_str());
+            }
+            return;
+        }
+
         m_definitions.push_back(std::move(def));
     } catch (const nlohmann::json::exception &e) {
         // Covers parse_error AND type_error (e.g. a required field present but
@@ -313,42 +340,91 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, 
         LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
         return nullptr;
     }
+    // Issue #79: the library never stores issue-ful definitions (loadFile and
+    // upsert reject them), so an invalid definition reaching the factory is a
+    // direct-caller bug; refuse instead of creating a broken engine. Validation
+    // is recomputed from type/parameters — never trust the caller-maintained
+    // `issues` cache, which a hand-built definition can leave empty.
+    const auto issues = validate(def.type, def.parameters);
+    if (!issues.empty()) {
+        LOG_WARN("ComponentLibrary: refusing to instantiate '%s' (%s): %zu validation "
+                 "issue(s)",
+                 def.part_number.c_str(), def.type.c_str(), issues.size());
+        return nullptr;
+    }
 
     IComponentEngine *result = descriptor->create(registry, graph, id);
     if (!result)
         return nullptr;
-    result->deserialize(def.parameters);
 
-    if (def.type == "amplifier") {
-        auto *amp = dynamic_cast<AmplifierEngine *>(result);
-        for (const auto &df : def.data_files) {
-            if (df.type == "s_parameters" && amp) {
-                std::filesystem::path json_dir =
-                    std::filesystem::path(def.source_path).parent_path();
-                // S1: the data-file path must stay within the library JSON
-                // file's directory; absolute paths and '..' escapes are
-                // rejected (skipped) rather than reading arbitrary files.
-                if (auto sparam_path = resolveDataFilePath(json_dir, df.path)) {
-                    amp->setSParamFilepath(sparam_path->string());
-
-                    if (amp->sparamLoaded()) {
-                        LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
-                                 sparam_path->string().c_str());
-                    } else {
-                        LOG_WARN("Failed to load S-param file for %s: %s (falling back to "
-                                 "single-point params)",
-                                 def.part_number.c_str(), sparam_path->string().c_str());
-                    }
-                    break; // Only load first S-param file
+    // The engine is registered in the registry and node graph from create();
+    // any failure below rolls it back so no partially configured component
+    // survives and no exception escapes to the caller.
+    try {
+        const std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
+        // Issue #79: path-bearing *parameters* are resolved against the library
+        // JSON's directory and containment-checked like data_files entries;
+        // escaping paths are dropped so engine deserialize() never loads an
+        // arbitrary file (mirrors the project-file load boundary).
+        nlohmann::json params = def.parameters;
+        if (params.is_object() && !def.source_path.empty()) {
+            for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                if (!params.contains(key) || !params[key].is_string())
+                    continue;
+                const std::string value = params[key].get<std::string>();
+                if (auto resolved = resolveDataFilePath(json_dir, value)) {
+                    params[key] = resolved->string();
+                } else {
+                    LOG_WARN("ComponentLibrary: rejecting S-param parameter path '%s' for "
+                             "%s (must stay within the library directory)",
+                             value.c_str(), def.part_number.c_str());
+                    params.erase(key);
                 }
-                LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
-                         "(must stay within the library directory)",
-                         df.path.c_str(), def.part_number.c_str());
             }
         }
-    }
+        result->deserialize(params);
 
-    if (!def.part_number.empty())
-        graph.setNodePartNumber(result->graphNodeId(), def.part_number);
+        if (def.type == "amplifier") {
+            auto *amp = dynamic_cast<AmplifierEngine *>(result);
+            for (const auto &df : def.data_files) {
+                if (df.type == "s_parameters" && amp) {
+                    // S1: the data-file path must stay within the library JSON
+                    // file's directory; absolute paths and '..' escapes are
+                    // rejected (skipped) rather than reading arbitrary files.
+                    if (auto sparam_path = resolveDataFilePath(json_dir, df.path)) {
+                        amp->setSParamFilepath(sparam_path->string());
+
+                        if (amp->sparamLoaded()) {
+                            LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
+                                     sparam_path->string().c_str());
+                        } else {
+                            LOG_WARN("Failed to load S-param file for %s: %s (falling back to "
+                                     "single-point params)",
+                                     def.part_number.c_str(), sparam_path->string().c_str());
+                        }
+                        break; // Only load first S-param file
+                    }
+                    LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
+                             "(must stay within the library directory)",
+                             df.path.c_str(), def.part_number.c_str());
+                }
+            }
+        }
+
+        if (!def.part_number.empty())
+            graph.setNodePartNumber(result->graphNodeId(), def.part_number);
+    } catch (const std::exception &e) {
+        // A definition that passes field validation can still trip an engine
+        // deserialize() on an engine-state key the library schema does not
+        // describe (e.g. "enable_nonlinear" as a string).
+        LOG_WARN("ComponentLibrary: failed to instantiate '%s' (%s): %s", def.part_number.c_str(),
+                 def.type.c_str(), e.what());
+        try {
+            registry.remove(result->graphNodeId());
+        } catch (...) {
+            // Removal failure must not mask the rollback outcome.
+        }
+        return nullptr;
+    }
     return result;
 }

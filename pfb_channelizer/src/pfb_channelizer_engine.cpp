@@ -206,18 +206,31 @@ void PFBChannelizerEngine::update(double) {
     // Each input tone should appear once in the full-band output. Overlapping
     // channel filters produce multiple representations of the same tone; keep
     // the strongest filtered representation rather than exposing duplicates.
+    // A channel only sees tones within +/-channel_bw of its centre, so a
+    // duplicate of one of channel k's tones can only have been appended by
+    // channels k-2..k (k itself only when the input carries duplicate
+    // frequencies). Restricting the search to those runs avoids re-scanning
+    // the whole accumulated tone list on every occurrence.
     out_full.tones.clear();
-    for (const auto &ch : m_channels) {
+    size_t run_start_k2 = 0; // where channel k-2's appends begin (search window)
+    size_t run_start_k1 = 0; // where channel k-1's appends begin
+    for (size_t k = 0; k < m_channels.size(); ++k) {
+        const auto &ch = m_channels[k];
+        const size_t run_start = out_full.tones.size();
+        const size_t window_begin = (k >= 2) ? run_start_k2 : 0;
         for (const auto &tone : ch.tones) {
-            auto existing = std::find_if(out_full.tones.begin(), out_full.tones.end(),
-                                         [&tone](const Spectrum::Tone &candidate) {
-                                             return candidate.freq_Hz == tone.freq_Hz;
-                                         });
+            auto existing =
+                std::find_if(out_full.tones.begin() + static_cast<std::ptrdiff_t>(window_begin),
+                             out_full.tones.end(), [&tone](const Spectrum::Tone &candidate) {
+                                 return candidate.freq_Hz == tone.freq_Hz;
+                             });
             if (existing == out_full.tones.end())
                 out_full.tones.push_back(tone);
             else if (tone.power_dBm > existing->power_dBm)
                 *existing = tone;
         }
+        run_start_k2 = run_start_k1;
+        run_start_k1 = run_start;
     }
 
     out_full.bumpGeneration();
