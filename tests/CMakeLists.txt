@@ -142,6 +142,13 @@ add_standalone_test(test_signal_domain
     SOURCES test_signal_domain.cpp
     LIBS ${TEST_ENGINE_LIBS}
 )
+# Standalone for the source-vs-added noise-field contract (issue #82). Kept
+# out of the main `tests` binary for the same MinGW-w64 registration-ceiling
+# reason as test_component_authoring above.
+add_standalone_test(test_signal_generator_noise
+    SOURCES test_signal_generator_noise.cpp
+    LIBS simulator::signal_generator_engine simulator::node_graph_engine
+)
 
 # Standalone for the S1/S2 security-fix tests (S-param path containment at the
 # project-file and library boundaries + touchstone parser size/point guards).
@@ -171,5 +178,14 @@ add_standalone_test(test_pfb_filter_design
 )
 add_standalone_test(test_pfb_calculator
     SOURCES test_pfb_calculator.cpp
+    LIBS simulator::app
+)
+# Standalone issue #79 coverage: component-library definitions are validated at
+# load/upsert and rejected before they reach the insertion UI or engine factory;
+# engine deserialization failures roll back; path-bearing parameters get the
+# same containment as data_files entries. Kept outside tests.exe for the
+# MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue79_component_validation
+    SOURCES test_issue79_component_validation.cpp
     LIBS simulator::app
 )

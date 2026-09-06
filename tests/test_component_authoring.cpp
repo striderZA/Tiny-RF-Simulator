@@ -157,7 +157,7 @@ static std::string write_temp_json(const std::string &content) {
     return path.string();
 }
 
-TEST_CASE("ComponentLibrary loadFile attaches validation issues for out-of-range value",
+TEST_CASE("ComponentLibrary loadFile rejects a definition with an out-of-range value",
           "[library][validate]") {
     std::string json = R"({
         "schema_version": 1,
@@ -169,8 +169,9 @@ TEST_CASE("ComponentLibrary loadFile attaches validation issues for out-of-range
     ComponentLibrary lib;
     lib.loadFile(path);
     auto defs = lib.all();
-    REQUIRE(defs.size() == 1);
-    REQUIRE_FALSE(defs[0]->issues.empty());
+    // Issue #79: invalid definitions are rejected at the load boundary so they
+    // never reach the insertion UI or the engine factory.
+    REQUIRE(defs.empty());
     std::filesystem::remove(path);
 }
 

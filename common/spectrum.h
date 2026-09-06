@@ -15,8 +15,11 @@ struct Spectrum {
     std::vector<double> frequencies;
     std::vector<Tone> tones;
 
-    // Noise vectors store POWER SPECTRAL DENSITY in W/Hz.
-    // To get total power in a bin, multiply by bin width.
+    // Source-vs-added invariant: noise_W holds density that entered through an
+    // RF input and passed through to the output; noise_added_W holds density
+    // the component generated itself. A source with no RF input (e.g. the
+    // signal generator) must keep noise_W zero and report its thermal floor in
+    // noise_added_W. Consumers read noise_total_W (= noise_W + noise_added_W).
     std::vector<double> noise_W;       // input noise density (W/Hz)
     std::vector<double> noise_added_W; // added noise density (W/Hz)
     std::vector<double> noise_total_W; // total output noise density (W/Hz)

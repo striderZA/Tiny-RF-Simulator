@@ -161,3 +161,86 @@ TEST_CASE("PFB deserialize clamps filter parameters", "[pfb_filter_design]") {
     REQUIRE(pfb.tapsPerBranch() == 1);
     REQUIRE(pfb.kaiserBeta() == Approx(20.0));
 }
+TEST_CASE("PFB full-band output deduplicates tones across overlapping channels",
+          "[pfb_filter_design]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph); // defaults K=8, beta=8
+    pfb.setChannelCount(16);
+    pfb.setFs_Hz(200e6); // channel_bw = 12.5 MHz; ch8 center = 6.25 MHz
+
+    Spectrum in;
+    in.frequencies.resize(201);
+    for (int i = 0; i < 201; ++i)
+        in.frequencies[i] = -100e6 + i * 1e6;
+    in.noise_total_W.assign(201, 1e-20);
+
+    // T1 sits between ch7 (-6.25 MHz) and ch8 (6.25 MHz); ch8's filter weight
+    // (offset 0.25 ch) is stronger than ch7's (0.75 ch).
+    in.tones.push_back({3.125e6, -30.0, 0.0});
+    // T2 sits at ch8's centre (offset 0 ch) and leaks into ch7/ch9 at 1.0 ch.
+    in.tones.push_back({6.25e6, -30.0, 0.0});
+    // T3a/T3b share one frequency (ch8/ch9 boundary at offset 0.5 ch) but
+    // differ in power; the duplicate-frequency input tones must collapse into
+    // a single output tone carrying the stronger one's filtered power.
+    in.tones.push_back({12.5e6, -30.0, 0.0});
+    in.tones.push_back({12.5e6, -20.0, 0.0});
+
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    PfbFilterDesign proto(16, 8, 8.0);
+    auto filtered = [&proto](double power_dBm, double norm_offset) {
+        double w = proto.responseAt(norm_offset);
+        return 10.0 * std::log10(std::pow(10.0, power_dBm / 10.0) * w * w + 1e-300);
+    };
+
+    const auto &out = pfb.node().outputs[1];
+    // Every frequency appears exactly once, ordered by first-appearance
+    // channel (ch7's tones precede ch8's), with the strongest filtered
+    // representation kept at that first position.
+    REQUIRE(out.tones.size() == 3);
+    REQUIRE(out.tones[0].freq_Hz == Approx(3.125e6).margin(1e-6));
+    REQUIRE(out.tones[1].freq_Hz == Approx(6.25e6).margin(1e-6));
+    REQUIRE(out.tones[2].freq_Hz == Approx(12.5e6).margin(1e-6));
+
+    // T1 keeps ch8's stronger representation (found two channels later and
+    // replaced in place), not ch7's first, weaker one.
+    REQUIRE(out.tones[0].power_dBm == Approx(filtered(-30.0, 3.125e6 / 12.5e6)).margin(1e-9));
+    REQUIRE(out.tones[0].power_dBm > filtered(-30.0, 9.375e6 / 12.5e6));
+    // T2's centre-channel pass (w = 1) dominates its 1.0-ch edge leaks.
+    REQUIRE(out.tones[1].power_dBm == Approx(-30.0).margin(1e-9));
+    // T3a/T3b collapse to T3b's stronger filtered power.
+    REQUIRE(out.tones[2].power_dBm == Approx(filtered(-20.0, 6.25e6 / 12.5e6)).margin(1e-9));
+}
+
+TEST_CASE("PFB full-band output deduplicates late in the channel sweep", "[pfb_filter_design]") {
+    // Regression: dedupe must find an earlier occurrence of a frequency even
+    // when many unrelated tones were appended in between (the duplicate's
+    // first appearance is several channel runs back, not adjacent).
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph); // defaults K=8, beta=8
+    pfb.setChannelCount(8);
+    pfb.setFs_Hz(200e6); // channel_bw = 25 MHz; ch4 center = 6.25 MHz
+
+    Spectrum in;
+    in.frequencies.resize(201);
+    for (int i = 0; i < 201; ++i)
+        in.frequencies[i] = -100e6 + i * 1e6;
+    in.noise_total_W.assign(201, 1e-20);
+    in.tones.push_back({0.0, -30.0, 0.0}); // ch3/ch4 boundary (offset 0.5 ch)
+    for (int i = 1; i <= 30; ++i)
+        in.tones.push_back({static_cast<double>(i) * 1e6, -50.0, 0.0}); // spread tones
+
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &out = pfb.node().outputs[1];
+    REQUIRE(out.tones.size() == 31); // no duplicate frequencies survive
+    std::vector<double> freqs;
+    freqs.reserve(out.tones.size());
+    for (const auto &t : out.tones)
+        freqs.push_back(t.freq_Hz);
+    std::sort(freqs.begin(), freqs.end());
+    for (size_t i = 1; i < freqs.size(); ++i)
+        REQUIRE(freqs[i] > freqs[i - 1]); // strictly increasing => globally unique
+}
