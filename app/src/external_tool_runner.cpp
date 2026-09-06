@@ -161,6 +161,8 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     // Keep the tool inside a job object so a timeout can terminate the whole
     // descendant tree, not just the direct child.
     HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (job == nullptr)
+        return {.launched = false, .exit_code = -1, .error = "CreateJobObjectW failed"};
 
     STARTUPINFOW startup_info{};
     startup_info.cb = sizeof(startup_info);
@@ -172,12 +174,22 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         nullptr, command_line.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED, nullptr,
         working_dir.empty() ? nullptr : working_dir_w.c_str(), &startup_info, &process_info);
     if (!created) {
-        if (job != nullptr)
-            CloseHandle(job);
+        CloseHandle(job);
         return {.launched = false, .exit_code = -1, .error = "CreateProcessW failed"};
     }
 
-    const BOOL in_job = job != nullptr && AssignProcessToJobObject(job, process_info.hProcess);
+    // Refuse to run without descendant-kill control: if the child cannot be
+    // placed in the job, terminate it while still suspended and report launch
+    // failure instead of executing with only direct-child termination.
+    if (!AssignProcessToJobObject(job, process_info.hProcess)) {
+        TerminateProcess(process_info.hProcess, 124);
+        WaitForSingleObject(process_info.hProcess, INFINITE);
+        CloseHandle(process_info.hThread);
+        CloseHandle(process_info.hProcess);
+        CloseHandle(job);
+        return {.launched = false, .exit_code = -1, .error = "could not assign process to job"};
+    }
+
     ResumeThread(process_info.hThread);
 
     const auto deadline = std::chrono::steady_clock::now() + kProcessTimeout;
@@ -188,20 +200,15 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         if (wait != WAIT_TIMEOUT) {
             CloseHandle(process_info.hThread);
             CloseHandle(process_info.hProcess);
-            if (job != nullptr)
-                CloseHandle(job);
+            CloseHandle(job);
             return {.launched = true, .exit_code = -1, .error = "WaitForSingleObject failed"};
         }
         if (std::chrono::steady_clock::now() >= deadline) {
-            if (in_job)
-                TerminateJobObject(job, 124);
-            else
-                TerminateProcess(process_info.hProcess, 124);
+            TerminateJobObject(job, 124);
             WaitForSingleObject(process_info.hProcess, INFINITE);
             CloseHandle(process_info.hThread);
             CloseHandle(process_info.hProcess);
-            if (job != nullptr)
-                CloseHandle(job);
+            CloseHandle(job);
             return {.launched = true, .exit_code = 124, .error = "process timed out"};
         }
     }
@@ -210,15 +217,13 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     if (!GetExitCodeProcess(process_info.hProcess, &exit_code)) {
         CloseHandle(process_info.hThread);
         CloseHandle(process_info.hProcess);
-        if (job != nullptr)
-            CloseHandle(job);
+        CloseHandle(job);
         return {.launched = true, .exit_code = -1, .error = "GetExitCodeProcess failed"};
     }
 
     CloseHandle(process_info.hThread);
     CloseHandle(process_info.hProcess);
-    if (job != nullptr)
-        CloseHandle(job);
+    CloseHandle(job);
     return {.launched = true, .exit_code = static_cast<int>(exit_code), .error = {}};
 }
 #else
