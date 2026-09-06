@@ -421,7 +421,11 @@ void RfSimulatorApp::drawExtensionsPanel() {
 }
 
 void RfSimulatorApp::saveProject(const std::string &path) {
-    m_serializer->save(path);
+    // Only a successful write may clear dirty state or adopt the path: a
+    // failed save must leave the project dirty on its previous path so the
+    // user keeps the chance to retry (issue #77).
+    if (!m_serializer->save(path))
+        return;
     m_current_project_path = path;
     m_dirty = false;
 }
