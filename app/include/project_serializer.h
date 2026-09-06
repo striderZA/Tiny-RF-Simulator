@@ -19,7 +19,7 @@ class ProjectSerializer {
                       bool &show_properties, bool &show_node_editor,
                       NetworkAnalyzerEngine &na_engine);
 
-    void save(const std::string &path);
+    bool save(const std::string &path); // false on open/write/flush/close failure (logged)
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
     void reset();                       // newProject: links, components, probes, counters, PFBs
 

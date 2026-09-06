@@ -189,3 +189,10 @@ add_standalone_test(test_issue79_component_validation
     SOURCES test_issue79_component_validation.cpp
     LIBS simulator::app
 )
+# Standalone issue #77 coverage: a failed save (unwritable target path) must
+# not clear the project's dirty state or replace the current path. Kept
+# outside tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue77_save_failure
+    SOURCES test_issue77_save_failure.cpp
+    LIBS simulator::app
+)

@@ -158,7 +158,7 @@ ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEng
       m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
       m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
-void ProjectSerializer::save(const std::string &path) {
+bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
     root["version"] = 1;
 
@@ -308,12 +308,22 @@ void ProjectSerializer::save(const std::string &path) {
     std::ofstream out(path);
     if (!out) {
         LOG_ERROR("Failed to open project file for writing: %s", path.c_str());
-        return;
+        return false;
     }
     out << root.dump(2);
+    out.flush();
+    if (!out) {
+        LOG_ERROR("Failed to write project file: %s", path.c_str());
+        return false;
+    }
     out.close();
+    if (!out) {
+        LOG_ERROR("Failed to close project file: %s", path.c_str());
+        return false;
+    }
 
     LOG_INFO("Saved project to %s", path.c_str());
+    return true;
 }
 
 bool ProjectSerializer::load(const std::string &path) {
