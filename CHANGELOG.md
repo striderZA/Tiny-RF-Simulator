@@ -1,3 +1,14 @@
+## [0.21.2] - 2026-09-06
+
+### Fixed
+
+- **Project saves** — failed writes now preserve the dirty state and current project path so they can be retried safely.
+- **Multi-output persistence** — splitter and PFB output-2 links and probes now survive project save/load round trips.
+
+### Security
+
+- **Extension execution** — validate extension IDs, isolate invocation workspaces, limit result-file size, enforce temporary-root containment, and terminate descendant processes on timeout.
+
 ## [0.21.1] - 2026-09-06
 
 ### Fixed
