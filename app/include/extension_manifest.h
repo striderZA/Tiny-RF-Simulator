@@ -31,6 +31,13 @@ struct ExtensionValidationIssue {
     std::string message;
 };
 
+// True when the weakly-canonical form of `candidate` equals or is a descendant
+// of the weakly-canonical form of `root`; false when either path cannot be
+// resolved. Shared by manifest path resolution and the app's extension
+// workspace containment check (extension ids become workspace path segments).
+bool canonicalPathWithinRoot(const std::filesystem::path &root,
+                             const std::filesystem::path &candidate);
+
 struct ExtensionManifest {
     int schema_version = 0;
     std::string id;

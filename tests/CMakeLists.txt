@@ -204,3 +204,13 @@ add_standalone_test(test_issue78_multi_output
     SOURCES test_issue78_multi_output.cpp
     LIBS simulator::app
 )
+
+# Standalone issue #80 coverage: extension-execution hardening (workspace id
+# allowlist + canonical containment, per-invocation workspace isolation,
+# result-file size bound, app-level containment of hand-built manifests).
+# Kept outside tests.exe and out of test_extensions.cpp for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_issue80_extension_hardening
+    SOURCES test_issue80_extension_hardening.cpp
+    LIBS simulator::app
+)
