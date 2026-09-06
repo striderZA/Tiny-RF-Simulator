@@ -12,6 +12,7 @@ class SplitterEngine : public ComponentEngineBase {
     std::string hoverSummary() const override;
     int outputPinId(int index) const override;
     int outputPinId() const override { return outputPinId(0); }
+    int numOutputPins() const override { return 2; }
 
     void update(double dt) override;
     nlohmann::json serialize() const override;
