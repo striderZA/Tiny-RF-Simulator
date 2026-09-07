@@ -140,6 +140,8 @@ void PFBChannelizerEngine::update(double) {
 
     double bin_width =
         (in_ptr->frequencies.size() > 1) ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
+    const double channel_spacing = m_cfg.Fs_Hz / m_cfg.M;
+    const double channel_bw = channel_spacing * static_cast<double>(m_cfg.sampling_ratio);
 
     for (auto &ch : m_channels) {
         ch.noise_W = 0.0;
@@ -159,7 +161,7 @@ void PFBChannelizerEngine::update(double) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
             if (std::abs(offset) <= ch.bandwidth_Hz) {
                 Spectrum::Tone t = tone;
-                double w = m_design.responseAt(offset / (m_cfg.Fs_Hz / m_cfg.M));
+                double w = m_design.responseAt(offset / channel_bw);
                 double power_lin = std::pow(10.0, tone.power_dBm / 10.0) * w * w;
                 t.power_dBm = 10.0 * std::log10(power_lin + 1e-300);
                 ch.tones.push_back(t);
@@ -208,7 +210,6 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
     std::vector<int> overlap_count(n_full, 0);
-    double channel_bw = m_cfg.Fs_Hz * static_cast<double>(m_cfg.sampling_ratio) / m_cfg.M;
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
@@ -281,7 +282,7 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
             double offset = freqs[i] - ch.center_freq_Hz;
             if (std::abs(offset) <= channel_bw) {
                 ch.bin_indices.push_back(i);
-                ch.bin_weights.push_back(m_design.responseAt(offset / channel_spacing));
+                ch.bin_weights.push_back(m_design.responseAt(offset / channel_bw));
             }
         }
     }

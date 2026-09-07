@@ -52,6 +52,40 @@ TEST_CASE("PFB ratio two doubles channel output rate and bandwidth", "[pfb][samp
     REQUIRE(pfb.node().outputs[0].fs_Hz == Approx(25e6));
 }
 
+TEST_CASE("PFB oversampling preserves full-band flat-noise density", "[pfb][sampling_ratio]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+    auto input = makeInput(400e6);
+    pfb.node().inputs[0] = &input;
+
+    pfb.update(0.0);
+    const double critical_psd = pfb.node().outputs[1].noise_total_W.at(200);
+    REQUIRE(critical_psd > 0.0);
+
+    pfb.setSamplingRatio(2);
+    pfb.update(0.0);
+    const double oversampled_psd = pfb.node().outputs[1].noise_total_W.at(200);
+
+    REQUIRE(oversampled_psd / critical_psd == Approx(1.0).epsilon(0.05));
+}
+
+TEST_CASE("PFB oversampling widens the usable channel response", "[pfb][sampling_ratio]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+    auto input = makeInput(400e6);
+    input.tones.push_back({18.25e6, -30.0, 0.0});
+    pfb.node().inputs[0] = &input;
+
+    pfb.update(0.0);
+    const double critical_tone = pfb.channels().at(16).tones.front().power_dBm;
+
+    pfb.setSamplingRatio(2);
+    pfb.update(0.0);
+    const double oversampled_tone = pfb.channels().at(16).tones.front().power_dBm;
+
+    REQUIRE(oversampled_tone > critical_tone + 20.0);
+}
+
 TEST_CASE("PFB sampling ratio accepts only one or two", "[pfb][sampling_ratio]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
