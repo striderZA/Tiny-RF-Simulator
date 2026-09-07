@@ -45,8 +45,7 @@ PowerMeasurement PowerMeterEngine::measure(const Spectrum *source) const {
         return invalid(PowerMeterError::InvalidFrequencyGrid);
 
     for (size_t i = 0; i < frequencies.size(); ++i) {
-        if (!std::isfinite(frequencies[i]) ||
-            (i > 0 && frequencies[i] <= frequencies[i - 1]))
+        if (!std::isfinite(frequencies[i]) || (i > 0 && frequencies[i] <= frequencies[i - 1]))
             return invalid(PowerMeterError::InvalidFrequencyGrid);
         if (i > 1 && !nearlyEqual(frequencies[i] - frequencies[i - 1], bin_width))
             return invalid(PowerMeterError::InvalidFrequencyGrid);
