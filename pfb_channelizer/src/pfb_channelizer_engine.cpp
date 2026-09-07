@@ -55,6 +55,14 @@ void PFBChannelizerEngine::setKaiserBeta(double beta) {
     }
 }
 
+void PFBChannelizerEngine::setSamplingRatio(int ratio) {
+    ratio = std::clamp(ratio, 1, 2);
+    if (ratio != m_cfg.sampling_ratio) {
+        m_cfg.sampling_ratio = ratio;
+        m_dirty = true;
+    }
+}
+
 void PFBChannelizerEngine::setActiveChannel(int ch) {
     if (ch < 0)
         ch = 0;
@@ -94,6 +102,7 @@ void PFBChannelizerEngine::update(double) {
         out.tones.clear();
         out.noise_W.clear();
         out.noise_total_W.clear();
+        out.fs_Hz = outputFs_Hz();
         out.bumpGeneration();
         out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         // Sever the full-band output too: it previously retained the last
@@ -106,6 +115,7 @@ void PFBChannelizerEngine::update(double) {
         out_full.noise_total_W.clear();
         out_full.noise_added_W.clear();
         out_full.phase_deg.clear();
+        out_full.fs_Hz = m_cfg.Fs_Hz;
         out_full.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         out_full.bumpGeneration();
         return;
@@ -118,16 +128,20 @@ void PFBChannelizerEngine::update(double) {
     // spectrum.
     if (in_ptr->frequencies != m_cached_freqs || m_cfg.Fs_Hz != m_cached_Fs_Hz ||
         m_cfg.K != m_cached_K || m_cfg.beta != m_cached_beta ||
+        m_cfg.sampling_ratio != m_cached_sampling_ratio ||
         m_channels.size() != static_cast<size_t>(m_cfg.M)) {
         recomputeChannels(in_ptr->frequencies);
         m_cached_freqs = in_ptr->frequencies;
         m_cached_Fs_Hz = m_cfg.Fs_Hz;
         m_cached_K = m_cfg.K;
         m_cached_beta = m_cfg.beta;
+        m_cached_sampling_ratio = m_cfg.sampling_ratio;
     }
 
     double bin_width =
         (in_ptr->frequencies.size() > 1) ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
+    const double channel_spacing = m_cfg.Fs_Hz / m_cfg.M;
+    const double channel_bw = channel_spacing * static_cast<double>(m_cfg.sampling_ratio);
 
     for (auto &ch : m_channels) {
         ch.noise_W = 0.0;
@@ -147,7 +161,7 @@ void PFBChannelizerEngine::update(double) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
             if (std::abs(offset) <= ch.bandwidth_Hz) {
                 Spectrum::Tone t = tone;
-                double w = m_design.responseAt(offset / (m_cfg.Fs_Hz / m_cfg.M));
+                double w = m_design.responseAt(offset / channel_bw);
                 double power_lin = std::pow(10.0, tone.power_dBm / 10.0) * w * w;
                 t.power_dBm = 10.0 * std::log10(power_lin + 1e-300);
                 ch.tones.push_back(t);
@@ -161,6 +175,7 @@ void PFBChannelizerEngine::update(double) {
     out.noise_W.resize(n, 0.0);
     out.noise_total_W.resize(n, 0.0);
     out.phase_deg.resize(n, 0.0);
+    out.fs_Hz = outputFs_Hz();
     out.tones = active.tones;
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
 
@@ -188,13 +203,13 @@ void PFBChannelizerEngine::update(double) {
     // removes ripple from overlapping channel contributions.
     auto &out_full = m_node.outputs[1];
     out_full.frequencies = in_ptr->frequencies;
+    out_full.fs_Hz = m_cfg.Fs_Hz;
 
     size_t n_full = in_ptr->frequencies.size();
     out_full.noise_W.assign(n_full, 0.0);
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
     std::vector<int> overlap_count(n_full, 0);
-    double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
@@ -219,18 +234,17 @@ void PFBChannelizerEngine::update(double) {
     // Each input tone should appear once in the full-band output. Overlapping
     // channel filters produce multiple representations of the same tone; keep
     // the strongest filtered representation rather than exposing duplicates.
-    // A channel only sees tones within +/-channel_bw of its centre, so a
-    // duplicate of one of channel k's tones can only have been appended by
-    // channels k-2..k (k itself only when the input carries duplicate
-    // frequencies). Restricting the search to those runs avoids re-scanning
-    // the whole accumulated tone list on every occurrence.
+    // A channel only sees tones within +/-channel_bw of its centre. Search
+    // only the recent channel runs that can overlap the current one; this
+    // keeps duplicate suppression bounded while supporting oversampling.
     out_full.tones.clear();
-    size_t run_start_k2 = 0; // where channel k-2's appends begin (search window)
-    size_t run_start_k1 = 0; // where channel k-1's appends begin
+    const size_t overlap_channels = static_cast<size_t>(2 * m_cfg.sampling_ratio);
+    std::vector<size_t> run_starts(m_channels.size(), 0);
     for (size_t k = 0; k < m_channels.size(); ++k) {
         const auto &ch = m_channels[k];
         const size_t run_start = out_full.tones.size();
-        const size_t window_begin = (k >= 2) ? run_start_k2 : 0;
+        run_starts[k] = run_start;
+        const size_t window_begin = (k >= overlap_channels) ? run_starts[k - overlap_channels] : 0;
         for (const auto &tone : ch.tones) {
             auto existing =
                 std::find_if(out_full.tones.begin() + static_cast<std::ptrdiff_t>(window_begin),
@@ -242,8 +256,6 @@ void PFBChannelizerEngine::update(double) {
             else if (tone.power_dBm > existing->power_dBm)
                 *existing = tone;
         }
-        run_start_k2 = run_start_k1;
-        run_start_k1 = run_start;
     }
 
     out_full.bumpGeneration();
@@ -251,14 +263,15 @@ void PFBChannelizerEngine::update(double) {
 
 void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
     m_design = PfbFilterDesign(m_cfg.M, m_cfg.K, m_cfg.beta);
-    double channel_bw = m_cfg.Fs_Hz / m_cfg.M;
+    double channel_spacing = m_cfg.Fs_Hz / m_cfg.M;
+    double channel_bw = channel_spacing * static_cast<double>(m_cfg.sampling_ratio);
     double nyquist = m_cfg.Fs_Hz / 2.0;
     m_channels.resize(m_cfg.M);
 
     for (int k = 0; k < m_cfg.M; ++k) {
         auto &ch = m_channels[k];
         ch.channel_index = k;
-        ch.center_freq_Hz = -nyquist + channel_bw / 2.0 + k * channel_bw;
+        ch.center_freq_Hz = -nyquist + channel_spacing / 2.0 + k * channel_spacing;
         ch.bandwidth_Hz = channel_bw;
         ch.bin_indices.clear();
         ch.bin_weights.clear();
@@ -279,6 +292,7 @@ nlohmann::json PFBChannelizerEngine::serialize() const {
     return {{"channel_count", m_cfg.M},
             {"taps_per_branch", m_cfg.K},
             {"kaiser_beta", m_cfg.beta},
+            {"sampling_ratio", m_cfg.sampling_ratio},
             {"active_channel", m_active_channel}};
 }
 
@@ -290,6 +304,7 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
         m_cfg.M = 2048;
     m_cfg.K = std::clamp(j.value("taps_per_branch", 8), 1, 64);
     m_cfg.beta = std::clamp(j.value("kaiser_beta", 8.0), 0.0, 20.0);
+    m_cfg.sampling_ratio = std::clamp(j.value("sampling_ratio", 1), 1, 2);
     m_active_channel = j.value("active_channel", 0);
     if (m_active_channel < 0)
         m_active_channel = 0;
@@ -300,5 +315,6 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
 
 std::string PFBChannelizerEngine::hoverSummary() const {
     return "PFB M=" + std::to_string(m_cfg.M) + " K=" + std::to_string(m_cfg.K) +
-           " Ch=" + std::to_string(m_active_channel);
+           " Ch=" + std::to_string(m_active_channel) +
+           " OS=" + std::to_string(m_cfg.sampling_ratio) + "x";
 }

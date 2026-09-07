@@ -91,6 +91,7 @@ Default section order:
 - The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
 
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
+- PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 - Superpowers plan/spec documents are working materials and must not be committed.
 

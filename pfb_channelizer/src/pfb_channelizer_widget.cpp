@@ -13,6 +13,8 @@ void PFBChannelizerWidget::rebuildCache() {
     if (!in || in->frequencies.size() < 2) {
         m_cells.clear();
         m_cached_gen = in ? in->generation : 0;
+        m_cached_output_gen = m_engine.node().outputs[0].generation;
+        m_cached_grid_offset = m_grid_offset;
         return;
     }
 
@@ -66,6 +68,8 @@ void PFBChannelizerWidget::rebuildCache() {
     m_y_max += 3.0;
 
     m_cached_gen = in->generation;
+    m_cached_output_gen = m_engine.node().outputs[0].generation;
+    m_cached_grid_offset = m_grid_offset;
 }
 
 void PFBChannelizerWidget::draw(const char *title, bool *p_open) {
@@ -94,7 +98,9 @@ void PFBChannelizerWidget::draw(const char *title, bool *p_open) {
         m_grid_offset = 0;
     }
 
-    if (in != m_cached_input || in->generation != m_cached_gen)
+    if (in != m_cached_input || in->generation != m_cached_gen ||
+        m_grid_offset != m_cached_grid_offset ||
+        m_engine.node().outputs[0].generation != m_cached_output_gen)
         rebuildCache();
 
     ImDrawList *dl = ImGui::GetWindowDrawList();

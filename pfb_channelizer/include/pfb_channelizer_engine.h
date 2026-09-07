@@ -24,6 +24,7 @@ struct PFBConfig {
     int K = 8;
     double Fs_Hz = 0.0;
     double beta = 8.0;
+    int sampling_ratio = 1;
 };
 
 class PFBChannelizerEngine : public ComponentEngineBase {
@@ -39,6 +40,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     void setChannelCount(int M);
     void setTapsPerBranch(int K);
     void setKaiserBeta(double beta);
+    void setSamplingRatio(int ratio);
     void setActiveChannel(int ch);
     void setFs_Hz(double fs) {
         if (fs != m_cfg.Fs_Hz || m_fs_from_input) {
@@ -51,8 +53,13 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     int channelCount() const { return m_cfg.M; }
     int tapsPerBranch() const { return m_cfg.K; }
     double kaiserBeta() const { return m_cfg.beta; }
+    int samplingRatio() const { return m_cfg.sampling_ratio; }
     int activeChannel() const { return m_active_channel; }
     double fs_Hz() const { return m_cfg.Fs_Hz; }
+    double outputFs_Hz() const {
+        return m_cfg.Fs_Hz > 0.0 ? m_cfg.Fs_Hz * static_cast<double>(m_cfg.sampling_ratio) / m_cfg.M
+                                 : 0.0;
+    }
     const std::vector<PFBChannel> &channels() const { return m_channels; }
 
     double activeChannelCenter_Hz() const {
@@ -77,6 +84,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     std::vector<double> m_cached_freqs;
     double m_cached_Fs_Hz = 0;
     int m_cached_K = 0;
+    int m_cached_sampling_ratio = 0;
     double m_cached_beta = 0.0;
     bool m_fs_from_input = false;
 
