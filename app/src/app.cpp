@@ -257,6 +257,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
 }
 
 void RfSimulatorApp::newProject() {
+    m_power_meter_widget->clearSource();
     m_serializer->reset();
     m_spectrum_widget->setProbeLabels({});
     m_current_project_path.clear();
@@ -444,6 +445,7 @@ void RfSimulatorApp::saveProject(const std::string &path) {
 }
 
 void RfSimulatorApp::loadProject(const std::string &path) {
+    m_power_meter_widget->clearSource();
     if (!m_serializer->load(path))
         return;
     m_current_project_path = path;

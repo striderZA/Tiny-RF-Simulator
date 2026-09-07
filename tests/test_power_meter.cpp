@@ -16,6 +16,7 @@ Spectrum spectrumWithGrid() {
 TEST_CASE("PowerMeter converts one tone from dBm", "[power_meter]") {
     Spectrum spec = spectrumWithGrid();
     spec.tones = {{1e6, 0.0, 0.0}};
+    spec.noise_total_W.clear();
     const auto result = PowerMeterEngine{}.measure(&spec);
     REQUIRE(result.valid);
     REQUIRE(result.error == PowerMeterError::None);
@@ -78,22 +79,34 @@ TEST_CASE("PowerMeter rejects malformed frequency grids", "[power_meter]") {
     SECTION("one frequency") {
         Spectrum spec;
         spec.frequencies = {0.0};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidFrequencyGrid);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidFrequencyGrid);
     }
     SECTION("non-increasing") {
         Spectrum spec;
         spec.frequencies = {0.0, 1e6, 1e6};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidFrequencyGrid);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidFrequencyGrid);
     }
     SECTION("non-uniform") {
         Spectrum spec;
         spec.frequencies = {0.0, 1e6, 3e6};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidFrequencyGrid);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidFrequencyGrid);
     }
     SECTION("non-finite") {
         Spectrum spec;
         spec.frequencies = {0.0, std::numeric_limits<double>::quiet_NaN()};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidFrequencyGrid);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidFrequencyGrid);
     }
 }
 
@@ -102,21 +115,33 @@ TEST_CASE("PowerMeter rejects malformed noise and tones", "[power_meter]") {
     SECTION("noise size mismatch") {
         Spectrum spec = spectrumWithGrid();
         spec.noise_total_W = {1e-12};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidNoise);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidNoise);
     }
     SECTION("negative noise") {
         Spectrum spec = spectrumWithGrid();
         spec.noise_total_W[1] = -1.0;
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidNoise);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidNoise);
     }
     SECTION("non-finite noise") {
         Spectrum spec = spectrumWithGrid();
         spec.noise_total_W[1] = std::numeric_limits<double>::infinity();
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidNoise);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidNoise);
     }
     SECTION("non-finite tone") {
         Spectrum spec = spectrumWithGrid();
         spec.tones = {{1e6, std::numeric_limits<double>::quiet_NaN(), 0.0}};
-        REQUIRE(engine.measure(&spec).error == PowerMeterError::InvalidTone);
+        const auto result = engine.measure(&spec);
+        REQUIRE_FALSE(result.valid);
+        REQUIRE(std::isnan(result.power_dBm));
+        REQUIRE(result.error == PowerMeterError::InvalidTone);
     }
 }

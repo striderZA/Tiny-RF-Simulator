@@ -9,6 +9,7 @@ class PowerMeterWidget {
     PowerMeterWidget(PowerMeterEngine &engine, NodeGraphEngine &graph);
 
     void draw(const char *title, bool *p_open = nullptr);
+    void clearSource() { m_source_pin = -1; }
 
   private:
     PowerMeterEngine &m_engine;
