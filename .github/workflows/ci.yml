@@ -22,7 +22,7 @@ jobs:
           find src app core common tests test_engine \
             signal_generator amplifier spectrum_analyzer equalizer \
             node_graph splitter mixer adc coax pfb_channelizer iq_plot \
-            network_analyzer ideal_filter attenuator combiner touchstone \
+            network_analyzer ideal_filter attenuator combiner power_meter touchstone \
             help layout tutorial logging \
             -name '*.cpp' -o -name '*.h' | \
             xargs clang-format-18 --dry-run --Werror
