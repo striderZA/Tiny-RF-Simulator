@@ -214,3 +214,9 @@ add_standalone_test(test_issue80_extension_hardening
     SOURCES test_issue80_extension_hardening.cpp
     LIBS simulator::app
 )
+# Standalone sampling-ratio coverage stays outside tests.exe because of the
+# MinGW-w64 registration ceiling.
+add_standalone_test(test_pfb_sampling_ratio
+    SOURCES test_pfb_sampling_ratio.cpp
+    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
+)

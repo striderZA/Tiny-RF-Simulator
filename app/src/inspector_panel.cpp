@@ -766,6 +766,17 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
         engine.setKaiserBeta(beta);
         m_param_edited = true;
     }
+    const char *sampling_labels[] = {"1x (critical)", "2x (oversampled)"};
+    int sampling_ratio = engine.samplingRatio() - 1;
+    if (ImGui::Combo("Sampling Ratio", &sampling_ratio, sampling_labels, 2)) {
+        engine.setSamplingRatio(sampling_ratio + 1);
+        m_param_edited = true;
+    }
+    if (engine.outputFs_Hz() > 0.0) {
+        ImGui::Text("Channel output Fs: %.3f MHz", engine.outputFs_Hz() / 1e6);
+    } else {
+        ImGui::TextDisabled("Channel output Fs: waiting for ADC input");
+    }
 
     if (ImGui::SliderInt("Active Channel", &ch, 0, engine.channelCount() - 1)) {
         engine.setActiveChannel(ch);
