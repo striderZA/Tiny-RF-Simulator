@@ -94,6 +94,11 @@ add_standalone_test(test_network_analyzer
          simulator::node_graph_engine
 )
 
+add_standalone_test(test_power_meter
+    SOURCES test_power_meter.cpp
+    LIBS simulator::power_meter_engine
+)
+
 # Standalone executable for all new tests added by the component-library authoring UI
 # plan (docs/superpowers/plans/2026-07-28-component-library-authoring-ui.md). Kept out
 # of the main `tests` binary because this MinGW-w64 toolchain silently drops any
