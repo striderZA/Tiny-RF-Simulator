@@ -558,9 +558,3 @@ void NodeGraphWidget::setupDarkTheme() {
     ImNodes::PushColorStyle(ImNodesCol_Pin, IM_COL32(200, 200, 220, 255));
     ImNodes::PushColorStyle(ImNodesCol_PinHovered, IM_COL32(120, 200, 255, 255));
 }
-
-size_t NodeGraphWidget::findNodeIndex(int node_id) const {
-    (void)node_id;
-    // Real implementation is added in a later task.
-    return size_t(-1);
-}

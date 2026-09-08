@@ -2,10 +2,49 @@
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <limits>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
 
 PFBChannelizerEngine::PFBChannelizerEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "PFB", 1, 2) {}
+
+void PFBChannelizerEngine::prepareToneIndex(size_t expected_tones) {
+    constexpr size_t min_capacity = 8;
+    if (expected_tones == 0)
+        return;
+    if (expected_tones > std::numeric_limits<size_t>::max() / 2)
+        throw std::length_error("PFB tone index size overflow");
+
+    const size_t required = std::max(min_capacity, expected_tones * 2);
+    size_t capacity = min_capacity;
+    while (capacity < required) {
+        if (capacity > std::numeric_limits<size_t>::max() / 2)
+            throw std::length_error("PFB tone index size overflow");
+        capacity *= 2;
+    }
+    if (m_tone_index.size() >= capacity)
+        return;
+
+    m_tone_index.assign(capacity, {});
+    m_tone_index_mask = capacity - 1;
+    m_tone_index_generation = 0;
+}
+
+PFBChannelizerEngine::ToneIndexSlot &
+PFBChannelizerEngine::toneIndexSlot(double freq_Hz) {
+    const size_t start = std::hash<double>{}(freq_Hz) & m_tone_index_mask;
+    for (size_t offset = 0; offset < m_tone_index.size(); ++offset) {
+        const size_t index = (start + offset) & m_tone_index_mask;
+        auto &slot = m_tone_index[index];
+        if (!slot.occupied || slot.generation != m_tone_index_generation)
+            return slot;
+        if (slot.freq_Hz == freq_Hz)
+            return slot;
+    }
+    throw std::logic_error("PFB tone index is full");
+}
 
 int PFBChannelizerEngine::outputPinId(int index) const {
     if (!m_graph || m_graph_node_id < 0)
@@ -117,6 +156,7 @@ void PFBChannelizerEngine::update(double) {
         out_full.phase_deg.clear();
         out_full.fs_Hz = m_cfg.Fs_Hz;
         out_full.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+        m_overlap_counts.clear();
         out_full.bumpGeneration();
         return;
     }
@@ -209,7 +249,7 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_W.assign(n_full, 0.0);
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
-    std::vector<int> overlap_count(n_full, 0);
+    m_overlap_counts.assign(n_full, 0);
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
@@ -219,14 +259,14 @@ void PFBChannelizerEngine::update(double) {
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
                 out_full.noise_W[bin_idx] += density;
                 out_full.noise_total_W[bin_idx] += density;
-                ++overlap_count[bin_idx];
+                ++m_overlap_counts[bin_idx];
             }
         }
     }
     for (size_t i = 0; i < n_full; ++i) {
-        if (overlap_count[i] > 1) {
-            out_full.noise_W[i] /= static_cast<double>(overlap_count[i]);
-            out_full.noise_total_W[i] /= static_cast<double>(overlap_count[i]);
+        if (m_overlap_counts[i] > 1) {
+            out_full.noise_W[i] /= static_cast<double>(m_overlap_counts[i]);
+            out_full.noise_total_W[i] /= static_cast<double>(m_overlap_counts[i]);
         }
     }
     out_full.phase_deg = in_ptr->phase_deg;
@@ -234,27 +274,31 @@ void PFBChannelizerEngine::update(double) {
     // Each input tone should appear once in the full-band output. Overlapping
     // channel filters produce multiple representations of the same tone; keep
     // the strongest filtered representation rather than exposing duplicates.
-    // A channel only sees tones within +/-channel_bw of its centre. Search
-    // only the recent channel runs that can overlap the current one; this
-    // keeps duplicate suppression bounded while supporting oversampling.
+    // A reusable frequency index preserves first-appearance ordering while
+    // avoiding a scan through all previously emitted tones.
     out_full.tones.clear();
-    const size_t overlap_channels = static_cast<size_t>(2 * m_cfg.sampling_ratio);
-    std::vector<size_t> run_starts(m_channels.size(), 0);
-    for (size_t k = 0; k < m_channels.size(); ++k) {
-        const auto &ch = m_channels[k];
-        const size_t run_start = out_full.tones.size();
-        run_starts[k] = run_start;
-        const size_t window_begin = (k >= overlap_channels) ? run_starts[k - overlap_channels] : 0;
+    prepareToneIndex(in_ptr->tones.size());
+    if (++m_tone_index_generation == 0) {
+        for (auto &slot : m_tone_index)
+            slot = {};
+        m_tone_index_generation = 1;
+    }
+    for (const auto &ch : m_channels) {
         for (const auto &tone : ch.tones) {
-            auto existing =
-                std::find_if(out_full.tones.begin() + static_cast<std::ptrdiff_t>(window_begin),
-                             out_full.tones.end(), [&tone](const Spectrum::Tone &candidate) {
-                                 return candidate.freq_Hz == tone.freq_Hz;
-                             });
-            if (existing == out_full.tones.end())
+            if (std::isnan(tone.freq_Hz)) {
                 out_full.tones.push_back(tone);
-            else if (tone.power_dBm > existing->power_dBm)
-                *existing = tone;
+                continue;
+            }
+            auto &slot = toneIndexSlot(tone.freq_Hz);
+            if (!slot.occupied || slot.generation != m_tone_index_generation) {
+                slot.freq_Hz = tone.freq_Hz;
+                slot.output_index = out_full.tones.size();
+                slot.generation = m_tone_index_generation;
+                slot.occupied = true;
+                out_full.tones.push_back(tone);
+            } else if (tone.power_dBm > out_full.tones[slot.output_index].power_dBm) {
+                out_full.tones[slot.output_index] = tone;
+            }
         }
     }
 

@@ -36,6 +36,7 @@ class NodeGraphEngine {
   public:
     int addNode(const std::string &label, SignalNode *signal_node, int num_inputs, int num_outputs);
     void removeNode(int node_id);
+    void removeNodeForSignalNode(SignalNode *signal_node);
 
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);

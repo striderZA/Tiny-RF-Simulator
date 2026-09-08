@@ -659,16 +659,10 @@ void RfSimulatorApp::rewireInputs() {
 void RfSimulatorApp::update_dsp() {
     rewireInputs();
 
-    std::unordered_map<int, std::function<void()>> updates;
-    for (auto *comp : m_components.all()) {
-        updates[comp->graphNodeId()] = [comp]() { comp->update(0.0); };
-    }
-
     auto order = m_graph_engine.topologicalOrder();
     for (int node_id : order) {
-        auto it = updates.find(node_id);
-        if (it != updates.end())
-            it->second();
+        if (auto *comp = m_components.find(node_id))
+            comp->update(0.0);
     }
 
     // Update spectrum view based on probed pins. Each probe resolves to a
