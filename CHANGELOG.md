@@ -1,3 +1,17 @@
+## [0.22.1] - 2026-09-08
+
+### Fixed
+
+- **Graph node removal** — safely remove nodes by their signal identity and immediately rewire surviving components, preventing stale downstream references after deletion.
+
+### Changed
+
+- **DSP frame-loop performance** — reduce per-frame dispatch and allocation overhead in component updates and PFB channelizer tone processing.
+
+### Testing
+
+- Add regression coverage for graph-node removal and multi-generation PFB frequency handling.
+
 ## [0.22.0] - 2026-09-08
 
 ### Added
