@@ -445,9 +445,12 @@ void RfSimulatorApp::saveProject(const std::string &path) {
 }
 
 void RfSimulatorApp::loadProject(const std::string &path) {
-    m_power_meter_widget->clearSource();
-    if (!m_serializer->load(path))
+    if (!m_serializer->load(path)) {
+        if (m_serializer->lastLoadReset())
+            m_power_meter_widget->clearSource();
         return;
+    }
+    m_power_meter_widget->clearSource();
     m_current_project_path = path;
     refreshExtensions();
     m_dirty = false;

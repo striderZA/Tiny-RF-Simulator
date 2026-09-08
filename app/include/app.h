@@ -100,6 +100,7 @@ class RfSimulatorApp {
     ComponentRegistry &testComponents() { return m_components; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
+    PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }

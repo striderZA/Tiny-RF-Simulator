@@ -21,7 +21,9 @@ class ProjectSerializer {
 
     bool save(const std::string &path); // false on open/write/flush/close failure (logged)
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
-    void reset();                       // newProject: links, components, probes, counters, PFBs
+    // True when the latest load reset project state before returning.
+    bool lastLoadReset() const { return m_last_load_reset; }
+    void reset(); // newProject: links, components, probes, counters, PFBs
 
   private:
     ComponentRegistry &m_components;
@@ -35,4 +37,5 @@ class ProjectSerializer {
     bool &m_show_properties;
     bool &m_show_node_editor;
     NetworkAnalyzerEngine &m_na_engine;
+    bool m_last_load_reset = false;
 };
