@@ -36,6 +36,7 @@ class NodeGraphEngine {
   public:
     int addNode(const std::string &label, SignalNode *signal_node, int num_inputs, int num_outputs);
     void removeNode(int node_id);
+    void removeNodeForSignalNode(SignalNode *signal_node);
 
     int addLink(int start_pin, int end_pin);
     void removeLink(int link_id);
@@ -109,6 +110,7 @@ class NodeGraphEngine {
     std::unordered_map<int, std::vector<int>> m_node_to_group_cache;
 
     void rebuildNodeToGroupCache();
+    void removeNodeAt(std::vector<GraphNode>::iterator it);
 };
 
 // View-layer component type. Used by NodeGraphWidget to pick a color and

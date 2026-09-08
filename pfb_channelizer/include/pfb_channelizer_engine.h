@@ -5,9 +5,9 @@
 #include "pfb_filter_design.h"
 #include "signal_node.h"
 #include "spectrum.h"
+#include <cstdint>
 #include <string>
 #include <vector>
-
 struct PFBChannel {
     int channel_index;
     double center_freq_Hz;
@@ -78,10 +78,21 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     void deserialize(const nlohmann::json &) override;
 
   private:
+    struct ToneIndexSlot {
+        double freq_Hz = 0.0;
+        size_t output_index = 0;
+        uint64_t generation = 0;
+        bool occupied = false;
+    };
+
     PFBConfig m_cfg;
     int m_active_channel = 0;
     std::vector<PFBChannel> m_channels;
     std::vector<double> m_cached_freqs;
+    std::vector<int> m_overlap_counts;
+    std::vector<ToneIndexSlot> m_tone_index;
+    size_t m_tone_index_mask = 0;
+    uint64_t m_tone_index_generation = 0;
     double m_cached_Fs_Hz = 0;
     int m_cached_K = 0;
     int m_cached_sampling_ratio = 0;
@@ -89,6 +100,8 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     bool m_fs_from_input = false;
 
     void recomputeChannels(const std::vector<double> &freqs);
+    void prepareToneIndex(size_t expected_tones);
+    ToneIndexSlot &toneIndexSlot(double freq_Hz);
     // Shared real prototype; rebuilt whenever M/K/beta change. The single
     // source of truth for channel weights (also used by the Filter Calculator).
     PfbFilterDesign m_design{32, 8, 8.0};

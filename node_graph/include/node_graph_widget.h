@@ -127,5 +127,4 @@ class NodeGraphWidget {
     void detectNodeMoves();
     void handleRubberBand(bool editor_hovered);
     void handleGroupSelection();
-    size_t findNodeIndex(int node_id) const;
 };

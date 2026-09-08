@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -243,4 +244,29 @@ TEST_CASE("PFB full-band output deduplicates late in the channel sweep", "[pfb_f
     std::sort(freqs.begin(), freqs.end());
     for (size_t i = 1; i < freqs.size(); ++i)
         REQUIRE(freqs[i] > freqs[i - 1]); // strictly increasing => globally unique
+}
+
+TEST_CASE("PFB tone index handles disjoint generations without saturation",
+          "[pfb_filter_design][performance]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+    pfb.setChannelCount(8);
+    pfb.setFs_Hz(200e6);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -100e6 + i * 0.5e6;
+    in.noise_total_W.assign(in.frequencies.size(), 1e-20);
+    pfb.node().inputs[0] = &in;
+
+    for (int generation = 0; generation < 3; ++generation) {
+        in.tones.clear();
+        for (int i = 0; i < 8; ++i)
+            in.tones.push_back({-87e6 + i * 25e6 + generation * 0.25e6, -30.0, 0.0});
+        in.bumpGeneration();
+        pfb.update(0.0);
+
+        REQUIRE(pfb.node().outputs[1].tones.size() == in.tones.size());
+    }
 }

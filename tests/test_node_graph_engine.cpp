@@ -8,15 +8,47 @@ TEST_CASE("NodeGraphEngine can add and remove nodes", "[node_graph]") {
     SignalNode node1;
     SignalNode node2;
 
-    int id1 = engine.addNode("Generator 0", &node1, false, true);
-    int id2 = engine.addNode("Amplifier 0", &node2, true, true);
+    const int id1 = engine.addNode("Generator 0", &node1, false, true);
+    engine.addNode("Amplifier 0", &node2, true, true);
 
     REQUIRE(engine.nodes().size() == 2);
     REQUIRE(engine.nodes()[0].label == "Generator 0");
     REQUIRE(engine.nodes()[1].label == "Amplifier 0");
 
-    engine.removeNode(id1);
-    REQUIRE(engine.nodes().size() == 1);
+    SECTION("removes the first node by its ID") {
+        engine.removeNode(id1);
+        REQUIRE(engine.nodes().size() == 1);
+    }
+
+    SECTION("removes the requested ID when signal nodes are shared") {
+        NodeGraphEngine shared_engine;
+        SignalNode shared_node;
+        SignalNode sink_node;
+
+        const int first_id = shared_engine.addNode("First", &shared_node, 0, 1);
+        const int second_id = shared_engine.addNode("Second", &shared_node, 0, 1);
+        const int sink_id = shared_engine.addNode("Sink", &sink_node, 1, 0);
+        const int first_output = shared_engine.nodes()[0].output_pin_ids[0];
+        const int second_output = shared_engine.nodes()[1].output_pin_ids[0];
+        const int sink_input = shared_engine.nodes()[2].input_pin_ids[0];
+
+        const int first_link = shared_engine.addLink(first_output, sink_input);
+        const int second_link = shared_engine.addLink(second_output, sink_input);
+        REQUIRE(shared_engine.addProbePin(first_output));
+        REQUIRE(shared_engine.addProbePin(second_output));
+
+        shared_engine.removeNode(second_id);
+
+        REQUIRE(shared_engine.nodes().size() == 2);
+        REQUIRE(shared_engine.nodes()[0].node_id == first_id);
+        REQUIRE(shared_engine.nodes()[1].node_id == sink_id);
+        REQUIRE(shared_engine.links().size() == 1);
+        REQUIRE(shared_engine.links()[0].link_id == first_link);
+        REQUIRE(shared_engine.links()[0].start_pin_id == first_output);
+        REQUIRE(shared_engine.links()[0].link_id != second_link);
+        REQUIRE(shared_engine.probePins().size() == 1);
+        REQUIRE(shared_engine.probePins()[0] == first_output);
+    }
 }
 
 TEST_CASE("NodeGraphEngine can link nodes and query topology", "[node_graph]") {

@@ -27,8 +27,20 @@ int NodeGraphEngine::addNode(const std::string &label, SignalNode *signal_node, 
 void NodeGraphEngine::removeNode(int node_id) {
     auto it = std::find_if(m_nodes.begin(), m_nodes.end(),
                            [node_id](const GraphNode &n) { return n.node_id == node_id; });
-    if (it == m_nodes.end())
-        return;
+    if (it != m_nodes.end())
+        removeNodeAt(it);
+}
+
+void NodeGraphEngine::removeNodeForSignalNode(SignalNode *signal_node) {
+    auto it = std::find_if(m_nodes.begin(), m_nodes.end(), [signal_node](const GraphNode &n) {
+        return n.signal_node == signal_node;
+    });
+    if (it != m_nodes.end())
+        removeNodeAt(it);
+}
+
+void NodeGraphEngine::removeNodeAt(std::vector<GraphNode>::iterator it) {
+    const int node_id = it->node_id;
 
     LOG_INFO("Removed node '%s' (id=%d)", it->label.c_str(), node_id);
 
