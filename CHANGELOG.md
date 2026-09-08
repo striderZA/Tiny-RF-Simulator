@@ -1,3 +1,9 @@
+## [0.22.2] - 2026-09-08
+
+### Changed
+
+- **Release pipeline** — releases are now prepared through a `release/vX.Y.Z` pull request and tagged only after merge; the pull-request CI pipeline was replaced by tag-time validation (format check and AddressSanitizer on every release tag, plus a Linux GCC Debug full-test-suite leg for patch releases).
+
 ## [0.22.1] - 2026-09-08
 
 ### Fixed
