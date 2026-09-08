@@ -1,3 +1,15 @@
+## [0.22.0] - 2026-09-08
+
+### Added
+
+- **Power Meter instrument** — measure total signal power in dBm from any signal-node output, including tone-only, noise-only, and combined signals.
+  - Select a live graph output pin as the measurement source.
+  - Report clear invalid-input states for unavailable or malformed spectra.
+
+### Testing
+
+- Add power-meter engine and application regression coverage for tone/noise measurement and project-load source handling.
+
 ## [0.21.2] - 2026-09-06
 
 ### Fixed
