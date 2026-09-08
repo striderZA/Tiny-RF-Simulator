@@ -110,6 +110,7 @@ class NodeGraphEngine {
     std::unordered_map<int, std::vector<int>> m_node_to_group_cache;
 
     void rebuildNodeToGroupCache();
+    void removeNodeAt(std::vector<GraphNode>::iterator it);
 };
 
 // View-layer component type. Used by NodeGraphWidget to pick a color and
