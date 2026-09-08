@@ -31,7 +31,7 @@ class ComponentRegistry {
 
             auto type_it = m_type_index.find(type);
             if (type_it == m_type_index.end()) {
-                type_it = m_type_index.emplace(type, std::vector<IComponentEngine *> {}).first;
+                type_it = m_type_index.emplace(type, std::vector<IComponentEngine *>{}).first;
                 type_entry_added = true;
             }
             type_it->second.push_back(static_cast<IComponentEngine *>(ptr));

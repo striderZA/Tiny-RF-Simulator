@@ -32,9 +32,8 @@ void PFBChannelizerEngine::prepareToneIndex(size_t expected_tones) {
     m_tone_index_generation = 0;
 }
 
-PFBChannelizerEngine::ToneIndexSlot &
-PFBChannelizerEngine::toneIndexSlot(double freq_Hz) {
-    const size_t start = std::hash<double>{}(freq_Hz) & m_tone_index_mask;
+PFBChannelizerEngine::ToneIndexSlot &PFBChannelizerEngine::toneIndexSlot(double freq_Hz) {
+    const size_t start = std::hash<double>{}(freq_Hz)&m_tone_index_mask;
     for (size_t offset = 0; offset < m_tone_index.size(); ++offset) {
         const size_t index = (start + offset) & m_tone_index_mask;
         auto &slot = m_tone_index[index];
