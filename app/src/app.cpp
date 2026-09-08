@@ -147,6 +147,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_graph_engine);
+    m_power_meter_widget = std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_graph_engine);
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
     // state (persisted by ProjectSerializer) — mark the project dirty exactly
     // like InspectorPanel::onParamChange does for component params.
@@ -207,6 +208,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_log = m_state.loadBool("WindowState", "Log", true);
     m_show_spectrum = m_state.loadBool("WindowState", "SpectrumAnalyzer", true);
     m_show_na = m_state.loadBool("WindowState", "NetworkAnalyzer", false);
+    m_show_power_meter = m_state.loadBool("WindowState", "PowerMeter", false);
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
@@ -255,6 +257,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
 }
 
 void RfSimulatorApp::newProject() {
+    m_power_meter_widget->clearSource();
     m_serializer->reset();
     m_spectrum_widget->setProbeLabels({});
     m_current_project_path.clear();
@@ -442,8 +445,12 @@ void RfSimulatorApp::saveProject(const std::string &path) {
 }
 
 void RfSimulatorApp::loadProject(const std::string &path) {
-    if (!m_serializer->load(path))
+    if (!m_serializer->load(path)) {
+        if (m_serializer->lastLoadReset())
+            m_power_meter_widget->clearSource();
         return;
+    }
+    m_power_meter_widget->clearSource();
     m_current_project_path = path;
     refreshExtensions();
     m_dirty = false;
@@ -762,6 +769,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Log", nullptr, &m_show_log);
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
+            ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
@@ -1046,6 +1054,9 @@ void RfSimulatorApp::draw_ui() {
         m_na_widget->draw("Network Analyzer", &m_show_na);
     }
 
+    if (m_show_power_meter)
+        m_power_meter_widget->draw("Power Meter", &m_show_power_meter);
+
     m_pfb_views.draw();
 
     for (size_t i = 0; i < m_generator_widgets.size(); ++i) {
@@ -1081,6 +1092,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Log", m_show_log);
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
+    m_state.saveBool("WindowState", "PowerMeter", m_show_power_meter);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_components, m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);

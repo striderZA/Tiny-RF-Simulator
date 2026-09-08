@@ -29,6 +29,8 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
 #include "pfb_view_manager.h"
+#include "power_meter_engine.h"
+#include "power_meter_widget.h"
 #include "project_serializer.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
@@ -58,6 +60,7 @@ class RfSimulatorApp {
     bool m_show_log = true;
     bool m_show_spectrum = true;
     bool m_show_na = false;
+    bool m_show_power_meter = false;
     bool m_show_properties = true;
     bool m_show_node_editor = true;
     bool m_show_help = false;
@@ -97,6 +100,7 @@ class RfSimulatorApp {
     ComponentRegistry &testComponents() { return m_components; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
+    PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
@@ -151,8 +155,10 @@ class RfSimulatorApp {
     NodeGraphEngine m_graph_engine;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
+    PowerMeterEngine m_power_meter_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
+    std::unique_ptr<PowerMeterWidget> m_power_meter_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;

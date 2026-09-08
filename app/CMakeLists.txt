@@ -56,6 +56,8 @@ target_link_libraries(app
         simulator::network_analyzer_engine
         simulator::network_analyzer_widget
         simulator::node_graph_engine
+        simulator::power_meter_engine
+        simulator::power_meter_widget
         simulator::node_graph_widget
         simulator::help_widget
         simulator::layout

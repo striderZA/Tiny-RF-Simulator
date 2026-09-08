@@ -327,6 +327,7 @@ bool ProjectSerializer::save(const std::string &path) {
 }
 
 bool ProjectSerializer::load(const std::string &path) {
+    m_last_load_reset = false;
     std::ifstream in(path);
     if (!in) {
         LOG_ERROR("Failed to open project file: %s", path.c_str());
@@ -387,10 +388,12 @@ bool ProjectSerializer::load(const std::string &path) {
             // assert a fresh app ends with zero components), then fail. The
             // checks above ran before any reset, so restoration never sees a
             // partially validated file.
+            m_last_load_reset = true;
             reset();
             return false;
         }
 
+        m_last_load_reset = true;
         reset();
 
         // Map: type string \u2192 factory lambda
