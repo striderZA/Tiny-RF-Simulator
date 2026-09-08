@@ -57,6 +57,29 @@ jobs:
           fi
           echo "Version and changelog checks passed for $TAG_VERSION"
 
+  # The PR sanity pipeline was removed: all automated validation now runs at
+  # tag time. format and sanitizer run on every release tag; patch tags add
+  # the Linux GCC Debug test leg (patch-test); minor/major tags run the full
+  # strict-build matrix instead.
+  format:
+    needs: classify-release
+    runs-on: ubuntu-24.04
+    name: Format check
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install clang-format
+        run: sudo apt-get install -y -qq clang-format-18
+      - name: Check formatting
+        # Directory list must mirror scripts/format.sh and .githooks/pre-commit.
+        run: |
+          find src app core common tests test_engine \
+            signal_generator amplifier spectrum_analyzer equalizer \
+            node_graph splitter mixer adc coax pfb_channelizer iq_plot \
+            network_analyzer ideal_filter attenuator combiner power_meter touchstone \
+            help layout tutorial logging \
+            -name '*.cpp' -o -name '*.h' | \
+            xargs clang-format-18 --dry-run --Werror
+
   strict-build:
     needs: [classify-release, validate-version]
     if: needs.classify-release.outputs.is_minor_or_major == 'true'
@@ -175,9 +198,33 @@ jobs:
             exit 1
           fi
 
+  patch-test:
+    needs: [classify-release, validate-version]
+    if: needs.classify-release.outputs.is_patch == 'true'
+    runs-on: ubuntu-24.04
+    name: Linux GCC 14 Debug (patch validation)
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+          sudo apt-get install -y -qq g++-14
+      - name: Configure
+        run: >-
+          cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_C_COMPILER=gcc-14
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGLFW_BUILD_WAYLAND=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+
   sanitizer:
     needs: [classify-release, validate-version]
-    if: needs.classify-release.outputs.is_minor_or_major == 'true'
     runs-on: ubuntu-24.04
     name: AddressSanitizer
     steps:
@@ -285,13 +332,17 @@ jobs:
             mingw-dlls/
 
   release:
-    needs: [classify-release, validate-version, strict-build, sanitizer, package]
+    needs: [classify-release, validate-version, format, patch-test, strict-build, sanitizer, package]
     if: >-
       always() &&
       needs.validate-version.result == 'success' &&
+      needs.format.result == 'success' &&
+      needs.sanitizer.result == 'success' &&
       needs.package.result == 'success' &&
-      (needs.classify-release.outputs.is_minor_or_major != 'true' ||
-       (needs.strict-build.result == 'success' && needs.sanitizer.result == 'success'))
+      ((needs.classify-release.outputs.is_minor_or_major == 'true' &&
+        needs.strict-build.result == 'success') ||
+       (needs.classify-release.outputs.is_patch == 'true' &&
+        needs.patch-test.result == 'success'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write

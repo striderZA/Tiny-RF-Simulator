@@ -28,7 +28,7 @@ cmake --build build
 
 The first build takes 60-90s while FetchContent clones dependencies. Subsequent builds are fast.
 
-**One-time setup — enable the format pre-commit hook** (blocks commits that would fail CI's `format` job):
+**One-time setup — enable the format pre-commit hook** (blocks commits that would fail the release workflow's `format` job):
 
 ```bash
 git config core.hooksPath .githooks
@@ -44,7 +44,7 @@ If `clang-format-18` isn't available via your system package manager (e.g. Windo
 ctest --test-dir build --output-on-failure
 ```
 
-Test sources live in `tests/` (Catch2 unit + benchmark suites) and `test_engine/` (ImGui UI tests). The main `tests` binary compiles `TEST_SOURCES` from `tests/CMakeLists.txt` (plus `test_session_state.cpp` on Windows); coverage that must run on every platform — or would push past the MinGW-w64 registration ceiling — goes in standalone executables registered there via `add_standalone_test` (`tests/CMakeLists.txt` is the authoritative inventory). PR and release CI run these under Xvfb for UI tests and with AddressSanitizer for memory safety.
+Test sources live in `tests/` (Catch2 unit + benchmark suites) and `test_engine/` (ImGui UI tests). The main `tests` binary compiles `TEST_SOURCES` from `tests/CMakeLists.txt` (plus `test_session_state.cpp` on Windows); coverage that must run on every platform — or would push past the MinGW-w64 registration ceiling — goes in standalone executables registered there via `add_standalone_test` (`tests/CMakeLists.txt` is the authoritative inventory). The release workflow runs these under Xvfb for UI tests and with AddressSanitizer for memory safety.
 
 For per-engine dirty/clean benchmarks:
 
@@ -57,33 +57,35 @@ build/bin/tests.exe [bench]   # Windows
 
 ## CI Pipeline
 
-Every pull request runs a sanity pipeline (`.github/workflows/ci.yml`):
+Pull requests run **no automated pipeline**. All CI validation happens when a release tag is pushed (`.github/workflows/release.yml`). Every release tag, patch included, runs:
 
 - **Format check** — clang-format 18 enforces code style across all source modules
-- **Linux GCC 14 Debug build + full test suite** (Xvfb for UI tests)
-- **Linux GCC 14 Release build + full test suite**
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
-
-The remaining strict-release legs — Linux Clang 18, Windows MinGW-w64, and packaging — intentionally run only on minor/major release tags (`release.yml`) to keep PR feedback cheap; PR CI covers the Linux GCC Debug/Release and ASan configurations where most failures surface.
-
-Minor and major release tags (`vX.Y.0`, including `vX.0.0`) trigger the stricter release validation flow:
-
 - **Packaging builds** — Linux and Windows artifacts
-- **Full validation matrix** — Linux GCC Debug/Release, Linux Clang, Windows MinGW
-- **Tests** — unit tests + UI tests where supported
-- **AddressSanitizer** — memory safety checks on Linux
 
-Patch release tags (`vX.Y.Z` where `Z > 0`) still build/package Linux and Windows artifacts, but skip the strict validation matrix.
+On top of that:
+
+- **Patch release tags** (`vX.Y.Z` where `Z > 0`) run a **Linux GCC 14 Debug build + full test suite** (Xvfb for UI tests).
+- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the stricter **validation matrix** instead: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
+
+Because nothing is checked automatically before merge, run the local gates on every branch before opening a PR:
+
+```bash
+scripts/format.sh --check   # CI-equivalent formatting (also enforced by the pre-commit hook)
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
 ### Release Process
 
-Every release tag, including patch tags, requires a matching changelog entry before it is pushed:
+Every release is prepared through a pull request; the tag is created only on the merged `master` commit:
 
-1. Update `CMakeLists.txt` and add the matching `## [X.Y.Z]` section at the top of `CHANGELOG.md`.
-2. Push `master`, then create and push the annotated `vX.Y.Z` tag.
-3. The release workflow validates the tag against `CMakeLists.txt`, runs the applicable build/test matrix, and packages Linux and Windows binaries.
-4. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth; `cliff.toml` is for standalone git-cliff generation only.
-5. Review and publish the generated GitHub draft after the workflow succeeds.
+1. Branch `release/vX.Y.Z` from `master`. Update `CMakeLists.txt` and add the matching `## [X.Y.Z]` section at the top of `CHANGELOG.md`.
+2. Open a PR against `master`, pass the local gates above, and merge (squash or rebase) after review.
+3. On the merged `master` commit, create and push the annotated tag: `git tag -a vX.Y.Z -m "Release X.Y.Z" && git push origin vX.Y.Z`.
+4. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the applicable build/test matrix, and packages Linux and Windows binaries.
+5. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth; `cliff.toml` is for standalone git-cliff generation only.
+6. Review and publish the generated GitHub draft after the workflow succeeds.
 
 ## Architecture (Quick Reference)
 
@@ -115,6 +117,7 @@ Every release tag, including patch tags, requires a matching changelog entry bef
   - `feat/<short-description>` for new features
   - `fix/<short-description>` for bug fixes
   - `docs/<short-description>` for documentation
+  - `release/vX.Y.Z` for release preparation (see Release Process)
 - Branch from `master`, delete the feature branch after merging.
 
 ### Commits
@@ -127,7 +130,7 @@ Every release tag, including patch tags, requires a matching changelog entry bef
 ### Pull Requests
 
 - Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
-- Ensure CI passes before requesting review.
+- No CI runs on pull requests — verify build, tests, and formatting locally before requesting review (see CI Pipeline).
 - Squash-merge or rebase-merge to keep history clean.
 
 ## Where to Get Help
