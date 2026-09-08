@@ -9,7 +9,7 @@ Additional references:
 - [README.md](README.md) — project overview, features, quick start
 - [Architecture overview](openwiki/architecture/overview.md) — full architecture deep-dive (engine+widget pattern, signal chain, subcircuit groups, dirty-flag caching)
 - [`.clang-format`](.clang-format) — code style rules
-- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) / [`.github/workflows/release.yml`](.github/workflows/release.yml) — PR CI and tag release configuration
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) — release-tag validation and packaging configuration (pull requests run no CI pipeline)
 
 # DOX framework
 
@@ -97,6 +97,8 @@ Default section order:
 
 ## Release Contract
 
+- Releases are prepared on a `release/vX.Y.Z` branch and merged to `master` via pull request; the annotated `vX.Y.Z` tag is created only on the merged master commit.
+- Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, a Linux GCC Debug full-test-suite leg on patch tags, and the strict build matrix on minor/major tags.
 - `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
 

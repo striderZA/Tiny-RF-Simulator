@@ -11,8 +11,8 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# Must mirror the `format` job in .github/workflows/ci.yml and the DIRS list in
-# .githooks/pre-commit.
+# Must mirror the `format` job in .github/workflows/release.yml and the DIRS
+# list in .githooks/pre-commit.
 DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner power_meter touchstone help layout tutorial logging)
 
 resolve_clang_format() {

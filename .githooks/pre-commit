@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Blocks commits that would fail CI's `format` job (see .github/workflows/ci.yml).
+# Blocks commits that would fail the release workflow's `format` job (see .github/workflows/release.yml).
 # Enable once per clone with:  git config core.hooksPath .githooks
 set -u
 
-# Directories/extensions must mirror the `format` job in .github/workflows/ci.yml
+# Directories/extensions must mirror the `format` job in .github/workflows/release.yml
 # and scripts/format.sh exactly.
 DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner power_meter touchstone help layout tutorial logging)
 # Staged, non-deleted .cpp/.h files under the CI-checked directories. Check this FIRST so
