@@ -102,6 +102,13 @@ Default section order:
 - `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
 
+## AI Software Factory
+
+- Issues in, validated PRs out; every AI step is a shared Archon SDLC workflow via `python factory/consumer.py run <workflow>` — never a direct coding-agent call or a local workflow copy.
+- Archon provider config is native (`~/.archon/config.yaml`): Pi assistant, tiers small/medium/large.
+- `MISSION.md` is the human-owned scope contract; `harness/ci.py` is the ordinary gate; `.factory/locks/floor.json` is the coverage ratchet. Builders may not touch governance, harness, locks, or holdout files.
+- Scheduling is OFF until one full lap has been watched manually (see FACTORY.md installation record).
+
 ## Child DOX Index
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
@@ -111,6 +118,9 @@ Default section order:
 - [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
 - [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
+- [factory/AGENTS.md](factory/AGENTS.md) — pinned Archon SDLC consumer, workflow invocation contract, scheduling-off rule
+- [harness/AGENTS.md](harness/AGENTS.md) — static/unit gates (`ci.py` + `check.py`), journey/holdout input specs
+- [.factory/AGENTS.md](.factory/AGENTS.md) — operator state: holdout, floor ratchet, unused scheduling entry points
 
 <!-- OPENWIKI:START -->
 
