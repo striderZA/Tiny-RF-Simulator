@@ -28,6 +28,8 @@ cmake --build build
 
 The first build takes 60-90s while FetchContent clones dependencies. Subsequent builds are fast.
 
+**Where dependency sources live:** all FetchContent dependencies (imgui, implot, catch2, imgui_test_engine, …) are fetched into `build/_deps/<name>-src/` inside the active build directory. Never search the filesystem for headers like `imgui_internal.h` — on Windows a `find /`-style scan hangs far past any agent timeout. Read `build/_deps/*-src` or the `FetchContent_Declare` block in `CMakeLists.txt` instead.
+
 **One-time setup — enable the format pre-commit hook** (blocks commits that would fail the release workflow's `format` job):
 
 ```bash
