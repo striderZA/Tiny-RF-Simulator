@@ -94,6 +94,7 @@ Default section order:
 - PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 - Superpowers plan/spec documents are working materials and must not be committed.
+- Never run filesystem-wide searches (`find /`, `dir /s`, global greps from the drive root) — they hang headless agent runs past their watchdog. In a fresh factory worktree there is no local `build/`; dependency *sources* are browsable at `../../build/_deps/<name>-src` relative to the worktree (canonical checkout), and a fresh checkout can configure deps itself with `cmake -B build -G Ninja` (~90 s). Read `CMakeLists.txt` `FetchContent_Declare` pins for versions.
 
 ## Release Contract
 
