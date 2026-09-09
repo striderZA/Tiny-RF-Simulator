@@ -89,8 +89,12 @@ class RfSimulatorApp {
     bool m_show_extension_trust_prompt = false;
 
     // True when a project-local external tool has no approval yet; gating is
-    // limited to that case so built-in and global tools keep working.
+    // limited to that kind and provenance, so built-in/global extensions and
+    // project-local data packs are unaffected.
     bool extensionRequiresTrust(const ExtensionManifest &manifest) const;
+    // The `Tools` menu's payload: external tools minus the project-local ones
+    // with no approval yet, whose manifest-controlled label must not appear.
+    std::vector<const ExtensionManifest *> toolsMenuEntries() const;
     void requestExtensionTrust(const ExtensionManifest &manifest);
     // Trusting never runs anything: the user launches the tool separately.
     void grantPendingExtensionTrust();

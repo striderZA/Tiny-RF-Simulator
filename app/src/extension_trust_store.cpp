@@ -23,6 +23,13 @@ namespace {
 
 constexpr int kTrustSchemaVersion = 1;
 
+// The persisted row's field spellings, owned here so the reader and the
+// writer of the same file cannot drift apart.
+constexpr const char *kFieldRoot = "root";
+constexpr const char *kFieldId = "id";
+constexpr const char *kFieldVersion = "version";
+constexpr const char *kFieldEntryPath = "entry_path";
+
 // Directory of the running executable, for exe-relative durable state.
 // Mirrors LayoutManager / TutorialState / ExtensionManager; falls back to the
 // current working directory if exe-path detection fails.
@@ -104,6 +111,15 @@ std::optional<ExtensionTrustEntry> ExtensionTrustStore::entryFor(const fs::path 
 }
 
 bool ExtensionTrustStore::approve(const ExtensionManifest &manifest) {
+    // A row is only worth persisting if the loader will accept it again; the
+    // reader rejects any empty field, so an incomplete manifest must be
+    // refused rather than stored as an approval that vanishes on reload.
+    if (manifest.id.empty() || manifest.version.empty() || manifest.entry_path.empty()) {
+        LOG_WARN("Cannot trust extension '%s': manifest identity or entry point is incomplete",
+                 manifest.id.c_str());
+        return false;
+    }
+
     const auto key = keyFor(manifest.root_dir);
     if (!key) {
         LOG_WARN("Cannot trust extension '%s': extension root could not be resolved",
@@ -186,25 +202,35 @@ void ExtensionTrustStore::load() {
         }
 
         ExtensionTrustEntry entry;
-        if (!readString(item, "root", entry.root) || !readString(item, "id", entry.id) ||
-            !readString(item, "version", entry.version) ||
-            !readString(item, "entry_path", entry.entry_path)) {
+        if (!readString(item, kFieldRoot, entry.root) || !readString(item, kFieldId, entry.id) ||
+            !readString(item, kFieldVersion, entry.version) ||
+            !readString(item, kFieldEntryPath, entry.entry_path)) {
             LOG_WARN("Ignoring malformed extension trust entry %zu in %s", i,
                      m_store_path.string().c_str());
             continue;
         }
 
-        m_entries[entry.root] = entry;
+        // The key is the canonical root, exactly as every lookup derives it; a
+        // hand-edited row (native separators, dot segments) is stored under its
+        // canonical spelling so it stays findable and revocable.
+        const auto key = keyFor(entry.root);
+        if (!key) {
+            LOG_WARN("Ignoring extension trust entry %zu with an unresolvable root in %s", i,
+                     m_store_path.string().c_str());
+            continue;
+        }
+        entry.root = *key;
+        m_entries[*key] = entry;
     }
 }
 
 bool ExtensionTrustStore::save() const {
     json approvals = json::array();
     for (const auto &[root, entry] : m_entries) {
-        approvals.push_back({{"root", entry.root},
-                             {"id", entry.id},
-                             {"version", entry.version},
-                             {"entry_path", entry.entry_path}});
+        approvals.push_back({{kFieldRoot, entry.root},
+                             {kFieldId, entry.id},
+                             {kFieldVersion, entry.version},
+                             {kFieldEntryPath, entry.entry_path}});
     }
 
     json out;

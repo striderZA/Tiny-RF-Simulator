@@ -20,7 +20,9 @@ struct ExtensionTrustEntry {
 // Persisted record of which extension directories the user allowed to execute.
 // Approvals are keyed by the canonical extension root (VS Code workspace-trust
 // shape): editing files inside an approved folder does not re-prompt, a copy at
-// a different path needs its own approval.
+// a different path needs its own approval. Rows are filed under that key on the
+// way in as well, so a hand-edited spelling of an approved root stays findable
+// and revocable instead of orphaning itself in the file.
 //
 // Every degraded path (missing file, unreadable, wrong schema, malformed
 // entry) resolves to "not approved" and is logged; nothing is ever trusted by
@@ -40,7 +42,8 @@ class ExtensionTrustStore {
     std::optional<ExtensionTrustEntry> entryFor(const std::filesystem::path &root_dir) const;
 
     // Both persist immediately and return false when the file could not be
-    // written; a failed approve() leaves the root unapproved (fail closed).
+    // written or the manifest is too incomplete for its own loader to accept;
+    // a failed approve() leaves the root unapproved (fail closed).
     bool approve(const ExtensionManifest &manifest);
     bool revoke(const std::filesystem::path &root_dir);
 

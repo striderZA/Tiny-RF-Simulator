@@ -467,8 +467,18 @@ void RfSimulatorApp::drawExtensionsPanel() {
 }
 
 bool RfSimulatorApp::extensionRequiresTrust(const ExtensionManifest &manifest) const {
-    return m_extension_manager.isProjectLocal(manifest) &&
+    return manifest.kind == ExtensionKind::ExternalTool &&
+           m_extension_manager.isProjectLocal(manifest) &&
            !m_extension_trust.isApproved(manifest.root_dir);
+}
+
+std::vector<const ExtensionManifest *> RfSimulatorApp::toolsMenuEntries() const {
+    std::vector<const ExtensionManifest *> entries;
+    for (const auto *tool : m_extension_manager.externalTools()) {
+        if (tool && !extensionRequiresTrust(*tool))
+            entries.push_back(tool);
+    }
+    return entries;
 }
 
 void RfSimulatorApp::requestExtensionTrust(const ExtensionManifest &manifest) {
@@ -911,13 +921,7 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::BeginMenu("Tools")) {
             ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
             ImGui::Separator();
-            for (const auto *tool : m_extension_manager.externalTools()) {
-                if (!tool)
-                    continue;
-                // The menu label comes from the manifest, so an untrusted
-                // project-local tool is kept out of the menu entirely.
-                if (extensionRequiresTrust(*tool))
-                    continue;
+            for (const auto *tool : toolsMenuEntries()) {
                 for (const auto &action : externalToolActions(*tool)) {
                     if (action.location == "tools" && ImGui::MenuItem(action.label.c_str()))
                         runExternalTool(*tool, action.label);

@@ -7,11 +7,17 @@
 //
 // Covered here:
 //  - ExtensionTrustStore persistence: round trip, fail-closed loading,
-//    approvals scoped to one directory, revocation,
+//    approvals scoped to one directory, revocation, hand-edited rows staying
+//    findable under their canonical root, incomplete approvals refused, and a
+//    failed write never leaving a memory-only approval,
 //  - the app gate: an untrusted project-local tool refuses to run before any
-//    workspace is created and raises the trust prompt,
+//    workspace is created and raises the trust prompt, and an approval that
+//    could not be saved leaves the tool gated, not memory-approved,
 //  - grant / deny / revoke transitions, including that trusting is not running,
-//  - built-in, global, and never-rescanned roots are not gated,
+//  - built-in, global, and never-rescanned roots are not gated, and a
+//    project-local data pack is never gated,
+//  - the Tools menu payload excludes an untrusted project-local tool and keeps
+//    everything the gate does not apply to,
 //  - an external-tool id collision leaves the built-in launchable and the
 //    project-local copy Shadowed.
 
@@ -88,6 +94,23 @@ void writeStoreFile(const fs::path &path, const std::string &body) {
     fs::create_directories(path.parent_path());
     std::ofstream out(path);
     out << body;
+}
+
+// A store path whose parent directory does not exist: opening the ofstream
+// fails on every platform, so save() cannot land (same technique as
+// test_issue77_save_failure.cpp).
+fs::path unwritableStorePath(const char *stem) {
+    static unsigned sequence = 0;
+    return fs::temp_directory_path() / (std::string(stem) + std::to_string(++sequence)) /
+           "extension_trust.json";
+}
+
+bool toolsMenuLists(const RfSimulatorApp &app, const std::string &id) {
+    for (const auto *tool : app.toolsMenuEntries()) {
+        if (tool->id == id)
+            return true;
+    }
+    return false;
 }
 
 // A project-local tool that records its own execution, so a test can prove the
@@ -234,6 +257,134 @@ TEST_CASE("trust store keeps valid approvals alongside malformed entries",
     const ExtensionTrustStore store(store_path);
     REQUIRE_FALSE(store.isApproved(root));
     REQUIRE(store.isApproved(valid_root));
+}
+
+TEST_CASE("trust store files a hand-edited row under its canonical root",
+          "[issue45][trust-store]") {
+    const fs::path root = fs::temp_directory_path() / "rfsim_ext45_handedited";
+    const fs::path store_path = fs::temp_directory_path() / "rfsim_ext45_handedited.json";
+    ScopedRemove cleanup_root{root};
+    ScopedRemove cleanup_store{store_path};
+    fs::create_directories(root);
+
+    // The spelling a user gets by pasting a Windows path into the file the
+    // panel names: native separators and a dot segment, already in the file
+    // before this process ever reads it.
+    const std::string raw_root =
+        root.string() + std::string(1, fs::path::preferred_separator) + ".";
+    REQUIRE(raw_root != genericRoot(root));
+    REQUIRE(genericRoot(fs::path(raw_root)) == genericRoot(root));
+
+    writeStoreFile(store_path, nlohmann::json({{"schema_version", 1},
+                                               {"approvals",
+                                                {{{"root", raw_root},
+                                                  {"id", "project.handedited"},
+                                                  {"version", "1.0.0"},
+                                                  {"entry_path", "bin/t.py"}}}}})
+                                   .dump());
+
+    ExtensionTrustStore store(store_path);
+    REQUIRE(store.isApproved(root));
+    const auto entry = store.entryFor(root);
+    REQUIRE(entry.has_value());
+    REQUIRE(entry->root == genericRoot(root));
+
+    // Revocable, not an orphan nothing can remove: the row leaves the file.
+    REQUIRE(store.revoke(root));
+    REQUIRE_FALSE(store.isApproved(root));
+    const nlohmann::json after_revoke =
+        nlohmann::json::parse(std::ifstream(store_path), nullptr, false);
+    REQUIRE_FALSE(after_revoke.is_discarded());
+    REQUIRE(after_revoke["approvals"].empty());
+}
+
+TEST_CASE("trust store drops rows it cannot key or read, and keeps valid siblings",
+          "[issue45][trust-store]") {
+    const fs::path valid_root = fs::temp_directory_path() / "rfsim_ext45_unkeyable_valid";
+    const fs::path store_path = fs::temp_directory_path() / "rfsim_ext45_unkeyable.json";
+    ScopedRemove cleanup_valid{valid_root};
+    ScopedRemove cleanup_store{store_path};
+    fs::create_directories(valid_root);
+
+    writeStoreFile(store_path, nlohmann::json({{"schema_version", 1},
+                                               {"approvals",
+                                                {
+                                                    // Empty field: unreadable row.
+                                                    {{"root", genericRoot(valid_root)},
+                                                     {"id", "project.noentry"},
+                                                     {"version", "1.0.0"},
+                                                     {"entry_path", ""}},
+                                                    // No usable root: unkeyable row.
+                                                    {{"root", "\u0000"},
+                                                     {"id", "project.unresolvable"},
+                                                     {"version", "1.0.0"},
+                                                     {"entry_path", "bin/t.py"}},
+                                                    {{"root", genericRoot(valid_root)},
+                                                     {"id", "project.valid"},
+                                                     {"version", "1.0.0"},
+                                                     {"entry_path", "bin/t.py"}},
+                                                }}})
+                                   .dump());
+
+    ExtensionTrustStore store(store_path);
+    // The first two rows would both key on valid_root; only the complete row
+    // may win it, and the whole file still has to load.
+    const auto entry = store.entryFor(valid_root);
+    REQUIRE(entry.has_value());
+    REQUIRE(entry->id == "project.valid");
+}
+
+TEST_CASE("trust store refuses an approval its own loader would discard",
+          "[issue45][trust-store]") {
+    const fs::path root = fs::temp_directory_path() / "rfsim_ext45_incomplete";
+    const fs::path store_path = fs::temp_directory_path() / "rfsim_ext45_incomplete.json";
+    ScopedRemove cleanup_root{root};
+    ScopedRemove cleanup_store{store_path};
+    fs::create_directories(root);
+
+    ExtensionTrustStore store(store_path);
+
+    ExtensionManifest missing_entry = makeToolManifest(root, "project.incomplete45", fs::path{});
+    REQUIRE_FALSE(store.approve(missing_entry));
+
+    missing_entry.entry_path = root / "bin" / "t.py";
+    missing_entry.version.clear();
+    REQUIRE_FALSE(store.approve(missing_entry));
+
+    missing_entry.version = "1.0.0";
+    missing_entry.id.clear();
+    REQUIRE_FALSE(store.approve(missing_entry));
+
+    // Nothing in memory, nothing on disk, nothing a second reader could trip on.
+    REQUIRE_FALSE(store.isApproved(root));
+    REQUIRE_FALSE(store.entryFor(root).has_value());
+    REQUIRE_FALSE(fs::exists(store_path));
+
+    ExtensionTrustStore reloaded(store_path);
+    REQUIRE_FALSE(reloaded.isApproved(root));
+
+    // The same manifest, once complete, is still approvable at all.
+    REQUIRE(store.approve(makeToolManifest(root, "project.incomplete45", root / "bin" / "t.py")));
+    REQUIRE(store.isApproved(root));
+}
+
+TEST_CASE("a failed trust write leaves no approval in memory",
+          "[issue45][trust-store][fail-closed]") {
+    const fs::path root = fs::temp_directory_path() / "rfsim_ext45_writefail";
+    const fs::path store_path = unwritableStorePath("rfsim_ext45_writefail");
+    ScopedRemove cleanup_root{root};
+    fs::create_directories(root);
+    REQUIRE_FALSE(fs::exists(store_path.parent_path()));
+
+    ExtensionTrustStore store(store_path);
+    REQUIRE_FALSE(store.approve(makeToolManifest(root, "project.writefail45", root / "t.py")));
+
+    // The contract: a decision that could not be persisted does not exist.
+    REQUIRE_FALSE(store.isApproved(root));
+    REQUIRE_FALSE(store.entryFor(root).has_value());
+
+    const ExtensionTrustStore reader(store_path);
+    REQUIRE_FALSE(reader.isApproved(root));
 }
 
 TEST_CASE("trust approvals do not cross extension roots", "[issue45][trust-store]") {
@@ -400,6 +551,98 @@ TEST_CASE_METHOD(ImGuiFixture, "extensions outside the project root are not gate
     const ExtensionManifest builtin =
         makeToolManifest(fs::temp_directory_path(), "project.builtin", fs::path("tool.py"));
     REQUIRE_FALSE(app.extensionRequiresTrust(builtin));
+
+    // The gate's domain is project-local external tools only: a data pack in
+    // the project's extension root is never gated (issue #45).
+    RfSimulatorApp pack_app;
+    pack_app.m_extension_trust.setStorePath(project_root / "extension_trust.json");
+    pack_app.m_current_project_path = (project_root / "demo.rfsim").string();
+    pack_app.refreshExtensions();
+    const fs::path pack_root = project_root / "rf-sim-extensions" / "pack";
+    ExtensionManifest pack = makeToolManifest(pack_root, "project.pack45", pack_root / "library");
+    pack.kind = ExtensionKind::DataPack;
+    REQUIRE(pack_app.m_extension_manager.isProjectLocal(pack));
+    REQUIRE_FALSE(pack_app.extensionRequiresTrust(pack));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "a trust decision that could not be saved does not arm the tool",
+                 "[issue45][app-gate][fail-closed]") {
+    const ToolFixture fixture =
+        makeProjectTool("rfsim_ext45_writefail_app", "project.echo45writefail");
+    ScopedRemove cleanup{fixture.project_root};
+    // Only the tool directory is created; the store's parent stays missing so
+    // every write to it fails.
+    const fs::path store_path = unwritableStorePath("rfsim_ext45_writefail_app");
+    REQUIRE_FALSE(fs::exists(store_path.parent_path()));
+
+    RfSimulatorApp app;
+    app.m_extension_trust.setStorePath(store_path);
+    app.m_current_project_path = (fixture.project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    const ExtensionManifest *tool = toolById(app, fixture.id);
+    REQUIRE(tool != nullptr);
+    const fs::path tool_root = tool->root_dir;
+
+    app.runExternalTool(*tool);
+    REQUIRE(app.m_show_extension_trust_prompt);
+    app.grantPendingExtensionTrust();
+
+    // The user is told where the decision was supposed to land...
+    const std::string message = app.testExtensionResultMessage();
+    REQUIRE(message.find("could not be saved") != std::string::npos);
+    REQUIRE(message.find(store_path.string()) != std::string::npos);
+    // ...the prompt is not stuck on a decision that failed...
+    REQUIRE_FALSE(app.m_show_extension_trust_prompt);
+    REQUIRE_FALSE(app.m_pending_trust_manifest.has_value());
+    // ...and the tool is still gated: no memory-only approval.
+    REQUIRE(app.extensionRequiresTrust(*tool));
+    REQUIRE_FALSE(app.m_extension_trust.isApproved(tool_root));
+
+    app.runExternalTool(*tool);
+    REQUIRE(app.testExtensionResultMessage().find("not trusted") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(fixture.side_effect));
+    REQUIRE_FALSE(fs::exists(store_path));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "untrusted tools stay out of the Tools menu payload",
+                 "[issue45][app-gate][tools-menu]") {
+    const fs::path builtin_dir =
+        fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_ext45_menu_builtin";
+    const fs::path builtin_manifest = writeManifest(
+        builtin_dir, {{"schema_version", 1},
+                      {"id", "builtin.menu45"},
+                      {"name", "Built-in Menu Tool"},
+                      {"version", "1.0.0"},
+                      {"kind", "external-tool"},
+                      {"capabilities", {"generator"}},
+                      {"entry", "bin/builtin.py"},
+                      {"menus", {{{"location", "tools"}, {"label", "Built-in Menu Tool"}}}}});
+    ScopedRemove cleanup_builtin{builtin_dir};
+    REQUIRE(fs::exists(builtin_manifest));
+
+    const ToolFixture fixture = makeProjectTool("rfsim_ext45_menu", "project.echo45menu");
+    ScopedRemove cleanup{fixture.project_root};
+
+    RfSimulatorApp app;
+    app.m_extension_trust.setStorePath(fixture.project_root / "extension_trust.json");
+    app.m_current_project_path = (fixture.project_root / "demo.rfsim").string();
+    app.refreshExtensions();
+
+    // Built-in and global tools are unaffected by an empty trust store.
+    REQUIRE(toolsMenuLists(app, "builtin.menu45"));
+
+    const ExtensionManifest *tool = toolById(app, fixture.id);
+    REQUIRE(tool != nullptr);
+    // The tool is discoverable so the panel can offer Trust, but the menu must
+    // not carry its manifest-controlled label while it is untrusted.
+    REQUIRE_FALSE(toolsMenuLists(app, fixture.id));
+
+    app.runExternalTool(*tool);
+    REQUIRE(app.m_show_extension_trust_prompt);
+    app.grantPendingExtensionTrust();
+    REQUIRE(app.m_extension_trust.isApproved(tool->root_dir));
+    REQUIRE(toolsMenuLists(app, fixture.id));
 }
 
 TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
