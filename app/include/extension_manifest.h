@@ -19,6 +19,7 @@ enum class ExtensionStatusKind {
     Ok,
     Invalid,
     Incompatible,
+    Shadowed,
 };
 
 struct ExtensionMenuEntry {

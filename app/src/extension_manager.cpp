@@ -1,5 +1,7 @@
 #include "extension_manager.h"
 
+#include "logging_core.h"
+
 #include <algorithm>
 #include <charconv>
 #include <climits>
@@ -145,9 +147,10 @@ std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) 
     // (<exe_dir>/extensions), matching the install rules and the layout/ +
     // SessionState exe-relative convention. Nonexistent in dev/build-tree
     // layouts (loadRoot skips missing roots), so discovery is unchanged
-    // there. Placed right after the source-tree root and before the
-    // global/project-local roots, so later-root shadowing precedence is
-    // preserved (built-in > global > project-local).
+    // there. Roots are scanned in this order and the first manifest claiming
+    // an id wins: source-tree built-in > exe-dir built-in > global >
+    // project-local. A later duplicate is kept as a Shadowed record instead
+    // of replacing the winner (issue #45).
     roots.push_back(fs::path(detectExeDir()) / "extensions");
 #ifdef _WIN32
     if (const char *home = std::getenv("USERPROFILE"))
@@ -206,7 +209,12 @@ void ExtensionManager::loadRoot(const fs::path &root) {
             if (extension_id) {
                 const auto existing = m_records_by_id.find(*extension_id);
                 if (existing != m_records_by_id.end()) {
-                    m_records[existing->second] = std::move(record);
+                    record.status = ExtensionStatusKind::Shadowed;
+                    record.shadow_detail = "id '" + *extension_id + "' is already provided by " +
+                                           m_records[existing->second].manifest_path.string();
+                    LOG_WARN("Extension %s: %s", manifest_path.string().c_str(),
+                             record.shadow_detail.c_str());
+                    m_records.push_back(std::move(record));
                     continue;
                 }
                 m_records_by_id.emplace(*extension_id, m_records.size());
@@ -222,8 +230,28 @@ void ExtensionManager::loadRoot(const fs::path &root) {
 void ExtensionManager::rescan(const fs::path &project_root) {
     m_records.clear();
     m_records_by_id.clear();
+    std::error_code ec;
+    m_project_extension_root = fs::weakly_canonical(project_root / "rf-sim-extensions", ec);
+    if (ec)
+        m_project_extension_root.clear();
     for (const auto &root : scanRoots(project_root))
         loadRoot(root);
+}
+
+bool ExtensionManager::isUnderProjectExtensionRoot(const fs::path &candidate) const {
+    // An empty root means no project was resolved; canonicalPathWithinRoot()
+    // compares component-wise, so a zero-component root would match anything.
+    if (m_project_extension_root.empty())
+        return false;
+    return canonicalPathWithinRoot(m_project_extension_root, candidate);
+}
+
+bool ExtensionManager::isProjectLocal(const ExtensionRecord &record) const {
+    return isUnderProjectExtensionRoot(record.manifest_path);
+}
+
+bool ExtensionManager::isProjectLocal(const ExtensionManifest &manifest) const {
+    return isUnderProjectExtensionRoot(manifest.root_dir);
 }
 
 std::vector<const ExtensionManifest *> ExtensionManager::dataPacks() const {

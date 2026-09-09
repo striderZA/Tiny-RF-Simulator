@@ -201,7 +201,7 @@ TEST_CASE("extension manager keeps invalid manifests visible", "[extensions][dis
     REQUIRE_FALSE(record_it->issues.empty());
 }
 
-TEST_CASE("extension manager prefers project-local copies over built-in copies",
+TEST_CASE("extension manager keeps the built-in copy and flags the project-local duplicate",
           "[extensions][discovery]") {
     const fs::path builtin_root = fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_shadow_case";
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_shadow";
@@ -230,23 +230,42 @@ TEST_CASE("extension manager prefers project-local copies over built-in copies",
     mgr.rescan(project_root);
 
     const auto &records = mgr.all();
-    const auto record_it =
-        std::find_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-            return record.manifest && record.manifest->id == "shared.pack";
-        });
+    std::vector<const ExtensionRecord *> duplicates;
+    for (const auto &record : records) {
+        if (record.manifest && record.manifest->id == "shared.pack")
+            duplicates.push_back(&record);
+    }
 
-    REQUIRE(record_it != records.end());
-    REQUIRE(record_it->manifest_path == project_manifest);
-    REQUIRE(record_it->manifest->name == "Project Pack");
-    REQUIRE(record_it->status == ExtensionStatusKind::Ok);
-    REQUIRE(std::count_if(records.begin(), records.end(), [&](const ExtensionRecord &record) {
-                return record.manifest && record.manifest->id == "shared.pack";
-            }) == 1);
+    // First root wins and the loser stays visible instead of disappearing.
+    REQUIRE(duplicates.size() == 2);
+    const ExtensionRecord *winner = nullptr;
+    const ExtensionRecord *shadowed = nullptr;
+    for (const auto *record : duplicates) {
+        if (record->status == ExtensionStatusKind::Ok)
+            winner = record;
+        else
+            shadowed = record;
+    }
+
+    REQUIRE(winner != nullptr);
+    REQUIRE(shadowed != nullptr);
+    REQUIRE(winner->manifest_path == builtin_manifest);
+    REQUIRE(winner->manifest->name == "Built-in Pack");
+    REQUIRE(shadowed->status == ExtensionStatusKind::Shadowed);
+    REQUIRE(shadowed->manifest_path == project_manifest);
+    REQUIRE(shadowed->shadow_detail.find("shared.pack") != std::string::npos);
+    REQUIRE(shadowed->shadow_detail.find(builtin_manifest.string()) != std::string::npos);
 
     const auto packs = mgr.dataPacks();
-    REQUIRE(std::find_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
+    const auto pack_it =
+        std::find_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
+            return manifest->id == "shared.pack";
+        });
+    REQUIRE(pack_it != packs.end());
+    REQUIRE(std::count_if(packs.begin(), packs.end(), [&](const ExtensionManifest *manifest) {
                 return manifest->id == "shared.pack";
-            }) != packs.end());
+            }) == 1);
+    REQUIRE((*pack_it)->manifest_path == builtin_manifest);
 }
 
 TEST_CASE("extension manager excludes malformed compatibility manifests from active queries",
@@ -436,6 +455,13 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool records success message", "[
     const auto &tools = app.testExtensionManager().externalTools();
     REQUIRE_FALSE(tools.empty());
 
+    // Project-local tools are gated until approved; redirect the store so the
+    // approval never lands in the developer's real <exe_dir>/extension_trust.json.
+    const fs::path trust_store = fs::temp_directory_path() / "rfsim_ext_app_tool_trust.json";
+    ScopedRemove trust_cleanup{trust_store};
+    app.m_extension_trust.setStorePath(trust_store);
+    REQUIRE(app.m_extension_trust.approve(*tools.front()));
+
     app.runExternalTool(*tools.front());
 
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
@@ -487,6 +513,11 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool passes selected menu label t
 
     const auto &tools = app.testExtensionManager().externalTools();
     REQUIRE(std::size(tools) == 1);
+
+    const fs::path trust_store = fs::temp_directory_path() / "rfsim_ext_app_tool_action_trust.json";
+    ScopedRemove trust_cleanup{trust_store};
+    app.m_extension_trust.setStorePath(trust_store);
+    REQUIRE(app.m_extension_trust.approve(*tools.front()));
 
     app.runExternalTool(*tools.front(), "Import");
 
@@ -584,6 +615,11 @@ TEST_CASE_METHOD(ImGuiFixture, "app runExternalTool does not reuse stale result 
 
     const auto &tools = app.testExtensionManager().externalTools();
     REQUIRE(std::size(tools) == 1);
+
+    const fs::path trust_store = fs::temp_directory_path() / "rfsim_ext_app_tool_stale_trust.json";
+    ScopedRemove trust_cleanup{trust_store};
+    app.m_extension_trust.setStorePath(trust_store);
+    REQUIRE(app.m_extension_trust.approve(*tools.front()));
 
     app.runExternalTool(*tools.front(), "Run");
     REQUIRE(app.testExtensionResultMessage().find("Extension run succeeded") != std::string::npos);
