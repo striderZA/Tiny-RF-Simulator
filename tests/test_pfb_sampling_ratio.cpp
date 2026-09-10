@@ -52,6 +52,34 @@ TEST_CASE("PFB ratio two doubles channel output rate and bandwidth", "[pfb][samp
     REQUIRE(pfb.node().outputs[0].fs_Hz == Approx(25e6));
 }
 
+TEST_CASE("PFB oversampling scales usable bandwidth but not the channel grid",
+          "[pfb][sampling_ratio]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+    auto input = makeInput(400e6);
+    pfb.node().inputs[0] = &input;
+    pfb.update(0.0);
+
+    std::vector<double> critical_centers;
+    std::vector<double> critical_bandwidths;
+    critical_centers.reserve(pfb.channels().size());
+    critical_bandwidths.reserve(pfb.channels().size());
+    for (const auto &ch : pfb.channels()) {
+        critical_centers.push_back(ch.center_freq_Hz);
+        critical_bandwidths.push_back(ch.bandwidth_Hz);
+    }
+
+    pfb.setSamplingRatio(2);
+    pfb.update(0.0);
+    REQUIRE(pfb.samplingRatio() == 2);
+    REQUIRE(pfb.channels().size() == critical_centers.size());
+
+    for (size_t i = 0; i < critical_centers.size(); ++i) {
+        REQUIRE(pfb.channels()[i].center_freq_Hz == Approx(critical_centers[i]));
+        REQUIRE(pfb.channels()[i].bandwidth_Hz == Approx(2.0 * critical_bandwidths[i]));
+    }
+}
+
 TEST_CASE("PFB oversampling preserves full-band flat-noise density", "[pfb][sampling_ratio]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);

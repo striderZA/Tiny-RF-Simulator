@@ -72,7 +72,8 @@ TEST_CASE("PFB channelizer no input produces empty output", "[pfb]") {
     REQUIRE(pfb.node().outputs[0].tones.empty());
 }
 
-TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
+TEST_CASE("PFB channelizer critical sampling: boundary tone appears in both adjacent channels",
+          "[pfb]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
     pfb.setChannelCount(16);
@@ -82,6 +83,9 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     in.frequencies.resize(201);
     for (int i = 0; i < 201; ++i)
         in.frequencies[i] = -100e6 + i * 1e6;
+    // Critical sampling (ratio 1x, the default): the tone sits exactly on the
+    // boundary between ch 7 and ch 8, so it is within +/- one channel width of
+    // both centres and each adjacent channel reports it.
     // Tone at 0 Hz: between ch 7 centre (-6.25 MHz) and ch 8 centre (6.25 MHz)
     in.tones.push_back({0.0, -30.0, 0.0});
     in.noise_total_W.assign(201, 1e-20);
@@ -92,7 +96,7 @@ TEST_CASE("PFB channelizer oversampling: tone at bin boundary", "[pfb]") {
     const auto &ch7 = pfb.channels()[7];
     const auto &ch8 = pfb.channels()[8];
 
-    // Both adjacent channels should see the tone (oversampling within ±1 channel_bw)
+    // Both adjacent channels should see the tone (critical-sampling boundary overlap)
     REQUIRE(ch7.tones.size() == 1);
     REQUIRE(ch8.tones.size() == 1);
 
