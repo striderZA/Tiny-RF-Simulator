@@ -31,6 +31,10 @@ class SpectrumAnalyzerWidget {
     void setProbeTargets(const std::vector<std::pair<SignalNode *, int>> &targets);
     void setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs);
 
+    // The plot fills the window's remaining vertical space and never shrinks
+    // below this floor (issue #88).
+    static constexpr float kMinPlotHeight = 180.0f;
+
   private:
     SpectrumAnalyzerEngine &m_engine;
     ViewManager &m_view_manager;
