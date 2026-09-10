@@ -1,11 +1,14 @@
 #include "flow_metrics.h"
 #include "flow_params.h"
 #include "flow_result.h"
+#include "flow_runner.h"
 #include "spectrum.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -328,4 +331,151 @@ TEST_CASE("issue87 params: rejects malformed paths", "[issue87][params]") {
     REQUIRE_FALSE(applyConditionValue(snapshot, "gain_dB]", 1.0, &error));
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0", 1.0, &error));
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[x]", 1.0, &error));
+}
+
+namespace {
+std::string writeTempFlow(const std::string &name, const std::string &json) {
+    const std::string path = (std::filesystem::temp_directory_path() / name).string();
+    std::ofstream out(path);
+    out << json;
+    return path;
+}
+const std::string kValidFlow = R"({
+  "version": 1,
+  "name": "unit",
+  "conditions": [
+    {"component": 100, "path": "tones[0].power_dBm", "values": [-30, -20]}
+  ],
+  "measure": [
+    {"component": 101, "port": 0, "metric": "power_dBm"}
+  ]
+})";
+} // namespace
+
+TEST_CASE("issue87 loader: a valid flow file loads", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_valid.flow.json", kValidFlow));
+    REQUIRE(loaded.ok);
+    REQUIRE(loaded.spec.version == 1);
+    REQUIRE(loaded.spec.name == "unit");
+    REQUIRE(loaded.spec.conditions.size() == 1);
+    REQUIRE(loaded.spec.conditions[0].component == 100);
+    REQUIRE(loaded.spec.conditions[0].path == "tones[0].power_dBm");
+    REQUIRE(loaded.spec.conditions[0].values == std::vector<double>{-30, -20});
+    REQUIRE(loaded.spec.measure.size() == 1);
+    REQUIRE(loaded.spec.measure[0].component == 101);
+    REQUIRE(loaded.spec.measure[0].port == 0);
+    REQUIRE(loaded.spec.measure[0].metric == "power_dBm");
+}
+
+TEST_CASE("issue87 loader: conditions are optional and default to no sweep", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_nosweep.flow.json",
+                      R"({"version": 1, "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+    REQUIRE(loaded.spec.conditions.empty());
+    REQUIRE(loaded.spec.measure[0].port == 0);           // defaulted
+    REQUIRE(loaded.spec.name == "issue87_nosweep.flow"); // defaults to the file stem
+}
+
+TEST_CASE("issue87 loader: a missing file is reported", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        (std::filesystem::temp_directory_path() / "issue87_does_not_exist.flow.json").string());
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::FileUnreadable);
+}
+
+TEST_CASE("issue87 loader: malformed JSON is reported", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_bad.flow.json", "{ not json"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::InvalidJson);
+}
+
+TEST_CASE("issue87 loader: a non-object root is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_root.flow.json", "[1, 2, 3]"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: an unsupported version is rejected", "[issue87][loader]") {
+    for (const std::string version : {"0", "2"}) {
+        const auto loaded = LoadFlowFile(
+            writeTempFlow("issue87_version.flow.json",
+                          R"({"version": )" + version +
+                              R"(, "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+        REQUIRE_FALSE(loaded.ok);
+        REQUIRE(loaded.error.code == FlowErrorCode::UnsupportedVersion);
+    }
+}
+
+TEST_CASE("issue87 loader: a missing version is rejected", "[issue87][loader]") {
+    const auto loaded =
+        LoadFlowFile(writeTempFlow("issue87_noversion.flow.json",
+                                   R"({"measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a missing or empty measure is rejected", "[issue87][loader]") {
+    const auto missing =
+        LoadFlowFile(writeTempFlow("issue87_nomeasure.flow.json", R"({"version": 1})"));
+    REQUIRE_FALSE(missing.ok);
+    REQUIRE(missing.error.code == FlowErrorCode::WrongShape);
+
+    const auto empty = LoadFlowFile(
+        writeTempFlow("issue87_emptymeasure.flow.json", R"({"version": 1, "measure": []})"));
+    REQUIRE_FALSE(empty.ok);
+    REQUIRE(empty.error.code == FlowErrorCode::EmptyMeasurement);
+}
+
+TEST_CASE("issue87 loader: an unknown metric is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_badmetric.flow.json",
+                      R"({"version": 1, "measure": [{"component": 1, "metric": "nope"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::UnknownMetric);
+}
+
+TEST_CASE("issue87 loader: an empty values array is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow(
+        "issue87_emptyvalues.flow.json",
+        R"({"version": 1, "conditions": [{"component": 100, "path": "gain_dB", "values": []}],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a non-array conditions section is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_badconditions.flow.json",
+                                                   R"({"version": 1, "conditions": 5,
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a non-numeric value is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_badvalue.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 100, "path": "gain_dB", "values": ["x"]}],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::BadFieldType);
+}
+
+TEST_CASE("issue87 loader: a duplicate condition target is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_duplicate.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 100, "path": "gain_dB", "values": [1]},
+                           {"component": 100, "path": "gain_dB", "values": [2]}],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::DuplicateConditionTarget);
+}
+
+TEST_CASE("issue87 loader: a duplicate measurement is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_dupmeasure.flow.json",
+                                                   R"({"version": 1,
+            "measure": [{"component": 101, "port": 0, "metric": "power_dBm"},
+                        {"component": 101, "port": 0, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::DuplicateMeasurement);
 }

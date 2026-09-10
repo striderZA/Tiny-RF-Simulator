@@ -5,6 +5,7 @@ add_library(test_flow STATIC
     src/flow_metrics.cpp
     src/flow_params.cpp
     src/flow_result.cpp
+    src/flow_runner.cpp
 )
 add_library(simulator::test_flow ALIAS test_flow)
 
