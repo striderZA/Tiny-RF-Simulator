@@ -526,13 +526,7 @@ graphify-out/
 # AI agent session state
 .agents/
 
-__pycache__/
-*.pyo
-.factory/consumer.json
-.factory/retired/
-.factory/STOP
-harness/.results/
-.factory/holdout/.results/
+# Secret safety
 .env
 .env.*
 !.env.example
