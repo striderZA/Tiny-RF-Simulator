@@ -1,6 +1,0 @@
-{
-  "static": "python harness/check.py static",
-  "unit": "python harness/check.py unit",
-  "unit_count_pattern": "tests passed, \\d+ tests failed out of (\\d+)",
-  "description": "Ordinary project checks only. check.py wraps the CI-equivalent commands (clang-format-18 over the full scanned file set; cmake+Ninja build; full ctest incl. imgui_test_engine UI suite) as single shell-free argv for ci.py, and works in a fresh candidate worktree with no build/ directory."
-}
