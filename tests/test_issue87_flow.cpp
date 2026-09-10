@@ -243,6 +243,7 @@ TEST_CASE("issue87 params: writes a float slot in place", "[issue87][params]") {
     nlohmann::json snapshot = {{"gain_dB", 20.0}};
     std::string error;
     REQUIRE(applyConditionValue(snapshot, "gain_dB", -30.0, &error));
+    REQUIRE(snapshot["gain_dB"].is_number_float());
     REQUIRE(snapshot["gain_dB"].get<double>() == Approx(-30.0));
 }
 
@@ -288,6 +289,7 @@ TEST_CASE("issue87 params: addresses array elements", "[issue87][params]") {
 
     std::string error;
     REQUIRE(applyConditionValue(snapshot, "tones[0].power_dBm", -10.0, &error));
+    REQUIRE(snapshot["tones"][0]["power_dBm"].is_number_float());
     REQUIRE(snapshot["tones"][0]["power_dBm"].get<double>() == Approx(-10.0));
     REQUIRE(snapshot["tones"][0]["freq_Hz"].get<double>() == Approx(1e9));
 }
@@ -296,6 +298,7 @@ TEST_CASE("issue87 params: rejects a path that does not resolve", "[issue87][par
     nlohmann::json snapshot = {{"gain_dB", 20.0}};
     std::string error;
     REQUIRE_FALSE(applyConditionValue(snapshot, "nf_dB", 3.0, &error));
+    REQUIRE_FALSE(error.empty());
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0].power_dBm", -10.0, &error));
 }
 
@@ -306,6 +309,7 @@ TEST_CASE("issue87 params: rejects an out-of-range index", "[issue87][params]") 
 
     std::string error;
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[1].power_dBm", -10.0, &error));
+    REQUIRE_FALSE(error.empty());
 }
 
 TEST_CASE("issue87 params: rejects a non-numeric slot", "[issue87][params]") {
@@ -319,6 +323,7 @@ TEST_CASE("issue87 params: rejects malformed paths", "[issue87][params]") {
     nlohmann::json snapshot = {{"gain_dB", 20.0}};
     std::string error;
     REQUIRE_FALSE(applyConditionValue(snapshot, "", 1.0, &error));
+    REQUIRE_FALSE(error.empty());
     REQUIRE_FALSE(applyConditionValue(snapshot, "gain_dB.", 1.0, &error));
     REQUIRE_FALSE(applyConditionValue(snapshot, "gain_dB]", 1.0, &error));
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0", 1.0, &error));

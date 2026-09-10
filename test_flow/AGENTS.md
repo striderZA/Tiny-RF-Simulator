@@ -25,7 +25,9 @@ component output ports.
   (`atten_dB`, not `attenuation_dB`).
 - Condition `path`s are dot-separated keys with optional zero-based array indices, e.g. `gain_dB` or
   `tones[0].power_dBm`.
-- Patches are type-preserving: an integer slot requires an integral value.
+- Patches are type-preserving: a signed integer slot requires an integral value; an unsigned slot
+  requires a finite, non-negative, integral value and stays unsigned; a float slot requires a finite
+  value. Boolean, string, null, object and array slots are rejected.
 - Non-finite metric values encode as JSON `null`; `valid` distinguishes a measurement from a
   failure.
 - A fatal flow error yields `ok = false` with zero rows.
