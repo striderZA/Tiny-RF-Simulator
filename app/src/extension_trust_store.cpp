@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <fstream>
 #include <system_error>
 
@@ -180,9 +181,18 @@ void ExtensionTrustStore::load() {
         LOG_WARN("Extension trust file is not valid JSON: %s", m_store_path.string().c_str());
         return;
     }
+    // The comparison must not narrow: get<int> silently wraps, so a hand
+    // written schema_version of 4294967297 (2^32 + 1) would land on 1 and be
+    // accepted as the current schema. Compare at the widest signed width the
+    // JSON integer can occupy and reject anything outside it outright.
     if (!root.is_object() || !root.contains("schema_version") ||
-        !root["schema_version"].is_number_integer() ||
-        root["schema_version"].get<int>() != kTrustSchemaVersion) {
+        !root["schema_version"].is_number_integer()) {
+        LOG_WARN("Extension trust file has an unsupported schema_version: %s",
+                 m_store_path.string().c_str());
+        return;
+    }
+    const std::int64_t declared_schema = root["schema_version"].get<std::int64_t>();
+    if (declared_schema != kTrustSchemaVersion) {
         LOG_WARN("Extension trust file has an unsupported schema_version: %s",
                  m_store_path.string().c_str());
         return;

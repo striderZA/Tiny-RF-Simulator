@@ -513,9 +513,11 @@ void RfSimulatorApp::drawExternalToolTrustControls(const ExtensionManifest &mani
     ImGui::TextWrapped("Extension root: %s", manifest.root_dir.string().c_str());
 
     const auto entry = m_extension_trust.entryFor(manifest.root_dir);
-    if (entry && entry->entry_path != manifest.entry_path.generic_string())
-        ImGui::TextWrapped("Trusted for a different entry point (%s); revoke to review.",
-                           entry->entry_path.c_str());
+    if (entry && (entry->id != manifest.id || entry->version != manifest.version ||
+                  entry->entry_path != manifest.entry_path.generic_string()))
+        ImGui::TextWrapped(
+            "Trusted for a different manifest (id '%s', version %s, entry %s); revoke to review.",
+            entry->id.c_str(), entry->version.c_str(), entry->entry_path.c_str());
 
     if (needs_trust) {
         if (ImGui::Button(("Trust...##" + manifest.id).c_str()))

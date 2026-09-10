@@ -686,10 +686,10 @@ TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
     REQUIRE(builtin != nullptr);
     REQUIRE(shadowed != nullptr);
     REQUIRE(builtin->manifest_path == builtin_manifest);
-    REQUIRE_FALSE(mgr.isProjectLocal(*builtin));
+    REQUIRE_FALSE(mgr.isProjectLocal(*builtin->manifest));
     REQUIRE(shadowed->status == ExtensionStatusKind::Shadowed);
     REQUIRE(shadowed->manifest_path == project_manifest);
-    REQUIRE(mgr.isProjectLocal(*shadowed));
+    REQUIRE(mgr.isProjectLocal(*shadowed->manifest));
     REQUIRE(shadowed->shadow_detail.find(builtin_manifest.string()) != std::string::npos);
 
     // Only the built-in tool is launchable: a project cannot take over an id
@@ -703,4 +703,136 @@ TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
     REQUIRE(collisions.size() == 1);
     REQUIRE(collisions.front()->entry_path ==
             fs::weakly_canonical(builtin_root / "bin" / "builtin.py"));
+}
+
+TEST_CASE("a symlinked extension under the project root stays project-local",
+          "[issue45][discovery][symlink]") {
+    const fs::path base = fs::temp_directory_path() / "rfsim_ext45_symlink";
+    const fs::path ext_root = base / "rf-sim-extensions";
+    const fs::path outside = base / "payload-outside";
+    ScopedRemove cleanup{base};
+
+    writeManifest(outside, {{"schema_version", 1},
+                            {"id", "project.link45"},
+                            {"name", "Linked Tool"},
+                            {"version", "1.0.0"},
+                            {"kind", "external-tool"},
+                            {"capabilities", {"generator"}},
+                            {"entry", "bin/t.py"}});
+    fs::create_directories(ext_root);
+    std::error_code ec;
+    fs::create_directory_symlink(outside, ext_root / "linked-tool", ec);
+    if (ec) {
+        // Windows without developer mode cannot link; the provenance stamp is
+        // still exercised by every other case here, so skip rather than fail.
+        INFO("platform cannot create directory symlinks: " << ec.message());
+        return;
+    }
+
+    ExtensionManager mgr;
+    mgr.rescan(base);
+
+    const ExtensionManifest *linked = nullptr;
+    for (const auto *tool : mgr.externalTools()) {
+        if (tool && tool->id == "project.link45")
+            linked = tool;
+    }
+    REQUIRE(linked != nullptr);
+
+    // The resolved root really does sit outside the canonical extension root,
+    // so a containment-only predicate would classify this project-shipped
+    // tool as global and run it with no trust prompt (the bypass).
+    REQUIRE(linked->root_dir == fs::weakly_canonical(outside));
+    REQUIRE_FALSE(canonicalPathWithinRoot(mgr.projectExtensionRoot(), linked->root_dir));
+    // The discovery stamp closes it: still project-local, still gated.
+    REQUIRE(mgr.isProjectLocal(*linked));
+}
+
+TEST_CASE("rescan with an empty project root pins the CWD trust boundary", "[issue45][discovery]") {
+    ExtensionManager mgr;
+    // Documented contract: an empty project_root behaves exactly like
+    // refreshExtensions()'s "no project open" fallback — the current working
+    // directory is the project, so CWD/rf-sim-extensions is the boundary.
+    mgr.rescan(fs::path{});
+    REQUIRE(mgr.projectExtensionRoot() ==
+            fs::weakly_canonical(fs::current_path() / "rf-sim-extensions"));
+
+    const fs::path cwd_tool = fs::current_path() / "rf-sim-extensions" / "tool";
+    REQUIRE(mgr.isProjectLocal(makeToolManifest(cwd_tool, "project.cwd45", fs::path("bin/t.py"))));
+    REQUIRE_FALSE(mgr.isProjectLocal(
+        makeToolManifest(fs::temp_directory_path(), "project.elsewhere45", fs::path("t.py"))));
+}
+
+TEST_CASE("an incompatible incumbent still reserves the id", "[issue45][discovery]") {
+    // Documented first-root-wins policy: the reservation does not depend on
+    // the incumbent's status, so a duplicate can never impersonate a known
+    // id even while the higher-precedence manifest is unusable. Both records
+    // stay visible; nothing is launchable until the incumbent is fixed.
+    const fs::path builtin_root =
+        fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_ext45_compat_incumbent";
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext45_compat_incumbent";
+    const fs::path builtin_manifest =
+        writeManifest(builtin_root, {{"schema_version", 1},
+                                     {"id", "shared.compat45"},
+                                     {"name", "Old Built-in Tool"},
+                                     {"version", "1.0.0"},
+                                     {"kind", "external-tool"},
+                                     {"capabilities", {"generator"}},
+                                     {"entry", "bin/builtin.py"},
+                                     {"compat", {{"min_app_version", "999.0"}}}});
+    writeManifest(project_root / "rf-sim-extensions" / "dup-tool", {{"schema_version", 1},
+                                                                    {"id", "shared.compat45"},
+                                                                    {"name", "Project Tool"},
+                                                                    {"version", "2.0.0"},
+                                                                    {"kind", "external-tool"},
+                                                                    {"capabilities", {"generator"}},
+                                                                    {"entry", "bin/modern.py"}});
+    ScopedRemove cleanup_builtin{builtin_root};
+    ScopedRemove cleanup_project{project_root};
+    REQUIRE(fs::exists(builtin_manifest));
+
+    ExtensionManager mgr;
+    mgr.rescan(project_root);
+
+    const ExtensionRecord *incumbent = nullptr;
+    const ExtensionRecord *loser = nullptr;
+    for (const auto &record : mgr.all()) {
+        if (!record.manifest || record.manifest->id != "shared.compat45")
+            continue;
+        if (record.status == ExtensionStatusKind::Incompatible)
+            incumbent = &record;
+        else
+            loser = &record;
+    }
+
+    REQUIRE(incumbent != nullptr);
+    REQUIRE(loser != nullptr);
+    REQUIRE(loser->status == ExtensionStatusKind::Shadowed);
+    REQUIRE(loser->shadow_detail.find("shared.compat45") != std::string::npos);
+    for (const auto *tool : mgr.externalTools()) {
+        REQUIRE(tool->id != "shared.compat45");
+    }
+}
+
+TEST_CASE("trust store rejects a schema_version that narrows to the current one",
+          "[issue45][trust-store]") {
+    const fs::path root = fs::temp_directory_path() / "rfsim_ext45_schemawrap";
+    const fs::path store_path = fs::temp_directory_path() / "rfsim_ext45_schemawrap.json";
+    ScopedRemove cleanup_root{root};
+    ScopedRemove cleanup_store{store_path};
+    fs::create_directories(root);
+
+    // 4294967297 == 2^32 + 1: an int comparison wraps it onto 1, so a
+    // narrowing get<int> would accept this document as schema v1.
+    writeStoreFile(store_path, nlohmann::json({{"schema_version", 4294967297},
+                                               {"approvals",
+                                                {{{"root", genericRoot(root)},
+                                                  {"id", "project.wrap45"},
+                                                  {"version", "1.0.0"},
+                                                  {"entry_path", "bin/t.py"}}}}})
+                                   .dump());
+
+    const ExtensionTrustStore store(store_path);
+    REQUIRE_FALSE(store.isApproved(root));
+    REQUIRE_FALSE(store.entryFor(root).has_value());
 }

@@ -163,7 +163,7 @@ std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) 
     return roots;
 }
 
-void ExtensionManager::loadRoot(const fs::path &root) {
+void ExtensionManager::loadRoot(const fs::path &root, bool from_project_root) {
     try {
         std::error_code ec;
         if (!fs::exists(root, ec) || !fs::is_directory(root, ec))
@@ -199,8 +199,16 @@ void ExtensionManager::loadRoot(const fs::path &root) {
             ExtensionRecord record;
             record.manifest_path = manifest_path;
             record.manifest = parseExtensionManifest(manifest_path, record.issues);
-            if (record.manifest)
+            if (record.manifest) {
                 record.status = statusForManifest(*record.manifest);
+                // Provenance is decided by the scan slot, before any symlink
+                // rewrites root_dir to a path outside the project. A project
+                // that ships a link into rf-sim-extensions ships the trigger
+                // itself, so everything discovered there is project-local
+                // even when it resolves elsewhere (issue #45 trust gate).
+                if (from_project_root)
+                    m_project_local_roots.insert(record.manifest->root_dir.generic_string());
+            }
 
             const std::optional<std::string> extension_id =
                 record.manifest ? std::optional<std::string>(record.manifest->id)
@@ -209,6 +217,13 @@ void ExtensionManager::loadRoot(const fs::path &root) {
             if (extension_id) {
                 const auto existing = m_records_by_id.find(*extension_id);
                 if (existing != m_records_by_id.end()) {
+                    // First-root-wins regardless of the incumbent's status:
+                    // an Invalid/Incompatible higher-precedence manifest
+                    // still reserves the id, so a duplicate can never
+                    // impersonate it. Both records stay visible (the loser
+                    // as Shadowed) and the shadow_detail names the winner.
+                    // Tested by the incompatible-incumbent case in
+                    // test_issue45_extension_trust.cpp.
                     record.status = ExtensionStatusKind::Shadowed;
                     record.shadow_detail = "id '" + *extension_id + "' is already provided by " +
                                            m_records[existing->second].manifest_path.string();
@@ -230,28 +245,39 @@ void ExtensionManager::loadRoot(const fs::path &root) {
 void ExtensionManager::rescan(const fs::path &project_root) {
     m_records.clear();
     m_records_by_id.clear();
+    m_project_local_roots.clear();
     std::error_code ec;
-    m_project_extension_root = fs::weakly_canonical(project_root / "rf-sim-extensions", ec);
-    if (ec)
+    const fs::path project_slot = project_root / "rf-sim-extensions";
+    // absolute() first: weakly_canonical() of a relative path stays relative
+    // on some toolchains (MinGW), and a relative boundary never matches the
+    // canonical absolute roots discovery produces — every containment check
+    // would silently answer false.
+    const fs::path absolute_slot = fs::absolute(project_slot, ec);
+    if (ec) {
         m_project_extension_root.clear();
+    } else {
+        m_project_extension_root = fs::weakly_canonical(absolute_slot, ec);
+        if (ec)
+            m_project_extension_root.clear();
+    }
     for (const auto &root : scanRoots(project_root))
-        loadRoot(root);
+        loadRoot(root, root == project_slot);
 }
 
 bool ExtensionManager::isUnderProjectExtensionRoot(const fs::path &candidate) const {
-    // An empty root means no project was resolved; canonicalPathWithinRoot()
-    // compares component-wise, so a zero-component root would match anything.
+    // An empty root means the project path was unresolvable;
+    // canonicalPathWithinRoot() compares component-wise, so a zero-component
+    // root would match anything.
     if (m_project_extension_root.empty())
         return false;
     return canonicalPathWithinRoot(m_project_extension_root, candidate);
 }
 
-bool ExtensionManager::isProjectLocal(const ExtensionRecord &record) const {
-    return isUnderProjectExtensionRoot(record.manifest_path);
-}
-
 bool ExtensionManager::isProjectLocal(const ExtensionManifest &manifest) const {
-    return isUnderProjectExtensionRoot(manifest.root_dir);
+    // Either containment, or a symlinked discovery path that resolved outside
+    // the canonical root while still being discovered through the project slot.
+    return m_project_local_roots.count(manifest.root_dir.generic_string()) > 0 ||
+           isUnderProjectExtensionRoot(manifest.root_dir);
 }
 
 std::vector<const ExtensionManifest *> ExtensionManager::dataPacks() const {
