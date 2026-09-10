@@ -11,6 +11,7 @@
 #include "component_type_registry.h"
 #include "equalizer_engine.h"
 #include "extension_manager.h"
+#include "extension_trust_store.h"
 #include "external_tool_runner.h"
 
 #include "help_widget.h"
@@ -80,6 +81,24 @@ class RfSimulatorApp {
     ExternalToolRunner m_external_tool_runner;
     bool m_show_extensions = false;
     std::string m_extension_result_message;
+    // Approvals for project-local extensions. Public (like the other UI state
+    // below) so app-level tests can read it and redirect setStorePath() to a
+    // temp file instead of the real <exe_dir>/extension_trust.json.
+    ExtensionTrustStore m_extension_trust;
+    std::optional<ExtensionManifest> m_pending_trust_manifest;
+    bool m_show_extension_trust_prompt = false;
+
+    // True when a project-local external tool has no approval yet; gating is
+    // limited to that kind and provenance, so built-in/global extensions and
+    // project-local data packs are unaffected.
+    bool extensionRequiresTrust(const ExtensionManifest &manifest) const;
+    // The `Tools` menu's payload: external tools minus the project-local ones
+    // with no approval yet, whose manifest-controlled label must not appear.
+    std::vector<const ExtensionManifest *> toolsMenuEntries() const;
+    void requestExtensionTrust(const ExtensionManifest &manifest);
+    // Trusting never runs anything: the user launches the tool separately.
+    void grantPendingExtensionTrust();
+    void denyPendingExtensionTrust();
 
     SessionState m_state;
     TutorialState m_tutorial_state;
@@ -122,6 +141,10 @@ class RfSimulatorApp {
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
+    void drawExtensionTrustPrompt();
+    // Trust state, identity details, and the Trust/Revoke control for a
+    // project-local external tool record in the Extensions panel.
+    void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
     bool saveComponentForm();
 
     // --- Network Analyzer host adapter --------------------------------------

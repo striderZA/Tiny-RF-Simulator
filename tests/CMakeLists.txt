@@ -223,6 +223,15 @@ add_standalone_test(test_issue80_extension_hardening
     SOURCES test_issue80_extension_hardening.cpp
     LIBS simulator::app
 )
+# Standalone issue #45 coverage: project-local external tools stay refused
+# until the user records an approval in ExtensionTrustStore, and a duplicate
+# extension id is reported as Shadowed instead of replacing the first
+# manifest that claimed it. Kept outside tests.exe for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_issue45_extension_trust
+    SOURCES test_issue45_extension_trust.cpp
+    LIBS simulator::app
+)
 # Standalone sampling-ratio coverage stays outside tests.exe because of the
 # MinGW-w64 registration ceiling.
 add_standalone_test(test_pfb_sampling_ratio

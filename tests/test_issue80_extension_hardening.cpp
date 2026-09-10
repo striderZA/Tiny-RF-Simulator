@@ -1,7 +1,9 @@
-// Issue #80 regression coverage: extension-execution hardening after the
-// trust-gating work (issue #45). Standalone executable (not part of
-// test_extensions.cpp) because the MinGW-w64 toolchain silently drops
-// TEST_CASE registrations beyond the per-binary ceiling; see tests/CMakeLists.txt.
+// Issue #80 regression coverage: extension-execution hardening, which constrains
+// *where* a tool runs. Issue #45's trust gate (see
+// test_issue45_extension_trust.cpp) decides *whether* it may run at all.
+// Standalone executable (not part of test_extensions.cpp) because the
+// MinGW-w64 toolchain silently drops TEST_CASE registrations beyond the
+// per-binary ceiling; see tests/CMakeLists.txt.
 //
 // Covered here:
 //  - traversal / special-character extension ids are rejected at manifest

@@ -16,6 +16,7 @@ add_library(app STATIC
     src/component_form_widget.cpp
     src/extension_manifest.cpp
     src/extension_manager.cpp
+    src/extension_trust_store.cpp
     src/external_tool_runner.cpp
     src/pfb_view_manager.cpp
     src/pfb_calculator_widget.cpp

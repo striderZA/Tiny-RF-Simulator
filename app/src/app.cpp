@@ -351,6 +351,15 @@ void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest,
                                      std::string_view action_label) {
     namespace fs = std::filesystem;
 
+    // Fail closed for any caller: a tool that ships with the open project must
+    // be explicitly trusted before its entry point is launched (issue #45).
+    if (extensionRequiresTrust(manifest)) {
+        m_extension_result_message = "Extension run failed: " + manifest.name +
+                                     " is not trusted (it ships with the open project)";
+        requestExtensionTrust(manifest);
+        return;
+    }
+
     const std::string effective_action_label =
         action_label.empty() ? manifest.name : std::string(action_label);
     const fs::path project_root = m_current_project_path.empty()
@@ -384,6 +393,22 @@ void RfSimulatorApp::runExternalTool(const ExtensionManifest &manifest,
         refreshExtensions();
 }
 
+// Exhaustive so a new ExtensionStatusKind cannot silently report "Invalid" in
+// the Extensions panel.
+static const char *extensionStatusName(ExtensionStatusKind status) {
+    switch (status) {
+    case ExtensionStatusKind::Ok:
+        return "Ok";
+    case ExtensionStatusKind::Incompatible:
+        return "Incompatible";
+    case ExtensionStatusKind::Shadowed:
+        return "Shadowed";
+    case ExtensionStatusKind::Invalid:
+        break;
+    }
+    return "Invalid";
+}
+
 void RfSimulatorApp::drawExtensionsPanel() {
     if (!m_show_extensions)
         return;
@@ -402,25 +427,32 @@ void RfSimulatorApp::drawExtensionsPanel() {
             const bool has_manifest = record.manifest.has_value();
             const std::string label =
                 has_manifest ? record.manifest->name : record.manifest_path.filename().string();
-            const char *status = record.status == ExtensionStatusKind::Ok ? "Ok"
-                                 : record.status == ExtensionStatusKind::Incompatible
-                                     ? "Incompatible"
-                                     : "Invalid";
 
-            ImGui::Text("%s [%s]", label.c_str(), status);
+            ImGui::Text("%s [%s]", label.c_str(), extensionStatusName(record.status));
             if (has_manifest && record.status == ExtensionStatusKind::Ok &&
                 record.manifest->kind == ExtensionKind::ExternalTool) {
-                const auto actions = externalToolActions(*record.manifest);
-                for (std::size_t i = 0; i < actions.size(); ++i) {
-                    ImGui::SameLine();
-                    const std::string button_label = record.manifest->menus.empty()
-                                                         ? "Run##" + record.manifest->id
-                                                         : actions[i].label + "##" +
-                                                               record.manifest->id + "-" +
-                                                               std::to_string(i);
-                    if (ImGui::Button(button_label.c_str()))
-                        runExternalTool(*record.manifest, actions[i].label);
+                const bool needs_trust = extensionRequiresTrust(*record.manifest);
+                if (m_extension_manager.isProjectLocal(*record.manifest))
+                    drawExternalToolTrustControls(*record.manifest, needs_trust);
+                if (!needs_trust) {
+                    const auto actions = externalToolActions(*record.manifest);
+                    for (std::size_t i = 0; i < actions.size(); ++i) {
+                        ImGui::SameLine();
+                        const std::string button_label = record.manifest->menus.empty()
+                                                             ? "Run##" + record.manifest->id
+                                                             : actions[i].label + "##" +
+                                                                   record.manifest->id + "-" +
+                                                                   std::to_string(i);
+                        if (ImGui::Button(button_label.c_str()))
+                            runExternalTool(*record.manifest, actions[i].label);
+                    }
                 }
+            }
+
+            if (!record.shadow_detail.empty()) {
+                ImGui::Indent();
+                ImGui::TextWrapped("Ignored: %s", record.shadow_detail.c_str());
+                ImGui::Unindent();
             }
 
             if (!record.issues.empty()) {
@@ -432,6 +464,106 @@ void RfSimulatorApp::drawExtensionsPanel() {
         }
     }
     ImGui::End();
+}
+
+bool RfSimulatorApp::extensionRequiresTrust(const ExtensionManifest &manifest) const {
+    return manifest.kind == ExtensionKind::ExternalTool &&
+           m_extension_manager.isProjectLocal(manifest) &&
+           !m_extension_trust.isApproved(manifest.root_dir);
+}
+
+std::vector<const ExtensionManifest *> RfSimulatorApp::toolsMenuEntries() const {
+    std::vector<const ExtensionManifest *> entries;
+    for (const auto *tool : m_extension_manager.externalTools()) {
+        if (tool && !extensionRequiresTrust(*tool))
+            entries.push_back(tool);
+    }
+    return entries;
+}
+
+void RfSimulatorApp::requestExtensionTrust(const ExtensionManifest &manifest) {
+    m_pending_trust_manifest = manifest;
+    m_show_extension_trust_prompt = true;
+}
+
+void RfSimulatorApp::grantPendingExtensionTrust() {
+    if (m_pending_trust_manifest && !m_extension_trust.approve(*m_pending_trust_manifest))
+        m_extension_result_message =
+            "Extension trust could not be saved: " + m_extension_trust.storePath().string();
+    m_pending_trust_manifest.reset();
+    m_show_extension_trust_prompt = false;
+}
+
+void RfSimulatorApp::denyPendingExtensionTrust() {
+    m_pending_trust_manifest.reset();
+    m_show_extension_trust_prompt = false;
+}
+
+// The manifest supplies name and entry point, so the panel spells out the
+// project-local origin and the exact file that would run before offering the
+// only two actions: trust the folder, or revoke a previous decision.
+void RfSimulatorApp::drawExternalToolTrustControls(const ExtensionManifest &manifest,
+                                                   bool needs_trust) {
+    ImGui::Indent();
+    if (needs_trust)
+        ImGui::TextWrapped("Untrusted (ships with the open project). Trust it to run it.");
+    else
+        ImGui::TextWrapped("Trusted (ships with the open project)");
+    ImGui::TextWrapped("Entry point: %s", manifest.entry_path.string().c_str());
+    ImGui::TextWrapped("Extension root: %s", manifest.root_dir.string().c_str());
+
+    const auto entry = m_extension_trust.entryFor(manifest.root_dir);
+    if (entry && (entry->id != manifest.id || entry->version != manifest.version ||
+                  entry->entry_path != manifest.entry_path.generic_string()))
+        ImGui::TextWrapped(
+            "Trusted for a different manifest (id '%s', version %s, entry %s); revoke to review.",
+            entry->id.c_str(), entry->version.c_str(), entry->entry_path.c_str());
+
+    if (needs_trust) {
+        if (ImGui::Button(("Trust...##" + manifest.id).c_str()))
+            requestExtensionTrust(manifest);
+    } else if (ImGui::Button(("Revoke trust##" + manifest.id).c_str())) {
+        if (!m_extension_trust.revoke(manifest.root_dir))
+            m_extension_result_message =
+                "Extension trust could not be saved: " + m_extension_trust.storePath().string();
+    }
+    ImGui::Unindent();
+}
+
+void RfSimulatorApp::drawExtensionTrustPrompt() {
+    if (m_show_extension_trust_prompt) {
+        ImGui::OpenPopup("Untrusted Extension");
+    }
+    if (!ImGui::BeginPopupModal("Untrusted Extension", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    if (m_pending_trust_manifest) {
+        const ExtensionManifest &manifest = *m_pending_trust_manifest;
+        ImGui::TextWrapped("Run code from the project you have open?");
+        ImGui::Separator();
+        ImGui::Text("Name: %s", manifest.name.c_str());
+        ImGui::Text("Id: %s", manifest.id.c_str());
+        ImGui::Text("Version: %s", manifest.version.c_str());
+        if (!manifest.author.empty())
+            ImGui::Text("Author: %s", manifest.author.c_str());
+        ImGui::TextWrapped("Entry point: %s", manifest.entry_path.string().c_str());
+        ImGui::TextWrapped("Extension root: %s", manifest.root_dir.string().c_str());
+        ImGui::Separator();
+        ImGui::TextWrapped("This code ships with the open project and runs with your account's "
+                           "rights. Trust it only if you have read it.");
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button("Trust", ImVec2(140, 0))) {
+        grantPendingExtensionTrust();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(140, 0))) {
+        denyPendingExtensionTrust();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 void RfSimulatorApp::saveProject(const std::string &path) {
@@ -791,9 +923,7 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::BeginMenu("Tools")) {
             ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
             ImGui::Separator();
-            for (const auto *tool : m_extension_manager.externalTools()) {
-                if (!tool)
-                    continue;
+            for (const auto *tool : toolsMenuEntries()) {
                 for (const auto &action : externalToolActions(*tool)) {
                     if (action.location == "tools" && ImGui::MenuItem(action.label.c_str()))
                         runExternalTool(*tool, action.label);
@@ -1080,6 +1210,10 @@ void RfSimulatorApp::draw_ui() {
         // that back onto the app's visibility flag.
         m_show_tutorial = m_tutorial_state.isActive();
     }
+
+    // Last so a Trust request raised from the Extensions panel or a refused
+    // run opens within the same frame.
+    drawExtensionTrustPrompt();
 }
 
 RfSimulatorApp::~RfSimulatorApp() {
