@@ -13,6 +13,10 @@
 
 - Point agent guidance at `build/_deps` for dependency sources and forbid filesystem-wide header searches.
 
+### Testing
+
+- Initialize the ImGui context in the extension-trust symlink case so it exercises the project-local trust gate instead of crashing the Linux test legs.
+
 ## [0.22.2] - 2026-09-08
 
 ### Changed

@@ -33,7 +33,7 @@ Own the Catch2 v3.4.0 unit test suite and ImGui test engine UI tests. Verify all
 - Test both nominal and edge cases: zero inputs, max values, parameter extremes
 - Node graph tests must verify probe routing, link topology, and topological sort
 - Touchstone parser tests must cover all format variants (DB, MA, RI) and frequency units
-- Do not depend on ImGui or GLFW in pure DSP-engine tests; app-integration tests may create ImGui, ImPlot, and ImNodes contexts to construct `RfSimulatorApp` safely
+- Do not depend on ImGui or GLFW in pure DSP-engine tests; app-integration tests **must** create ImGui, ImPlot, and ImNodes contexts (`TEST_CASE_METHOD(ImGuiFixture, ...)`) before constructing `RfSimulatorApp`, which otherwise segfaults headlessly on the Linux/ASan legs.
 - App-level tests may include `simulator::app` for integration scenarios
 
 ## Verification
