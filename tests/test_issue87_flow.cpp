@@ -1,4 +1,5 @@
 #include "flow_metrics.h"
+#include "flow_params.h"
 #include "flow_result.h"
 #include "spectrum.h"
 
@@ -236,4 +237,71 @@ TEST_CASE("issue87 json: a failed result reports its error code name", "[issue87
     REQUIRE(parsed["error"]["code"] == "unknown_metric");
     REQUIRE(parsed["error"]["message"] == "measure[0]: unknown metric 'nope'");
     REQUIRE(parsed["rows"].empty());
+}
+
+TEST_CASE("issue87 params: writes a float slot in place", "[issue87][params]") {
+    nlohmann::json snapshot = {{"gain_dB", 20.0}};
+    std::string error;
+    REQUIRE(applyConditionValue(snapshot, "gain_dB", -30.0, &error));
+    REQUIRE(snapshot["gain_dB"].get<double>() == Approx(-30.0));
+}
+
+TEST_CASE("issue87 params: an integer slot stays an integer", "[issue87][params]") {
+    nlohmann::json snapshot = {{"decimation", 2}};
+    std::string error;
+    REQUIRE(applyConditionValue(snapshot, "decimation", 8.0, &error));
+    REQUIRE(snapshot["decimation"].is_number_integer());
+    REQUIRE(snapshot["decimation"].get<int>() == 8);
+}
+
+TEST_CASE("issue87 params: a fractional value is rejected for an integer slot",
+          "[issue87][params]") {
+    nlohmann::json snapshot = {{"decimation", 2}};
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "decimation", 4.5, &error));
+    REQUIRE_FALSE(error.empty());
+}
+
+TEST_CASE("issue87 params: addresses array elements", "[issue87][params]") {
+    nlohmann::json snapshot;
+    snapshot["tones"] = nlohmann::json::array();
+    snapshot["tones"].push_back(nlohmann::json{{"freq_Hz", 1e9}, {"power_dBm", -30.0}});
+
+    std::string error;
+    REQUIRE(applyConditionValue(snapshot, "tones[0].power_dBm", -10.0, &error));
+    REQUIRE(snapshot["tones"][0]["power_dBm"].get<double>() == Approx(-10.0));
+    REQUIRE(snapshot["tones"][0]["freq_Hz"].get<double>() == Approx(1e9));
+}
+
+TEST_CASE("issue87 params: rejects a path that does not resolve", "[issue87][params]") {
+    nlohmann::json snapshot = {{"gain_dB", 20.0}};
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "nf_dB", 3.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0].power_dBm", -10.0, &error));
+}
+
+TEST_CASE("issue87 params: rejects an out-of-range index", "[issue87][params]") {
+    nlohmann::json snapshot;
+    snapshot["tones"] = nlohmann::json::array();
+    snapshot["tones"].push_back(nlohmann::json{{"power_dBm", -30.0}});
+
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "tones[1].power_dBm", -10.0, &error));
+}
+
+TEST_CASE("issue87 params: rejects a non-numeric slot", "[issue87][params]") {
+    nlohmann::json snapshot = {{"filter_type", "LPF"}, {"sparam_mode", false}};
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "filter_type", 1.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "sparam_mode", 1.0, &error));
+}
+
+TEST_CASE("issue87 params: rejects malformed paths", "[issue87][params]") {
+    nlohmann::json snapshot = {{"gain_dB", 20.0}};
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "", 1.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "gain_dB.", 1.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "gain_dB]", 1.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0", 1.0, &error));
+    REQUIRE_FALSE(applyConditionValue(snapshot, "tones[x]", 1.0, &error));
 }

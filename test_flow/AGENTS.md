@@ -23,6 +23,8 @@ component output ports.
 - Components are addressed by `IComponentEngine::id()`, never by graph node id.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
   (`atten_dB`, not `attenuation_dB`).
+- Condition `path`s are dot-separated keys with optional zero-based array indices, e.g. `gain_dB` or
+  `tones[0].power_dBm`.
 - Patches are type-preserving: an integer slot requires an integral value.
 - Non-finite metric values encode as JSON `null`; `valid` distinguishes a measurement from a
   failure.
