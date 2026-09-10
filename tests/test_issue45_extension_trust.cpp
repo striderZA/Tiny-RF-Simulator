@@ -705,8 +705,8 @@ TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
             fs::weakly_canonical(builtin_root / "bin" / "builtin.py"));
 }
 
-TEST_CASE("a symlinked extension under the project root stays project-local",
-          "[issue45][discovery][symlink]") {
+TEST_CASE_METHOD(ImGuiFixture, "a symlinked extension under the project root stays project-local",
+                 "[issue45][discovery][symlink]") {
     const fs::path base = fs::temp_directory_path() / "rfsim_ext45_symlink";
     const fs::path ext_root = base / "rf-sim-extensions";
     const fs::path outside = base / "payload-outside";
