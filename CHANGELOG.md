@@ -1,3 +1,13 @@
+## [0.22.4] - 2026-09-10
+
+### Fixed
+
+- **Spectrum Analyzer sizing** — the plot now fills the panel's remaining height instead of sitting at ImPlot's fixed 300 px default, keeps a 180 px usable floor, and reserves the readout rows drawn below it (including the marker block while the marker is enabled). The window's minimum height drops from 400 px to 240 px, so a docked analyzer no longer forces its dock node to grow into neighbouring panels.
+
+### Testing
+
+- Add a UI regression test that reads the analyzer plot rect to verify it tracks the window size, respects the floor, yields room to the marker controls, and survives close/reopen.
+
 ## [0.22.3] - 2026-09-10
 
 ### Security
