@@ -151,6 +151,40 @@ This is the same as standard DFT bin mapping. Use `np.fft.fftfreq(M, d=1.0/Fs)` 
 
 ---
 
+## RF Simulator Contract: 1x / 2x Oversampling
+
+The RF Simulator PFB channelizer supports a persisted `Sampling Ratio` control: `1x` (critical
+sampling, the default) or `2x` (oversampled). The value is clamped to `[1, 2]`, saved per PFB
+channelizer in project files, and defaults to `1x` when absent from a legacy file.
+
+For an input stream at `Fs` split into `M` channels with spacing `Fs/M`:
+
+| Quantity | 1x (critical) | 2x (oversampled) |
+|---|---|---|
+| Channel output rate (`outputFs_Hz`) | `Fs / M` | `2 · Fs / M` |
+| Usable channel bandwidth | `Fs / M` | `2 · Fs / M` |
+| Channel center `f_k` | `-Fs/2 + Fs/(2M) + k · Fs/M` | **unchanged** |
+| Full-band output rate | `Fs` | `Fs` |
+
+General form: `outputFs_Hz = ratio · Fs / M` and `channel_bw = ratio · Fs / M`, while every channel
+center stays at `-Fs/2 + Fs/(2M) + k · Fs/M`. The ratio scales the usable bandwidth and output rate,
+not the channel grid — adjacent channels overlap by one channel width at `2x`.
+
+### Implementation model and limitation
+
+The engine maps **input spectrum bins** into each channel using the shared prototype response: a bin
+is included when `|f_bin − f_k| <= channel_bw` and is weighted by
+`responseAt((f_bin − f_k)/channel_bw)`. Raising the ratio widens `channel_bw`, so more input bins
+fall inside each channel and the reported output rate/bandwidth grow. A full-band output that
+averages overlapping channel contributions keeps its flat PSD.
+
+This is a **spectral model, not a temporal one**. It does not implement a time-domain oversampled
+polyphase/commutator path running at `2·Fs/M`, and it does not perform an `M/2`-stride polyphase
+overlap-add. "Oversampling" here is the frequency-domain equivalent only. Ratios above `2x` are
+unsupported, and polyphase synthesis/reconstruction remains out of scope (tracked in ROADMAP item 17).
+
+---
+
 ## Critical Implementation Details
 
 | Detail | Recommendation |

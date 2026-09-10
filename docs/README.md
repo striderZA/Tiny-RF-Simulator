@@ -7,7 +7,7 @@ Engineering references and design specs that support the codebase.
 | Document | Description |
 |----------|-------------|
 | [amplifier_nonlinear_model.md](resources/amplifier_nonlinear_model.md) | Nonlinear amplifier model (gain compression, harmonics, IMD) — engineering reference for the amplifier module |
-| [pfb_channelizer_info.md](resources/pfb_channelizer_info.md) | Polyphase filter bank channelizer — theory and design notes for the PFB module |
+| [pfb_channelizer_info.md](resources/pfb_channelizer_info.md) | Polyphase filter bank channelizer — theory, design notes, and the simulator's 1x/2x oversampling contract |
 | [rf_adc_info.md](resources/rf_adc_info.md) | RF ADC software twin — semi-idealized sampling model (aliasing, Nyquist zones, NSD) |
 | [touchstone_v2_parser_spec.md](resources/touchstone_v2_parser_spec.md) | Touchstone v2.0 file format spec — parser reference for `.s2p`/`.s3p`/`.s4p` support |
 
