@@ -5,7 +5,8 @@
 
 // Writes `value` at `path` inside `snapshot`, preserving the JSON type of the
 // existing slot: an integer slot requires an integral value and is written back
-// as an integer, a float slot is written as a float, and boolean/string/null
+// as an integer, an unsigned slot requires a non-negative integral value and
+// stays unsigned, a float slot is written as a float, and boolean/string/null
 // slots are rejected. `path` is a dot/bracket path into the target engine's
 // serialize() object, e.g. "gain_dB" or "tones[0].power_dBm".
 //

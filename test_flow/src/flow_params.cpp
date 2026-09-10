@@ -105,7 +105,21 @@ bool applyConditionValue(nlohmann::json &snapshot, const std::string &path, doub
         node = &(*it);
     }
 
-    if (node->is_number_integer() || node->is_number_unsigned()) {
+    // `is_number_integer()` is also true for unsigned values, so the unsigned
+    // slot must be matched first to keep its JSON type.
+    if (node->is_number_unsigned()) {
+        if (!std::isfinite(value))
+            return fail("slot is unsigned but the value is not finite");
+        if (value < 0.0)
+            return fail("slot is unsigned but the value is negative");
+        if (value != std::floor(value))
+            return fail("slot is unsigned but the value is not integral");
+        if (value > 1.8e19)
+            return fail("value " + std::to_string(value) + " is outside unsigned integer range");
+        *node = static_cast<unsigned long long>(value);
+        return true;
+    }
+    if (node->is_number_integer()) {
         if (!std::isfinite(value) || value != std::floor(value))
             return fail("slot is an integer but the value is not integral");
         if (std::abs(value) > 9.0e18)

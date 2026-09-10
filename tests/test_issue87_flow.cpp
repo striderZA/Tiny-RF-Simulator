@@ -262,6 +262,25 @@ TEST_CASE("issue87 params: a fractional value is rejected for an integer slot",
     REQUIRE_FALSE(error.empty());
 }
 
+TEST_CASE("issue87 params: an unsigned slot stays unsigned", "[issue87][params]") {
+    nlohmann::json snapshot = {{"count", 5u}};
+    REQUIRE(snapshot["count"].is_number_unsigned());
+
+    std::string error;
+    REQUIRE(applyConditionValue(snapshot, "count", 7.0, &error));
+    REQUIRE(snapshot["count"].is_number_unsigned());
+    REQUIRE(snapshot["count"].get<unsigned>() == 7u);
+}
+
+TEST_CASE("issue87 params: a negative value is rejected for an unsigned slot",
+          "[issue87][params]") {
+    nlohmann::json snapshot = {{"count", 5u}};
+    std::string error;
+    REQUIRE_FALSE(applyConditionValue(snapshot, "count", -1.0, &error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE(snapshot["count"].get<unsigned>() == 5u);
+}
+
 TEST_CASE("issue87 params: addresses array elements", "[issue87][params]") {
     nlohmann::json snapshot;
     snapshot["tones"] = nlohmann::json::array();
