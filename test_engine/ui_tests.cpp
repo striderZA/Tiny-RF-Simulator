@@ -86,6 +86,84 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t = IM_REGISTER_TEST(e, "rf_simulator", "properties_window_exists");
     t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Properties"); };
 
+    // Issue #88: the analyzer plot must absorb the window's vertical space
+    // (ImPlot's bare BeginPlot default is a fixed 300 px) and keep a usable
+    // floor when the window is small.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_plot_tracks_window_size");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // The plot only exists when at least one pin is probed (the widget
+        // early-returns on an empty trace list), so probe the seeded
+        // generator's output for the duration of this test.
+        auto &graph = s_app->testGraphEngine();
+        int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(graph.addProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->Yield(3);
+
+        // Black-box: ImPlot registers the plot frame through ImGui::ItemAdd, so
+        // the test engine can read its rect instead of the widget exposing one.
+        auto plot_size = [&]() {
+            ctx->SetRef("Spectrum Analyzer");
+            auto info = ctx->ItemInfo("Spectrum", ImGuiTestOpFlags_NoError);
+            ctx->SetRef("");
+            return info.RectFull.GetSize();
+        };
+
+        const ImVec2 default_size = plot_size();
+        IM_CHECK(default_size.y >= SpectrumAnalyzerWidget::kMinPlotHeight);
+
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 760));
+        ctx->Yield(3);
+        const ImVec2 tall_size = plot_size();
+
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 600));
+        ctx->Yield(3);
+        const ImVec2 short_size = plot_size();
+
+        ctx->LogInfo("spectrum plot: default=%.1f tall=%.1f short=%.1f wide=%.1f", default_size.y,
+                     tall_size.y, short_size.y, tall_size.x);
+        IM_CHECK(tall_size.y > 320.0f);       // grew past ImPlot's old fixed default
+        IM_CHECK(short_size.y < tall_size.y); // tracks the window instead of staying fixed
+        IM_CHECK(short_size.y >= SpectrumAnalyzerWidget::kMinPlotHeight);
+        IM_CHECK(tall_size.x > 600.0f); // fills the window width
+
+        // Enabling the marker adds control rows below the plot; the plot must
+        // give up exactly that room and stay usable.
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Enable Marker"));
+        ctx->ItemClick("Enable Marker");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        const float marker_h = plot_size().y;
+        IM_CHECK(marker_h < short_size.y);
+        IM_CHECK(marker_h >= SpectrumAnalyzerWidget::kMinPlotHeight);
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Snap to Peak"));
+        ctx->ItemClick("Enable Marker"); // restore the disabled layout
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        // Closing and reopening the panel must not disturb the layout.
+        s_app->m_show_spectrum = false;
+        ctx->Yield(2);
+        s_app->m_show_spectrum = true;
+        ctx->Yield(3);
+        const float reopened_h = plot_size().y;
+        IM_CHECK(reopened_h >= SpectrumAnalyzerWidget::kMinPlotHeight);
+        IM_CHECK(reopened_h < tall_size.y);
+
+        // A docked panel's minimum height must not force its dock node to grow
+        // into neighbouring panels; #88 dropped the old hard 400 px floor.
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(400, 240));
+        ctx->Yield(3);
+        IM_CHECK(ctx->GetWindowByRef("Spectrum Analyzer")->Size.y <= 241.0f);
+
+        IM_CHECK(graph.removeProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // =========================================================================
 
     // Issue #67: selecting a link and pressing Delete must remove it (previously

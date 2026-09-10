@@ -9,6 +9,15 @@
 #include <algorithm>
 #include <limits>
 
+namespace {
+// Vertical space (px) the readout rows below the plot need: the average-noise
+// and trace/peak text lines plus the Reset Zoom button. The marker block adds
+// more only while it is enabled. Reserving it lets the plot grow into whatever
+// is left instead of sitting at ImPlot's fixed 300 px default (issue #88).
+constexpr float kPlotBottomReserve = 88.0f;
+constexpr float kMarkerControlsReserve = 44.0f;
+} // namespace
+
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
@@ -131,8 +140,12 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
 }
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
-    ImGui::SetNextWindowSize(ImVec2(500, 550), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 400), ImVec2(FLT_MAX, FLT_MAX));
+    // First-use size gives the plot a useful working area; the minimum stops at
+    // the width the labelled inputs need and a modest height so a docked panel
+    // never forces its dock node to grow and squeeze neighbouring panels
+    // (issue #88).
+    ImGui::SetNextWindowSize(ImVec2(640, 620), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 240), ImVec2(FLT_MAX, FLT_MAX));
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;
@@ -286,7 +299,15 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
                               m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
 
-    if (ImPlot::BeginPlot("Spectrum")) {
+    // Let the plot absorb the remaining window height (ImPlot's own default is
+    // a fixed 300 px), reserving room for the readout rows drawn below it and
+    // never dropping under the usable floor (issue #88).
+    const float bottom_reserve =
+        kPlotBottomReserve + (m_marker.enabled ? kMarkerControlsReserve : 0.0f);
+    const float plot_height =
+        std::max(kMinPlotHeight, ImGui::GetContentRegionAvail().y - bottom_reserve);
+
+    if (ImPlot::BeginPlot("Spectrum", ImVec2(-1.0f, plot_height))) {
         for (size_t i = 0; i < active_nodes.size(); ++i) {
             auto *node = active_nodes[i];
             if (!node)
