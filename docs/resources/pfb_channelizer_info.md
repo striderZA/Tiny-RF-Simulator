@@ -168,7 +168,7 @@ For an input stream at `Fs` split into `M` channels with spacing `Fs/M`:
 
 General form: `outputFs_Hz = ratio · Fs / M` and `channel_bw = ratio · Fs / M`, while every channel
 center stays at `-Fs/2 + Fs/(2M) + k · Fs/M`. The ratio scales the usable bandwidth and output rate,
-not the channel grid — adjacent channels overlap by one channel width at `2x`.
+not the channel grid; wider per-channel inclusion supports overlap more at higher ratios.
 
 ### Implementation model and limitation
 
