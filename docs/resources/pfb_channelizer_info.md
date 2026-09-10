@@ -193,7 +193,7 @@ unsupported, and polyphase synthesis/reconstruction remains out of scope (tracke
 | Buffer shift direction | Oldest sample at index 0 or K-1 — pick one and be consistent with poly_matrix orientation |
 | Input ordering | Pass samples newest-last; reverse before loading into buffer column |
 | Channel 0 content | DC + aliases; may need post-processing depending on use case |
-| Overlapping channels | For raised-cosine prototype or oversampled PFB, increase `K` and use `M/2` stride |
+| Overlapping channels | Conventional time-domain oversampled PFBs use a raised-cosine prototype and an `M/2` stride; the RF Simulator does **not** implement that path — see the 1x/2x spectral contract above |
 | Output scaling | `np.fft.ifft` divides by `M`; multiply back if you need unity gain per channel |
 
 ---
