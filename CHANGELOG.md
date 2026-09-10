@@ -1,3 +1,18 @@
+## [0.22.3] - 2026-09-10
+
+### Security
+
+- **Extension trust gate** — project-local extensions must now be explicitly trusted before they run. Approvals persist per canonical extension root in `<exe_dir>/extension_trust.json`, fail closed on every degraded path, and keep trust and run as separate user actions; untrusted tools are absent from the Tools menu and gain `Trust...`/`Revoke trust` controls in the Extensions panel.
+- **Duplicate extension IDs** — a project-local extension can no longer silently override a built-in or global extension with the same ID. The first root in scan order wins and the loser is reported as `Shadowed` instead of taking effect.
+
+### Changed
+
+- **Behavior change for existing users** — a project-local tool that ran before now needs one **Trust...** click, and a project-local extension that previously overrode a built-in or global ID stops working (by design).
+
+### Documentation
+
+- Point agent guidance at `build/_deps` for dependency sources and forbid filesystem-wide header searches.
+
 ## [0.22.2] - 2026-09-08
 
 ### Changed
