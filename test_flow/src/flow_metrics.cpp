@@ -39,14 +39,26 @@ double peakFreq_Hz(const Spectrum &spec) {
 double noiseFloor_dBm_per_Hz(const Spectrum &spec) {
     if (spec.frequencies.size() < 2 || spec.noise_total_W.empty())
         return nan();
-    const size_t n = std::min(spec.frequencies.size(), spec.noise_total_W.size());
-    double sum = 0.0;
-    for (size_t i = 0; i < n; ++i)
-        sum += spec.noise_total_W[i];
-    const double mean_density = sum / static_cast<double>(n);
-    if (!(mean_density > 0.0))
+    // A density vector that does not match the grid is malformed data. Truncating
+    // would report a plausible value where power_dBm correctly reports
+    // not-computable, so both metrics must agree the input is unmeasurable.
+    if (spec.noise_total_W.size() != spec.frequencies.size())
         return nan();
-    return 10.0 * std::log10(mean_density * 1000.0); // W/Hz -> dBm/Hz
+
+    double sum = 0.0;
+    for (double density : spec.noise_total_W) {
+        // Per-bin, not mean-based: PowerMeterEngine rejects any negative density, so a
+        // mean test would let a negative bin cancel a positive one and disagree with
+        // power_dBm about whether the input is measurable at all.
+        if (!std::isfinite(density) || density < 0.0)
+            return nan(); // malformed data
+        sum += density;
+    }
+    const double mean_density = sum / static_cast<double>(spec.noise_total_W.size());
+
+    if (mean_density == 0.0)
+        return -std::numeric_limits<double>::infinity(); // well-formed but silent
+    return 10.0 * std::log10(mean_density * 1000.0);     // W/Hz -> dBm/Hz
 }
 
 } // namespace

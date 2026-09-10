@@ -17,17 +17,44 @@ const MetricDefinition *metric(const std::string &name) {
 }
 } // namespace
 
-TEST_CASE("issue87 metrics: power_dBm sums tones and integrated noise", "[issue87][metrics]") {
+TEST_CASE("issue87 metrics: power_dBm integrates noise density over the bin width",
+          "[issue87][metrics]") {
+    // No tones: the noise term is the only contribution, so this constrains
+    // density * bin_width rather than merely the dBm conversion.
+    Spectrum spec;
+    spec.frequencies = {1e9, 1.1e9}; // 1e8 Hz bins
+    spec.noise_total_W = {4.0e-21, 4.0e-21};
+    // 2 bins * 4e-21 W/Hz * 1e8 Hz = 8e-13 W -> 10*log10(8e-10) = -90.96910 dBm
+    const MetricDefinition *def = metric("power_dBm");
+    REQUIRE(def != nullptr);
+    REQUIRE(def->compute(spec) == Approx(-90.96910).margin(1e-4));
+}
+
+TEST_CASE("issue87 metrics: power_dBm scales with the bin width", "[issue87][metrics]") {
+    Spectrum narrow;
+    narrow.frequencies = {1e9, 1.1e9}; // 1e8 Hz bins
+    narrow.noise_total_W = {4.0e-21, 4.0e-21};
+    Spectrum wide;
+    wide.frequencies = {1e9, 1.2e9}; // 2e8 Hz bins
+    wide.noise_total_W = {4.0e-21, 4.0e-21};
+
+    const MetricDefinition *def = metric("power_dBm");
+    REQUIRE(def != nullptr);
+    // Doubling the bin width doubles the integrated noise: +10*log10(2) dB.
+    REQUIRE(def->compute(wide) - def->compute(narrow) == Approx(3.0103).margin(1e-3));
+}
+
+TEST_CASE("issue87 metrics: power_dBm sums a tone and integrated noise", "[issue87][metrics]") {
     Spectrum spec;
     spec.frequencies = {1e9, 1.1e9};
     spec.tones = {{1e9, -30.0, 0.0}};
-    spec.noise_total_W = {4.0e-21, 4.0e-21}; // 4e-21 W/Hz * 1e8 Hz = 4e-13 W per bin
+    spec.noise_total_W = {4.0e-21, 4.0e-21};
 
     const MetricDefinition *def = metric("power_dBm");
     REQUIRE(def != nullptr);
     REQUIRE(def->unit == "dBm");
-    // 1e-6 W (tone) + 2 * 4e-13 W (two bins) -> 10*log10(1.0000008e-3) = -29.9999965 dBm
-    REQUIRE(def->compute(spec) == Approx(-29.9999965).margin(0.001));
+    // 1e-6 W tone + 8e-13 W noise = 1.0000008e-6 W -> -29.99999653 dBm
+    REQUIRE(def->compute(spec) == Approx(-29.99999653).margin(1e-6));
 }
 
 TEST_CASE("issue87 metrics: a silent spectrum is a valid -inf power measurement",
@@ -80,6 +107,38 @@ TEST_CASE("issue87 metrics: noise_floor_dBm_per_Hz is the mean density in dBm/Hz
 
 TEST_CASE("issue87 metrics: an invalid grid is not computable", "[issue87][metrics]") {
     Spectrum spec; // no frequencies, no noise
+
+    const MetricDefinition *def = metric("noise_floor_dBm_per_Hz");
+    REQUIRE(def != nullptr);
+    REQUIRE(std::isnan(def->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: a zero noise density is a valid -inf floor", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+    spec.noise_total_W = {0.0, 0.0};
+
+    const MetricDefinition *def = metric("noise_floor_dBm_per_Hz");
+    REQUIRE(def != nullptr);
+    REQUIRE(std::isinf(def->compute(spec)));
+    REQUIRE(def->compute(spec) < 0.0);
+}
+
+TEST_CASE("issue87 metrics: a negative noise density is not computable", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+    spec.noise_total_W = {-1e-21, 1e-21};
+
+    const MetricDefinition *def = metric("noise_floor_dBm_per_Hz");
+    REQUIRE(def != nullptr);
+    REQUIRE(std::isnan(def->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: a density grid of the wrong length is not computable",
+          "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9, 3e9};
+    spec.noise_total_W = {4.0e-21, 4.0e-21}; // two densities, three bins
 
     const MetricDefinition *def = metric("noise_floor_dBm_per_Hz");
     REQUIRE(def != nullptr);
