@@ -44,7 +44,16 @@ class ExtensionManager {
     bool isProjectLocal(const ExtensionManifest &manifest) const;
 
   private:
-    std::vector<std::filesystem::path> scanRoots(const std::filesystem::path &project_root) const;
+    // A discovery root plus whether it is the open project's own extension
+    // directory. Provenance travels with the root instead of being re-derived
+    // by comparing paths inside rescan(), so a change to scanRoots() cannot
+    // silently stop the trust gate from stamping project-local extensions
+    // (which would reopen the symlink bypass).
+    struct ScanRoot {
+        std::filesystem::path path;
+        bool project_local = false;
+    };
+    std::vector<ScanRoot> scanRoots(const std::filesystem::path &project_root) const;
     void loadRoot(const std::filesystem::path &root, bool from_project_root);
     bool isUnderProjectExtensionRoot(const std::filesystem::path &candidate) const;
     // Canonical generic-string root_dirs of manifests discovered through the

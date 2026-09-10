@@ -140,9 +140,10 @@ std::optional<std::string> readManifestId(const fs::path &manifest_path) {
 
 } // namespace
 
-std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) const {
-    std::vector<fs::path> roots;
-    roots.push_back(fs::path(PROJECT_SOURCE_DIR) / "extensions");
+std::vector<ExtensionManager::ScanRoot>
+ExtensionManager::scanRoots(const fs::path &project_root) const {
+    std::vector<ScanRoot> roots;
+    roots.push_back({fs::path(PROJECT_SOURCE_DIR) / "extensions", false});
     // Installed built-in payloads live next to the executable
     // (<exe_dir>/extensions), matching the install rules and the layout/ +
     // SessionState exe-relative convention. Nonexistent in dev/build-tree
@@ -151,15 +152,17 @@ std::vector<fs::path> ExtensionManager::scanRoots(const fs::path &project_root) 
     // an id wins: source-tree built-in > exe-dir built-in > global >
     // project-local. A later duplicate is kept as a Shadowed record instead
     // of replacing the winner (issue #45).
-    roots.push_back(fs::path(detectExeDir()) / "extensions");
+    roots.push_back({fs::path(detectExeDir()) / "extensions", false});
 #ifdef _WIN32
     if (const char *home = std::getenv("USERPROFILE"))
-        roots.push_back(fs::path(home) / ".rf-sim" / "extensions");
+        roots.push_back({fs::path(home) / ".rf-sim" / "extensions", false});
 #else
     if (const char *home = std::getenv("HOME"))
-        roots.push_back(fs::path(home) / ".rf-sim" / "extensions");
+        roots.push_back({fs::path(home) / ".rf-sim" / "extensions", false});
 #endif
-    roots.push_back(project_root / "rf-sim-extensions");
+    // The project's own root is the one slot the trust gate must stamp: what
+    // a project ships it may not run without approval.
+    roots.push_back({project_root / "rf-sim-extensions", true});
     return roots;
 }
 
@@ -261,7 +264,7 @@ void ExtensionManager::rescan(const fs::path &project_root) {
             m_project_extension_root.clear();
     }
     for (const auto &root : scanRoots(project_root))
-        loadRoot(root, root == project_slot);
+        loadRoot(root.path, root.project_local);
 }
 
 bool ExtensionManager::isUnderProjectExtensionRoot(const fs::path &candidate) const {

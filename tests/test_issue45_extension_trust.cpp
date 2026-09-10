@@ -723,10 +723,10 @@ TEST_CASE("a symlinked extension under the project root stays project-local",
     std::error_code ec;
     fs::create_directory_symlink(outside, ext_root / "linked-tool", ec);
     if (ec) {
-        // Windows without developer mode cannot link; the provenance stamp is
-        // still exercised by every other case here, so skip rather than fail.
-        INFO("platform cannot create directory symlinks: " << ec.message());
-        return;
+        // Windows without SeCreateSymbolicLinkPrivilege cannot link. SKIP (not
+        // a silent return) so the run reports how many cases went unexercised
+        // instead of looking green; Linux and privileged Windows run it.
+        SKIP("platform cannot create directory symlinks: " + ec.message());
     }
 
     ExtensionManager mgr;
@@ -744,8 +744,18 @@ TEST_CASE("a symlinked extension under the project root stays project-local",
     // tool as global and run it with no trust prompt (the bypass).
     REQUIRE(linked->root_dir == fs::weakly_canonical(outside));
     REQUIRE_FALSE(canonicalPathWithinRoot(mgr.projectExtensionRoot(), linked->root_dir));
-    // The discovery stamp closes it: still project-local, still gated.
+    // The discovery stamp closes it: still project-local...
     REQUIRE(mgr.isProjectLocal(*linked));
+
+    // ...and the gate the user actually meets refuses to run it.
+    RfSimulatorApp app;
+    app.m_extension_trust.setStorePath(base / "extension_trust.json");
+    app.m_current_project_path = (base / "demo.rfsim").string();
+    app.refreshExtensions();
+    const ExtensionManifest *app_tool = toolById(app, "project.link45");
+    REQUIRE(app_tool != nullptr);
+    REQUIRE(app.extensionRequiresTrust(*app_tool));
+    REQUIRE_FALSE(toolsMenuLists(app, "project.link45"));
 }
 
 TEST_CASE("rescan with an empty project root pins the CWD trust boundary", "[issue45][discovery]") {
