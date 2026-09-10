@@ -112,6 +112,7 @@ Default section order:
 - [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
 - [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
+- [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
 
 <!-- OPENWIKI:START -->
 
