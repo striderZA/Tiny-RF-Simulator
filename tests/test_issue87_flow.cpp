@@ -8,8 +8,6 @@
 #include "node_graph_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
-#include "spectrum.h"
-
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -19,7 +17,42 @@
 #include <limits>
 #include <map>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
 #include <string>
+
+class ThrowingEngine final : public IComponentEngine {
+  public:
+    ThrowingEngine(int id, NodeGraphEngine &graph, bool fail_on_zero = false)
+        : m_id(id), m_fail_on_zero(fail_on_zero), m_graph(&graph) {
+        m_graph_node_id = graph.addNode("Throwing", &m_node, 0, 1);
+        m_node.outputs.resize(1);
+    }
+
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    int outputPinId() const override { return m_graph->outputPinId(m_graph_node_id); }
+    std::string hoverSummary() const override { return "Throwing"; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
+    void update(double) override {}
+    std::string_view type_name() const override { return "throwing"; }
+
+    nlohmann::json serialize() const override { return {{"value", m_value}}; }
+    void deserialize(const nlohmann::json &snapshot) override {
+        const double value = snapshot.at("value").get<double>();
+        m_value = value;
+        if (value != 0.0 || (m_fail_on_zero && value == 0.0))
+            throw std::runtime_error("intentional deserialize failure");
+    }
+
+  private:
+    int m_id;
+    int m_graph_node_id = -1;
+    double m_value = 0.0;
+    bool m_fail_on_zero = false;
+    SignalNode m_node;
+    NodeGraphEngine *m_graph = nullptr;
+};
 
 using Catch::Approx;
 
@@ -102,6 +135,60 @@ TEST_CASE("issue87 metrics: peak metrics are not computable without tones", "[is
     const MetricDefinition *power = metric("peak_power_dBm");
     REQUIRE(power != nullptr);
     REQUIRE(std::isnan(power->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: peak metrics reject non-finite tone fields", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+    spec.tones = {{1e9, std::numeric_limits<double>::quiet_NaN(), 0.0}, {2e9, -10.0, 0.0}};
+
+    REQUIRE(std::isnan(metric("peak_power_dBm")->compute(spec)));
+    REQUIRE(std::isnan(metric("peak_freq_Hz")->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: noise floor rejects malformed frequency grids", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9, 4e9};
+    spec.noise_total_W = {4.0e-21, 4.0e-21, 4.0e-21};
+
+    REQUIRE(std::isnan(metric("noise_floor_dBm_per_Hz")->compute(spec)));
+
+    Spectrum repeated;
+    repeated.frequencies = {1e9, 2e9, 2e9};
+    repeated.noise_total_W = {4.0e-21, 4.0e-21, 4.0e-21};
+    REQUIRE(std::isnan(metric("noise_floor_dBm_per_Hz")->compute(repeated)));
+
+    Spectrum nonfinite;
+    nonfinite.frequencies = {1e9, std::numeric_limits<double>::quiet_NaN()};
+    nonfinite.noise_total_W = {4.0e-21, 4.0e-21};
+    REQUIRE(std::isnan(metric("noise_floor_dBm_per_Hz")->compute(nonfinite)));
+}
+
+TEST_CASE("issue87 metrics: empty noise is a valid silent floor", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+
+    const double value = metric("noise_floor_dBm_per_Hz")->compute(spec);
+    REQUIRE(std::isinf(value));
+    REQUIRE(value < 0.0);
+}
+
+TEST_CASE("issue87 metrics: noise floor rejects accumulation overflow", "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+    spec.noise_total_W = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
+
+    REQUIRE(std::isnan(metric("noise_floor_dBm_per_Hz")->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: finite large noise stays finite after dBm conversion",
+          "[issue87][metrics]") {
+    Spectrum spec;
+    spec.frequencies = {1e9, 2e9};
+    const double density = std::numeric_limits<double>::max() / 4.0;
+    spec.noise_total_W = {density, density};
+
+    REQUIRE(std::isfinite(metric("noise_floor_dBm_per_Hz")->compute(spec)));
 }
 
 TEST_CASE("issue87 metrics: noise_floor_dBm_per_Hz is the mean density in dBm/Hz",
@@ -538,6 +625,90 @@ TEST_CASE("issue87 loader: a conditions entry that is not an object is rejected"
             "measure": [{"component": 1, "metric": "power_dBm"}]})"));
     REQUIRE_FALSE(loaded.ok);
     REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: out-of-range integer fields are rejected", "[issue87][loader]") {
+    const auto bad_version = LoadFlowFile(writeTempFlow(
+        "issue87_version_range.flow.json",
+        R"({"version": 4294967297, "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+
+    const auto bad_negative =
+        LoadFlowFile(writeTempFlow("issue87_negative_component_range.flow.json",
+                                   R"({"version": 1, "measure": [{"component": -2147483649,
+            "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(bad_negative.ok);
+    REQUIRE(bad_negative.error.code == FlowErrorCode::BadFieldType);
+    REQUIRE_FALSE(bad_version.ok);
+    REQUIRE(bad_version.error.code == FlowErrorCode::BadFieldType);
+
+    const auto bad_component =
+        LoadFlowFile(writeTempFlow("issue87_component_range.flow.json",
+                                   R"({"version": 1, "conditions": [{"component": 4294967296,
+            "path": "gain_dB", "values": [1]}],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(bad_component.ok);
+    REQUIRE(bad_component.error.code == FlowErrorCode::BadFieldType);
+
+    const auto bad_port = LoadFlowFile(
+        writeTempFlow("issue87_port_range.flow.json",
+                      R"({"version": 1, "measure": [{"component": 1, "port": 4294967296,
+            "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(bad_port.ok);
+    REQUIRE(bad_port.error.code == FlowErrorCode::BadFieldType);
+}
+
+TEST_CASE("issue87 runner: dangling links do not create a false cycle", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    AmplifierEngine downstream(101, graph);
+    AmplifierEngine upstream(100, graph);
+    graph.addLink(999, upstream.inputPinId());
+    graph.addLink(upstream.outputPinId(), downstream.inputPinId());
+    std::vector<IComponentEngine *> comps{&downstream, &upstream};
+
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_dangling_link.flow.json",
+                      R"({"version": 1, "measure": [{"component": 101, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 1);
+}
+
+TEST_CASE("issue87 runner: deserialize failure is a typed flow error", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    ThrowingEngine engine(300, graph);
+    std::vector<IComponentEngine *> comps{&engine};
+
+    FlowSpec spec;
+    spec.name = "throwing";
+    spec.conditions.push_back(Condition{300, "value", {1.0}});
+    spec.measure.push_back(Measurement{300, 0, "power_dBm"});
+    const nlohmann::json before = engine.serialize();
+
+    FlowResult result;
+    REQUIRE_NOTHROW(result = RunFlow(spec, comps, graph));
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::DeserializeFailed);
+    REQUIRE(result.rows.empty());
+    REQUIRE(engine.serialize() == before);
+}
+
+TEST_CASE("issue87 runner: rollback failure is reported", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    ThrowingEngine engine(301, graph, true);
+    std::vector<IComponentEngine *> comps{&engine};
+
+    FlowSpec spec;
+    spec.name = "rollback-failure";
+    spec.conditions.push_back(Condition{301, "value", {1.0}});
+    spec.measure.push_back(Measurement{301, 0, "power_dBm"});
+
+    const FlowResult result = RunFlow(spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::DeserializeFailed);
+    REQUIRE(result.error.message.find("rollback failed") != std::string::npos);
+    REQUIRE(result.rows.empty());
 }
 
 TEST_CASE("issue87 loader: a conditions entry missing a required field is rejected",

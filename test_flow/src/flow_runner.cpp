@@ -8,8 +8,12 @@
 #include "signal_node.h"
 
 #include <cmath>
+#include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -45,6 +49,22 @@ std::string knownMetricNames() {
     return out;
 }
 
+std::optional<int> checkedJsonInt(const nlohmann::json &value) {
+    if (value.is_number_unsigned()) {
+        const std::uint64_t number = value.get<std::uint64_t>();
+        if (number <= static_cast<std::uint64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(number);
+        return std::nullopt;
+    }
+    if (value.is_number_integer()) {
+        const std::int64_t number = value.get<std::int64_t>();
+        if (number >= static_cast<std::int64_t>(std::numeric_limits<int>::min()) &&
+            number <= static_cast<std::int64_t>(std::numeric_limits<int>::max()))
+            return static_cast<int>(number);
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 FlowLoadResult LoadFlowFile(const std::string &path) {
@@ -75,12 +95,12 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
 
     if (!root.contains("version"))
         return fail(FlowErrorCode::WrongShape, "missing required field 'version'");
-    if (!root["version"].is_number_integer())
-        return fail(FlowErrorCode::BadFieldType, "'version' must be an integer");
-    if (root["version"].get<int>() != 1)
+    const auto version = checkedJsonInt(root["version"]);
+    if (!version)
+        return fail(FlowErrorCode::BadFieldType, "'version' must be a representable integer");
+    if (*version != 1)
         return fail(FlowErrorCode::UnsupportedVersion,
-                    "unsupported flow version " + std::to_string(root["version"].get<int>()) +
-                        " (expected 1)");
+                    "unsupported flow version " + std::to_string(*version) + " (expected 1)");
     out.spec.version = 1;
 
     out.spec.name = std::filesystem::path(path).stem().string();
@@ -101,8 +121,10 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
                 return fail(FlowErrorCode::WrongShape, where + " must be an object");
             if (!cj.contains("component"))
                 return fail(FlowErrorCode::WrongShape, where + " is missing 'component'");
-            if (!cj["component"].is_number_integer())
-                return fail(FlowErrorCode::BadFieldType, where + ".component must be an integer");
+            const auto component_id = checkedJsonInt(cj["component"]);
+            if (!component_id)
+                return fail(FlowErrorCode::BadFieldType,
+                            where + ".component must be a representable integer");
             if (!cj.contains("path"))
                 return fail(FlowErrorCode::WrongShape, where + " is missing 'path'");
             if (!cj["path"].is_string())
@@ -115,7 +137,7 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
                 return fail(FlowErrorCode::WrongShape, where + ".values must not be empty");
 
             Condition condition;
-            condition.component = cj["component"].get<int>();
+            condition.component = *component_id;
             condition.path = cj["path"].get<std::string>();
             for (const auto &vj : cj["values"]) {
                 if (!vj.is_number())
@@ -148,16 +170,20 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
             return fail(FlowErrorCode::WrongShape, where + " must be an object");
         if (!mj.contains("component"))
             return fail(FlowErrorCode::WrongShape, where + " is missing 'component'");
-        if (!mj["component"].is_number_integer())
-            return fail(FlowErrorCode::BadFieldType, where + ".component must be an integer");
+        const auto component_id = checkedJsonInt(mj["component"]);
+        if (!component_id)
+            return fail(FlowErrorCode::BadFieldType,
+                        where + ".component must be a representable integer");
 
         Measurement measurement;
-        measurement.component = mj["component"].get<int>();
+        measurement.component = *component_id;
 
         if (mj.contains("port") && !mj["port"].is_null()) {
-            if (!mj["port"].is_number_integer())
-                return fail(FlowErrorCode::BadFieldType, where + ".port must be an integer");
-            measurement.port = mj["port"].get<int>();
+            const auto port = checkedJsonInt(mj["port"]);
+            if (!port)
+                return fail(FlowErrorCode::BadFieldType,
+                            where + ".port must be a representable integer");
+            measurement.port = *port;
             if (measurement.port < 0)
                 return fail(FlowErrorCode::BadFieldType, where + ".port must not be negative");
         }
@@ -268,6 +294,26 @@ FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> comp
                                engineById(components, condition.component)->serialize());
     }
 
+    const auto restoreBaselines = [&]() -> std::string {
+        std::string rollback_error;
+        for (const auto &baseline : baselines) {
+            try {
+                engineById(components, baseline.first)->deserialize(baseline.second);
+            } catch (const std::exception &e) {
+                if (!rollback_error.empty())
+                    rollback_error += "; ";
+                rollback_error += "component " + std::to_string(baseline.first) + ": " + e.what();
+            } catch (...) {
+                if (!rollback_error.empty())
+                    rollback_error += "; ";
+                rollback_error +=
+                    "component " + std::to_string(baseline.first) + ": unknown exception";
+            }
+        }
+        rewireComponentInputs(components, graph);
+        return rollback_error;
+    };
+
     FlowResult result;
     result.name = spec.name;
 
@@ -295,8 +341,26 @@ FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> comp
             }
             row.conditions.push_back({condition.component, condition.path, value});
         }
-        for (size_t b = 0; b < baselines.size(); ++b)
-            engineById(components, baselines[b].first)->deserialize(working[b]);
+        for (size_t b = 0; b < baselines.size(); ++b) {
+            IComponentEngine *engine = engineById(components, baselines[b].first);
+            try {
+                engine->deserialize(working[b]);
+            } catch (const std::exception &e) {
+                const std::string rollback_error = restoreBaselines();
+                std::string message = "failed to deserialize component " +
+                                      std::to_string(baselines[b].first) + ": " + e.what();
+                if (!rollback_error.empty())
+                    message += " (rollback failed: " + rollback_error + ")";
+                return fail(spec, FlowErrorCode::DeserializeFailed, message);
+            } catch (...) {
+                const std::string rollback_error = restoreBaselines();
+                std::string message = "failed to deserialize component " +
+                                      std::to_string(baselines[b].first) + ": unknown exception";
+                if (!rollback_error.empty())
+                    message += " (rollback failed: " + rollback_error + ")";
+                return fail(spec, FlowErrorCode::DeserializeFailed, message);
+            }
+        }
 
         // Mirrors RfSimulatorApp::rewireInputs() by calling the very same
         // function, so the harness and the GUI can never disagree about a
