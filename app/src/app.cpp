@@ -8,6 +8,7 @@
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
+#include "rewire.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -763,37 +764,7 @@ void RfSimulatorApp::drawComponentFormModal() {
     }
 }
 
-void RfSimulatorApp::rewireInputs() {
-    for (auto *comp : m_components.all()) {
-        int N = comp->numInputPins();
-        for (int k = 0; k < N; ++k) {
-            int pid = comp->inputPinId(k);
-            if (pid >= 0) {
-                auto source = m_graph_engine.getSourceForInput(pid);
-                IComponentEngine *source_comp = nullptr;
-                if (source.node) {
-                    for (auto *candidate : m_components.all()) {
-                        if (&candidate->node() == source.node) {
-                            source_comp = candidate;
-                            break;
-                        }
-                    }
-                }
-                const int source_pin = source_comp && source.output_index >= 0
-                                           ? source_comp->outputPinId(source.output_index)
-                                           : -1;
-                const bool allowed = graphLinkAllowed(source_comp, comp, source_pin, pid);
-                comp->node().inputs[k] =
-                    allowed && source.node && source.output_index >= 0 &&
-                            static_cast<size_t>(source.output_index) < source.node->outputs.size()
-                        ? &source.node->outputs[static_cast<size_t>(source.output_index)]
-                        : nullptr;
-            } else if (static_cast<size_t>(k) < comp->node().inputs.size()) {
-                comp->node().inputs[k] = nullptr;
-            }
-        }
-    }
-}
+void RfSimulatorApp::rewireInputs() { rewireComponentInputs(m_components.all(), m_graph_engine); }
 
 void RfSimulatorApp::update_dsp() {
     rewireInputs();

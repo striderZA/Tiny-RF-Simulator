@@ -238,3 +238,14 @@ add_standalone_test(test_pfb_sampling_ratio
     SOURCES test_pfb_sampling_ratio.cpp
     LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
 )
+
+# Standalone issue #87 coverage: the GUI-free test-flow harness (flow file
+# loading, parameter sweeps, metric capture, JSON export). Kept outside
+# tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue87_flow
+    SOURCES test_issue87_flow.cpp
+    LIBS simulator::test_flow simulator::signal_generator_engine
+         simulator::amplifier_engine simulator::attenuator_engine
+         simulator::adc_engine simulator::pfb_channelizer_engine
+         simulator::node_graph_engine
+)

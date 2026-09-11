@@ -76,7 +76,7 @@ jobs:
             signal_generator amplifier spectrum_analyzer equalizer \
             node_graph splitter mixer adc coax pfb_channelizer iq_plot \
             network_analyzer ideal_filter attenuator combiner power_meter touchstone \
-            help layout tutorial logging \
+            help layout tutorial logging test_flow \
             -name '*.cpp' -o -name '*.h' | \
             xargs clang-format-18 --dry-run --Werror
 

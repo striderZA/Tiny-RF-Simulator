@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "amp power and frequency sweep",
+  "conditions": [
+    {"component": 100, "path": "tones[0].power_dBm", "values": [-30, -20]},
+    {"component": 100, "path": "tones[0].freq_Hz", "values": [1000000000.0, 2000000000.0]}
+  ],
+  "measure": [
+    {"component": 101, "port": 0, "metric": "peak_power_dBm"},
+    {"component": 101, "port": 0, "metric": "peak_freq_Hz"}
+  ]
+}

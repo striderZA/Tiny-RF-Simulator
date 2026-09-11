@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "amplifier noise floor",
+  "measure": [
+    {"component": 100, "port": 0, "metric": "noise_floor_dBm_per_Hz"},
+    {"component": 101, "port": 0, "metric": "noise_floor_dBm_per_Hz"}
+  ]
+}

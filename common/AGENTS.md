@@ -10,6 +10,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 - `common/signal_node.h` — `SignalNode` (input + output spectra + view_enabled)
 - `common/spectrum.h` — `Spectrum` (frequencies, tones, noise vectors, phase, generation counter, `fs_Hz`, `is_complex_baseband`) and `Peak`; also the free helper `conjugateSymmetricExpand()` for expanding real-domain tones into +-fc conjugate-symmetric pairs
 - `common/component_interface.h` — `IComponentEngine` (DSP engine contract; pure-virtual `type_name()` returns the canonical lowercase type key used by registry dispatch)
+- `common/graph_link_policy.h` — the single physical link rule (currently PFB channelizers accept RF ADC outputs only), shared by app canvas creation, project-load restoration, and the `test_flow` runner; the DSP rewire pass that applies it lives in `node_graph/src/rewire.cpp`
 - `common/view_manager.h` — `ViewManager` (registry of `SignalNode*`)
 - `common/include/group.h` — `Group` and `GroupBoundaryPin` (subcircuit grouping data)
 - `common/iq_stream.h` — `IQStream` (used by the digital chain)

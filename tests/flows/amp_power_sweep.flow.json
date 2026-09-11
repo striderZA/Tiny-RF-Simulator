@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "amp power sweep",
+  "conditions": [
+    {"component": 100, "path": "tones[0].power_dBm", "values": [-30, -20, -10]}
+  ],
+  "measure": [
+    {"component": 101, "port": 0, "metric": "power_dBm"}
+  ]
+}

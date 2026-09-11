@@ -4,6 +4,7 @@ project(node_graph LANGUAGES CXX)
 # ---- Engine (pure data) ----
 add_library(node_graph_engine STATIC
     src/node_graph_engine.cpp
+    src/rewire.cpp
 )
 
 target_include_directories(node_graph_engine
