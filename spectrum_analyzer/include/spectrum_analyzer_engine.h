@@ -57,7 +57,16 @@ class SpectrumAnalyzerEngine {
     double m_vbw = DEFAULT_VBW;
     double m_rbw = DEFAULT_RBW;
 
-    std::vector<double> integratePowerPerBin(const Spectrum &spec) const;
+    // Splits a spectrum into per-bin noise power (W) and per-bin tone impulse
+    // power (W) on its own frequency grid. Both are linear in power, so callers
+    // may filter or jitter them independently before recombining.
+    void binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
+                            std::vector<double> &tone_W) const;
+    // Combines RBW-filtered per-bin noise and tone power (W) into a dBm display
+    // trace. The cosmetic noise-floor jitter scales only the noise component, so
+    // deterministic tone peaks never wander; a non-positive sigma disables it.
+    std::vector<double> toJitteredPower_dBm(const std::vector<double> &noise_W,
+                                            const std::vector<double> &tone_W) const;
     std::vector<double> applyTraceMode(const Spectrum &spec,
                                        const std::vector<double> &after_vbw) const;
 
@@ -67,7 +76,8 @@ class SpectrumAnalyzerEngine {
     mutable uint64_t m_cache_spec_gen = 0;
     mutable double m_cache_rbw = 0;
     mutable double m_cache_bin_width = 0;
-    mutable std::vector<double> m_cache_rbw_power_W;
+    mutable std::vector<double> m_cache_rbw_noise_W;
+    mutable std::vector<double> m_cache_rbw_tone_W;
 
     mutable std::mt19937 m_rng;
     mutable bool m_noise_jitter_enabled = true;
