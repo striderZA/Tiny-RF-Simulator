@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "attenuator insertion loss",
+  "measure": [
+    {"component": 100, "port": 0, "metric": "power_dBm"},
+    {"component": 102, "port": 0, "metric": "power_dBm"}
+  ]
+}

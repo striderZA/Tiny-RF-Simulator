@@ -1,7 +1,13 @@
+#include "adc_engine.h"
+#include "amplifier_engine.h"
+#include "attenuator_engine.h"
 #include "flow_metrics.h"
 #include "flow_params.h"
 #include "flow_result.h"
 #include "flow_runner.h"
+#include "node_graph_engine.h"
+#include "pfb_channelizer_engine.h"
+#include "signal_generator_engine.h"
 #include "spectrum.h"
 
 #include <catch2/catch_approx.hpp>
@@ -556,4 +562,292 @@ TEST_CASE("issue87 loader: a failure after a valid measurement still returns an 
     REQUIRE_FALSE(loaded.ok);
     REQUIRE(loaded.error.code == FlowErrorCode::UnknownMetric);
     REQUIRE(loaded.spec.measure.empty());
+}
+
+namespace {
+
+constexpr int kGenId = 100;
+constexpr int kAmpId = 101;
+constexpr int kAttenId = 102;
+constexpr int kAdcId = 200;
+constexpr int kPfbId = 201;
+
+std::string fixture(const std::string &name) {
+    return std::string(PROJECT_SOURCE_DIR) + "/tests/flows/" + name;
+}
+
+// Returns the reading for (component, port, metric) in row `row`; NaN when absent.
+double metricValue(const FlowResult &result, size_t row, int component, int port,
+                   const std::string &metric) {
+    REQUIRE(row < result.rows.size());
+    for (const auto &sample : result.rows[row].metrics) {
+        if (sample.component == component && sample.port == port && sample.name == metric)
+            return sample.value;
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+} // namespace
+
+TEST_CASE("issue87 runner: a power sweep tracks drive plus gain", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(fixture("amp_power_sweep.flow.json"));
+    REQUIRE(loaded.ok);
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 3);
+    // The generator's own thermal floor (k*T over the full grid) adds ~1.6e-10 W
+    // against a 1e-6 W tone, so the total lands within 0.001 dB of drive + 20.
+    REQUIRE(metricValue(result, 0, kAmpId, 0, "power_dBm") == Approx(-10.0).margin(0.01));
+    REQUIRE(metricValue(result, 1, kAmpId, 0, "power_dBm") == Approx(0.0).margin(0.01));
+    REQUIRE(metricValue(result, 2, kAmpId, 0, "power_dBm") == Approx(10.0).margin(0.01));
+    REQUIRE(result.rows[0].conditions[0].path == "tones[0].power_dBm");
+    REQUIRE(result.rows[0].conditions[0].value == Approx(-30.0));
+    REQUIRE(result.rows[0].metrics[0].valid);
+}
+
+TEST_CASE("issue87 runner: two conditions sweep the cartesian product in order",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(fixture("amp_power_freq_sweep.flow.json"));
+    REQUIRE(loaded.ok);
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 4);
+    // First condition (power) is outermost, so it varies slowest.
+    REQUIRE(result.rows[0].conditions[0].value == Approx(-30.0));
+    REQUIRE(result.rows[0].conditions[1].value == Approx(1e9));
+    REQUIRE(result.rows[1].conditions[0].value == Approx(-30.0));
+    REQUIRE(result.rows[1].conditions[1].value == Approx(2e9));
+    REQUIRE(result.rows[2].conditions[0].value == Approx(-20.0));
+    REQUIRE(result.rows[2].conditions[1].value == Approx(1e9));
+    REQUIRE(result.rows[3].conditions[0].value == Approx(-20.0));
+    REQUIRE(result.rows[3].conditions[1].value == Approx(2e9));
+
+    REQUIRE(metricValue(result, 0, kAmpId, 0, "peak_freq_Hz") == Approx(1e9).margin(1.0));
+    REQUIRE(metricValue(result, 1, kAmpId, 0, "peak_freq_Hz") == Approx(2e9).margin(1.0));
+    REQUIRE(metricValue(result, 0, kAmpId, 0, "peak_power_dBm") == Approx(-10.0).margin(0.01));
+    REQUIRE(metricValue(result, 3, kAmpId, 0, "peak_power_dBm") == Approx(0.0).margin(0.01));
+}
+
+TEST_CASE("issue87 runner: an attenuator drops the measured power by its attenuation",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AttenuatorEngine atten(kAttenId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    // Canonical key from serialize() is atten_dB (the inspector field key is
+    // attenuation_dB — the harness always uses the serialize key).
+    atten.deserialize(nlohmann::json{{"atten_dB", 10.0}, {"sparam_mode", false}});
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &atten};
+
+    const auto loaded = LoadFlowFile(fixture("gen_atten_power.flow.json"));
+    REQUIRE(loaded.ok);
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 1);
+    // The generator floor passes the attenuator nearly unchanged (the matched
+    // attenuator attenuates it by 10 dB and adds 10 dB of noise), so the ratio
+    // is 9.994 dB, not exactly 10.
+    const double gen_power = metricValue(result, 0, kGenId, 0, "power_dBm");
+    const double atten_power = metricValue(result, 0, kAttenId, 0, "power_dBm");
+    REQUIRE(gen_power - atten_power == Approx(9.994).margin(0.05));
+}
+
+TEST_CASE("issue87 runner: the amplifier output floor rises by gain plus noise figure",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(fixture("noise_floor.flow.json"));
+    REQUIRE(loaded.ok);
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 1);
+
+    // Derivation from common.h's addedNoiseDensity_W_per_Hz(nf_dB, G):
+    //   generator floor          = k*T                       = 4.0037e-21 W/Hz
+    //   amp passes input noise   = G * k*T                   (G = 100)
+    //   amp adds                 = k * T*(F-1) * G           (F = 1.99526)
+    //   output / input           = G + (F-1)*G = G*F = 199.53 -> 23.0 dB
+    const double gen_floor = metricValue(result, 0, kGenId, 0, "noise_floor_dBm_per_Hz");
+    const double amp_floor = metricValue(result, 0, kAmpId, 0, "noise_floor_dBm_per_Hz");
+    REQUIRE(std::isfinite(gen_floor));
+    REQUIRE(std::isfinite(amp_floor));
+    REQUIRE(amp_floor - gen_floor == Approx(23.0).margin(0.5));
+}
+
+TEST_CASE("issue87 runner: a repeated run reproduces identical results", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(fixture("amp_power_sweep.flow.json"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult first = RunFlow(loaded.spec, comps, graph);
+    const FlowResult second = RunFlow(loaded.spec, comps, graph);
+    REQUIRE(first.ok);
+    REQUIRE(second.ok);
+    REQUIRE(first.toJson().dump() == second.toJson().dump());
+}
+
+TEST_CASE("issue87 runner: an unknown component is reported before any run", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_missing_component.flow.json",
+                      R"({"version": 1, "measure": [{"component": 999, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::ComponentNotFound);
+    REQUIRE(result.rows.empty());
+}
+
+TEST_CASE("issue87 runner: an out-of-range port is reported before any run", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    std::vector<IComponentEngine *> comps{&gen};
+
+    const auto loaded = LoadFlowFile(writeTempFlow(
+        "issue87_bad_port.flow.json",
+        R"({"version": 1, "measure": [{"component": 100, "port": 3, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::PortOutOfRange);
+    REQUIRE(result.rows.empty());
+}
+
+TEST_CASE("issue87 runner: an inapplicable condition path is reported before any run",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    std::vector<IComponentEngine *> comps{&gen};
+
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_bad_path.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 100, "path": "no_such_key", "values": [1]}],
+            "measure": [{"component": 100, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::PathNotApplicable);
+    REQUIRE(result.rows.empty());
+}
+
+TEST_CASE("issue87 runner: the shared link policy rejects a non-ADC source into a PFB",
+          "[issue87][runner]") {
+    // Illegal: generator -> PFB. The graph accepts the link; the runner's rewire
+    // pass must leave the PFB input null, exactly as the app's canvas would.
+    {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(kGenId, graph);
+        PFBChannelizerEngine pfb(kPfbId, graph);
+        gen.addTone(1e9, -30.0, 0.0);
+        graph.addLink(gen.outputPinId(), pfb.inputPinId());
+        std::vector<IComponentEngine *> comps{&gen, &pfb};
+
+        const auto loaded = LoadFlowFile(writeTempFlow(
+            "issue87_illegal_link.flow.json",
+            R"({"version": 1, "measure": [{"component": 201, "port": 0, "metric": "power_dBm"}]})"));
+        REQUIRE(loaded.ok);
+        const FlowResult result = RunFlow(loaded.spec, comps, graph);
+        REQUIRE(result.ok);
+        REQUIRE(pfb.node().inputs[0] == nullptr);
+    }
+
+    // Legal: ADC -> PFB.
+    {
+        NodeGraphEngine graph;
+        AdcEngine adc(kAdcId, graph);
+        PFBChannelizerEngine pfb(kPfbId, graph);
+        graph.addLink(adc.outputPinId(), pfb.inputPinId());
+        std::vector<IComponentEngine *> comps{&adc, &pfb};
+
+        const auto loaded = LoadFlowFile(writeTempFlow(
+            "issue87_legal_link.flow.json",
+            R"({"version": 1, "measure": [{"component": 201, "port": 0, "metric": "power_dBm"}]})"));
+        REQUIRE(loaded.ok);
+        const FlowResult result = RunFlow(loaded.spec, comps, graph);
+        REQUIRE(result.ok);
+        REQUIRE(pfb.node().inputs[0] != nullptr);
+    }
+}
+
+TEST_CASE("issue87 runner: a cyclic circuit is rejected", "[issue87][runner]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(kAmpId, graph);
+    AmplifierEngine amp2(kAmpId + 1, graph);
+    graph.addLink(amp.outputPinId(), amp2.inputPinId());
+    graph.addLink(amp2.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&amp, &amp2};
+
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_cycle.flow.json",
+                      R"({"version": 1, "measure": [{"component": 101, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    // topologicalOrder() returns both nodes (it appends the ones it could not
+    // order), so only the link-order check can catch this.
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::CyclicGraph);
+    REQUIRE(result.rows.empty());
+}
+
+TEST_CASE("issue87 runner: every sweep value is validated before the first row",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(kAdcId, graph);
+    std::vector<IComponentEngine *> comps{&adc};
+
+    // 8 is a valid integral decimation, 4.5 is not: the whole flow must be
+    // rejected before any row is computed, not half-way through the sweep.
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_late_bad_value.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 200, "path": "decimation", "values": [8, 4.5]}],
+            "measure": [{"component": 200, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::PathNotApplicable);
+    REQUIRE(result.rows.empty());
 }

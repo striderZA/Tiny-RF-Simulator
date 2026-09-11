@@ -1,13 +1,39 @@
 #include "flow_runner.h"
 
+#include "component_interface.h"
 #include "flow_metrics.h"
+#include "flow_params.h"
+#include "node_graph_engine.h"
+#include "rewire.h"
+#include "signal_node.h"
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
+
+FlowResult fail(const FlowSpec &spec, FlowErrorCode code, const std::string &message) {
+    FlowResult result;
+    result.name = spec.name;
+    result.ok = false;
+    result.error.code = code;
+    result.error.message = message;
+    return result;
+}
+
+IComponentEngine *engineById(std::span<IComponentEngine *const> components, int id) {
+    for (auto *component : components) {
+        if (component && component->id() == id)
+            return component;
+    }
+    return nullptr;
+}
 
 std::string knownMetricNames() {
     std::string out;
@@ -163,4 +189,167 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
 
     out.ok = true;
     return out;
+}
+
+FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> components,
+                   NodeGraphEngine &graph) {
+    // 1. Resolve every reference before the first run, so a fatal error still
+    //    yields zero rows and a partial experiment can never look complete.
+    for (const auto &condition : spec.conditions) {
+        IComponentEngine *component = engineById(components, condition.component);
+        if (!component)
+            return fail(spec, FlowErrorCode::ComponentNotFound,
+                        "condition targets unknown component " +
+                            std::to_string(condition.component));
+        // Every value, not just the first: otherwise a type mismatch would only
+        // surface mid-sweep, after some rows had already been computed.
+        for (double candidate : condition.values) {
+            nlohmann::json snapshot = component->serialize();
+            std::string error;
+            if (!applyConditionValue(snapshot, condition.path, candidate, &error))
+                return fail(spec, FlowErrorCode::PathNotApplicable, error);
+        }
+    }
+    for (const auto &measurement : spec.measure) {
+        IComponentEngine *component = engineById(components, measurement.component);
+        if (!component)
+            return fail(spec, FlowErrorCode::ComponentNotFound,
+                        "measurement targets unknown component " +
+                            std::to_string(measurement.component));
+        if (measurement.port < 0 ||
+            static_cast<size_t>(measurement.port) >= component->node().outputs.size())
+            return fail(spec, FlowErrorCode::PortOutOfRange,
+                        "component " + std::to_string(measurement.component) +
+                            " has no output port " + std::to_string(measurement.port));
+        if (MetricRegistry::instance().find(measurement.metric) == nullptr)
+            return fail(spec, FlowErrorCode::UnknownMetric,
+                        "unknown metric '" + measurement.metric + "'");
+    }
+
+    // 2. Reject a cyclic circuit. topologicalOrder() appends the nodes it could
+    //    not order and still returns a full-length vector, so the cycle has to be
+    //    detected from the link order itself; otherwise a flow would silently
+    //    produce order-dependent numbers.
+    {
+        const std::vector<int> order = graph.topologicalOrder();
+        std::unordered_map<int, size_t> position;
+        position.reserve(order.size());
+        for (size_t i = 0; i < order.size(); ++i)
+            position[order[i]] = i;
+
+        for (const GraphLink &link : graph.links()) {
+            const int from = graph.nodeIdForPin(link.start_pin_id);
+            const int to = graph.nodeIdForPin(link.end_pin_id);
+            const auto from_it = position.find(from);
+            const auto to_it = position.find(to);
+            if (from_it == position.end() || to_it == position.end())
+                continue;
+            if (from_it->second >= to_it->second)
+                return fail(spec, FlowErrorCode::CyclicGraph,
+                            "circuit has a cycle: node " + std::to_string(from) +
+                                " is not ordered before node " + std::to_string(to));
+        }
+    }
+
+    // 3. Freeze one baseline snapshot per targeted component. Every row patches a
+    //    clone of it, so a row never depends on the previous row's state.
+    std::vector<std::pair<int, nlohmann::json>> baselines;
+    for (const auto &condition : spec.conditions) {
+        bool seen = false;
+        for (const auto &baseline : baselines) {
+            if (baseline.first == condition.component) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen)
+            continue;
+        baselines.emplace_back(condition.component,
+                               engineById(components, condition.component)->serialize());
+    }
+
+    FlowResult result;
+    result.name = spec.name;
+
+    const size_t n_conditions = spec.conditions.size();
+    std::vector<size_t> counter(n_conditions, 0);
+    while (true) {
+        FlowRow row;
+        row.conditions.reserve(n_conditions);
+        row.metrics.reserve(spec.measure.size());
+
+        std::vector<nlohmann::json> working;
+        working.reserve(baselines.size());
+        for (const auto &baseline : baselines)
+            working.push_back(baseline.second);
+
+        for (size_t c = 0; c < n_conditions; ++c) {
+            const Condition &condition = spec.conditions[c];
+            const double value = condition.values[counter[c]];
+            for (size_t b = 0; b < baselines.size(); ++b) {
+                if (baselines[b].first != condition.component)
+                    continue;
+                std::string error;
+                if (!applyConditionValue(working[b], condition.path, value, &error))
+                    return fail(spec, FlowErrorCode::PathNotApplicable, error);
+            }
+            row.conditions.push_back({condition.component, condition.path, value});
+        }
+        for (size_t b = 0; b < baselines.size(); ++b)
+            engineById(components, baselines[b].first)->deserialize(working[b]);
+
+        // Mirrors RfSimulatorApp::rewireInputs() by calling the very same
+        // function, so the harness and the GUI can never disagree about a
+        // circuit's wiring.
+        rewireComponentInputs(components, graph);
+
+        for (int node_id : graph.topologicalOrder()) {
+            for (auto *component : components) {
+                if (component && component->graphNodeId() == node_id) {
+                    component->update(0.0);
+                    break;
+                }
+            }
+        }
+
+        for (const auto &measurement : spec.measure) {
+            IComponentEngine *component = engineById(components, measurement.component);
+            const Spectrum &output =
+                component->node().outputs[static_cast<size_t>(measurement.port)];
+            const MetricDefinition *definition =
+                MetricRegistry::instance().find(measurement.metric);
+            const double measured = definition->compute(output);
+
+            MetricSample sample;
+            sample.name = measurement.metric;
+            sample.component = measurement.component;
+            sample.port = measurement.port;
+            sample.unit = definition->unit;
+            sample.value = measured;
+            sample.valid = !std::isnan(measured);
+            row.metrics.push_back(std::move(sample));
+        }
+        result.rows.push_back(std::move(row));
+
+        if (n_conditions == 0)
+            break;
+
+        // Advance the odometer: the last condition varies fastest. A complete
+        // wrap means the last row has already been produced.
+        bool wrapped = false;
+        size_t k = n_conditions;
+        while (k > 0) {
+            --k;
+            if (++counter[k] < spec.conditions[k].values.size())
+                break;
+            counter[k] = 0;
+            if (k == 0)
+                wrapped = true;
+        }
+        if (wrapped)
+            break;
+    }
+
+    result.ok = true;
+    return result;
 }
