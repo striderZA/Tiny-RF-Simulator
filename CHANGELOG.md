@@ -1,3 +1,25 @@
+## [0.23.0] - 2026-09-11
+
+### Added
+
+- **GUI-free test-flow (ATP) harness** — a new `test_flow` library builds and runs a circuit from a JSON flow file with no GUI or app dependency, sweeping component parameters and capturing measurements.
+  - Conditions address persisted `serialize()` keys, including nested and indexed paths such as `tones[0].power_dBm`, and patch them with type-preserving writes that reject mismatched slots.
+  - Built-in metrics report total `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz` from any component output port.
+  - Results export as one JSON row per condition combination; non-measurable readings encode as `null` with a `valid` flag, and a failed load resets the spec instead of leaking partially parsed conditions.
+  - Ship example flow files under `tests/flows/` plus a standalone `test_issue87_flow` end-to-end executable.
+
+### Changed
+
+- **Shared graph link policy** — move `graphLinkAllowed` out of `app/` into `common/graph_link_policy.h` and extract the per-frame input rewiring into `node_graph`'s `rewireComponentInputs()`, giving the app and tests one shared wiring implementation.
+
+### Documentation
+
+- Document the PFB channelizer's 1x/2x oversampling contract — `outputFs_Hz = ratio · Fs / M` with channel centers unchanged — and state its spectral-only limitation, replacing an incorrect channel-overlap claim.
+
+### Testing
+
+- Correct the PFB critical-sampling expectation and add grid-invariance plus sampling-ratio coverage.
+
 ## [0.22.4] - 2026-09-10
 
 ### Fixed
