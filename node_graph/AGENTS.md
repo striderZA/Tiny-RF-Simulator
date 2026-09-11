@@ -26,6 +26,8 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
 - Groups (`Group`, `GroupBoundaryPin` from `common/include/group.h`) are a visual layer: `NodeGraphEngine` owns them and `NodeGraphWidget` renders/collapses them; no DSP engine consumes them.
 - Node, pin, link, group, and boundary-pin id counters are monotonic and restored on project load through `setNextIds()`, `setNextGroupId()`, and `setNextBoundaryPinId()`.
 - Node removal must re-run `rewireComponentInputs()` synchronously with `ComponentRegistry::remove()` so no surviving component holds a dangling `Spectrum*` into the destroyed engine's `SignalNode` (issue #37).
+- `topologicalOrder()` counts only links whose start and end pins both resolve to graph nodes;
+  stale or dangling links are not treated as graph edges or cycles.
 - Widget callbacks (`onNodeMoved`, `onRemoveNode`, `onDuplicateNode`, `onLinkChanged`, `onLinkCreating`, `onNodeHover`) are the only channel from widget to app; the engine itself takes no app-level callbacks.
 
 ## Work Guidance

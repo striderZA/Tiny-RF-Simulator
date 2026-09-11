@@ -36,6 +36,8 @@ component output ports.
   failure.
 - A fatal flow error yields `ok = false` with zero rows, and the loaded spec is reset — a failed load
   never leaks partially parsed conditions.
+- `RunFlow()` converts component `deserialize()` exceptions into `DeserializeFailed`, attempts to restore
+  targeted baseline snapshots, reports rollback failure details, and returns no rows.
 - `test_flow` is one of the mirrored format-check directory lists in `scripts/format.sh`,
   `.githooks/pre-commit`, and `.github/workflows/release.yml`; keep all three in lockstep when
   directories are added or removed.

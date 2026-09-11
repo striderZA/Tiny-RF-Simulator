@@ -289,9 +289,10 @@ std::vector<int> NodeGraphEngine::topologicalOrder() const {
     }
 
     for (const auto &link : m_links) {
-        auto it = pin_owner.find(link.end_pin_id);
-        if (it != pin_owner.end())
-            in_degree[it->second]++;
+        const auto start_it = pin_owner.find(link.start_pin_id);
+        const auto end_it = pin_owner.find(link.end_pin_id);
+        if (start_it != pin_owner.end() && end_it != pin_owner.end())
+            in_degree[end_it->second]++;
     }
 
     std::queue<int> q;
