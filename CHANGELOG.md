@@ -2,7 +2,7 @@
 
 ### Added
 
-- **GUI-free test-flow (ATP) harness** — a new `test_flow` library builds and runs a circuit from a JSON flow file with no GUI or app dependency, sweeping component parameters and capturing measurements.
+- **GUI-free test-flow (ATP) harness** — a new `test_flow` library runs a JSON flow file against an already-built circuit with no GUI or app dependency: the flow sweeps persisted component parameters and captures measurements, while the caller supplies the engines and graph.
   - Conditions address persisted `serialize()` keys, including nested and indexed paths such as `tones[0].power_dBm`, and patch them with type-preserving writes that reject mismatched slots.
   - Built-in metrics report total `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz` from any component output port.
   - Results export as one JSON row per condition combination; non-measurable readings encode as `null` with a `valid` flag, and a failed load resets the spec instead of leaking partially parsed conditions.
