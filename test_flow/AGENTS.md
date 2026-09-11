@@ -18,9 +18,10 @@ component output ports.
 
 ## Local Contracts
 
+- Flow files are JSON objects: `version` (required, must be `1`), optional `name` (defaults to the file stem), optional `conditions[]`, and required `measure[]`. A condition is `{component, path, values}`; a measurement is `{component, port, metric}`. `component` is an `IComponentEngine::id()`, never a graph node id.
+- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading.
 - This library must not link `simulator::app`, ImGui, implot, or imnodes. It takes
   `std::span<IComponentEngine *const>` rather than `ComponentRegistry`, which lives in `app/`.
-- Components are addressed by `IComponentEngine::id()`, never by graph node id.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
   (`atten_dB`, not `attenuation_dB`).
 - Condition `path`s are dot-separated keys with optional zero-based array indices, e.g. `gain_dB` or
@@ -28,9 +29,16 @@ component output ports.
 - Patches are type-preserving: a signed integer slot requires an integral value; an unsigned slot
   requires a finite, non-negative, integral value and stays unsigned; a float slot requires a finite
   value. Boolean, string, null, object and array slots are rejected.
+- Built-in metrics: `power_dBm` (total power, the same measurement the GUI power meter reports),
+  `peak_power_dBm` and `peak_freq_Hz` (strongest tone), and `noise_floor_dBm_per_Hz` (mean noise
+  density). A metric returns `NaN` when the input is not measurable.
 - Non-finite metric values encode as JSON `null`; `valid` distinguishes a measurement from a
   failure.
-- A fatal flow error yields `ok = false` with zero rows.
+- A fatal flow error yields `ok = false` with zero rows, and the loaded spec is reset — a failed load
+  never leaks partially parsed conditions.
+- `test_flow` is one of the mirrored format-check directory lists in `scripts/format.sh`,
+  `.githooks/pre-commit`, and `.github/workflows/release.yml`; keep all three in lockstep when
+  directories are added or removed.
 
 ## Work Guidance
 
