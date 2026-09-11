@@ -543,3 +543,17 @@ TEST_CASE("issue87 loader: a failed load returns an empty spec", "[issue87][load
     REQUIRE(loaded.spec.measure.empty());
     REQUIRE(loaded.spec.name.empty());
 }
+
+TEST_CASE("issue87 loader: a failure after a valid measurement still returns an empty spec",
+          "[issue87][loader]") {
+    // measure[0] is valid and gets pushed; measure[1] fails. The returned spec
+    // must therefore discard an already-populated measurement, not merely one
+    // that was never added.
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_partial_measure.flow.json",
+                                                   R"({"version": 1,
+            "measure": [{"component": 1, "metric": "power_dBm"},
+                        {"component": 2, "metric": "nope"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::UnknownMetric);
+    REQUIRE(loaded.spec.measure.empty());
+}
