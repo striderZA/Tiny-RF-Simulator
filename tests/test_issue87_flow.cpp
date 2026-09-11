@@ -10,12 +10,14 @@
 #include "signal_generator_engine.h"
 #include "spectrum.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -153,6 +155,49 @@ TEST_CASE("issue87 metrics: a density grid of the wrong length is not computable
     const MetricDefinition *def = metric("noise_floor_dBm_per_Hz");
     REQUIRE(def != nullptr);
     REQUIRE(std::isnan(def->compute(spec)));
+}
+
+TEST_CASE("issue87 metrics: both metrics reject malformed noise identically",
+          "[issue87][metrics]") {
+    const MetricDefinition *total = metric("power_dBm");
+    const MetricDefinition *floor_dBm = metric("noise_floor_dBm_per_Hz");
+    REQUIRE(total != nullptr);
+    REQUIRE(floor_dBm != nullptr);
+
+    SECTION("negative density bin") {
+        Spectrum spec;
+        spec.frequencies = {1e9, 2e9};
+        spec.noise_total_W = {-1e-21, 1e-21};
+        REQUIRE(std::isnan(total->compute(spec)));
+        REQUIRE(std::isnan(floor_dBm->compute(spec)));
+    }
+
+    SECTION("density grid shorter than the frequency grid") {
+        Spectrum spec;
+        spec.frequencies = {1e9, 2e9, 3e9};
+        spec.noise_total_W = {4e-21, 4e-21};
+        REQUIRE(std::isnan(total->compute(spec)));
+        REQUIRE(std::isnan(floor_dBm->compute(spec)));
+    }
+
+    // Same input, serialized exactly as the runner produces it: the unmeasurable
+    // value must encode as a null with valid=false, so a consumer cannot confuse
+    // it with the well-formed silent case (null value, valid=true).
+    Spectrum malformed;
+    malformed.frequencies = {1e9, 2e9};
+    malformed.noise_total_W = {-1e-21, 1e-21};
+    const double measured = total->compute(malformed);
+    FlowResult result;
+    result.ok = true;
+    result.name = "malformed";
+    FlowRow row;
+    row.metrics.push_back(
+        MetricSample{"power_dBm", 101, 0, measured, total->unit, !std::isnan(measured)});
+    result.rows.push_back(row);
+
+    const nlohmann::json parsed = nlohmann::json::parse(result.toJson().dump());
+    REQUIRE(parsed["rows"][0]["metrics"]["101:0:power_dBm"]["valid"] == false);
+    REQUIRE(parsed["rows"][0]["metrics"]["101:0:power_dBm"]["value"].is_null());
 }
 
 TEST_CASE("issue87 metrics: the registry exposes the four built-ins", "[issue87][metrics]") {
@@ -720,6 +765,63 @@ TEST_CASE("issue87 runner: a repeated run reproduces identical results", "[issue
     REQUIRE(first.toJson().dump() == second.toJson().dump());
 }
 
+TEST_CASE("issue87 runner: reversing condition order yields identical values per configuration",
+          "[issue87][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    gen.addTone(1e9, -30.0, 0.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    std::vector<IComponentEngine *> comps{&gen, &amp};
+
+    const auto loaded = LoadFlowFile(fixture("amp_power_freq_sweep.flow.json"));
+    REQUIRE(loaded.ok);
+
+    FlowSpec reversed = loaded.spec;
+    std::reverse(reversed.conditions.begin(), reversed.conditions.end());
+    REQUIRE(reversed.conditions.size() == loaded.spec.conditions.size());
+
+    const FlowResult forward_result = RunFlow(loaded.spec, comps, graph);
+    const FlowResult reverse_result = RunFlow(reversed, comps, graph);
+    REQUIRE(forward_result.ok);
+    REQUIRE(reverse_result.ok);
+    REQUIRE(forward_result.rows.size() == reverse_result.rows.size());
+
+    // Key each row by its full condition set, so the two runs' different emission
+    // orders do not matter: reversing the sweep order must not change any
+    // configuration's measurement. A runner that let the previous row's state
+    // leak through (e.g. only re-patched the condition the odometer advanced and
+    // left the rest stale) would disagree here.
+    const auto configuration = [](const FlowRow &row) {
+        std::map<std::string, double> values;
+        for (const auto &condition : row.conditions)
+            values[std::to_string(condition.component) + ":" + condition.path] = condition.value;
+        return values;
+    };
+    const auto metric_of = [](const FlowRow &row, const std::string &name) {
+        for (const auto &sample : row.metrics)
+            if (sample.name == name)
+                return sample.value;
+        return std::numeric_limits<double>::quiet_NaN();
+    };
+
+    for (const FlowRow &forward_row : forward_result.rows) {
+        const auto wanted = configuration(forward_row);
+        bool matched = false;
+        for (const FlowRow &reverse_row : reverse_result.rows) {
+            if (!(configuration(reverse_row) == wanted))
+                continue;
+            matched = true;
+            REQUIRE(metric_of(reverse_row, "peak_power_dBm") ==
+                    Approx(metric_of(forward_row, "peak_power_dBm")).margin(1e-9));
+            REQUIRE(metric_of(reverse_row, "peak_freq_Hz") ==
+                    Approx(metric_of(forward_row, "peak_freq_Hz")).margin(1e-6));
+        }
+        REQUIRE(matched);
+    }
+}
+
 TEST_CASE("issue87 runner: an unknown component is reported before any run", "[issue87][runner]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(kGenId, graph);
@@ -872,5 +974,29 @@ TEST_CASE("issue87 runner: every sweep value is validated before the first row",
         REQUIRE(result.ok);
         REQUIRE(result.rows.size() == 1);
         REQUIRE(result.rows[0].conditions[0].value == Approx(8.0));
+    }
+}
+
+TEST_CASE("issue87 stability: serialize -> deserialize -> serialize is identical for swept engines",
+          "[issue87][stability]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(kGenId, graph);
+    AmplifierEngine amp(kAmpId, graph);
+    AttenuatorEngine atten(kAttenId, graph);
+    AdcEngine adc(kAdcId, graph);
+
+    gen.addTone(1e9, -30.0, 45.0);
+    amp.deserialize(nlohmann::json{{"gain_dB", 20.0}, {"nf_dB", 3.0}});
+    atten.deserialize(nlohmann::json{{"atten_dB", 10.0}, {"sparam_mode", false}});
+    adc.deserialize(nlohmann::json{{"sample_rate_Hz", 1e9},
+                                   {"nsd_dBm_per_Hz", -155.0},
+                                   {"decimation", 2},
+                                   {"nco_fs_fraction", 0.25}});
+
+    const std::vector<IComponentEngine *> engines{&gen, &amp, &atten, &adc};
+    for (IComponentEngine *engine : engines) {
+        const nlohmann::json first = engine->serialize();
+        engine->deserialize(first);
+        REQUIRE(engine->serialize() == first);
     }
 }
