@@ -3,9 +3,71 @@
 #include "implot.h"
 #include "node_graph_engine.h"
 #include "utils.h"
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
+
+namespace {
+
+// Axis limits framed on the plotted sweep and its measured values.
+struct PlotLimits {
+    bool valid = false;
+    double x_min = 0.0;
+    double x_max = 1.0;
+    double y_min = 0.0;
+    double y_max = 1.0;
+};
+
+// Minimum dB span so a flat trace (constant gain, or a single-point sweep)
+// still gets a readable axis instead of a near-zero window.
+constexpr double kMinDbSpan = 10.0;
+// Headroom kept above and below the measured values, as a fraction of the span.
+constexpr double kDbMargin = 0.1;
+
+// ImPlot auto-fits a plot only on the frame it is first drawn and never
+// again, so a panel opened before any probe point is selected -- or a sweep
+// changed afterwards -- keeps the range that was current then and squeezes the
+// traces into a corner. Frame the axes on the current data every frame
+// instead, as SpectrumAnalyzerWidget and IQPlotWidget do.
+PlotLimits plotLimitsFor(const std::vector<double> &freqs, const std::vector<double> &gain,
+                         const std::vector<double> &nf) {
+    PlotLimits limits;
+    if (freqs.empty() || freqs.size() != gain.size() || freqs.size() != nf.size())
+        return limits; // nothing is plotted: leave ImPlot's own range alone
+
+    const auto freq_ends = std::minmax_element(freqs.begin(), freqs.end());
+    limits.x_min = *freq_ends.first;
+    limits.x_max = *freq_ends.second;
+
+    double lo = 0.0;
+    double hi = 0.0;
+    bool have_sample = false;
+    for (const auto *series : {&gain, &nf}) {
+        for (double value : *series) {
+            if (!std::isfinite(value))
+                continue; // no path, or no matching tone, at that point
+            if (!have_sample) {
+                lo = hi = value;
+                have_sample = true;
+            } else {
+                lo = std::min(lo, value);
+                hi = std::max(hi, value);
+            }
+        }
+    }
+    if (!have_sample)
+        return limits; // nothing measured to frame
+
+    const double center = 0.5 * (lo + hi);
+    const double half_span = std::max(0.5 * (hi - lo), 0.5 * kMinDbSpan) * (1.0 + kDbMargin);
+    limits.y_min = center - half_span;
+    limits.y_max = center + half_span;
+    limits.valid = true;
+    return limits;
+}
+
+} // namespace
 
 NetworkAnalyzerWidget::NetworkAnalyzerWidget(NetworkAnalyzerEngine &engine, NodeGraphEngine &graph)
     : m_engine(engine), m_graph(graph) {}
@@ -87,6 +149,12 @@ void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {
     const auto &freqs = m_engine.sweepFrequencies();
     const auto &gain = m_engine.gainDb();
     const auto &nf = m_engine.noiseFigureDb();
+
+    // Frame the axes on the current sweep and measurement (see plotLimitsFor).
+    const PlotLimits limits = plotLimitsFor(freqs, gain, nf);
+    if (limits.valid)
+        ImPlot::SetNextAxesLimits(limits.x_min, limits.x_max, limits.y_min, limits.y_max,
+                                  ImPlotCond_Always);
 
     if (ImPlot::BeginPlot("Gain / Noise Figure vs Frequency", ImVec2(-1, -80))) {
         ImPlot::SetupAxes("Frequency (Hz)", "dB");
