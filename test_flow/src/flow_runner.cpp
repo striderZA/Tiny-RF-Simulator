@@ -27,6 +27,9 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
         out.ok = false;
         out.error.code = code;
         out.error.message = message;
+        // A failure must not leak partially parsed state: conditions and name are
+        // populated before the measure section is validated.
+        out.spec = FlowSpec{};
         return out;
     };
 

@@ -479,3 +479,67 @@ TEST_CASE("issue87 loader: a duplicate measurement is rejected", "[issue87][load
     REQUIRE_FALSE(loaded.ok);
     REQUIRE(loaded.error.code == FlowErrorCode::DuplicateMeasurement);
 }
+
+TEST_CASE("issue87 loader: a conditions entry that is not an object is rejected",
+          "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_cond_entry.flow.json",
+                                                   R"({"version": 1, "conditions": [5],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a conditions entry missing a required field is rejected",
+          "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_cond_missing.flow.json",
+                      R"({"version": 1, "conditions": [{"component": 100, "path": "gain_dB"}],
+            "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a measure entry that is not an object is rejected",
+          "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_measure_entry.flow.json", R"({"version": 1, "measure": [5]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a measure entry missing 'metric' is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow(
+        "issue87_measure_missing.flow.json", R"({"version": 1, "measure": [{"component": 1}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::WrongShape);
+}
+
+TEST_CASE("issue87 loader: a non-integer version is rejected", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(
+        writeTempFlow("issue87_version_type.flow.json",
+                      R"({"version": "1", "measure": [{"component": 1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::BadFieldType);
+}
+
+TEST_CASE("issue87 loader: a negative measure port is a bad field type", "[issue87][loader]") {
+    const auto loaded = LoadFlowFile(writeTempFlow(
+        "issue87_negative_port.flow.json",
+        R"({"version": 1, "measure": [{"component": 1, "port": -1, "metric": "power_dBm"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::BadFieldType);
+}
+
+TEST_CASE("issue87 loader: a failed load returns an empty spec", "[issue87][loader]") {
+    // A valid conditions section followed by an invalid measure section must not
+    // leave the returned spec half-populated.
+    const auto loaded = LoadFlowFile(writeTempFlow("issue87_partial_spec.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 100, "path": "gain_dB", "values": [1]}],
+            "measure": [{"component": 1, "metric": "nope"}]})"));
+    REQUIRE_FALSE(loaded.ok);
+    REQUIRE(loaded.error.code == FlowErrorCode::UnknownMetric);
+    REQUIRE(loaded.spec.conditions.empty());
+    REQUIRE(loaded.spec.measure.empty());
+    REQUIRE(loaded.spec.name.empty());
+}
