@@ -838,16 +838,39 @@ TEST_CASE("issue87 runner: every sweep value is validated before the first row",
     AdcEngine adc(kAdcId, graph);
     std::vector<IComponentEngine *> comps{&adc};
 
-    // 8 is a valid integral decimation, 4.5 is not: the whole flow must be
-    // rejected before any row is computed, not half-way through the sweep.
-    const auto loaded = LoadFlowFile(writeTempFlow("issue87_late_bad_value.flow.json",
-                                                   R"({"version": 1,
+    SECTION("a later invalid value rejects the whole flow without touching the engine") {
+        // 8 is a valid integral decimation, 4.5 is not: the whole flow must be
+        // rejected before any row is computed, not half-way through the sweep.
+        const auto loaded = LoadFlowFile(writeTempFlow("issue87_late_bad_value.flow.json",
+                                                       R"({"version": 1,
             "conditions": [{"component": 200, "path": "decimation", "values": [8, 4.5]}],
             "measure": [{"component": 200, "metric": "power_dBm"}]})"));
-    REQUIRE(loaded.ok);
+        REQUIRE(loaded.ok);
 
-    const FlowResult result = RunFlow(loaded.spec, comps, graph);
-    REQUIRE_FALSE(result.ok);
-    REQUIRE(result.error.code == FlowErrorCode::PathNotApplicable);
-    REQUIRE(result.rows.empty());
+        // Pre-run validation only ever patches COPIES of each serialize() snapshot
+        // and never calls deserialize(), so a rejected flow must leave the engine
+        // byte-identical. A runner that validated only values[0] and failed mid-sweep
+        // would have deserialized 8.0 into the ADC before reaching 4.5.
+        const nlohmann::json before = adc.serialize();
+
+        const FlowResult result = RunFlow(loaded.spec, comps, graph);
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(result.error.code == FlowErrorCode::PathNotApplicable);
+        REQUIRE(result.rows.empty());
+        REQUIRE(adc.serialize() == before);
+    }
+
+    SECTION("the same flow with only the valid value runs one row") {
+        // Positive control: the rejection above must be caused by 4.5, not by 8.
+        const auto loaded = LoadFlowFile(writeTempFlow("issue87_single_good_value.flow.json",
+                                                       R"({"version": 1,
+            "conditions": [{"component": 200, "path": "decimation", "values": [8]}],
+            "measure": [{"component": 200, "metric": "power_dBm"}]})"));
+        REQUIRE(loaded.ok);
+
+        const FlowResult result = RunFlow(loaded.spec, comps, graph);
+        REQUIRE(result.ok);
+        REQUIRE(result.rows.size() == 1);
+        REQUIRE(result.rows[0].conditions[0].value == Approx(8.0));
+    }
 }
