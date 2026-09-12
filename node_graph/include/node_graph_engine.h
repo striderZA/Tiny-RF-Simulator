@@ -52,16 +52,20 @@ class NodeGraphEngine {
     std::vector<SignalSource> getSourcesForInput(int input_pin_id) const;
     std::vector<int> topologicalOrder() const;
 
-    // Editing-policy queries, evaluated by the editor and the project loader
-    // before a link is committed. addLink() itself stays permissive so callers
-    // that intentionally build multi-source inputs keep working; these queries
-    // are the single source of truth for "may this link be created?".
+    // Structural editing-policy queries, evaluated by the editor and the
+    // project loader before a link is committed. addLink() itself stays
+    // permissive so callers that intentionally build multi-source inputs keep
+    // working; the physical ADC->PFB rule lives separately in
+    // graphLinkAllowed() and is applied alongside these at each commit point.
+    // A pin that resolves to no node is treated as unconstrained, so callers
+    // remain responsible for validating that the pins exist.
     // inputHasLink() is true when any existing link already terminates at
     // input_pin_id (the rewire pass honours only the first such link).
     bool inputHasLink(int input_pin_id) const;
     // wouldCreateCycle() is true when start_pin and end_pin already sit on the
     // same node, or when end_pin's node can reach start_pin's node through
-    // existing links (so adding the edge would close a directed cycle).
+    // existing links (so adding the edge would close a directed cycle). It is
+    // false when either pin resolves to no node.
     bool wouldCreateCycle(int start_pin, int end_pin) const;
     // canAddLink() rejects a duplicate link into an occupied input pin and any
     // link that would introduce a cycle.
