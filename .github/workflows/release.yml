@@ -263,7 +263,9 @@ jobs:
             cxx_compiler: g++-14
             c_compiler: gcc-14
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
+            # Release: these artifacts are attached to the GitHub release, so
+            # they must be optimized (no Debug asserts / -O0).
+            build_type: Release
             artifact_name: build-linux
           - os: windows-latest
             label: Windows package build
@@ -271,7 +273,7 @@ jobs:
             cxx_compiler: g++
             c_compiler: gcc
             cmake_flags: ""
-            build_type: Debug
+            build_type: Release
             artifact_name: build-windows
 
     runs-on: ${{ matrix.os }}
@@ -286,7 +288,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config \
+          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
           sudo apt-get install -y -qq g++-14
 
@@ -314,6 +316,32 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Test
+        run: |
+          # Package artifacts are release-facing: run the suite against the exact
+          # Release build that ships. strict-build skips patch tags and has no
+          # Windows Release leg, so this job is the only place both shipped
+          # configurations are exercised on every tag. UI tests need a display:
+          # xvfb on Linux, excluded on Windows (same rationale as strict-build).
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+          else
+            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
+          fi
+
+      - name: Verify MinGW TEST_CASE registration count
+        if: runner.os == 'Windows'
+        run: |
+          # Keep this floor in sync with strict-build's identical check; both
+          # guard against TEST_CASEs silently dropped by MinGW-w64.
+          EXPECTED=223
+          COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
+          echo "registered TEST_CASEs: $COUNT (expected >= $EXPECTED)"
+          if [ "$COUNT" -lt "$EXPECTED" ]; then
+            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $EXPECTED"
+            exit 1
+          fi
 
       - name: Collect MinGW runtime DLLs
         if: runner.os == 'Windows'

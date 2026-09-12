@@ -102,6 +102,7 @@ Default section order:
 - Releases are prepared on a `release/vX.Y.Z` branch and merged to `master` via pull request; the annotated `vX.Y.Z` tag is created only on the merged master commit.
 - Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, a Linux GCC Debug full-test-suite leg on patch tags, and the strict build matrix on minor/major tags.
 - `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
+- The `package` job builds the Linux/Windows artifacts attached to a GitHub release with `CMAKE_BUILD_TYPE=Release` and validates that Release build configuration with CTest (non-UI, plus the MinGW TEST_CASE registration floor on Windows); it runs on every tag, so the shipped configuration is always exercised. CI does not launch the packaged GUI executable itself. Debug builds are validation-only and are never shipped.
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
 
 ## Child DOX Index
