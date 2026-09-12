@@ -1,3 +1,13 @@
+## [0.23.2] - 2026-09-12
+
+### Fixed
+
+- **Spectrum Analyzer tone stability** — keep cosmetic noise-floor jitter from moving deterministic tone peaks in spectrum displays.
+
+### Testing
+
+- Add standalone regression coverage for noisy tone traces, combined-spectrum rendering, tone-only determinism, and disabled/invalid jitter settings.
+
 ## [0.23.1] - 2026-09-12
 
 ### Fixed
