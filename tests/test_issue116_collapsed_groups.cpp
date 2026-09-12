@@ -229,3 +229,58 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #116: project load drops duplicate-input a
     REQUIRE(app.testGraphEngine().links().size() == 2);
     std::remove(path.c_str());
 }
+
+// ---------------------------------------------------------------------------
+// 1 — a project loaded with a collapsed group renders its block on the first
+// frame, from the grid-position snapshot ProjectSerializer takes before the
+// members can be dropped from the imnodes pool
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #116: a loaded collapsed group renders from the loader snapshot",
+                 "[issue116][project]") {
+    const std::string path = "test_issue116_collapsed_load.rfsim";
+    std::remove(path.c_str());
+    {
+        std::ofstream out(path);
+        out << R"json({
+            "version": 1,
+            "components": [
+                {"type": "SignalGenerator", "params": {}, "pos": {"x": 0, "y": 0}},
+                {"type": "Amplifier", "params": {}, "pos": {"x": 0, "y": 100}},
+                {"type": "Amplifier", "params": {}, "pos": {"x": 200, "y": 0}}
+            ],
+            "links": [
+                {"from": 0, "from_port": 0, "to": 1, "to_port": 0},
+                {"from": 1, "from_port": 0, "to": 2, "to_port": 0}
+            ],
+            "probe_pins": [],
+            "groups": [{"name": "Collapsed", "member_components": [0, 1], "collapsed": true}],
+            "network_analyzer": {},
+            "window_state": {},
+            "graph_state": {}
+        })json";
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(path);
+    REQUIRE(app.componentCount() == 3);
+    REQUIRE(app.testGraphEngine().numGroups() == 1);
+    const int group_id = app.testGraphEngine().groups()[0].id;
+    REQUIRE(app.testGraphEngine().groups()[0].collapsed);
+    const auto *group = app.testGraphEngine().groupById(group_id);
+    REQUIRE(group != nullptr);
+    // The member -> external link is the block's single output boundary pin.
+    REQUIRE(group->boundary_pins.size() == 1);
+    REQUIRE(group->boundary_pins[0].is_output);
+
+    // The members were never drawn, so only the loader's captureGridPositions()
+    // snapshot can place the block on this first frame.
+    bool open = true;
+    ImGui::NewFrame();
+    app.testGraphWidget().draw("Collapsed Load Test", &open);
+    ImGui::EndFrame();
+
+    REQUIRE(open);
+    REQUIRE(app.testGraphWidget().collapsedGroupBlockRendered(group_id));
+    std::remove(path.c_str());
+}
