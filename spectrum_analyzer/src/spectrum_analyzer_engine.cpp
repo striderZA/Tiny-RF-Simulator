@@ -16,9 +16,11 @@ static double W_to_dBm(double w) {
     return 10.0 * std::log10(w) + 30.0;
 }
 
-std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum &spec) const {
+void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
+                                                std::vector<double> &tone_W) const {
     size_t n = spec.frequencies.size();
-    std::vector<double> power_W(n, 0.0);
+    noise_W.assign(n, 0.0);
+    tone_W.assign(n, 0.0);
 
     double bin_width = 1.0;
     if (spec.frequencies.size() >= 2) {
@@ -28,15 +30,15 @@ std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum 
     // Convert noise density (W/Hz) to per-bin power (W)
     if (spec.noise_total_W.size() == n) {
         for (size_t i = 0; i < n; ++i) {
-            power_W[i] = spec.noise_total_W[i] * bin_width;
+            noise_W[i] = spec.noise_total_W[i] * bin_width;
         }
     } else if (!spec.noise_total_W.empty()) {
         for (size_t i = 0; i < n && i < spec.noise_total_W.size(); ++i) {
-            power_W[i] = spec.noise_total_W[i] * bin_width;
+            noise_W[i] = spec.noise_total_W[i] * bin_width;
         }
     }
 
-    // Add tones as discrete impulses. Real-domain spectra (pre-ADC) get expanded into their
+    // Tones are discrete impulses. Real-domain spectra (pre-ADC) get expanded into their
     // +-fc conjugate-symmetric half-power pair per Euler's formula before binning; post-ADC
     // complex-baseband spectra are already correctly one-sided and render as-is.
     std::vector<Spectrum::Tone> expanded_tones;
@@ -52,12 +54,29 @@ std::vector<double> SpectrumAnalyzerEngine::integratePowerPerBin(const Spectrum 
         int bin_idx =
             static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
-            double tone_W = std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
-            power_W[bin_idx] += tone_W;
+            tone_W[bin_idx] += std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
         }
     }
+}
 
-    return power_W;
+std::vector<double>
+SpectrumAnalyzerEngine::toJitteredPower_dBm(const std::vector<double> &noise_W,
+                                            const std::vector<double> &tone_W) const {
+    std::vector<double> power_dBm(noise_W.size());
+    // Constructing the distribution is only defined for a positive sigma, so
+    // guard it: a disabled or invalid setting stays a pure no-op.
+    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
+        std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
+        for (size_t i = 0; i < power_dBm.size(); ++i) {
+            double noise_W_i = noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0);
+            power_dBm[i] = W_to_dBm(noise_W_i + tone_W[i]);
+        }
+    } else {
+        for (size_t i = 0; i < power_dBm.size(); ++i) {
+            power_dBm[i] = W_to_dBm(noise_W[i] + tone_W[i]);
+        }
+    }
+    return power_dBm;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec) const {
@@ -71,33 +90,27 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         bin_width = spec.frequencies[1] - spec.frequencies[0];
     }
 
-    // Cache the expensive integrate + RBW step. Jitter + VBW still run every
-    // frame so the display keeps its instrument-like live feel.
-    std::vector<double> rbw_power_W;
+    // Cache the expensive split + RBW step. Jitter + VBW still run every frame
+    // so the display keeps its instrument-like live feel.
+    std::vector<double> rbw_noise_W, rbw_tone_W;
     if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
         bin_width == m_cache_bin_width) {
-        rbw_power_W = m_cache_rbw_power_W;
+        rbw_noise_W = m_cache_rbw_noise_W;
+        rbw_tone_W = m_cache_rbw_tone_W;
     } else {
-        std::vector<double> power_W = this->integratePowerPerBin(spec);
-        rbw_power_W = this->applyRBW(power_W, bin_width);
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(spec, noise_W, tone_W);
+        rbw_noise_W = this->applyRBW(noise_W, bin_width);
+        rbw_tone_W = this->applyRBW(tone_W, bin_width);
         m_cache_spectrum = &spec;
         m_cache_spec_gen = spec.generation;
         m_cache_rbw = m_rbw;
         m_cache_bin_width = bin_width;
-        m_cache_rbw_power_W = rbw_power_W;
+        m_cache_rbw_noise_W = rbw_noise_W;
+        m_cache_rbw_tone_W = rbw_tone_W;
     }
 
-    std::vector<double> power_dBm(rbw_power_W.size());
-    for (size_t i = 0; i < rbw_power_W.size(); ++i) {
-        power_dBm[i] = W_to_dBm(rbw_power_W[i]);
-    }
-
-    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
-        std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
-        for (auto &p : power_dBm) {
-            p += jitter(m_rng);
-        }
-    }
+    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
 
     std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
     return this->applyTraceMode(spec, vbw_out);
@@ -120,16 +133,20 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
         return {};
     }
 
-    // Sum per-bin power (W). Use integratePowerPerBin for each Spectrum and add.
-    std::vector<double> sum_power_W(n, 0.0);
+    // Sum per-bin noise and tone power (W) separately so jitter can be applied
+    // to the noise floor without disturbing tone peaks.
+    std::vector<double> sum_noise_W(n, 0.0);
+    std::vector<double> sum_tone_W(n, 0.0);
     for (const Spectrum *s : specs) {
         if (!s) {
             continue;
         }
-        std::vector<double> p = this->integratePowerPerBin(*s);
-        size_t m = std::min(n, p.size());
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(*s, noise_W, tone_W);
+        size_t m = std::min(n, noise_W.size());
         for (size_t i = 0; i < m; ++i) {
-            sum_power_W[i] += p[i];
+            sum_noise_W[i] += noise_W[i];
+            sum_tone_W[i] += tone_W[i];
         }
     }
 
@@ -142,22 +159,11 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
         }
     }
 
-    std::vector<double> rbw_power_W = this->applyRBW(sum_power_W, bin_width);
+    std::vector<double> rbw_noise_W = this->applyRBW(sum_noise_W, bin_width);
+    std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
-    std::vector<double> power_dBm(rbw_power_W.size());
-    for (size_t i = 0; i < rbw_power_W.size(); ++i) {
-        power_dBm[i] = W_to_dBm(rbw_power_W[i]);
-    }
-
-    // Add random noise jitter in dBm domain for visual "live" spectrum effect.
-    // Symmetric in dBm — no asymmetric clamping artifacts like power-domain jitter.
-    // VBW smooths this naturally; tone peaks are unaffected.
-    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
-        std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
-        for (auto &p : power_dBm) {
-            p += jitter(m_rng);
-        }
-    }
+    // Jitter the noise floor only, then add the deterministic tone power back.
+    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
 
     std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
     return vbw_out;

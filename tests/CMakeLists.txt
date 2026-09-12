@@ -249,3 +249,11 @@ add_standalone_test(test_issue87_flow
          simulator::adc_engine simulator::pfb_channelizer_engine
          simulator::node_graph_engine
 )
+
+# Standalone coverage for the spectrum-display noise jitter: the cosmetic
+# noise-floor fluctuation must not move deterministic tone peaks. Kept outside
+# tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_spectrum_jitter
+    SOURCES test_spectrum_jitter.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
