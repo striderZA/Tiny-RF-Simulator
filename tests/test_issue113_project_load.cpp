@@ -201,6 +201,14 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #113: a failed save leaves the original fi
 
     RfSimulatorApp app;
 
+    // Establish a real "previous file" first, so the failed save's refusal to
+    // adopt the new path is observable rather than trivially true on a fresh
+    // app (issue #77/#113).
+    const auto previous = tree.file("previous.rfsim");
+    app.saveProject(previous.string());
+    REQUIRE(app.m_current_project_path == previous.string());
+    REQUIRE_FALSE(app.isDirty());
+
     // Block the documented sibling temp path with a directory so the temp
     // write cannot start; this reproduces a failed save deterministically on
     // every platform (an ofstream cannot open a directory for writing).
@@ -211,7 +219,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #113: a failed save leaves the original fi
     app.saveProject(target.string());
 
     REQUIRE(app.isDirty());
-    REQUIRE(app.m_current_project_path.empty());
+    REQUIRE(app.m_current_project_path == previous.string());
     REQUIRE(readText(target) == original);
 
     // Unblocking the temp path lets the retry succeed, replacing the target
@@ -224,4 +232,40 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #113: a failed save leaves the original fi
     REQUIRE(app.m_current_project_path == target.string());
     REQUIRE_FALSE(fs::exists(temp));
     REQUIRE(readText(target) != original);
+}
+
+// ---------------------------------------------------------------------------
+// A section-shape failure resets the project and drops its path, so the
+// project-local extension roots must follow it: `ExtensionManager` is re-scanned
+// against the CWD ("no project open") instead of leaving the destroyed
+// project's tools/data packs active under the now-untitled project.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #113: a section-shape load failure re-roots extensions at the CWD",
+                 "[issue113][project]") {
+    // Two directories: the previous project's extension root must actually
+    // change, so the corrupt file cannot live beside the good one.
+    TempTree old_tree("ext_old");
+    TempTree corrupt_tree("ext_corrupt");
+
+    const auto old_path = old_tree.file("old.rfsim");
+    {
+        RfSimulatorApp seed;
+        seed.saveProject(old_path.string());
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(old_path.string());
+    REQUIRE(app.m_current_project_path == old_path.string());
+    const auto old_root = fs::weakly_canonical(old_tree.dir / "rf-sim-extensions");
+    REQUIRE(app.testExtensionManager().projectExtensionRoot() == old_root);
+
+    const auto corrupt = corrupt_tree.file("corrupt.rfsim");
+    writeText(corrupt, R"({"components": 5})");
+    app.loadProject(corrupt.string());
+
+    REQUIRE(app.m_current_project_path.empty());
+    REQUIRE(app.componentCount() == 0);
+    const auto cwd_root = fs::weakly_canonical(fs::current_path() / "rf-sim-extensions");
+    REQUIRE(app.testExtensionManager().projectExtensionRoot() == cwd_root);
 }

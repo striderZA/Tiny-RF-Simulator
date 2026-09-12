@@ -158,6 +158,13 @@ ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEng
       m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
       m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
+std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
+    return {{{"log", &m_show_log},
+             {"spectrum_analyzer", &m_show_spectrum},
+             {"properties", &m_show_properties},
+             {"node_editor", &m_show_node_editor}}};
+}
+
 bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
     root["version"] = 1;
@@ -296,11 +303,10 @@ bool ProjectSerializer::save(const std::string &path) {
     }
     root["groups"] = groups_arr;
 
-    // Window state
-    root["window_state"]["log"] = m_show_log;
-    root["window_state"]["spectrum_analyzer"] = m_show_spectrum;
-    root["window_state"]["properties"] = m_show_properties;
-    root["window_state"]["node_editor"] = m_show_node_editor;
+    // Window state (canonical flag list shared with the load-time shape guard
+    // and restore — see windowFlags()).
+    for (const auto &[key, member] : windowFlags())
+        root["window_state"][key] = *member;
 
     // Graph state counters (for later additions)
     root["graph_state"]["next_component_id"] = m_next_component_id;
@@ -338,17 +344,14 @@ bool ProjectSerializer::save(const std::string &path) {
         return false;
     }
 
+    // std::filesystem::rename atomically replaces an existing target on every
+    // supported platform (POSIX rename / Windows MoveFileEx with
+    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
+    // fallback: deleting the target first would reintroduce the data-loss
+    // window this function exists to close. If the rename fails the original
+    // is still intact — drop the temp and report the failure.
     std::error_code ec;
     fs::rename(temp, target, ec);
-    if (ec) {
-        // Not every platform renames over an existing file (Windows in
-        // particular); fall back to remove+rename. The temp file shares the
-        // target's directory, so this is the only portable fallback.
-        std::error_code rm_ec;
-        fs::remove(target, rm_ec);
-        ec.clear();
-        fs::rename(temp, target, ec);
-    }
     if (ec) {
         LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
         std::error_code rm_ec;
@@ -437,7 +440,8 @@ bool ProjectSerializer::load(const std::string &path) {
             if (!root.contains("window_state") || root["window_state"].is_null())
                 return true;
             const auto &ws = root["window_state"];
-            for (const char *key : {"log", "spectrum_analyzer", "properties", "node_editor"}) {
+            for (const auto &flag : windowFlags()) {
+                const char *key = flag.first;
                 if (ws.contains(key) && !ws[key].is_boolean()) {
                     LOG_ERROR("Invalid project file %s: 'window_state.%s' must be a boolean",
                               path.c_str(), key);
@@ -804,11 +808,10 @@ bool ProjectSerializer::load(const std::string &path) {
         // the section default (true). Null sections leave the live values.
         auto &ws = root["window_state"];
         if (!ws.is_null()) {
-            m_show_log = ws.contains("log") ? ws["log"].get<bool>() : true;
-            m_show_spectrum =
-                ws.contains("spectrum_analyzer") ? ws["spectrum_analyzer"].get<bool>() : true;
-            m_show_properties = ws.contains("properties") ? ws["properties"].get<bool>() : true;
-            m_show_node_editor = ws.contains("node_editor") ? ws["node_editor"].get<bool>() : true;
+            // An absent flag keeps the section default (true). Presence was
+            // shape-validated before reset(), so get<bool>() cannot throw.
+            for (const auto &[key, member] : windowFlags())
+                *member = ws.contains(key) ? ws[key].get<bool>() : true;
         }
 
         // Restore graph state counters. Pre-validation guarantees a present
