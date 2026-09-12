@@ -263,7 +263,9 @@ jobs:
             cxx_compiler: g++-14
             c_compiler: gcc-14
             cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
+            # Release: these artifacts are attached to the GitHub release, so
+            # they must be optimized (no Debug asserts / -O0).
+            build_type: Release
             artifact_name: build-linux
           - os: windows-latest
             label: Windows package build
@@ -271,7 +273,7 @@ jobs:
             cxx_compiler: g++
             c_compiler: gcc
             cmake_flags: ""
-            build_type: Debug
+            build_type: Release
             artifact_name: build-windows
 
     runs-on: ${{ matrix.os }}

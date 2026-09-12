@@ -63,7 +63,7 @@ Pull requests run **no automated pipeline**. All CI validation happens when a re
 
 - **Format check** — clang-format 18 enforces code style across all source modules
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
-- **Packaging builds** — Linux and Windows artifacts
+- **Packaging builds** — optimized Release Linux and Windows binaries (the artifacts attached to the GitHub release)
 
 On top of that:
 
