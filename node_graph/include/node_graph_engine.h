@@ -52,6 +52,21 @@ class NodeGraphEngine {
     std::vector<SignalSource> getSourcesForInput(int input_pin_id) const;
     std::vector<int> topologicalOrder() const;
 
+    // Editing-policy queries, evaluated by the editor and the project loader
+    // before a link is committed. addLink() itself stays permissive so callers
+    // that intentionally build multi-source inputs keep working; these queries
+    // are the single source of truth for "may this link be created?".
+    // inputHasLink() is true when any existing link already terminates at
+    // input_pin_id (the rewire pass honours only the first such link).
+    bool inputHasLink(int input_pin_id) const;
+    // wouldCreateCycle() is true when start_pin and end_pin already sit on the
+    // same node, or when end_pin's node can reach start_pin's node through
+    // existing links (so adding the edge would close a directed cycle).
+    bool wouldCreateCycle(int start_pin, int end_pin) const;
+    // canAddLink() rejects a duplicate link into an occupied input pin and any
+    // link that would introduce a cycle.
+    bool canAddLink(int start_pin, int end_pin) const;
+
     static constexpr int MAX_PROBES = 4;
 
     const std::vector<int> &probePins() const { return m_probe_pins; }
