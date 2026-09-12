@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <string>
+#include <utility>
 
 class ComponentRegistry;
 class NetworkAnalyzerEngine;
@@ -26,6 +28,13 @@ class ProjectSerializer {
     void reset(); // newProject: links, components, probes, counters, PFBs
 
   private:
+    // Canonical `window_state` scalar flags as (JSON key, live member). save()
+    // writes them, load()'s shape guard validates them, and load()'s restore
+    // reads them — all from this one list, so a new flag cannot be persisted
+    // without also being shape-validated (issue #113).
+    using WindowFlag = std::pair<const char *, bool *>;
+    std::array<WindowFlag, 4> windowFlags();
+
     ComponentRegistry &m_components;
     NodeGraphEngine &m_graph;
     NodeGraphWidget &m_graph_widget;

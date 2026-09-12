@@ -579,8 +579,21 @@ void RfSimulatorApp::saveProject(const std::string &path) {
 
 void RfSimulatorApp::loadProject(const std::string &path) {
     if (!m_serializer->load(path)) {
-        if (m_serializer->lastLoadReset())
+        if (m_serializer->lastLoadReset()) {
             m_power_meter_widget->clearSource();
+            // The failed load already destroyed the live project, so the
+            // previous file must never remain the next Ctrl+S save target —
+            // after a failure the empty project is unsaved, not "old.rfsim"
+            // (issue #113). A failure that left state intact keeps the path.
+            m_current_project_path.clear();
+            m_dirty = true;
+            // Extension discovery is rooted at the project directory, so it
+            // must be re-derived once the path is gone: otherwise the
+            // destroyed project's project-local tools and data packs stay
+            // active under the now-untitled project. Clear-then-refresh is the
+            // same order as newProject(), so the rescan re-roots at the CWD.
+            refreshExtensions();
+        }
         return;
     }
     m_power_meter_widget->clearSource();

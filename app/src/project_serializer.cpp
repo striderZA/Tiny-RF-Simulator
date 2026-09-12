@@ -158,6 +158,13 @@ ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEng
       m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
       m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
+std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
+    return {{{"log", &m_show_log},
+             {"spectrum_analyzer", &m_show_spectrum},
+             {"properties", &m_show_properties},
+             {"node_editor", &m_show_node_editor}}};
+}
+
 bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
     root["version"] = 1;
@@ -296,29 +303,59 @@ bool ProjectSerializer::save(const std::string &path) {
     }
     root["groups"] = groups_arr;
 
-    // Window state
-    root["window_state"]["log"] = m_show_log;
-    root["window_state"]["spectrum_analyzer"] = m_show_spectrum;
-    root["window_state"]["properties"] = m_show_properties;
-    root["window_state"]["node_editor"] = m_show_node_editor;
+    // Window state (canonical flag list shared with the load-time shape guard
+    // and restore — see windowFlags()).
+    for (const auto &[key, member] : windowFlags())
+        root["window_state"][key] = *member;
 
     // Graph state counters (for later additions)
     root["graph_state"]["next_component_id"] = m_next_component_id;
 
-    std::ofstream out(path);
+    // Atomic save (issue #113): the previous contents must survive a failed
+    // write so issue #77's retry contract never retries against a truncated
+    // file. Serialize into a sibling "<path>.tmp", flush/close it, and only
+    // then rename it over the target. A failure before the rename leaves the
+    // original byte-identical; the fixed sibling name is what the regression
+    // test blocks to force a write failure deterministically.
+    const fs::path target(path);
+    fs::path temp = target;
+    temp += ".tmp";
+    const std::string temp_str = temp.string();
+
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
     if (!out) {
-        LOG_ERROR("Failed to open project file for writing: %s", path.c_str());
+        LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
         return false;
     }
     out << root.dump(2);
     out.flush();
     if (!out) {
-        LOG_ERROR("Failed to write project file: %s", path.c_str());
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        out.close();
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
         return false;
     }
     out.close();
     if (!out) {
-        LOG_ERROR("Failed to close project file: %s", path.c_str());
+        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
+        return false;
+    }
+
+    // std::filesystem::rename atomically replaces an existing target on every
+    // supported platform (POSIX rename / Windows MoveFileEx with
+    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
+    // fallback: deleting the target first would reintroduce the data-loss
+    // window this function exists to close. If the rename fails the original
+    // is still intact — drop the temp and report the failure.
+    std::error_code ec;
+    fs::rename(temp, target, ec);
+    if (ec) {
+        LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
         return false;
     }
 
@@ -390,6 +427,47 @@ bool ProjectSerializer::load(const std::string &path) {
             // partially validated file.
             m_last_load_reset = true;
             reset();
+            return false;
+        }
+
+        // Field-level shape guard for the two singleton sections, validated
+        // here (before reset) so an invalid optional scalar is *rejected* and
+        // cannot mutate the live project: a corrupt UI flag or counter must not
+        // discard the project the user already has open (issue #113). This
+        // deliberately differs from the section-shape failure above, which
+        // resets because no coherent project can be recovered from it.
+        const auto window_state_ok = [&]() -> bool {
+            if (!root.contains("window_state") || root["window_state"].is_null())
+                return true;
+            const auto &ws = root["window_state"];
+            for (const auto &flag : windowFlags()) {
+                const char *key = flag.first;
+                if (ws.contains(key) && !ws[key].is_boolean()) {
+                    LOG_ERROR("Invalid project file %s: 'window_state.%s' must be a boolean",
+                              path.c_str(), key);
+                    return false;
+                }
+            }
+            return true;
+        };
+        const auto graph_state_ok = [&]() -> bool {
+            if (!root.contains("graph_state") || root["graph_state"].is_null())
+                return true;
+            const auto &gs = root["graph_state"];
+            if (gs.contains("next_component_id")) {
+                const auto v = checkedJsonInt(gs["next_component_id"]);
+                if (!v || *v < 0) {
+                    LOG_ERROR("Invalid project file %s: 'graph_state.next_component_id' must be a "
+                              "non-negative integer within int range",
+                              path.c_str());
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (!window_state_ok() || !graph_state_ok()) {
+            // Leave m_last_load_reset false: the live project and its current
+            // save path are untouched, so the caller keeps them.
             return false;
         }
 
@@ -725,20 +803,22 @@ bool ProjectSerializer::load(const std::string &path) {
             }
         }
 
-        // Restore window state
+        // Restore window state. These fields were shape-validated before
+        // reset(), so a present key is guaranteed boolean; an absent key keeps
+        // the section default (true). Null sections leave the live values.
         auto &ws = root["window_state"];
         if (!ws.is_null()) {
-            m_show_log = ws.value("log", true);
-            m_show_spectrum = ws.value("spectrum_analyzer", true);
-            m_show_properties = ws.value("properties", true);
-            m_show_node_editor = ws.value("node_editor", true);
+            // An absent flag keeps the section default (true). Presence was
+            // shape-validated before reset(), so get<bool>() cannot throw.
+            for (const auto &[key, member] : windowFlags())
+                *member = ws.contains(key) ? ws[key].get<bool>() : true;
         }
 
-        // Restore graph state counters
+        // Restore graph state counters. Pre-validation guarantees a present
+        // next_component_id is a non-negative int, so no wrap/truncation.
         auto &gs = root["graph_state"];
-        if (!gs.is_null()) {
-            m_next_component_id = gs.value("next_component_id", m_next_component_id);
-        }
+        if (!gs.is_null() && gs.contains("next_component_id"))
+            m_next_component_id = gs["next_component_id"].get<int>();
     } catch (const std::exception &e) {
         // Broadened from nlohmann::json::exception: any exception escaping
         // restoration (including non-JSON engine/container errors on

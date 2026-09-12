@@ -257,3 +257,11 @@ add_standalone_test(test_spectrum_jitter
     SOURCES test_spectrum_jitter.cpp
     LIBS simulator::spectrum_analyzer_engine
 )
+
+# Regression coverage for issue #113 (failed-load save-target leak, malformed
+# window_state/graph_state guards, atomic save). Kept outside tests.exe for the
+# MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue113_project_load
+    SOURCES test_issue113_project_load.cpp
+    LIBS simulator::app
+)
