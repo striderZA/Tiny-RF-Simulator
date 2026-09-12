@@ -29,6 +29,14 @@ void NodeGraphWidget::syncNodesFromEngine() {
     }
 }
 
+void NodeGraphWidget::captureGridPositions() {
+    ImNodes::EditorContextSet(m_context);
+    m_cached_grid_positions.clear();
+    for (const auto &node : m_engine.nodes()) {
+        m_cached_grid_positions[node.node_id] = ImNodes::GetNodeGridSpacePos(node.node_id);
+    }
+}
+
 void NodeGraphWidget::markNodesRegistered() {
     for (const auto &node : m_engine.nodes()) {
         m_registered_in_pool.insert(node.node_id);
@@ -164,10 +172,15 @@ void NodeGraphWidget::drawNodes() {
         // nodes get removed from the pool by ObjectPoolUpdate in EndNodeEditor.
         ImVec2 screen_pos = ImNodes::GetNodeScreenSpacePos(node.node_id);
         m_node_screen_positions[node.node_id] = screen_pos;
+        // Remember the pan-independent grid position too. Collapsed-group
+        // members stop being drawn (and are dropped from the imnodes pool), so
+        // this cache is what lets drawGroupCollapsedBlocks() place their block
+        // (issue #116).
+        ImVec2 grid_pos = ImNodes::GetNodeGridSpacePos(node.node_id);
+        m_cached_grid_positions[node.node_id] = grid_pos;
         if (first_visible) {
             // Refresh the grid-to-screen offset from the first visible node every frame
             // so it's always current with panning changes.
-            ImVec2 grid_pos = ImNodes::GetNodeGridSpacePos(node.node_id);
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
@@ -241,6 +254,7 @@ void NodeGraphWidget::drawNodes() {
 }
 
 void NodeGraphWidget::drawLinks() {
+    m_cross_group_links_drawn = 0;
     std::unordered_set<int> hidden_nodes;
     for (const auto &g : m_engine.groups()) {
         if (g.collapsed) {
@@ -269,8 +283,10 @@ void NodeGraphWidget::drawLinks() {
 
         bool start_hidden = hidden_nodes.count(start_node) > 0;
         bool end_hidden = hidden_nodes.count(end_node) > 0;
-        if (start_hidden && end_hidden)
-            continue; // internal link in collapsed group
+        if (start_hidden && end_hidden &&
+            m_engine.groupIdForNode(start_node) == m_engine.groupIdForNode(end_node)) {
+            continue; // both endpoints inside the same collapsed group
+        }
 
         // When a link endpoint is on a hidden (grouped) node, redirect the link to the
         // group's synthesized boundary pin so it visually attaches to the collapsed block.
@@ -295,6 +311,8 @@ void NodeGraphWidget::drawLinks() {
             }
         }
 
+        if (start_hidden && end_hidden)
+            ++m_cross_group_links_drawn;
         ImNodes::Link(link.link_id, draw_start_pin, draw_end_pin);
     }
 }
@@ -455,6 +473,7 @@ void NodeGraphWidget::handleNodeDeletion() {
                     onLinkChanged();
                 // Remove from position caches so they don't accumulate stale entries
                 m_node_screen_positions.erase(node_id);
+                m_cached_grid_positions.erase(node_id);
                 m_last_node_grid_positions.erase(node_id);
             }
             ImNodes::ClearNodeSelection();
