@@ -520,6 +520,9 @@ TEST_CASE("NetworkAnalyzer: engine serialize/deserialize round-trip", "[network_
 // ---------------------------------------------------------------------------
 #include "imgui.h"
 #include "implot.h"
+// The axis ranges ImPlot settles on are only observable through its internals
+// (ImPlot::GetPlot); the pinned implot commit makes that stable.
+#include "implot_internal.h"
 
 namespace {
 struct ImGuiFixture {
@@ -575,4 +578,97 @@ TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: widget draws with and without p
     widget.draw("Network Analyzer Test", &open);
     REQUIRE(open);
     ImGui::EndFrame();
+}
+
+namespace {
+// The plot object lives in the window that owns the plot id, so re-enter that
+// window for the lookup.
+ImPlotRange plotAxisRange(const char *window, const char *plot, ImAxis axis) {
+    ImGui::Begin(window);
+    ImPlotPlot *p = ImPlot::GetPlot(plot);
+    REQUIRE(p != nullptr);
+    const ImPlotRange range = p->Axes[axis].Range;
+    ImGui::End();
+    return range;
+}
+} // namespace
+
+// ImPlot only auto-fits a plot on the frame it is first drawn and never
+// again, so the gain/NF traces used to stay pinned to whatever range happened
+// to be current then -- including ImPlot's 0..1 default when the panel was
+// opened before any probe point was selected, which squeezed the measured
+// data into a corner of the plot.
+TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: gain/NF plot scales to the measured sweep",
+                 "[network_analyzer][widget]") {
+    constexpr const char *kWindow = "Network Analyzer Scaling Test";
+    constexpr const char *kPlot = "Gain / Noise Figure vs Frequency";
+
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AttenuatorEngine atten(2, graph);
+    atten.setAttenuation(10.0);
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    TestNaHost host({&gen, &atten});
+    NetworkAnalyzerEngine na(graph, host);
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(11);
+
+    NetworkAnalyzerWidget widget(na, graph);
+    bool open = true;
+
+    // Frame 1: the panel is opened before any probe point is selected, so the
+    // plot is created with no data to fit. The size is pinned because a
+    // freshly created auto-sized window leaves the plot no rect to draw into.
+    ImGui::NewFrame();
+    ImGui::SetNextWindowSize(ImVec2(900, 700), ImGuiCond_Always);
+    widget.draw(kWindow, &open);
+    ImGui::EndFrame();
+    REQUIRE(open);
+
+    // Frame 2: probing a 1-2 GHz sweep with a 10 dB pad must frame that sweep
+    // on X and the -10 dB gain/NF traces on Y.
+    na.setPointA(gen.outputPinId());
+    na.setPointB(atten.outputPinId());
+    na.update();
+    ImGui::NewFrame();
+    widget.draw(kWindow, &open);
+    const ImPlotRange x = plotAxisRange(kWindow, kPlot, ImAxis_X1);
+    const ImPlotRange y = plotAxisRange(kWindow, kPlot, ImAxis_Y1);
+    ImGui::EndFrame();
+
+    REQUIRE_THAT(x.Min, WithinAbs(1e9, 1.0));
+    REQUIRE_THAT(x.Max, WithinAbs(2e9, 1.0));
+    REQUIRE(y.Min <= -10.0);
+    REQUIRE(y.Max >= -10.0);
+    REQUIRE(y.Max - y.Min < 100.0); // framed on the data, not a stale wide range
+
+    // Frame 3: changing the sweep re-frames the plot -- the stale-range half
+    // of the same bug.
+    na.setStartFrequency(2.4e9);
+    na.setStopFrequency(2.5e9);
+    na.update();
+    ImGui::NewFrame();
+    widget.draw(kWindow, &open);
+    const ImPlotRange moved = plotAxisRange(kWindow, kPlot, ImAxis_X1);
+    ImGui::EndFrame();
+
+    REQUIRE_THAT(moved.Min, WithinAbs(2.4e9, 1.0));
+    REQUIRE_THAT(moved.Max, WithinAbs(2.5e9, 1.0));
+
+    // Frame 4: a flat trace (0 dB pad -- constant gain and NF) still gets a
+    // readable dB window rather than a zero-height axis.
+    atten.setAttenuation(0.0);
+    na.update();
+    REQUIRE_FALSE(na.gainDb().empty());
+    for (double g : na.gainDb())
+        REQUIRE_THAT(g, WithinAbs(na.gainDb().front(), 1e-9)); // constant across the sweep
+    ImGui::NewFrame();
+    widget.draw(kWindow, &open);
+    const ImPlotRange flat = plotAxisRange(kWindow, kPlot, ImAxis_Y1);
+    ImGui::EndFrame();
+
+    REQUIRE(flat.Min <= 0.0);
+    REQUIRE(flat.Max >= 0.0);
+    REQUIRE(flat.Max - flat.Min >= 10.0); // never a degenerate dB axis
 }
