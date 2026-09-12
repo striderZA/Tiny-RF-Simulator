@@ -1,3 +1,13 @@
+## [0.23.1] - 2026-09-12
+
+### Fixed
+
+- **Network Analyzer plot autoscaling** — automatically scale the gain and noise-figure plots to the visible data range while preserving useful bounds for stable display.
+
+### Testing
+
+- Add regression coverage for gain and noise-figure plot autoscaling.
+
 ## [0.23.0] - 2026-09-11
 
 ### Added
