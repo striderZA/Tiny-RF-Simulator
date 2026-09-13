@@ -40,7 +40,10 @@ void CombinerEngine::setManualMode(bool enabled) {
 }
 
 void CombinerEngine::setSParamMode(bool enabled) {
-    m_sparam_mode = enabled && m_sparam_data.loaded() && m_sparam_data.numPorts() == 3;
+    // Mode is UI state, not validity state: it must stay settable before a file
+    // is chosen so the inspector can reveal its S-param picker on a fresh node
+    // (issue #137). update() enforces the 3-port requirement at runtime.
+    m_sparam_mode = enabled;
     m_dirty = true;
 }
 
@@ -74,7 +77,11 @@ void CombinerEngine::update(double dt) {
     const Spectrum *in1 = m_node.inputs.size() > 1 ? m_node.inputs[1] : nullptr;
 
     // --- S-parameter mode ---
-    if (m_sparam_mode && m_sparam_data.loaded()) {
+    // A 2-port file must fall through to manual mode: SParameterData::interpolate
+    // bounds-checks and returns identity S-params for out-of-range indices, so a
+    // 2-port device would otherwise resolve S21/S31 to {1,0} and produce the
+    // k*T*(1-1-1) added-noise artifact (issue #117/#137).
+    if (m_sparam_mode && m_sparam_data.loaded() && m_sparam_data.numPorts() == 3) {
         if (!m_dirty && in0 == m_cached_input0_ptr && in1 == m_cached_input1_ptr &&
             (!in0 || in0->generation == m_cached_input0_generation) &&
             (!in1 || in1->generation == m_cached_input1_generation))

@@ -168,26 +168,54 @@ TEST_CASE("Issue 117: equalizer magnitude profile and mixer signed difference", 
     REQUIRE(real_mixer.node().outputs[0].tones[0].freq_Hz == Approx(300e6));
 }
 
+TEST_CASE("Issue 137: combiner S-param mode latches before a file is chosen", "[issue137]") {
+    NodeGraphEngine graph;
+    CombinerEngine combiner(0, graph);
+    REQUIRE_FALSE(combiner.sparamMode());
+    // The inspector checkbox sets mode before any path exists, then reveals the
+    // file picker; a setter that refuses without a loaded 3-port file deadlocks
+    // that flow (issue #137).
+    combiner.setSParamMode(true);
+    REQUIRE(combiner.sparamMode());
+}
+
 TEST_CASE("Issue 117: combiner validates ports and clamps added noise", "[issue117]") {
     NodeGraphEngine graph;
     CombinerEngine combiner(0, graph);
+
+    // A 2-port file must not auto-enable S-param mode on load.
     combiner.setSParamFilepath(amplifierSParamPath());
     REQUIRE_FALSE(combiner.sparamMode());
 
-    const auto path = writeOverpoweredCombinerSParam();
+    // The mode flag is UI state and stays settable without a file (issue #137),
+    // but a 2-port file must not reach the S-param branch at runtime: its S21/S31
+    // would resolve identity (|S|^2 = 1), giving the raw k*T*(1-1-1) added-noise
+    // term. It falls through to the manual branch's -3.01 dB combining loss.
     combiner.setSParamMode(true);
-    REQUIRE_FALSE(combiner.sparamMode());
-    combiner.setSParamFilepath(path.string());
     REQUIRE(combiner.sparamMode());
-
     auto input0 = makeSpectrum({1e9, 2e9}, {{1e9, -10.0, 0.0}});
     auto input1 = makeSpectrum({1e9, 2e9}, {{1e9, -10.0, 0.0}});
     combiner.node().inputs[0] = &input0;
     combiner.node().inputs[1] = &input1;
     combiner.update(0.0);
+    const auto &manual_out = combiner.node().outputs[0];
+    REQUIRE(manual_out.tones.size() == 2);
+    for (const auto &t : manual_out.tones)
+        REQUIRE(t.power_dBm == Approx(-10.0 - 3.010299956639812).margin(1e-9));
 
-    for (double noise : combiner.node().outputs[0].noise_added_W)
-        REQUIRE(noise >= 0.0);
+    // A valid 3-port file activates the S-param branch. This fixture is
+    // deliberately overpowered (|S21| = |S31| = 2), so the raw added-noise term
+    // is negative and must be clamped to zero.
+    const auto path = writeOverpoweredCombinerSParam();
+    combiner.setSParamFilepath(path.string());
+    REQUIRE(combiner.sparamMode());
+    combiner.update(0.0);
+    const auto &sparam_out = combiner.node().outputs[0];
+    REQUIRE(sparam_out.tones.size() == 2);
+    for (const auto &t : sparam_out.tones)
+        REQUIRE(t.power_dBm == Approx(-10.0 + 20.0 * std::log10(2.0)).margin(1e-6));
+    for (double noise : sparam_out.noise_added_W)
+        REQUIRE(noise == Approx(0.0));
 
     std::filesystem::remove(path);
 }

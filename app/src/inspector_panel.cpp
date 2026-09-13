@@ -669,13 +669,23 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     }
 
     if (sparam_mode) {
-        std::string path = engine.sparamFilepath();
-        char path_buf[512];
-        strncpy(path_buf, path.c_str(), sizeof(path_buf) - 1);
-        path_buf[sizeof(path_buf) - 1] = '\0';
-        if (ImGui::InputText("S-param file", path_buf, sizeof(path_buf))) {
-            engine.setSParamFilepath(path_buf);
-            m_param_edited = true;
+        ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
+        if (ImGui::Button("Browse##comb_sparam")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                              .result();
+            if (!result.empty()) {
+                engine.setSParamFilepath(result[0]);
+                LOG_INFO("Combiner S-param file: %s", result[0].c_str());
+                m_param_edited = true;
+            }
+        }
+        if (engine.sparamLoaded() && engine.sparamData().numPorts() == 3) {
+            ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
+                                engine.sparamData().numPorts());
+        } else if (!engine.sparamFilepath().empty()) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                               "Failed to load file (a 3-port .s3p is required)");
         }
     }
 
