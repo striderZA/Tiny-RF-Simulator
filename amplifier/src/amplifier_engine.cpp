@@ -135,9 +135,8 @@ void AmplifierEngine::update(double dt) {
     // Nonlinear processing
     if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
         size_t n_fund = out.tones.size();
-        double gain_linear = dbToLinear(m_gain_dB);
-        auto result =
-            m_nonlinear.process(in_ptr->tones, [gain_linear](double) { return gain_linear; });
+        double gain_amp = std::sqrt(dbToLinear(m_gain_dB));
+        auto result = m_nonlinear.process(in_ptr->tones, [gain_amp](double) { return gain_amp; });
 
         for (const auto &t : result.extra_tones)
             out.tones.push_back(t);

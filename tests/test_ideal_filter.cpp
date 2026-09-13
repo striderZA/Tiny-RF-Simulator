@@ -4,6 +4,7 @@
 #include "signal_generator_engine.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 
 using Catch::Approx;
 
@@ -132,7 +133,7 @@ TEST_CASE("IdealFilter passes noise density unchanged in passband", "[filter]") 
     const auto &in_ref = gen.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == in_ref.noise_total_W.size());
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
-        if (out.frequencies[i] <= 300e6)
+        if (std::abs(out.frequencies[i]) <= 300e6)
             REQUIRE(out.noise_total_W[i] == Approx(in_ref.noise_total_W[i]).epsilon(1e-30));
         else
             REQUIRE(out.noise_total_W[i] == Approx(0.0).epsilon(1e-30));
@@ -205,7 +206,7 @@ TEST_CASE("IdealFilter BSF passes noise outside stopband, blocks inside", "[filt
     REQUIRE(out.noise_total_W.size() == in_ref.noise_total_W.size());
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
         double f = out.frequencies[i];
-        if (f < 100e6 || f > 200e6)
+        if (std::abs(f) < 100e6 || std::abs(f) > 200e6)
             REQUIRE(out.noise_total_W[i] == Approx(in_ref.noise_total_W[i]).epsilon(1e-30));
         else
             REQUIRE(out.noise_total_W[i] == Approx(0.0).epsilon(1e-30));

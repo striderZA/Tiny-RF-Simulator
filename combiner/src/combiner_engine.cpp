@@ -40,13 +40,13 @@ void CombinerEngine::setManualMode(bool enabled) {
 }
 
 void CombinerEngine::setSParamMode(bool enabled) {
-    m_sparam_mode = enabled;
+    m_sparam_mode = enabled && m_sparam_data.loaded() && m_sparam_data.numPorts() == 3;
     m_dirty = true;
 }
 
 void CombinerEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
-    m_sparam_mode = m_sparam_data.load(path);
+    m_sparam_mode = m_sparam_data.load(path) && m_sparam_data.numPorts() == 3;
     m_dirty = true;
 }
 
@@ -63,7 +63,8 @@ void CombinerEngine::deserialize(const nlohmann::json &j) {
     m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
         m_sparam_data.load(m_sparam_filepath);
-    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
+    m_sparam_mode =
+        j.value("sparam_mode", false) && m_sparam_data.loaded() && m_sparam_data.numPorts() == 3;
     m_dirty = true;
 }
 
@@ -160,7 +161,7 @@ void CombinerEngine::update(double dt) {
             double n1 = (in1 && i < in1->noise_total_W.size()) ? in1->noise_total_W[i] : 0.0;
 
             out.noise_W[i] = n0 * mag_sq_S21 + n1 * mag_sq_S31;
-            out.noise_added_W[i] = k * T * (1.0 - mag_sq_S21 - mag_sq_S31);
+            out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - mag_sq_S21 - mag_sq_S31);
             out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
         }
 

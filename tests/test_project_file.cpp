@@ -518,6 +518,10 @@ static std::string sparamFixturePath() {
     return std::string(PROJECT_SOURCE_DIR) +
            "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
 }
+static std::string combinerSparamFixturePath() {
+    return std::string(PROJECT_SOURCE_DIR) +
+           "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+}
 
 TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (issue #56)",
                  "[project_file][sparam]") {
@@ -528,7 +532,10 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
     // against the project file's directory and must stay inside it, so the
     // fixture is staged next to the project file and referenced by its
     // relative name (the project file itself lives in the CWD).
-    const std::string local_s2p = tempPath("_fixture.s2p");
+    const std::string local_s2p = path.substr(0, path.find_last_of('.')) + "_fixture.s2p";
+    const std::string local_s3p = path.substr(0, path.find_last_of('.')) + "_combiner_fixture.s3p";
+    std::filesystem::copy_file(combinerSparamFixturePath(), local_s3p,
+                               std::filesystem::copy_options::overwrite_existing);
     std::filesystem::copy_file(s2p, local_s2p, std::filesystem::copy_options::overwrite_existing);
     {
         RfSimulatorApp app;
@@ -551,7 +558,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         REQUIRE(atten.sparamMode());
 
         auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
-        comb.setSParamFilepath(local_s2p);
+        comb.setSParamFilepath(local_s3p);
         REQUIRE(comb.sparamMode());
 
         REQUIRE(app.componentCount() == 5);
@@ -613,6 +620,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
     }
     std::remove(path.c_str());
     std::filesystem::remove(local_s2p);
+    std::filesystem::remove(local_s3p);
 }
 
 // ---------------------------------------------------------------------------

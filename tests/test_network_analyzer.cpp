@@ -101,7 +101,7 @@ double vToDbm(double V) { return 10.0 * std::log10((V * V / 50.0) / 0.001); }
 // gain_dB + compression(P_stim).
 double expectedCompressionDb(const std::vector<Spectrum::Tone> &input_tones, double gain_dB,
                              double oip2_dBm, double oip3_dBm) {
-    const double gain_linear = std::pow(10.0, gain_dB / 10.0);
+    const double gain_linear = std::pow(10.0, gain_dB / 20.0);
     const double k1 = 1.0 / dbmToV(oip2_dBm);
     const double k2 = 4.0 / (3.0 * dbmToV(oip3_dBm) * dbmToV(oip3_dBm));
 
@@ -172,7 +172,7 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
     amp.setGain_dB(20.0);
     amp.setNF_dB(0.0);
     amp.setEnableNonlinear(true);
-    amp.setOIP3_dBm(20.0); // OIP2 stays at the 100 dBm default
+    amp.setOIP3_dBm(0.0); // OIP2 stays at the 100 dBm default
     graph.addLink(gen.outputPinId(), amp.inputPinId());
     TestNaHost host({&gen, &amp});
     NetworkAnalyzerEngine na(graph, host);
@@ -184,16 +184,16 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
 
     // The measured gain through a compressed amplifier is
     // gain_dB + compression(P_stim); expectedCompressionDb() replicates the
-    // model's math exactly (including its 20*log10(linear) power convention),
-    // so matching it pins the ABSOLUTE stimulus power — a fixed-level stimulus
-    // would produce a different gain at a different configured power.
+    // model's voltage-gain convention, so matching it pins the ABSOLUTE
+    // stimulus power — a fixed-level stimulus would produce a different gain
+    // at a different configured power.
     const auto run_and_check = [&](double stim_dBm) {
         na.setStimulusPower(stim_dBm);
         na.update();
         std::vector<Spectrum::Tone> input;
         for (double f : na.sweepFrequencies())
             input.push_back({f, stim_dBm, 0.0});
-        const double expected = 20.0 + expectedCompressionDb(input, 20.0, 100.0, 20.0);
+        const double expected = 20.0 + expectedCompressionDb(input, 20.0, 100.0, 0.0);
         REQUIRE(na.gainDb().size() == 2);
         for (double g : na.gainDb())
             REQUIRE_THAT(g, WithinAbs(expected, 0.01));
@@ -205,7 +205,7 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
     // -30 dBm: measurably compressed — a clearly different gain than above,
     // exactly per the model, proving the sweep runs at the configured power.
     const double compressed = run_and_check(-30.0);
-    REQUIRE_THAT(compressed, WithinAbs(19.89, 0.01));
+    REQUIRE_THAT(compressed, WithinAbs(19.8925, 0.01));
 
     // Deeply into compression the model saturates (MIN_POWER) -> no data.
     na.setStimulusPower(30.0);

@@ -28,7 +28,8 @@ void MixerEngine::update(double dt) {
     if (in_ptr) {
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
-            lower.freq_Hz = std::abs(tone.freq_Hz - m_lo_freq_Hz);
+            lower.freq_Hz = in_ptr->is_complex_baseband ? (tone.freq_Hz - m_lo_freq_Hz)
+                                                        : std::abs(tone.freq_Hz - m_lo_freq_Hz);
             lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
             lower.phase_deg = tone.phase_deg;
             out.tones.push_back(lower);
