@@ -1,4 +1,5 @@
 #include "ideal_filter_engine.h"
+#include <cmath>
 #include <cstdio>
 #include <nlohmann/json.hpp>
 #include <numbers>
@@ -15,15 +16,16 @@ void IdealFilterEngine::setSParamFilepath(const std::string &path) {
 }
 
 bool IdealFilterEngine::isInPassband(double freq_Hz) const {
+    const double freq = std::abs(freq_Hz);
     switch (m_type) {
     case FilterType::LPF:
-        return freq_Hz <= m_fc_low_Hz;
+        return freq <= m_fc_low_Hz;
     case FilterType::HPF:
-        return freq_Hz > m_fc_low_Hz;
+        return freq > m_fc_low_Hz;
     case FilterType::BPF:
-        return freq_Hz >= m_fc_low_Hz && freq_Hz <= m_fc_high_Hz;
+        return freq >= m_fc_low_Hz && freq <= m_fc_high_Hz;
     case FilterType::BSF:
-        return freq_Hz < m_fc_low_Hz || freq_Hz > m_fc_high_Hz;
+        return freq < m_fc_low_Hz || freq > m_fc_high_Hz;
     }
     return true;
 }
@@ -136,9 +138,9 @@ void IdealFilterEngine::update(double dt) {
         return;
     }
 
-    out.noise_W.resize(N, 0.0);
+    out.noise_W.assign(N, 0.0);
     out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W.resize(N, 0.0);
+    out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
         if (isInPassband(out.frequencies[i])) {
             // Propagate the input's TOTAL noise (input noise + upstream added
