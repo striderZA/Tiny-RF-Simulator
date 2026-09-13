@@ -5,30 +5,46 @@ on:
     tags:
       - "v*"
 
+env:
+  # MinGW-w64 silently drops TEST_CASEs past a ceiling in the main `tests`
+  # binary. Both Windows legs below fail if the registered count drops below
+  # this verified floor; bump it when the registered count changes.
+  MINGW_TEST_CASE_FLOOR: "223"
+
 jobs:
   classify-release:
     runs-on: ubuntu-24.04
     outputs:
-      is_patch: ${{ steps.classify.outputs.is_patch }}
-      is_minor_or_major: ${{ steps.classify.outputs.is_minor_or_major }}
+      # JSON array of build legs for strict-build's matrix. Patch tags get a
+      # single Linux GCC Debug leg; minor/major tags get the full 4-way matrix.
+      matrix: ${{ steps.classify.outputs.matrix }}
     steps:
-      - name: Classify tag
+      - name: Classify tag and build the validation matrix
         id: classify
         shell: bash
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
           if [[ ! "$TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "ERROR: tag '$TAG' is not semantic version X.Y.Z"
             exit 1
           fi
           PATCH="${BASH_REMATCH[3]}"
+          LINUX='{"os":"ubuntu-24.04","shell":"bash","cxx_compiler":"g++-14","c_compiler":"gcc-14","cmake_flags":"-DGLFW_BUILD_WAYLAND=OFF"}'
           if [ "$PATCH" = "0" ]; then
-            echo "is_patch=false" >> "$GITHUB_OUTPUT"
-            echo "is_minor_or_major=true" >> "$GITHUB_OUTPUT"
+            MATRIX=$(jq -c -n --argjson linux "$LINUX" '[
+              $linux + {label:"Linux GCC 14 (Debug)", build_type:"Debug"},
+              $linux + {label:"Linux GCC 14 (Release)", build_type:"Release"},
+              $linux + {label:"Linux Clang 18", build_type:"Debug", cxx_compiler:"clang++-18", c_compiler:"clang-18"},
+              {os:"windows-latest", label:"Windows MinGW-w64", shell:"msys2 - {0}", cxx_compiler:"g++", c_compiler:"gcc", cmake_flags:"", build_type:"Debug"}
+            ]')
           else
-            echo "is_patch=true" >> "$GITHUB_OUTPUT"
-            echo "is_minor_or_major=false" >> "$GITHUB_OUTPUT"
+            MATRIX=$(jq -c -n --argjson linux "$LINUX" '[
+              $linux + {label:"Linux GCC 14 Debug (patch validation)", build_type:"Debug"}
+            ]')
           fi
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "validation matrix: $MATRIX"
 
   validate-version:
     needs: classify-release
@@ -45,22 +61,15 @@ jobs:
             echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
             exit 1
           fi
-          if ! awk -v version="$TAG_VERSION" '
-            /^## \[/ && index($0, "## [" version "]") == 1 {
-              found=1
-              exit
-            }
-            END { exit !found }
-          ' CHANGELOG.md; then
-            echo "ERROR: CHANGELOG.md has no section for [$TAG_VERSION]"
+          if ! bash scripts/release-notes.sh "$TAG_VERSION" > /dev/null; then
             exit 1
           fi
           echo "Version and changelog checks passed for $TAG_VERSION"
 
   # The PR sanity pipeline was removed: all automated validation now runs at
-  # tag time. format and sanitizer run on every release tag; patch tags add
-  # the Linux GCC Debug test leg (patch-test); minor/major tags run the full
-  # strict-build matrix instead.
+  # tag time. format and sanitizer run on every release tag; strict-build's leg
+  # list is chosen by classify-release (one Linux GCC Debug leg for patch tags,
+  # the full 4-way matrix for minor/major tags).
   format:
     needs: classify-release
     runs-on: ubuntu-24.04
@@ -70,52 +79,17 @@ jobs:
       - name: Install clang-format
         run: sudo apt-get install -y -qq clang-format-18
       - name: Check formatting
-        # Directory list must mirror scripts/format.sh and .githooks/pre-commit.
-        run: |
-          find src app core common tests test_engine \
-            signal_generator amplifier spectrum_analyzer equalizer \
-            node_graph splitter mixer adc coax pfb_channelizer iq_plot \
-            network_analyzer ideal_filter attenuator combiner power_meter touchstone \
-            help layout tutorial logging test_flow \
-            -name '*.cpp' -o -name '*.h' | \
-            xargs clang-format-18 --dry-run --Werror
+        # scripts/format.sh is the single source of truth for the checked file
+        # set (scripts/format-dirs.sh), shared with .githooks/pre-commit.
+        run: bash scripts/format.sh --check --all
 
   strict-build:
     needs: [classify-release, validate-version]
-    if: needs.classify-release.outputs.is_minor_or_major == 'true'
     name: ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            label: Linux GCC 14 (Debug)
-            shell: bash
-            cxx_compiler: g++-14
-            c_compiler: gcc-14
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
-          - os: ubuntu-24.04
-            label: Linux GCC 14 (Release)
-            shell: bash
-            cxx_compiler: g++-14
-            c_compiler: gcc-14
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Release
-          - os: ubuntu-24.04
-            label: Linux Clang 18
-            shell: bash
-            cxx_compiler: clang++-18
-            c_compiler: clang-18
-            cmake_flags: -DGLFW_BUILD_WAYLAND=OFF
-            build_type: Debug
-          - os: windows-latest
-            label: Windows MinGW-w64
-            shell: msys2 - {0}
-            cxx_compiler: g++
-            c_compiler: gcc
-            cmake_flags: ""
-            build_type: Debug
+        include: ${{ fromJSON(needs.classify-release.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
     defaults:
@@ -186,42 +160,16 @@ jobs:
           # a ceiling in the main `tests` binary (see tests/AGENTS.md). Count
           # the registered cases (each emits one indented tag line) and fail if
           # the count ever falls below the verified floor, so a silent drop is
-          # caught in CI instead of shipping unrun tests. Bump EXPECTED when the
-          # registered count changes; new coverage that must run on Windows goes
-          # in a standalone executable (e.g. test_signal_domain), not the main
-          # tests binary.
-          EXPECTED=223
+          # caught in CI instead of shipping unrun tests. Bump
+          # MINGW_TEST_CASE_FLOOR (workflow env) when the registered count
+          # changes; new coverage that must run on Windows goes in a standalone
+          # executable (e.g. test_signal_domain), not the main tests binary.
           COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
-          echo "registered TEST_CASEs: $COUNT (expected >= $EXPECTED)"
-          if [ "$COUNT" -lt "$EXPECTED" ]; then
-            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $EXPECTED"
+          echo "registered TEST_CASEs: $COUNT (expected >= $MINGW_TEST_CASE_FLOOR)"
+          if [ "$COUNT" -lt "$MINGW_TEST_CASE_FLOOR" ]; then
+            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $MINGW_TEST_CASE_FLOOR"
             exit 1
           fi
-
-  patch-test:
-    needs: [classify-release, validate-version]
-    if: needs.classify-release.outputs.is_patch == 'true'
-    runs-on: ubuntu-24.04
-    name: Linux GCC 14 Debug (patch validation)
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-          sudo apt-get install -y -qq g++-14
-      - name: Configure
-        run: >-
-          cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=g++-14
-          -DCMAKE_C_COMPILER=gcc-14
-          -DCMAKE_BUILD_TYPE=Debug
-          -DGLFW_BUILD_WAYLAND=OFF
-      - name: Build
-        run: cmake --build build
-      - name: Test
-        run: xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
 
   sanitizer:
     needs: [classify-release, validate-version]
@@ -333,13 +281,13 @@ jobs:
       - name: Verify MinGW TEST_CASE registration count
         if: runner.os == 'Windows'
         run: |
-          # Keep this floor in sync with strict-build's identical check; both
-          # guard against TEST_CASEs silently dropped by MinGW-w64.
-          EXPECTED=223
+          # Same floor as strict-build; MINGW_TEST_CASE_FLOOR is defined once at
+          # workflow scope. Both Windows legs guard against TEST_CASEs silently
+          # dropped by MinGW-w64.
           COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
-          echo "registered TEST_CASEs: $COUNT (expected >= $EXPECTED)"
-          if [ "$COUNT" -lt "$EXPECTED" ]; then
-            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $EXPECTED"
+          echo "registered TEST_CASEs: $COUNT (expected >= $MINGW_TEST_CASE_FLOOR)"
+          if [ "$COUNT" -lt "$MINGW_TEST_CASE_FLOOR" ]; then
+            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $MINGW_TEST_CASE_FLOOR"
             exit 1
           fi
 
@@ -360,17 +308,14 @@ jobs:
             mingw-dlls/
 
   release:
-    needs: [classify-release, validate-version, format, patch-test, strict-build, sanitizer, package]
+    needs: [classify-release, validate-version, format, strict-build, sanitizer, package]
     if: >-
       always() &&
       needs.validate-version.result == 'success' &&
       needs.format.result == 'success' &&
       needs.sanitizer.result == 'success' &&
       needs.package.result == 'success' &&
-      ((needs.classify-release.outputs.is_minor_or_major == 'true' &&
-        needs.strict-build.result == 'success') ||
-       (needs.classify-release.outputs.is_patch == 'true' &&
-        needs.patch-test.result == 'success'))
+      needs.strict-build.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -381,19 +326,7 @@ jobs:
           persist-credentials: false
 
       - name: Generate release notes from changelog
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk -v version="$VERSION" '
-            /^## \[/ {
-              if (found) exit
-              if (index($0, "## [" version "]") == 1) found=1
-            }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if [ ! -s release-notes.md ]; then
-            echo "ERROR: CHANGELOG.md has no section for [$VERSION]"
-            exit 1
-          fi
+        run: bash scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > release-notes.md
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4

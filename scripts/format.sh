@@ -11,9 +11,9 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# Must mirror the `format` job in .github/workflows/release.yml and the DIRS
-# list in .githooks/pre-commit.
-DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner power_meter touchstone help layout tutorial logging test_flow)
+# The checked directory set is defined once in scripts/format-dirs.sh, shared
+# with .githooks/pre-commit and the release workflow's format job.
+source scripts/format-dirs.sh
 
 resolve_clang_format() {
   for candidate in clang-format-18 clang-format; do
@@ -51,9 +51,9 @@ done
 if [ "${#EXPLICIT_FILES[@]}" -gt 0 ]; then
   FILES=("${EXPLICIT_FILES[@]}")
 elif [[ "$MODE" == *-all ]]; then
-  mapfile -t FILES < <(find "${DIRS[@]}" -name '*.cpp' -o -name '*.h' 2>/dev/null)
+  mapfile -t FILES < <(find "${FORMAT_DIRS[@]}" -name '*.cpp' -o -name '*.h' 2>/dev/null)
 else
-  mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR -- "${DIRS[@]}" \
+  mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR -- "${FORMAT_DIRS[@]}" \
     | grep -E '\.(cpp|h)$' || true)
 fi
 

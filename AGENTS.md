@@ -99,11 +99,13 @@ Default section order:
 
 ## Release Contract
 
-- Releases are prepared on a `release/vX.Y.Z` branch and merged to `master` via pull request; the annotated `vX.Y.Z` tag is created only on the merged master commit.
-- Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, a Linux GCC Debug full-test-suite leg on patch tags, and the strict build matrix on minor/major tags.
-- `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft.
-- The `package` job builds the Linux/Windows artifacts attached to a GitHub release with `CMAKE_BUILD_TYPE=Release` and validates that Release build configuration with CTest (non-UI, plus the MinGW TEST_CASE registration floor on Windows); it runs on every tag, so the shipped configuration is always exercised. CI does not launch the packaged GUI executable itself. Debug builds are validation-only and are never shipped.
-- `CHANGELOG.md` is the source of truth for GitHub release descriptions; `cliff.toml` is not used by the release workflow.
+- Releases are prepared by default on a `release/vX.Y.Z` branch merged to `master` via pull request; `scripts/release.sh --on-master` is the sanctioned direct-to-master alternative. Either way the annotated `vX.Y.Z` tag is created only on `master`, after the version bump has landed.
+- `scripts/release.sh <X.Y.Z>` is the standard local path: it prepares (branch, version bump, gates, commit) and, with `--tag`, cuts and pushes the annotated tag on `master`. The `CHANGELOG.md` section for the version must already exist with at least one bullet, or it refuses to run.
+- Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, plus a `strict-build` matrix whose leg list `classify-release` selects from the tag (Linux GCC Debug only on patch tags; the full four-way matrix on minor/major tags).
+- `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft. `scripts/release-notes.sh <X.Y.Z>` is the single changelog-section extractor used by the workflow and the local script; it rejects an empty section.
+- The `package` job builds the Linux/Windows artifacts attached to a GitHub release with `CMAKE_BUILD_TYPE=Release` and validates that Release build configuration with CTest (non-UI, plus the MinGW `TEST_CASE` registration floor on Windows, set once as the workflow's `MINGW_TEST_CASE_FLOOR`); it runs on every tag, so the shipped configuration is always exercised. CI does not launch the packaged GUI executable itself. Debug builds are validation-only and are never shipped.
+- The clang-format file set is defined once in `scripts/format-dirs.sh` (shared by `scripts/format.sh`, `.githooks/pre-commit`, and the workflow's `format` job).
+- `CHANGELOG.md` is the source of truth for GitHub release descriptions.
 
 ## Child DOX Index
 
