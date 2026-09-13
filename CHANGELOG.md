@@ -1,3 +1,23 @@
+## [0.23.4] - 2026-09-13
+
+### Fixed
+
+- **Amplifier ideal-mode distortion** — ideal-mode nonlinear distortion now applies the configured gain as a voltage ratio (`sqrt(10^(G/10))`) instead of a power ratio, so ideal-mode H2/H3 levels match the S-parameter branch instead of being inflated by 2G/3G dB.
+- **Ideal filter passband symmetry** — LPF, HPF, BPF, and BSF compare the magnitude of each bin, so complex-baseband (ADC) spectra are filtered symmetrically: a negative-frequency blocker is now rejected by an LPF, and the BSF mirror is no longer left in band.
+- **Ideal filter stale noise** — out-of-band bins are cleared when the passband shrinks (`assign` rather than `resize`), so a 1 GHz → 3 GHz → 1 GHz retune no longer keeps the wider band's noise density.
+- **Signal generator sample-rate edits** — `setFs_Hz()` now marks the engine dirty, so an inspector sample-rate change propagates to `out.fs_Hz` instead of silently no-op'ing until another setter runs.
+- **Signed-frequency DSP** — the equalizer slope is computed from `|freq|`, so negative (complex-baseband) bins are no longer evaluated at 1 Hz, and the mixer keeps the signed difference product for complex baseband instead of folding it to a positive image.
+- **Combiner added-noise term** — the added-noise contribution is clamped at zero and S-parameter mode requires a valid 3-port file; a 2-port file now falls through to manual mode instead of resolving identity S-parameters and producing a negative `-kT` term that the power meter reported as `InvalidNoise`.
+- **Combiner S-parameter mode selection** — a fresh Combiner node can once again be switched into S-parameter mode from the inspector (regression from the combiner fix above): the mode flag is UI state, the 3-port requirement is enforced in `update()`, and the picker gains a Browse button, loaded point/port counts, and a failed-load message like the other S-parameter inspectors.
+
+### Changed
+
+- **Release pipeline** — `scripts/release.sh` prepares a release (branch, version bump, local gates, commit) and, with `--tag`, cuts and pushes the annotated tag on `master`; `scripts/release-notes.sh` is the single changelog-section extractor shared with the release workflow. The clang-format file set moved into `scripts/format-dirs.sh`, the patch-tag test leg is now a `strict-build` matrix leg chosen by `classify-release`, `MINGW_TEST_CASE_FLOOR` is defined once at workflow scope, and the unused `cliff.toml` and release template were removed.
+
+### Testing
+
+- Add standalone issue #117 numeric-correctness coverage (ideal amplifier nonlinear voltage gain, magnitude-symmetric ideal filtering, stale-noise clearing, generator sample-rate dirty propagation, equalizer/mixer signed-frequency behavior, and three-port combiner validation/noise clamping) plus issue #137 combiner S-param mode-latch and runtime 3-port guard regressions.
+
 ## [0.23.3] - 2026-09-13
 
 ### Fixed
