@@ -275,3 +275,18 @@ add_standalone_test(test_issue116_collapsed_groups
     SOURCES test_issue116_collapsed_groups.cpp
     LIBS simulator::app simulator::node_graph_widget
 )
+# Standalone issue #117 coverage: six independent DSP numeric-correctness
+# regressions. Kept outside tests.exe because of the MinGW-w64 registration
+# ceiling.
+add_standalone_test(test_issue117_numeric_correctness
+    SOURCES test_issue117_numeric_correctness.cpp
+    LIBS simulator::signal_generator_engine
+         simulator::amplifier_engine
+         simulator::ideal_filter_engine
+         simulator::equalizer_engine
+         simulator::mixer_engine
+         simulator::combiner_engine
+         simulator::adc_engine
+         simulator::node_graph_engine
+         simulator::touchstone_parser
+)
