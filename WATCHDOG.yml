@@ -1,0 +1,46 @@
+advisors:
+  - name: default
+  - name: Engineering Review
+    instructions: |2-
+      # RF Simulator Review Guidance
+      
+      ## Architecture
+      
+      Watch for violations of module ownership and unnecessary coupling between:
+      
+      - signal generation
+      - signal representation
+      - spectrum analysis
+      - logging
+      - UI widgets
+      
+      Domain logic should not migrate into ImGui/ImPlot rendering code without
+      a strong reason.
+      
+      Prefer private implementation changes over public interface growth.
+      
+      ## Numerical correctness
+      
+      Treat assumptions involving these areas as high-risk:
+      
+      - RF power conversions
+      - dBm / watts / voltage conversions
+      - impedance assumptions
+      - sample rate and bandwidth
+      - FFT normalization
+      - PSD / noise calculations
+      - complex versus real signal conventions
+      - RBW / bin-width behaviour
+      
+      Do not accept a numerically plausible result merely because unit tests pass.
+      Check that the physical interpretation is correct.
+      
+      ## Tests
+      
+      The project follows strict TDD.
+      
+      Watch specifically for tests that:
+      - encode the implementation rather than behaviour
+      - accidentally make the regression impossible to reproduce
+      - use tolerances that conceal numerical errors
+      - fail to test boundary conditions relevant to DSP/RF behaviour
