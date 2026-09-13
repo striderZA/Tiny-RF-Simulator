@@ -65,29 +65,30 @@ Pull requests run **no automated pipeline**. All CI validation happens when a re
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
 - **Packaging builds** — optimized Release Linux and Windows binaries (the artifacts attached to the GitHub release); each package leg runs the test suite against the build it ships (UI tests excluded on Windows)
 
-On top of that:
+On top of that, the `strict-build` validation matrix is chosen by tag class:
 
-- **Patch release tags** (`vX.Y.Z` where `Z > 0`) run a **Linux GCC 14 Debug build + full test suite** (Xvfb for UI tests).
-- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the stricter **validation matrix** instead: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
+- **Patch release tags** (`vX.Y.Z` where `Z > 0`) build and test **Linux GCC 14 Debug** only (Xvfb for UI tests).
+- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the full **validation matrix**: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
 
 Because nothing is checked automatically before merge, run the local gates on every branch before opening a PR:
 
 ```bash
-scripts/format.sh --check   # CI-equivalent formatting (also enforced by the pre-commit hook)
+bash scripts/format.sh --check   # CI-equivalent formatting (also enforced by the pre-commit hook)
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
 ### Release Process
 
-Every release is prepared through a pull request; the tag is created only on the merged `master` commit:
+Releases are prepared through a pull request by default; the tag is created only on `master`, after the version bump has landed. `scripts/release.sh` implements these steps; `--on-master` prepares directly on `master` instead of a release branch:
 
-1. Branch `release/vX.Y.Z` from `master`. Update `CMakeLists.txt` and add the matching `## [X.Y.Z]` section at the top of `CHANGELOG.md`.
-2. Open a PR against `master`, pass the local gates above, and merge (squash or rebase) after review.
-3. On the merged `master` commit, create and push the annotated tag: `git tag -a vX.Y.Z -m "Release X.Y.Z" && git push origin vX.Y.Z`.
-4. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the applicable build/test matrix, and packages Linux and Windows binaries.
-5. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth; `cliff.toml` is for standalone git-cliff generation only.
-6. Review and publish the generated GitHub draft after the workflow succeeds.
+1. Write the `## [X.Y.Z] - YYYY-MM-DD` section (with at least one bullet) at the top of `CHANGELOG.md`.
+2. Run `bash scripts/release.sh X.Y.Z`. From a clean `master` tree it creates `release/vX.Y.Z`, bumps `CMakeLists.txt`, runs the local gates, and commits `chore: prepare release vX.Y.Z`. Use `--on-master` to commit on `master` instead, or `--dry-run` to preview without changing anything.
+3. If it created a release branch, open a PR against `master` (the script prints the command) and merge after review; `--on-master` skips this step, so push `master` directly.
+4. Once the version bump is on `master`, tag it: `bash scripts/release.sh X.Y.Z --tag`. It verifies the version matches `CMakeLists.txt`, cuts the annotated `vX.Y.Z` tag, and pushes it.
+5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the tag-class build/test matrix, and packages Linux and Windows binaries.
+6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
+7. Review and publish the generated GitHub draft after the workflow succeeds.
 
 ## Architecture (Quick Reference)
 
@@ -101,7 +102,7 @@ Every release is prepared through a pull request; the tag is created only on the
 ## Code Style
 
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
-  Run `scripts/format.sh` to reformat changed files, or `scripts/format.sh --check` to dry-run (CI-equivalent). CI will reject PRs with formatting violations.
+  Run `bash scripts/format.sh` to reformat changed files, or `bash scripts/format.sh --check` to dry-run (CI-equivalent). The checked directory set lives once in `scripts/format-dirs.sh` (shared with the pre-commit hook and the release workflow). CI will reject PRs with formatting violations.
   Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
 - **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.

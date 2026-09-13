@@ -3,12 +3,12 @@
 # Enable once per clone with:  git config core.hooksPath .githooks
 set -u
 
-# Directories/extensions must mirror the `format` job in .github/workflows/release.yml
-# and scripts/format.sh exactly.
-DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner power_meter touchstone help layout tutorial logging test_flow)
+# The checked directory set is defined once in scripts/format-dirs.sh, shared
+# with scripts/format.sh and the release workflow's format job.
+source "$(git rev-parse --show-toplevel)/scripts/format-dirs.sh"
 # Staged, non-deleted .cpp/.h files under the CI-checked directories. Check this FIRST so
 # commits that touch no C++ (docs, scripts, CI config, ...) never require clang-format at all.
-mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR -- "${DIRS[@]}" \
+mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR -- "${FORMAT_DIRS[@]}" \
   | grep -E '\.(cpp|h)$' || true)
 
 if [ "${#FILES[@]}" -eq 0 ]; then
