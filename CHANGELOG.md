@@ -1,3 +1,19 @@
+## [0.23.3] - 2026-09-13
+
+### Fixed
+
+- **Project load/save failure safety** — saving now uses an atomic replace that cannot delete the existing project before the new one is durable, and a failed save preserves the dirty state and current project path; a failed load resets to an untitled project and re-roots extension discovery instead of leaving the old project's tools and data packs active.
+- **Collapsed subcircuit blocks** — collapsed groups render their block from a cached pan-independent grid position, and links between two collapsed groups are no longer dropped as internal.
+- **Graph link policy** — the editor and project loader now reject a second link into a single-source input and any link that would create a cycle; `NodeGraphEngine` exposes read-only input-has-link, cycle, and add-link queries that are applied alongside the physical ADC-to-PFB rule at every commit point.
+
+### Changed
+
+- **Release packaging** — the Linux and Windows package jobs build `Release` binaries (previously Debug) and validate each shipped configuration with the non-UI test suite, plus the MinGW `TEST_CASE` registration floor on Windows. CI does not launch the packaged GUI executable.
+
+### Testing
+
+- Add standalone project load/save regression coverage, and issue-116 graph-topology coverage for collapsed-block rendering, cross-group link drawing, and duplicate-input/cycle rejection at the engine, app callback, and project-load boundaries.
+
 ## [0.23.2] - 2026-09-12
 
 ### Fixed
