@@ -90,8 +90,7 @@ TEST_CASE("Issue 117: ideal LPF rejects negative complex-baseband blocker", "[is
     AdcEngine adc(0, graph);
     adc.setFs_Hz(1e9);
     adc.setDecimation(2);
-    adc.setNcoFsFraction(0.0);
-    Spectrum input = makeSpectrum({0.0, 500e6}, {{50e6, -10.0, 0.0}, {200e6, -20.0, 0.0}});
+    Spectrum input = makeSpectrum({0.0, 500e6}, {{300e6, -10.0, 0.0}, {50e6, -20.0, 0.0}});
     adc.node().inputs[0] = &input;
     adc.update(0.0);
 
@@ -102,9 +101,8 @@ TEST_CASE("Issue 117: ideal LPF rejects negative complex-baseband blocker", "[is
     filter.update(0.0);
 
     const auto &out = filter.node().outputs[0];
-    REQUIRE(out.tones.size() == 2);
-    for (const auto &tone : out.tones)
-        REQUIRE(std::abs(tone.freq_Hz) == Approx(50e6));
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(50e6));
 }
 
 TEST_CASE("Issue 117: ideal filter clears stale out-of-band noise", "[issue117]") {
@@ -177,6 +175,8 @@ TEST_CASE("Issue 117: combiner validates ports and clamps added noise", "[issue1
     REQUIRE_FALSE(combiner.sparamMode());
 
     const auto path = writeOverpoweredCombinerSParam();
+    combiner.setSParamMode(true);
+    REQUIRE_FALSE(combiner.sparamMode());
     combiner.setSParamFilepath(path.string());
     REQUIRE(combiner.sparamMode());
 
