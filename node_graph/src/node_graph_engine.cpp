@@ -173,6 +173,54 @@ std::vector<SignalSource> NodeGraphEngine::getSourcesForInput(int input_pin_id) 
     return result;
 }
 
+bool NodeGraphEngine::inputHasLink(int input_pin_id) const {
+    if (input_pin_id < 0)
+        return false;
+    return std::any_of(m_links.begin(), m_links.end(),
+                       [input_pin_id](const GraphLink &l) { return l.end_pin_id == input_pin_id; });
+}
+
+bool NodeGraphEngine::wouldCreateCycle(int start_pin, int end_pin) const {
+    const int start_node = nodeIdForPin(start_pin);
+    const int end_node = nodeIdForPin(end_pin);
+    if (start_node < 0 || end_node < 0)
+        return false;
+    if (start_node == end_node)
+        return true;
+
+    // Walk the existing links forward from end_node; reaching start_node means
+    // the candidate edge (start_node -> end_node) would close a cycle.
+    std::unordered_set<int> visited;
+    std::vector<int> stack{end_node};
+    while (!stack.empty()) {
+        const int current = stack.back();
+        stack.pop_back();
+        if (current == start_node)
+            return true;
+        if (!visited.insert(current).second)
+            continue;
+
+        auto node_it = std::find_if(m_nodes.begin(), m_nodes.end(),
+                                    [current](const GraphNode &n) { return n.node_id == current; });
+        if (node_it == m_nodes.end())
+            continue;
+        for (int out_pin : node_it->output_pin_ids) {
+            for (const auto &link : m_links) {
+                if (link.start_pin_id != out_pin)
+                    continue;
+                const int target = nodeIdForPin(link.end_pin_id);
+                if (target >= 0)
+                    stack.push_back(target);
+            }
+        }
+    }
+    return false;
+}
+
+bool NodeGraphEngine::canAddLink(int start_pin, int end_pin) const {
+    return !inputHasLink(end_pin) && !wouldCreateCycle(start_pin, end_pin);
+}
+
 bool NodeGraphEngine::addProbePin(int pin_id) {
     if (pin_id < 0)
         return false;

@@ -28,6 +28,19 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
 - Node removal must re-run `rewireComponentInputs()` synchronously with `ComponentRegistry::remove()` so no surviving component holds a dangling `Spectrum*` into the destroyed engine's `SignalNode` (issue #37).
 - `topologicalOrder()` counts only links whose start and end pins both resolve to graph nodes;
   stale or dangling links are not treated as graph edges or cycles.
+- `NodeGraphEngine::canAddLink()` — backed by `inputHasLink()` and `wouldCreateCycle()` — is the
+  editing policy for link creation: it rejects a second link into an occupied input pin and any
+  link that would close a directed cycle. `addLink()` itself stays permissive so callers that
+  intentionally build multi-source inputs keep working; the app's `onLinkCreating` and the project
+  loader both gate on `canAddLink()`, so the GUI cannot build a circuit the `test_flow` harness
+  rejects.
+- `NodeGraphWidget` caches each node's pan-independent grid position: `drawNodes()` refreshes it for
+  visible nodes and `captureGridPositions()` snapshots every node after a project load. Collapsed
+  group members stop being drawn and are dropped from the imnodes pool, so
+  `drawGroupCollapsedBlocks()` places each block from that cache (never from the per-frame
+  screen-position map). `drawLinks()` treats "both endpoints hidden" as an internal link only when
+  both belong to the *same* collapsed group; a link between two different collapsed groups is drawn
+  through both groups' synthesized boundary pins.
 - Widget callbacks (`onNodeMoved`, `onRemoveNode`, `onDuplicateNode`, `onLinkChanged`, `onLinkCreating`, `onNodeHover`) are the only channel from widget to app; the engine itself takes no app-level callbacks.
 
 ## Work Guidance

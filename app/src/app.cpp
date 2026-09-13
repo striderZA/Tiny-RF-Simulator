@@ -96,7 +96,13 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         auto *target = m_components.find(target_node_id);
         const int source_node_id = m_graph_engine.nodeIdForPin(start_pin);
         auto *source = m_components.find(source_node_id);
-        return graphLinkAllowed(source, target, start_pin, end_pin);
+        if (!graphLinkAllowed(source, target, start_pin, end_pin))
+            return false;
+        // Reject a second link into an occupied input pin (the single-source
+        // rewire pass would silently honour only the first) and any link that
+        // would close a cycle (update order would become order-dependent).
+        // Issue #116.
+        return m_graph_engine.canAddLink(start_pin, end_pin);
     };
     m_graph_widget->onRemoveNode = [this](int id) {
         markDirty();

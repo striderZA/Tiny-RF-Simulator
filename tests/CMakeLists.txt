@@ -265,3 +265,13 @@ add_standalone_test(test_issue113_project_load
     SOURCES test_issue113_project_load.cpp
     LIBS simulator::app
 )
+
+# Standalone issue #116 coverage: collapsed subcircuit blocks render from a
+# cached grid position, links between two different collapsed groups are drawn
+# through their boundary pins, and the editor rejects duplicate-input and cyclic
+# links. Kept outside tests.exe for the MinGW-w64 registration-ceiling reason
+# above.
+add_standalone_test(test_issue116_collapsed_groups
+    SOURCES test_issue116_collapsed_groups.cpp
+    LIBS simulator::app simulator::node_graph_widget
+)

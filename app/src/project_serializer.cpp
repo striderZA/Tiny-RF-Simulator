@@ -533,16 +533,20 @@ bool ProjectSerializer::load(const std::string &path) {
 
                 // Restore position. Malformed optional metadata must not abort
                 // an otherwise valid component, so only read the numeric fields
-                // when their shapes actually match.
+                // when their shapes actually match. The position is always
+                // applied (defaulting to the origin) so every loaded node is
+                // registered in the imnodes pool — captureGridPositions() and
+                // saveProject() read it back without asserting.
+                ImVec2 restored_pos(0.0f, 0.0f);
                 if (cj.contains("pos") && cj["pos"].is_object()) {
                     const auto &pos = cj["pos"];
-                    const float pos_x =
-                        pos.contains("x") && pos["x"].is_number() ? pos["x"].get<float>() : 0.0f;
-                    const float pos_y =
-                        pos.contains("y") && pos["y"].is_number() ? pos["y"].get<float>() : 0.0f;
-                    ImNodes::EditorContextSet(m_graph_widget.context());
-                    ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), ImVec2(pos_x, pos_y));
+                    if (pos.contains("x") && pos["x"].is_number())
+                        restored_pos.x = pos["x"].get<float>();
+                    if (pos.contains("y") && pos["y"].is_number())
+                        restored_pos.y = pos["y"].get<float>();
                 }
+                ImNodes::EditorContextSet(m_graph_widget.context());
+                ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), restored_pos);
 
                 // Restore library part number (only when it is a string)
                 if (cj.contains("part_number") && cj["part_number"].is_string())
@@ -570,6 +574,10 @@ bool ProjectSerializer::load(const std::string &path) {
                 new_node_ids.push_back(-1);
             }
         }
+        // Snapshot every loaded node's grid position before they can be dropped
+        // from the imnodes pool: a collapsed group's members are never drawn, so
+        // the widget needs this cache to render their block (issue #116).
+        m_graph_widget.captureGridPositions();
         // After restoring all positions, inform the widget so subsequent
         // syncNodesFromEngine calls (e.g. from saveProject) don't reset them.
         m_graph_widget.markNodesRegistered();
@@ -620,10 +628,11 @@ bool ProjectSerializer::load(const std::string &path) {
             int start_pin = from_comp->outputPinId(from_port);
             int end_pin = to_comp->inputPinId(to_port);
             if (start_pin >= 0 && end_pin >= 0 &&
-                graphLinkAllowed(from_comp, to_comp, start_pin, end_pin)) {
+                graphLinkAllowed(from_comp, to_comp, start_pin, end_pin) &&
+                m_graph.canAddLink(start_pin, end_pin)) {
                 m_graph.addLink(start_pin, end_pin);
             } else if (start_pin >= 0 && end_pin >= 0) {
-                LOG_WARN("Skipping physically invalid link in project file %s", path.c_str());
+                LOG_WARN("Skipping invalid link in project file %s", path.c_str());
             }
         }
 

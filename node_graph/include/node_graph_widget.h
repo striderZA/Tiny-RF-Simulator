@@ -50,9 +50,23 @@ class NodeGraphWidget {
     void syncNodesFromEngine();
     void clearPositionCache() {
         m_last_node_grid_positions.clear();
+        m_cached_grid_positions.clear();
         m_node_screen_positions.clear();
         m_registered_in_pool.clear();
     }
+    // Snapshots the current grid-space position of every engine node into the
+    // cache. Call only while all engine nodes are registered in the imnodes pool
+    // (e.g. right after a project load restores positions) so a collapsed
+    // group's members keep their positions on the first frame where they are
+    // hidden.
+    void captureGridPositions();
+    // True when the collapsed block for `group_id` was rendered this frame.
+    bool collapsedGroupBlockRendered(int group_id) const {
+        return m_rendered_collapsed_groups.count(group_id) > 0;
+    }
+    // Number of links drawn last frame whose two endpoints sat in different
+    // collapsed groups (issue #116).
+    int crossGroupLinksDrawn() const { return m_cross_group_links_drawn; }
     void markNodesRegistered();
     ImVec2 gridToScreenOffset() const { return m_grid_to_screen_offset; }
     ImVec2 nodeGridPosition(int node_id) const {
@@ -103,6 +117,16 @@ class NodeGraphWidget {
     std::vector<int> m_rubber_band_members;
     std::unordered_map<int, ImVec2> m_node_screen_positions;
     ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
+
+    // Last known grid-space (pan-independent) position of every node the
+    // widget has seen rendered. Collapsed-group members stop being drawn, so
+    // this cache is what lets drawGroupCollapsedBlocks() still place the block
+    // (issue #116).
+    std::unordered_map<int, ImVec2> m_cached_grid_positions;
+    // Collapsed groups whose block was actually rendered this frame.
+    std::unordered_set<int> m_rendered_collapsed_groups;
+    // Links drawn last frame between two different collapsed groups.
+    int m_cross_group_links_drawn = 0;
 
     // Last known grid-space positions for detecting node moves
     std::unordered_map<int, ImVec2> m_last_node_grid_positions;

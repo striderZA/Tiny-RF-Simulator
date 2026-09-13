@@ -67,19 +67,22 @@ void NodeGraphWidget::drawGroupBackgrounds() {
 }
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
+    m_rendered_collapsed_groups.clear();
     for (const auto &g : m_engine.groups()) {
         if (!g.collapsed)
             continue;
 
-        // Compute centroid in screen space using cached positions (member nodes may have been
-        // removed from the imnodes pool since hidden nodes aren't rendered each frame)
+        // Compute the block's centroid from each member's cached grid position
+        // (converted to screen with the current pan offset). Hidden members are
+        // no longer in the imnodes pool, so the cache is the only source of
+        // their positions (issue #116).
         if (g.member_node_ids.empty())
             continue;
         ImVec2 sum(0, 0);
         int count = 0;
         for (int nid : g.member_node_ids) {
-            auto pos_it = m_node_screen_positions.find(nid);
-            if (pos_it == m_node_screen_positions.end())
+            auto pos_it = m_cached_grid_positions.find(nid);
+            if (pos_it == m_cached_grid_positions.end())
                 continue;
             sum.x += pos_it->second.x;
             sum.y += pos_it->second.y;
@@ -87,10 +90,9 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         }
         if (count == 0)
             continue;
-        ImVec2 centroid_screen(sum.x / count, sum.y / count);
-        // Convert to grid space and position the collapsed block at the centroid
-        ImVec2 centroid_grid = centroid_screen - m_grid_to_screen_offset;
+        ImVec2 centroid_grid(sum.x / count, sum.y / count);
         ImNodes::SetNodeGridSpacePos(g.id, centroid_grid - ImVec2(60, 40));
+        m_rendered_collapsed_groups.insert(g.id);
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
