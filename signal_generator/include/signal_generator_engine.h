@@ -32,7 +32,12 @@ class SignalGeneratorEngine : public ComponentEngineBase {
     size_t toneCount() const { return m_tones.size(); }
 
     double fs_Hz() const { return m_fs_Hz; }
-    void setFs_Hz(double fs) { m_fs_Hz = fs; }
+    void setFs_Hz(double fs) {
+        if (fs != m_fs_Hz) {
+            m_fs_Hz = fs;
+            m_dirty = true;
+        }
+    }
 
     void update(double dt) override;
     nlohmann::json serialize() const override;

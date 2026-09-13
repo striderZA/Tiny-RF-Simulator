@@ -91,7 +91,7 @@ void EqualizerEngine::update(double dt) {
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     for (auto &t : out.tones) {
-        double f = std::max(t.freq_Hz, 1.0);
+        double f = std::max(std::abs(t.freq_Hz), 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
         double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(ratio);
         t.power_dBm += gain_db;
@@ -114,7 +114,7 @@ void EqualizerEngine::update(double dt) {
     // Apply gain to noise per bin
     out.noise_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
-        double f = std::max(out.frequencies[i], 1.0);
+        double f = std::max(std::abs(out.frequencies[i]), 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
         double gain_db = m_ref_gain_dB + m_slope_dB_per_decade * std::log10(ratio);
         double gain_linear = dbToLinear(gain_db);
