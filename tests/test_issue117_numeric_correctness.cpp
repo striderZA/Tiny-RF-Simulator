@@ -90,6 +90,7 @@ TEST_CASE("Issue 117: ideal LPF rejects negative complex-baseband blocker", "[is
     AdcEngine adc(0, graph);
     adc.setFs_Hz(1e9);
     adc.setDecimation(2);
+    adc.setNcoFsFraction(0.0);
     Spectrum input = makeSpectrum({0.0, 500e6}, {{50e6, -10.0, 0.0}, {200e6, -20.0, 0.0}});
     adc.node().inputs[0] = &input;
     adc.update(0.0);
