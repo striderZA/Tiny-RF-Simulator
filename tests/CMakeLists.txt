@@ -85,6 +85,11 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+add_standalone_test(test_rf_switch
+    SOURCES test_rf_switch.cpp
+    LIBS simulator::rf_switch_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_network_analyzer
     SOURCES test_network_analyzer.cpp
     LIBS simulator::network_analyzer_engine simulator::network_analyzer_widget
