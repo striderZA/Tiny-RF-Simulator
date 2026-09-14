@@ -100,6 +100,11 @@ add_standalone_test(test_rf_switch_project
     LIBS simulator::app
 )
 
+add_standalone_test(test_rf_switch_2to1
+    SOURCES test_rf_switch_2to1.cpp
+    LIBS simulator::rf_switch_2to1_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_network_analyzer
     SOURCES test_network_analyzer.cpp
     LIBS simulator::network_analyzer_engine simulator::network_analyzer_widget
