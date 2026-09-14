@@ -184,3 +184,8 @@ TEST_CASE("SPDT switch: serialize/deserialize round-trip and defaults", "[rf_swi
     REQUIRE(c.insertionLoss_dB() == Catch::Approx(RFSwitchEngine::DEFAULT_INSERTION_LOSS_DB));
     REQUIRE(c.isolation_dB() == Catch::Approx(RFSwitchEngine::DEFAULT_ISOLATION_DB));
 }
+
+TEST_CASE("SPDT switch: node kind has a distinct theme color", "[rf_switch]") {
+    REQUIRE(themeColor(NodeKind::RFSwitchSPDT) != themeColor(NodeKind::Unknown));
+    REQUIRE(themeColor(NodeKind::RFSwitchSPDT) == 0xFFE879F9u);
+}
