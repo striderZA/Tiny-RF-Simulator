@@ -12,6 +12,7 @@
 #include "logging_core.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
+#include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "utils.h"
@@ -76,6 +77,10 @@ const std::map<std::string_view, DrawerFn> &drawerMap() {
         {"combiner",
          [](InspectorPanel &p, IComponentEngine &e) {
              p.drawCombinerProperties(static_cast<CombinerEngine &>(e), e.id());
+         }},
+        {"rf_switch_spdt",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawRFSwitchProperties(static_cast<RFSwitchEngine &>(e), e.id());
          }},
     };
     return drawers;
@@ -690,6 +695,41 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     }
 
     ImGui::Text("Loss: -3 dB per input");
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawRFSwitchProperties(RFSwitchEngine &engine, int index) {
+    (void)index;
+
+    ImGui::TextDisabled("SPDT: 1 pole → 2 throws");
+
+    int active = engine.activeThrow();
+    if (ImGui::RadioButton("T1", active == 0)) {
+        engine.setActiveThrow(0);
+        m_param_edited = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("T2", active == 1)) {
+        engine.setActiveThrow(1);
+        m_param_edited = true;
+    }
+
+    double il = engine.insertionLoss_dB();
+    if (utils::inputDouble("Insertion Loss (dB)", il, 0.1, 1.0, "%.2f", 0.0, 60.0)) {
+        engine.setInsertionLoss_dB(il);
+        m_param_edited = true;
+    }
+
+    double iso = engine.isolation_dB();
+    if (utils::inputDouble("Isolation (dB)", iso, 1.0, 10.0, "%.1f", 0.0, 120.0)) {
+        engine.setIsolation_dB(iso);
+        m_param_edited = true;
+    }
+
+    ImGui::Text("%s active | IL %.2f dB | ISO %.1f dB", engine.activeThrow() == 0 ? "T1" : "T2",
+                engine.insertionLoss_dB(), engine.isolation_dB());
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());

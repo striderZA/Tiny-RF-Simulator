@@ -55,7 +55,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Every registry label_prefix maps to its kind", "
     REQUIRE(app.testGraphWidget().kindForLabel("UnknownThing 1") == NodeKind::Unknown);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "All 11 registry types round-trip through project save/load",
+TEST_CASE_METHOD(ImGuiFixture, "All 12 registry types round-trip through project save/load",
                  "[dispatch]") {
     auto path = "test_dispatch_all_types.rfsim";
     std::remove(path);
@@ -64,13 +64,13 @@ TEST_CASE_METHOD(ImGuiFixture, "All 11 registry types round-trip through project
         app.newProject();
         for (const auto &addable : app.testGraphWidget().addableComponents())
             addable.on_add(ImVec2(0, 0));
-        REQUIRE(app.componentCount() == 11);
+        REQUIRE(app.componentCount() == 12);
         app.saveProject(path);
     }
     {
         RfSimulatorApp app;
         app.loadProject(path);
-        REQUIRE(app.componentCount() == 11);
+        REQUIRE(app.componentCount() == 12);
     }
     std::remove(path);
 }
@@ -141,6 +141,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         {"equalizer", NodeKind::Equalizer},
         {"attenuator", NodeKind::Attenuator},
         {"combiner", NodeKind::Combiner},
+        {"rf_switch_spdt", NodeKind::RFSwitchSPDT},
     };
     // supports_sparam_file must be true exactly for the engines that
     // implement the Touchstone S-param API (verified against
@@ -149,7 +150,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
     const std::map<std::string_view, bool> expected_sparam = {
         {"amplifier", true}, {"attenuator", true}, {"combiner", true},  {"equalizer", true},
         {"filter", true},    {"adc", false},       {"coax", false},     {"generator", false},
-        {"mixer", false},    {"pfb", false},       {"splitter", false},
+        {"mixer", false},    {"pfb", false},       {"splitter", false}, {"rf_switch_spdt", false},
     };
 
     for (const auto *d : ComponentTypeRegistry::instance().all()) {
