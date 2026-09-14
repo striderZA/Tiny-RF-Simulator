@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -42,6 +43,10 @@ TEST_CASE("SPDT switch: pin shape and labels", "[rf_switch]") {
     REQUIRE(sw.outputPinId(1) != -1);
     REQUIRE(sw.outputPinId(0) != sw.outputPinId(1));
     REQUIRE(sw.outputPinId(2) == -1);
+
+    const GraphNode &node = graph.nodes()[0];
+    REQUIRE(node.input_labels == std::vector<std::string>{"COM"});
+    REQUIRE(node.output_labels == std::vector<std::string>{"T1", "T2"});
 }
 
 TEST_CASE("SPDT switch: active throw gets insertion loss, inactive gets isolation", "[rf_switch]") {
