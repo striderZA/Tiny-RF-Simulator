@@ -214,7 +214,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     rfsw.authorable = true;
     rfsw.supports_sparam_file = false;
     rfsw.fields = {
-        {"active_throw", "Active Throw", "", FieldKind::Number, false, 0.0, 1.0, {}, 0, ""},
+        {"active_throw", "Active Throw", "", FieldKind::Enum, false, 0, 0, {"T1", "T2"}, "T1", ""},
         {"insertion_loss_dB",
          "Insertion Loss",
          "dB",

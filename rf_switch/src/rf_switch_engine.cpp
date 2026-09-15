@@ -107,7 +107,21 @@ nlohmann::json RFSwitchEngine::serialize() const {
 }
 
 void RFSwitchEngine::deserialize(const nlohmann::json &j) {
-    setActiveThrow(j.value("active_throw", 0));
+    // active_throw arrives either as the authored name ("T1"/"T2", the
+    // component-library form / descriptor enum) or as the integer the project
+    // serializer writes. An unrecognized name leaves the current throw alone,
+    // mirroring IdealFilterEngine's filter_type handling.
+    if (j.contains("active_throw")) {
+        if (j["active_throw"].is_string()) {
+            const std::string named = j["active_throw"].get<std::string>();
+            if (named == "T1")
+                setActiveThrow(0);
+            else if (named == "T2")
+                setActiveThrow(1);
+        } else {
+            setActiveThrow(j.value("active_throw", 0));
+        }
+    }
     setInsertionLoss_dB(j.value("insertion_loss_dB", DEFAULT_INSERTION_LOSS_DB));
     setIsolation_dB(j.value("isolation_dB", DEFAULT_ISOLATION_DB));
     m_dirty = true;

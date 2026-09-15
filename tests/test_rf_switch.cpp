@@ -190,6 +190,26 @@ TEST_CASE("SPDT switch: serialize/deserialize round-trip and defaults", "[rf_swi
     REQUIRE(c.isolation_dB() == Catch::Approx(RFSwitchEngine::DEFAULT_ISOLATION_DB));
 }
 
+TEST_CASE("SPDT switch: deserialize accepts a named throw", "[rf_switch]") {
+    NodeGraphEngine graph;
+    RFSwitchEngine sw(1, graph);
+
+    // The component-library authoring form writes the throw by name.
+    sw.deserialize(nlohmann::json{{"active_throw", "T2"}});
+    REQUIRE(sw.activeThrow() == 1);
+    sw.deserialize(nlohmann::json{{"active_throw", "T1"}});
+    REQUIRE(sw.activeThrow() == 0);
+
+    // The .rfsim project serializer writes the integer form.
+    sw.deserialize(nlohmann::json{{"active_throw", 1}});
+    REQUIRE(sw.activeThrow() == 1);
+
+    // An unrecognized name leaves the current throw alone, mirroring
+    // IdealFilterEngine's filter_type handling.
+    sw.deserialize(nlohmann::json{{"active_throw", "T3"}});
+    REQUIRE(sw.activeThrow() == 1);
+}
+
 TEST_CASE("SPDT switch: node kind has a distinct theme color", "[rf_switch]") {
     REQUIRE(themeColor(NodeKind::RFSwitchSPDT) != themeColor(NodeKind::Unknown));
     REQUIRE(themeColor(NodeKind::RFSwitchSPDT) == 0xFFE879F9u);
