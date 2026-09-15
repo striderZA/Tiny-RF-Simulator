@@ -728,8 +728,9 @@ void InspectorPanel::drawRFSwitchProperties(RFSwitchEngine &engine, int index) {
         m_param_edited = true;
     }
 
-    ImGui::Text("%s active | IL %.2f dB | ISO %.1f dB", engine.activeThrow() == 0 ? "T1" : "T2",
-                engine.insertionLoss_dB(), engine.isolation_dB());
+    // Single source of truth for the throw/loss status line: the same string
+    // the node's hover tooltip shows.
+    ImGui::TextUnformatted(engine.hoverSummary().c_str());
 
     if (ImGui::Button("Delete") && onRemoveNode)
         onRemoveNode(engine.graphNodeId());
