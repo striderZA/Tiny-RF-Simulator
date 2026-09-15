@@ -19,6 +19,10 @@ class RFSwitchEngine : public ComponentEngineBase {
     std::string_view type_name() const override { return "rf_switch_spdt"; }
     std::string hoverSummary() const override;
 
+    // Both indexed accessors must stay declared here: ComponentEngineBase's
+    // own inputPinId() hides IComponentEngine::inputPinId(int) for a
+    // statically-typed RFSwitchEngine, so dropping the pair makes
+    // `switch.inputPinId(0)` fail to compile.
     int inputPinId() const override { return inputPinId(0); }
     int inputPinId(int index) const override;
     int outputPinId() const override { return outputPinId(0); }
