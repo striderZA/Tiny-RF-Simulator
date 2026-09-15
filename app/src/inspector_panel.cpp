@@ -12,6 +12,7 @@
 #include "logging_core.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
+#include "rf_switch_2to1_engine.h"
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -81,6 +82,10 @@ const std::map<std::string_view, DrawerFn> &drawerMap() {
         {"rf_switch_spdt",
          [](InspectorPanel &p, IComponentEngine &e) {
              p.drawRFSwitchProperties(static_cast<RFSwitchEngine &>(e), e.id());
+         }},
+        {"rf_switch_spdt_2to1",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawRFSwitch2to1Properties(static_cast<RFSwitch2to1Engine &>(e), e.id());
          }},
     };
     return drawers;
@@ -730,6 +735,42 @@ void InspectorPanel::drawRFSwitchProperties(RFSwitchEngine &engine, int index) {
 
     // Single source of truth for the throw/loss status line: the same string
     // the node's hover tooltip shows.
+    ImGui::TextUnformatted(engine.hoverSummary().c_str());
+
+    if (ImGui::Button("Delete") && onRemoveNode)
+        onRemoveNode(engine.graphNodeId());
+}
+
+void InspectorPanel::drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int index) {
+    (void)index;
+
+    ImGui::TextDisabled("SPDT: 2 throws → 1 pole");
+
+    int active = engine.activeThrow();
+    if (ImGui::RadioButton("T1", active == 0)) {
+        engine.setActiveThrow(0);
+        m_param_edited = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("T2", active == 1)) {
+        engine.setActiveThrow(1);
+        m_param_edited = true;
+    }
+
+    double il = engine.insertionLoss_dB();
+    if (utils::inputDouble("Insertion Loss (dB)", il, 0.1, 1.0, "%.2f", 0.0, 60.0)) {
+        engine.setInsertionLoss_dB(il);
+        m_param_edited = true;
+    }
+
+    double iso = engine.isolation_dB();
+    if (utils::inputDouble("Isolation (dB)", iso, 1.0, 10.0, "%.1f", 0.0, 120.0)) {
+        engine.setIsolation_dB(iso);
+        m_param_edited = true;
+    }
+
+    // Single source of truth for the throw/loss status line: the same string
+    // the node's hover tooltip shows (mirrors drawRFSwitchProperties).
     ImGui::TextUnformatted(engine.hoverSummary().c_str());
 
     if (ImGui::Button("Delete") && onRemoveNode)

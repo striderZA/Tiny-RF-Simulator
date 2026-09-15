@@ -20,6 +20,7 @@ class IdealFilterEngine;
 class AttenuatorEngine;
 class CombinerEngine;
 class PFBChannelizerEngine;
+class RFSwitch2to1Engine;
 class RFSwitchEngine;
 class ComponentRegistry;
 
@@ -85,6 +86,7 @@ class InspectorPanel {
     void drawAttenuatorProperties(AttenuatorEngine &engine, int index);
     void drawCombinerProperties(CombinerEngine &engine, int index);
     void drawRFSwitchProperties(RFSwitchEngine &engine, int index);
+    void drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int index);
     void drawGroupPanel(int group_id);
 
   private:

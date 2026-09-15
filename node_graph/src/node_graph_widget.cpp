@@ -139,10 +139,17 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
 }
 
 NodeKind NodeGraphWidget::kindForLabel(const std::string &label) const {
-    for (const auto &[prefix, kind] : m_kind_prefixes)
-        if (label.rfind(prefix, 0) == 0)
-            return kind;
-    return NodeKind::Unknown;
+    // Longest matching prefix wins, so an overlapping pair such as
+    // "SPDT Switch" / "SPDT Switch (2:1)" cannot depend on registration order.
+    NodeKind best = NodeKind::Unknown;
+    size_t best_len = 0;
+    for (const auto &[prefix, kind] : m_kind_prefixes) {
+        if (prefix.size() > best_len && label.rfind(prefix, 0) == 0) {
+            best = kind;
+            best_len = prefix.size();
+        }
+    }
+    return best;
 }
 
 void NodeGraphWidget::drawNodes() {

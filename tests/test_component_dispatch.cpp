@@ -55,7 +55,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Every registry label_prefix maps to its kind", "
     REQUIRE(app.testGraphWidget().kindForLabel("UnknownThing 1") == NodeKind::Unknown);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "All 12 registry types round-trip through project save/load",
+TEST_CASE_METHOD(ImGuiFixture, "All 13 registry types round-trip through project save/load",
                  "[dispatch]") {
     auto path = "test_dispatch_all_types.rfsim";
     std::remove(path);
@@ -64,13 +64,13 @@ TEST_CASE_METHOD(ImGuiFixture, "All 12 registry types round-trip through project
         app.newProject();
         for (const auto &addable : app.testGraphWidget().addableComponents())
             addable.on_add(ImVec2(0, 0));
-        REQUIRE(app.componentCount() == 12);
+        REQUIRE(app.componentCount() == 13);
         app.saveProject(path);
     }
     {
         RfSimulatorApp app;
         app.loadProject(path);
-        REQUIRE(app.componentCount() == 12);
+        REQUIRE(app.componentCount() == 13);
     }
     std::remove(path);
 }
@@ -142,15 +142,26 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         {"attenuator", NodeKind::Attenuator},
         {"combiner", NodeKind::Combiner},
         {"rf_switch_spdt", NodeKind::RFSwitchSPDT},
+        {"rf_switch_spdt_2to1", NodeKind::RFSwitchSPDT2to1},
     };
     // supports_sparam_file must be true exactly for the engines that
     // implement the Touchstone S-param API (verified against
     // AmplifierEngine, IdealFilterEngine, EqualizerEngine, AttenuatorEngine,
     // CombinerEngine).
     const std::map<std::string_view, bool> expected_sparam = {
-        {"amplifier", true}, {"attenuator", true}, {"combiner", true},  {"equalizer", true},
-        {"filter", true},    {"adc", false},       {"coax", false},     {"generator", false},
-        {"mixer", false},    {"pfb", false},       {"splitter", false}, {"rf_switch_spdt", false},
+        {"amplifier", true},
+        {"attenuator", true},
+        {"combiner", true},
+        {"equalizer", true},
+        {"filter", true},
+        {"adc", false},
+        {"coax", false},
+        {"generator", false},
+        {"mixer", false},
+        {"pfb", false},
+        {"splitter", false},
+        {"rf_switch_spdt", false},
+        {"rf_switch_spdt_2to1", false},
     };
 
     for (const auto *d : ComponentTypeRegistry::instance().all()) {
@@ -170,4 +181,44 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         REQUIRE(sparam_it != expected_sparam.end());
         CHECK(d->supports_sparam_file == sparam_it->second);
     }
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "kindForLabel resolves the longest matching label prefix",
+                 "[dispatch]") {
+    // Registered shortest-first on purpose: a first-match scan would return
+    // Amplifier for the longer label, so this pins order-independence rather
+    // than the current registration order of the real registry.
+    NodeGraphEngine engine;
+    NodeGraphWidget widget(engine);
+    widget.registerNodeKind("Amp", NodeKind::Amplifier);
+    widget.registerNodeKind("Amplifier", NodeKind::Splitter);
+
+    REQUIRE(widget.kindForLabel("Amplifier 3") == NodeKind::Splitter);
+    REQUIRE(widget.kindForLabel("Amp 3") == NodeKind::Amplifier);
+    REQUIRE(widget.kindForLabel("Unrelated 3") == NodeKind::Unknown);
+
+    // The same overlapping pair registered longest-first must give identical
+    // answers: a last-match scan would otherwise return Amplifier here.
+    NodeGraphWidget reversed(engine);
+    reversed.registerNodeKind("Amplifier", NodeKind::Splitter);
+    reversed.registerNodeKind("Amp", NodeKind::Amplifier);
+
+    REQUIRE(reversed.kindForLabel("Amplifier 3") == NodeKind::Splitter);
+    REQUIRE(reversed.kindForLabel("Amp 3") == NodeKind::Amplifier);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "kindForLabel separates the 1:2 and 2:1 SPDT prefixes",
+                 "[dispatch]") {
+    NodeGraphEngine engine;
+    NodeGraphWidget widget(engine);
+    widget.registerNodeKind("SPDT Switch", NodeKind::RFSwitchSPDT);
+    widget.registerNodeKind("SPDT Switch (2:1)", NodeKind::RFSwitchSPDT2to1);
+
+    REQUIRE(widget.kindForLabel("SPDT Switch (2:1) 7") == NodeKind::RFSwitchSPDT2to1);
+    REQUIRE(widget.kindForLabel("SPDT Switch 7") == NodeKind::RFSwitchSPDT);
+}
+
+TEST_CASE("SPDT 2:1 switch has its own theme colour", "[dispatch]") {
+    REQUIRE(themeColor(NodeKind::RFSwitchSPDT2to1) == 0xFFE879F9u);
+    REQUIRE(themeColor(NodeKind::RFSwitchSPDT2to1) != themeColor(NodeKind::Unknown));
 }

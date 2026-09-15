@@ -106,14 +106,25 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
             next_of.emplace(node.node_id, std::move(nexts));
     }
 
-    // A chain that crosses a Combiner's combined signal input is inherently
-    // ambiguous (the combiner merges two primary paths; the private chain can
-    // only reproduce one) -> reject. The start node is exempt: its output is
-    // the injection point, replaced by the stimulus, so the combiner itself is
-    // upstream of the measurement and never part of the chain.
-    const auto crosses_combiner = [&](int node_id) {
+    // A chain that enters a node with more than one input pin is inherently
+    // ambiguous: such a node merges (combiner) or selects between (2:1 switch)
+    // the two primary paths arriving on its inputs, while the private chain
+    // below can reproduce only one of them -- it always feeds a clone's
+    // inputs[0], and the DFS records only the output port a node departs by,
+    // never the input pin it was entered through, so the tool cannot even
+    // confirm which of the two the probed path really enters. Reject
+    // structurally, not by type name: CombinerEngine and RFSwitch2to1Engine
+    // are the only engines with a second input pin today, so combiner
+    // behaviour is unchanged and no single-input component is affected.
+    // Degrading to no-data is the honest answer -- e.g. a link entering a 2:1
+    // switch through T2 with throw 2 active would otherwise be measured on T1
+    // and report the isolation floor instead of the insertion loss, a wrong
+    // number with no NaN to signal it. The start node is exempt: its output is
+    // the injection point, replaced by the stimulus, so a multi-input start
+    // node is upstream of the measurement and never part of the chain.
+    const auto enters_multi_input_node = [&](int node_id) {
         auto *comp = m_host.componentForNode(node_id);
-        return comp && comp->type_name() == "combiner";
+        return comp && comp->numInputPins() > 1;
     };
 
     // DFS enumerating distinct simple paths, bailing out as soon as a second
@@ -148,7 +159,7 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
         for (const auto &[oi, nxt] : it->second) {
             if (path_count >= 2 || steps > kMaxDfsSteps)
                 return;
-            if (crosses_combiner(nxt))
+            if (enters_multi_input_node(nxt))
                 continue;
             if (std::find(path.begin(), path.end(), nxt) != path.end())
                 continue; // simple paths only (no revisits)
