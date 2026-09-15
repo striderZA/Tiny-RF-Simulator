@@ -8,4 +8,4 @@
 #     `bash scripts/format.sh --check --all`, so it shares this list too.
 #
 # Add new C++ module directories here only.
-FORMAT_DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner power_meter touchstone help layout tutorial logging test_flow)
+FORMAT_DIRS=(src app core common tests test_engine signal_generator amplifier spectrum_analyzer equalizer node_graph splitter mixer adc coax pfb_channelizer iq_plot network_analyzer ideal_filter attenuator combiner rf_switch power_meter touchstone help layout tutorial logging test_flow)

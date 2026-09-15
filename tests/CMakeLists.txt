@@ -85,6 +85,21 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+add_standalone_test(test_rf_switch
+    SOURCES test_rf_switch.cpp
+    LIBS simulator::rf_switch_engine simulator::node_graph_engine
+)
+
+# Project-file round trip for the SPDT switch: covers the registry
+# project_type lookup, the serializer, and the restoration of a link on the
+# switch's second output pin (T2), none of which the engine-level
+# test_rf_switch case can reach. Kept outside tests.exe for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_rf_switch_project
+    SOURCES test_rf_switch_project.cpp
+    LIBS simulator::app
+)
+
 add_standalone_test(test_network_analyzer
     SOURCES test_network_analyzer.cpp
     LIBS simulator::network_analyzer_engine simulator::network_analyzer_widget
