@@ -211,6 +211,15 @@ TEST_CASE("SPDT switch: deserialize accepts a named throw", "[rf_switch]") {
 }
 
 TEST_CASE("SPDT switch: node kind has a distinct theme color", "[rf_switch]") {
-    REQUIRE(themeColor(NodeKind::RFSwitchSPDT) != themeColor(NodeKind::Unknown));
-    REQUIRE(themeColor(NodeKind::RFSwitchSPDT) == 0xFFE879F9u);
+    // No literal color here: the claim is distinctness from every other kind,
+    // and it must survive a palette change.
+    const NodeKind others[] = {NodeKind::Unknown,       NodeKind::Generator,   NodeKind::Amplifier,
+                               NodeKind::Splitter,      NodeKind::Mixer,       NodeKind::Adc,
+                               NodeKind::PFB,           NodeKind::IdealFilter, NodeKind::CoaxCable,
+                               NodeKind::Equalizer,     NodeKind::Attenuator,  NodeKind::Combiner,
+                               NodeKind::GroupCollapsed};
+    for (const auto kind : others) {
+        CAPTURE(static_cast<int>(kind));
+        REQUIRE(themeColor(NodeKind::RFSwitchSPDT) != themeColor(kind));
+    }
 }
