@@ -262,5 +262,15 @@ TEST_CASE("SPDT 2:1 switch: an unchanged input generation recomputes nothing", "
     // Bump input 1 — output should also recompute.
     t2.bumpGeneration();
     sw.update(0.0);
-    REQUIRE(sw.node().outputs[0].generation != after_in0);
+    const uint64_t after_in1 = sw.node().outputs[0].generation;
+    REQUIRE(after_in1 != after_in0);
+
+    // A parameter edit alone — no input pointer or generation change at all —
+    // must also force a recompute: this is the only route by which the
+    // inspector's Active Throw / Insertion Loss / Isolation edits reach the
+    // DSP (setters set m_dirty; beginUpdate2's m_dirty term is what carries
+    // it). Without that term every setter edit is silently dropped.
+    sw.setActiveThrow(1);
+    sw.update(0.0);
+    REQUIRE(sw.node().outputs[0].generation != after_in1);
 }
