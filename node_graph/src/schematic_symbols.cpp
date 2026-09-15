@@ -77,6 +77,22 @@ static void drawRFSwitchSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     dl->AddLine(throw_b, ImVec2(c.x + 22, c.y + 8), color, 2.0f);
 }
 
+static void drawRFSwitch2to1Symbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
+    // Mirror of the 1:2 SPDT: two throw contacts on the left, common pole on
+    // the right with the arm resting toward the selected throw's side.
+    ImVec2 pole(c.x + 20, c.y + 8);
+    ImVec2 throw_a(c.x - 16, c.y - 12);
+    ImVec2 throw_b(c.x - 16, c.y + 8);
+    ImVec2 arm_end(c.x - 10, c.y - 4);
+    dl->AddCircleFilled(pole, 3.0f, color);
+    dl->AddCircleFilled(throw_a, 2.5f, color);
+    dl->AddCircleFilled(throw_b, 2.5f, color);
+    dl->AddLine(pole, arm_end, color, 2.0f);
+    dl->AddLine(ImVec2(c.x + 26, c.y + 8), pole, color, 2.0f);
+    dl->AddLine(throw_a, ImVec2(c.x - 22, c.y - 12), color, 2.0f);
+    dl->AddLine(throw_b, ImVec2(c.x - 22, c.y + 8), color, 2.0f);
+}
+
 static void drawAdcSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     ImVec2 pts[6] = {
         ImVec2(c.x - 24, c.y + 8), ImVec2(c.x - 16, c.y + 8), ImVec2(c.x - 16, c.y - 4),
@@ -185,6 +201,9 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKin
         break;
     case NodeKind::RFSwitchSPDT:
         drawRFSwitchSymbol(dl, center, color);
+        break;
+    case NodeKind::RFSwitchSPDT2to1:
+        drawRFSwitch2to1Symbol(dl, center, color);
         break;
     case NodeKind::GroupCollapsed:
         drawGroupCollapsedSymbol(dl, center, color);
