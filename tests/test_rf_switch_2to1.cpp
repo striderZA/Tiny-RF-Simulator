@@ -237,6 +237,26 @@ TEST_CASE("SPDT 2:1 switch: serialize/deserialize round-trip", "[rf_switch_2to1]
     REQUIRE(c.isolation_dB() == Catch::Approx(40.0));
 }
 
+TEST_CASE("SPDT 2:1 switch: deserialize accepts a named throw", "[rf_switch_2to1]") {
+    NodeGraphEngine graph;
+    RFSwitch2to1Engine sw(1, graph);
+
+    // The component-library authoring form writes the throw by name.
+    sw.deserialize(nlohmann::json{{"active_throw", "T2"}});
+    REQUIRE(sw.activeThrow() == 1);
+    sw.deserialize(nlohmann::json{{"active_throw", "T1"}});
+    REQUIRE(sw.activeThrow() == 0);
+
+    // The .rfsim project serializer writes the integer form.
+    sw.deserialize(nlohmann::json{{"active_throw", 1}});
+    REQUIRE(sw.activeThrow() == 1);
+
+    // An unrecognized name leaves the current throw alone, mirroring
+    // IdealFilterEngine's filter_type handling.
+    sw.deserialize(nlohmann::json{{"active_throw", "T3"}});
+    REQUIRE(sw.activeThrow() == 1);
+}
+
 TEST_CASE("SPDT 2:1 switch: an unchanged input generation recomputes nothing", "[rf_switch_2to1]") {
     NodeGraphEngine graph;
     RFSwitch2to1Engine sw(1, graph);
