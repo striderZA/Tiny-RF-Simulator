@@ -71,10 +71,13 @@ These test files are compiled into the main `tests` executable (21 files; 22 on 
 |---|---|---|
 | `test_attenuator.cpp` | `test_attenuator` | Pass-through, flat attenuation, passive noise model, noise floor convergence, S-param, clamping, dirty-flag, hover |
 | `test_combiner.cpp` | `test_combiner` | Basic combination, single/both inputs, dirty-flag, S-param mode |
+| `test_rf_switch.cpp` | `test_rf_switch` | Forward SPDT routing, insertion/isolation loss, passive noise, clamping, serialization, hover summary |
+| `test_rf_switch_project.cpp` | `test_rf_switch_project` | Forward SPDT project serialization and round-trip behavior |
+| `test_rf_switch_2to1.cpp` | `test_rf_switch_2to1` | Reverse SPDT routing, two-input dirty checking, leakage/noise, clamping, serialization, hover summary |
 | `test_component_authoring.cpp` | `test_component_authoring` | ComponentTypeRegistry descriptors, ComponentLibrary validate, ComponentFormModel build/validate/round-trip |
 | `test_extensions.cpp` | `test_extensions` | Extension manifest parsing/rejection, discovery across built-in/global/project-local roots, ExternalToolRunner request/result flow |
 | `test_issue37_pfb_input_removal.cpp` | `test_issue37_pfb_input_removal` | Issue #37 regression: removing an upstream node immediately nulls downstream dangling input pointers |
-| `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all 11 types round-trip through save/load, legacy `.rfsim` type strings backward compat |
+| `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all registered types, including both SPDT switch orientations, round-trip through save/load, legacy `.rfsim` type strings backward compat |
 | `test_issue42_multi_output.cpp` | `test_issue42_multi_output` | Issue #42 regression: Splitter OUT2 routes to Combiner IN1 via `outputs[1]`; probing Splitter/PFB OUT2 resolves output index 1 |
 | `test_network_analyzer.cpp` | `test_network_analyzer` | Network Analyzer v3 instrument: stimulus power reaches the isolated chain, gain accuracy (attenuator chain), NF accuracy (amplifier chain), probing does not perturb a real consumer, disconnected/ambiguous/combiner-crossing paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw with/without probe points |
 | `test_path_containment.cpp` | `test_path_containment` | S1/S2 security fixes (2026-08-09 codebase review): project load neutralizes S-param paths outside the project dir, save relativizes in-project paths, library `data_files` confined to the JSON's dir, TouchstoneParser 256 MiB size guard + 10M frequency-point cap |

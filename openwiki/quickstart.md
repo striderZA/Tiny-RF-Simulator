@@ -63,6 +63,8 @@ build/bin/tests [bench]
 | `equalizer/` | Gain-slope (dB/decade) equalizer + S-param mode |
 | `attenuator/` | Passive attenuator with manual dB control + S-param mode, passive noise model |
 | `combiner/` | 2-input, 1-output passive RF combiner (Wilkinson -3 dB model) + 3-port S-param mode |
+| `rf_switch/` | 1-input, 2-output SPDT switch with selectable throw, insertion loss, and isolation |
+| `rf_switch_2to1/` | 2-input, 1-output reverse SPDT switch with selectable throw, insertion loss, and isolation |
 | `coax/` | Coaxial cable loss/phase model (MilTech presets) |
 | `adc/` | RF ADC with sampling, aliasing, NSD noise model |
 | `pfb_channelizer/` | Polyphase filter bank (M channels, K taps) |
@@ -75,7 +77,7 @@ build/bin/tests [bench]
 | `tutorial/` | Interactive first-run guided walkthrough: data-driven step catalog, `TutorialState` (pure logic + completion marker), `TutorialWidget` (panel highlight) |
 | `layout/` | Exe-relative ImGui layout persistence (default + named presets) |
 | `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests (~340 test cases, 12 standalone executables incl. `test_issue48_json_loader`, 14 benchmarks) |
+| `tests/` | Catch2 unit tests plus many standalone executables (including the RF switch suites and `test_issue48_json_loader`) and benchmarks |
 | `test_engine/` | ImGui test engine UI tests |
 | `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
 | `src/` | `main.cpp` entry point |
@@ -103,6 +105,7 @@ build/bin/tests [bench]
 | Change area / intent | Wiki page | Source entry points | Key symbols / types | Focused tests | Minimal validation |
 |---|---|---|---|---|---|
 | Add / modify a DSP engine component | [RF Components](domains/rf-components.md), [Architecture](architecture/overview.md) | `app/src/component_type_registry.cpp`, `<component>/src/*_engine.cpp`, `app/src/inspector_panel.cpp` (`drawerMap()`) | `IComponentEngine`, `ComponentTypeDescriptor`, `ComponentRegistry` | `tests/test_<component>.cpp` | `ctest --test-dir build -R <component> --output-on-failure` |
+| Modify an SPDT switch | [RF Components](domains/rf-components.md#rf-switches-rf_switch-rf_switch_2to1) | `rf_switch/src/rf_switch_engine.cpp`, `rf_switch_2to1/src/rf_switch_2to1_engine.cpp`, `app/src/component_type_registry.cpp` | `RFSwitchEngine`, `RFSwitch2to1Engine` | `test_rf_switch`, `test_rf_switch_project`, `test_rf_switch_2to1` | `ctest --test-dir build -R "rf_switch" --output-on-failure` |
 | Change the node graph / topology / probes | [DSP Pipeline](workflows/dsp-pipeline.md) | `node_graph/src/node_graph_engine.cpp`, `node_graph/src/node_graph_widget.cpp` | `NodeGraphEngine`, `GraphNode`, `GraphLink`, `SignalSource` | `test_node_graph_engine.cpp`, `test_issue42_multi_output.cpp` | `ctest --test-dir build -R "node_graph|issue42" --output-on-failure` |
 | S-parameter / Touchstone work | [S-Parameter System](integrations/s-param-system.md) | `touchstone/src/touchstone_parser.cpp`, `touchstone/src/s_parameter_data.cpp`, `app/src/project_serializer.cpp`, `app/src/component_library.cpp` | `TouchstoneParser`, `SParameterData`, `resolveSparamPath` | `test_touchstone.cpp`, `test_*_sparam.cpp`, `test_path_containment.cpp` | `ctest --test-dir build -R "touchstone|sparam|path_containment" --output-on-failure` |
 | Project save/load (`.rfsim`) | [Architecture](architecture/overview.md) | `app/src/project_serializer.cpp`, engine `serialize()`/`deserialize()` | `ProjectSerializer`, `checkedJsonInt` | `test_project_file.cpp` (17 cases), `test_issue48_json_loader.cpp` (project cases) | `build/bin/test_project_file` or `ctest --test-dir build -R test_project_file --output-on-failure` |
@@ -127,7 +130,7 @@ build/bin/tests [bench]
 
 **S-parameter mode** — Five components (amplifier, ideal filter, equalizer, attenuator, combiner) support dual-mode operation: ideal parametric OR Touchstone .sNp file driven. S-parameter data files live in `component_data/`.
 
-**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 8 categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). One-click insert into the node graph via View menu. In-app authoring (v0.16.0) adds a New/Edit Component form (`ComponentFormModel`/`ComponentFormWidget`) that writes schema-v2 JSON, validated against the [ComponentTypeRegistry](architecture/overview.md) schema; built-in `component_data/library/` entries are read-only.
+**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 8 library categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). The registry also includes the authorable SPDT switch types, which use direct inspector fields rather than S-parameter data. One-click insert into the node graph via View menu. In-app authoring (v0.16.0) adds a New/Edit Component form (`ComponentFormModel`/`ComponentFormWidget`) that writes schema-v2 JSON, validated against the [ComponentTypeRegistry](architecture/overview.md) schema; built-in `component_data/library/` entries are read-only.
 
 **P1dB parameter** — First-class 1-dB compression point support (v0.9.0) on `NonlinearModel` and `AmplifierEngine`. Automatic OIP3 ↔ P1dB derivation (OIP3 = P1dB + 9.6 dB) when OIP3 is at default. Persisted in project save/load.
 
@@ -158,7 +161,8 @@ build/bin/tests [bench]
 | S-param path containment | v0.19.x | S1: `.rfsim` load confines `sparam_filepath` to the project dir, save relativizes in-project paths; library `data_files` confined to the JSON's dir. S2: Touchstone parser 256 MiB size cap + 10M in-loop frequency-point cap. `test_path_containment.cpp` |
 | Interactive tutorial mode | v0.17.0 | Data-driven 6-step guided walkthrough with panel highlight, first-run "Welcome" offer, exe-relative `.tutorial_completed` marker; `Help > Tutorial` guarded by the unsaved-changes modal; `test_tutorial_state.cpp` + 5 UI tests |
 | Extension system | v0.16.0 | `plugin.json` manifests for data packs + external tools, discovery across built-in/global/project-local roots, JSON request/result `ExternalToolRunner`, Tools menu + Extensions panel; test fixtures in `tests/fixtures/extensions/` (repo ships no built-in extension payload) |
-| Component registry unification | v0.16.0 | Single `ComponentTypeRegistry` dispatch table for all 11 types (canvas menu, add, duplicate, save/load, inspector, NodeKind); `RfSimulatorApp` decomposed into `ProjectSerializer` + `PFBViewManager`; S-param modes now reload on project deserialize |
+| Component registry unification | v0.16.0 | Single `ComponentTypeRegistry` dispatch table for all component types (canvas menu, add, duplicate, save/load, inspector, NodeKind); `RfSimulatorApp` decomposed into `ProjectSerializer` + `PFBViewManager`; S-param modes now reload on project deserialize |
+| SPDT RF switches | Latest | Added forward `rf_switch_spdt` (COM → T1/T2) and reverse `rf_switch_spdt_2to1` (T1/T2 → COM) nodes with selectable throw, insertion loss, isolation, passive noise, serialization, and focused tests |
 | Spectrum analyzer trace modes | v0.11.0 | 4 trace modes (ClearWrite, MaxHold, MinHold, VideoAverage EWMA) with per-trace history buffers, auto-prune, mode-switch reset; UI controls for trace mode + video average count |
 | Library S-param data file import | v0.10.0 | JSON schema v2 with `data_files` array for Touchstone references; auto-load S-param on library instantiation; graceful fallback to single-point params; `[DATA]` indicator in browser |
 | Part number display | v0.9.1 | Component blocks show library part number subtitle; 7 new component categories in library |

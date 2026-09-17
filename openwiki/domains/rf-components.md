@@ -232,6 +232,48 @@ Every RF component in the simulator follows the same pattern: a **pure-DSP engin
 
 ---
 
+## RF Switches (`rf_switch/`, `rf_switch_2to1/`)
+
+The two SPDT switch engines model opposite orientations of the same passive switch. Both are registered as authorable component types, expose T1/T2 selection in the inspector, and serialize `active_throw`, `insertion_loss_dB`, and `isolation_dB`. Defaults are 0.5 dB insertion loss and 40 dB isolation; setters clamp insertion loss to 0–60 dB and isolation to 0–120 dB. Neither supports S-parameter files.
+
+```mermaid
+flowchart LR
+    IN["COM input"] --> SEL["Selected throw"]
+    IN --> LEAK["Unselected throw"]
+    SEL --> IL["Insertion loss"]
+    LEAK --> ISO["Isolation loss"]
+    IL --> OUT1["Output or COM"]
+    ISO --> OUT2["Leakage output or COM"]
+```
+
+*The switch routes one throw at insertion loss while the other remains visible at the isolation floor; the 2:1 orientation reverses the direction of the ports.*
+
+### SPDT Switch (`rf_switch/`)
+
+| Property | Value |
+|---|---|
+| Header | `include/rf_switch_engine.h` |
+| Type | Processing node (1 input `COM`, 2 outputs `T1`/`T2`) |
+| Engine type | `rf_switch_spdt` |
+| CMake target | `simulator::rf_switch_engine` |
+
+The selected throw applies insertion loss; the unselected throw still emits the input at the isolation floor. Tones retain frequency and phase while their power is reduced by the selected or isolation loss. Each output uses the passive noise model `noise_total = G * noise_in + k*T*(1 - G)` and has its own generation counter. `active_throw` accepts `T1`/`T2` names when loading library-style JSON and integer values in project JSON.
+
+### SPDT Switch (2:1) (`rf_switch_2to1/`)
+
+| Property | Value |
+|---|---|
+| Header | `include/rf_switch_2to1_engine.h` |
+| Type | Processing node (2 inputs `T1`/`T2`, 1 output `COM`) |
+| Engine type | `rf_switch_spdt_2to1` |
+| CMake target | `simulator::rf_switch_2to1_engine` |
+
+The selected input reaches COM through insertion loss and the other input leaks through isolation loss. Tones from the two paths are concatenated rather than coherently vector-summed. Noise is combined as `G_IL * noise_selected + G_ISO * noise_unselected`, then thermal noise is added as `k*T*max(0, 1 - G_IL - G_ISO)`. Because it has two inputs, it uses `beginUpdate2()` to cache both input pointers and generations; changing either input or switch setting triggers recomputation.
+
+**Tests:** `test_rf_switch.cpp`, `test_rf_switch_project.cpp`, and `test_rf_switch_2to1.cpp` cover routing, attenuation/isolation, passive noise, clamping, enum/integer serialization, hover summaries, project round-trip, two-input dirty checking, and dispatch integration.
+
+---
+
 ## Coaxial Cable (`coax/`)
 
 | Property | Value |
