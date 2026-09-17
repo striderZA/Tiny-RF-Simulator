@@ -30,7 +30,7 @@ The first build takes 60-90s while FetchContent clones dependencies. Subsequent 
 
 **Where dependency sources live:** all FetchContent dependencies (imgui, implot, catch2, imgui_test_engine, …) are fetched into `build/_deps/<name>-src/` inside the active build directory. A fresh git worktree has **no** `build/` yet — run `cmake -B build -G Ninja` once (~90 s) to fetch them there, or browse the canonical checkout's copy. Never search the filesystem for headers like `imgui_internal.h` — a `find /`-style scan hangs far past any agent timeout on Windows. Read `CMakeLists.txt`'s `FetchContent_Declare` block for pinned versions.
 
-**One-time setup — enable the format pre-commit hook** (blocks commits that would fail the release workflow's `format` job):
+**One-time setup — enable the local git hooks** (`.githooks/pre-commit` blocks commits that would fail the release workflow's `format` job; `.githooks/commit-msg` enforces the commit message format below):
 
 ```bash
 git config core.hooksPath .githooks
@@ -128,7 +128,10 @@ Releases are prepared through a pull request by default; the tag is created only
 - **Atomic commits:** one logical change per commit (feature, fix, refactor, or docs).
 - **Commit early, commit often** — a commit should represent a working state.
 - **Verify the build and tests pass** before committing.
-- **Imperative mood** subject line, <70 chars, no body.
+- **Subject format:** `<type>[(<scope>)][!]: <imperative summary>`, under 70 characters. `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`; `scope` is optional lowercase (e.g. `test(pfb): cover grid invariance`); `!` marks a breaking change. A body is optional — leave a blank line after the subject and wrap it at 72 characters.
+- **Enforced locally** by [`.githooks/commit-msg`](.githooks/commit-msg) on every `git commit`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress (`git merge`). Keep it sensible with `git commit --no-verify` only when the rule genuinely does not apply.
+- **Test the hooks** with `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+- Commits created by GitHub's squash merge never run local hooks, so **write the PR title in the same format**.
 
 ### Pull Requests
 

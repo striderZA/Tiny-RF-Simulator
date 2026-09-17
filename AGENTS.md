@@ -107,6 +107,13 @@ Default section order:
 - The clang-format file set is defined once in `scripts/format-dirs.sh` (shared by `scripts/format.sh`, `.githooks/pre-commit`, and the workflow's `format` job).
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions.
 
+## Git Hooks
+
+- `.githooks/` holds the local commit gates, enabled per clone with `git config core.hooksPath .githooks`. They run for local commits only; GitHub-side squash merges bypass them, so PR titles must carry the same subject format.
+- `.githooks/pre-commit` rejects staged C++ that fails clang-format 18 over the `scripts/format-dirs.sh` directory set; `.githooks/commit-msg` rejects a subject that is not `<type>[(<scope>)][!]: <summary>` under 70 characters, with `type` from `build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress; an optional body is allowed.
+- `CONTRIBUTING.md` (Clone & Build, Git Workflow > Commits) is the human-facing statement of both contracts. `scripts/test-githooks.sh` is the hook regression test; run it after editing anything under `.githooks/`.
+- Hook files must stay mode `100755` in git (`git update-index --chmod=+x <path>`): git skips a non-executable hook on POSIX clones without any error.
+
 ## Child DOX Index
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
