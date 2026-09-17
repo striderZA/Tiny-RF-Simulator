@@ -22,15 +22,15 @@
 
 // --- Task 1: ComponentTypeRegistry ---
 
-TEST_CASE("ComponentTypeRegistry covers all 11 existing types", "[type_registry]") {
+TEST_CASE("ComponentTypeRegistry covers all 12 existing types", "[type_registry]") {
     auto all = ComponentTypeRegistry::instance().all();
     std::vector<std::string> types;
     for (auto *d : all)
         types.push_back(d->type);
     std::sort(types.begin(), types.end());
-    std::vector<std::string> expected = {"adc",      "amplifier", "attenuator", "coax",
-                                         "combiner", "equalizer", "filter",     "generator",
-                                         "mixer",    "pfb",       "splitter"};
+    std::vector<std::string> expected = {"adc",      "amplifier", "attenuator",     "coax",
+                                         "combiner", "equalizer", "filter",         "generator",
+                                         "mixer",    "pfb",       "rf_switch_spdt", "splitter"};
     REQUIRE(types == expected);
 }
 
@@ -129,6 +129,32 @@ TEST_CASE("ComponentLibrary validate flags unknown enum value", "[library][valid
         if (i.field == "filter_type")
             found = true;
     REQUIRE(found);
+}
+
+TEST_CASE("ComponentTypeRegistry authors the SPDT throw by name", "[library][validate]") {
+    const auto *d = ComponentTypeRegistry::instance().find("rf_switch_spdt");
+    REQUIRE(d != nullptr);
+    const auto field =
+        std::find_if(d->fields.begin(), d->fields.end(),
+                     [](const ParameterField &f) { return f.key == "active_throw"; });
+    REQUIRE(field != d->fields.end());
+    REQUIRE(field->kind == FieldKind::Enum);
+    REQUIRE(field->enum_values == std::vector<std::string>{"T1", "T2"});
+
+    // Only the active_throw field is under test here; the required
+    // insertion_loss_dB is deliberately omitted from the first two params.
+    const auto flags_active_throw = [](const std::vector<ValidationIssue> &issues) {
+        return std::any_of(issues.begin(), issues.end(),
+                           [](const ValidationIssue &i) { return i.field == "active_throw"; });
+    };
+    ComponentLibrary lib;
+    // A bare number is not a valid throw...
+    CHECK(flags_active_throw(lib.validate("rf_switch_spdt", {{"active_throw", 1.0}})));
+    // ...a name outside {T1, T2} is rejected...
+    CHECK(flags_active_throw(lib.validate("rf_switch_spdt", {{"active_throw", "T3"}})));
+    // ...and a named throw plus the required insertion loss is clean.
+    CHECK_FALSE(flags_active_throw(
+        lib.validate("rf_switch_spdt", {{"active_throw", "T2"}, {"insertion_loss_dB", 0.5}})));
 }
 
 TEST_CASE("ComponentLibrary validate flags unknown type", "[library][validate]") {

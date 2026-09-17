@@ -20,6 +20,7 @@ class IdealFilterEngine;
 class AttenuatorEngine;
 class CombinerEngine;
 class PFBChannelizerEngine;
+class RFSwitchEngine;
 class ComponentRegistry;
 
 struct ViewToggles {
@@ -83,6 +84,7 @@ class InspectorPanel {
     void drawIdealFilterProperties(IdealFilterEngine &engine, int index);
     void drawAttenuatorProperties(AttenuatorEngine &engine, int index);
     void drawCombinerProperties(CombinerEngine &engine, int index);
+    void drawRFSwitchProperties(RFSwitchEngine &engine, int index);
     void drawGroupPanel(int group_id);
 
   private:
