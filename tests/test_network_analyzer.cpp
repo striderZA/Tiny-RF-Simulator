@@ -15,6 +15,7 @@
 #include "network_analyzer_engine.h"
 #include "network_analyzer_widget.h"
 #include "node_graph_engine.h"
+#include "rf_switch_2to1_engine.h"
 #include "signal_generator_engine.h"
 #include "spectrum.h"
 #include "splitter_engine.h"
@@ -52,6 +53,8 @@ class TestNaScratch final : public INetworkAnalyzerScratch {
             return make<SplitterEngine>(id);
         if (type == "combiner")
             return make<CombinerEngine>(id);
+        if (type == "rf_switch_spdt_2to1")
+            return make<RFSwitch2to1Engine>(id);
         return nullptr;
     }
 
@@ -431,7 +434,62 @@ TEST_CASE("NetworkAnalyzer: path through a Combiner yields all-NaN", "[network_a
 }
 
 // ---------------------------------------------------------------------------
-// 8. Mixer in path — the clone reproduces the configured lo_freq_Hz
+// 8. RF Switch 2:1 in path — a switch has two input pins, so the same
+//    reasoning as the combiner applies structurally: the private clone chain
+//    below always feeds a clone's inputs[0] (T1 for a 2:1 switch), and the
+//    DFS records only the output port a chain node departs by — never the
+//    input pin it was entered through — so the tool cannot confirm which
+//    throw the probed path really enters. Left unguarded, a link entering
+//    through T2 with throw 2 active is measured on T1 and reports the
+//    isolation floor (-40 dB at the shipped defaults) instead of the
+//    insertion loss (-0.5 dB): a wrong number, with no NaN to signal it.
+//    Both entry ports therefore degrade to all-NaN, like the combiner above.
+//    The rf_switch_spdt_2to1 branch in TestNaScratch is what makes this a
+//    regression test for the guard: without it the path would degrade to
+//    all-NaN as an "unknown type" clone and the assertions below would still
+//    hold with the guard removed.
+// ---------------------------------------------------------------------------
+TEST_CASE("NetworkAnalyzer: path through an RF Switch 2:1 yields all-NaN", "[network_analyzer]") {
+    const auto measure_through_throw = [](int throw_index, int input_port) {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(1, graph);
+        RFSwitch2to1Engine sw(2, graph);
+        sw.setActiveThrow(throw_index);
+        AttenuatorEngine end(3, graph); // Point B
+        graph.addLink(gen.outputPinId(), sw.inputPinId(input_port));
+        graph.addLink(sw.outputPinId(), end.inputPinId());
+        TestNaHost host({&gen, &sw, &end});
+        NetworkAnalyzerEngine na(graph, host);
+        na.setStartFrequency(1e9);
+        na.setStopFrequency(2e9);
+        na.setPoints(11);
+        na.setPointA(gen.outputPinId());
+        na.setPointB(end.outputPinId());
+        na.update();
+
+        // Sanity: the graph really does connect A to B (via the switch) — so
+        // the all-NaN result is the multi-input rejection, not a missing link.
+        REQUIRE(graph.nodeIdForPin(sw.outputPinId()) == sw.graphNodeId());
+        REQUIRE(graph.nodeIdForPin(end.inputPinId()) == end.graphNodeId());
+        REQUIRE(graph.nodeIdForPin(gen.outputPinId()) == gen.graphNodeId());
+        INFO("entered through input port " << input_port << " with throw " << throw_index
+                                           << " active; gain[0] = " << na.gainDb()[0]);
+        for (double g : na.gainDb())
+            REQUIRE(std::isnan(g));
+        for (double nf : na.noiseFigureDb())
+            REQUIRE(std::isnan(nf));
+    };
+
+    // The wiring that exposed the defect: the link enters through the second
+    // input (T2) and the second throw is selected.
+    measure_through_throw(1, 1);
+    // Entered through T1 with throw 1 active — the guard is port-independent,
+    // so this is rejected for the same reason.
+    measure_through_throw(0, 0);
+}
+
+// ---------------------------------------------------------------------------
+// 9. Mixer in path — the clone reproduces the configured lo_freq_Hz
 //    translation (LO is a parameter copied by deserialize(), not a live wired
 //    signal). With LO == exactly one grid step, every sweep tone's upper/lower
 //    sideband lands back on the grid, so every point is matched at the

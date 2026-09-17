@@ -11,6 +11,7 @@
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "pfb_channelizer_engine.h"
+#include "rf_switch_2to1_engine.h"
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
@@ -231,6 +232,34 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
         return static_cast<IComponentEngine *>(&registry.add<RFSwitchEngine>(id, graph));
     };
     m_descriptors.push_back(rfsw);
+
+    ComponentTypeDescriptor rfsw2;
+    rfsw2.type = "rf_switch_spdt_2to1";
+    rfsw2.project_type = "RFSwitchSPDT2to1";
+    rfsw2.display_name = "SPDT Switch (2:1)";
+    rfsw2.menu_label = "Add SPDT Switch (2:1)";
+    rfsw2.label_prefix = "SPDT Switch (2:1)";
+    rfsw2.kind = NodeKind::RFSwitchSPDT2to1;
+    rfsw2.authorable = true;
+    rfsw2.supports_sparam_file = false;
+    rfsw2.fields = {
+        {"active_throw", "Active Throw", "", FieldKind::Enum, false, 0, 0, {"T1", "T2"}, "T1", ""},
+        {"insertion_loss_dB",
+         "Insertion Loss",
+         "dB",
+         FieldKind::Number,
+         true,
+         0.0,
+         60.0,
+         {},
+         0.5,
+         ""},
+        {"isolation_dB", "Isolation", "dB", FieldKind::Number, false, 0.0, 120.0, {}, 40.0, ""},
+    };
+    rfsw2.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
+        return static_cast<IComponentEngine *>(&registry.add<RFSwitch2to1Engine>(id, graph));
+    };
+    m_descriptors.push_back(rfsw2);
 
     ComponentTypeDescriptor adc;
     adc.type = "adc";

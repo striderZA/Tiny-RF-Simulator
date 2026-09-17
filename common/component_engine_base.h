@@ -22,6 +22,13 @@
 // Subclasses still implement the IComponentEngine pure virtuals
 // (type_name(), hoverSummary(), update(), serialize(), deserialize()) and may
 // override inputPinId()/outputPinId() for multi-pin layouts.
+//
+// A two-input engine cannot use beginUpdate(): it caches a single input, so a
+// change arriving on the second would go unseen and the output would go stale.
+// CombinerEngine and RFSwitch2to1Engine therefore each carry their own
+// (pointer, generation) pair per input. That prologue is currently copied
+// twice; when a third two-input engine appears, hoist it here as a
+// beginUpdate(in0, in1) overload rather than copying it again.
 class ComponentEngineBase : public IComponentEngine {
   public:
     ComponentEngineBase(int id, NodeGraphEngine &graph, std::string_view label, int num_inputs,

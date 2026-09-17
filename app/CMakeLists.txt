@@ -55,6 +55,7 @@ target_link_libraries(app
         simulator::attenuator_engine
         simulator::combiner_engine
         simulator::rf_switch_engine
+        simulator::rf_switch_2to1_engine
         simulator::network_analyzer_engine
         simulator::network_analyzer_widget
         simulator::node_graph_engine

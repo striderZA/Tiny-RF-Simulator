@@ -149,6 +149,7 @@ enum class NodeKind {
     Attenuator,
     Combiner,
     RFSwitchSPDT,
+    RFSwitchSPDT2to1,
     GroupCollapsed
 };
 
@@ -181,6 +182,8 @@ inline uint32_t themeColor(NodeKind k) {
         return 0xFFF87171; // red
     case NodeKind::RFSwitchSPDT:
         return 0xFFE879F9; // fuchsia
+    case NodeKind::RFSwitchSPDT2to1:
+        return 0xFFE879F9; // fuchsia (same device family as the 1:2 SPDT)
     case NodeKind::GroupCollapsed:
         return 0xFF818CF8;  // indigo
     case NodeKind::Unknown: // fallthrough
