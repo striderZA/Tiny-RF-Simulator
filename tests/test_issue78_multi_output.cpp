@@ -20,8 +20,10 @@
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 struct Issue78ImGuiFixture {
@@ -37,10 +39,17 @@ struct Issue78ImGuiFixture {
     }
 };
 
-// Unique temp filename per call so parallel test processes don't collide.
+// Unique temp filename per call so parallel test processes don't collide. The
+// counter alone is not enough: `catch_discover_tests` gives every TEST_CASE its
+// own process, so concurrent cases would all start at 0 and share a file. The
+// path is absolute because this standalone executable runs with the source tree
+// as its working directory, which a relative name would write into.
 static int s_temp_counter = 0;
 static std::string tempPath() {
-    return "test_issue78_roundtrip_" + std::to_string(s_temp_counter++) + ".rfsim";
+    return (std::filesystem::temp_directory_path() /
+            ("test_issue78_roundtrip_" + test_temp_paths::processTag() + "_" +
+             std::to_string(s_temp_counter++) + ".rfsim"))
+        .string();
 }
 
 template <typename T> static T *findOne(ComponentRegistry &registry) {
