@@ -1,3 +1,27 @@
+## [0.24.0] - 2026-09-17
+
+### Added
+
+- **SPDT RF switch (1:2)** — a new `rf_switch` component routes one common input (`COM`) to exactly one of two throws (`T1`/`T2`): the selected throw passes at the configured insertion loss, while the unselected throw still emits the input at the isolation floor. Each throw is an independent passive two-port using the Attenuator/Combiner noise model (`G·noise_in + kT(1−G)`), the schematic symbol carries `COM`/`T1`/`T2` pin labels, and the inspector exposes an Active Throw radio pair (`T1`/`T2`), Insertion Loss (0–60 dB, default 0.5 dB), and Isolation (0–120 dB, default 40 dB), while the registry descriptor types `active_throw` as an enum (`T1`/`T2`) for the authoring form. `active_throw` round-trips through save/load as either the authored name or the serialized integer.
+- **2:1 SPDT RF switch** — the mirrored `rf_switch_2to1` component sums two throw inputs (`T1`/`T2`) into one common output (`COM`): the active throw arrives at the insertion loss, the other leaks in at the isolation floor, and the two paths are superposed the way the Combiner's manual mode does (per-tone power adjustment, tones concatenated rather than vector-summed). Its added-noise term is `kT·max(0, 1 − G_IL − G_ISO)`, and it carries the same inspector fields and serialization form as the 1:2 switch.
+- **Local git hooks** — `.githooks/pre-commit` rejects staged C++ that fails clang-format 18, and `.githooks/commit-msg` enforces the `<type>[(<scope>)][!]: <summary>` subject format (under 70 characters), exempting Git-generated `Merge …`/`Revert …`/`fixup! …`/`squash! …` subjects and an in-progress merge. `scripts/test-githooks.sh` covers both hooks.
+
+### Changed
+
+- **Component dispatch table** — `ComponentTypeRegistry` grows from 11 to 13 rows (SPDT Switch, SPDT Switch (2:1)); both are authorable, ship defaults for their three fields, and drive the canvas menu, add/duplicate, save/load, and inspector drawing like every other row.
+- **Node label to `NodeKind` resolution** — `kindForLabel()` now resolves the longest matching label prefix, so the overlapping `SPDT Switch` / `SPDT Switch (2:1)` prefixes no longer depend on registry order; the two new kinds share the switch family's fuchsia theme colour.
+- **Network Analyzer path rule** — the walk now rejects any path entering a node with more than one input pin, replacing the `type_name() == "combiner"` special case. The rule is structural because the private clone chain always feeds a clone's `inputs[0]` and the DFS records only the port a node departs by, never the input it was entered through, so a multi-input node would be measured on a branch the probed path never used. Combiner behaviour is unchanged; the start node stays exempt as the injection point.
+
+### Fixed
+
+- **Network Analyzer through a 2:1 switch** — a path entering the switch through `T2` with throw 2 active previously reported the isolation floor instead of the insertion loss, a wrong number with no NaN to signal it; such multi-input paths now degrade to no-data.
+- **Pre-commit hook mode** — `.githooks/pre-commit` is stored `100755`, so POSIX clones no longer skip it silently (git ignores a non-executable hook without any error).
+
+### Testing
+
+- Add 22 cases across `tests/test_rf_switch.cpp` (10), `tests/test_rf_switch_2to1.cpp` (11), and `tests/test_rf_switch_project.cpp` (1): insertion-loss/isolation levels, per-throw noise, throw switching, pin labels, unique theme colour, clamping, dirty-flag skipping, registry authoring by throw name, and project round-trip of the `T2` link.
+- Extend the registry/dispatch coverage to all 13 types, add `kindForLabel` longest-prefix and 1:2-vs-2:1 separation cases, and assert that a Network Analyzer path through the 2:1 switch yields all-NaN.
+
 ## [0.23.4] - 2026-09-13
 
 ### Fixed
