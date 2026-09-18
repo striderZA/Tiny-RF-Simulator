@@ -133,6 +133,13 @@ Releases are prepared through a pull request by default; the tag is created only
 - **Test the hooks** with `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
 - Commits created by GitHub's squash merge never run local hooks, so **write the PR title in the same format**.
 
+### Pushing
+
+- **Force-pushing published history is blocked locally.** [`.githooks/pre-push`](.githooks/pre-push) rejects any push that would update an existing remote ref with a non-fast-forward commit, because that history is what open pull requests, reviews, and other clones point at. Creating a branch, deleting a branch, and fast-forward pushes pass unchanged.
+- **When the rewrite is intended** — typically your own unmerged branch after a `rebase` or `commit --amend` — allow it for that one push: `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`. `git push --no-verify` also skips the check, along with every other hook.
+- Ancestry that cannot be decided locally (a shallow or partial clone) is allowed with a notice rather than guessed at.
+- Only pushes made from this clone are affected: the GitHub UI, the API, and other machines do not run the hook.
+
 ### Pull Requests
 
 - Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md).

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Blocks force pushes: any update of an existing remote ref that is not a
+# fast-forward. Enable once per clone with:  git config core.hooksPath .githooks
+#
+# git calls a pre-push hook with the remote as $1/$2 and one line per ref on
+# stdin:  <local ref> <local sha> <remote ref> <remote sha>
+# An all-zero sha means the ref is being created (local) or deleted (remote), and
+# a fast-forward leaves the published tip reachable from the new one, so only a
+# reachable->unreachable tip change is rejected.
+#
+# Local only: a push made anywhere else (GitHub UI, API, another clone) never
+# runs it. Two intentional ways past it, both explicit and both per-invocation:
+#   RFSIM_ALLOW_FORCE_PUSH=1 git push ...   # allow this one push
+#   git push --no-verify ...                # skip every hook
+set -u
+
+ZERO=0000000000000000000000000000000000000000
+
+remote_name="${1:-origin}"
+
+rejects=""
+while read -r _local_ref local_sha remote_ref remote_sha || [ -n "${remote_sha:-}" ]; do
+  [ -n "${remote_ref:-}" ] || continue
+
+  # Creating a ref, deleting a ref, or re-pushing the same tip is not a rewrite.
+  if [ "$local_sha" = "$ZERO" ] || [ "$remote_sha" = "$ZERO" ] || [ "$local_sha" = "$remote_sha" ]; then
+    continue
+  fi
+
+  git merge-base --is-ancestor "$remote_sha" "$local_sha"
+  case $? in
+    0) continue ;;
+    1) ;;
+    *)
+      # The published tip is not available locally (shallow or partial clone),
+      # so ancestry cannot be decided here; do not block on a guess.
+      echo "pre-push: cannot verify ${remote_ref} is a fast-forward (no local ${remote_sha}); allowing" >&2
+      continue
+      ;;
+  esac
+
+  rejects="${rejects}  ${remote_ref}  ${remote_sha} -> ${local_sha}
+"
+done
+
+[ -n "$rejects" ] || exit 0
+
+if [ -n "${RFSIM_ALLOW_FORCE_PUSH:-}" ]; then
+  {
+    echo "pre-push: RFSIM_ALLOW_FORCE_PUSH is set, rewriting history on ${remote_name}:"
+    printf '%s' "$rejects"
+  } >&2
+  exit 0
+fi
+
+{
+  echo "pre-push: rejected a force push to ${remote_name} (non-fast-forward update):"
+  printf '%s' "$rejects"
+  echo
+  echo "A force push rewrites history that other clones and open pull requests may"
+  echo "already have. If the rewrite is intended (your own unmerged branch), re-run"
+  echo "the same command as:"
+  echo
+  echo "  RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>"
+  echo
+  echo "See CONTRIBUTING.md (Git Workflow > Pushing). To skip every hook: git push --no-verify"
+} >&2
+exit 1

@@ -156,5 +156,115 @@ else
 fi
 rm -f "$E2E/.git/MERGE_HEAD"
 
+# --- pre-push: the force-push guard -------------------------------------------
+# Rewriting an existing remote ref (a non-fast-forward update) must be rejected;
+# creating a ref, deleting a ref, and fast-forwarding must not be. The fixture is a
+# real repo with a real bare remote, so the ancestry checks run on real objects, and
+# the hook is run from that repo's working directory exactly as git runs it.
+PUSH_HOOK="$ROOT/.githooks/pre-push"
+PUSH="$TMP/push"
+PUSH_HOOKS="$TMP/hooks-push"
+ZERO_SHA=0000000000000000000000000000000000000000
+
+check_push() {
+  local expect="$1" label="$2"
+  shift 2
+  local got=0
+  if ! printf '%s\n' "$@" | (cd "$PUSH/work" && bash "$PUSH_HOOK" origin) >/dev/null 2>&1; then
+    got=1
+  fi
+  if [ "$got" = "$expect" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: pre-push ${label} (expected exit ${expect}, got ${got})"
+  fi
+}
+
+git init -q --bare "$PUSH/remote.git"
+git init -q "$PUSH/work"
+git -C "$PUSH/work" config user.name "Hook Test"
+git -C "$PUSH/work" config user.email "hook@test.invalid"
+git -C "$PUSH/work" config commit.gpgsign false
+echo one >"$PUSH/work/a.txt"
+git -C "$PUSH/work" add a.txt
+git -C "$PUSH/work" commit -q -m "feat: first commit"
+git -C "$PUSH/work" remote add origin "$PUSH/remote.git"
+git -C "$PUSH/work" push -q origin HEAD:refs/heads/main
+
+WORK_BRANCH="$(git -C "$PUSH/work" symbolic-ref --short HEAD)"
+BASE="$(git -C "$PUSH/work" rev-parse HEAD)"
+
+# A descendant of the published tip (fast-forward).
+echo two >>"$PUSH/work/a.txt"
+git -C "$PUSH/work" add a.txt
+git -C "$PUSH/work" commit -q -m "feat: second commit"
+FF="$(git -C "$PUSH/work" rev-parse HEAD)"
+
+# A rewrite of the published tip: same parent as BASE, so BASE is unreachable from it.
+git -C "$PUSH/work" checkout -q -b rewritten "$BASE"
+git -C "$PUSH/work" commit -q --amend -m "feat: amended first commit"
+REW="$(git -C "$PUSH/work" rev-parse HEAD)"
+git -C "$PUSH/work" checkout -q "$WORK_BRANCH"
+
+check_push 0 "fast-forward update" "refs/heads/main ${FF} refs/heads/main ${BASE}"
+check_push 0 "new remote branch" "refs/heads/topic ${FF} refs/heads/topic ${ZERO_SHA}"
+check_push 0 "remote ref deletion" "refs/heads/main ${ZERO_SHA} refs/heads/main ${BASE}"
+check_push 0 "unchanged tip" "refs/heads/main ${BASE} refs/heads/main ${BASE}"
+check_push 0 "unverifiable tip (not a guess)" "refs/heads/main ${FF} refs/heads/main 1111111111111111111111111111111111111111"
+check_push 1 "force push" "refs/heads/main ${REW} refs/heads/main ${BASE}"
+check_push 1 "force push mixed with a fast-forward" \
+  "refs/heads/main ${FF} refs/heads/main ${BASE}" \
+  "refs/heads/topic ${REW} refs/heads/topic ${BASE}"
+
+# The documented per-push override must let the same update through.
+if printf '%s\n' "refs/heads/main ${REW} refs/heads/main ${BASE}" |
+  (cd "$PUSH/work" && RFSIM_ALLOW_FORCE_PUSH=1 bash "$PUSH_HOOK" origin) >/dev/null 2>&1; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: pre-push override did not allow the rewrite"
+fi
+
+# End-to-end through real git pushes, with the hook active via core.hooksPath.
+mkdir -p "$PUSH_HOOKS"
+cp "$PUSH_HOOK" "$PUSH_HOOKS/pre-push"
+git -C "$PUSH/work" config core.hooksPath "$PUSH_HOOKS"
+
+if git -C "$PUSH/work" push -q origin "refs/heads/${WORK_BRANCH}:refs/heads/main"; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: pre-push blocked a fast-forward push"
+fi
+
+if git -C "$PUSH/work" push -q --force origin "refs/heads/rewritten:refs/heads/main" 2>/dev/null; then
+  FAIL=$((FAIL + 1))
+  echo "FAIL: pre-push allowed a force push"
+else
+  PASS=$((PASS + 1))
+fi
+
+if [ "$(git -C "$PUSH/remote.git" rev-parse refs/heads/main)" = "$FF" ]; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: a rejected force push still moved the remote ref"
+fi
+
+if RFSIM_ALLOW_FORCE_PUSH=1 git -C "$PUSH/work" push -q --force origin "refs/heads/rewritten:refs/heads/main"; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: pre-push override did not let the force push through"
+fi
+
+if [ "$(git -C "$PUSH/remote.git" rev-parse refs/heads/main)" = "$REW" ]; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: an overridden force push did not move the remote ref"
+fi
+
 echo "test-githooks: ${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]

@@ -109,9 +109,10 @@ Default section order:
 
 ## Git Hooks
 
-- `.githooks/` holds the local commit gates, enabled per clone with `git config core.hooksPath .githooks`. They run for local commits only; GitHub-side squash merges bypass them, so PR titles must carry the same subject format.
+- `.githooks/` holds the local commit and push gates, enabled per clone with `git config core.hooksPath .githooks`. They run for local git operations only; GitHub-side squash merges and server-side pushes bypass them, so PR titles must carry the same subject format.
 - `.githooks/pre-commit` rejects staged C++ that fails clang-format 18 over the `scripts/format-dirs.sh` directory set; `.githooks/commit-msg` rejects a subject that is not `<type>[(<scope>)][!]: <summary>` under 70 characters, with `type` from `build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress; an optional body is allowed.
-- `CONTRIBUTING.md` (Clone & Build, Git Workflow > Commits) is the human-facing statement of both contracts. `scripts/test-githooks.sh` is the hook regression test; run it after editing anything under `.githooks/`.
+- `.githooks/pre-push` rejects any push that would update an existing remote ref with a non-fast-forward — the force-push case — since that history is what open PRs and other clones point at. Creating, deleting, and fast-forwarding a ref pass, and a tip whose ancestry cannot be decided locally (shallow or partial clone) is allowed with a notice rather than guessed at. The escape hatch is per invocation: `RFSIM_ALLOW_FORCE_PUSH=1 git push …`, or `git push --no-verify` to skip every hook.
+- `CONTRIBUTING.md` (Clone & Build, Git Workflow > Commits and Pushing) is the human-facing statement of these contracts. `scripts/test-githooks.sh` is the hook regression test; run it after editing anything under `.githooks/`.
 - Hook files must stay mode `100755` in git (`git update-index --chmod=+x <path>`): git skips a non-executable hook on POSIX clones without any error.
 
 ## Child DOX Index
