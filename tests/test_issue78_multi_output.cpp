@@ -39,11 +39,12 @@ struct Issue78ImGuiFixture {
     }
 };
 
-// Unique temp filename per call so parallel test processes don't collide. The
-// counter alone is not enough: `catch_discover_tests` gives every TEST_CASE its
-// own process, so concurrent cases would all start at 0 and share a file. The
-// path is absolute because this standalone executable runs with the source tree
-// as its working directory, which a relative name would write into.
+// The absolute path matters because this standalone executable runs with the
+// source tree as its CTest working directory (`add_standalone_test`), so a bare
+// relative name wrote the scratch file into the checkout. The pid tag is not
+// needed for the cases of this file — one CTest entry runs them all in a single
+// process, so the counter already orders them — but it keeps a second concurrent
+// `ctest` invocation of this entry from reusing the same name.
 static int s_temp_counter = 0;
 static std::string tempPath() {
     return (std::filesystem::temp_directory_path() /

@@ -8,21 +8,26 @@
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "splitter_engine.h"
+#include "test_temp_paths.h"
 #include "view_manager.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <random>
 
 using Catch::Approx;
 
+// This file is compiled into the main `tests` binary, so `catch_discover_tests`
+// runs each TEST_CASE as its own process: a `static` counter alone would restart
+// at 0 and a `random_device` name is only probabilistically unique. The pid tag
+// plus the per-process counter is deterministic and collision-free. See
+// tests/AGENTS.md.
 static std::string write_temp_json(const std::string &content) {
-    static std::random_device rd;
-    std::uniform_int_distribution<int> dis(100000, 999999);
+    static int s_temp_counter = 0;
     auto path = std::filesystem::temp_directory_path() /
-                ("test_component_" + std::to_string(dis(rd)) + ".json");
+                ("test_component_" + test_temp_paths::processTag() + "_" +
+                 std::to_string(s_temp_counter++) + ".json");
     std::ofstream ofs(path);
     ofs << content;
     ofs.close();

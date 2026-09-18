@@ -51,6 +51,10 @@ struct ScopedRemove {
     ~ScopedRemove() {
         std::error_code ec;
         fs::remove_all(path, ec);
+        // A silent failure here is what leaves a plant behind for the next run
+        // (see tests/AGENTS.md); name the path instead of hiding it.
+        if (ec)
+            WARN("ScopedRemove failed to remove " << path.string() << ": " << ec.message());
     }
 };
 

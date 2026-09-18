@@ -13,6 +13,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -67,7 +68,10 @@ TEST_CASE_METHOD(Issue70ImGuiFixture, "PFB enforces ADC-only input across reconn
 
 TEST_CASE_METHOD(Issue70ImGuiFixture, "Project load rejects direct PFB input links (issue #70)",
                  "[app][pfb][regression][issue70][project]") {
-    const std::string path = "test_issue70_invalid_link.rfsim";
+    // Absolute temp path: this standalone executable runs with the source tree
+    // as its CTest working directory, so a relative name would write into it.
+    const std::string path =
+        (std::filesystem::temp_directory_path() / "test_issue70_invalid_link.rfsim").string();
     std::remove(path.c_str());
     {
         std::ofstream out(path);
