@@ -13,8 +13,9 @@
 #include "implot.h"
 #include "inspector_panel.h"
 #include "pfb_channelizer_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
-#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <string_view>
@@ -57,8 +58,10 @@ TEST_CASE_METHOD(ImGuiFixture, "Every registry label_prefix maps to its kind", "
 
 TEST_CASE_METHOD(ImGuiFixture, "All 13 registry types round-trip through project save/load",
                  "[dispatch]") {
-    auto path = "test_dispatch_all_types.rfsim";
-    std::remove(path);
+    const auto path = (std::filesystem::temp_directory_path() /
+                       ("test_dispatch_all_types_" + test_temp_paths::processTag() + ".rfsim"))
+                          .string();
+    std::filesystem::remove(path);
     {
         RfSimulatorApp app;
         app.newProject();
@@ -72,12 +75,14 @@ TEST_CASE_METHOD(ImGuiFixture, "All 13 registry types round-trip through project
         app.loadProject(path);
         REQUIRE(app.componentCount() == 13);
     }
-    std::remove(path);
+    std::filesystem::remove(path);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Legacy .rfsim type strings still load (backward compat)",
                  "[dispatch]") {
-    auto path = "test_dispatch_legacy.rfsim";
+    const auto path = (std::filesystem::temp_directory_path() /
+                       ("test_dispatch_legacy_" + test_temp_paths::processTag() + ".rfsim"))
+                          .string();
     std::ofstream out(path);
     out << R"({
       "version": 1,
@@ -98,7 +103,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Legacy .rfsim type strings still load (backward 
     app.loadProject(path);
     REQUIRE(app.componentCount() == 6);
     REQUIRE(app.testComponents().byType<PFBChannelizerEngine>().size() == 1);
-    std::remove(path);
+    std::filesystem::remove(path);
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
