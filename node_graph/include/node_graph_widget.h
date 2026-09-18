@@ -90,6 +90,7 @@ class NodeGraphWidget {
     void drawNodes();
     void showPinTooltips();
     void showNodeHoverTooltips();
+    void showLinkTooltips();
     void drawLinks();
     void handleContextMenu(bool editor_hovered);
     void handleLinkCreation();

@@ -13,7 +13,7 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
 - `include/node_graph_widget.h` — `NodeGraphWidget`
 - `src/node_graph_widget.cpp` — node/link rendering, canvas menu, link creation/deletion, hover
 - `src/node_graph_widget_groups.cpp` — group backgrounds, collapsed group blocks, rubber-band selection, group rename
-- `src/node_graph_widget_tooltips.cpp` — pin and node hover tooltips
+- `src/node_graph_widget_tooltips.cpp` — pin, node, link, and collapsed-subcircuit hover tooltips (signal summary plus interaction hints)
 - `src/schematic_symbols.cpp` — per-`NodeKind` schematic symbol drawing
 - `include/rewire.h` / `src/rewire.cpp` — `rewireComponentInputs()`, the shared rewire loop
 - `CMakeLists.txt` — `simulator::node_graph_engine` (pure data, no ImGui) and `simulator::node_graph_widget` (ImNodes UI)
@@ -42,6 +42,7 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
   both belong to the *same* collapsed group; a link between two different collapsed groups is drawn
   through both groups' synthesized boundary pins.
 - Widget callbacks (`onNodeMoved`, `onRemoveNode`, `onDuplicateNode`, `onLinkChanged`, `onLinkCreating`, `onNodeHover`) are the only channel from widget to app; the engine itself takes no app-level callbacks.
+- Hover tooltips are the discoverability surface for the editor's gestures, so the chords they print are the ones `NodeGraphWidget::handleProbeClick()` implements — **Ctrl+click adds a probe** (the Spectrum Analyzer plots that signal), **Shift+click removes it** — and Help/Tutorial wording must match. A tooltip is suppressed while a mouse button is dragging and while a pin owns the hover, so a pin hover never stacks the node tooltip on top of the pin tooltip. The node probe hint reports the probe slot already held by the node's *first* output, which is the port a node-body Ctrl+click targets.
 
 ## Work Guidance
 
@@ -52,6 +53,7 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
 
 - `ctest --test-dir build` must pass with zero failures.
 - `tests/test_node_graph_engine.cpp` covers add/remove, link topology, probes, id counters, groups, and `themeColor()`; `tests/test_issue87_flow.cpp` covers the shared link policy and rewire behavior.
+- `test_engine/ui_tests.cpp::hover_tooltips_node_link_subcircuit` covers the hover tooltips end-to-end: a node body, a link, and a collapsed subcircuit block must each raise a tooltip window (ImGui's `##Tooltip_00`, read through `WasActive` because the test engine runs between frames), and an empty-canvas point must raise none.
 
 ## Child DOX Index
 

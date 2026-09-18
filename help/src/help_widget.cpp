@@ -42,7 +42,7 @@ const HelpSection sections[] = {
      4},
     {"Viewing Signal Chain Results",
      {
-         "Click an output pin to probe it — the Spectrum Analyzer shows that node's signal",
+         "Ctrl+click an output pin to probe it — the Spectrum Analyzer shows that node's signal",
          "Up to 4 probes supported, each with a distinct color (teal, orange, purple, blue)",
          "Toggle individual probe trace visibility in the Spectrum Analyzer legend",
          "PFB Channelizer nodes produce IQ plots showing per-channel output",
