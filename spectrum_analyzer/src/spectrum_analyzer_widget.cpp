@@ -168,14 +168,27 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update stop frequency: %.0f MHz", m_engine.stopFrequency() / 1e6);
     }
 
-    if (utils::inputFrequency("VBW (MHz)", vbw, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
+    // RBW/VBW are displayed in kHz so the range can reach down to 1 kHz: the
+    // full sweep is 1 kHz .. 100 MHz and every value in it is typeable without
+    // fractional MHz (a 1 kHz setting reads "1", not "0.001").
+    if (utils::inputFrequency("VBW (kHz)", vbw, 1.0, 10.0, "%.0f", 1e3, 100e6, 1e3)) {
         m_engine.setVideoBw(vbw);
-        LOG_INFO("Update VBW: %.0f MHz", m_engine.vbw() / 1e6);
+        LOG_INFO("Update VBW: %.0f kHz", m_engine.vbw() / 1e3);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Video bandwidth: moving-average window applied across\n"
+                          "the displayed trace. Wider = smoother noise floor.");
     }
 
-    if (utils::inputFrequency("RBW (MHz)", rbw, 1.0, 10.0, "%.0f", 1e6, 100e6)) {
+    if (utils::inputFrequency("RBW (kHz)", rbw, 1.0, 10.0, "%.0f", 1e3, 100e6, 1e3)) {
         m_engine.setResBw(rbw);
-        LOG_INFO("Update RBW: %.0f MHz", m_engine.rbw() / 1e6);
+        LOG_INFO("Update RBW: %.0f kHz", m_engine.rbw() / 1e3);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Resolution bandwidth: Gaussian filter width applied to\n"
+                          "the spectrum. A narrower RBW lowers the displayed noise\n"
+                          "floor, down to the spectrum's bin spacing - below that it\n"
+                          "can no longer resolve.");
     }
 
     // Trace mode controls

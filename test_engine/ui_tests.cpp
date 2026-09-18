@@ -797,4 +797,49 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // Dismissing the offer counts as completed — it must never nag again.
         IM_CHECK(std::filesystem::exists(marker));
     };
+
+    // =========================================================================
+    // Spectrum Analyzer Settings Tests
+    // =========================================================================
+
+    // RBW/VBW must reach down to 1 kHz, which is why both are entered in kHz (a
+    // 1 kHz setting reads "1"). The widget's clamp is what keeps the engine in
+    // range, so an out-of-range entry has to land on the 1 kHz floor rather than
+    // being accepted.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_rbw_vbw_reach_1khz");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const double rbw_before = sa.rbw();
+        const double vbw_before = sa.vbw();
+
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(2);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("RBW (kHz)"));
+        IM_CHECK(ctx->ItemExists("VBW (kHz)"));
+
+        ctx->ItemInputValue("RBW (kHz)", "1");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.rbw(), 1e3);
+
+        // Below the floor: clamped up to 1 kHz, not accepted as-is.
+        ctx->ItemInputValue("RBW (kHz)", "0.5");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.rbw(), 1e3);
+
+        ctx->ItemInputValue("VBW (kHz)", "2");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.vbw(), 2e3);
+
+        ctx->ItemInputValue("VBW (kHz)", "0.1");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.vbw(), 1e3);
+        ctx->SetRef("");
+
+        sa.setResBw(rbw_before);
+        sa.setVideoBw(vbw_before);
+        ctx->Yield(2);
+    };
 }
