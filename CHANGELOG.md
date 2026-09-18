@@ -1,3 +1,19 @@
+## [0.24.1] - 2026-09-18
+
+### Added
+
+- **Force-push gate** — [`.githooks/pre-push`](.githooks/pre-push) rejects any push that would update an existing remote ref with a non-fast-forward commit, because that history is what open pull requests, reviews, and other clones point at. Creating a ref, deleting a ref, and every fast-forward pass unchanged; a tip whose ancestry cannot be decided locally (shallow or partial clone) is allowed with a notice rather than guessed at. The escape hatch is per invocation: `RFSIM_ALLOW_FORCE_PUSH=1 git push …`, or `git push --no-verify` to skip every hook. `scripts/test-githooks.sh` covers the ancestry cases plus a real end-to-end push against a bare remote.
+
+### Fixed
+
+- **Parallel test isolation** — scratch files and exe-relative state are now safe under a local `ctest -jN`. `test_project_file` and `test_issue78_multi_output` named their scratch files from a `static` counter, which restarts at 0 in each of the per-`TEST_CASE` processes `catch_discover_tests` registers, so concurrent cases opened the same `test_roundtrip_<n>.rfsim` and clobbered each other's save/load state (`ctest -j2` failed 6 of them, `-j8` failed 8, sequential passed). Every scratch name now carries the process id — `test_temp_paths.h` (`processTag()`), a new shared header — and the standalone targets whose relative names landed in the checkout resolve under `temp_directory_path()` instead. `test_project_file` keeps its relative name deliberately: its S-parameter case stages a fixture beside the project file to exercise relative resolution.
+- **Shared exe-relative and extension-root state** — `test_ui` (which drives `<exe_dir>/layouts/UITestLayout.ini` and `<exe_dir>/.tutorial_completed` through the app) and the `test_extensions`/`test_issue45_extension_trust` pair (which share the source-tree built-in extension root that `ExtensionManager` hardcodes as its highest-precedence scan root) are now `RUN_SERIAL`, since neither path is injectable. The three `ScopedRemove` destructors now warn with the path they could not remove instead of discarding the error, which is what let an interrupted run leave a plant behind that then failed `test_extensions` when run alone.
+
+### Testing
+
+- `ctest` passes 261/261 sequentially and at `-j2`, `-j4`, `-j8` (three consecutive runs), and `-j16`; the extension pair passes 10 repeats.
+- `bash scripts/test-githooks.sh` reports 37 passed, 0 failed, including a fast-forward push that succeeds, a `git push --force` that is refused with the remote ref left unmoved, and the same force push succeeding under `RFSIM_ALLOW_FORCE_PUSH=1`.
+
 ## [0.24.0] - 2026-09-17
 
 ### Added
