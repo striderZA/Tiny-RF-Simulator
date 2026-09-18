@@ -16,6 +16,7 @@
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
 #include <filesystem>
@@ -198,7 +199,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #116: project load drops duplicate-input a
     // Absolute temp path: this standalone executable runs with the source tree
     // as its CTest working directory, so a relative name would write into it.
     const std::string path =
-        (std::filesystem::temp_directory_path() / "test_issue116_invalid_links.rfsim").string();
+        (std::filesystem::temp_directory_path() /
+         ("test_issue116_invalid_links_" + test_temp_paths::processTag() + ".rfsim"))
+            .string();
     std::remove(path.c_str());
     {
         std::ofstream out(path);
@@ -245,7 +248,9 @@ TEST_CASE_METHOD(ImGuiFixture,
     // Absolute temp path: this standalone executable runs with the source tree
     // as its CTest working directory, so a relative name would write into it.
     const std::string path =
-        (std::filesystem::temp_directory_path() / "test_issue116_collapsed_load.rfsim").string();
+        (std::filesystem::temp_directory_path() /
+         ("test_issue116_collapsed_load_" + test_temp_paths::processTag() + ".rfsim"))
+            .string();
     std::remove(path.c_str());
     {
         std::ofstream out(path);
