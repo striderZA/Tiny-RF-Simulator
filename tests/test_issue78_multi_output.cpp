@@ -20,8 +20,10 @@
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 struct Issue78ImGuiFixture {
@@ -37,10 +39,18 @@ struct Issue78ImGuiFixture {
     }
 };
 
-// Unique temp filename per call so parallel test processes don't collide.
+// The absolute path matters because this standalone executable runs with the
+// source tree as its CTest working directory (`add_standalone_test`), so a bare
+// relative name wrote the scratch file into the checkout. The pid tag is not
+// needed for the cases of this file — one CTest entry runs them all in a single
+// process, so the counter already orders them — but it keeps a second concurrent
+// `ctest` invocation of this entry from reusing the same name.
 static int s_temp_counter = 0;
 static std::string tempPath() {
-    return "test_issue78_roundtrip_" + std::to_string(s_temp_counter++) + ".rfsim";
+    return (std::filesystem::temp_directory_path() /
+            ("test_issue78_roundtrip_" + test_temp_paths::processTag() + "_" +
+             std::to_string(s_temp_counter++) + ".rfsim"))
+        .string();
 }
 
 template <typename T> static T *findOne(ComponentRegistry &registry) {

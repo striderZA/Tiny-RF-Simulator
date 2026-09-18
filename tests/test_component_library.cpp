@@ -8,21 +8,26 @@
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "splitter_engine.h"
+#include "test_temp_paths.h"
 #include "view_manager.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <random>
 
 using Catch::Approx;
 
+// This file is compiled into the main `tests` binary, so `catch_discover_tests`
+// runs each TEST_CASE as its own process: a `static` counter alone would restart
+// at 0 and a `random_device` name is only probabilistically unique. The pid tag
+// plus the per-process counter is deterministic and collision-free. See
+// tests/AGENTS.md.
 static std::string write_temp_json(const std::string &content) {
-    static std::random_device rd;
-    std::uniform_int_distribution<int> dis(100000, 999999);
+    static int s_temp_counter = 0;
     auto path = std::filesystem::temp_directory_path() /
-                ("test_component_" + std::to_string(dis(rd)) + ".json");
+                ("test_component_" + test_temp_paths::processTag() + "_" +
+                 std::to_string(s_temp_counter++) + ".json");
     std::ofstream ofs(path);
     ofs << content;
     ofs.close();
@@ -60,7 +65,9 @@ TEST_CASE("ComponentLibrary loads valid amplifier JSON", "[library]") {
 }
 
 TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
-    std::filesystem::create_directories("test_lib/amplifiers/test");
+    const auto lib_root =
+        std::filesystem::temp_directory_path() / ("test_lib_" + test_temp_paths::processTag());
+    std::filesystem::create_directories(lib_root / "amplifiers/test");
 
     std::string json1 =
         R"({"schema_version":1,"type":"amplifier","part_number":"AMP-001","parameters":{"gain_dB":10.0}})";
@@ -68,16 +75,16 @@ TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
         R"({"schema_version":1,"type":"amplifier","part_number":"AMP-002","parameters":{"gain_dB":20.0}})";
 
     {
-        std::ofstream ofs("test_lib/amplifiers/test/amp1.json");
+        std::ofstream ofs(lib_root / "amplifiers/test/amp1.json");
         ofs << json1;
     }
     {
-        std::ofstream ofs("test_lib/amplifiers/test/amp2.json");
+        std::ofstream ofs(lib_root / "amplifiers/test/amp2.json");
         ofs << json2;
     }
 
     ComponentLibrary lib;
-    lib.scan("test_lib");
+    lib.scan(lib_root.string());
 
     auto defs = lib.all();
     REQUIRE(defs.size() == 2);
@@ -85,7 +92,7 @@ TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
     auto amps = lib.byType("amplifier");
     REQUIRE(amps.size() == 2);
 
-    std::filesystem::remove_all("test_lib");
+    std::filesystem::remove_all(lib_root);
 }
 
 TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]") {

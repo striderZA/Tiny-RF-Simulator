@@ -16,9 +16,11 @@
 #include "implot.h"
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 using Catch::Approx;
@@ -38,7 +40,12 @@ struct ImGuiFixture {
 
 TEST_CASE_METHOD(ImGuiFixture, "Round-trip: SPDT switch params and its T2 link survive save/load",
                  "[project_file][rf_switch]") {
-    const std::string path = "test_rf_switch_project.rfsim";
+    // Absolute temp path: this standalone executable runs with the source tree
+    // as its CTest working directory, so a relative name would write into it.
+    const std::string path =
+        (std::filesystem::temp_directory_path() /
+         ("test_rf_switch_project_" + test_temp_paths::processTag() + ".rfsim"))
+            .string();
     std::remove(path.c_str());
     {
         RfSimulatorApp app;

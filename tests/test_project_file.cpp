@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -17,11 +18,15 @@
 
 using Catch::Approx;
 
-// Generate a unique temp filename per call so parallel test processes don't
-// step on each other's files.
+// Unique temp filename per call so parallel test processes don't step on each
+// other's files. The counter only orders calls within this process, so the pid
+// carries the cross-process uniqueness: `catch_discover_tests` runs each
+// TEST_CASE as its own process, and two of them starting at counter 0 would
+// otherwise open the same file.
 static int s_temp_counter = 0;
 static std::string tempPath(const std::string &suffix = "") {
-    return "test_roundtrip_" + std::to_string(s_temp_counter++) + suffix + ".rfsim";
+    return "test_roundtrip_" + test_temp_paths::processTag() + "_" +
+           std::to_string(s_temp_counter++) + suffix + ".rfsim";
 }
 
 struct ImGuiFixture {
