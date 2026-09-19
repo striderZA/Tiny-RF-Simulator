@@ -296,15 +296,20 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
     // Hovering a node, a link, or a collapsed subcircuit must bring up a tooltip:
     // the editor's probe chord (Ctrl+click) is documented nowhere else, so the
-    // hint text is the discoverability surface. Black-box check: ImGui names its
-    // tooltip windows "##Tooltip_NN", and because the test engine runs between
-    // frames it reads WasActive (the previous frame's Active flag) rather than
-    // Active, which the frame that just started already cleared.
+    // hint text is the discoverability surface. Black-box check: ImGui's tooltip
+    // windows carry ImGuiWindowFlags_Tooltip, and because the test engine runs
+    // between frames the check reads WasActive (the previous frame's Active flag)
+    // rather than Active, which the frame that just started already cleared.
     t = IM_REGISTER_TEST(e, "rf_simulator", "hover_tooltips_node_link_subcircuit");
     t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Any tooltip window, whatever its "##Tooltip_NN" suffix: ImGui bumps
+        // that suffix when a second tooltip is drawn in one frame, so pinning the
+        // name would silently read a window this editor never opened.
         auto tooltip_visible = []() {
-            ImGuiWindow *w = ImGui::FindWindowByName("##Tooltip_00");
-            return w != nullptr && w->WasActive;
+            for (ImGuiWindow *w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && (w->Flags & ImGuiWindowFlags_Tooltip))
+                    return true;
+            return false;
         };
         // True once the mouse sits on `node_id`. A pin never counts: imnodes
         // reports the pin instead of the node, which is the case the node
@@ -411,6 +416,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(group_id > 0);
         graph.setGroupCollapsed(group_id, true);
         ctx->Yield(4);
+        // The link was removed above, so this block has no cross-boundary link —
+        // the case where Ctrl+click has nothing to probe and the tooltip must not
+        // advertise one. The block still has to describe itself.
+        const Group *group = graph.groupById(group_id);
+        IM_CHECK(group != nullptr);
+        IM_CHECK(group->boundary_pins.empty());
         IM_CHECK(hover_node(group_id, ImNodes::GetNodeScreenSpacePos(group_id),
                             ImNodes::GetNodeDimensions(group_id)));
         ctx->Yield(3);
