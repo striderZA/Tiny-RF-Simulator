@@ -118,6 +118,7 @@ class RfSimulatorApp {
     NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
     ComponentRegistry &testComponents() { return m_components; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
+    SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }

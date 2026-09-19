@@ -23,8 +23,8 @@ const std::vector<TutorialStep> steps = {
      "gain or frequency. Changes take effect immediately.",
      TutorialTarget::Properties},
     {"View Results",
-     "Click an output pin to probe it — the Spectrum Analyzer plots that node's live signal. Up "
-     "to four probes can be active, each with its own trace color.",
+     "Ctrl+click an output pin to probe it — the Spectrum Analyzer plots that node's live signal. "
+     "Up to four probes can be active, each with its own trace color.",
      TutorialTarget::SpectrumAnalyzer},
     {"Navigate the Graph",
      "Pan the canvas by middle-click dragging. Ctrl+click or rubber-band select to pick several "

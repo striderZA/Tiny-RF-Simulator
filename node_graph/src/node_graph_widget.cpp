@@ -67,9 +67,10 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         // Rubber-band selection (Shift+drag on empty space)
         handleRubberBand(editor_hovered);
 
-        // Pin tooltips (after EndNodeEditor per imnodes query pattern)
+        // Hover tooltips (after EndNodeEditor per imnodes query pattern)
         showPinTooltips();
         showNodeHoverTooltips();
+        showLinkTooltips();
 
         // Process interactions after EndNodeEditor (IsNodeHovered requires scope None)
         handleLinkCreation();

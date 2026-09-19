@@ -93,6 +93,7 @@ Default section order:
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
 - PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
 - Spectrum-display noise jitter is a cosmetic effect on the noise floor only; it must never perturb deterministic signal tones, so tone peaks stay fixed frame to frame.
+- The spectrum analyzer's RBW and VBW controls span 1 kHz – 100 MHz and are labelled in kHz, so the 1 kHz floor is typeable without fractional MHz values. The range lives at the widget's `utils::inputFrequency()` call (its trailing `displayUnit_Hz` picks the unit); the engine setters stay unclamped so `test_flow`/tests can drive any value.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 - Superpowers plan/spec documents are working materials and must not be committed.
 - Never run filesystem-wide searches (`find /`, `dir /s`, global greps from the drive root) — they hang headless agent runs past their watchdog. A fresh git worktree has no local `build/`; dependency *sources* are browsable in the canonical checkout's `build/_deps/<name>-src`, and a fresh checkout can configure deps itself with `cmake -B build -G Ninja` (~90 s). Read `CMakeLists.txt` `FetchContent_Declare` pins for versions.

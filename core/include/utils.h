@@ -30,9 +30,13 @@ static bool inputDouble(std::string label, double &ref, double minorStep, double
 
     return changed;
 }
-static bool inputFrequency(const char *label, double &freq_Hz, double minorStep_MHz,
-                           double majorStep_MHz, const char *format, double lowerLimit_Hz,
-                           double upperLimit_Hz) {
+// Frequency input in a caller-chosen display unit. `minorStep`/`majorStep` are
+// expressed in that display unit, because ImGui::InputDouble steps whatever the
+// field shows. `displayUnit_Hz` defaults to MHz, the panel-wide convention
+// (`inputFrequency` returns the value in Hz, so no caller scales by hand).
+static bool inputFrequency(const char *label, double &freq_Hz, double minorStep, double majorStep,
+                           const char *format, double lowerLimit_Hz, double upperLimit_Hz,
+                           double displayUnit_Hz = 1e6) {
     // clamp external writes to freq_Hz BEFORE drawing widget
     if (freq_Hz > upperLimit_Hz) {
         LOG_WARN("Unable to update frequency: %s! (above upper limit)", label);
@@ -42,13 +46,11 @@ static bool inputFrequency(const char *label, double &freq_Hz, double minorStep_
         freq_Hz = lowerLimit_Hz;
     }
 
-    double freq_MHz = freq_Hz / 1e6;
-    double minorStep = minorStep_MHz;
-    double majorStep = majorStep_MHz;
-    bool changed = ImGui::InputDouble(label, &freq_MHz, minorStep, majorStep, format);
+    double displayValue = freq_Hz / displayUnit_Hz;
+    bool changed = ImGui::InputDouble(label, &displayValue, minorStep, majorStep, format);
 
     if (changed) {
-        freq_Hz = freq_MHz * 1e6;
+        freq_Hz = displayValue * displayUnit_Hz;
         // optionally clamp AFTER user change too
         if (freq_Hz > upperLimit_Hz) {
             LOG_WARN("Unable to update frequency: %s! (above upper limit)", label);

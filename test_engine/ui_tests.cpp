@@ -291,6 +291,142 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     };
 
     // =========================================================================
+    // Hover Tooltip Tests
+    // =========================================================================
+
+    // Hovering a node, a link, or a collapsed subcircuit must bring up a tooltip:
+    // the editor's probe chord (Ctrl+click) is documented nowhere else, so the
+    // hint text is the discoverability surface. Black-box check: ImGui names its
+    // tooltip windows "##Tooltip_NN", and because the test engine runs between
+    // frames it reads WasActive (the previous frame's Active flag) rather than
+    // Active, which the frame that just started already cleared.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "hover_tooltips_node_link_subcircuit");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto tooltip_visible = []() {
+            ImGuiWindow *w = ImGui::FindWindowByName("##Tooltip_00");
+            return w != nullptr && w->WasActive;
+        };
+        // True once the mouse sits on `node_id`. A pin never counts: imnodes
+        // reports the pin instead of the node, which is the case the node
+        // tooltip is deliberately suppressed for.
+        auto hover_node = [&](int node_id, ImVec2 pos, ImVec2 dim) {
+            for (float fy = 0.25f; fy <= 0.8f; fy += 0.25f) {
+                for (float fx = 0.25f; fx <= 0.8f; fx += 0.25f) {
+                    ctx->MouseMoveToPos(ImVec2(pos.x + dim.x * fx, pos.y + dim.y * fy));
+                    ctx->Yield(1);
+                    int hovered = -1;
+                    if (ImNodes::IsNodeHovered(&hovered) && hovered == node_id)
+                        return true;
+                }
+            }
+            return false;
+        };
+
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+        ImNodes::EditorContextResetPanning(ImVec2(0, 0));
+        ctx->Yield(2);
+
+        auto &graph = s_app->testGraphEngine();
+        const int gen_node = NodeHelper::findComponentNodeId<SignalGeneratorEngine>(*s_app);
+        const int amp_node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
+        IM_CHECK(gen_node >= 0);
+        IM_CHECK(amp_node >= 0);
+        const int gen_out = graph.outputPinId(gen_node);
+        const int amp_in = graph.inputPinId(amp_node);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(amp_in >= 0);
+
+        // Separate the two seeded nodes (they start stacked at the canvas origin)
+        // inside the window's visible top-left region so both, and the link
+        // between them, can be reached by the mouse.
+        ImVec2 vp = ImGui::GetIO().DisplaySize;
+        auto info = ctx->WindowInfo("Node Editor");
+        ImVec2 vis_min = info.RectFull.Min;
+        ImVec2 vis_max =
+            ImVec2(std::min(info.RectFull.Max.x, vp.x), std::min(info.RectFull.Max.y, vp.y));
+        float anchor_x = std::min(vis_min.x + 180.0f, vis_max.x - 120.0f);
+        float anchor_y = std::min(vis_min.y + 120.0f, vis_max.y - 120.0f);
+        ImNodes::SetNodeScreenSpacePos(gen_node, ImVec2(anchor_x - 140.0f, anchor_y - 60.0f));
+        ImNodes::SetNodeScreenSpacePos(amp_node, ImVec2(anchor_x + 140.0f, anchor_y + 40.0f));
+        ctx->Yield(4);
+
+        // -- node body --
+        IM_CHECK(hover_node(gen_node, ImNodes::GetNodeScreenSpacePos(gen_node),
+                            ImNodes::GetNodeDimensions(gen_node)));
+        ctx->Yield(3);
+        IM_CHECK(tooltip_visible());
+
+        // -- empty canvas: the tooltip follows the hover, it is not permanently up.
+        // Both nodes sit in the window's top-left anchor region, so probe the other
+        // corners and require one of them to be over no node at all --
+        // IsNodeHovered is the editor's own predicate, so this is not our screen
+        // arithmetic talking.
+        bool found_empty = false;
+        for (const ImVec2 &c : {ImVec2(vis_min.x + 20.0f, vis_max.y - 20.0f),
+                                ImVec2(vis_max.x - 20.0f, vis_max.y - 20.0f),
+                                ImVec2(vis_max.x - 20.0f, vis_min.y + 20.0f)}) {
+            ctx->MouseMoveToPos(c);
+            ctx->Yield(2);
+            int h = -1;
+            if (!ImNodes::IsNodeHovered(&h)) {
+                found_empty = true;
+                break;
+            }
+        }
+        IM_CHECK(found_empty);
+        ctx->Yield(4);
+        IM_CHECK(!tooltip_visible());
+
+        // -- link: the drawn link is a bezier between the two nodes' pins, which
+        //    sit below the middle of each node rect, so sweep the gap between the
+        //    node rects from the bottom row upwards - the first row usually hits --
+        const int link_id = graph.addLink(gen_out, amp_in);
+        IM_CHECK(link_id >= 0);
+        ctx->Yield(4);
+        ImVec2 c1 =
+            ImNodes::GetNodeScreenSpacePos(gen_node) + ImNodes::GetNodeDimensions(gen_node) * 0.5f;
+        ImVec2 c2 =
+            ImNodes::GetNodeScreenSpacePos(amp_node) + ImNodes::GetNodeDimensions(amp_node) * 0.5f;
+        ImVec2 mid = (c1 + c2) * 0.5f;
+        bool link_hovered = false;
+        for (float dy = 40.0f; dy >= -40.0f && !link_hovered; dy -= 4.0f) {
+            for (float dx = -60.0f; dx <= 60.0f && !link_hovered; dx += 4.0f) {
+                ctx->MouseMoveToPos(ImVec2(mid.x + dx, mid.y + dy));
+                ctx->Yield(1);
+                int hovered = -1;
+                link_hovered = ImNodes::IsLinkHovered(&hovered) && hovered == link_id;
+            }
+        }
+        IM_CHECK(link_hovered);
+        ctx->Yield(3);
+        IM_CHECK(tooltip_visible());
+
+        graph.removeLink(link_id);
+        ctx->Yield(2);
+
+        // -- collapsed subcircuit block (block ids live in 50000..99999) --
+        const int group_id = graph.addGroup("Tooltip Subcircuit", {gen_node, amp_node});
+        IM_CHECK(group_id > 0);
+        graph.setGroupCollapsed(group_id, true);
+        ctx->Yield(4);
+        IM_CHECK(hover_node(group_id, ImNodes::GetNodeScreenSpacePos(group_id),
+                            ImNodes::GetNodeDimensions(group_id)));
+        ctx->Yield(3);
+        IM_CHECK(tooltip_visible());
+
+        graph.removeGroup(group_id);
+        ctx->Yield(2);
+
+        // Restore the seeded nodes to their default origin positions so the
+        // subcircuit tests' "stacked at canvas origin" assumptions hold.
+        ImNodes::SetNodeGridSpacePos(gen_node, ImVec2(0, 0));
+        ImNodes::SetNodeGridSpacePos(amp_node, ImVec2(0, 0));
+        ctx->Yield(2);
+    };
+
+    // =========================================================================
     // Subcircuit Group UI Tests
     // =========================================================================
 
@@ -796,5 +932,50 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!s_app->testTutorialState().isActive());
         // Dismissing the offer counts as completed — it must never nag again.
         IM_CHECK(std::filesystem::exists(marker));
+    };
+
+    // =========================================================================
+    // Spectrum Analyzer Settings Tests
+    // =========================================================================
+
+    // RBW/VBW must reach down to 1 kHz, which is why both are entered in kHz (a
+    // 1 kHz setting reads "1"). The widget's clamp is what keeps the engine in
+    // range, so an out-of-range entry has to land on the 1 kHz floor rather than
+    // being accepted.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_rbw_vbw_reach_1khz");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const double rbw_before = sa.rbw();
+        const double vbw_before = sa.vbw();
+
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(2);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("RBW (kHz)"));
+        IM_CHECK(ctx->ItemExists("VBW (kHz)"));
+
+        ctx->ItemInputValue("RBW (kHz)", "1");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.rbw(), 1e3);
+
+        // Below the floor: clamped up to 1 kHz, not accepted as-is.
+        ctx->ItemInputValue("RBW (kHz)", "0.5");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.rbw(), 1e3);
+
+        ctx->ItemInputValue("VBW (kHz)", "2");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.vbw(), 2e3);
+
+        ctx->ItemInputValue("VBW (kHz)", "0.1");
+        ctx->Yield(2);
+        IM_CHECK_EQ(sa.vbw(), 1e3);
+        ctx->SetRef("");
+
+        sa.setResBw(rbw_before);
+        sa.setVideoBw(vbw_before);
+        ctx->Yield(2);
     };
 }
