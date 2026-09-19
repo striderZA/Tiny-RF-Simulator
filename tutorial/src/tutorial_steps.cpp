@@ -27,8 +27,9 @@ const std::vector<TutorialStep> steps = {
      "Up to four probes can be active, each with its own trace color.",
      TutorialTarget::SpectrumAnalyzer},
     {"Navigate the Graph",
-     "Pan the canvas by middle-click dragging. Ctrl+click or rubber-band select to pick several "
-     "nodes at once, and press Delete to remove them. That's the whole workflow — click Finish.",
+     "Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several "
+     "nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete "
+     "to remove them. That's the whole workflow — click Finish.",
      TutorialTarget::NodeEditor},
 };
 
