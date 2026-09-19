@@ -1,6 +1,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "node_graph_widget.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -192,13 +193,19 @@ void NodeGraphWidget::showNodeHoverTooltips() {
     // Collapsed subcircuit block (block ids are allocated from 50000). The name
     // is project data, so it is never interpolated into a format string.
     if (const Group *group = m_engine.groupById(hovered_node)) {
+        // A block Ctrl+click probes the group's first *output* boundary pin
+        // (handleProbeClick), so the hint is only printed when one exists: a
+        // subcircuit with no cross-boundary output link has nothing to probe.
+        const bool probeable = std::any_of(group->boundary_pins.begin(), group->boundary_pins.end(),
+                                           [](const GroupBoundaryPin &bp) { return bp.is_output; });
         const std::string title = "Subcircuit: " + group->name;
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(title.c_str());
         ImGui::PopTextWrapPos();
         ImGui::Separator();
-        ImGui::TextDisabled("%s", kProbeHint);
+        if (probeable)
+            ImGui::TextDisabled("%s", kProbeHint);
         ImGui::TextDisabled("Right-click: expand / rename / ungroup");
         ImGui::EndTooltip();
         return;
