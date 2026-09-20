@@ -1,9 +1,13 @@
 // Standalone Catch2 executable for the S1/S2 security fixes from the
-// 2026-08-09 codebase review:
+// 2026-08-09 codebase review, plus the issue #120 component-authoring save
+// path:
 //   S1 — S-param file path containment (project-file boundary in
 //        ProjectSerializer::load()/save(), library boundary in
 //        ComponentLibrary::instantiate())
 //   S2 — touchstone parser file-size guard + in-loop frequency-point cap
+//   #120 — the S-param file the authoring form copies next to the library JSON
+//        is named from a sanitized part number, and the save path refuses any
+//        data-file name that is not a bare file name (no separators, no '..').
 //
 // Built as its own executable rather than appended to the main `tests` binary
 // because this MinGW-w64 toolchain silently drops any TEST_CASE registered
@@ -11,12 +15,14 @@
 // in tests/CMakeLists.txt).
 #include "amplifier_engine.h"
 #include "app.h"
+#include "component_form_model.h"
 #include "component_library.h"
 #include "component_registry.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
 #include "node_graph_engine.h"
+#include "test_temp_paths.h"
 #include "touchstone_parser.h"
 #include "view_manager.h"
 #include <catch2/catch_approx.hpp>
@@ -283,4 +289,147 @@ TEST_CASE("TouchstoneParser rejects oversized files before reading", "[containme
     REQUIRE_FALSE(after.has_value());
 
     std::filesystem::remove(path);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #120 — component-authoring save path: the S-param file copied next to
+// the library JSON is named from `sanitizePathSegment(part_number)` instead of
+// the raw part number, and the app refuses any data-file name that is not a
+// bare file name before joining it onto the destination directory.
+// ---------------------------------------------------------------------------
+TEST_CASE("Data-file names that could escape the library root are rejected",
+          "[containment][issue120][library]") {
+    const std::string dir = "library/amplifier/acme";
+    // Traversal / separator / absolute spellings, refused on both platforms so
+    // a library authored on Windows is as safe read on Linux (and vice versa).
+    // This is the exact composition RfSimulatorApp::saveComponentForm() makes
+    // for a new entry.
+    CHECK_FALSE(dataFileCopyDestination(dir, "..\\..\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "../../evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "sub/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "sub\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "/abs/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "\\abs\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "C:/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "C:\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "..").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, ".").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "").has_value());
+    CHECK_FALSE(dataFileCopyDestination("", "AMP.s2p").has_value());
+
+    // The plain names the authoring form produces resolve next to the JSON.
+    CHECK(dataFileCopyDestination(dir, "AM1143.s2p") == std::filesystem::path(dir) / "AM1143.s2p");
+    CHECK(dataFileCopyDestination(dir, "ZX60-33LN.s2p").has_value());
+    CHECK(dataFileCopyDestination(dir, "Test Amp.s2p").has_value());
+    // ".." that is part of a name rather than a path component stays legal —
+    // the gate tests path components, not a ".." substring.
+    CHECK(dataFileCopyDestination(dir, "AMP..v2.s2p").has_value());
+}
+
+TEST_CASE("Component authoring derives the copied S-param name from a sanitized part number",
+          "[containment][issue120]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("..\\..\\evil");
+    model.setManufacturer("Acme");
+    model.setParameter("gain_dB", 20.0);
+    model.setSparamSourcePath("AM1143.s2p"); // extension is all that is read
+
+    const auto def = model.buildDefinition();
+    REQUIRE(def.data_files.size() == 1);
+    CHECK(def.data_files.front().type == "s_parameters");
+    CHECK(def.data_files.front().path == "evil.s2p");
+    CHECK(
+        dataFileCopyDestination("library/amplifier/Acme", def.data_files.front().path).has_value());
+
+    // The pre-fix spelling of this entry's data file — the raw part number plus
+    // the picked extension, which is what the JSON would then have persisted —
+    // is exactly what the gate refuses, so the stored path can never disagree
+    // with the copied file name.
+    CHECK_FALSE(
+        dataFileCopyDestination("library/amplifier/Acme", model.partNumber() + ".s2p").has_value());
+
+    // A part number that sanitizes to nothing falls back to "component" instead
+    // of producing an extension-only or empty file name.
+    model.setPartNumber("..");
+    CHECK(model.buildDefinition().data_files.front().path == "component.s2p");
+}
+
+TEST_CASE("Component authoring copy destination stays inside the library root",
+          "[containment][issue120]") {
+    namespace fs = std::filesystem;
+    const auto base =
+        fs::temp_directory_path() / ("containment_issue120_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    fs::create_directories(base);
+    const auto picked = base / "picked.s2p";
+    writeS2p(picked);
+
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("..\\..\\escape");
+    model.setParameter("gain_dB", 20.0);
+    model.setParameter("nf_dB", 2.0);
+    model.setSparamSourcePath(picked.string());
+    const auto def = model.buildDefinition();
+    REQUIRE(def.data_files.size() == 1);
+
+    // Same composition as RfSimulatorApp::saveComponentForm() for a new entry
+    // (the app method itself is private): the data-file name is joined onto the
+    // JSON's directory through the shared safety gate.
+    const fs::path root = base / "library";
+    const fs::path dir = root / def.type / "unknown";
+    fs::create_directories(dir);
+    const fs::path json_path = dir / "escape.json";
+    const auto dest_sparam =
+        dataFileCopyDestination(json_path.parent_path().string(), def.data_files.front().path);
+    REQUIRE(dest_sparam.has_value());
+    std::error_code ec;
+    fs::copy_file(model.sparamSourcePath(), *dest_sparam, fs::copy_options::overwrite_existing, ec);
+    REQUIRE_FALSE(ec);
+
+    // The copy landed next to the JSON, inside the library root...
+    CHECK(fs::weakly_canonical(*dest_sparam) == fs::weakly_canonical(dir / "escape.s2p"));
+    // ...and nothing was written to the traversal target the raw part number
+    // ("..\..\escape.s2p" from directory/type/manufacturer) would have reached.
+    CHECK_FALSE(fs::exists(root / "escape.s2p"));
+    CHECK(fs::exists(dir / "escape.s2p"));
+    // The name the JSON persists is the name that was copied, so the entry stays
+    // resolvable on the next load instead of pointing at the raw part number.
+    CHECK(dest_sparam->filename().string() == def.data_files.front().path);
+    CHECK(def.data_files.front().path.find('\\') == std::string::npos);
+    CHECK(def.data_files.front().path.find('/') == std::string::npos);
+
+    // The sanitized name is the one the library later resolves: write the entry
+    // the way saveComponentForm() does and instantiate it, so the fixed naming
+    // is proven usable end to end (not just traversal-proof).
+    nlohmann::json entry;
+    entry["schema_version"] = 2;
+    entry["type"] = def.type;
+    entry["part_number"] = def.part_number;
+    entry["parameters"] = def.parameters;
+    entry["data_files"] = nlohmann::json::array();
+    entry["data_files"].push_back(
+        {{"type", def.data_files.front().type}, {"path", def.data_files.front().path}});
+    {
+        std::ofstream ofs(json_path);
+        ofs << entry.dump(2);
+    }
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path.string());
+    REQUIRE(lib.all().size() == 1);
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+    auto *engine = lib.instantiate(*lib.all().front(), 402, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto *amp = dynamic_cast<AmplifierEngine *>(engine);
+    REQUIRE(amp != nullptr);
+    CHECK(amp->sparamLoaded());
+
+    fs::remove_all(base);
 }

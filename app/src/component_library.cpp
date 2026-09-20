@@ -1,6 +1,7 @@
 #include "component_library.h"
 #include "component_type_registry.h"
 #include "logging_core.h"
+#include <cctype>
 #include <exception>
 #include <filesystem>
 #include <limits>
@@ -72,7 +73,50 @@ std::optional<fs::path> resolveDataFilePath(const fs::path &json_dir, const std:
     return resolved;
 }
 
+// True only for a bare file name that cannot escape the directory it is joined
+// to: non-empty, no '/' or '\' (rejected on both platforms so a library
+// authored on one is safe on the other), no drive/root prefix and no "."/".."
+// component. Deliberately stricter than resolveDataFilePath(), which also
+// honors contained subdirectory paths — a *copied* file has no reason to name
+// one.
+bool isSafeDataFileName(const std::string &path) {
+    if (path.empty())
+        return false;
+    if (path.find('/') != std::string::npos || path.find('\\') != std::string::npos)
+        return false;
+    const fs::path p(path);
+    if (p.is_absolute() || p.has_root_name() || p.has_root_directory() || p.has_parent_path())
+        return false;
+    for (const auto &part : p) {
+        if (part == "." || part == "..")
+            return false;
+    }
+    return !p.filename().empty();
+}
+
 } // namespace
+
+std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ')
+            out.push_back(c);
+    }
+    size_t start = out.find_first_not_of(' ');
+    if (start == std::string::npos)
+        return fallback;
+    size_t end = out.find_last_not_of(' ');
+    out = out.substr(start, end - start + 1);
+    return out.empty() ? fallback : out;
+}
+
+std::optional<std::filesystem::path> dataFileCopyDestination(const std::string &dest_dir,
+                                                             const std::string &name) {
+    if (dest_dir.empty() || !isSafeDataFileName(name))
+        return std::nullopt;
+    return std::filesystem::path(dest_dir) / name;
+}
 
 std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
                                                         const nlohmann::json &parameters) const {

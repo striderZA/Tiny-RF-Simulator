@@ -1,6 +1,8 @@
 #pragma once
 
+#include <filesystem>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,22 @@ struct ValidationIssue {
     std::string field; // empty = whole-definition issue (e.g. unknown type)
     std::string message;
 };
+
+// --- Library entry / data-file naming ---------------------------------------
+// Keep only filesystem-safe characters for one path segment: [A-Za-z0-9-_ ],
+// trimmed of surrounding spaces. Every other character (including separators
+// and '.') is dropped, so the result can never traverse out of the directory
+// it is joined to; `fallback` is returned when nothing survives. Used for the
+// library JSON/directory names and for the name of a copied data file.
+std::string sanitizePathSegment(const std::string &s, const std::string &fallback);
+
+// Destination for a data file being copied into a library entry's directory:
+// `dest_dir / name`, or nullopt when `name` is not a bare file name (the caller
+// must then refuse the save instead of joining an escaping name). The
+// component-authoring save path uses this for the picked S-param file
+// (issue #120).
+std::optional<std::filesystem::path> dataFileCopyDestination(const std::string &dest_dir,
+                                                             const std::string &name);
 
 struct ComponentDefinition {
     int schema_version;

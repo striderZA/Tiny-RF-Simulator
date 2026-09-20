@@ -10,7 +10,6 @@
 #include "pfb_channelizer_engine.h"
 #include "rewire.h"
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -27,24 +26,6 @@
 #include <climits>
 #include <unistd.h>
 #endif
-// Keep only filesystem-safe characters for path segments: [A-Za-z0-9-_ ].
-// Strips everything else (incl. /, \\, and . which eliminates .. risks).
-// Trims leading/trailing spaces. Returns fallback if result is empty.
-static std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
-    std::string out;
-    out.reserve(s.size());
-    for (char c : s) {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ')
-            out.push_back(c);
-    }
-    size_t start = out.find_first_not_of(' ');
-    if (start == std::string::npos)
-        return fallback;
-    size_t end = out.find_last_not_of(' ');
-    out = out.substr(start, end - start + 1);
-    return out.empty() ? fallback : out;
-}
-
 // Directory of the running executable, for exe-relative data/layout lookup.
 // Falls back to the current working directory if exe-path detection fails.
 // Same convention as layout/ (LayoutManager) and tutorial/ (TutorialState).
@@ -681,10 +662,21 @@ bool RfSimulatorApp::saveComponentForm() {
 
     // Copy S-param file into place next to the destination JSON, if one was picked.
     if (!model.sparamSourcePath().empty()) {
+        // Issue #120: never join an unchecked data-file name onto dest_dir.
+        // ComponentFormModel::buildDefinition() already derives the name from a
+        // sanitized part number, but a definition reaching this point by any
+        // other route must not be able to write outside the library root.
+        const std::string data_name =
+            def.data_files.empty() ? std::string() : def.data_files.front().path;
         fs::path dest_dir = fs::path(def.source_path).parent_path();
-        fs::path dest_sparam = dest_dir / def.data_files[0].path;
+        const auto dest_sparam = dataFileCopyDestination(dest_dir.string(), data_name);
+        if (!dest_sparam) {
+            m_component_form_error = "Refusing unsafe S-parameter file name '" + data_name +
+                                     "': expected a plain file name inside the library root.";
+            return false;
+        }
         std::error_code ec;
-        fs::copy_file(model.sparamSourcePath(), dest_sparam, fs::copy_options::overwrite_existing,
+        fs::copy_file(model.sparamSourcePath(), *dest_sparam, fs::copy_options::overwrite_existing,
                       ec);
         if (ec) {
             m_component_form_error = "Failed to copy S-parameter file: " + ec.message();
