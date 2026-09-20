@@ -43,13 +43,14 @@ const HelpSection sections[] = {
     {"Viewing Signal Chain Results",
      {
          "Ctrl+click an output pin to probe it — the Spectrum Analyzer shows that node's signal",
+         "Ctrl+click a node body to probe that node's first output (it also multi-selects)",
          "Up to 4 probes supported, each with a distinct color (teal, orange, purple, blue)",
          "Toggle individual probe trace visibility in the Spectrum Analyzer legend",
          "PFB Channelizer nodes produce IQ plots showing per-channel output",
          "Each widget can be resized, docked, or hidden via the View menu",
          "Window visibility is saved and restored between sessions",
      },
-     6},
+     7},
     {"Using the Inspector Panel",
      {
          "The Inspector (Properties) panel shows details for the selected node",

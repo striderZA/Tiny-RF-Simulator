@@ -589,3 +589,14 @@ void NodeGraphEngine::rebuildGroupBoundaryPins(int group_id) {
     }
     g->boundary_pins = std::move(new_pins);
 }
+
+int NodeGraphEngine::firstOutputBoundaryPin(int group_id) const {
+    const Group *g = groupById(group_id);
+    if (!g)
+        return -1;
+    for (const auto &bp : g->boundary_pins) {
+        if (bp.is_output)
+            return bp.internal_pin_id;
+    }
+    return -1;
+}

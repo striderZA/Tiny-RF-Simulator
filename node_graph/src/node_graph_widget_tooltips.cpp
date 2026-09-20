@@ -1,7 +1,6 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "node_graph_widget.h"
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -194,18 +193,25 @@ void NodeGraphWidget::showNodeHoverTooltips() {
     // is project data, so it is never interpolated into a format string.
     if (const Group *group = m_engine.groupById(hovered_node)) {
         // A block Ctrl+click probes the group's first *output* boundary pin
-        // (handleProbeClick), so the hint is only printed when one exists: a
-        // subcircuit with no cross-boundary output link has nothing to probe.
-        const bool probeable = std::any_of(group->boundary_pins.begin(), group->boundary_pins.end(),
-                                           [](const GroupBoundaryPin &bp) { return bp.is_output; });
+        // (handleProbeClick); a subcircuit with no cross-boundary output link has
+        // nothing to probe, so the hint is gated on that same pin and reports the
+        // probe slot it already holds, exactly as the node-body hint does.
+        const int probe_pin = m_engine.firstOutputBoundaryPin(hovered_node);
         const std::string title = "Subcircuit: " + group->name;
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(title.c_str());
         ImGui::PopTextWrapPos();
         ImGui::Separator();
-        if (probeable)
-            ImGui::TextDisabled("%s", kProbeHint);
+        if (probe_pin >= 0) {
+            const int slot = m_engine.probeSlotForPin(probe_pin);
+            if (slot >= 0) {
+                ImGui::Text("Probed [%d]", slot + 1);
+                ImGui::TextDisabled("%s", kUnprobeHint);
+            } else {
+                ImGui::TextDisabled("%s", kProbeHint);
+            }
+        }
         ImGui::TextDisabled("Right-click: expand / rename / ungroup");
         ImGui::EndTooltip();
         return;
