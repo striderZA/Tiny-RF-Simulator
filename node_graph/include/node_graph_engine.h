@@ -112,6 +112,11 @@ class NodeGraphEngine {
     void setGroupCollapsed(int group_id, bool collapsed);
     bool isGroupCollapsed(int group_id) const;
     void rebuildGroupBoundaryPins(int group_id);
+    // Internal pin id of `group_id`'s first output boundary pin, or -1 when the
+    // group has no cross-boundary output link. `NodeGraphWidget` derives both its
+    // collapsed-block probe target and that block's probe hint from this, so the
+    // hint cannot advertise a gesture with nothing to probe.
+    int firstOutputBoundaryPin(int group_id) const;
     int groupIdForNode(int node_id) const;
     const std::vector<int> &groupsContainingNode(int node_id) const;
 

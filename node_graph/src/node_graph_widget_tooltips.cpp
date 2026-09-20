@@ -192,13 +192,26 @@ void NodeGraphWidget::showNodeHoverTooltips() {
     // Collapsed subcircuit block (block ids are allocated from 50000). The name
     // is project data, so it is never interpolated into a format string.
     if (const Group *group = m_engine.groupById(hovered_node)) {
+        // A block Ctrl+click probes the group's first *output* boundary pin
+        // (handleProbeClick); a subcircuit with no cross-boundary output link has
+        // nothing to probe, so the hint is gated on that same pin and reports the
+        // probe slot it already holds, exactly as the node-body hint does.
+        const int probe_pin = m_engine.firstOutputBoundaryPin(hovered_node);
         const std::string title = "Subcircuit: " + group->name;
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(title.c_str());
         ImGui::PopTextWrapPos();
         ImGui::Separator();
-        ImGui::TextDisabled("%s", kProbeHint);
+        if (probe_pin >= 0) {
+            const int slot = m_engine.probeSlotForPin(probe_pin);
+            if (slot >= 0) {
+                ImGui::Text("Probed [%d]", slot + 1);
+                ImGui::TextDisabled("%s", kUnprobeHint);
+            } else {
+                ImGui::TextDisabled("%s", kProbeHint);
+            }
+        }
         ImGui::TextDisabled("Right-click: expand / rename / ungroup");
         ImGui::EndTooltip();
         return;

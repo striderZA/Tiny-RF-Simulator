@@ -528,16 +528,9 @@ void NodeGraphWidget::handleProbeClick() {
                 }
             }
             if (target_pin < 0 && m_clicked_node >= 50000 && m_clicked_node < 100000) {
-                // Group-block click; probe the first output boundary pin
-                const Group *g = m_engine.groupById(m_clicked_node);
-                if (g) {
-                    for (const auto &bp : g->boundary_pins) {
-                        if (bp.is_output) {
-                            target_pin = bp.internal_pin_id;
-                            break;
-                        }
-                    }
-                }
+                // Group-block click; probe the first output boundary pin — the same
+                // pin the collapsed block's tooltip hint is gated on.
+                target_pin = m_engine.firstOutputBoundaryPin(m_clicked_node);
             }
             if (target_pin >= 100000) {
                 // Synthesized boundary pin id; translate to real internal pin id

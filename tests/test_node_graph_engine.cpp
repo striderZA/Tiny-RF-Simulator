@@ -212,6 +212,46 @@ TEST_CASE("NodeGraphEngine group counter accessors", "[node_graph]") {
 
     engine.setNextBoundaryPinId(1999);
     REQUIRE(engine.nextBoundaryPinId() == 1999);
+
+    SECTION("firstOutputBoundaryPin follows the group's cross-boundary output link") {
+        NodeGraphEngine g;
+        SignalNode gen;
+        SignalNode amp;
+        SignalNode meter;
+        SignalNode load;
+        g.addNode("Generator", &gen, false, true); // outside, drives a member input
+        g.addNode("Amplifier", &amp, true, true);  // member
+        g.addNode("Meter", &meter, true, true);    // member, drives an outside input
+        g.addNode("Load", &load, true, false);     // outside
+        const int gen_out = g.nodes()[0].output_pin_ids[0];
+        const int amp_in = g.nodes()[1].input_pin_ids[0];
+        const int meter_out = g.nodes()[2].output_pin_ids[0];
+        const int load_in = g.nodes()[3].input_pin_ids[0];
+
+        // Groups need at least two members.
+        const int group_id = g.addGroup("Sub", {g.nodes()[1].node_id, g.nodes()[2].node_id});
+        REQUIRE(group_id > 0);
+        REQUIRE(g.firstOutputBoundaryPin(group_id) == -1); // no cross-boundary link
+        REQUIRE(g.firstOutputBoundaryPin(99999) == -1);    // unknown group
+
+        // A link *into* the group synthesizes an input boundary pin, which a
+        // collapsed-block Ctrl+click cannot target.
+        g.addLink(gen_out, amp_in);
+        g.rebuildGroupBoundaryPins(group_id);
+        REQUIRE(g.groupById(group_id)->boundary_pins.size() == 1);
+        REQUIRE(g.firstOutputBoundaryPin(group_id) == -1);
+
+        // A link *out of* the group is the target.
+        const int out_link = g.addLink(meter_out, load_in);
+        g.rebuildGroupBoundaryPins(group_id);
+        REQUIRE(g.groupById(group_id)->boundary_pins.size() == 2);
+        REQUIRE(g.firstOutputBoundaryPin(group_id) == meter_out);
+
+        // Removing it leaves only the input boundary pin again.
+        g.removeLink(out_link);
+        g.rebuildGroupBoundaryPins(group_id);
+        REQUIRE(g.firstOutputBoundaryPin(group_id) == -1);
+    }
 }
 
 TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph][appearance]") {
