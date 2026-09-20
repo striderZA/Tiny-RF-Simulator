@@ -629,6 +629,20 @@ void RfSimulatorApp::openEditComponentForm(const ComponentDefinition &def) {
     m_show_component_form = true;
 }
 
+// Test-only entry points for the authoring form (issue #120); see app.h. They
+// open the real form and let a test choose a destination root or a staged
+// S-param path that the UI would otherwise supply through a button / file
+// picker, so the save path under test is the production one.
+void RfSimulatorApp::testOpenNewComponentForm(const std::string &type,
+                                              const std::string &destination_root) {
+    openNewComponentForm(type);
+    m_component_form_destination_root = destination_root;
+}
+
+void RfSimulatorApp::testOpenEditComponentForm(const ComponentDefinition &def) {
+    openEditComponentForm(def);
+}
+
 bool RfSimulatorApp::saveComponentForm() {
     namespace fs = std::filesystem;
     auto &model = *m_component_form_model;
@@ -664,8 +678,12 @@ bool RfSimulatorApp::saveComponentForm() {
     if (!model.sparamSourcePath().empty()) {
         // Issue #120: never join an unchecked data-file name onto dest_dir.
         // ComponentFormModel::buildDefinition() already derives the name from a
-        // sanitized part number, but a definition reaching this point by any
-        // other route must not be able to write outside the library root.
+        // sanitized part number, so through the authoring form this gate cannot
+        // currently fire — it is deliberate defence in depth for a definition
+        // that reaches this point by any other route. The gate's rejection table
+        // is unit-tested against dataFileCopyDestination(), and the save path
+        // around it (both the new-entry and the edit coordinate) end to end in
+        // tests/test_path_containment.cpp.
         const std::string data_name =
             def.data_files.empty() ? std::string() : def.data_files.front().path;
         fs::path dest_dir = fs::path(def.source_path).parent_path();
