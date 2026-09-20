@@ -125,6 +125,18 @@ class RfSimulatorApp {
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
     const std::string &testExtensionResultMessage() const { return m_extension_result_message; }
+    // Component-authoring form (issue #120): the form model and its save path
+    // are private and normally driven by the library browser, so these
+    // accessors let an app-level test seed and save an entry deterministically
+    // — a temp destination root instead of the Project/Global buttons, and a
+    // staged S-param path instead of the native file picker.
+    void testOpenNewComponentForm(const std::string &type, const std::string &destination_root);
+    void testOpenEditComponentForm(const ComponentDefinition &def);
+    void testSetComponentFormDestinationRoot(const std::string &root) {
+        m_component_form_destination_root = root;
+    }
+    ComponentFormModel &testComponentFormModel() { return *m_component_form_model; }
+    bool testSaveComponentForm() { return saveComponentForm(); }
 
     void openFileDialog();
     void saveFileDialog();

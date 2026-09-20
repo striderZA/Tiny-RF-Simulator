@@ -48,8 +48,13 @@ ComponentDefinition ComponentFormModel::buildDefinition() const {
     def.parameters = m_parameters;
     def.source_path = m_source_path;
     if (!m_sparam_source_path.empty()) {
+        // The data file is copied next to the destination JSON, so its name
+        // must be as traversal-proof as the JSON name itself (issue #120): the
+        // raw part number would otherwise carry '..' or a separator into the
+        // copy destination.
         auto ext = std::filesystem::path(m_sparam_source_path).extension().string();
-        def.data_files.push_back({"s_parameters", m_part_number + ext});
+        def.data_files.push_back(
+            {"s_parameters", sanitizePathSegment(m_part_number, "component") + ext});
     } else if (!m_original_data_files.empty()) {
         def.data_files = m_original_data_files;
     }

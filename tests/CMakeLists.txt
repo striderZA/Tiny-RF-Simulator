@@ -180,8 +180,10 @@ add_standalone_test(test_signal_generator_noise
 )
 
 # Standalone for the S1/S2 security-fix tests (S-param path containment at the
-# project-file and library boundaries + touchstone parser size/point guards).
-# Kept out of the main `tests` binary for the same MinGW-w64 registration
+# project-file and library boundaries + touchstone parser size/point guards)
+# plus issue #120 (the component-authoring save path derives a copied data
+# file's name from a sanitized part number and refuses escaping names).
+# Kept out of the main `tests` binary for the same MinGW registration
 # ceiling reason as test_component_authoring above.
 add_standalone_test(test_path_containment
     SOURCES test_path_containment.cpp

@@ -1,9 +1,16 @@
 // Standalone Catch2 executable for the S1/S2 security fixes from the
-// 2026-08-09 codebase review:
+// 2026-08-09 codebase review, plus the issue #120 component-authoring save
+// path:
 //   S1 — S-param file path containment (project-file boundary in
 //        ProjectSerializer::load()/save(), library boundary in
 //        ComponentLibrary::instantiate())
 //   S2 — touchstone parser file-size guard + in-loop frequency-point cap
+//   #120 — the S-param file the authoring form copies next to the library JSON
+//        is named from a sanitized part number, and the save path refuses any
+//        data-file name that is not a bare file name (no separators, no '..').
+//        The copy cases drive the real RfSimulatorApp::saveComponentForm()
+//        through its test accessors, so the app's own dest_dir composition is
+//        what is exercised (new entry and edit).
 //
 // Built as its own executable rather than appended to the main `tests` binary
 // because this MinGW-w64 toolchain silently drops any TEST_CASE registered
@@ -11,12 +18,14 @@
 // in tests/CMakeLists.txt).
 #include "amplifier_engine.h"
 #include "app.h"
+#include "component_form_model.h"
 #include "component_library.h"
 #include "component_registry.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
 #include "node_graph_engine.h"
+#include "test_temp_paths.h"
 #include "touchstone_parser.h"
 #include "view_manager.h"
 #include <catch2/catch_approx.hpp>
@@ -56,6 +65,19 @@ void writeS2p(const std::filesystem::path &path) {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream ofs(path);
     ofs << kMinimalS2p;
+}
+
+// Reads a file's bytes verbatim, so a case can assert that what was copied is
+// what was picked (and that an edit replaced the previous revision in place).
+std::string readFile(const std::filesystem::path &path) {
+    std::ifstream ifs(path, std::ios::binary);
+    std::string out;
+    char buf[4096];
+    while (ifs) {
+        ifs.read(buf, sizeof buf);
+        out.append(buf, static_cast<std::string::size_type>(ifs.gcount()));
+    }
+    return out;
 }
 
 nlohmann::json amplifierComponent(const std::string &sparam_filepath) {
@@ -283,4 +305,193 @@ TEST_CASE("TouchstoneParser rejects oversized files before reading", "[containme
     REQUIRE_FALSE(after.has_value());
 
     std::filesystem::remove(path);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #120 — component-authoring save path: the S-param file copied next to
+// the library JSON is named from `sanitizePathSegment(part_number)` instead of
+// the raw part number, and the app refuses any data-file name that is not a
+// bare file name before joining it onto the destination directory.
+// ---------------------------------------------------------------------------
+TEST_CASE("Data-file names that could escape the library root are rejected",
+          "[containment][issue120][library]") {
+    const std::string dir = "library/amplifier/acme";
+    // Traversal / separator / absolute spellings, refused on both platforms so
+    // a library authored on Windows is as safe read on Linux (and vice versa).
+    // This is the exact composition RfSimulatorApp::saveComponentForm() makes
+    // for a new entry.
+    CHECK_FALSE(dataFileCopyDestination(dir, "..\\..\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "../../evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "sub/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "sub\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "/abs/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "\\abs\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "C:/evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "C:\\evil.s2p").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "..").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, ".").has_value());
+    CHECK_FALSE(dataFileCopyDestination(dir, "").has_value());
+    CHECK_FALSE(dataFileCopyDestination("", "AMP.s2p").has_value());
+
+    // The plain names the authoring form produces resolve next to the JSON.
+    CHECK(dataFileCopyDestination(dir, "AM1143.s2p") == std::filesystem::path(dir) / "AM1143.s2p");
+    CHECK(dataFileCopyDestination(dir, "ZX60-33LN.s2p").has_value());
+    CHECK(dataFileCopyDestination(dir, "Test Amp.s2p").has_value());
+    // ".." that is part of a name rather than a path component stays legal —
+    // the gate tests path components, not a ".." substring.
+    CHECK(dataFileCopyDestination(dir, "AMP..v2.s2p").has_value());
+}
+
+TEST_CASE("Component authoring derives the copied S-param name from a sanitized part number",
+          "[containment][issue120]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("..\\..\\evil");
+    model.setManufacturer("Acme");
+    model.setParameter("gain_dB", 20.0);
+    model.setSparamSourcePath("AM1143.s2p"); // extension is all that is read
+
+    const auto def = model.buildDefinition();
+    REQUIRE(def.data_files.size() == 1);
+    CHECK(def.data_files.front().type == "s_parameters");
+    CHECK(def.data_files.front().path == "evil.s2p");
+    CHECK(
+        dataFileCopyDestination("library/amplifier/Acme", def.data_files.front().path).has_value());
+
+    // The pre-fix spelling of this entry's data file — the raw part number plus
+    // the picked extension, which is what the JSON would then have persisted —
+    // is exactly what the gate refuses, so the stored path can never disagree
+    // with the copied file name.
+    CHECK_FALSE(
+        dataFileCopyDestination("library/amplifier/Acme", model.partNumber() + ".s2p").has_value());
+
+    // A part number that sanitizes to nothing falls back to "component" instead
+    // of producing an extension-only or empty file name.
+    model.setPartNumber("..");
+    CHECK(model.buildDefinition().data_files.front().path == "component.s2p");
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Component authoring save keeps the copied S-param inside the root",
+                 "[containment][issue120]") {
+    namespace fs = std::filesystem;
+    const auto base =
+        fs::temp_directory_path() / ("containment_issue120_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    fs::create_directories(base);
+    const auto picked = base / "picked.s2p";
+    writeS2p(picked);
+    const fs::path root = base / "library";
+
+    // Drives the real RfSimulatorApp::saveComponentForm() through the app's test
+    // accessors: the composition of dest_dir and the data-file name under test
+    // is the app's own, so it cannot drift from a re-implementation here.
+    RfSimulatorApp app;
+    app.testOpenNewComponentForm("amplifier", root.string());
+    auto &model = app.testComponentFormModel();
+    model.setPartNumber("..\\..\\escape");
+    model.setManufacturer("Acme");
+    model.setParameter("gain_dB", 20.0);
+    model.setParameter("nf_dB", 2.0);
+    model.setSparamSourcePath(picked.string());
+    REQUIRE(app.testSaveComponentForm());
+
+    // The part number names neither the entry's directory nor its data file: the
+    // save lands under the sanitized "escape" spelling.
+    const fs::path dir = root / "amplifier" / "Acme";
+    const fs::path json_path = dir / "escape.json";
+    REQUIRE(fs::exists(json_path));
+    REQUIRE(fs::exists(dir / "escape.s2p"));
+    CHECK(readFile(dir / "escape.s2p") == readFile(picked));
+    // The traversal target the raw name ("..\..\escape.s2p" from dir) would have
+    // reached stays empty.
+    CHECK_FALSE(fs::exists(root / "escape.s2p"));
+
+    // The name the JSON persists is the name that was copied, so the entry stays
+    // resolvable on the next load instead of pointing at the raw part number.
+    const nlohmann::json entry = nlohmann::json::parse(readFile(json_path));
+    REQUIRE(entry.contains("data_files"));
+    REQUIRE(entry["data_files"].size() == 1);
+    CHECK(entry["data_files"][0]["type"] == "s_parameters");
+    CHECK(entry["data_files"][0]["path"] == "escape.s2p");
+    CHECK(entry["part_number"] == "..\\..\\escape");
+
+    // ...and the library resolves that name to the copied file: instantiating the
+    // saved entry proves the fixed naming is usable end to end, not just
+    // traversal-proof.
+    ComponentLibrary lib;
+    lib.loadFile(json_path.string());
+    REQUIRE(lib.all().size() == 1);
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+    auto *engine = lib.instantiate(*lib.all().front(), 402, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto *amp = dynamic_cast<AmplifierEngine *>(engine);
+    REQUIRE(amp != nullptr);
+    CHECK(amp->sparamLoaded());
+
+    fs::remove_all(base);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Component authoring edit overwrites in place, never under a destination root",
+                 "[containment][issue120]") {
+    namespace fs = std::filesystem;
+    const auto base =
+        fs::temp_directory_path() / ("containment_issue120_edit_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    const fs::path root = base / "library";
+    const fs::path dir = root / "amplifier" / "Acme";
+    fs::create_directories(dir);
+    const fs::path json_path = dir / "escape.json";
+    const fs::path data_path = dir / "escape.s2p";
+
+    // A previously saved entry with its data file already beside its JSON.
+    {
+        nlohmann::json entry;
+        entry["schema_version"] = 2;
+        entry["type"] = "amplifier";
+        entry["part_number"] = "..\\..\\escape";
+        entry["manufacturer"] = "Acme";
+        entry["parameters"] = {{"gain_dB", 20.0}, {"nf_dB", 2.0}};
+        entry["data_files"] = nlohmann::json::array();
+        entry["data_files"].push_back({{"type", "s_parameters"}, {"path", "escape.s2p"}});
+        std::ofstream ofs(json_path);
+        ofs << entry.dump(2);
+    }
+    { // an older revision of the data file, so overwrite-in-place is observable
+        std::ofstream ofs(data_path);
+        ofs << "# GHz S MA R 50\n1.0 0.9 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+    const auto picked = base / "picked.s2p";
+    writeS2p(picked);
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path.string());
+    REQUIRE(lib.all().size() == 1);
+    const ComponentDefinition def = *lib.all().front();
+
+    RfSimulatorApp app;
+    app.testOpenEditComponentForm(def);
+    // An edit overwrites the entry's own directory (dest_dir comes from the
+    // entry's source_path), so a destination root picked earlier in the session
+    // is never a save target and stays uncreated.
+    const fs::path unused_root = base / "chosen-root";
+    app.testSetComponentFormDestinationRoot(unused_root.string());
+    app.testComponentFormModel().setSparamSourcePath(picked.string());
+    REQUIRE(app.testSaveComponentForm());
+
+    CHECK(readFile(data_path) == readFile(picked)); // replaced in place
+    CHECK_FALSE(fs::exists(unused_root));
+    CHECK_FALSE(fs::exists(root / "escape.s2p"));
+
+    ComponentLibrary reloaded;
+    reloaded.loadFile(json_path.string());
+    REQUIRE(reloaded.all().size() == 1);
+    REQUIRE(reloaded.all().front()->data_files.size() == 1);
+    CHECK(reloaded.all().front()->data_files.front().path == "escape.s2p");
+
+    fs::remove_all(base);
 }
