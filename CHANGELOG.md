@@ -1,3 +1,24 @@
+## [0.24.2] - 2026-09-20
+
+### Added
+
+- **Editor hover tooltips** — node, pin, link, and collapsed-subcircuit tooltips now carry the interaction hints beside the signal or parameter summary: Ctrl+click probes a signal for the Spectrum Analyzer, Shift+click removes that probe, right-click opens the node/link/group menu, and an unconnected input pin says how to connect it. The node hint reports the probe slot already held by the output a node-body click targets, and a multi-output part is told to click the specific pin instead. Tooltips are suppressed while a mouse button is dragging or a popup is open, and a pin hover no longer stacks the node tooltip on top of the pin tooltip. `help_widget.cpp` and `tutorial_steps.cpp`, which both claimed a plain click probes a pin, are corrected to match the gesture `handleProbeClick()` actually implements.
+- **Spectrum Analyzer RBW/VBW down to 1 kHz** — RBW and VBW now span 1 kHz – 100 MHz and are entered in kHz, so the floor is typeable as `1` instead of only as a fractional `0.001` MHz. Narrower than the display grid spacing the RBW cannot resolve further — `applyRBW` degenerates to a passthrough once `rbw_bins` is far below 1 — which the field tooltip now states instead of leaving the control looking broken; both fields also explain what they do on hover.
+
+### Changed
+
+- **RBW/VBW range ownership** — the 1 kHz – 100 MHz UI range lives at the widget's `utils::inputFrequency()` call; the `SpectrumAnalyzerEngine` setters stay unclamped so unit tests and API callers can still drive any value. `inputFrequency()` grows a trailing `displayUnit_Hz` (default `1e6`, so no existing call site changes) and its step arguments are now display-unit values, because `ImGui::InputDouble` steps whatever the field shows.
+
+### Fixed
+
+- **Collapsed-block probe hint** — the collapsed-subcircuit tooltip printed "Ctrl+click: probe" for every block, but `handleProbeClick()` can only probe a block through its first *output* boundary pin and `rebuildGroupBoundaryPins()` synthesizes none for a subcircuit with no cross-boundary link, so a block in that shape advertised a gesture that silently did nothing. `NodeGraphEngine::firstOutputBoundaryPin()` now owns that rule and both the click handler and the hint read it, and the block hint reports the probe slot that pin already holds instead of always advertising a probe.
+
+### Testing
+
+- Add `hover_tooltips_node_link_subcircuit` to `test_engine/ui_tests.cpp`: a node body, a link, and a collapsed subcircuit block must each raise a tooltip window, while an empty-canvas point verified free of node hover raises none. The check scans every `ImGuiWindowFlags_Tooltip` window for `WasActive` rather than the literal `##Tooltip_00` name, which ImGui shifts when another panel tooltips first in the same frame. The collapsed-block step also asserts its group has no output boundary pin — the shape whose hint is now gated.
+- Add `spectrum_analyzer_rbw_vbw_reach_1khz`, driven through a new `testSpectrumAnalyzerEngine()` accessor: typing `1` in the kHz field yields 1000 Hz, and typing `0.5` clamps up to the 1 kHz floor rather than being accepted as-is.
+- Add `firstOutputBoundaryPin` cases to `tests/test_node_graph_engine.cpp` — no cross-boundary link, an input-only boundary link, an output boundary link, and the link removed — covering the rule a UI tooltip test cannot query, since ImGui registers text items with id 0 and the test engine cannot read tooltip text.
+
 ## [0.24.1] - 2026-09-18
 
 ### Added
