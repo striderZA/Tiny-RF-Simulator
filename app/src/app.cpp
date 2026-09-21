@@ -924,9 +924,19 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
             ImGui::Separator();
             for (const auto *tool : toolsMenuEntries()) {
-                for (const auto &action : externalToolActions(*tool)) {
-                    if (action.location == "tools" && ImGui::MenuItem(action.label.c_str()))
-                        runExternalTool(*tool, action.label);
+                const auto actions = externalToolActions(*tool);
+                for (std::size_t i = 0; i < actions.size(); ++i) {
+                    if (actions[i].location != "tools")
+                        continue;
+                    // The label doubles as the action's dispatch key, so it is
+                    // handed to runExternalTool() untouched; only the ImGui ID
+                    // carries the disambiguator. Extension ids are deduplicated
+                    // but labels are not, and a shared ID lets a click on one
+                    // tool's row launch another's.
+                    const std::string item_label =
+                        actions[i].label + "##" + tool->id + "-" + std::to_string(i);
+                    if (ImGui::MenuItem(item_label.c_str()))
+                        runExternalTool(*tool, actions[i].label);
                 }
             }
             ImGui::EndMenu();
