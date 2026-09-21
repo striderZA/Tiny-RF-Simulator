@@ -328,3 +328,11 @@ add_standalone_test(test_issue117_numeric_correctness
          simulator::node_graph_engine
          simulator::touchstone_parser
 )
+
+# Standalone: new TEST_CASEs stay out of the main tests binary (MinGW-w64
+# registration ceiling), and out of test_extensions.cpp, following
+# test_issue80_extension_hardening.
+add_standalone_test(test_issue130_extension_menu_labels
+    SOURCES test_issue130_extension_menu_labels.cpp
+    LIBS simulator::app
+)
