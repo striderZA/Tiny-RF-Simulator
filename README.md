@@ -57,7 +57,7 @@ build/bin/tiny-rf-simulator.exe
 | 🏛️ Architecture | [Architecture Overview](openwiki/architecture/overview.md) |
 | 📡 RF Components | [Components Reference](openwiki/domains/rf-components.md) |
 | 📐 S-Parameter System | [S-Parameter System](openwiki/integrations/s-param-system.md) |
-| 🧪 Testing | [Testing Guide](openwiki/testing/guidance.md) |
+| 🧪 Testing | [Testing Guide](openwiki/testing/guidance.md) · [Test Flow (ATP)](test_flow/AGENTS.md) |
 | ⚙️ Operations | [Build & Operations](openwiki/operations/build-runbook.md) |
 | 📈 DSP Pipeline | [DSP Pipeline & Workflows](openwiki/workflows/dsp-pipeline.md) |
 | 📚 Engineering Refs | [Amplifier model](docs/resources/amplifier_nonlinear_model.md) · [PFB channelizer](docs/resources/pfb_channelizer_info.md) · [RF ADC](docs/resources/rf_adc_info.md) · [Touchstone parser](docs/resources/touchstone_v2_parser_spec.md) |
