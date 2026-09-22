@@ -109,7 +109,24 @@ bool parseMenus(const json &value, std::vector<ExtensionMenuEntry> &menus,
         }
 
         const std::string location = entry["location"].get<std::string>();
-        menus.push_back({location, entry["label"].get<std::string>()});
+        const std::string label = entry["label"].get<std::string>();
+
+        // A label is the only identifier an action carries into the run request
+        // (ExternalToolRequest::action_label) and the menu item is keyed on it,
+        // so two entries sharing a (location, label) pair are indistinguishable
+        // once clicked. Reject the duplicate rather than keep an entry that
+        // cannot be addressed.
+        const bool duplicate =
+            std::any_of(menus.begin(), menus.end(), [&](const ExtensionMenuEntry &existing) {
+                return existing.location == location && existing.label == label;
+            });
+        if (duplicate) {
+            addIssue(issues, "menus[" + std::to_string(i) + "].label",
+                     "Duplicate label '" + label + "' for location '" + location + "'");
+            continue;
+        }
+
+        menus.push_back({location, label});
     }
 
     return true;
