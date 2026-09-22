@@ -1,3 +1,19 @@
+## [0.24.3] - 2026-09-22
+
+### Fixed
+
+- **Extension menu label ambiguity** — a duplicate (location, label) pair across two extension manifests is now rejected at parse time instead of keeping an entry that cannot be addressed: the menu label is the action's only run-time identifier (`ExternalToolRequest::action_label`) and the ImGui item is keyed on it, so two entries sharing a label could launch the wrong tool. The Tools menu and Extensions panel now also suffix the item id with the manifest id and action index (the pattern the Extensions panel already used) so distinct entries never share one ImGui id, while still handing the raw label to `runExternalTool()` as the dispatch key.
+- **S-parameter copy path traversal** — the component-authoring save path joined the raw part number onto the library destination directory, so a part number containing separators or `..` wrote the picked S-param file outside the chosen root. The data-file name now comes from `sanitizePathSegment()` (moved beside the library code so `app.cpp` and `ComponentFormModel` share it) and the copy destination is built by `dataFileCopyDestination()`, which refuses any name that is not a bare file name with a visible form error.
+
+### Documentation
+
+- **Release CRLF-trap recipe** — the release-pipeline guidance in the root `AGENTS.md` is now a runnable recipe: read the committed bytes with `git cat-file blob HEAD~1:CMakeLists.txt`, require `git diff HEAD~1 --stat -- CMakeLists.txt` to print `2 +-`, and restore + byte-replace + `--amend` if the MSYS `sed` had rewritten the file to LF-only.
+
+### Testing
+
+- Add `tests/test_issue130_extension_menu_labels.cpp` as its own standalone executable (matching the existing pattern that keeps extension coverage out of `tests.exe` and the MinGW `TEST_CASE` registration ceiling): duplicate labels are rejected and unique ids are assigned.
+- Extend `tests/test_path_containment.cpp` with authoring save-path coverage driven through new `testOpenNewComponentForm`/`testOpenEditComponentForm`/`testSetComponentFormDestinationRoot`/`testComponentFormModel`/`testSaveComponentForm` accessors: the new-entry case asserts the saved JSON path, persisted data-file name, copied bytes, refused traversal target, and an instantiate-with-S-params round trip of the saved entry; the edit case asserts the copy replaces the previous revision in the entry's own directory and that a chosen destination root stays uncreated.
+
 ## [0.24.2] - 2026-09-20
 
 ### Added
