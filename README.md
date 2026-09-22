@@ -19,12 +19,17 @@
 
 ## ✨ Features
 
-- 🔧 **Modular components** — Amplifiers, attenuators, mixers, filters, splitters, combiners, and more
-- 📊 **Real-time spectrum display** — Probe any node in the signal chain with ImPlot
+- 🔧 **13 component types** — Amplifiers, attenuators, equalizers, mixers, filters, splitters, combiners, RF switches (1:2 and 2:1), coax cable, RF ADC, signal generator, and PFB channelizer
+- 📊 **Real-time spectrum display** — probe any node in the signal chain with ImPlot
 - 📐 **S-parameter support** — Touchstone file import for accurate component modeling
 - 🧮 **DSP pipeline** — Polyphase filter bank channelizer, noise PSD analysis
 - 🏗️ **Dirty-flag caching** — Efficient recomputation only when parameters change
+- 🔀 **Subcircuits** — collapse part of the schematic into a block for reuse
 - 🧩 **Extensible architecture** — Clean engine+widget pattern for adding new components
+- 🖥️ **Network Analyzer** — measures gain and noise figure of the chain between two probe points
+- ⚡ **Power Meter** — total power readout at any node in the chain
+- 🔌 **Extensions** — manifest-based plugins for data packs and external Tools-menu actions
+- 📘 **Guided tutorial** — first-run walkthrough with panel highlighting
 
 
 ## 🚀 Quick Start
