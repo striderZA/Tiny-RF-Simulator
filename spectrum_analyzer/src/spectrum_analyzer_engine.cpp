@@ -241,6 +241,77 @@ std::vector<Peak> SpectrumAnalyzerEngine::findPeaks(const std::vector<double> &p
     return peaks;
 }
 
+std::optional<double>
+SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
+    // Measurement only: render caches, jitter state, VBW and trace history stay
+    // untouched, so a probe can ask for SNR between frames without perturbing them.
+
+    // renderSpectrum() derives the bin width from the first two bins, so a grid
+    // without two finite strictly ascending bins has nothing measurable on it.
+    size_t n = spec.frequencies.size();
+    if (n < 2) {
+        return std::nullopt;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(spec.frequencies[i])) {
+            return std::nullopt;
+        }
+        if (i > 0 && !(spec.frequencies[i] > spec.frequencies[i - 1])) {
+            return std::nullopt;
+        }
+    }
+    double bin_width = spec.frequencies[1] - spec.frequencies[0];
+
+    // applyRBW() needs a positive, finite RBW: it divides by the bin width scaled
+    // by m_rbw and would otherwise produce a degenerate kernel.
+    if (!std::isfinite(m_rbw) || m_rbw <= 0.0) {
+        return std::nullopt;
+    }
+
+    // Greatest finite stored tone power, in full (unsplit) linear watts.
+    const Spectrum::Tone *strongest = nullptr;
+    for (const auto &t : spec.tones) {
+        if (!std::isfinite(t.freq_Hz) || !std::isfinite(t.power_dBm)) {
+            continue;
+        }
+        if (strongest == nullptr || t.power_dBm > strongest->power_dBm) {
+            strongest = &t;
+        }
+    }
+    if (strongest == nullptr) {
+        return std::nullopt;
+    }
+
+    // Same rounded-grid tone bin renderSpectrum() bins the tone into.
+    int bin_idx =
+        static_cast<int>(std::round((strongest->freq_Hz - spec.frequencies.front()) / bin_width));
+    if (bin_idx < 0 || static_cast<size_t>(bin_idx) >= n) {
+        return std::nullopt;
+    }
+
+    // Noise exactly as renderSpectrum() builds it: density (W/Hz) times bin width,
+    // then the same RBW filter. Only the selected tone bin is read.
+    std::vector<double> noise_W, tone_W;
+    this->binPowerComponents(spec, noise_W, tone_W);
+    std::vector<double> rbw_noise_W = this->applyRBW(noise_W, bin_width);
+    if (rbw_noise_W.size() != n) {
+        return std::nullopt;
+    }
+    double noise_linear_W = rbw_noise_W[static_cast<size_t>(bin_idx)];
+    if (!std::isfinite(noise_linear_W) || noise_linear_W <= 0.0) {
+        return std::nullopt;
+    }
+
+    // Full stored tone power: the real-domain display path halves it into a +-fc
+    // pair, but SNR is quoted against the whole tone.
+    double signal_linear_W = std::pow(10.0, (strongest->power_dBm - 30.0) / 10.0);
+    if (!std::isfinite(signal_linear_W) || signal_linear_W <= 0.0) {
+        return std::nullopt;
+    }
+
+    return 10.0 * std::log10(signal_linear_W / noise_linear_W);
+}
+
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
     size_t n = power_W.size();

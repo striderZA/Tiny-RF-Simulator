@@ -1,6 +1,7 @@
 #pragma once
 #include "common.h"
 #include "spectrum.h"
+#include <optional>
 #include <random>
 #include <unordered_map>
 #include <vector>
@@ -47,6 +48,16 @@ class SpectrumAnalyzerEngine {
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
     std::vector<Peak> findPeaks(const std::vector<double> &power_dBm,
                                 const std::vector<double> &freq_axis, size_t max_count = 8) const;
+
+    // Strongest-tone SNR of one spectrum, in dB: the greatest finite stored tone
+    // power against the RBW-filtered noise power at that tone's nearest grid bin.
+    // Both sides are full linear watts, so a real-domain tone is measured at its
+    // stored power rather than at the 3 dB-low +-fc display peak. Returns nullopt
+    // when there is no finite tone, no two-bin finite strictly ascending grid, a
+    // tone off the grid, a non-finite/non-positive RBW, or no positive filtered
+    // noise under it. Read-only: it never touches the render caches, jitter state,
+    // VBW, or trace history.
+    std::optional<double> computeStrongestToneSNRdB(const Spectrum &spec) const;
 
   private:
     // Config
