@@ -301,10 +301,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     // between frames the check reads WasActive (the previous frame's Active flag)
     // rather than Active, which the frame that just started already cleared.
     // The tooltip's *text* is not reachable here: ImGui registers text items with
-    // id 0, so the test engine cannot query them. This case therefore pins the
-    // node-body data the app hands the widget (summary + analyzer SNR) plus the
-    // presence of the tooltip window; the numeric content and its formatting are
-    // pinned by the standalone app adapter test instead.
+    // id 0, so the test engine cannot query them. This case therefore checks the
+    // node-body callback data the app hands the widget (non-empty summary plus a
+    // populated analyzer SNR) together with the tooltip-window visibility above.
+    // The standalone app adapter test asserts that numeric callback data — not
+    // the rendered string — and the widget's formatted "SNR: %.1f dB" / "SNR:
+    // --" row text is not independently asserted anywhere; it is verified by
+    // source review of showNodeHoverTooltips().
     t = IM_REGISTER_TEST(e, "rf_simulator", "hover_tooltips_node_link_subcircuit");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Any tooltip window, whatever its "##Tooltip_NN" suffix: ImGui bumps
