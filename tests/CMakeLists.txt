@@ -346,3 +346,13 @@ add_standalone_test(test_spectrum_analyzer_snr
     SOURCES test_spectrum_analyzer_snr.cpp
     LIBS simulator::spectrum_analyzer_engine
 )
+
+# Standalone app-level coverage for the node-hover SNR row: the onNodeHover
+# callback carries the registry summary plus the analyzer's strongest-tone SNR
+# for the node's first output, and reports "unavailable" when that output has no
+# measurable tone. Kept outside tests.exe for the MinGW-w64 registration-ceiling
+# reason above.
+add_standalone_test(test_node_hover_snr
+    SOURCES test_node_hover_snr.cpp
+    LIBS simulator::app
+)

@@ -99,7 +99,22 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         rewireInputs();
         m_pfb_views.rebuild(m_components, m_state);
     };
-    m_graph_widget->onNodeHover = [this](int id) { return m_components.hoverSummary(id); };
+    m_graph_widget->onNodeHover = [this](int id) {
+        NodeHoverInfo info;
+        info.summary = m_components.hoverSummary(id);
+        // The analyzer owns the SNR measurement (binning, RBW integration, grid
+        // snapping), so the row is filled here from the app's current analyzer
+        // state rather than in the widget. Only the first output is measured:
+        // multi-output ports are probed individually (see the node tooltip's
+        // "Ctrl+click an output pin" hint), and a node with no output at all has
+        // nothing to measure.
+        if (IComponentEngine *component = m_components.find(id)) {
+            const auto &outputs = component->node().outputs;
+            if (!outputs.empty())
+                info.snr_dB = m_spectrum_engine.computeStrongestToneSNRdB(outputs[0]);
+        }
+        return info;
+    };
     m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
 
     m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)

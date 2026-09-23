@@ -217,8 +217,8 @@ void NodeGraphWidget::showNodeHoverTooltips() {
         return;
     }
 
-    const std::string summary = onNodeHover ? onNodeHover(hovered_node) : std::string();
-    if (summary.empty())
+    const NodeHoverInfo info = onNodeHover ? onNodeHover(hovered_node) : NodeHoverInfo{};
+    if (info.summary.empty())
         return;
 
     // Ctrl+click on a node body probes its first output, so the hint reports
@@ -238,8 +238,15 @@ void NodeGraphWidget::showNodeHoverTooltips() {
 
     ImGui::BeginTooltip();
     ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-    ImGui::TextUnformatted(summary.c_str());
+    ImGui::TextUnformatted(info.summary.c_str());
     ImGui::PopTextWrapPos();
+    // One SNR row, immediately after the summary: the analyzer's strongest-tone
+    // measurement for this node's first output, or the unavailable form when the
+    // app had nothing measurable (no tone, no grid, no probeable analyzer RBW).
+    if (info.snr_dB)
+        ImGui::Text("SNR: %.1f dB", *info.snr_dB);
+    else
+        ImGui::TextUnformatted("SNR: --");
     ImGui::Separator();
     if (probe_slot >= 0) {
         ImGui::Text("Probed [%d]", probe_slot + 1);
