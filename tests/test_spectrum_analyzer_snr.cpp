@@ -218,6 +218,27 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR picks the nearest grid entry on 
     }
 }
 
+TEST_CASE("SpectrumAnalyzer: strongest-tone SNR stays finite at an extreme ratio",
+          "[spectrum][snr]") {
+    // 10^297 W of signal against ~1.09e-299 W of noise: the ratio itself overflows a
+    // double to +inf, but the mathematical dB result is only 5959.6 dB. Forming the
+    // ratio first would report an infinite SNR for a perfectly finite answer.
+    Spectrum spec;
+    spec.frequencies = {0.0, 1.0, 2.0};
+    spec.noise_total_W.assign(3, 1e-299);
+    spec.tones = {{1.0, 3000.0, 0.0}}; // 10^((3000 - 30) / 10) = 1e297 W
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    sa.setResBw(1.0);
+
+    std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+    REQUIRE(snr.has_value());
+    REQUIRE(std::isfinite(*snr));
+    REQUIRE(*snr == Catch::Approx(5960.0).margin(1.0));
+    REQUIRE(*snr < 6000.0);
+}
+
 TEST_CASE("SpectrumAnalyzer: SNR measurement leaves render state untouched", "[spectrum][snr]") {
     Spectrum spec = makeSpectrum();
 

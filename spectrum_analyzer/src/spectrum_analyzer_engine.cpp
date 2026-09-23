@@ -323,7 +323,15 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
         return std::nullopt;
     }
 
-    return 10.0 * std::log10(signal_linear_W / noise_linear_W);
+    // Difference of logarithms, not log10(signal / noise): for extreme but finite
+    // powers the ratio itself overflows to +inf or underflows to 0, while the dB
+    // difference stays representable. A non-finite result then means genuinely
+    // unusable input.
+    double snr_dB = 10.0 * (std::log10(signal_linear_W) - std::log10(noise_linear_W));
+    if (!std::isfinite(snr_dB)) {
+        return std::nullopt;
+    }
+    return snr_dB;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,

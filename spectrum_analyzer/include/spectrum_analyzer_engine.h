@@ -55,9 +55,11 @@ class SpectrumAnalyzerEngine {
     // Both sides are full linear watts, so a real-domain tone is measured at its
     // stored power rather than at the 3 dB-low +-fc display peak. Returns nullopt
     // when there is no finite tone, no two-bin finite strictly ascending grid, a
-    // tone outside the swept span, a non-finite/non-positive RBW, or no positive
-    // filtered noise under it. Read-only: it never touches the render caches,
-    // jitter state, VBW, or trace history.
+    // tone outside the swept span, a non-finite/non-positive RBW, no positive
+    // filtered noise under it, or a non-finite dB result. Computed as a difference
+    // of logarithms, so even an extreme (but finite) signal-to-noise ratio returns
+    // its true dB value instead of overflowing the linear ratio. Read-only: it
+    // never touches the render caches, jitter state, VBW, or trace history.
     std::optional<double> computeStrongestToneSNRdB(const Spectrum &spec) const;
 
   private:
