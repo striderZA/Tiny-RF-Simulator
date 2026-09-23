@@ -123,6 +123,24 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR is unavailable without usable in
         REQUIRE_FALSE(sa.computeStrongestToneSNRdB(spec).has_value());
     }
 
+    SECTION("tone just above the top of the span") {
+        // 100.1 MHz on a 0..100 MHz grid must not round back into the last bin.
+        Spectrum spec = makeSpectrum();
+        spec.tones = {{100.1e6, kStrongestTone_dBm, 0.0}};
+        SpectrumAnalyzerEngine sa;
+        sa.setResBw(10e6);
+        REQUIRE_FALSE(sa.computeStrongestToneSNRdB(spec).has_value());
+    }
+
+    SECTION("tone just below the bottom of the span") {
+        // -0.1 MHz is finite and rounds to bin 0, but it is outside the span.
+        Spectrum spec = makeSpectrum();
+        spec.tones = {{-0.1e6, kStrongestTone_dBm, 0.0}};
+        SpectrumAnalyzerEngine sa;
+        sa.setResBw(10e6);
+        REQUIRE_FALSE(sa.computeStrongestToneSNRdB(spec).has_value());
+    }
+
     SECTION("all-zero noise density") {
         Spectrum spec = makeSpectrum();
         spec.noise_total_W.assign(kBins, 0.0);
@@ -151,6 +169,52 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR is unavailable without usable in
         SpectrumAnalyzerEngine sa;
         sa.setResBw(10e6);
         REQUIRE_FALSE(sa.computeStrongestToneSNRdB(spec).has_value());
+    }
+}
+
+TEST_CASE("SpectrumAnalyzer: strongest-tone SNR picks the nearest grid entry on a "
+          "nonuniform grid",
+          "[spectrum][snr]") {
+    // The first bin spacing is not representative of the rest of the grid, so a
+    // rounded (f - front) / first_spacing lookup lands on the wrong entry. Distinct
+    // noise densities at the competing entries separate the two choices numerically.
+    SECTION("nearest entry wins over first-spacing rounding") {
+        Spectrum spec;
+        spec.frequencies = {0.0, 100.0, 101.0, 102.0};
+        // Index 1 -> 1e-16 W per bin, index 3 -> 1e-13 W per bin (x100 Hz spacing).
+        spec.noise_total_W = {0.0, 1e-18, 0.0, 1e-15};
+        // 101.6 Hz: nearest entry is 102 (0.4 Hz away), while first-spacing rounding
+        // divides by 100 Hz and picks index 1 (1.6 Hz away + a wrong bin entirely).
+        spec.tones = {{101.6, kStrongestTone_dBm, 0.0}};
+        spec.is_complex_baseband = true;
+
+        SpectrumAnalyzerEngine sa;
+        // RBW far below the bin spacing -> the Gaussian kernel collapses to the
+        // identity, so the measured floor is exactly the selected entry's power.
+        sa.setResBw(1.0);
+
+        std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+        REQUIRE(snr.has_value());
+        // 1e-5 W against 1e-13 W.
+        REQUIRE(*snr == Catch::Approx(80.0).margin(1e-6));
+        REQUIRE(std::fabs(*snr - 110.0) > 1.0); // index 1 would have read this
+    }
+
+    SECTION("an exact tie resolves to the lower index") {
+        Spectrum spec;
+        spec.frequencies = {0.0, 1.0, 3.0};
+        spec.noise_total_W = {0.0, 1e-18, 1e-15};
+        // 2 Hz sits exactly between entries 1 and 3.
+        spec.tones = {{2.0, kStrongestTone_dBm, 0.0}};
+        spec.is_complex_baseband = true;
+
+        SpectrumAnalyzerEngine sa;
+        sa.setResBw(1e-3); // kernel collapses to the identity
+
+        std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+        REQUIRE(snr.has_value());
+        REQUIRE(*snr == Catch::Approx(130.0).margin(1e-6)); // lower index (1e-18 W)
+        REQUIRE(std::fabs(*snr - 100.0) > 1.0);             // the upper index's value
     }
 }
 

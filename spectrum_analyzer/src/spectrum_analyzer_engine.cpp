@@ -282,11 +282,25 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
         return std::nullopt;
     }
 
-    // Same rounded-grid tone bin renderSpectrum() bins the tone into.
-    int bin_idx =
-        static_cast<int>(std::round((strongest->freq_Hz - spec.frequencies.front()) / bin_width));
-    if (bin_idx < 0 || static_cast<size_t>(bin_idx) >= n) {
+    // Nearest *actual* frequency entry. The grid is only guaranteed finite and
+    // strictly ascending, so the first-bin spacing cannot be trusted to locate a
+    // bin on its own; and a tone off either end of the swept span is unavailable
+    // rather than rounding into an endpoint bin.
+    if (strongest->freq_Hz < spec.frequencies.front() ||
+        strongest->freq_Hz > spec.frequencies.back()) {
         return std::nullopt;
+    }
+    auto at_or_above =
+        std::lower_bound(spec.frequencies.begin(), spec.frequencies.end(), strongest->freq_Hz);
+    size_t bin_idx = static_cast<size_t>(at_or_above - spec.frequencies.begin());
+    if (bin_idx > 0) {
+        // A tone inside the span always has an entry at or above it, so bin_idx is
+        // in range and only the lower neighbour needs comparing.
+        double dist_above = spec.frequencies[bin_idx] - strongest->freq_Hz;
+        double dist_below = strongest->freq_Hz - spec.frequencies[bin_idx - 1];
+        if (dist_below <= dist_above) {
+            --bin_idx; // Exact tie resolves to the lower index.
+        }
     }
 
     // Noise exactly as renderSpectrum() builds it: density (W/Hz) times bin width,
