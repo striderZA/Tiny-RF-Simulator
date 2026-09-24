@@ -241,6 +241,94 @@ std::vector<Peak> SpectrumAnalyzerEngine::findPeaks(const std::vector<double> &p
     return peaks;
 }
 
+std::optional<double>
+SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
+    // Measurement only: render caches, jitter state, VBW and trace history stay
+    // untouched, so a probe can ask for SNR between frames without perturbing them.
+
+    // renderSpectrum() derives the bin width from the first two bins, so a grid
+    // without two finite strictly ascending bins has nothing measurable on it.
+    size_t n = spec.frequencies.size();
+    if (n < 2) {
+        return std::nullopt;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(spec.frequencies[i])) {
+            return std::nullopt;
+        }
+        if (i > 0 && !(spec.frequencies[i] > spec.frequencies[i - 1])) {
+            return std::nullopt;
+        }
+    }
+    double bin_width = spec.frequencies[1] - spec.frequencies[0];
+
+    // applyRBW() needs a positive, finite RBW: it divides by the bin width scaled
+    // by m_rbw and would otherwise produce a degenerate kernel.
+    if (!std::isfinite(m_rbw) || m_rbw <= 0.0) {
+        return std::nullopt;
+    }
+
+    // Greatest finite stored tone power, in full (unsplit) linear watts.
+    const Spectrum::Tone *strongest = nullptr;
+    for (const auto &t : spec.tones) {
+        if (!std::isfinite(t.freq_Hz) || !std::isfinite(t.power_dBm)) {
+            continue;
+        }
+        if (strongest == nullptr || t.power_dBm > strongest->power_dBm) {
+            strongest = &t;
+        }
+    }
+    if (strongest == nullptr) {
+        return std::nullopt;
+    }
+
+    // Nearest *actual* frequency entry. The grid is only guaranteed finite and
+    // strictly ascending, so the first-bin spacing cannot be trusted to locate a
+    // bin on its own; and a tone off either end of the swept span is unavailable
+    // rather than rounding into an endpoint bin.
+    if (strongest->freq_Hz < spec.frequencies.front() ||
+        strongest->freq_Hz > spec.frequencies.back()) {
+        return std::nullopt;
+    }
+    auto at_or_above =
+        std::lower_bound(spec.frequencies.begin(), spec.frequencies.end(), strongest->freq_Hz);
+    size_t bin_idx = static_cast<size_t>(at_or_above - spec.frequencies.begin());
+    if (bin_idx > 0) {
+        // A tone inside the span always has an entry at or above it, so bin_idx is
+        // in range and only the lower neighbour needs comparing.
+        double dist_above = spec.frequencies[bin_idx] - strongest->freq_Hz;
+        double dist_below = strongest->freq_Hz - spec.frequencies[bin_idx - 1];
+        if (dist_below <= dist_above) {
+            --bin_idx; // Exact tie resolves to the lower index.
+        }
+    }
+
+    // Noise exactly as renderSpectrum() builds it: density (W/Hz) times bin width,
+    // then the same RBW filter. Only the selected tone bin is read.
+    std::vector<double> noise_W, tone_W;
+    this->binPowerComponents(spec, noise_W, tone_W);
+    std::vector<double> rbw_noise_W = this->applyRBW(noise_W, bin_width);
+    if (rbw_noise_W.size() != n) {
+        return std::nullopt;
+    }
+    double noise_linear_W = rbw_noise_W[static_cast<size_t>(bin_idx)];
+    if (!std::isfinite(noise_linear_W) || noise_linear_W <= 0.0) {
+        return std::nullopt;
+    }
+
+    // Full stored tone power: the real-domain display path halves it into a +-fc
+    // pair, but SNR is quoted against the whole tone.
+    // The tone is already in dBm. Convert only the positive noise power to dBm,
+    // avoiding underflow or overflow if a finite tone level cannot be represented
+    // as a double in watts.
+    double noise_dBm = 10.0 * std::log10(noise_linear_W) + 30.0;
+    double snr_dB = strongest->power_dBm - noise_dBm;
+    if (!std::isfinite(snr_dB)) {
+        return std::nullopt;
+    }
+    return snr_dB;
+}
+
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
     size_t n = power_W.size();

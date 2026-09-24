@@ -300,6 +300,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     // windows carry ImGuiWindowFlags_Tooltip, and because the test engine runs
     // between frames the check reads WasActive (the previous frame's Active flag)
     // rather than Active, which the frame that just started already cleared.
+    // The tooltip's *text* is not reachable here: ImGui registers text items with
+    // id 0, so the test engine cannot query them. This case therefore checks the
+    // node-body callback data the app hands the widget (non-empty summary plus a
+    // populated analyzer SNR) together with the tooltip-window visibility above.
+    // The standalone app adapter test asserts that numeric callback data — not
+    // the rendered string — and the widget's formatted "SNR: %.1f dB" / "SNR:
+    // --" row text is not independently asserted anywhere; it is verified by
+    // source review of showNodeHoverTooltips().
     t = IM_REGISTER_TEST(e, "rf_simulator", "hover_tooltips_node_link_subcircuit");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Any tooltip window, whatever its "##Tooltip_NN" suffix: ImGui bumps
@@ -356,6 +364,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImNodes::SetNodeScreenSpacePos(gen_node, ImVec2(anchor_x - 140.0f, anchor_y - 60.0f));
         ImNodes::SetNodeScreenSpacePos(amp_node, ImVec2(anchor_x + 140.0f, anchor_y + 40.0f));
         ctx->Yield(4);
+
+        // -- node body data: this is what the tooltip body renders, read straight
+        //    from the app callback the widget calls. The seeded generator carries a
+        //    tone, so the analyzer-backed SNR row is populated alongside the
+        //    registry summary; the widget only prints both.
+        IM_CHECK(s_app->testGraphWidget().onNodeHover);
+        const NodeHoverInfo gen_hover = s_app->testGraphWidget().onNodeHover(gen_node);
+        IM_CHECK(!gen_hover.summary.empty());
+        IM_CHECK(gen_hover.snr_dB.has_value());
 
         // -- node body --
         IM_CHECK(hover_node(gen_node, ImNodes::GetNodeScreenSpacePos(gen_node),

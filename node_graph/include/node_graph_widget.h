@@ -4,6 +4,7 @@
 #include "imgui.h"
 #include "node_graph_engine.h"
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,6 +13,16 @@
 struct ImVec2;
 
 struct ImNodesEditorContext;
+
+// What the widget needs to describe a hovered node in its body tooltip: the
+// owning component's summary line, plus the analyzer-measured strongest-tone
+// SNR of the node's first output when that measurement is available. The widget
+// renders the number but never computes it — the analyzer settings live in the
+// app, which owns the callback that fills this in.
+struct NodeHoverInfo {
+    std::string summary;
+    std::optional<double> snr_dB;
+};
 
 class NodeGraphWidget {
   public:
@@ -27,7 +38,7 @@ class NodeGraphWidget {
     std::function<void()> onLinkChanged;
     // Return false to reject a user-created link before it reaches the topology engine.
     std::function<bool(int start_pin_id, int end_pin_id)> onLinkCreating;
-    std::function<std::string(int graph_node_id)> onNodeHover;
+    std::function<NodeHoverInfo(int graph_node_id)> onNodeHover;
 
     // Data-driven canvas menu: app populates from ComponentTypeRegistry.
     struct AddableComponent {
