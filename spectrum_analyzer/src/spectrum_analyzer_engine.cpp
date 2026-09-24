@@ -318,16 +318,11 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
 
     // Full stored tone power: the real-domain display path halves it into a +-fc
     // pair, but SNR is quoted against the whole tone.
-    double signal_linear_W = std::pow(10.0, (strongest->power_dBm - 30.0) / 10.0);
-    if (!std::isfinite(signal_linear_W) || signal_linear_W <= 0.0) {
-        return std::nullopt;
-    }
-
-    // Difference of logarithms, not log10(signal / noise): for extreme but finite
-    // powers the ratio itself overflows to +inf or underflows to 0, while the dB
-    // difference stays representable. A non-finite result then means genuinely
-    // unusable input.
-    double snr_dB = 10.0 * (std::log10(signal_linear_W) - std::log10(noise_linear_W));
+    // The tone is already in dBm. Convert only the positive noise power to dBm,
+    // avoiding underflow or overflow if a finite tone level cannot be represented
+    // as a double in watts.
+    double noise_dBm = 10.0 * std::log10(noise_linear_W) + 30.0;
+    double snr_dB = strongest->power_dBm - noise_dBm;
     if (!std::isfinite(snr_dB)) {
         return std::nullopt;
     }

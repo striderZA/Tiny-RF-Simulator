@@ -239,6 +239,31 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR stays finite at an extreme ratio
     REQUIRE(*snr < 6000.0);
 }
 
+TEST_CASE("SpectrumAnalyzer: SNR preserves finite extreme tone dBm values", "[spectrum][snr]") {
+    Spectrum spec;
+    spec.frequencies = {0.0, 1.0, 2.0};
+    spec.noise_total_W.assign(3, 1e-200);
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    // The 1 Hz bins with a very narrow RBW leave the center-bin noise at 1e-200 W.
+    sa.setResBw(0.01);
+
+    SECTION("signal conversion does not underflow") {
+        spec.tones = {{1.0, -4000.0, 0.0}};
+        std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+        REQUIRE(snr.has_value());
+        REQUIRE(*snr == Catch::Approx(-2030.0).margin(1e-6));
+    }
+
+    SECTION("signal conversion does not overflow") {
+        spec.tones = {{1.0, 4000.0, 0.0}};
+        std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+        REQUIRE(snr.has_value());
+        REQUIRE(*snr == Catch::Approx(5970.0).margin(1e-6));
+    }
+}
+
 TEST_CASE("SpectrumAnalyzer: SNR measurement leaves render state untouched", "[spectrum][snr]") {
     Spectrum spec = makeSpectrum();
 
