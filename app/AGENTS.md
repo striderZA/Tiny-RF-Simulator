@@ -1,7 +1,7 @@
 # app/AGENTS.md
 
 ## Purpose
-Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `PfbCalculatorWidget`, and `ProjectSerializer`.
+Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `PfbCalculatorWidget`, `TestFlowWidget`, and `ProjectSerializer`.
 
 ## Ownership
 - `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration (project save/load logic lives in `ProjectSerializer`)
@@ -12,6 +12,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `NetworkAnalyzerEngine` / `NetworkAnalyzerWidget` — singleton instrument panel owned directly by `RfSimulatorApp` (like `m_spectrum_engine`/`m_spectrum_widget`): the engine is a plain value member (not an `IComponentEngine`, no registry row, no graph node) constructed with `m_graph_engine` and a small app-owned `INetworkAnalyzerHost` adapter (`NaHost`, see `network_analyzer_engine.h`'s layering comment) that resolves live engines via `ComponentRegistry::find` and builds private, throwaway scratch clone passes; `m_na_widget` renders the Point A/B pickers + sweep fields + gain/NF plot
 - `PowerMeterEngine` / `PowerMeterWidget` — singleton observer instrument owned directly by `RfSimulatorApp`; the UI widget selects a live graph output pin while the UI-independent engine measures total instantaneous power in dBm; it is not an `IComponentEngine`, registry row, graph node, or project-state source selection
 - `PfbCalculatorWidget` — dockable PFB filter calculator owned directly by `RfSimulatorApp` (`m_calculator_widget`): binds M/K/beta + rejection target to the graph-selected (or combo-picked) PFB and applies them through the engine's setters; all response math comes from `PfbFilterDesign` in `pfb_channelizer/` so tool and engine can never drift
+- `TestFlowWidget` — app-owned Test Flow runner panel (`m_test_flow_widget`, a `std::unique_ptr` declared after `m_components`/`m_graph_engine` so it is destroyed before them): loads a flow JSON, validates it against the live circuit, runs it through the snapshot/restore boundary, renders the preview/result table, and exports the last result; holds only `ComponentRegistry`/`NodeGraphEngine` references (never `RfSimulatorApp`), with the native open/export dialogs owned by the app lambdas `draw()` invokes
 - `ProjectSerializer` — owns the `.rfsim` save/load/new JSON logic (extracted from `RfSimulatorApp`, issue #51)
 - `ComponentFormModel` / `ComponentFormWidget` — pure-logic + ImGui rendering pair for the New/Edit Component form
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots, plus the project-local provenance query the trust gate reads
@@ -54,6 +55,9 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `update_dsp()`'s signal-routing pass is factored into `rewireInputs()`, which delegates to `rewireComponentInputs()` in `node_graph/` (sets every component's `node().inputs[k]` from current graph links, binding the resolved output port's `Spectrum` — `&source->outputs[source.output_index]` — and nulling severed ones); `onRemoveNode` calls it synchronously right after `ComponentRegistry::remove()` so no surviving component is left holding a dangling `Spectrum*` into the just-destroyed engine's `SignalNode` while the rest of that frame's `draw_ui()` still runs — widgets that dereference `node().inputs[]` directly during draw (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37)
 - `RfSimulatorApp` installs the ADC-only link policy (`common/graph_link_policy.h`) plus `NodeGraphEngine::canAddLink()` (no second link into an occupied input, no cycles) as the canvas `onLinkCreating` guard, and `ProjectSerializer::load()` applies both before restoring a link; DSP rewiring applies the physical policy through the shared `rewireComponentInputs()` pass, and the generic `NodeGraphEngine` remains topology-only (`addLink()` stays permissive).
 - The node-hover adapter is the app's: `m_graph_widget->onNodeHover` fills `NodeHoverInfo::summary` from `ComponentRegistry::hoverSummary()` and `NodeHoverInfo::snr_dB` from `m_spectrum_engine.computeStrongestToneSNRdB()` applied to the node's **first output only** (`component->node().outputs[0]`; a node with no output leaves the optional empty, and multi-output ports stay individually probeable through the Ctrl+click hint). The measurement is taken with the analyzer's **current** RBW (`SpectrumAnalyzerEngine::rbw()`), so changing the SA resolution bandwidth changes the hover row; the call is measurement-only and does not touch the analyzer's render caches. The widget never knows any of this — it just renders what the callback returns.
+- `TestFlowWidget::run()` wraps the test-flow `RunFlow()` in an all-engine snapshot/restore boundary: it serializes every engine in `ComponentRegistry::all()` before execution, restores each snapshot independently afterwards (one failure cannot strand the rest), then runs the shared `rewireComponentInputs()` pass so each `node().inputs[]` pointer matches the untouched graph. A run is net-neutral — every component's `serialize()` state, every graph link, and the project dirty flag are exactly what they were before — and the widget never calls `markDirty()`. `run()` is true only when execution, every measurement, and every restoration succeeded.
+- A failed restoration latches `restoreFailed()`: the run reports failure and later runs are refused until `resetAfterCircuitReload()` clears the latch and the stale result. `RfSimulatorApp` calls that reset from `newProject()` and only after a *successful* `loadProject()` (a failed load may leave the current circuit intact, so it must not discard the panel's result); the retained flow selection is revalidated against the replacing circuit by `preview()` on demand, which resolves flow component ids by iterating `ComponentRegistry::all()` and matching `IComponentEngine::id()` — never `ComponentRegistry::find()`, which is keyed by graph-node id.
+- Test-flow selection, load state, and the last result are session-only and never persisted; `View > Test Flow` toggles `m_show_test_flow`, which persists through `SessionState` (`WindowState`/`TestFlow`) exactly like the other panel toggles
 - Destructor saves window state via `SessionState`
 
 ## Work Guidance
@@ -61,6 +65,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 
 ## Verification
 - Round-trip tests in `tests/test_project_file.cpp`
+- Test Flow panel snapshot/restore boundary, latched-restore recovery, and reload revalidation in the standalone `tests/test_test_flow_widget.cpp` target (see `tests/AGENTS.md`)
 
 ## Child DOX Index
 *(none)*
