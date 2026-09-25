@@ -157,6 +157,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_na_widget->onParamChange = [this]() { markDirty(); };
     m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_components);
     m_calculator_widget->onParamChange = [this]() { markDirty(); };
+    m_test_flow_widget = std::make_unique<TestFlowWidget>(m_components, m_graph_engine);
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without

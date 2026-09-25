@@ -39,6 +39,7 @@
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_widget.h"
 #include "splitter_engine.h"
+#include "test_flow_widget.h"
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
 #include "view_manager.h"
@@ -123,6 +124,8 @@ class RfSimulatorApp {
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
+    // Test Flow panel model; app-level tests drive load/run/restore through it.
+    TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
     const std::string &testExtensionResultMessage() const { return m_extension_result_message; }
     // Component-authoring form (issue #120): the form model and its save path
@@ -212,6 +215,9 @@ class RfSimulatorApp {
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
     ComponentRegistry m_components;
+    // References m_components and m_graph_engine, so it is declared after both
+    // and destroyed before they are.
+    std::unique_ptr<TestFlowWidget> m_test_flow_widget;
     // Declared after m_components so the manager (and its widget references to
     // engines) is destroyed before the engines themselves.
     PFBViewManager m_pfb_views;
