@@ -1171,3 +1171,174 @@ TEST_CASE("issue87 stability: serialize -> deserialize -> serialize is identical
         REQUIRE(engine->serialize() == first);
     }
 }
+
+// ---------------------------------------------------------------------------
+// ValidateFlow: the pass an attached UI runs to decide whether its Run button
+// is enabled. It must agree with RunFlow() exactly — same verdicts, same order,
+// same wording — or a panel would offer a run the harness then refuses.
+// ---------------------------------------------------------------------------
+TEST_CASE("issue87 validate: a runnable flow yields no issues", "[issue87][validate]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(kAmpId, graph);
+    const std::vector<IComponentEngine *> comps{&amp};
+
+    FlowSpec spec;
+    spec.name = "runnable";
+    spec.conditions.push_back(Condition{kAmpId, "gain_dB", {0.0, 10.0}});
+    spec.measure.push_back(Measurement{kAmpId, 0, "power_dBm"});
+
+    REQUIRE(ValidateFlow(spec, comps).empty());
+    REQUIRE(RunFlow(spec, comps, graph).ok);
+}
+
+TEST_CASE("issue87 validate: every failing reference is reported in RunFlow's check order",
+          "[issue87][validate]") {
+    NodeGraphEngine graph;
+    AmplifierEngine amp(kAmpId, graph);
+    const std::vector<IComponentEngine *> comps{&amp};
+
+    FlowSpec spec;
+    spec.conditions.push_back(Condition{kAmpId, "no_such_key", {0.0}});
+    spec.conditions.push_back(Condition{9999, "gain_dB", {0.0}});
+    spec.measure.push_back(Measurement{kAmpId, 7, "power_dBm"});
+    spec.measure.push_back(Measurement{kAmpId, 0, "nope"});
+
+    const std::vector<FlowError> issues = ValidateFlow(spec, comps);
+    REQUIRE(issues.size() == 4);
+    REQUIRE(issues[0].code == FlowErrorCode::PathNotApplicable);
+    REQUIRE(issues[1].code == FlowErrorCode::ComponentNotFound);
+    REQUIRE(issues[2].code == FlowErrorCode::PortOutOfRange);
+    REQUIRE(issues[3].code == FlowErrorCode::UnknownMetric);
+    // The panel renders these strings, so the port message has to say what the
+    // component does have.
+    REQUIRE(issues[0].message.find("no_such_key") != std::string::npos);
+    REQUIRE(issues[2].message.find("has no output port 7") != std::string::npos);
+    REQUIRE(issues[2].message.find("output(s)") != std::string::npos);
+
+    // RunFlow reports the first of them, word for word, with no rows.
+    const FlowResult result = RunFlow(spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == issues[0].code);
+    REQUIRE(result.error.message == issues[0].message);
+    REQUIRE(result.rows.empty());
+}
+
+TEST_CASE("issue87 validate: every value is checked, wherever the mismatch sits",
+          "[issue87][validate]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(kAdcId, graph);
+    const std::vector<IComponentEngine *> comps{&adc};
+
+    // `decimation` is the ADC's integer (signed) slot, so 2.5 cannot be written
+    // there whatever the values in front of it are.
+    FlowSpec spec;
+    spec.name = "fractional middle";
+    spec.conditions.push_back(Condition{kAdcId, "decimation", {1.0, 2.5, 2.0}});
+    spec.measure.push_back(Measurement{kAdcId, 0, "power_dBm"});
+
+    // The mismatch sits between two acceptable values: a pre-flight that only
+    // looked at the ends would call this flow runnable and leave the failure to
+    // RunFlow.
+    const std::vector<FlowError> issues = ValidateFlow(spec, comps);
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].code == FlowErrorCode::PathNotApplicable);
+    REQUIRE(issues[0].message.find("decimation") != std::string::npos);
+    REQUIRE(issues[0].message.find("not integral") != std::string::npos);
+
+    // The same verdict RunFlow() reaches, and no rows from it.
+    const FlowResult result = RunFlow(spec, comps, graph);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == issues[0].code);
+    REQUIRE(result.error.message == issues[0].message);
+    REQUIRE(result.rows.empty());
+
+    // Once no value offends the slot, the flow is accepted.
+    FlowSpec accepted = spec;
+    accepted.conditions[0].values = {1.0, 2.0, 1.0};
+    REQUIRE(ValidateFlow(accepted, comps).empty());
+
+    // Structure is never affected by the value scan: an unknown component and an
+    // out-of-range port are reported alongside it, in check order.
+    FlowSpec structural = accepted;
+    structural.conditions[0].component = 9999;
+    structural.measure[0].port = 7;
+    const std::vector<FlowError> mixed = ValidateFlow(structural, comps);
+    REQUIRE(mixed.size() == 2);
+    REQUIRE(mixed[0].code == FlowErrorCode::ComponentNotFound);
+    REQUIRE(mixed[1].code == FlowErrorCode::PortOutOfRange);
+}
+
+TEST_CASE("issue87 params: a resolved slot checks values exactly as the write path does",
+          "[issue87][params]") {
+    nlohmann::json snapshot = {{"float_slot", 1.5},
+                               {"int_slot", 3},
+                               {"uint_slot", 4u},
+                               {"bool_slot", true},
+                               {"array_slot", nlohmann::json::array({1, 2u})}};
+    const nlohmann::json original = snapshot;
+
+    ConditionSlotKind kind = ConditionSlotKind::Float;
+    std::string error;
+
+    // Classification keeps the JSON type: the unsigned slot must be matched
+    // before the signed one.
+    REQUIRE(resolveConditionSlot(snapshot, "float_slot", &kind, &error));
+    REQUIRE(kind == ConditionSlotKind::Float);
+    REQUIRE(resolveConditionSlot(snapshot, "int_slot", &kind, &error));
+    REQUIRE(kind == ConditionSlotKind::Signed);
+    REQUIRE(resolveConditionSlot(snapshot, "uint_slot", &kind, &error));
+    REQUIRE(kind == ConditionSlotKind::Unsigned);
+    REQUIRE(resolveConditionSlot(snapshot, "array_slot[1]", &kind, &error));
+    REQUIRE(kind == ConditionSlotKind::Unsigned);
+
+    // Resolution reports the same failures applyConditionValue() would, with the
+    // path prefixed, and never touches the snapshot.
+    REQUIRE_FALSE(resolveConditionSlot(snapshot, "bool_slot", &kind, &error));
+    REQUIRE(error.find("path 'bool_slot': slot is not numeric") == 0);
+    REQUIRE_FALSE(resolveConditionSlot(snapshot, "", &kind, &error));
+    REQUIRE(error == "path '': path is empty");
+    REQUIRE_FALSE(resolveConditionSlot(snapshot, "missing", &kind, &error));
+    REQUIRE(error == "path 'missing': no key 'missing'");
+    REQUIRE_FALSE(resolveConditionSlot(snapshot, "array_slot[9]", &kind, &error));
+    REQUIRE(error == "path 'array_slot[9]': array index 9 out of range");
+    REQUIRE(snapshot == original);
+
+    // The value rules are the write path's rules: for every slot kind and a
+    // spread of values, checking and writing agree — success, message, and the
+    // value actually written.
+    const std::vector<std::pair<std::string, std::vector<double>>> cases = {
+        {"float_slot",
+         {0.0, -1.5, 1e300, std::numeric_limits<double>::quiet_NaN(),
+          std::numeric_limits<double>::infinity()}},
+        {"int_slot", {0.0, -7.0, 3.0, 2.5, 1e19, -1e19}},
+        {"uint_slot", {0.0, 4.0, -1.0, 2.5, 1e20}},
+    };
+    for (const auto &[path, values] : cases) {
+        REQUIRE(resolveConditionSlot(snapshot, path, &kind, &error));
+        for (double value : values) {
+            std::string checked;
+            const bool accepts = conditionSlotAccepts(kind, value, &checked);
+
+            nlohmann::json target = original;
+            std::string written;
+            const bool writes = applyConditionValue(target, path, value, &written);
+            REQUIRE(accepts == writes);
+            if (accepts) {
+                REQUIRE(written.empty());
+                // The write lands in that slot with its JSON type preserved and
+                // moves nothing else.
+                nlohmann::json expected = original;
+                if (kind == ConditionSlotKind::Signed)
+                    expected[path] = static_cast<long long>(value);
+                else if (kind == ConditionSlotKind::Unsigned)
+                    expected[path] = static_cast<unsigned long long>(value);
+                else
+                    expected[path] = value;
+                REQUIRE(target == expected);
+            } else {
+                REQUIRE(written == conditionPathErrorPrefix(path) + checked);
+                REQUIRE(target == original); // a refusal writes nothing
+            }
+        }
+    }
+}

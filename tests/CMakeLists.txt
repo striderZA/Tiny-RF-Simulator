@@ -356,3 +356,18 @@ add_standalone_test(test_node_hover_snr
     SOURCES test_node_hover_snr.cpp
     LIBS simulator::app
 )
+
+# Standalone coverage for the app-owned Test Flow runner panel: the
+# all-component snapshot/restore boundary around RunFlow() (a sweep must leave
+# every serialize() state, every graph link, and the dirty flag untouched), the
+# ordinary-failure path, and the latched restoration failure. Kept outside
+# tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_test_flow_widget
+    SOURCES test_test_flow_widget.cpp
+    LIBS simulator::app simulator::test_flow
+)
+
+# App-level tests share the exe-relative build/bin/app.ini that
+# RfSimulatorApp::~RfSimulatorApp() writes, exactly like test_ui: a concurrent
+# run would read-modify-write that one file from two processes.
+set_tests_properties(test_test_flow_widget PROPERTIES RUN_SERIAL TRUE)

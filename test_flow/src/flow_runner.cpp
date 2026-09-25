@@ -217,39 +217,75 @@ FlowLoadResult LoadFlowFile(const std::string &path) {
     return out;
 }
 
+std::vector<FlowError> ValidateFlow(const FlowSpec &spec,
+                                    std::span<IComponentEngine *const> components) {
+    std::vector<FlowError> issues;
+
+    for (const auto &condition : spec.conditions) {
+        IComponentEngine *component = engineById(components, condition.component);
+        if (!component) {
+            issues.push_back(
+                {FlowErrorCode::ComponentNotFound,
+                 "condition targets unknown component " + std::to_string(condition.component)});
+            continue;
+        }
+        // Every value, not just the first: otherwise a type mismatch would only
+        // surface mid-sweep, after some rows had already been computed. The slot
+        // is resolved once and each candidate is then checked arithmetically —
+        // no JSON write per value — because this pass also runs once per frame
+        // for a panel that uses it as its Run-button pre-flight.
+        nlohmann::json snapshot = component->serialize();
+        ConditionSlotKind kind = ConditionSlotKind::Float;
+        std::string error;
+        if (!resolveConditionSlot(snapshot, condition.path, &kind, &error)) {
+            issues.push_back({FlowErrorCode::PathNotApplicable, error});
+            continue;
+        }
+        for (double value : condition.values) {
+            if (!conditionSlotAccepts(kind, value, &error)) {
+                issues.push_back({FlowErrorCode::PathNotApplicable,
+                                  conditionPathErrorPrefix(condition.path) + error});
+                break; // one reason per condition is enough to explain it
+            }
+        }
+    }
+
+    for (const auto &measurement : spec.measure) {
+        IComponentEngine *component = engineById(components, measurement.component);
+        if (!component) {
+            issues.push_back(
+                {FlowErrorCode::ComponentNotFound,
+                 "measurement targets unknown component " + std::to_string(measurement.component)});
+            continue;
+        }
+        const size_t outputs = component->node().outputs.size();
+        if (measurement.port < 0 || static_cast<size_t>(measurement.port) >= outputs) {
+            issues.push_back({FlowErrorCode::PortOutOfRange,
+                              "component " + std::to_string(measurement.component) +
+                                  " has no output port " + std::to_string(measurement.port) + " (" +
+                                  std::to_string(outputs) + " output(s))"});
+            continue;
+        }
+        if (MetricRegistry::instance().find(measurement.metric) == nullptr) {
+            issues.push_back(
+                {FlowErrorCode::UnknownMetric, "unknown metric '" + measurement.metric + "'"});
+        }
+    }
+
+    return issues;
+}
+
 FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> components,
                    NodeGraphEngine &graph) {
     // 1. Resolve every reference before the first run, so a fatal error still
-    //    yields zero rows and a partial experiment can never look complete.
-    for (const auto &condition : spec.conditions) {
-        IComponentEngine *component = engineById(components, condition.component);
-        if (!component)
-            return fail(spec, FlowErrorCode::ComponentNotFound,
-                        "condition targets unknown component " +
-                            std::to_string(condition.component));
-        // Every value, not just the first: otherwise a type mismatch would only
-        // surface mid-sweep, after some rows had already been computed.
-        for (double candidate : condition.values) {
-            nlohmann::json snapshot = component->serialize();
-            std::string error;
-            if (!applyConditionValue(snapshot, condition.path, candidate, &error))
-                return fail(spec, FlowErrorCode::PathNotApplicable, error);
-        }
-    }
-    for (const auto &measurement : spec.measure) {
-        IComponentEngine *component = engineById(components, measurement.component);
-        if (!component)
-            return fail(spec, FlowErrorCode::ComponentNotFound,
-                        "measurement targets unknown component " +
-                            std::to_string(measurement.component));
-        if (measurement.port < 0 ||
-            static_cast<size_t>(measurement.port) >= component->node().outputs.size())
-            return fail(spec, FlowErrorCode::PortOutOfRange,
-                        "component " + std::to_string(measurement.component) +
-                            " has no output port " + std::to_string(measurement.port));
-        if (MetricRegistry::instance().find(measurement.metric) == nullptr)
-            return fail(spec, FlowErrorCode::UnknownMetric,
-                        "unknown metric '" + measurement.metric + "'");
+    //    yields zero rows and a partial experiment can never look complete. This
+    //    is the very pass an attached UI pre-flight runs, so a panel can never
+    //    disagree with the harness about whether a flow applies; the first issue
+    //    is the one reported, because a fatal flow error carries a single code.
+    {
+        const std::vector<FlowError> issues = ValidateFlow(spec, components);
+        if (!issues.empty())
+            return fail(spec, issues.front().code, issues.front().message);
     }
 
     // 2. Reject a cyclic circuit. topologicalOrder() appends the nodes it could

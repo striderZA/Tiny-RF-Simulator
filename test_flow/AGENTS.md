@@ -10,16 +10,20 @@ component output ports.
 
 - `include/flow_types.h` — `FlowSpec`, `Condition`, `Measurement`, `FlowError`/`FlowErrorCode`
 - `include/flow_params.h` — `applyConditionValue()`: type-preserving write into a component's
-  `serialize()` snapshot
+  `serialize()` snapshot, plus `resolveConditionSlot()`/`conditionSlotAccepts()` — the same path and
+  value rules split so a sweep can be checked by resolving the slot once instead of writing per value
 - `include/flow_metrics.h` — `MetricSample`, `MetricDefinition`, `MetricRegistry` (four built-ins)
 - `include/flow_result.h` — `ConditionValue`, `FlowRow`, `FlowResult`, `toJson()`
-- `include/flow_runner.h` — `LoadFlowFile()`, `RunFlow()`
+- `include/flow_runner.h` — `LoadFlowFile()`, `ValidateFlow()`, `RunFlow()`
 - `CMakeLists.txt` — `simulator::test_flow` STATIC target
 
 ## Local Contracts
 
 - Flow files are JSON objects: `version` (required, must be `1`), optional `name` (defaults to the file stem), optional `conditions[]`, and required `measure[]`. A condition is `{component, path, values}`; a measurement is `{component, port, metric}`. `component` is an `IComponentEngine::id()`, never a graph node id.
-- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading.
+- **Addressing is positional and volatile.** A load re-creates components in saved order from the counter's base of 100 (`ProjectSerializer::reset()`), so ids assigned in save order survive a clean save/load, but any deletion or reorder shifts every later id — and because ids stay dense, a stale flow reference can then *silently bind to a different component* (often the same type, so the path still applies) instead of failing. Only `ValidateFlow()`/`RunFlow()`'s resolution decides; a flow file is not portable across a circuit edit until flows address something stable.
+- `ValidateFlow(spec, components)` is the single pre-flight: every condition's component and path/value compatibility, then every measurement's component, output port and metric, as a `FlowError` list in the order `RunFlow()` checks them. `RunFlow()` runs this same pass and reports the first issue verbatim, so an attached UI can never call a flow runnable that the harness refuses. It strictly reads the circuit.
+- `ValidateFlow()` is exhaustive — every value of every condition, not a sample — and stays affordable per frame because it resolves each condition's `path` once with `resolveConditionSlot()` and then checks the values arithmetically with `conditionSlotAccepts()`, with no JSON write per candidate.
+- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading. Neither the loader nor the runner caps the row count, and the product is executed synchronously, so a caller that faces a user must bound it itself (the app panel refuses above `TestFlowWidget::kMaxRunRows`).
 - This library must not link `simulator::app`, ImGui, implot, or imnodes. It takes
   `std::span<IComponentEngine *const>` rather than `ComponentRegistry`, which lives in `app/`.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
@@ -28,7 +32,8 @@ component output ports.
   `tones[0].power_dBm`.
 - Patches are type-preserving: a signed integer slot requires an integral value; an unsigned slot
   requires a finite, non-negative, integral value and stays unsigned; a float slot requires a finite
-  value. Boolean, string, null, object and array slots are rejected.
+  value. Boolean, string, null, object and array slots are rejected. `conditionSlotAccepts()` is
+  exactly these value rules, which is what lets the pre-flight check a value without writing it.
 - Built-in metrics: `power_dBm` (total power, the same measurement the GUI power meter reports),
   `peak_power_dBm` and `peak_freq_Hz` (strongest tone), and `noise_floor_dBm_per_Hz` (mean noise
   density). A metric returns `NaN` when the input is not measurable.

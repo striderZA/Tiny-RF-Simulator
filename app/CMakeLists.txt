@@ -21,6 +21,7 @@ add_library(app STATIC
     src/pfb_view_manager.cpp
     src/pfb_calculator_widget.cpp
     src/project_serializer.cpp
+    src/test_flow_widget.cpp
 )
 add_library(simulator::app ALIAS app)
 
@@ -65,6 +66,7 @@ target_link_libraries(app
         simulator::help_widget
         simulator::layout
         simulator::tutorial
+        simulator::test_flow
         common
 )
 

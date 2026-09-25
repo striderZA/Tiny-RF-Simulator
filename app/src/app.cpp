@@ -157,6 +157,7 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_na_widget->onParamChange = [this]() { markDirty(); };
     m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_components);
     m_calculator_widget->onParamChange = [this]() { markDirty(); };
+    m_test_flow_widget = std::make_unique<TestFlowWidget>(m_components, m_graph_engine);
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without
@@ -216,6 +217,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
+    m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
 }
 
 void RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -266,6 +268,10 @@ void RfSimulatorApp::newProject() {
     m_current_project_path.clear();
     refreshExtensions();
     m_dirty = false;
+    // The reset replaced every engine, so the panel's snapshots and result refer
+    // to a circuit that no longer exists. The retained flow selection is
+    // revalidated against the new circuit by the panel itself.
+    m_test_flow_widget->resetAfterCircuitReload();
 }
 
 void RfSimulatorApp::requestTutorial() {
@@ -595,6 +601,13 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             // active under the now-untitled project. Clear-then-refresh is the
             // same order as newProject(), so the rescan re-roots at the CWD.
             refreshExtensions();
+            // The failed load already destroyed the live circuit, so this is a
+            // reload like any other: the panel's latch, its notice, and its
+            // stale result all describe a circuit that no longer exists. A
+            // failure that leaves the circuit intact (handled below) is not a
+            // reload and must not touch them. The retained flow selection is
+            // revalidated against the emptied circuit by the panel itself.
+            m_test_flow_widget->resetAfterCircuitReload();
         }
         return;
     }
@@ -602,6 +615,25 @@ void RfSimulatorApp::loadProject(const std::string &path) {
     m_current_project_path = path;
     refreshExtensions();
     m_dirty = false;
+    // A load that replaced the circuit — this successful one, or a failed one
+    // that reset it (handled above) — is a circuit reload for the panel, so its
+    // latch and stale result are cleared; a failed load that left the live
+    // circuit intact must not discard them. The retained flow selection is
+    // validated against the new circuit by the panel itself.
+    m_test_flow_widget->resetAfterCircuitReload();
+}
+
+void RfSimulatorApp::openTestFlowDialog() {
+    auto result = pfd::open_file("Open Test Flow", ".", {"JSON flow (*.json)", "*.json"}).result();
+    if (!result.empty())
+        m_test_flow_widget->loadFlow(result[0]);
+}
+
+void RfSimulatorApp::exportTestFlowDialog() {
+    auto path = pfd::save_file("Export Test Flow Results", ".", {"JSON results (*.json)", "*.json"})
+                    .result();
+    if (!path.empty())
+        m_test_flow_widget->exportResult(path);
 }
 
 void RfSimulatorApp::openFileDialog() {
@@ -915,6 +947,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
+            ImGui::MenuItem("Test Flow", nullptr, &m_show_test_flow);
             ImGui::Separator();
             if (ImGui::BeginMenu("Layouts")) {
                 if (ImGui::MenuItem("Save As...")) {
@@ -1221,6 +1254,11 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_calculator && m_calculator_widget) {
         m_calculator_widget->draw("Filter Calculator", &m_show_calculator);
     }
+    if (m_show_test_flow) {
+        m_test_flow_widget->draw(
+            "Test Flow", &m_show_test_flow, [this]() { openTestFlowDialog(); },
+            [this]() { exportTestFlowDialog(); });
+    }
     drawExtensionsPanel();
 
     if (m_show_log)
@@ -1251,4 +1289,5 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
+    m_state.saveBool("WindowState", "TestFlow", m_show_test_flow);
 }
