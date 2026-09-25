@@ -11,6 +11,7 @@
 // ImGui Test Engine registers all of its cases unconditionally with no argv
 // filter, so a failure there cannot be run in isolation; `add_standalone_test`
 // produces one CTest entry that runs on every CI leg. See tests/AGENTS.md.
+#include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "app.h"
 #include "component_engine_base.h"
@@ -28,6 +29,7 @@
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -899,10 +901,20 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE_FALSE(widget.result().has_value());
     REQUIRE_FALSE(widget.restoreFailed());
     // The retained selection is revalidated against the reloaded circuit rather
-    // than assumed valid: the loader re-mints component ids, so the flow above
-    // no longer resolves.
+    // than assumed valid — and this is what "revalidated" means in practice:
+    // a flow's `component` is an IComponentEngine::id(), and a load re-creates
+    // components in saved order from the counter's base of 100
+    // (ProjectSerializer::reset()), so these hand-assigned 900/901 come back as
+    // 100/101 and the flow above no longer resolves. Ids are positional: a save
+    // followed by a load reproduces ids that were assigned in save order, while
+    // any deletion or reorder shifts every later one — which is why a stale flow
+    // reference can silently address a different component instead of failing
+    // (see test_flow/AGENTS.md's addressing contract).
     REQUIRE(widget.preview().loaded);
     REQUIRE_FALSE(widget.preview().runnable);
+    REQUIRE(app.testComponents().size() == 2);
+    REQUIRE(app.testComponents().byType<SignalGeneratorEngine>().front()->id() == 100);
+    REQUIRE(app.testComponents().byType<AmplifierEngine>().front()->id() == 101);
 
     // A failed load that leaves the circuit intact is not a reset: only a load
     // that replaced the circuit (a successful one, or a failure that reset it)
@@ -1074,4 +1086,283 @@ TEST_CASE_METHOD(ImGuiFixture,
     clickButton(widget, result_rects.export_button, open_dialog, export_dialog);
     REQUIRE(export_calls == 1);
     REQUIRE(open_calls == 1);
+}
+
+// ===========================================================================
+// Pre-flight validation (ValidateFlow) and the panel's run budget
+// ===========================================================================
+
+// Mean microseconds one frame of the panel costs over `frames` frames.
+long long frameCost(TestFlowWidget &widget, int frames) {
+    const auto noop = []() {};
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < frames; ++i) {
+        ImGui::NewFrame();
+        widget.draw("Test Flow", nullptr, noop, noop);
+        ImGui::Render();
+    }
+    const auto stop = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() / frames;
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: the pre-flight rejects a condition path the circuit cannot apply",
+                 "[test_flow][widget][panel][failure]") {
+    RfSimulatorApp app;
+    SignalGeneratorEngine &generator =
+        *app.testComponents().byType<SignalGeneratorEngine>().front();
+    AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
+    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+
+    // `path` addresses the engine's serialize() keys, never an inspector label:
+    // a mistyped key is the likeliest hand-authoring mistake, and the panel must
+    // catch it before Run is enabled rather than after the click.
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "bad path"},
+        {"conditions",
+         nlohmann::json::array({nlohmann::json{
+             {"component", generator.id()}, {"path", "no_such_key"}, {"values", {-30.0}}}})},
+        {"measure", nlohmann::json::array({measureJson(amplifier.id(), 0, "power_dBm")})}};
+    const fs::path path = uniqueTempPath("preflight_bad_path");
+    writeText(path, flow.dump(2));
+    ScopedRemove cleanup{path};
+
+    TestFlowWidget &widget = app.testTestFlowWidget();
+    REQUIRE(widget.loadFlow(path.string()));
+
+    const TestFlowWidget::FlowPreview preview = widget.preview();
+    REQUIRE(preview.loaded);
+    REQUIRE(preview.conditions[0].resolved); // the component resolves ...
+    REQUIRE_FALSE(preview.runnable);         // ... its path does not
+    REQUIRE(preview.issues.size() == 1);
+    REQUIRE(preview.issues[0].find("no_such_key") != std::string::npos);
+
+    // Run is refused by the harness's own verdict, and — because the pre-flight
+    // is a read — the circuit is untouched by the refusal.
+    const std::vector<ComponentState> components_before = snapshotComponents(app.testComponents());
+    const std::vector<std::array<int, 3>> links_before = snapshotLinks(app.testGraphEngine());
+    const bool dirty_before = app.isDirty();
+
+    REQUIRE_FALSE(widget.run());
+    REQUIRE(widget.result().has_value());
+    REQUIRE_FALSE(widget.result()->ok);
+    REQUIRE(widget.result()->error.code == FlowErrorCode::PathNotApplicable);
+    REQUIRE(widget.result()->rows.empty());
+    REQUIRE_FALSE(widget.restoreFailed());
+
+    const std::vector<ComponentState> components_after = snapshotComponents(app.testComponents());
+    REQUIRE(components_after.size() == components_before.size());
+    for (size_t i = 0; i < components_before.size(); ++i)
+        REQUIRE(components_after[i].state == components_before[i].state);
+    REQUIRE(snapshotLinks(app.testGraphEngine()) == links_before);
+    REQUIRE(app.isDirty() == dirty_before);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: the pre-flight checks every value of a condition",
+                 "[test_flow][widget][panel][failure]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kAdcId = 820;
+    constexpr int kProbeId = 821;
+    components.add<AdcEngine>(kAdcId, graph);
+    components.add<TrackingEngine>(kProbeId, graph, 1.0);
+
+    // The ADC's `decimation` slot is an integer, and the fractional value sits
+    // between two acceptable ones: only a pre-flight that scans the whole list
+    // catches this before the click.
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "fractional middle"},
+        {"conditions",
+         nlohmann::json::array({nlohmann::json{
+             {"component", kAdcId}, {"path", "decimation"}, {"values", {1.0, 2.5, 2.0}}}})},
+        {"measure", nlohmann::json::array({measureJson(kProbeId, 0, "power_dBm")})}};
+    const fs::path path = uniqueTempPath("preflight_middle");
+    writeText(path, flow.dump(2));
+    ScopedRemove cleanup{path};
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.loadFlow(path.string()));
+    const TestFlowWidget::FlowPreview preview = widget.preview();
+    REQUIRE(preview.conditions[0].resolved);
+    REQUIRE(preview.conditions[0].value_count == 3);
+    REQUIRE_FALSE(preview.runnable);
+    REQUIRE(preview.issues.size() == 1);
+    REQUIRE(preview.issues[0].find("decimation") != std::string::npos);
+    REQUIRE(preview.issues[0].find("not integral") != std::string::npos);
+
+    // Nothing was swept to find that out: the pre-flight only reads.
+    REQUIRE(widget.result().has_value() == false);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: a sweep above the row limit is refused before it runs",
+                 "[test_flow][widget][panel][failure]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kFirstId = 830;
+    constexpr int kSecondId = 831;
+    auto &first = components.add<TrackingEngine>(kFirstId, graph, 1.0);
+    auto &second = components.add<TrackingEngine>(kSecondId, graph, 2.0);
+    graph.addLink(first.outputPinId(), second.inputPinId());
+
+    // 150 x 150 = 22500 rows, above the panel's budget: the cartesian product
+    // runs on the UI thread, so this must be refused rather than attempted.
+    nlohmann::json values = nlohmann::json::array();
+    for (int i = 0; i < 150; ++i)
+        values.push_back(1.0 + 0.001 * i);
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "oversized"},
+        {"conditions",
+         nlohmann::json::array(
+             {nlohmann::json{{"component", kFirstId}, {"path", "value"}, {"values", values}},
+              nlohmann::json{{"component", kSecondId}, {"path", "value"}, {"values", values}}})},
+        {"measure", nlohmann::json::array({measureJson(kSecondId, 0, "power_dBm")})}};
+    const fs::path path = uniqueTempPath("preflight_oversized");
+    writeText(path, flow.dump(2));
+    ScopedRemove cleanup{path};
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.loadFlow(path.string()));
+
+    const TestFlowWidget::FlowPreview preview = widget.preview();
+    REQUIRE(preview.loaded);
+    REQUIRE(preview.expected_rows == 150 * 150);
+    REQUIRE_FALSE(preview.runnable);
+    REQUIRE(preview.issues.size() == 1);
+    REQUIRE(preview.issues[0].find(std::to_string(TestFlowWidget::kMaxRunRows)) !=
+            std::string::npos);
+
+    REQUIRE_FALSE(widget.run());
+    REQUIRE(widget.statusMessage().find("row limit") != std::string::npos);
+    REQUIRE_FALSE(widget.result().has_value());
+    // Refused before the first row: no engine was swept, so nothing had to be
+    // restored either.
+    REQUIRE(first.deserializeCalls() == 0);
+    REQUIRE(second.deserializeCalls() == 0);
+    REQUIRE(first.value() == Catch::Approx(1.0));
+    REQUIRE(second.value() == Catch::Approx(2.0));
+
+    // At the limit the same flow shape runs: the refusal is the budget, not a
+    // mistake in the flow.
+    nlohmann::json small = nlohmann::json::array();
+    for (int i = 0; i < 100; ++i)
+        small.push_back(1.0 + 0.001 * i);
+    const nlohmann::json ok_flow = {
+        {"version", 1},
+        {"name", "at the limit"},
+        {"conditions",
+         nlohmann::json::array(
+             {nlohmann::json{{"component", kFirstId}, {"path", "value"}, {"values", small}},
+              nlohmann::json{{"component", kSecondId}, {"path", "value"}, {"values", small}}})},
+        {"measure", nlohmann::json::array({measureJson(kSecondId, 0, "power_dBm")})}};
+    const fs::path ok_path = uniqueTempPath("preflight_at_limit");
+    writeText(ok_path, ok_flow.dump(2));
+    ScopedRemove ok_cleanup{ok_path};
+    REQUIRE(widget.loadFlow(ok_path.string()));
+    REQUIRE(widget.preview().expected_rows == 100 * 100);
+    REQUIRE(widget.preview().runnable);
+    REQUIRE(widget.run());
+    REQUIRE(widget.result()->rows.size() == 10000);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: the exhaustive pre-flight stays cheap enough to run per frame",
+                 "[test_flow][widget][panel][draw]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kFirstId = 850;
+    constexpr int kSecondId = 851;
+    components.add<TrackingEngine>(kFirstId, graph, 1.0);
+    components.add<TrackingEngine>(kSecondId, graph, 2.0);
+
+    // The largest sweep the run budget allows: one condition, 10000 values. The
+    // pre-flight checks every one of them on every frame it is drawn, which is
+    // only affordable because the path is resolved once per condition.
+    nlohmann::json values = nlohmann::json::array();
+    for (int i = 0; i < 10000; ++i)
+        values.push_back(1.0 + 0.0001 * i);
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "10000 values"},
+        {"conditions", nlohmann::json::array({nlohmann::json{
+                           {"component", kFirstId}, {"path", "value"}, {"values", values}}})},
+        {"measure", nlohmann::json::array({measureJson(kSecondId, 0, "power_dBm")})}};
+    const fs::path path = uniqueTempPath("preflight_cost");
+    writeText(path, flow.dump(2));
+    ScopedRemove cleanup{path};
+
+    TestFlowWidget widget(components, graph);
+    const long long idle_us = frameCost(widget, 10);
+    REQUIRE(widget.loadFlow(path.string()));
+    REQUIRE(widget.preview().runnable);
+    const long long validating_us = frameCost(widget, 10);
+    WARN("frame cost with a 10000-value flow loaded: " << idle_us / 1000.0 << " ms -> "
+                                                       << validating_us / 1000.0 << " ms");
+    // The delta is the whole pre-flight: measured 0.10 ms for 10000 values, so
+    // this allows a 20x regression. That is deliberately below the ~5-10 ms a
+    // per-value path re-parse would cost (the reason a sampled pre-flight was
+    // once considered) and far below the ~147 ms of a serialize-and-patch per
+    // value, so the discarded design cannot come back unnoticed.
+    REQUIRE(validating_us - idle_us < 2000);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: the results table stays bounded as the result grows",
+                 "[test_flow][widget][panel][draw]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kFirstId = 840;
+    constexpr int kSecondId = 841;
+    auto &first = components.add<TrackingEngine>(kFirstId, graph, 1.0);
+    auto &second = components.add<TrackingEngine>(kSecondId, graph, 2.0);
+    graph.addLink(first.outputPinId(), second.inputPinId());
+
+    // 100 x 100 = 10000 rows, the panel's whole budget. Cheap engines keep the
+    // run itself fast; the cost under test is the *drawing* of the result.
+    const auto values = [] {
+        nlohmann::json out = nlohmann::json::array();
+        for (int i = 0; i < 100; ++i)
+            out.push_back(1.0 + 0.001 * i);
+        return out;
+    };
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "10000 rows"},
+        {"conditions",
+         nlohmann::json::array(
+             {nlohmann::json{{"component", kFirstId}, {"path", "value"}, {"values", values()}},
+              nlohmann::json{{"component", kSecondId}, {"path", "value"}, {"values", values()}}})},
+        {"measure", nlohmann::json::array({measureJson(kSecondId, 0, "power_dBm")})}};
+    const fs::path path = uniqueTempPath("table_bound");
+    writeText(path, flow.dump(2));
+    ScopedRemove cleanup{path};
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.loadFlow(path.string()));
+    const long long without_result_us = frameCost(widget, 20);
+
+    REQUIRE(widget.run());
+    REQUIRE(widget.result()->rows.size() == 10000);
+    const long long with_result_us = frameCost(widget, 20);
+    WARN("frame cost: no result=" << without_result_us / 1000.0
+                                  << " ms, 10000-row result=" << with_result_us / 1000.0 << " ms");
+    // The table is height-bounded (kResultTableRows) and clipped, so the rows on
+    // screen are all that is submitted. What this measures is the bound: with no
+    // outer size every row is inside the visible area, ImGui clips nothing, and
+    // 10000 rows measured 34 ms per frame here against 0.27 ms bounded (the
+    // clipper then trims the off-screen formatting work). The slack absorbs a
+    // loaded machine while still failing that.
+    REQUIRE(with_result_us < without_result_us * 20 + 2000);
 }

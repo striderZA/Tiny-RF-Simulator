@@ -32,6 +32,13 @@ class NodeGraphEngine;
 // The widget holds ComponentRegistry and NodeGraphEngine references only — it
 // never knows about RfSimulatorApp, and dialog code lives in the app lambdas
 // draw() invokes.
+//
+// Whether a flow applies to the circuit is never the panel's own opinion:
+// preview() maps ValidateFlow()'s issues onto the panel, so Run cannot be
+// enabled for a flow RunFlow() would refuse (a condition `path` addresses
+// serialize() keys, not inspector labels, which makes it the likeliest
+// hand-authoring mistake). ValidateFlow() is exhaustive and resolves each
+// condition's path once, so calling it every frame stays affordable.
 class TestFlowWidget {
   public:
     TestFlowWidget(ComponentRegistry &components, NodeGraphEngine &graph);
@@ -48,6 +55,8 @@ class TestFlowWidget {
     // restoration succeeded. An individual measurement is not part of that
     // condition: an invalid MetricSample (`valid == false`) is a normal result,
     // preserved and rendered as "N/A" (JSON null), and never fails the run.
+    // Refused, without touching the circuit, while restoreFailed() is true, when
+    // no valid flow is loaded, or when the sweep exceeds kMaxRunRows.
     bool run();
 
     // Writes the last successful result as pretty JSON plus a trailing newline.
@@ -95,9 +104,17 @@ class TestFlowWidget {
         std::string component_label;
     };
 
+    // The most sweep rows the panel will run. A flow above it is refused by both
+    // preview() (as an issue, so Run is disabled with a visible reason) and
+    // run() — the cartesian product is executed synchronously on the UI thread,
+    // so an unbounded sweep is a frozen window rather than a long wait. Raise it
+    // only together with off-thread execution.
+    static constexpr size_t kMaxRunRows = 10000;
+
     // The loaded flow validated against the live circuit, recomputed on demand
-    // because a project load or new project replaces every engine. `runnable`
-    // is false for an unloaded flow, an unresolved id/port, or a latched
+    // because a project load or new project replaces every engine. `issues` is
+    // the harness's own verdict list (ValidateFlow(), exhaustive) plus the row
+    // limit; `runnable` is false for an unloaded flow, any issue, or a latched
     // restoration failure — the panel disables Run on it.
     struct FlowPreview {
         bool loaded = false;

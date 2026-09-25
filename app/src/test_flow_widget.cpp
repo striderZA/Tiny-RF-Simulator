@@ -34,6 +34,10 @@ IComponentEngine *findById(std::span<IComponentEngine *const> components, int id
 // How many sweep values a condition row previews before it is truncated.
 constexpr size_t kPreviewValues = 4;
 
+// How many results rows fit the table before it scrolls (and how many are
+// submitted per frame — the rest are clipped).
+constexpr float kResultTableRows = 12.0f;
+
 const ImVec4 kIssueColor(1.0f, 0.45f, 0.45f, 1.0f);
 
 void appendError(std::string &out, const std::string &detail) {
@@ -107,6 +111,15 @@ bool TestFlowWidget::run() {
     }
     if (!m_load_state.ok) {
         m_status = "Load a valid flow before running.";
+        return false;
+    }
+    // A sweep above the panel's budget would block the UI thread for minutes and
+    // build a row vector the panel cannot render, so it is refused here rather
+    // than discovered mid-run. preview() reports the same limit, so the disabled
+    // Run button always has a reason on screen.
+    if (expectedRowCount(m_load_state.spec) > kMaxRunRows) {
+        m_status = "Run refused: the sweep exceeds the panel's " + std::to_string(kMaxRunRows) +
+                   "-row limit.";
         return false;
     }
 
@@ -273,9 +286,6 @@ TestFlowWidget::FlowPreview TestFlowWidget::preview() const {
         if (IComponentEngine *component = findById(components, condition.component)) {
             entry.resolved = true;
             entry.component_label = std::string(component->type_name());
-        } else {
-            out.issues.push_back("condition targets unknown component " +
-                                 std::to_string(condition.component) + " (" + condition.path + ")");
         }
         out.conditions.push_back(std::move(entry));
     }
@@ -289,23 +299,26 @@ TestFlowWidget::FlowPreview TestFlowWidget::preview() const {
             entry.component_resolved = true;
             entry.component_label = std::string(component->type_name());
             entry.output_ports = component->node().outputs.size();
-            if (measurement.port < 0 ||
-                static_cast<size_t>(measurement.port) >= entry.output_ports) {
-                out.issues.push_back("component " + std::to_string(measurement.component) +
-                                     " has no output port " + std::to_string(measurement.port) +
-                                     " (" + std::to_string(entry.output_ports) + " output(s))");
-            } else {
-                entry.port_resolved = true;
-            }
-        } else {
-            out.issues.push_back("measurement targets unknown component " +
-                                 std::to_string(measurement.component) + " (" + measurement.metric +
-                                 ")");
+            entry.port_resolved =
+                measurement.port >= 0 && static_cast<size_t>(measurement.port) < entry.output_ports;
         }
         out.measurements.push_back(std::move(entry));
     }
 
+    // Every issue is the harness's own verdict, in RunFlow()'s order and
+    // wording, so the panel can never call a flow runnable that RunFlow() would
+    // refuse: a condition `path` addresses serialize() keys (never inspector
+    // labels), and a typo — or a value the slot cannot take — there is the
+    // mistake this pre-flight exists to catch before Run is enabled.
+    for (const FlowError &error : ValidateFlow(m_load_state.spec, components))
+        out.issues.push_back(error.message);
+
     out.expected_rows = expectedRowCount(m_load_state.spec);
+    // A sweep above the panel's budget is refused by run() too; saying so here is
+    // what keeps the disabled Run button explained.
+    if (out.expected_rows > kMaxRunRows)
+        out.issues.push_back("sweep exceeds the panel's " + std::to_string(kMaxRunRows) +
+                             "-row limit");
     // A latched restoration failure outranks a resolvable flow: the live circuit
     // no longer matches the project, so nothing may run until a reload.
     out.runnable = out.issues.empty() && !m_restore_failed;
@@ -447,12 +460,17 @@ void TestFlowWidget::draw(const char *title, bool *open, const std::function<voi
         }
 
         // One row per FlowRow, addressed by its index so every cell keeps a
-        // stable ImGui id across frames.
+        // stable ImGui id across frames. The table is height-bounded and its rows
+        // are clipped: submitting every row of a 10000-row result each frame
+        // costs tens of milliseconds and would auto-fit the window to the whole
+        // result instead of scrolling inside it.
         const int columns = 1 + static_cast<int>(condition_columns + metric_columns);
-        if (columns > 1 &&
-            ImGui::BeginTable("results", columns,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit)) {
+        const float table_height = ImGui::GetTextLineHeightWithSpacing() * kResultTableRows;
+        if (columns > 1 && ImGui::BeginTable("results", columns,
+                                             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                                 ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
+                                                 ImGuiTableFlags_SizingFixedFit,
+                                             ImVec2(0.0f, table_height))) {
             ImGui::TableSetupColumn("Row");
             std::string label;
             for (size_t i = 0; i < condition_columns; ++i) {
@@ -465,41 +483,48 @@ void TestFlowWidget::draw(const char *title, bool *open, const std::function<voi
             }
             ImGui::TableHeadersRow();
 
-            for (size_t r = 0; r < m_result->rows.size(); ++r) {
-                const FlowRow &row = m_result->rows[r];
-                ImGui::PushID(static_cast<int>(r));
-                ImGui::TableNextRow();
+            const int row_count = static_cast<int>(std::min<size_t>(
+                m_result->rows.size(), static_cast<size_t>(std::numeric_limits<int>::max())));
+            ImGuiListClipper clipper;
+            clipper.Begin(row_count);
+            while (clipper.Step()) {
+                for (int r = clipper.DisplayStart; r < clipper.DisplayEnd; ++r) {
+                    const size_t row_index = static_cast<size_t>(r);
+                    const FlowRow &row = m_result->rows[row_index];
+                    ImGui::PushID(r);
+                    ImGui::TableNextRow();
 
-                ImGui::TableNextColumn();
-                ImGui::Text("%zu", r);
-
-                for (size_t c = 0; c < condition_columns; ++c) {
                     ImGui::TableNextColumn();
-                    ImGui::PushID(static_cast<int>(c));
-                    if (c < row.conditions.size()) {
-                        const ConditionValue &value = row.conditions[c];
-                        ImGui::Text("%d:%s = %s", value.component, value.path.c_str(),
-                                    formatValue(value.value).c_str());
-                    } else {
-                        ImGui::TextUnformatted("-");
+                    ImGui::Text("%zu", row_index);
+
+                    for (size_t c = 0; c < condition_columns; ++c) {
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(static_cast<int>(c));
+                        if (c < row.conditions.size()) {
+                            const ConditionValue &value = row.conditions[c];
+                            ImGui::Text("%d:%s = %s", value.component, value.path.c_str(),
+                                        formatValue(value.value).c_str());
+                        } else {
+                            ImGui::TextUnformatted("-");
+                        }
+                        ImGui::PopID();
                     }
+
+                    for (size_t c = 0; c < metric_columns; ++c) {
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(static_cast<int>(condition_columns + c));
+                        if (c < row.metrics.size()) {
+                            const MetricSample &sample = row.metrics[c];
+                            ImGui::Text("%d:%d:%s = %s", sample.component, sample.port,
+                                        sample.name.c_str(), formatMetricValue(sample).c_str());
+                        } else {
+                            ImGui::TextUnformatted("-");
+                        }
+                        ImGui::PopID();
+                    }
+
                     ImGui::PopID();
                 }
-
-                for (size_t c = 0; c < metric_columns; ++c) {
-                    ImGui::TableNextColumn();
-                    ImGui::PushID(static_cast<int>(condition_columns + c));
-                    if (c < row.metrics.size()) {
-                        const MetricSample &sample = row.metrics[c];
-                        ImGui::Text("%d:%d:%s = %s", sample.component, sample.port,
-                                    sample.name.c_str(), formatMetricValue(sample).c_str());
-                    } else {
-                        ImGui::TextUnformatted("-");
-                    }
-                    ImGui::PopID();
-                }
-
-                ImGui::PopID();
             }
             ImGui::EndTable();
         }
