@@ -904,7 +904,9 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(widget.preview().loaded);
     REQUIRE_FALSE(widget.preview().runnable);
 
-    // A failed load is not a reset: the app only resets after a successful load.
+    // A failed load that leaves the circuit intact is not a reset: only a load
+    // that replaced the circuit (a successful one, or a failure that reset it)
+    // clears the panel's latch and result.
     SignalGeneratorEngine &restored_generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &restored_amplifier = *app.testComponents().byType<AmplifierEngine>().front();
