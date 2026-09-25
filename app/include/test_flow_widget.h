@@ -43,8 +43,11 @@ class TestFlowWidget {
     // load's own error if it has one.
     bool loadFlow(const std::string &path);
 
-    // Runs the loaded flow inside the snapshot/restore boundary. True only when
-    // execution, every measurement, and every restoration succeeded.
+    // Runs the loaded flow inside the snapshot/restore boundary. True when the
+    // execution completes without a fatal FlowResult error and every snapshot
+    // restoration succeeded. An individual measurement is not part of that
+    // condition: an invalid MetricSample (`valid == false`) is a normal result,
+    // preserved and rendered as "N/A" (JSON null), and never fails the run.
     bool run();
 
     // Writes the last successful result as pretty JSON plus a trailing newline.
