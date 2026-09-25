@@ -1,3 +1,26 @@
+## [0.25.0] - 2026-09-25
+
+### Added
+
+- **Test Flow authoring** — the Test Flow panel (`View > Test Flow`) no longer only runs a hand-written flow; it writes one, closing issue #155. Pick a component and one of its real `serialize()` keys from a combo that lists every key with its JSON type and current value, seed the values from the live circuit, add/update/remove conditions and measurements, `Save Flow...` it, and `Reload` to pick up a hand edit without re-picking the file. `New from Circuit` scaffolds a draft from the live circuit — a measurement on the first component with an output port, port 0, `power_dBm`, the form pre-filled from the first sweepable key and its *current* value — so a working file is one Add-condition click away, and every id and path in the form is read from the circuit rather than invented. A non-numeric key is listed but disabled with its JSON type as the reason, and a condition whose `path` does not resolve is marked red and answered with the sweepable keys that engine's `serialize()` does expose (up to `kMaxPathHints`), because a mistyped `serialize()` key, never an inspector label, is the likeliest authoring mistake.
+
+### Changed
+
+- **Flow authoring rules live in the harness, not the panel** — `test_flow/` gains `describeConditionPaths()` (every scalar leaf of a component's `serialize()` snapshot with its JSON type and current value, containers descended and never listed; only the entries it marks numeric are paths `resolveConditionSlot()` accepts, so a picker built on it cannot offer a path `applyConditionValue()` would refuse), `buildFlowDocument()`/`writeFlowFile()` (the document `LoadFlowFile()` reads back, ids and paths verbatim, written atomically via temp + rename so a failed write cannot truncate a hand-authored flow), and `parseConditionValues()`/`formatConditionValues()` (the values field's grammar and its shortest round-trip inverse, refusing rather than skipping a token that is not a complete finite number). The panel keeps adding no second copy of the document shape, value grammar, or applicability rules, and the harness keeps its no-ImGui/no-`simulator::app` rule.
+- **A draft is the single thing edited, validated and run** — edits land in an in-tool draft and `spec()` is the one accessor `preview()`, `run()` and `saveFlow()` read, so the panel cannot validate one flow and run another; `addCondition()`/`updateCondition()`/`addMeasurement()` check each candidate through `ValidateFlow()` and report its own wording, plus the loader's duplicate-target/duplicate-reading rules that `ValidateFlow()` does not check, so a refusal at the form is the verdict Run would give later and a draft the panel runs is also a file that loads back. A load clears the draft (the file is the truth again); a circuit reload keeps it and `preview()` revalidates it against the replacement circuit.
+- **`app/AGENTS.md` and `test_flow/AGENTS.md`** document the authoring contract: the `spec()`/draft boundary, circuit-sourced references, the form's use of `ValidateFlow()`, and the values-field buffer growth.
+
+### Fixed
+
+- **A refused authoring edit no longer creates a draft** — the duplicate-target and duplicate-reading checks and the remove/update index checks now run against the effective spec before any draft is materialised, so `draftActive()` keeps meaning "unsaved edits exist" and a rejected click cannot flip the panel into that state.
+- **The values field no longer truncates a long sweep** — its ImGui buffer grows from the model text (`kValuesBufferHeadroom` past its end) instead of using a fixed 256 bytes, which had let a long sweep's seeded text be truncated on the next keystroke and the truncation stored back, silently dropping values from a list the harness would then run as if it were complete.
+- **Discarding unsaved edits is stated, not silent** — a load (and `reloadFlow()`, which goes through it) reports in the status that the in-tool edits were discarded, and `New from Circuit` reports when it replaced a draft.
+
+### Testing
+
+- Add four `[issue155]` cases to `tests/test_issue87_flow.cpp`: the offered paths are exactly the sweepable leaves of `serialize()` (discovery and resolver agree, including that resolving touches nothing), a built document is the flow `LoadFlowFile()` reads back, a mistyped value list is refused rather than partially accepted, and a failed write leaves the previous file byte-identical.
+- Extend `tests/test_test_flow_widget.cpp` with the authoring contract over real headless frames and clicks: a flow scaffolded from the circuit saves, loads back and runs (with registry-id pinning), an authored condition is refused exactly where the harness would refuse it, the form seeds the current value and the draft is what runs, reload re-reads the selected file and drops the draft, a circuit reload keeps the draft and revalidates it, a scaffold needs something to measure, a refused edit never creates a draft, a 200-value list survives the form round trip, and the authoring buttons drive their own actions.
+
 ## [0.24.4] - 2026-09-25
 
 ### Added
