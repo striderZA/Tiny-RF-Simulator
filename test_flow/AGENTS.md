@@ -12,6 +12,11 @@ component output ports.
 - `include/flow_params.h` — `applyConditionValue()`: type-preserving write into a component's
   `serialize()` snapshot, plus `resolveConditionSlot()`/`conditionSlotAccepts()` — the same path and
   value rules split so a sweep can be checked by resolving the slot once instead of writing per value
+  — and `describeConditionPaths()`, the discovery pass an authoring UI offers instead of making the
+  author guess `atten_dB` from the inspector's `attenuation_dB`
+- `include/flow_author.h` — `buildFlowDocument()` (the document `LoadFlowFile()` reads back),
+  `parseConditionValues()`/`formatConditionValues()` (the value text field's grammar and its inverse),
+  `writeFlowFile()` (atomic pretty-JSON write)
 - `include/flow_metrics.h` — `MetricSample`, `MetricDefinition`, `MetricRegistry` (four built-ins)
 - `include/flow_result.h` — `ConditionValue`, `FlowRow`, `FlowResult`, `toJson()`
 - `include/flow_runner.h` — `LoadFlowFile()`, `ValidateFlow()`, `RunFlow()`
@@ -37,6 +42,26 @@ component output ports.
 - Built-in metrics: `power_dBm` (total power, the same measurement the GUI power meter reports),
   `peak_power_dBm` and `peak_freq_Hz` (strongest tone), and `noise_floor_dBm_per_Hz` (mean noise
   density). A metric returns `NaN` when the input is not measurable.
+- `describeConditionPaths(snapshot)` lists every scalar leaf of a snapshot in nlohmann's sorted key
+  order, containers descended and never listed (`tones` yields `tones[0].freq_Hz`; an empty container
+  yields nothing), so a picker built on it cannot offer a container, a missing key or a non-numeric
+  slot as if it were sweepable. Non-numeric leaves are still listed with `numeric == false` and their
+  JSON type, because "the key exists but cannot be swept" is the answer the author needs; `numeric`
+  entries resolve to the same `ConditionSlotKind` they report, and writing an entry's own `value` back
+  at its `path` is a no-op.
+- `buildFlowDocument(spec)` writes the document `LoadFlowFile()` reads back — `version` 1, `name`
+  only when non-empty (absent means the file stem), `conditions` only when there is one, and `measure`
+  always, even when empty so the loader's own "must not be empty" rule is what answers. Ids and paths
+  are copied from `spec` verbatim: nothing is invented, so a caller must have taken them from the
+  live circuit (`id()` and `describeConditionPaths()`).
+- `writeFlowFile()` mirrors `ProjectSerializer::save()`'s atomic discipline (issue #113): pretty JSON
+  plus a trailing newline into a sibling `<path>.tmp`, renamed over the target only after write,
+  flush and close all succeed, so a failed write never truncates a hand-authored flow and never leaves
+  the temp file behind.
+- `parseConditionValues()` accepts numbers separated by commas, semicolons or whitespace and rejects
+  (rather than skips) a token that is not a complete finite number, and an empty list;
+  `formatConditionValues()` is its inverse in `std::to_chars`' shortest round-trip form, so editing
+  one value of a list cannot perturb the value the author did not touch.
 - Non-finite metric values encode as JSON `null`; `valid` distinguishes a measurement from a
   failure.
 - A fatal flow error yields `ok = false` with zero rows, and the loaded spec is reset — a failed load
@@ -52,11 +77,16 @@ component output ports.
 - Add a metric: one function in `src/flow_metrics.cpp` returning `NaN` when not computable, plus one
   `m_defs.emplace(...)` registration.
 - Add a condition capability: extend the path grammar and patch in `src/flow_params.cpp`.
+- Add an authoring aid (issue #155): a UI-free helper in `src/flow_author.cpp` (or
+  `src/flow_params.cpp` when it is path/slot rule work) with its own unit test here, and let the
+  widget in `app/` drive it. The panel must not carry a second copy of the document shape, the value
+  grammar or the applicability rules: it calls `ValidateFlow()` for every verdict it shows.
 - Flow fixtures live in `tests/flows/`; the circuit a flow addresses is built by the test in C++.
 
 ## Verification
 
-- `ctest --test-dir build -R test_issue87_flow --output-on-failure`
+- `ctest --test-dir build -R test_issue87_flow --output-on-failure` — the harness, the pre-flight and
+  the authoring helpers (`[issue155]` runs just the authoring aids).
 
 ## Child DOX Index
 

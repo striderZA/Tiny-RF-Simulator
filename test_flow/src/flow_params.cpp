@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -223,4 +225,86 @@ bool applyConditionValue(nlohmann::json &snapshot, const std::string &path, doub
         return true;
     }
     return fail("slot is not numeric (null, boolean, string, object, or array)");
+}
+
+namespace {
+
+// The JSON type name of a leaf that is not numeric. Kept in the same words the
+// "slot is not numeric" rejection lists, so a picker's type hint and the
+// harness's error read as one vocabulary.
+std::string leafTypeName(const nlohmann::json &node) {
+    if (node.is_null())
+        return "null";
+    if (node.is_boolean())
+        return "boolean";
+    if (node.is_string())
+        return "string";
+    if (node.is_array())
+        return "array";
+    if (node.is_object())
+        return "object";
+    if (node.is_binary())
+        return "binary";
+    return "value";
+}
+
+// Depth-first walk that appends one entry per scalar leaf. Recursion depth is the
+// snapshot's own nesting, which engines keep to a tone list at most.
+void collectLeaves(const nlohmann::json &node, const std::string &path,
+                   std::vector<ConditionPathInfo> &out) {
+    if (node.is_object()) {
+        // nlohmann::json's default object type is a std::map, so keys come out
+        // sorted — a stable alphabetical order, which is a fine picker order and
+        // is deterministic regardless of how the engine built the literal.
+        for (auto it = node.begin(); it != node.end(); ++it) {
+            std::string child = path.empty() ? it.key() : path + "." + it.key();
+            collectLeaves(it.value(), child, out);
+        }
+        return;
+    }
+    if (node.is_array()) {
+        for (size_t i = 0; i < node.size(); ++i) {
+            // nlohmann::json stores size_t; a hostile index must still print the
+            // path it would parse back to, so only the token text matters.
+            const std::string child = path + "[" + std::to_string(i) + "]";
+            collectLeaves(node[i], child, out);
+        }
+        return;
+    }
+
+    ConditionPathInfo info;
+    info.path = path;
+    ConditionSlotKind kind = ConditionSlotKind::Float;
+    std::string reason;
+    if (classifySlot(node, &kind, reason)) {
+        info.numeric = true;
+        info.kind = kind;
+        info.value = node.get<double>();
+        switch (kind) {
+        case ConditionSlotKind::Unsigned:
+            info.type_name = "unsigned";
+            break;
+        case ConditionSlotKind::Signed:
+            info.type_name = "integer";
+            break;
+        case ConditionSlotKind::Float:
+            info.type_name = "float";
+            break;
+        }
+    } else {
+        info.type_name = leafTypeName(node);
+    }
+    out.push_back(std::move(info));
+}
+
+} // namespace
+
+std::vector<ConditionPathInfo> describeConditionPaths(const nlohmann::json &snapshot) {
+    std::vector<ConditionPathInfo> out;
+    // A non-object snapshot has no key to address, so it offers nothing; every
+    // engine's serialize() is an object.
+    if (!snapshot.is_object())
+        return out;
+    collectLeaves(snapshot, {}, out);
+    return out;
 }

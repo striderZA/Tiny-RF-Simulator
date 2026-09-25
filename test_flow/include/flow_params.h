@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 // The numeric slot a condition path resolved to. It is the only thing a swept
 // value has to satisfy:
@@ -47,3 +48,25 @@ bool resolveConditionSlot(const nlohmann::json &snapshot, const std::string &pat
 // if an unsigned slot gets a negative, non-integral, or above-1.8e19 value.
 bool applyConditionValue(nlohmann::json &snapshot, const std::string &path, double value,
                          std::string *error);
+
+// One scalar leaf of a component's serialize() snapshot: a path a condition may
+// address, with the value it currently holds. This is what an authoring UI offers
+// instead of making the author guess `atten_dB` from the inspector's label — the
+// two are different namespaces.
+struct ConditionPathInfo {
+    std::string path;      // "gain_dB", "tones[0].power_dBm"
+    std::string type_name; // "float", "unsigned", "integer", "string", "boolean", "null"
+    bool numeric = false;  // true when the slot is one resolveConditionSlot() resolves
+    ConditionSlotKind kind = ConditionSlotKind::Float; // meaningful only when numeric
+    double value = 0.0; // current value; meaningful only when numeric
+};
+
+// Every scalar leaf of `snapshot`, in nlohmann::json's sorted key order (stable,
+// so a picker's order does not shuffle between frames): objects and arrays are
+// descended (so a container key is never listed as if it were writable — "tones"
+// yields "tones[0].freq_Hz", not "tones"), and an empty container yields nothing.
+// Non-numeric leaves are listed too, with `numeric == false` and their JSON type,
+// because "the key exists but cannot be swept" is the answer the author needs;
+// only the paths with `numeric == true` are ones resolveConditionSlot() accepts,
+// so a picked path can never be one applyConditionValue() would refuse.
+std::vector<ConditionPathInfo> describeConditionPaths(const nlohmann::json &snapshot);

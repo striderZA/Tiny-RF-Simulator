@@ -1,6 +1,7 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
+#include "flow_author.h"
 #include "flow_metrics.h"
 #include "flow_params.h"
 #include "flow_result.h"
@@ -8,12 +9,14 @@
 #include "node_graph_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <nlohmann/json.hpp>
@@ -1341,4 +1344,325 @@ TEST_CASE("issue87 params: a resolved slot checks values exactly as the write pa
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Authoring aids (issue #155): discovering a component's serialize() keys and
+// writing a flow file back out. These are the pieces the Test Flow panel drives,
+// kept UI-free so the JSON shape and the value text grammar are testable here.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+namespace fs = std::filesystem;
+
+std::string flowScratchPath(const std::string &tag) {
+    return (fs::temp_directory_path() /
+            ("rfsim_issue155_" + tag + "_" + test_temp_paths::processTag() + ".json"))
+        .string();
+}
+
+std::string readFlowText(const std::string &path) {
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in.is_open());
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+struct ScopedFlowPath {
+    std::string path;
+    ~ScopedFlowPath() {
+        std::error_code error;
+        fs::remove_all(path, error);
+        error.clear();
+        fs::remove(path + ".tmp", error);
+    }
+};
+
+const ConditionPathInfo *findPath(const std::vector<ConditionPathInfo> &paths,
+                                  const std::string &path) {
+    for (const ConditionPathInfo &entry : paths) {
+        if (entry.path == path)
+            return &entry;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+TEST_CASE("issue155 discovery: the offered paths are exactly the sweepable leaves",
+          "[issue155][params]") {
+    // The shapes the real engines produce: flat numbers, an integer and an
+    // unsigned slot, a bool and a string that are not sweepable, a tone list, and
+    // containers with nothing in them.
+    const nlohmann::json snapshot = {
+        {"atten_dB", 10.0},
+        {"decimation", 2},
+        {"active_channel", 4u},
+        {"sparam_mode", false},
+        {"sparam_filepath", "touchstone.s2p"},
+        {"tones",
+         nlohmann::json::array({nlohmann::json{{"freq_Hz", 1.0e9}, {"power_dBm", -30.0}},
+                                nlohmann::json{{"freq_Hz", 2.0e9}, {"power_dBm", -20.0}}})},
+        {"empty_list", nlohmann::json::array()},
+        {"empty_object", nlohmann::json::object()},
+    };
+
+    const std::vector<ConditionPathInfo> paths = describeConditionPaths(snapshot);
+    // Containers are descended and never listed ("tones" has no entry of its
+    // own, and the empty containers contribute nothing); keys come out in
+    // nlohmann's sorted object order, so the picker's order is deterministic.
+    const std::vector<std::string> expected = {
+        "active_channel",     "atten_dB",         "decimation",
+        "sparam_filepath",    "sparam_mode",      "tones[0].freq_Hz",
+        "tones[0].power_dBm", "tones[1].freq_Hz", "tones[1].power_dBm"};
+    REQUIRE(paths.size() == expected.size());
+    for (size_t i = 0; i < expected.size(); ++i)
+        REQUIRE(paths[i].path == expected[i]);
+
+    const ConditionPathInfo *atten = findPath(paths, "atten_dB");
+    REQUIRE(atten != nullptr);
+    REQUIRE(atten->numeric);
+    REQUIRE(atten->kind == ConditionSlotKind::Float);
+    REQUIRE(atten->type_name == "float");
+    REQUIRE(atten->value == Approx(10.0));
+
+    const ConditionPathInfo *decimation = findPath(paths, "decimation");
+    REQUIRE(decimation != nullptr);
+    REQUIRE(decimation->numeric);
+    REQUIRE(decimation->kind == ConditionSlotKind::Signed);
+    REQUIRE(decimation->type_name == "integer");
+    REQUIRE(decimation->value == Approx(2.0));
+
+    const ConditionPathInfo *channel = findPath(paths, "active_channel");
+    REQUIRE(channel != nullptr);
+    REQUIRE(channel->numeric);
+    REQUIRE(channel->kind == ConditionSlotKind::Unsigned);
+    REQUIRE(channel->type_name == "unsigned");
+    REQUIRE(channel->value == Approx(4.0));
+
+    const ConditionPathInfo *tone = findPath(paths, "tones[1].power_dBm");
+    REQUIRE(tone != nullptr);
+    REQUIRE(tone->numeric);
+    REQUIRE(tone->value == Approx(-20.0));
+
+    // A key that exists but cannot be swept is still offered, with its type, so
+    // the author is told why rather than left guessing at a missing name.
+    const ConditionPathInfo *mode = findPath(paths, "sparam_mode");
+    REQUIRE(mode != nullptr);
+    REQUIRE_FALSE(mode->numeric);
+    REQUIRE(mode->type_name == "boolean");
+    const ConditionPathInfo *filepath = findPath(paths, "sparam_filepath");
+    REQUIRE(filepath != nullptr);
+    REQUIRE_FALSE(filepath->numeric);
+    REQUIRE(filepath->type_name == "string");
+
+    // The coupling this whole API rests on: a path the picker offers as numeric
+    // is one the harness resolves to the same kind and accepts, and one it marks
+    // as not numeric is one the harness refuses. A picker built on it therefore
+    // cannot offer a path applyConditionValue() would reject.
+    std::string error;
+    for (const ConditionPathInfo &entry : paths) {
+        ConditionSlotKind kind = ConditionSlotKind::Float;
+        const bool resolves = resolveConditionSlot(snapshot, entry.path, &kind, &error);
+        REQUIRE(resolves == entry.numeric);
+        if (entry.numeric) {
+            REQUIRE(kind == entry.kind);
+            // The current value is the snapshot's own: writing it back where it
+            // came from changes nothing, so a panel that seeds a new sweep with
+            // it starts from exactly the circuit's state.
+            nlohmann::json written = snapshot;
+            REQUIRE(applyConditionValue(written, entry.path, entry.value, &error));
+            REQUIRE(written == snapshot);
+        } else {
+            REQUIRE_FALSE(error.empty());
+        }
+    }
+
+    // A snapshot that is not an object has no key to address at all.
+    REQUIRE(describeConditionPaths(nlohmann::json::array({1, 2})).empty());
+    REQUIRE(describeConditionPaths(nlohmann::json{{"a", 1}})[0].path == "a");
+}
+
+TEST_CASE("issue155 authoring: a built document is the flow the loader reads back",
+          "[issue155][author]") {
+    FlowSpec spec;
+    spec.name = "authored";
+    spec.conditions.push_back(Condition{100, "tones[0].power_dBm", {-30.0, -25.5, -20.0}});
+    spec.conditions.push_back(Condition{101, "gain_dB", {0.0, 1.0e9}});
+    spec.measure.push_back(Measurement{101, 0, "power_dBm"});
+    spec.measure.push_back(Measurement{101, 1, "peak_freq_Hz"});
+
+    const nlohmann::json document = buildFlowDocument(spec);
+    REQUIRE(document["version"] == 1);
+    REQUIRE(document["name"] == "authored");
+    REQUIRE(document.contains("conditions"));
+    REQUIRE(document.contains("measure"));
+
+    const ScopedFlowPath scratch{flowScratchPath("round_trip")};
+    std::string error;
+    REQUIRE(writeFlowFile(scratch.path, document, &error));
+    REQUIRE(error.empty());
+
+    // The written file is the document, pretty-printed with a trailing newline,
+    // and it is what the loader accepts — the same FlowSpec out that went in, so
+    // a scaffold the panel wrote is exactly what its pre-flight then verifies.
+    const std::string text = readFlowText(scratch.path);
+    REQUIRE(text.back() == '\n');
+    REQUIRE(nlohmann::json::parse(text) == document);
+
+    const FlowLoadResult loaded = LoadFlowFile(scratch.path);
+    REQUIRE(loaded.ok);
+    REQUIRE(loaded.spec.name == spec.name);
+    REQUIRE(loaded.spec.conditions.size() == spec.conditions.size());
+    for (size_t i = 0; i < spec.conditions.size(); ++i) {
+        REQUIRE(loaded.spec.conditions[i].component == spec.conditions[i].component);
+        REQUIRE(loaded.spec.conditions[i].path == spec.conditions[i].path);
+        REQUIRE(loaded.spec.conditions[i].values == spec.conditions[i].values);
+    }
+    REQUIRE(loaded.spec.measure.size() == spec.measure.size());
+    for (size_t i = 0; i < spec.measure.size(); ++i) {
+        REQUIRE(loaded.spec.measure[i].component == spec.measure[i].component);
+        REQUIRE(loaded.spec.measure[i].port == spec.measure[i].port);
+        REQUIRE(loaded.spec.measure[i].metric == spec.measure[i].metric);
+    }
+
+    // A flow with no sweep writes no `conditions` section (the loader treats an
+    // absent section as no sweep, and an empty array the same way), while the
+    // required `measure` section is always present.
+    FlowSpec single;
+    single.name = "single row";
+    single.measure.push_back(Measurement{100, 0, "power_dBm"});
+    const nlohmann::json one = buildFlowDocument(single);
+    REQUIRE_FALSE(one.contains("conditions"));
+    const ScopedFlowPath one_scratch{flowScratchPath("one_row")};
+    REQUIRE(writeFlowFile(one_scratch.path, one, &error));
+    const FlowLoadResult one_loaded = LoadFlowFile(one_scratch.path);
+    REQUIRE(one_loaded.ok);
+    REQUIRE(one_loaded.spec.conditions.empty());
+    REQUIRE(one_loaded.spec.measure.size() == 1);
+
+    // An empty measure section is written, not dropped, so the author is told by
+    // the loader's own "must not be empty" rule what is missing.
+    FlowSpec no_measure;
+    no_measure.conditions.push_back(Condition{100, "gain_dB", {1.0}});
+    const nlohmann::json missing = buildFlowDocument(no_measure);
+    REQUIRE(missing.contains("measure"));
+    REQUIRE(missing["measure"].empty());
+    const ScopedFlowPath missing_scratch{flowScratchPath("no_measure")};
+    REQUIRE(writeFlowFile(missing_scratch.path, missing, &error));
+    const FlowLoadResult missing_loaded = LoadFlowFile(missing_scratch.path);
+    REQUIRE_FALSE(missing_loaded.ok);
+    REQUIRE(missing_loaded.error.code == FlowErrorCode::EmptyMeasurement);
+
+    // A nameless spec writes no name, and the loader then falls back to the file
+    // stem — the same behaviour a hand-written file gets.
+    FlowSpec nameless;
+    nameless.measure.push_back(Measurement{100, 0, "power_dBm"});
+    const nlohmann::json anonymous = buildFlowDocument(nameless);
+    REQUIRE_FALSE(anonymous.contains("name"));
+    const ScopedFlowPath nameless_scratch{flowScratchPath("nameless")};
+    REQUIRE(writeFlowFile(nameless_scratch.path, anonymous, &error));
+    const FlowLoadResult nameless_loaded = LoadFlowFile(nameless_scratch.path);
+    REQUIRE(nameless_loaded.ok);
+    REQUIRE(nameless_loaded.spec.name.find("rfsim_issue155_nameless_") == 0);
+}
+
+TEST_CASE("issue155 authoring: a mistyped value list is refused, never partially accepted",
+          "[issue155][author]") {
+    std::vector<double> values;
+    std::string error;
+
+    // Separators are a list's punctuation, so a mix of them is fine.
+    REQUIRE(parseConditionValues("-30, -20 -10", &values, &error));
+    REQUIRE(values == std::vector<double>{-30.0, -20.0, -10.0});
+    REQUIRE(parseConditionValues("0;1;2", &values, &error));
+    REQUIRE(values == std::vector<double>{0.0, 1.0, 2.0});
+    REQUIRE(parseConditionValues("1e9\t0.5\n-0.25", &values, &error));
+    REQUIRE(values == std::vector<double>{1e9, 0.5, -0.25});
+    REQUIRE(parseConditionValues("  7  ", &values, &error));
+    REQUIRE(values == std::vector<double>{7.0});
+
+    // Nothing to sweep is an error, not an empty sweep.
+    REQUIRE_FALSE(parseConditionValues("", &values, &error));
+    REQUIRE(error.find("at least one value") != std::string::npos);
+    REQUIRE_FALSE(parseConditionValues("  ,  ", &values, &error));
+
+    // A token that is not a complete finite number is refused outright: skipping
+    // it would silently drop a sweep point and produce a result that looks
+    // complete. The message names the offending text.
+    REQUIRE_FALSE(parseConditionValues("abc", &values, &error));
+    REQUIRE(error.find("'abc'") != std::string::npos);
+    REQUIRE_FALSE(parseConditionValues("1 abc", &values, &error));
+    REQUIRE(error.find("'abc'") != std::string::npos);
+    REQUIRE_FALSE(parseConditionValues("1e", &values, &error));
+    REQUIRE_FALSE(parseConditionValues("nan", &values, &error));
+    REQUIRE(error.find("finite") != std::string::npos);
+    REQUIRE_FALSE(parseConditionValues("inf", &values, &error));
+    REQUIRE_FALSE(parseConditionValues("1e999", &values, &error));
+    REQUIRE(error.find("finite") != std::string::npos);
+
+    // The format/parse pair round-trips bit-identically, including the values a
+    // one-decimal format would quietly perturb: editing one value of a list must
+    // not rewrite the others' meaning.
+    const std::vector<std::vector<double>> round_trips = {
+        {0.1, 0.2, 0.30000000000000004},       {-30.0, -20.0, -10.0},      {0.0, -0.0, 1.0},
+        {1e300, -1e-300, 123456789012345.678}, {std::nextafter(1.0, 2.0)},
+    };
+    for (const auto &value_list : round_trips) {
+        const std::string text = formatConditionValues(value_list);
+        std::vector<double> parsed;
+        REQUIRE(parseConditionValues(text, &parsed, &error));
+        REQUIRE(parsed == value_list);
+    }
+    // The shortest form: a value's own text, not a 17-digit expansion.
+    REQUIRE(formatConditionValues({0.1}) == "0.1");
+    REQUIRE(formatConditionValues({-30.0, -20.0}) == "-30, -20");
+    REQUIRE(formatConditionValues({}).empty());
+}
+
+TEST_CASE("issue155 authoring: a failed write leaves the previous file byte-identical",
+          "[issue155][author]") {
+    const ScopedFlowPath scratch{flowScratchPath("atomic")};
+    std::string error;
+
+    FlowSpec first;
+    first.name = "first";
+    first.measure.push_back(Measurement{100, 0, "power_dBm"});
+    REQUIRE(writeFlowFile(scratch.path, buildFlowDocument(first), &error));
+
+    FlowSpec second;
+    second.name = "second";
+    second.measure.push_back(Measurement{101, 0, "power_dBm"});
+    const nlohmann::json second_doc = buildFlowDocument(second);
+    REQUIRE(writeFlowFile(scratch.path, second_doc, &error));
+    // Replaced outright, not appended to or truncated into: what is on disk is
+    // exactly the new document.
+    REQUIRE(nlohmann::json::parse(readFlowText(scratch.path)) == second_doc);
+    REQUIRE(fs::exists(scratch.path + ".tmp") == false);
+
+    // Force the rename to fail by pointing the target at a directory: the write
+    // succeeds into the temp file and only the replacement fails, which is the
+    // case that must not destroy what was already there. The temp file is
+    // cleaned up rather than left beside the target.
+    const std::string directory_target = scratch.path + ".dir";
+    std::error_code ec;
+    fs::create_directory(directory_target, ec);
+    REQUIRE_FALSE(ec);
+    REQUIRE_FALSE(writeFlowFile(directory_target, second_doc, &error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE(fs::is_directory(directory_target));
+    REQUIRE_FALSE(fs::exists(directory_target + ".tmp"));
+    fs::remove_all(directory_target, ec);
+
+    // An unwritable target (no such directory) is reported, and creates nothing.
+    const std::string missing_dir =
+        (fs::temp_directory_path() / ("rfsim_issue155_missing_" + test_temp_paths::processTag()))
+            .string();
+    const std::string unwritable = missing_dir + "/flow.json";
+    REQUIRE_FALSE(writeFlowFile(unwritable, second_doc, &error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE_FALSE(fs::exists(missing_dir));
+
+    // The file the failed writes were aimed at is still the last good one.
+    REQUIRE(nlohmann::json::parse(readFlowText(scratch.path)) == second_doc);
 }
