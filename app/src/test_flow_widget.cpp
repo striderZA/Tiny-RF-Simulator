@@ -87,12 +87,22 @@ bool TestFlowWidget::loadFlow(const std::string &path) {
     m_load_state = LoadFlowFile(path);
     if (!m_load_state.ok)
         m_status = m_load_state.error.message;
+    // A latched restoration failure outlives the selection: whichever file the
+    // user picks next — valid or not — the panel keeps stating why nothing may
+    // run until the circuit is reloaded.
+    if (m_restore_failed) {
+        if (!m_status.empty())
+            m_status += '\n';
+        m_status += m_restore_failure;
+    }
     return m_load_state.ok;
 }
 
 bool TestFlowWidget::run() {
     if (m_restore_failed) {
-        m_status = "Restoration failed; reload the circuit before running another flow.";
+        // Re-state the original failure (which names the reload) rather than a
+        // generic line: the latch, not this call, is why the run is refused.
+        m_status = m_restore_failure;
         return false;
     }
     if (!m_load_state.ok) {
@@ -163,9 +173,13 @@ bool TestFlowWidget::run() {
     //    execution exception is a run failure. An ordinary FlowResult error is
     //    the user's diagnostic and is kept, because restoration succeeded.
     if (!restore_error.empty()) {
-        m_restore_failed = true;
         m_result.reset();
-        m_status = "Restore failed: " + restore_error + " — reload the circuit to run flows again.";
+        // Store the notice before taking the latch: later status writes read it
+        // back so the reason for the blocked panel survives new selections.
+        m_restore_failure =
+            "Restore failed: " + restore_error + " — reload the circuit to run flows again.";
+        m_status = m_restore_failure;
+        m_restore_failed = true;
         return false;
     }
     if (!execution_error.empty()) {
@@ -187,6 +201,8 @@ bool TestFlowWidget::exportResult(const std::string &path) {
     // report, not a discard, so the user can pick another path and retry.
     if (m_restore_failed || !m_result || !m_result->ok) {
         m_status = "Export unavailable: no successful run to export.";
+        if (m_restore_failed)
+            m_status += "\n" + m_restore_failure;
         return false;
     }
 
@@ -494,6 +510,7 @@ void TestFlowWidget::draw(const char *title, bool *open, const std::function<voi
 
 void TestFlowWidget::resetAfterCircuitReload() {
     m_restore_failed = false;
+    m_restore_failure.clear();
     m_result.reset();
     m_status.clear();
     // The selection and its parsed spec are retained on purpose: preview()

@@ -25,7 +25,9 @@ class NodeGraphEngine;
 //
 // A restoration failure latches restoreFailed(): the run reports failure, later
 // runs are refused, and the user recovers by reloading the circuit, after which
-// RfSimulatorApp calls resetAfterCircuitReload().
+// RfSimulatorApp calls resetAfterCircuitReload(). The latch also keeps the
+// original failure notice in statusMessage() across every later loadFlow(), so
+// the panel never sits blocked without stating that a reload is required.
 //
 // The widget holds ComponentRegistry and NodeGraphEngine references only — it
 // never knows about RfSimulatorApp, and dialog code lives in the app lambdas
@@ -36,7 +38,9 @@ class TestFlowWidget {
 
     // Replaces the selection and clears the previous result before parsing, so
     // a failed load can never leave stale rows behind. Returns false when the
-    // flow file is unreadable or invalid.
+    // flow file is unreadable or invalid. While restoreFailed() is true the
+    // status also keeps the latched restoration-failure notice, next to this
+    // load's own error if it has one.
     bool loadFlow(const std::string &path);
 
     // Runs the loaded flow inside the snapshot/restore boundary. True only when
@@ -57,6 +61,8 @@ class TestFlowWidget {
     const std::string &selectedPath() const { return m_selected_path; }
     const FlowLoadResult &loadState() const { return m_load_state; }
     const std::optional<FlowResult> &result() const { return m_result; }
+    // While restoreFailed() is true this always includes the latched
+    // restoration-failure notice, whatever the last load attempt reported.
     const std::string &statusMessage() const { return m_status; }
     bool restoreFailed() const { return m_restore_failed; }
 
@@ -122,9 +128,10 @@ class TestFlowWidget {
     static size_t expectedRowCount(const FlowSpec &spec);
     static size_t saturatingMultiply(size_t left, size_t right);
 
-    // Clears the restoration latch and the stale result. The app calls this
-    // only after newProject() or a successful project load, because those
-    // replace every engine the widget's snapshots referred to.
+    // Clears the restoration latch, its notice, and the stale result. The app
+    // calls this only after newProject() or a successful project load, because
+    // those replace every engine the widget's snapshots referred to. This is
+    // the only path that clears either.
     void resetAfterCircuitReload();
 
   private:
@@ -135,5 +142,9 @@ class TestFlowWidget {
     std::optional<FlowResult> m_result;
     std::string m_status;
     bool m_restore_failed = false;
+    // The exact message set when the latch was taken; re-stated by every later
+    // status write that would otherwise hide why the panel is blocked. Empty
+    // exactly while the latch is clear.
+    std::string m_restore_failure;
     ButtonRects m_button_rects;
 };

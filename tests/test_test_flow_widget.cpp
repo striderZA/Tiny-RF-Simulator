@@ -367,10 +367,52 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(rejecting.deserializeCalls() == rejecting_calls);
     REQUIRE(tracking.deserializeCalls() == tracking_calls);
 
+    // Selecting another flow must not hide why the panel is blocked: the latch
+    // outranks the new selection, so the restore-failure notice — and the
+    // reload requirement — stay in the status.
+    const fs::path second_path = uniqueTempPath("restore_second");
+    writeText(second_path, singleValueFlowJson(kRejectingId, kTrackingId, 3.0));
+    ScopedRemove second_cleanup{second_path};
+    REQUIRE(widget.loadFlow(second_path.string()));
+    REQUIRE(widget.selectedPath() == second_path.string());
+    REQUIRE(widget.loadState().ok);
+    REQUIRE(widget.restoreFailed());
+    REQUIRE(widget.statusMessage().find("Restore failed") != std::string::npos);
+    REQUIRE(widget.statusMessage().find("reload the circuit") != std::string::npos);
+
+    // The fresh flow resolves against the live circuit; the latched failure —
+    // not the flow — is what keeps Run disabled.
+    const TestFlowWidget::FlowPreview preview = widget.preview();
+    REQUIRE(preview.loaded);
+    REQUIRE(preview.issues.empty());
+    REQUIRE_FALSE(preview.runnable);
+
+    // A run is still refused by the latch alone, with no further deserialize.
+    REQUIRE_FALSE(widget.run());
+    REQUIRE(rejecting.deserializeCalls() == rejecting_calls);
+    REQUIRE(tracking.deserializeCalls() == tracking_calls);
+
+    // An invalid selection reports its own parse error *and* the latched
+    // notice: the user must see both why the file failed and why the panel is
+    // still blocked.
+    const fs::path invalid_path = uniqueTempPath("restore_invalid");
+    writeText(invalid_path, "{ this is not a flow");
+    ScopedRemove invalid_cleanup{invalid_path};
+    REQUIRE_FALSE(widget.loadFlow(invalid_path.string()));
+    REQUIRE_FALSE(widget.loadState().ok);
+    REQUIRE(widget.statusMessage().find(widget.loadState().error.message) != std::string::npos);
+    REQUIRE(widget.statusMessage().find("reload the circuit") != std::string::npos);
+
     // Only the documented circuit-reload recovery clears the latch.
     widget.resetAfterCircuitReload();
     REQUIRE_FALSE(widget.restoreFailed());
     REQUIRE_FALSE(widget.result().has_value());
+    // ... and with it the notice: no other path may clear either.
+    REQUIRE(widget.statusMessage().empty());
+
+    // The next selection loads under ordinary status semantics again.
+    REQUIRE(widget.loadFlow(second_path.string()));
+    REQUIRE(widget.statusMessage().empty());
 }
 
 // ===========================================================================
