@@ -920,6 +920,97 @@ TEST_CASE_METHOD(ImGuiFixture,
 
 // ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: a failed load only clears the latch when it resets the circuit",
+                 "[test_flow][widget][panel][restore]") {
+    RfSimulatorApp app;
+    SignalGeneratorEngine &generator =
+        *app.testComponents().byType<SignalGeneratorEngine>().front();
+    AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
+    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+
+    TestFlowWidget &widget = app.testTestFlowWidget();
+    const fs::path flow_path = uniqueTempPath("failed_load_flow");
+    const fs::path project_path = uniqueTempPath("failed_load_project");
+    ScopedRemove flow_cleanup{flow_path};
+    ScopedRemove project_cleanup{project_path};
+    writeText(flow_path, sweepFlowJson(generator.id(), amplifier.id(), 3));
+    REQUIRE(widget.loadFlow(flow_path.string()));
+    REQUIRE(widget.run());
+    REQUIRE(widget.result()->rows.size() == 3);
+    const std::string retained = widget.selectedPath();
+
+    // A save gives the app a current project path, which makes the two
+    // failed-load branches observable: the one that leaves the circuit intact
+    // must keep it (issue #113's contract is the other half of this switch).
+    app.saveProject(project_path.string());
+    REQUIRE(app.m_current_project_path == project_path.string());
+
+    // A field-level shape failure is rejected before the live circuit is touched
+    // (`lastLoadReset() == false`). Nothing was replaced, so the stale result,
+    // the selection, and the save target all survive.
+    const fs::path pre_reset_path = uniqueTempPath("failed_load_pre_reset");
+    ScopedRemove pre_reset_cleanup{pre_reset_path};
+    writeText(pre_reset_path, R"({"window_state": {"log": 5}})");
+    const size_t live_components = app.testComponents().size();
+
+    app.loadProject(pre_reset_path.string());
+    REQUIRE(app.m_current_project_path == project_path.string());
+    REQUIRE(app.testComponents().size() == live_components);
+    REQUIRE_FALSE(widget.restoreFailed());
+    REQUIRE(widget.selectedPath() == retained);
+    REQUIRE(widget.result().has_value());
+
+    // Latch a restoration failure on the live app: a component that rejects its
+    // own baseline makes execution succeed and only restoration fail.
+    constexpr double kRejectedBaseline = 1.0;
+    constexpr int kRejectingId = 950;
+    constexpr int kMeasuredId = 951;
+    auto &rejecting = app.testComponents().add<BaselineRejectingEngine>(
+        kRejectingId, app.testGraphEngine(), kRejectedBaseline);
+    AmplifierEngine &measured =
+        app.testComponents().add<AmplifierEngine>(kMeasuredId, app.testGraphEngine());
+    app.testGraphEngine().addLink(rejecting.outputPinId(), measured.inputPinId());
+
+    const fs::path rejecting_flow = uniqueTempPath("failed_load_rejecting_flow");
+    ScopedRemove rejecting_cleanup{rejecting_flow};
+    writeText(rejecting_flow, singleValueFlowJson(kRejectingId, kMeasuredId, 2.0));
+    REQUIRE(widget.loadFlow(rejecting_flow.string()));
+    REQUIRE_FALSE(widget.run());
+    REQUIRE(widget.restoreFailed());
+    REQUIRE_FALSE(widget.result().has_value());
+    REQUIRE(widget.statusMessage().find("Restore failed") == 0);
+    const std::string latched_selection = widget.selectedPath();
+
+    // The same non-resetting failure must not clear the latch or its notice.
+    app.loadProject(pre_reset_path.string());
+    REQUIRE(app.m_current_project_path == project_path.string());
+    REQUIRE(widget.restoreFailed());
+    REQUIRE(widget.statusMessage().find("Restore failed") == 0);
+    REQUIRE(widget.selectedPath() == latched_selection);
+
+    // A wrong top-level shape destroys the live project and leaves an empty one
+    // (`lastLoadReset() == true`). That *is* a circuit reload, so the latch and
+    // its notice go with the circuit they describe.
+    const fs::path reset_path = uniqueTempPath("failed_load_reset");
+    ScopedRemove reset_cleanup{reset_path};
+    writeText(reset_path, R"({"components": 5})");
+
+    app.loadProject(reset_path.string());
+    REQUIRE(app.m_current_project_path.empty());
+    REQUIRE(app.testComponents().size() == 0);
+    REQUIRE_FALSE(widget.restoreFailed());
+    REQUIRE_FALSE(widget.result().has_value());
+    REQUIRE(widget.statusMessage().empty());
+
+    // The selection survives the reload and is revalidated against the emptied
+    // circuit, so the panel stays disabled without discarding the user's choice.
+    REQUIRE(widget.selectedPath() == latched_selection);
+    REQUIRE(widget.preview().loaded);
+    REQUIRE_FALSE(widget.preview().runnable);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
                  "TestFlowWidget: draw only invokes a callback for its clicked button",
                  "[test_flow][widget][panel][draw]") {
     RfSimulatorApp app;

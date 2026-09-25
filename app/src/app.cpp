@@ -601,6 +601,13 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             // active under the now-untitled project. Clear-then-refresh is the
             // same order as newProject(), so the rescan re-roots at the CWD.
             refreshExtensions();
+            // The failed load already destroyed the live circuit, so this is a
+            // reload like any other: the panel's latch, its notice, and its
+            // stale result all describe a circuit that no longer exists. A
+            // failure that leaves the circuit intact (handled below) is not a
+            // reload and must not touch them. The retained flow selection is
+            // revalidated against the emptied circuit by the panel itself.
+            m_test_flow_widget->resetAfterCircuitReload();
         }
         return;
     }
@@ -608,10 +615,11 @@ void RfSimulatorApp::loadProject(const std::string &path) {
     m_current_project_path = path;
     refreshExtensions();
     m_dirty = false;
-    // Only a successful load replaces the circuit; a failed one (which may leave
-    // the current project intact) must not discard the panel's result. The
-    // retained flow selection is revalidated against the new circuit by the
-    // panel itself.
+    // A load that replaced the circuit — this successful one, or a failed one
+    // that reset it (handled above) — is a circuit reload for the panel, so its
+    // latch and stale result are cleared; a failed load that left the live
+    // circuit intact must not discard them. The retained flow selection is
+    // validated against the new circuit by the panel itself.
     m_test_flow_widget->resetAfterCircuitReload();
 }
 
