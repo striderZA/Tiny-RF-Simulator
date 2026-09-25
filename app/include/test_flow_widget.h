@@ -61,9 +61,10 @@ class TestFlowWidget {
 
     // Replaces the selection and clears the previous result before parsing, so
     // a failed load can never leave stale rows behind. Returns false when the
-    // flow file is unreadable or invalid. While restoreFailed() is true the
-    // status also keeps the latched restoration-failure notice, next to this
-    // load's own error if it has one.
+    // flow file is unreadable or invalid. An in-tool draft is discarded (the file
+    // is the flow again), and the status states that rather than dropping unsaved
+    // edits silently; while restoreFailed() is true it also keeps the latched
+    // restoration-failure notice, next to this load's own error if it has one.
     bool loadFlow(const std::string &path);
 
     // Runs the loaded flow inside the snapshot/restore boundary. True when the
@@ -108,7 +109,9 @@ class TestFlowWidget {
     bool hasSpec() const;
     // True while the panel holds edits that are not (yet) in the selected file:
     // either a draft seeded from the circuit or a loaded flow edited in place.
-    // Saving writes it and loads it straight back, so this clears on success.
+    // Saving writes it and loads it straight back, so this clears on success —
+    // and so does a load or reload, which discards the draft and says so in the
+    // status. A *refused* edit never creates one.
     bool draftActive() const { return m_draft.has_value(); }
 
     // One serialize() key the authoring form can offer for a component, plus
@@ -174,7 +177,8 @@ class TestFlowWidget {
     // Re-reads the selected file from disk, so a hand edit can be iterated on
     // inside the app. False with a status when nothing is selected or the file no
     // longer parses; an in-tool draft is discarded by this, exactly as a fresh
-    // load discards it, because the file is then the truth again.
+    // load discards it, and the status says so, because the file is then the truth
+    // again and the discard must not be silent.
     bool reloadFlow();
 
     // -----------------------------------------------------------------------
@@ -370,6 +374,10 @@ class TestFlowWidget {
     std::string m_form_values;
     int m_form_edit_index = -1;
     std::string m_form_error;
+    // The values field's ImGui buffer, grown from m_form_values (never shrunk)
+    // instead of a fixed cap: a fixed 256-byte buffer silently truncated a long
+    // sweep on the next keystroke and stored the truncated text back.
+    std::vector<char> m_values_buffer;
 
     // The measurement form's selection. The metric starts at the panel's default
     // so the Add button works as soon as a component is picked.

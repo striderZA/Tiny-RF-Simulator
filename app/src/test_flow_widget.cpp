@@ -43,10 +43,11 @@ constexpr size_t kPreviewValues = 4;
 // submitted per frame — the rest are clipped).
 constexpr float kResultTableRows = 12.0f;
 
-// The values text field's buffer. An ImGui InputText needs a fixed char buffer
-// (this repo does not link imgui_stdlib), and the model keeps the same text as a
-// std::string so a headless test can drive the field.
-constexpr size_t kValuesBufferSize = 256;
+// The values text field's ImGui buffer grows from the model text (see
+// drawAuthoringForms): this is the typing headroom kept past the text's end, so
+// the field never silently truncates a long sweep. The repo does not link
+// imgui_stdlib, so the field renders through a std::vector<char> copy.
+constexpr size_t kValuesBufferHeadroom = 64;
 
 // The metric a scaffolded measurement starts at, and the measurement form's
 // default. "power_dBm" is the total-power measurement the GUI's own power meter
@@ -60,6 +61,15 @@ void appendError(std::string &out, const std::string &detail) {
     if (!out.empty())
         out += "; ";
     out += detail;
+}
+
+// Appends a notice on its own line, so one status can carry a second fact (the
+// latched restoration failure, or a draft a load discarded) without overwriting
+// the first.
+std::string appendLine(const std::string &text, const std::string &line) {
+    if (text.empty())
+        return line;
+    return text + "\n" + line;
 }
 
 std::string formatValue(double value) {
@@ -104,11 +114,8 @@ TestFlowWidget::TestFlowWidget(ComponentRegistry &components, NodeGraphEngine &g
 
 void TestFlowWidget::setStatus(const std::string &message) {
     m_status = message;
-    if (m_restore_failed) {
-        if (!m_status.empty())
-            m_status += '\n';
-        m_status += m_restore_failure;
-    }
+    if (m_restore_failed)
+        m_status = appendLine(m_status, m_restore_failure);
 }
 
 const FlowSpec &TestFlowWidget::spec() const {
@@ -139,7 +146,10 @@ IComponentEngine *TestFlowWidget::componentById(int component) const {
 bool TestFlowWidget::loadFlow(const std::string &path) {
     // The new selection replaces the old one outright: a parse failure must
     // never leave the previous flow's rows on screen next to its error. Any
-    // in-tool draft goes the same way — the file is the truth again.
+    // in-tool draft goes the same way — the file is the truth again — but that
+    // is a discard of unsaved edits, so the status says so rather than letting it
+    // disappear quietly.
+    const bool had_draft = m_draft.has_value();
     m_selected_path = path;
     m_result.reset();
     m_status.clear();
@@ -149,7 +159,10 @@ bool TestFlowWidget::loadFlow(const std::string &path) {
     m_load_state = LoadFlowFile(path);
     // The latch notice, when there is one, rides along with this load's own
     // error (or with the empty status of a clean load).
-    setStatus(m_load_state.ok ? std::string() : m_load_state.error.message);
+    std::string message = m_load_state.ok ? std::string() : m_load_state.error.message;
+    if (had_draft)
+        message = appendLine(message, "The in-tool edits were discarded: the file is the flow.");
+    setStatus(message);
     return m_load_state.ok;
 }
 
@@ -403,6 +416,8 @@ bool TestFlowWidget::newFlowFromCircuit() {
 
     // A scaffold is a new, unsaved flow: the previous file's identity and load
     // record no longer describe what the panel holds, and its result is stale.
+    // A draft it replaces is unsaved work, so the status names that too.
+    const bool replaced_draft = m_draft.has_value();
     m_selected_path.clear();
     m_load_state = FlowLoadResult{};
     m_result.reset();
@@ -413,12 +428,16 @@ bool TestFlowWidget::newFlowFromCircuit() {
     setAuthoringComponent(form_component >= 0 ? form_component : measure_component);
     if (form_component >= 0)
         setAuthoringPath(form_path.path);
-    setStatus("New flow seeded from the circuit: measuring component " +
-              std::to_string(measure_component) + " port 0 with " + kDefaultMetric + "." +
-              (form_component >= 0
-                   ? " " + form_path.path + " on component " + std::to_string(form_component) +
-                         " is pre-filled with its current value — Add condition sweeps it."
-                   : " This circuit exposes no sweepable key."));
+    std::string message =
+        "New flow seeded from the circuit: measuring component " +
+        std::to_string(measure_component) + " port 0 with " + kDefaultMetric + "." +
+        (form_component >= 0
+             ? " " + form_path.path + " on component " + std::to_string(form_component) +
+                   " is pre-filled with its current value — Add condition sweeps it."
+             : " This circuit exposes no sweepable key.");
+    if (replaced_draft)
+        message = appendLine(message, "The previous in-tool edits were replaced.");
+    setStatus(message);
     return true;
 }
 
@@ -511,20 +530,24 @@ bool TestFlowWidget::placeCondition(std::optional<size_t> editing, int component
         return false;
     }
 
-    FlowSpec &draft = mutableDraft();
     // Duplicate targets are the loader's rule (DuplicateConditionTarget), not
     // ValidateFlow()'s, so it is checked here: a draft the panel runs must also be
     // a file the loader accepts, and two conditions on one key would collide.
-    for (size_t i = 0; i < draft.conditions.size(); ++i) {
+    // This runs against the *effective* spec before any draft exists, so a
+    // refused edit cannot leave one behind — a refusal must not flip the panel
+    // into "unsaved edits" for a flow the author never changed.
+    const std::vector<Condition> &existing_conditions = spec().conditions;
+    for (size_t i = 0; i < existing_conditions.size(); ++i) {
         if (editing && *editing == i)
             continue;
-        if (draft.conditions[i].component == component && draft.conditions[i].path == path) {
+        if (existing_conditions[i].component == component && existing_conditions[i].path == path) {
             setStatus("Component " + std::to_string(component) + " already sweeps '" + path +
                       "' — edit that condition instead of adding a second one.");
             return false;
         }
     }
 
+    FlowSpec &draft = mutableDraft();
     const bool updating = editing.has_value() && *editing < draft.conditions.size();
     if (updating)
         draft.conditions[*editing] = Condition{component, path, values};
@@ -552,11 +575,11 @@ bool TestFlowWidget::updateCondition(size_t index, int component, const std::str
 }
 
 bool TestFlowWidget::removeCondition(size_t index) {
-    FlowSpec &draft = mutableDraft();
-    if (index >= draft.conditions.size()) {
+    if (index >= spec().conditions.size()) {
         setStatus("No such condition to remove.");
         return false;
     }
+    FlowSpec &draft = mutableDraft();
     draft.conditions.erase(draft.conditions.begin() + static_cast<std::ptrdiff_t>(index));
     // The form's edit target is an index; keep it pointing at the same row after
     // the erase, or leave edit mode when that row was the one removed.
@@ -577,14 +600,17 @@ bool TestFlowWidget::addMeasurement(int component, int port, const std::string &
         return false;
     }
 
-    FlowSpec &draft = mutableDraft();
-    for (const Measurement &existing : draft.measure) {
+    // Checked against the effective spec, like the condition duplicate rule, so a
+    // refusal happens before any draft is created.
+    for (const Measurement &existing : spec().measure) {
         if (existing.component == component && existing.port == port && existing.metric == metric) {
             setStatus("Component " + std::to_string(component) + " already reports '" + metric +
                       "' at port " + std::to_string(port) + "'.");
             return false;
         }
     }
+
+    FlowSpec &draft = mutableDraft();
     draft.measure.push_back(Measurement{component, port, metric});
     setStatus("Measurement added: " + std::to_string(component) + " port " + std::to_string(port) +
               " " + metric + ".");
@@ -592,11 +618,11 @@ bool TestFlowWidget::addMeasurement(int component, int port, const std::string &
 }
 
 bool TestFlowWidget::removeMeasurement(size_t index) {
-    FlowSpec &draft = mutableDraft();
-    if (index >= draft.measure.size()) {
+    if (index >= spec().measure.size()) {
         setStatus("No such measurement to remove.");
         return false;
     }
+    FlowSpec &draft = mutableDraft();
     draft.measure.erase(draft.measure.begin() + static_cast<std::ptrdiff_t>(index));
     setStatus("Measurement removed.");
     return true;
@@ -1110,12 +1136,17 @@ void TestFlowWidget::drawAuthoringForms() {
     }
 
     // The values field is the model's own text, so the parse verdict and the
-    // refusal a commit would give are visible while typing.
-    char buffer[kValuesBufferSize] = {};
-    std::snprintf(buffer, sizeof(buffer), "%s", m_form_values.c_str());
+    // refusal a commit would give are visible while typing. The ImGui buffer is
+    // sized from that text (with headroom for typing) rather than fixed: a fixed
+    // one truncated a long sweep on the next keystroke, which stored the truncated
+    // text back and silently dropped values from the list.
+    if (m_values_buffer.size() < m_form_values.size() + kValuesBufferHeadroom)
+        m_values_buffer.resize(m_form_values.size() + kValuesBufferHeadroom);
+    std::snprintf(m_values_buffer.data(), m_values_buffer.size(), "%s", m_form_values.c_str());
     ImGui::SetNextItemWidth(420);
-    if (ImGui::InputTextWithHint("Values", "e.g. -30, -20, -10", buffer, sizeof(buffer)))
-        setAuthoringValuesText(buffer);
+    if (ImGui::InputTextWithHint("Values", "e.g. -30, -20, -10", m_values_buffer.data(),
+                                 m_values_buffer.size()))
+        setAuthoringValuesText(m_values_buffer.data());
     if (!m_form_error.empty())
         ImGui::TextColored(kIssueColor, "%s", m_form_error.c_str());
 

@@ -1720,12 +1720,14 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(slot.count() == 3);
 
     // Loading a file with a mistyped key shows the row as unresolved *and* lists
-    // the keys the engine does expose (issue #155 item 1).
+    // the keys the engine does expose (issue #155 item 1). The draft this load
+    // replaces is unsaved work, and the status says it was discarded.
     const fs::path typo_path = uniqueTempPath("hint_path");
     ScopedRemove typo_cleanup{typo_path};
     writeText(typo_path, mistypedKeyFlowJson(kSlotId));
     REQUIRE(widget.loadFlow(typo_path.string()));
     REQUIRE_FALSE(widget.draftActive());
+    REQUIRE(widget.statusMessage().find("in-tool edits were discarded") != std::string::npos);
     const TestFlowWidget::FlowPreview broken = widget.preview();
     REQUIRE(broken.loaded);
     REQUIRE_FALSE(broken.runnable);
@@ -1764,13 +1766,14 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(widget.preview().expected_rows == 3);
 
     // A hand edit outside the app is picked up by Reload without re-picking the
-    // file, and the draft goes away because the file is the truth again.
+    // file, and the draft goes away because the file is the truth again — which
+    // the status states, because discarding unsaved edits must not be silent.
     writeText(path, countFlowJson(kSlotId, {4.0, 5.0}));
     REQUIRE(widget.reloadFlow());
     REQUIRE_FALSE(widget.draftActive());
     REQUIRE(widget.selectedPath() == path.string());
     REQUIRE(widget.loadState().ok);
-    REQUIRE(widget.statusMessage().empty());
+    REQUIRE(widget.statusMessage().find("in-tool edits were discarded") != std::string::npos);
     REQUIRE(widget.spec().conditions.size() == 1);
     REQUIRE(widget.spec().conditions[0].values == std::vector<double>{4.0, 5.0});
     REQUIRE(widget.preview().expected_rows == 2);
@@ -1842,6 +1845,93 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: a scaffold needs something to me
 }
 
 // ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: a refused edit never creates a draft",
+                 "[test_flow][widget][panel][authoring][failure]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 900;
+    components.add<IntegerSlotEngine>(kSlotId, graph);
+
+    const fs::path path = uniqueTempPath("refusal_no_draft");
+    ScopedRemove cleanup{path};
+    writeText(path, countFlowJson(kSlotId, {1.0, 2.0}));
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.loadFlow(path.string()));
+    REQUIRE_FALSE(widget.draftActive());
+
+    // Each of these is refused *after* the checks that need no draft, so the
+    // refusal must not have created one: draftActive() is the panel's "unsaved
+    // edits exist" signal, and a rejected click is not an edit.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "count", {5.0})); // duplicate target
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE_FALSE(widget.addMeasurement(kSlotId, 0, "power_dBm")); // duplicate reading
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE_FALSE(widget.removeCondition(9)); // out of range
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE_FALSE(widget.removeMeasurement(9)); // out of range
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE_FALSE(widget.updateCondition(9, kSlotId, "count", {1.0}));
+    REQUIRE_FALSE(widget.draftActive());
+
+    // The flow the file holds is untouched, and a legitimate edit is what creates
+    // a draft.
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == std::vector<double>{1.0, 2.0});
+    REQUIRE(widget.spec().measure.size() == 1);
+    REQUIRE(widget.updateCondition(0, kSlotId, "count", {1.0, 2.0, 3.0}));
+    REQUIRE(widget.draftActive());
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: a long value list survives the form round trip",
+                 "[test_flow][widget][panel][authoring]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 901;
+    components.add<IntegerSlotEngine>(kSlotId, graph);
+
+    const fs::path path = uniqueTempPath("long_values");
+    ScopedRemove cleanup{path};
+
+    // Two hundred values format to ~900 characters. The field renders through a
+    // buffer sized from the model text; a fixed 256-byte buffer used to truncate
+    // that text on the next keystroke and store the truncation back, silently
+    // dropping values from a sweep the harness would then run as if it were
+    // complete.
+    std::vector<double> values;
+    for (int i = 0; i < 200; ++i)
+        values.push_back(static_cast<double>(i));
+    writeText(path, countFlowJson(kSlotId, values));
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.loadFlow(path.string()));
+    REQUIRE(widget.beginEditingCondition(0));
+
+    // The seeded text is the whole list, and a rendered frame leaves it alone:
+    // draw() writes the field back only when ImGui reports an edit.
+    const std::string seeded_text = widget.authoringValuesText();
+    REQUIRE(seeded_text.size() > 256);
+    REQUIRE(seeded_text == formatConditionValues(values));
+    drawFrame(widget, []() {}, []() {});
+    REQUIRE(widget.authoringValuesText() == seeded_text);
+
+    // Committing it back keeps every value: no truncation, no reordering.
+    REQUIRE(widget.commitAuthoringForm());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == values);
+    REQUIRE(widget.authoringEditIndex() == -1);
+
+    // And the result is an honest whole list, not a mangled one that a limit
+    // happens to hide: the file's own measurement already makes the draft
+    // runnable, with one row per value.
+    REQUIRE(widget.preview().runnable);
+    REQUIRE(widget.preview().expected_rows == values.size());
+}
+
+// ---------------------------------------------------------------------------
 TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: the authoring buttons drive their own actions",
                  "[test_flow][widget][panel][authoring][draw]") {
     RfSimulatorApp app;
@@ -1861,8 +1951,17 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: the authoring buttons drive thei
     TestFlowWidget::ButtonRects rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
     clickButton(widget, rects.new_from_circuit, open_dialog, noop, save_dialog);
     REQUIRE(widget.draftActive());
+    REQUIRE(widget.statusMessage().find("in-tool edits were replaced") == std::string::npos);
     REQUIRE(save_calls == 0);
     REQUIRE(open_calls == 0);
+
+    // Seeding again replaces the draft, and the status says so: re-clicking the
+    // button must not quietly throw away what the author just added.
+    rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
+    clickButton(widget, rects.new_from_circuit, open_dialog, noop, save_dialog);
+    REQUIRE(widget.statusMessage().find("previous in-tool edits were replaced") !=
+            std::string::npos);
+    REQUIRE(save_calls == 0);
 
     // Save Flow invokes only its own callback.
     rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);

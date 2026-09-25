@@ -27,10 +27,13 @@ nlohmann::json buildFlowDocument(const FlowSpec &spec);
 // result that looks complete. Returns false and sets `error` (when non-null).
 bool parseConditionValues(const std::string &text, std::vector<double> *values, std::string *error);
 
-// The inverse of parseConditionValues() for the edit field: the shortest decimal
-// text that reads back bit-identically (`0.1` stays `0.1`, a 17-digit value keeps
-// every digit), joined with ", ". Editing a value list therefore cannot perturb a
-// value the author did not touch.
+// The inverse of parseConditionValues() for the edit field: `std::to_chars`'
+// shortest round-trip form, so a value the author did not touch comes back
+// bit-identical (`0.1` stays `0.1`, a 17-digit value keeps every digit) and
+// editing a value list cannot perturb a value the author did not touch. A
+// non-finite value formats as `inf`/`nan`, which parseConditionValues() then
+// refuses: that direction of the round trip is deliberately closed, because such
+// a value cannot be swept at all.
 std::string formatConditionValues(const std::vector<double> &values);
 
 // Writes `document` to `path` as pretty JSON with a trailing newline, through a

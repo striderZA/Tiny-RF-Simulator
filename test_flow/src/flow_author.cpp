@@ -86,13 +86,15 @@ std::string formatConditionValues(const std::vector<double> &values) {
         if (i > 0)
             out += ", ";
         // std::to_chars' shortest round-trip form, so a value the author did not
-        // touch comes back bit-identical instead of at a printf's precision.
+        // touch comes back bit-identical instead of at a printf's precision. It
+        // writes "inf"/"nan" for a non-finite value rather than failing, so this
+        // error branch is a defensive guard against a buffer too small for a
+        // double (unreachable at this size); a non-finite value in a text field is
+        // refused by parseConditionValues() on the way back in, not here.
         char buffer[40] = {};
         const std::to_chars_result written =
             std::to_chars(buffer, buffer + sizeof(buffer), values[i]);
         if (written.ec != std::errc()) {
-            // Unreachable for a double in 40 bytes; a caller that gets here has a
-            // non-finite value, which the text field's own parser will reject.
             out += "nan";
             continue;
         }
