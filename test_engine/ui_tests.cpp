@@ -1030,7 +1030,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(3);
         IM_CHECK(s_app->m_show_test_flow);
-        IM_CHECK(ImGui::FindWindowByName("Test Flow") != nullptr);
+        // Listing the name only proves ImGui retains a window object; an
+        // inactive (collapsed/unfocused) window would pass too. Assert the
+        // window is actually submitted and active this frame.
+        ImGuiWindow *toggled = ImGui::FindWindowByName("Test Flow");
+        IM_CHECK(toggled != nullptr && toggled->Active);
 
         // Toggling it off hides the window again, leaving no panel behind for
         // the tests that follow. ImGui keeps an unsubmitted window object around
