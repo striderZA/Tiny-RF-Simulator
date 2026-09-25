@@ -1006,4 +1006,37 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         sa.setVideoBw(vbw_before);
         ctx->Yield(2);
     };
+
+    // Test Flow panel: View > Test Flow flips the in-memory visibility flag and
+    // the "Test Flow" window follows it. This is only the menu/window
+    // integration — the panel's own model (preview, validation, result table,
+    // export states) is covered by the filterable standalone
+    // test_test_flow_widget target, which also runs headless. SessionState's
+    // app.ini persistence is deliberately not asserted: it is a no-op outside
+    // Windows, so an assertion here would not be cross-platform.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "test_flow_view_menu_toggles_panel");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->m_show_test_flow = false;
+        ctx->Yield(3);
+        IM_CHECK(ImGui::FindWindowByName("Test Flow") == nullptr);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Test Flow");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_show_test_flow);
+        IM_CHECK(ImGui::FindWindowByName("Test Flow") != nullptr);
+
+        // Toggling it off hides the window again, leaving no panel behind for
+        // the tests that follow. ImGui keeps an unsubmitted window object around
+        // for a frame, so "hidden" is an inactive window, not necessarily a
+        // deleted one.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Test Flow");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(!s_app->m_show_test_flow);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Test Flow");
+        IM_CHECK(panel == nullptr || !panel->Active);
+    };
 }

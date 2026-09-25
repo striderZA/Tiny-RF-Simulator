@@ -63,6 +63,9 @@ class RfSimulatorApp {
     bool m_show_spectrum = true;
     bool m_show_na = false;
     bool m_show_power_meter = false;
+    // Test Flow panel visibility; persisted through SessionState
+    // (WindowState/TestFlow) exactly like the other panel toggles.
+    bool m_show_test_flow = false;
     bool m_show_properties = true;
     bool m_show_node_editor = true;
     bool m_show_help = false;
@@ -143,6 +146,10 @@ class RfSimulatorApp {
 
     void openFileDialog();
     void saveFileDialog();
+    // Native Test Flow dialogs. They own the pfd calls (the widget never does);
+    // a canceled dialog returns an empty path and leaves the panel untouched.
+    void openTestFlowDialog();
+    void exportTestFlowDialog();
 
   private:
     void load_window_states();

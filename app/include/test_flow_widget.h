@@ -6,6 +6,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 class ComponentRegistry;
 class NodeGraphEngine;
@@ -43,8 +44,9 @@ class TestFlowWidget {
     bool run();
 
     // Writes the last successful result as pretty JSON plus a trailing newline.
-    // Unavailable until a successful run.
-    bool exportResult(const std::string &path) const;
+    // Unavailable until a successful run; a failure is reported through
+    // statusMessage() and never discards the in-memory result.
+    bool exportResult(const std::string &path);
 
     // Renders the panel. The callbacks are invoked only when their buttons are
     // clicked, and a canceled native dialog never re-enters the model — the app
@@ -57,6 +59,68 @@ class TestFlowWidget {
     const std::optional<FlowResult> &result() const { return m_result; }
     const std::string &statusMessage() const { return m_status; }
     bool restoreFailed() const { return m_restore_failed; }
+
+    // One swept input as the panel renders it. `component` is the flow's
+    // IComponentEngine::id(); it is resolved by iterating
+    // ComponentRegistry::all() and matching IComponentEngine::id() — never
+    // ComponentRegistry::find(), which is keyed by graph-node id and would
+    // resolve the wrong engine (or none). `values` is a bounded preview.
+    struct ConditionEntry {
+        int component = -1;
+        std::string path;
+        size_t value_count = 0;
+        std::vector<double> values;
+        bool resolved = false;
+        std::string component_label;
+    };
+
+    // One output reading as the panel renders it. `port_resolved` is true only
+    // when the component resolved and its node() actually has that output port.
+    struct MeasurementEntry {
+        int component = -1;
+        int port = 0;
+        std::string metric;
+        bool component_resolved = false;
+        bool port_resolved = false;
+        size_t output_ports = 0;
+        std::string component_label;
+    };
+
+    // The loaded flow validated against the live circuit, recomputed on demand
+    // because a project load or new project replaces every engine. `runnable`
+    // is false for an unloaded flow, an unresolved id/port, or a latched
+    // restoration failure — the panel disables Run on it.
+    struct FlowPreview {
+        bool loaded = false;
+        std::string name;
+        std::vector<ConditionEntry> conditions;
+        std::vector<MeasurementEntry> measurements;
+        size_t expected_rows = 0;
+        bool runnable = false;
+        std::vector<std::string> issues;
+    };
+
+    FlowPreview preview() const;
+
+    // {x0, y0, x1, y1} of the last draw()'s buttons. A headless frame has no
+    // label-based item lookup without the ImGui Test Engine, so the panel tests
+    // press at these rects to drive a real click.
+    struct ButtonRects {
+        float open[4] = {};
+        float run[4] = {};
+        float export_button[4] = {};
+    };
+    const ButtonRects &lastButtonRects() const { return m_button_rects; }
+
+    // Text of one result-table metric cell: "N/A" when the sample is invalid or
+    // its value is not finite, otherwise the value and unit. The table therefore
+    // shows N/A in exactly the rows the exported JSON encodes as null.
+    static std::string formatMetricValue(const MetricSample &sample);
+
+    // One row per FlowRow: a flow with no conditions has a single row, otherwise
+    // the product of the condition value counts — saturating, never wrapping.
+    static size_t expectedRowCount(const FlowSpec &spec);
+    static size_t saturatingMultiply(size_t left, size_t right);
 
     // Clears the restoration latch and the stale result. The app calls this
     // only after newProject() or a successful project load, because those
@@ -71,4 +135,5 @@ class TestFlowWidget {
     std::optional<FlowResult> m_result;
     std::string m_status;
     bool m_restore_failed = false;
+    ButtonRects m_button_rects;
 };
