@@ -16,6 +16,7 @@
 #include "app.h"
 #include "component_engine_base.h"
 #include "component_registry.h"
+#include "flow_author.h"
 #include "flow_runner.h"
 #include "imgui.h"
 #include "imnodes.h"
@@ -472,12 +473,15 @@ std::string readText(const fs::path &path) {
 // The window geometry is pinned so a rect read from one frame stays valid in the
 // next: a fresh ImGui window auto-fits as its content grows, which would
 // otherwise move the buttons between reading their rects and clicking them.
+// `save_dialog` is optional: the panel's Save Flow button simply has nothing to
+// invoke without one.
 void drawFrame(TestFlowWidget &widget, const std::function<void()> &open_dialog,
-               const std::function<void()> &export_dialog) {
+               const std::function<void()> &export_dialog,
+               const std::function<void()> &save_dialog = {}) {
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(760.0f, 620.0f), ImGuiCond_Always);
-    widget.draw("Test Flow", nullptr, open_dialog, export_dialog);
+    widget.draw("Test Flow", nullptr, open_dialog, export_dialog, save_dialog);
     ImGui::Render();
 }
 
@@ -489,24 +493,27 @@ void drawFrame(TestFlowWidget &widget, const std::function<void()> &open_dialog,
 // double-click by ImGui's click-count heuristic.
 void clickButton(TestFlowWidget &widget, const float rect[4],
                  const std::function<void()> &open_dialog,
-                 const std::function<void()> &export_dialog) {
+                 const std::function<void()> &export_dialog,
+                 const std::function<void()> &save_dialog = {}) {
     const ImVec2 centre((rect[0] + rect[2]) * 0.5f, (rect[1] + rect[3]) * 0.5f);
     ImGui::GetIO().AddMousePosEvent(2.0f, 2.0f);
-    drawFrame(widget, open_dialog, export_dialog);
+    drawFrame(widget, open_dialog, export_dialog, save_dialog);
+
     ImGui::GetIO().AddMousePosEvent(centre.x, centre.y);
     ImGui::GetIO().AddMouseButtonEvent(0, true);
-    drawFrame(widget, open_dialog, export_dialog);
+    drawFrame(widget, open_dialog, export_dialog, save_dialog);
     ImGui::GetIO().AddMouseButtonEvent(0, false);
-    drawFrame(widget, open_dialog, export_dialog);
+    drawFrame(widget, open_dialog, export_dialog, save_dialog);
 }
 
 // Lets the window settle (its auto-fit size is only known after one frame) and
 // then returns the button rects the next frame will use.
 TestFlowWidget::ButtonRects warmUpAndReadRects(TestFlowWidget &widget,
                                                const std::function<void()> &open_dialog,
-                                               const std::function<void()> &export_dialog) {
-    drawFrame(widget, open_dialog, export_dialog);
-    drawFrame(widget, open_dialog, export_dialog);
+                                               const std::function<void()> &export_dialog,
+                                               const std::function<void()> &save_dialog = {}) {
+    drawFrame(widget, open_dialog, export_dialog, save_dialog);
+    drawFrame(widget, open_dialog, export_dialog, save_dialog);
     return widget.lastButtonRects();
 }
 
@@ -1365,4 +1372,525 @@ TEST_CASE_METHOD(ImGuiFixture,
     // clipper then trims the off-screen formatting work). The slack absorbs a
     // loaded machine while still failing that.
     REQUIRE(with_result_us < without_result_us * 20 + 2000);
+}
+
+// ===========================================================================
+// Authoring (issue #155): discovering serialize() keys, scaffolding a flow from
+// the circuit, editing conditions in the tool, and reloading the selected file.
+// ===========================================================================
+
+namespace {
+
+// One integer slot, so the form's value rule can be checked where it bites: a
+// fractional value the loader would happily parse into a list but the slot
+// cannot take.
+class IntegerSlotEngine final : public ComponentEngineBase {
+  public:
+    IntegerSlotEngine(int id, NodeGraphEngine &graph)
+        : ComponentEngineBase(id, graph, "IntegerSlot", 0, 1) {}
+
+    std::string_view type_name() const override { return "integer_slot"; }
+    std::string hoverSummary() const override { return "IntegerSlot"; }
+    void update(double) override {}
+
+    nlohmann::json serialize() const override { return {{"count", m_count}}; }
+    void deserialize(const nlohmann::json &snapshot) override {
+        m_count = snapshot.at("count").get<int>();
+    }
+
+    int count() const { return m_count; }
+
+  private:
+    int m_count = 3;
+};
+
+// A one-condition sweep of the integer slot's only key, measured at its own
+// output, as a hand-written flow file would state it.
+std::string countFlowJson(int component, const std::vector<double> &values) {
+    nlohmann::json list = nlohmann::json::array();
+    for (double value : values)
+        list.push_back(value);
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "count sweep"},
+        {"conditions", nlohmann::json::array({nlohmann::json{
+                           {"component", component}, {"path", "count"}, {"values", list}}})},
+        {"measure", nlohmann::json::array({measureJson(component, 0, "power_dBm")})}};
+    return flow.dump(2);
+}
+
+// A flow whose condition names a key the engine does not have.
+std::string mistypedKeyFlowJson(int component) {
+    const nlohmann::json flow = {
+        {"version", 1},
+        {"name", "typo"},
+        {"conditions", nlohmann::json::array({nlohmann::json{
+                           {"component", component}, {"path", "no_such_key"}, {"values", {1.0}}}})},
+        {"measure", nlohmann::json::array({measureJson(component, 0, "power_dBm")})}};
+    return flow.dump(2);
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: a flow scaffolded from the circuit saves and loads back",
+                 "[test_flow][widget][panel][authoring]") {
+    RfSimulatorApp app;
+    SignalGeneratorEngine &generator =
+        *app.testComponents().byType<SignalGeneratorEngine>().front();
+    AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
+    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+
+    TestFlowWidget &widget = app.testTestFlowWidget();
+    REQUIRE(widget.newFlowFromCircuit());
+
+    // The scaffold is an unsaved draft, and its one hard requirement came from
+    // the live circuit: the first component with an output port, by registry id.
+    REQUIRE(widget.draftActive());
+    REQUIRE(widget.selectedPath().empty());
+    REQUIRE_FALSE(widget.loadState().ok);
+    REQUIRE(widget.spec().conditions.empty());
+    REQUIRE(widget.spec().measure.size() == 1);
+    REQUIRE(widget.spec().measure[0].component == generator.id());
+    REQUIRE(widget.spec().measure[0].port == 0);
+    REQUIRE(widget.spec().measure[0].metric == "power_dBm");
+
+    // A flow with no sweep is one row, and it is runnable as it stands — the
+    // scaffold is a valid document before a single value is typed.
+    REQUIRE(widget.preview().runnable);
+    REQUIRE(widget.preview().issues.empty());
+    REQUIRE(widget.preview().expected_rows == 1);
+
+    // The form is pre-filled from the same discovery the picker lists, with the
+    // key's *current* value in the field: "sweep this key from where it is now".
+    const int form_component = widget.authoringComponent();
+    REQUIRE(form_component >= 0);
+    REQUIRE_FALSE(widget.authoringPath().empty());
+    double current_value = 0.0;
+    bool found_offer = false;
+    for (const TestFlowWidget::AuthoringComponent &component : widget.authoringComponents()) {
+        for (const TestFlowWidget::AuthoringPath &path : component.paths) {
+            if (component.component != form_component || path.path != widget.authoringPath())
+                continue;
+            REQUIRE(path.numeric);
+            current_value = path.value;
+            found_offer = true;
+        }
+    }
+    REQUIRE(found_offer);
+    std::vector<double> seeded;
+    std::string parse_error;
+    REQUIRE(parseConditionValues(widget.authoringValuesText(), &seeded, &parse_error));
+    REQUIRE(seeded == std::vector<double>{current_value});
+
+    // One Add condition completes the flow the scaffold deliberately left to the
+    // author.
+    REQUIRE(widget.commitAuthoringForm());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].component == form_component);
+    REQUIRE(widget.spec().conditions[0].path == widget.authoringPath());
+    REQUIRE(widget.spec().conditions[0].values == seeded);
+    REQUIRE(widget.preview().runnable);
+
+    // Saving writes it and reads it straight back: the panel then holds the
+    // file's own contents and the draft is gone.
+    const fs::path path = uniqueTempPath("scaffold_save");
+    ScopedRemove cleanup{path};
+    REQUIRE(widget.saveFlow(path.string()));
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE(widget.selectedPath() == path.string());
+    REQUIRE(widget.loadState().ok);
+    REQUIRE(widget.statusMessage().find("Saved flow") == 0);
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == seeded);
+    REQUIRE(widget.spec().measure.size() == 1);
+    REQUIRE(widget.spec().measure[0].component == generator.id());
+
+    // The bytes are a version:1 document, and every id in it is a registry id —
+    // never invented.
+    const nlohmann::json document = nlohmann::json::parse(readText(path));
+    REQUIRE(document["version"] == 1);
+    REQUIRE(document["name"] == "from circuit");
+    REQUIRE(document["measure"][0]["component"].get<int>() == generator.id());
+    bool registered = false;
+    for (IComponentEngine *component : app.testComponents().all()) {
+        if (component->id() == document["conditions"][0]["component"].get<int>())
+            registered = true;
+    }
+    REQUIRE(registered);
+    REQUIRE(document["conditions"][0]["path"].get<std::string>() == widget.authoringPath());
+
+    // The scaffolded-and-saved flow runs, which is the point of scaffolding one.
+    REQUIRE(widget.run());
+    REQUIRE(widget.result().has_value());
+    REQUIRE(widget.result()->ok);
+    REQUIRE(widget.result()->rows.size() == 1);
+    REQUIRE(widget.result()->rows[0].metrics.size() == 1);
+    REQUIRE(widget.result()->rows[0].metrics[0].component == generator.id());
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: an authored condition is refused where the harness would refuse",
+                 "[test_flow][widget][panel][authoring][failure]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 860;
+    constexpr int kOtherId = 861;
+    auto &slot = components.add<IntegerSlotEngine>(kSlotId, graph);
+    auto &other = components.add<IntegerSlotEngine>(kOtherId, graph);
+    graph.addLink(slot.outputPinId(), other.inputPinId());
+
+    TestFlowWidget widget(components, graph);
+
+    // Nothing to run until a flow exists at all — authored or loaded.
+    REQUIRE_FALSE(widget.run());
+    REQUIRE(widget.statusMessage().find("Load or author") == 0);
+
+    // A key this component does not have, in the harness's own words, and no
+    // draft is created by a refused edit.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "no_such_key", {1.0}));
+    REQUIRE(widget.statusMessage().find("no_such_key") != std::string::npos);
+    REQUIRE_FALSE(widget.draftActive());
+
+    // A component that is not in the circuit cannot be addressed at all.
+    REQUIRE_FALSE(widget.addCondition(9999, "count", {1.0}));
+    REQUIRE(widget.statusMessage().find("unknown component 9999") != std::string::npos);
+    REQUIRE_FALSE(widget.draftActive());
+
+    // A fractional value for an integer slot: refused at the edit, in the
+    // pre-flight's wording, rather than authored into a flow that cannot run.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "count", {2.5}));
+    REQUIRE(widget.statusMessage().find("not integral") != std::string::npos);
+    REQUIRE_FALSE(widget.draftActive());
+
+    // An empty list is not a sweep.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "count", {}));
+    REQUIRE(widget.statusMessage().find("at least one value") != std::string::npos);
+    REQUIRE_FALSE(widget.draftActive());
+
+    // Acceptable values create the draft, and validating them touched nothing:
+    // the harness resolves the slot without writing it.
+    REQUIRE(widget.addCondition(kSlotId, "count", {1.0, 2.0}));
+    REQUIRE(widget.draftActive());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.statusMessage().find("Condition added") == 0);
+    REQUIRE(slot.count() == 3);
+
+    // The same target twice is the loader's rule, not ValidateFlow()'s, so the
+    // form checks it: a draft the panel runs must also be a file that loads.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "count", {5.0}));
+    REQUIRE(widget.statusMessage().find("already sweeps") != std::string::npos);
+    REQUIRE(widget.spec().conditions.size() == 1);
+
+    // A second sweep on another component appends; an update replaces in place.
+    REQUIRE(widget.addCondition(kOtherId, "count", {7.0}));
+    REQUIRE(widget.spec().conditions.size() == 2);
+    REQUIRE(widget.updateCondition(1, kOtherId, "count", {7.0, 8.0}));
+    REQUIRE(widget.spec().conditions.size() == 2);
+    REQUIRE(widget.spec().conditions[1].values == std::vector<double>{7.0, 8.0});
+    REQUIRE(widget.statusMessage().find("Condition updated") == 0);
+    // A rejected update leaves the draft exactly as it was.
+    REQUIRE_FALSE(widget.updateCondition(1, kOtherId, "count", {7.5}));
+    REQUIRE(widget.spec().conditions[1].values == std::vector<double>{7.0, 8.0});
+    // Updating a row onto another row's target is still a duplicate.
+    REQUIRE_FALSE(widget.updateCondition(1, kSlotId, "count", {7.0}));
+    REQUIRE(widget.spec().conditions[1].component == kOtherId);
+
+    // Measurements: a valid reading is added; a bad port, an unknown metric and a
+    // duplicate reading are refused, each in the harness's own wording.
+    REQUIRE(widget.addMeasurement(kOtherId, 0, "power_dBm"));
+    REQUIRE(widget.statusMessage().find("Measurement added") == 0);
+    REQUIRE_FALSE(widget.addMeasurement(kOtherId, 0, "power_dBm"));
+    REQUIRE(widget.statusMessage().find("already reports") != std::string::npos);
+    REQUIRE_FALSE(widget.addMeasurement(kOtherId, 4, "power_dBm"));
+    REQUIRE(widget.statusMessage().find("has no output port 4") != std::string::npos);
+    REQUIRE_FALSE(widget.addMeasurement(kOtherId, 0, "nope"));
+    REQUIRE(widget.statusMessage().find("unknown metric 'nope'") != std::string::npos);
+    REQUIRE(widget.spec().measure.size() == 1);
+
+    // A draft the form built is a flow the panel runs: 2 x 2 = 4 rows.
+    REQUIRE(widget.preview().runnable);
+    REQUIRE(widget.preview().expected_rows == 4);
+    REQUIRE(widget.run());
+    REQUIRE(widget.result().has_value());
+    REQUIRE(widget.result()->rows.size() == 4);
+
+    // Removing the row being edited leaves edit mode ...
+    REQUIRE(widget.beginEditingCondition(1));
+    REQUIRE(widget.authoringEditIndex() == 1);
+    REQUIRE(widget.removeCondition(1));
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.authoringEditIndex() == -1);
+    // ... and removing the row below an edit target keeps aiming at the same row.
+    REQUIRE(widget.addCondition(kOtherId, "count", {7.0}));
+    REQUIRE(widget.beginEditingCondition(1));
+    REQUIRE(widget.removeCondition(0));
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.authoringEditIndex() == 0);
+    REQUIRE(widget.spec().conditions[0].component == kOtherId);
+
+    // Out-of-range indices are refused rather than trusted.
+    REQUIRE_FALSE(widget.removeCondition(9));
+    REQUIRE_FALSE(widget.removeMeasurement(9));
+    REQUIRE_FALSE(widget.updateCondition(9, kSlotId, "count", {1.0}));
+    REQUIRE_FALSE(widget.beginEditingCondition(9));
+
+    // A flow with no measurement cannot be saved: the loader would refuse the
+    // file, so the panel refuses to write one.
+    REQUIRE(widget.removeMeasurement(0));
+    const fs::path unsaved = uniqueTempPath("no_measure");
+    ScopedRemove cleanup{unsaved};
+    REQUIRE_FALSE(widget.saveFlow(unsaved.string()));
+    REQUIRE(widget.statusMessage().find("at least one measurement") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(unsaved));
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: the form seeds the current value and the draft is what runs",
+                 "[test_flow][widget][panel][authoring]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 870;
+    auto &slot = components.add<IntegerSlotEngine>(kSlotId, graph);
+
+    TestFlowWidget widget(components, graph);
+    widget.setAuthoringComponent(kSlotId);
+    REQUIRE(widget.authoringComponent() == kSlotId);
+    REQUIRE(widget.authoringPath().empty());
+
+    // Picking a key seeds the field with what the circuit holds right now.
+    REQUIRE(widget.setAuthoringPath("count"));
+    REQUIRE(widget.authoringValuesText() == "3");
+
+    // A key that is not a key, and a field that is not a value list, are both
+    // refused with the field's own message; the text the author typed is kept.
+    REQUIRE_FALSE(widget.setAuthoringPath("nope"));
+    REQUIRE(widget.authoringError().find("no key 'nope'") != std::string::npos);
+    REQUIRE_FALSE(widget.setAuthoringValuesText("abc"));
+    REQUIRE(widget.authoringError().find("'abc'") != std::string::npos);
+    REQUIRE(widget.authoringValuesText() == "abc");
+    REQUIRE_FALSE(widget.commitAuthoringForm());
+    REQUIRE(widget.spec().conditions.empty());
+    REQUIRE_FALSE(widget.draftActive());
+
+    // A good list commits, in the text's own order ...
+    REQUIRE(widget.setAuthoringValuesText("1, 2 3"));
+    REQUIRE(widget.authoringError().empty());
+    REQUIRE(widget.commitAuthoringForm());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == std::vector<double>{1.0, 2.0, 3.0});
+    REQUIRE(widget.authoringEditIndex() == -1);
+
+    // ... and editing an existing row loads it back into the form, so a tweak is
+    // an Update rather than a second sweep.
+    REQUIRE(widget.beginEditingCondition(0));
+    REQUIRE(widget.authoringEditIndex() == 0);
+    REQUIRE(widget.authoringComponent() == kSlotId);
+    REQUIRE(widget.authoringPath() == "count");
+    REQUIRE(widget.authoringValuesText() == "1, 2, 3");
+    REQUIRE(widget.setAuthoringValuesText("1, 2, 3, 4"));
+    REQUIRE(widget.commitAuthoringForm());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == std::vector<double>{1.0, 2.0, 3.0, 4.0});
+    REQUIRE(widget.authoringEditIndex() == -1);
+
+    // A second sweep of the same key is refused (the loader's own rule); a
+    // different key on the same component is what Add is for, and this engine
+    // exposes just the one. A measurement then makes the draft a whole flow,
+    // which is what the panel runs — there is no file involved.
+    REQUIRE_FALSE(widget.addCondition(kSlotId, "count", {9.0, 10.0, 11.0}));
+    REQUIRE(widget.statusMessage().find("already sweeps") != std::string::npos);
+    REQUIRE(widget.addMeasurement(kSlotId, 0, "power_dBm"));
+    const TestFlowWidget::FlowPreview state = widget.preview();
+    REQUIRE(state.loaded);
+    REQUIRE(state.runnable);
+    REQUIRE(state.conditions.size() == 1);
+    REQUIRE(state.conditions[0].path_resolved);
+    REQUIRE(state.conditions[0].path_hints.empty());
+    REQUIRE(state.expected_rows == 4);
+    REQUIRE(widget.run());
+    REQUIRE(widget.result()->rows.size() == 4);
+    // The run's boundary restored the swept engine: the draft is a description,
+    // not a change to the circuit.
+    REQUIRE(slot.count() == 3);
+
+    // Loading a file with a mistyped key shows the row as unresolved *and* lists
+    // the keys the engine does expose (issue #155 item 1).
+    const fs::path typo_path = uniqueTempPath("hint_path");
+    ScopedRemove typo_cleanup{typo_path};
+    writeText(typo_path, mistypedKeyFlowJson(kSlotId));
+    REQUIRE(widget.loadFlow(typo_path.string()));
+    REQUIRE_FALSE(widget.draftActive());
+    const TestFlowWidget::FlowPreview broken = widget.preview();
+    REQUIRE(broken.loaded);
+    REQUIRE_FALSE(broken.runnable);
+    REQUIRE_FALSE(broken.issues.empty());
+    REQUIRE(broken.conditions.size() == 1);
+    REQUIRE(broken.conditions[0].resolved);
+    REQUIRE_FALSE(broken.conditions[0].path_resolved);
+    REQUIRE(broken.conditions[0].path_hints == std::vector<std::string>{"count"});
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: reload re-reads the selected file and drops the draft",
+                 "[test_flow][widget][panel][authoring]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 880;
+    components.add<IntegerSlotEngine>(kSlotId, graph);
+
+    TestFlowWidget widget(components, graph);
+    const fs::path path = uniqueTempPath("reload");
+    ScopedRemove cleanup{path};
+
+    // Nothing selected: reload says so instead of clearing the panel.
+    REQUIRE_FALSE(widget.reloadFlow());
+    REQUIRE(widget.statusMessage().find("Nothing to reload") == 0);
+
+    writeText(path, countFlowJson(kSlotId, {1.0}));
+    REQUIRE(widget.loadFlow(path.string()));
+    REQUIRE(widget.preview().expected_rows == 1);
+
+    // An in-tool edit lives in a draft; the file on disk is still the file.
+    REQUIRE(widget.updateCondition(0, kSlotId, "count", {1.0, 2.0, 3.0}));
+    REQUIRE(widget.draftActive());
+    REQUIRE(widget.preview().expected_rows == 3);
+
+    // A hand edit outside the app is picked up by Reload without re-picking the
+    // file, and the draft goes away because the file is the truth again.
+    writeText(path, countFlowJson(kSlotId, {4.0, 5.0}));
+    REQUIRE(widget.reloadFlow());
+    REQUIRE_FALSE(widget.draftActive());
+    REQUIRE(widget.selectedPath() == path.string());
+    REQUIRE(widget.loadState().ok);
+    REQUIRE(widget.statusMessage().empty());
+    REQUIRE(widget.spec().conditions.size() == 1);
+    REQUIRE(widget.spec().conditions[0].values == std::vector<double>{4.0, 5.0});
+    REQUIRE(widget.preview().expected_rows == 2);
+
+    // A file that no longer parses is reported, and the selection is kept.
+    writeText(path, "{ not json");
+    REQUIRE_FALSE(widget.reloadFlow());
+    REQUIRE(widget.loadState().error.code == FlowErrorCode::InvalidJson);
+    REQUIRE(widget.selectedPath() == path.string());
+    REQUIRE(widget.statusMessage().find("invalid JSON") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture,
+                 "TestFlowWidget: a circuit reload keeps the draft and revalidates it",
+                 "[test_flow][widget][panel][authoring][restore]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    constexpr int kSlotId = 890;
+    auto &slot = components.add<IntegerSlotEngine>(kSlotId, graph);
+
+    TestFlowWidget widget(components, graph);
+    REQUIRE(widget.addCondition(kSlotId, "count", {1.0}));
+    REQUIRE(widget.addMeasurement(kSlotId, 0, "power_dBm"));
+    REQUIRE(widget.preview().runnable);
+
+    // The documented circuit-reload reset clears the latch and the stale result,
+    // never the author's work: the draft is revalidated against the replacement
+    // circuit by preview(), every frame, on demand.
+    widget.resetAfterCircuitReload();
+    REQUIRE(widget.draftActive());
+    REQUIRE(widget.preview().runnable);
+
+    // Against a circuit that no longer has the component, the same draft is not
+    // runnable rather than silently retargeted to a neighbour.
+    components.remove(slot.graphNodeId());
+    const TestFlowWidget::FlowPreview gone = widget.preview();
+    REQUIRE(gone.loaded);
+    REQUIRE_FALSE(gone.runnable);
+    REQUIRE_FALSE(gone.issues.empty());
+    REQUIRE(gone.conditions.size() == 1);
+    REQUIRE_FALSE(gone.conditions[0].resolved);
+    REQUIRE(widget.draftActive());
+    REQUIRE_FALSE(widget.run());
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: a scaffold needs something to measure",
+                 "[test_flow][widget][panel][authoring][failure]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components(graph, view);
+    TestFlowWidget widget(components, graph);
+
+    // An empty circuit has no measurable point, so no draft is created and the
+    // refusal names that.
+    REQUIRE_FALSE(widget.newFlowFromCircuit());
+    REQUIRE(widget.statusMessage().find("nothing to measure") != std::string::npos);
+    REQUIRE_FALSE(widget.draftActive());
+
+    // With no flow at all, the flow actions say why rather than doing something.
+    REQUIRE_FALSE(widget.run());
+    const fs::path path = uniqueTempPath("empty_save");
+    ScopedRemove cleanup{path};
+    REQUIRE_FALSE(widget.saveFlow(path.string()));
+    REQUIRE(widget.statusMessage().find("no flow to write") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(path));
+}
+
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: the authoring buttons drive their own actions",
+                 "[test_flow][widget][panel][authoring][draw]") {
+    RfSimulatorApp app;
+    SignalGeneratorEngine &generator =
+        *app.testComponents().byType<SignalGeneratorEngine>().front();
+    AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
+    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    TestFlowWidget &widget = app.testTestFlowWidget();
+
+    const auto noop = []() {};
+    int save_calls = 0;
+    int open_calls = 0;
+    const auto save_dialog = [&save_calls]() { ++save_calls; };
+    const auto open_dialog = [&open_calls]() { ++open_calls; };
+
+    // New from Circuit needs no dialog: it seeds the draft from the live circuit.
+    TestFlowWidget::ButtonRects rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
+    clickButton(widget, rects.new_from_circuit, open_dialog, noop, save_dialog);
+    REQUIRE(widget.draftActive());
+    REQUIRE(save_calls == 0);
+    REQUIRE(open_calls == 0);
+
+    // Save Flow invokes only its own callback.
+    rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
+    clickButton(widget, rects.save_flow, open_dialog, noop, save_dialog);
+    REQUIRE(save_calls == 1);
+    REQUIRE(open_calls == 0);
+
+    // Reload re-reads the selected file: a hand edit is picked up by the click
+    // alone, with no open dialog and no re-picking.
+    const fs::path path = uniqueTempPath("authoring_reload");
+    ScopedRemove cleanup{path};
+    writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 3));
+    REQUIRE(widget.loadFlow(path.string()));
+    REQUIRE(widget.preview().expected_rows == 3);
+    writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 2));
+    rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
+    clickButton(widget, rects.reload, open_dialog, noop, save_dialog);
+    REQUIRE(widget.preview().expected_rows == 2);
+    REQUIRE(open_calls == 0);
+    REQUIRE(save_calls == 1);
+
+    // Run reaches the runner from the panel and Export stays disabled until it
+    // has: the run's result decides the second click.
+    rects = warmUpAndReadRects(widget, open_dialog, noop, save_dialog);
+    clickButton(widget, rects.run, open_dialog, noop, save_dialog);
+    REQUIRE(widget.result().has_value());
+    REQUIRE(widget.result()->ok);
+    REQUIRE(widget.result()->rows.size() == 2);
+    REQUIRE(save_calls == 1);
+    REQUIRE(open_calls == 0);
 }

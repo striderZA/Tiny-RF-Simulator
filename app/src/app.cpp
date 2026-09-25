@@ -636,6 +636,12 @@ void RfSimulatorApp::exportTestFlowDialog() {
         m_test_flow_widget->exportResult(path);
 }
 
+void RfSimulatorApp::saveTestFlowDialog() {
+    auto path = pfd::save_file("Save Test Flow", ".", {"JSON flow (*.json)", "*.json"}).result();
+    if (!path.empty())
+        m_test_flow_widget->saveFlow(path);
+}
+
 void RfSimulatorApp::openFileDialog() {
     auto result = pfd::open_file("Open Project", ".",
                                  {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"})
@@ -1257,7 +1263,7 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_test_flow) {
         m_test_flow_widget->draw(
             "Test Flow", &m_show_test_flow, [this]() { openTestFlowDialog(); },
-            [this]() { exportTestFlowDialog(); });
+            [this]() { exportTestFlowDialog(); }, [this]() { saveTestFlowDialog(); });
     }
     drawExtensionsPanel();
 
