@@ -1018,7 +1018,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t->TestFunc = [](ImGuiTestContext *ctx) {
         s_app->m_show_test_flow = false;
         ctx->Yield(3);
-        IM_CHECK(ImGui::FindWindowByName("Test Flow") == nullptr);
+        // The flag round-trips through the shared exe-relative app.ini, so a
+        // prior run with the panel open can leave ImGui holding the window in
+        // its lookup table. "Hidden" is therefore an inactive window, not
+        // necessarily an absent one.
+        ImGuiWindow *preToggle = ImGui::FindWindowByName("Test Flow");
+        IM_CHECK(preToggle == nullptr || !preToggle->Active);
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Test Flow");
