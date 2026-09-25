@@ -150,6 +150,7 @@ class RfSimulatorApp {
     // a canceled dialog returns an empty path and leaves the panel untouched.
     void openTestFlowDialog();
     void exportTestFlowDialog();
+    void saveTestFlowDialog();
 
   private:
     void load_window_states();
