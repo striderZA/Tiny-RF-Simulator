@@ -303,6 +303,9 @@ imgui.ini
 output.log
 docs/specs/
 
+# Demo video sources stay local — README embeds a compressed GitHub attachment instead
+assets/*.mkv
+
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
