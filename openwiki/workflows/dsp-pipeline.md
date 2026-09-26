@@ -1,161 +1,156 @@
 ---
-type: Workflow
-title: "DSP Pipeline & Workflows"
-description: "Per-frame DSP execution flow, signal routing, topological sort, probe system, UI render order, and component lifecycle."
-tags: [dsp, pipeline, workflow, signal-flow]
+type: Runtime workflow
+title: DSP Pipeline & Runtime Workflows
+description: Trace application bootstrap, graph routing and topological DSP execution, dirty and generation-based caching, probes and analyzers, and project lifecycle handling. Covers multi-output ports, groups, failure-safe persistence, and the tests that protect these contracts.
+tags: [dsp, pipeline, runtime, signal-flow, project-lifecycle]
+verified:
+  - by: openwiki/0.5.2
+    at: 2026-09-25T17:58:06.034Z
+sources:
+  - id: openwiki-source-5f1fbd4979e8254a53e79f25
+    resource: repo://app/src/app.cpp
+  - id: openwiki-source-baedf8f3f47fa931244e3545
+    resource: repo://app/src/project_serializer.cpp
+  - id: openwiki-source-e83e99f47c11c31e339b7c5d
+    resource: repo://common/component_engine_base.h
+  - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
+    resource: repo://common/session_state.h
+  - id: openwiki-source-7bf29eec72cf699ce4b4dd02
+    resource: repo://node_graph/src/node_graph_engine.cpp
+  - id: openwiki-source-7483c8c3ea0d9c325c992db0
+    resource: repo://node_graph/src/rewire.cpp
+  - id: openwiki-source-d364d949938a433276255c32
+    resource: repo://src/main.cpp
+  - id: openwiki-source-db3b11270b3af5e21d87157d
+    resource: repo://tests/test_issue113_project_load.cpp
+  - id: openwiki-source-5fd889a40ac7997f236a4479
+    resource: repo://tests/test_issue116_collapsed_groups.cpp
+  - id: openwiki-source-7a7ab924a79c85a9c15a41d5
+    resource: repo://tests/test_issue37_pfb_input_removal.cpp
+  - id: openwiki-source-bae1d1eaae4afa85db21cc94
+    resource: repo://tests/test_issue42_multi_output.cpp
+  - id: openwiki-source-42ef0db762a7ffb82713cae7
+    resource: repo://tests/test_issue48_json_loader.cpp
+  - id: openwiki-source-0f9230ecfacbecf62404c17d
+    resource: repo://tests/test_issue77_save_failure.cpp
+  - id: openwiki-source-44dc58c64deaf5ec52844046
+    resource: repo://tests/test_network_analyzer.cpp
+generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
 ---
 
-# DSP Pipeline & Workflows
+# DSP Pipeline & Runtime Workflows
 
-This page covers the per-frame execution flow, signal routing logic, probe system, and how the application bootstraps.
+The application has two complementary loops: `RfSimulatorCore::Run` drives one application update and one UI draw per frame, while the graph engine owns topology and component engines own signal state. Project serialization is the boundary for durable graph, instrument, probe, group, and window state.
 
----
+## Bootstrap and frame boundary
 
-## Application Bootstrap
+`src/main.cpp` creates the core runtime and ImGui/ImPlot/GLFW/OpenGL context, creates the ImNodes context, constructs `RfSimulatorApp`, and enters `core.Run`. The app constructor wires the graph widget callbacks, registers all component types, seeds a Signal Generator and Amplifier, constructs the analyzer and inspector widgets, restores session window state, and schedules the first-run tutorial marker check. The callback arrangement matters: graph edits and parameter changes call `markDirty()`, and node removal rewires raw signal pointers immediately rather than waiting for the next frame.
 
-```
-src/main.cpp
-  ├─ Creates RfSimulatorCore (window, ImGui, ImPlot, GLFW, OpenGL2)
-  ├─ Creates ImNodes context
-  ├─ Creates RfSimulatorApp
-  │     ├─ Constructs NodeGraphWidget (canvas context menu wiring)
-  │     ├─ Adds default SignalGenerator + Amplifier
-  │     ├─ Constructs SpectrumAnalyzerWidget
-  │     ├─ Constructs NetworkAnalyzerWidget (singleton instrument)
-  │     ├─ Constructs IQPlotWidget(s), PFBChannelizerWidget(s)
-  │     └─ Constructs InspectorPanel (callback wiring)
-  └─ core.Run(lambda)
-        └─ Each frame: app.update_dsp() + app.draw_ui()
-```
-
----
-
-## Per-Frame DSP Pipeline
-
-`RfSimulatorApp::update_dsp()` executes in this order each frame:
-
-### Step 1 — Signal Routing
-
-For every component in `m_components`:
-
-1. For each input pin, call `NodeGraphEngine::getSourceForInput(input_pin_id)` to find the upstream node.
-2. Set `component->node().inputs[k] = &source.node->outputs[source.output_index]` — a raw pointer, zero-copy. Since v0.16.1 the lookup returns a `SignalSource{node, output_index}` pair, so splitter/PFB `OUT2` connects to `outputs[1]` instead of always `outputs[0]` (issue #42); severed inputs are nulled.
-
-### Step 2 — Topological Sort
-
-`NodeGraphEngine::topologicalOrder()` runs Kahn's algorithm:
-
-1. Compute in-degree for every node from current links.
-2. Enqueue zero-in-degree nodes.
-3. Process queue: add to ordered list, decrement downstream in-degrees, enqueue newly zero nodes.
-4. If remaining nodes exist (cycle), append them unsorted (should not happen in normal use).
-
-### Step 3 — DSP Update
-
-Iterate components in topological order and call `engine->update(0.0)` for each:
-
-- Each engine checks dirty flags: if its input pointer and generation haven't changed since last frame, return immediately.
-- Otherwise: read input `Spectrum`, apply component-specific processing, write output `Spectrum`, increment `generation`.
-
-### Step 4 — Probe Sync
-
-Call `NodeGraphEngine::probedSignalNodes()` to get up to 4 probed `SignalSource{node, output_index}` pairs. Set `view_enabled` flags accordingly:
-
-- Each probed node gets `view_enabled = true`
-- Previously probed but no-longer-probed nodes get `view_enabled = false`
-- Probe labels carry an `OUT2`/`OUT3` suffix when the resolved output index > 0, and `SpectrumAnalyzerWidget::setProbeTargets()` renders the probed port's `Spectrum` (not always `outputs[0]`, issue #42)
-
-### Step 5 — Spectrum Analyzer Update
-
-- Pass probe labels and PFB engine pointers to `SpectrumAnalyzerWidget`.
-- The spectrum analyzer accumulates `renderCombinedSpectrum()` from all `view_enabled` nodes.
-
----
-
-## UI Render Flow
-
-`RfSimulatorApp::draw_ui()` renders in this order:
-
-```
-Main Menu Bar        ← File / View / Help menus with keyboard shortcuts
-Node Editor         ← NodeGraphWidget::draw()
-Spectrum Analyzer   ← SpectrumAnalyzerWidget::draw()
-Network Analyzer    ← NetworkAnalyzerEngine::update() + NetworkAnalyzerWidget::draw() (only while m_show_na)
-IQ Plot (per PFB)   ← IQPlotWidget::draw()
-Channelizer Grid    ← PFBChannelizerWidget::draw()
-Properties Panel    ← InspectorPanel::draw()  (selected component)
-Generator Widgets   ← SignalGeneratorWidget::draw()
-Log                 ← LoggingWidget::draw()
-Help (How to Use)   ← HelpWidget::draw()      (toggled via F1 or Help > How to Use)
-Tutorial Guide      ← TutorialWidget::draw()  (floating walkthrough window; inactive unless running)
+```mermaid
+sequenceDiagram
+    participant Main as src/main.cpp
+    participant Core as RfSimulatorCore
+    participant App as RfSimulatorApp
+    participant Graph as NodeGraphEngine
+    participant UI as ImGui widgets
+    Main->>Core: construct runtime and graphics contexts
+    Main->>App: construct app and wire callbacks
+    App->>Graph: register seeded nodes and graph widget
+    Main->>Core: Run(frame callback)
+    loop each frame
+        Core->>App: update_dsp()
+        App->>Graph: rewire and compute topological order
+        App->>App: update engines in graph order
+        Core->>App: draw_ui()
+        App->>UI: draw menus, graph, analyzers, panels
+    end
 ```
 
-The main menu bar includes **File** (New/Open/Save/Exit with keyboard shortcuts), **View** (toggle Log, Spectrum Analyzer, Network Analyzer, Properties, Node Editor, Component Library), and **Help** (toggle "How to Use" panel via F1, plus `Help > Tutorial`). Keyboard shortcuts (Ctrl+S, Ctrl+O, Ctrl+N, F1) are only active when text fields are not focused (`!io.WantTextInput`).
+*Bootstrap and per-frame ownership: the core schedules the app; the app coordinates graph, engines, and widgets.*
 
-The **Network Analyzer** panel is a singleton instrument (like the Spectrum Analyzer): while visible, `RfSimulatorApp::draw_ui()` first calls `m_na_engine.update()` — which finds the unique path between Point A and Point B over the real graph, gates on a serialize-dump signature, and runs the clone-chain measurement — then renders `m_na_widget->draw()`. Its sweep/point edits fire `onParamChange` → `markDirty()` like component params. See [Network Analyzer Instrument](../architecture/overview.md#network-analyzer-instrument) and [RF Components](../domains/rf-components.md#network-analyzer-network_analyzer).
+## Per-frame DSP execution
 
-A one-time first-run "Welcome to Tiny RF Simulator" modal (v0.17.0) offers the [guided tutorial](../architecture/overview.md) — either answer marks it completed via the exe-relative `.tutorial_completed` marker, so it never nags again.
+`RfSimulatorApp::update_dsp()` performs four meaningful phases:
 
-All windows are gated by boolean visibility flags persisted in `SessionState`, including the help window state (`m_show_help`, saved as `"WindowState.Help"`).
+1. **Resolve links into inputs.** `rewireComponentInputs` visits each component input pin, asks `NodeGraphEngine::getSourceForInput` for a `SignalSource`, validates the source component and port policy, and stores either a pointer to the selected `Spectrum` or `nullptr`. This is intentionally zero-copy, but it means graph removal must clear or replace pointers before widgets can dereference them.
+2. **Order the graph.** `topologicalOrder()` computes in-degree from graph links and runs Kahn's algorithm. A normal acyclic graph therefore updates upstream components first. If a cycle is present, the function logs a warning and appends nodes that could not be ordered; this is a defensive fallback, not a valid feedback-loop execution model.
+3. **Update engines.** Components are looked up by graph node ID and called with `update(0.0)`. Engines use dirty state plus cached input pointer/generation state to skip unchanged work. When recomputation is required they transform their inputs, write their output spectra, and output generations change. Multi-input engines keep a pointer/generation pair per input rather than using the single-input helper.
+4. **Publish probes and analyzer targets.** Probed pins resolve to `(SignalNode*, output_index)`. The app updates labels, analyzer targets, and each node's `view_enabled`; PFB engine pointers are then refreshed into the spectrum analyzer and inspector. The analyzer can therefore display a selected output port rather than implicitly port zero.
 
----
-
-## Probe Selection Flow
-
+```mermaid
+flowchart TD
+    Start["update_dsp()"] --> Rewire["Resolve every input pin to source node and output port"]
+    Rewire --> Order["Kahn topological order"]
+    Order --> Update["Call component update in order"]
+    Update --> Cache{"Dirty or input pointer or generation changed?"}
+    Cache -->|no| Next["Skip recomputation"]
+    Cache -->|yes| Process["Process spectra and advance output generation"]
+    Next --> Probe["Resolve probes and synchronize view flags"]
+    Process --> Probe
+    Probe --> Analyzer["Publish probe targets and PFB pointers"]
 ```
-User clicks output pin in NodeGraphWidget
-  └─ NodeGraphWidget::handleProbeClick(pin_id)
-        └─ NodeGraphEngine::setActiveProbePin(pin_id)
-              ├─ Tracks up to 4 probes with distinct colors
-              └─ Next frame: update_dsp() syncs view_enabled
-                    └─ SpectrumAnalyzerWidget shows probed node spectrum
+
+*The per-frame flow combines topology, cache invalidation, and analyzer publication without copying spectra.*
+
+### Multi-output ports, probes, and graph safety
+
+A link stores pin IDs, but source resolution searches the source node's output-pin vector and preserves its index. Thus splitter/PFB `OUT2` binds `outputs[1]`, and a probe on that port reaches the same indexed spectrum in the analyzer. Up to four distinct probe pins are accepted; removing a node removes probes attached to its pins. The regression suite asserts both `Splitter OUT2 -> Combiner IN1` pointer identity and PFB/splitter probe indices (`tests/test_issue42_multi_output.cpp`).
+
+The graph widget rejects a second link into an occupied input and rejects a candidate edge that would close a cycle (`canAddLink`). These checks keep the normal runtime DAG invariant. Node removal strips links and probe pins, removes the node from groups, drops groups with fewer than two members, and rebuilds surviving group boundary pins. The app then calls `rewireInputs()` synchronously before rebuilding PFB views, preventing a same-frame use-after-free in widgets that inspect `SignalNode::inputs`.
+
+### Groups and collapsed subcircuits
+
+Groups are graph presentation and boundary metadata around member node IDs, not a separate DSP scheduler. Their membership, name, collapsed state, and component-index membership are serialized. Removing a member updates membership and removes undersized groups; boundary pins are rebuilt for remaining groups. On load, node positions are captured before collapsed members disappear from the rendered ImNodes pool so a collapsed group can still render its members' layout data.
+
+## Analyzer workflows
+
+The Spectrum Analyzer consumes the resolved probe targets and combines spectra from nodes whose `view_enabled` flag is true. Probe labels append `OUT2`, `OUT3`, and so on for nonzero output indices. The Network Analyzer is a singleton instrument rather than a graph component: while its panel is visible, `draw_ui()` updates the engine before drawing it. The engine finds the unique Point A to Point B path in the real graph, but performs its measurement through a private scratch graph and clone registry. The scratch pass is RAII-owned and discarded after measurement, so the real component registry and graph are not mutated. `tests/test_network_analyzer.cpp` exercises the injected host/scratch boundary and configured stimulus behavior.
+
+Other frame UI follows the DSP update: menu bar, node editor, spectrum analyzer, optional Network Analyzer and Power Meter, per-PFB IQ/grid views, properties, generator widgets, log, help, and tutorial. Visibility flags are session state; project window flags are separately serialized as project state.
+
+## Project lifecycle and unsaved changes
+
+`markDirty()` is called for node movement, link changes, component add/remove/duplicate, inspector changes, Network Analyzer and calculator parameter edits, and library insertion. New, Open, Exit, and Tutorial actions check this flag. If dirty, the app records a `PendingAction` and shows the unsaved dialog; only the chosen save/discard/cancel outcome proceeds. A clean New resets the serializer and dependent views, clears the project path and dirty flag, and revalidates test-flow state. Save updates the file only after the serializer reports success.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Clean
+    Clean --> Dirty: graph or parameter edit
+    Dirty --> SavePrompt: New, Open, Exit, or Tutorial
+    SavePrompt --> Dirty: Cancel
+    SavePrompt --> Clean: Save succeeds then action continues
+    SavePrompt --> Clean: Discard then action continues
+    Clean --> Clean: Save current project
+    Dirty --> Dirty: Save fails
+    Clean --> NewProject: New
+    NewProject --> Clean: reset graph and views
+    Clean --> OpenProject: Open
+    OpenProject --> Clean: load succeeds
+    OpenProject --> Clean: invalid top-level section resets to empty state
+    OpenProject --> Dirty: load rejected before reset and current project retained
 ```
 
-Probe colors (in order): teal (`#16C79A`), orange (`#E69628`), purple (`#7832AA`), blue (`#3C8CDC`).
+*Project actions preserve the current project on recoverable validation failure and gate destructive actions on unsaved state.*
 
----
+### Save format and failure semantics
 
-## Component Lifecycle
+`ProjectSerializer::save()` writes component types, serialized parameters, positions, library part numbers, links as component-index/port pairs, probes, Network Analyzer sweep and Point A/B state, groups, window flags, and the next component ID. S-parameter paths are made project-relative for portability. It writes to `<path>.tmp`, flushes and closes it, then atomically renames it over the target. Open/write/flush/close/rename failure returns `false`, removes the temporary file, and leaves the prior target intact; this is covered by the save-failure regression (`tests/test_issue77_save_failure.cpp`).
 
-### Adding a Component
+### Open, validation, and rollback
 
-1. User right-clicks canvas → context menu → selects component type.
-2. `NodeGraphWidget::onAdd*` callback triggered (wired in `RfSimulatorApp` constructor).
-3. `RfSimulatorApp` creates new engine instance, registers in `m_components`.
-4. Adds `GraphNode` with input/output pins to `NodeGraphEngine`.
-5. Next frame: engine appears in node graph, user can wire it.
+Load rejects unreadable, oversized, malformed-JSON, non-object-root, and wrong-shaped top-level sections. A wrong-shaped top-level section resets to the empty state and returns failure because no coherent project can be recovered. Conversely, invalid optional singleton scalar fields such as a window flag or graph counter are rejected before reset, preserving the live project and its path.
 
-### Removing a Component
+After reset, components are created in saved order. Each component record is shape-checked before typed access; unknown or malformed records are skipped while a saved-index-to-node map retains `-1`, so later valid siblings and their links/probes do not shift. If construction or deserialization throws after registration, the partially created component is removed and PFB view state is rebuilt. Links, probes, Network Analyzer points, and groups are restored only when their component/port references remain valid; malformed siblings are logged and skipped. S-parameter paths are resolved relative to the project directory and paths escaping that containment root are neutralized. The issue-48 loader suite and `tests/test_issue113_project_load.cpp` cover malformed-record isolation and load rollback/preservation behavior.
 
-1. User right-clicks node → "Remove" or selects node + Delete key.
-2. `RfSimulatorApp` removes node from `NodeGraphEngine` (cascading: removes links, auto-removes groups if membership drops below 2).
-3. Removes engine from `ComponentRegistry`, then calls `rewireInputs()` **synchronously** so no surviving component keeps a dangling `Spectrum*` into the destroyed engine's `SignalNode` — widgets that dereference `node().inputs[]` during `draw_ui()` (e.g. `PFBChannelizerWidget`) would otherwise use-after-free (issue #37).
-4. Probes on removed node are cleaned up.
-5. Next frame: node disappears from graph, signal chain re-routes.
+## Session state versus project state
 
-### Loading a Project (malformed-JSON isolation)
+`SessionState` persists UI preferences such as window geometry, visibility flags, and PFB channel selections through `app.ini` on Windows (and is a no-op on other platforms). Project files persist the graph and project-owned instrument/window flags. This separation lets a new project reset circuit state without confusing transient UI preferences with serialized graph content.
 
-`RfSimulatorApp::loadProject()` delegates to `ProjectSerializer::load()` (see [Project Save/Load](../architecture/overview.md#project-saveload)). Since v0.19.2 (issue #48) the load path validates each `.rfsim` section shape and every component/link/probe/Network Analyzer point/group record before typed access, using `checkedJsonInt` for integer fields and rolling back partially created components; a malformed record is logged and skipped so valid siblings still restore. See [JSON Loader Hardening](../architecture/overview.md#json-loader-hardening-issue-48) and the `test_issue48_json_loader` standalone suite in the [Testing Guide](../testing/guidance.md).
+## Focused regression tests
 
----
-
-## Session State Persistence
-
-`SessionState` (`common/session_state.h`) reads/writes `app.ini` using Windows INI APIs (no-op on other platforms). Persists:
-
-- Window position and size
-- Visibility flags for sub-windows (Log, IQ Plot, Spectrum Analyzer, **Network Analyzer**, etc.)
-- PFB active channel selections
-
----
-
-## Future Workflows (Planned)
-
-| Workflow | Status | Notes |
-|---|---|---|
-| Pulsed signal generation | 📋 Planned | Time-domain pulse capability |
-| Time-domain view improvements | 📋 Planned | Beyond current IQ plot |
-| Spectrum analyzer enhancements | ✅ Completed (v0.11.0) | MaxHold, MinHold, VideoAverage trace modes with per-trace history |
-| RF-accurate node-graph components | 📋 Planned | Improved RF representation |
-
-See [ROADMAP.md](/ROADMAP.md) for full feature tracking.
+- `tests/test_issue42_multi_output.cpp`: indexed multi-output routing and indexed probe publication.
+- `tests/test_issue37_pfb_input_removal.cpp`: safe immediate rewiring after removal.
+- `tests/test_node_graph_engine.cpp`, `tests/test_group.cpp`, and `tests/test_issue116_collapsed_groups.cpp`: topology, cycle/link policy, group membership, and collapsed layout behavior.
+- `tests/test_issue77_save_failure.cpp`: failed atomic save does not truncate the prior file.
+- `tests/test_issue48_json_loader.cpp` and `tests/test_issue113_project_load.cpp`: malformed-record isolation, rollback, and preservation of the live project on pre-reset validation failures.
+- `tests/test_network_analyzer.cpp`: scratch isolation and analyzer measurement semantics.

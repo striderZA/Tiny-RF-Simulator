@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:003be29fe55a1ae1a108ca2e8ecafef78fb76eccb3201b7decd362de9b50ebef",
+  "claims": [
+    {
+      "id": "claim_eeb03f8e355c4632b150721068dfaed8",
+      "statement": "Graph-attached RF engines derive from ComponentEngineBase, which owns graph identity, SignalNode storage, and single-input dirty checking; two-input engines must track both input generations independently.",
+      "evidence": [
+        {
+          "resource": "repo://combiner/include/combiner_engine.h",
+          "version": "repo-file-v1:sha256:18743b4346e9db2ae379875d4439e8986532e65439d4a29e29b54edc6c84bd4b"
+        },
+        {
+          "resource": "repo://common/component_engine_base.h",
+          "version": "repo-file-v1:sha256:a9f00107de52f694df302ad2580f59fa85399791cc3063add0e57c71571fcb55"
+        },
+        {
+          "resource": "repo://rf_switch_2to1/include/rf_switch_2to1_engine.h",
+          "version": "repo-file-v1:sha256:3162f0ca71cb8418978d150aaf0ef15b80330145eb209a5dccf3d9a13f7401fc"
+        }
+      ]
+    },
+    {
+      "id": "claim_77559d2a10f74d519e1f32d65b449fd3",
+      "statement": "ComponentTypeRegistry is the authoring boundary for 13 current component types and defines canonical keys, validation fields, S-parameter capability, and factories; spectrum and network analyzers are not registry components.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/component_type_registry.cpp",
+          "version": "repo-file-v1:sha256:2c95bf5fe255136f3157e486a73e5cf18c4e0c4fb94e99ee6401881d77c6a0c8"
+        },
+        {
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L52-L67",
+          "version": "repo-lines-v1:sha256:869327e5b34d05c0ef4f769a7d5ec06b0c973dd2692a6d3b98c67e68331621f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmZjZmNzZlNjlmNTk0NDI3YjcxNGE4NmIxMjY3MmQyMjFkMWI4ODZhOWYyMzQxZGU4YjhlNDMzYjRmMWYyZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYzBmMmU0NGMxOWRhN2MxNzM2NGVlYzQzZDg4NzllOGM2YTA4NTFlYzdkYWQ4NWU3NTE0MmMwZDZkYzYxZWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxMTkzZjIyOTk2YWQ3NDgxNWQxZDFjYzgxODJkZTVmZjM1ZDdkMmEyYTcwMmFjZDUzNjc3M2JlMTZiOTdjNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiOTAyMGU0NWQwYmJlOGI5YTRjNTI1NzJiNWM1ODhlZDNmNGMzYjVmN2M3NGQ4MTk1N2ZlMDFkZjhiMjFhNmUifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_authoring.cpp#L23-L36",
+          "version": "repo-lines-v1:sha256:df74f7fb2d760af3f160cf49a3bbb6d0060fd149e508caf7d2c05d7ebad2a007:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhMjUwM2UwNzkwZjc5ZGE3MjdjNmQ0MzBjNzk0M2MwNzViZjRjY2U4NjQ4ZTZiZjc0MTIxYWViMjY2NGRjYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyNjQ1MzcyNjRlYjAwODMxMjZkOTZlODA1NzNjMTlkZGYzZDVmYWVhN2E5YjJlYzQ2YzFkYzYwMzA2NzcyZjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4YzZiZTdmYmYwM2YyZGM0MjE5NWUwMzU2Njg4YTU5ODk3YzgxMmQ5MGNmZTBkYmEzNWQ3MWJiYzk0MWY3YzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2d0e622b6c84b8a8f35cc92eef2c29c",
+      "statement": "The current ADC contract uses fs_Hz, nsd_dBm_per_Hz, decimation, and nco_fs_fraction, with sample-rate, supported-decimation, and NCO-fraction bounds enforced by setters; legacy bits and v_fs are not engine parameters.",
+      "evidence": [
+        {
+          "resource": "repo://adc/include/adc_engine.h",
+          "version": "repo-file-v1:sha256:ee92b986e19919ae736e1cdb75b6f2a5be09cf697f45e491b327ccc5cd24612d"
+        },
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L254-L290",
+          "version": "repo-lines-v1:sha256:e8b08c3b23b3151a2e68ba29bf53df4439dc1d5eaf56dc07234493227f9871ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjZmE1YmE5MGZhOGQ2MzZhMjQwYmJiY2Q1Y2IwYjM5NWY3YTdhNzFkNDY4ZjE2NGYzYTY2YzMwYjFkZmNmYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjMzNmZmVjMDBkMWQwZDAyNWU1MWU3NGFmZjgwZDFlYzlhNjU3MDdhYzFkMjkxMjBjMmZjMWI4OTAyY2RlY2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZhZWNmNGNiOGY5NDc4YzM3NmI5OGMzMjkxNWRlNGUwMzk1ZGEwZTQ0MzZkYjFiMzQwMWNjNDE4YWQyMGRkOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4M2U0ZWM1MjE3ZTIyNDMwNGRiMjQ0NDg4YzAxOTU4NzlmOTZlYWQyNjZhMWViMDljMTg5MGZhYzE1NjExYzAifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_authoring.cpp#L55-L82",
+          "version": "repo-lines-v1:sha256:a225d5d655a643739e2e12f038d12bf7235671f3766cec45fa928730f06ce556:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0YzcxYWFiMzc4MWZlODUxOTJiMjM0Mjg4MTY0MTkwNWNmZTcyZjUyOTY2NmZjMmY4OWZlMjYzNWY3OWI5MWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkZmU0NzZjMTZlODhmNTdiZGYzMzM2M2I5MjZiZTJlZDFmMGUxNjcxNmI5YWFkN2ExMGU2YzM0OWE3NDFlZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhZDczYjZhZmQyZGRkNTFmMWIzZjJlYTMwNTEyNmQ2YmM1ZjQ0NzNjNjZjODM1Nzg5YTk0MWZlNjk5OTBjZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd73ab0f7c274b55b1e3a7c36513fa95",
+      "statement": "RF processing engines implement distinct physical or idealized models: amplifier gain/NF/nonlinearity and S21, mixer sidebands and NF, filter passband or S21 behavior, equalizer slope or S21, passive attenuation, and frequency-dependent coax loss and delay.",
+      "evidence": [
+        {
+          "resource": "repo://amplifier/src/amplifier_engine.cpp#L192-L224",
+          "version": "repo-lines-v1:sha256:6486a4d2b87bc904b81f6527d2fc04d20d67a3b14e08e654c58d8a5b1a77adbf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlZjZjMzk4ZDhiYzcxMGEyZTYyNDgyNjIxOWNmOGIxY2JjMThiMGM0ODc4NWVhNWRmYjBhNWNkYTBjZmU3OTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkYWE4YTFkZjUwNmU2ZTEzODg0YjBhYjk5YTYyMjg3MDA1Y2Y0MTEyOWI0MjJiODM3NGQyYTM5ZDRjNGRhMDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0OGRjNTI4MjJjZTg1ZWExNDMyZmYyMTY1ODk3ZDc0NTBjNWE3ODMyZGRjOTExOTYyYTFmMWE4ZTFmNzBhY2YifQ"
+        },
+        {
+          "resource": "repo://attenuator/include/attenuator_engine.h",
+          "version": "repo-file-v1:sha256:12f708eff6fba19d914556775c5323046affd82bdb2b23d8971fbbd54b5b2f49"
+        },
+        {
+          "resource": "repo://coax/include/coax_cable_engine.h",
+          "version": "repo-file-v1:sha256:fdd4749d7cbe8694d711dff70d5feab81f1d2c1362b19d35a94d41f10c820e78"
+        },
+        {
+          "resource": "repo://equalizer/include/equalizer_engine.h",
+          "version": "repo-file-v1:sha256:c5eb3503419e80c6bbcd6324de31ebad9ac27fc6981fe867d6a01ecdb7c29918"
+        },
+        {
+          "resource": "repo://ideal_filter/include/ideal_filter_engine.h",
+          "version": "repo-file-v1:sha256:b9e8c4ef6404456dab24910e6c7b37d350245a243e92c9116029f2fb5ba8fc49"
+        },
+        {
+          "resource": "repo://mixer/include/mixer_engine.h",
+          "version": "repo-file-v1:sha256:00e9aff0c546828f6e452c76d0ae96f2f85bf3a2c8be8687f249a9f60376ec76"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2f5465a823845e2964ee36864118bb6",
+      "statement": "Splitter and combiner are complementary topology engines with fixed 3.0103 dB paths; splitters divide to two outputs, while combiners merge two inputs and in S-parameter mode map a three-port device's S21 and S31 paths with passive noise.",
+      "evidence": [
+        {
+          "resource": "repo://combiner/include/combiner_engine.h",
+          "version": "repo-file-v1:sha256:18743b4346e9db2ae379875d4439e8986532e65439d4a29e29b54edc6c84bd4b"
+        },
+        {
+          "resource": "repo://splitter/include/splitter_engine.h",
+          "version": "repo-file-v1:sha256:2853b8d7886c7ec5a30a453da55e378f2775fdc96245e7fe7f0a662f26d4c4b2"
+        },
+        {
+          "resource": "repo://tests/test_component_dispatch.cpp",
+          "version": "repo-file-v1:sha256:f055b2407babb48f1a14db868db0697d3dfad3a3a53d431ffa4dc518ea020d3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_420549d030bc4eebb2816b4e2f4c32c0",
+      "statement": "The two RF switch orientations persist named T1/T2 throws plus insertion and isolation loss, apply insertion loss to the selected path and isolation to the other, and require output-specific or dual-input generation tracking.",
+      "evidence": [
+        {
+          "resource": "repo://rf_switch/include/rf_switch_engine.h",
+          "version": "repo-file-v1:sha256:85e73e7f2fa6c3b38c164a3350a2a53a5a4251ccb44457a42c46675020649a18"
+        },
+        {
+          "resource": "repo://rf_switch_2to1/include/rf_switch_2to1_engine.h",
+          "version": "repo-file-v1:sha256:3162f0ca71cb8418978d150aaf0ef15b80330145eb209a5dccf3d9a13f7401fc"
+        },
+        {
+          "resource": "repo://tests/test_component_authoring.cpp#L135-L162",
+          "version": "repo-lines-v1:sha256:f57475b124daab5435957e36bd8ecd28502bab2ff1dc1d13d0d70b8c5c263cf3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3ZDMxYjA4YzM0MDMyMjM0NThkZDlkOTgwOGY4NjFlYjM1YjVkZTlmZTNjYjgzNTM5N2Y1NjhjZTc5MzdiNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljZDc0ODZjZjdiNDI2ODQ0ZDUzZDZiYmQwYzk3Mzk5OWE2MjU3NTU0NGM4ODMzNGMwNmQ5MDllMjYwOTNjZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM1ZGE2ZDRjZDNiMDJmNzM4N2FjNzk1ZjA2MGYxZWM1MjU5MDA5MzQ5NDE3OWZjNTVkM2NhYzMzZDg1Zjg3YTgifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_dispatch.cpp",
+          "version": "repo-file-v1:sha256:f055b2407babb48f1a14db868db0697d3dfad3a3a53d431ffa4dc518ea020d3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_bdad18f1d56a4a5ebe68b47fa938b51a",
+      "statement": "PFBChannelizerEngine has one input and two indexed output ports: an active-channel view and a reconstructed full spectrum; its channel design uses M, K, Fs_Hz, beta, and sampling_ratio, with output sample rate Fs*sampling_ratio/M.",
+      "evidence": [
+        {
+          "resource": "repo://pfb_channelizer/include/pfb_channelizer_engine.h",
+          "version": "repo-file-v1:sha256:e6f6865cf2404b71d8b73f3f5a968e684f88e40e179ebbf33361a5580ade3806"
+        },
+        {
+          "resource": "repo://tests/test_component_dispatch.cpp",
+          "version": "repo-file-v1:sha256:f055b2407babb48f1a14db868db0697d3dfad3a3a53d431ffa4dc518ea020d3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_e3e1890b0f7b43d1884f862213b0befc",
+      "statement": "The spectrum analyzer separates tone and noise power, caches RBW work by spectrum generation and display settings, applies VBW and optional noise-only jitter per frame, and maintains ClearWrite, MaxHold, MinHold, and VideoAverage histories keyed by Spectrum pointer.",
+      "evidence": [
+        {
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h",
+          "version": "repo-file-v1:sha256:8b4ff1304a42e12e2833e82a88fef44a58f7496359584dc02dfef525094f3987"
+        },
+        {
+          "resource": "repo://tests/test_component_dispatch.cpp",
+          "version": "repo-file-v1:sha256:f055b2407babb48f1a14db868db0697d3dfad3a3a53d431ffa4dc518ea020d3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_fa32d0b2779c4e56884cf95b692e89db",
+      "statement": "Network Analyzer is a non-component instrument that measures a unique graph path using a private scratch clone chain and synthetic tone comb, preserves actual output-port indexes for multi-output nodes, rejects invalid or ambiguous paths with NaN, and gates recomputation with serialized-chain and sweep signatures.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L134-L157",
+          "version": "repo-lines-v1:sha256:c834107ab445f2accb05bd2d028c887637f9cf18381d19bbeb3889dd75e6eedc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhYmViYzkwZTM2NTUxY2I4ZmFkNzYyNjljNWRiMGY5ZTcwYmE4YmNmN2Q3YjgxM2M3ODUwNjY4MmZkMTNlODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwMzU1ZTdiMjA5OWY5OWNiYzU3OGQ1M2VmNGVkNDFmM2RmN2M2MDJlZTFhMDhhMjJiYzcwMjdjZjA4ZjhjOWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhNGY1NDRkOGIwN2MwOWU5NTI0Njk2ZTIzMGYyNmIyZjJhZmEyYmY5MzkyYTI4YjUwZDIwZDMwZTI2ZDQzNTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3ZjFkNzY0OTU4NTk5MjViYTMyZjg2YzkzMmFmMjFkYjNhZWI1Mjk0ZDVhZDI5NzlkMjI4MDEwN2U5NzViOWMifQ"
+        },
+        {
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L52-L112",
+          "version": "repo-lines-v1:sha256:13b59c9c6baea82f16684231539349eda22cec852ebe0cb73fc1419e83f93925:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmZjZmNzZlNjlmNTk0NDI3YjcxNGE4NmIxMjY3MmQyMjFkMWI4ODZhOWYyMzQxZGU4YjhlNDMzYjRmMWYyZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkNjEyMmM3ZmEyYzdmOWFhOGMzNjdmYmIxZTBlYjhkM2UzYTM1NDI3ODg0MzJkYjVlMGZiZjcyMDBmNGU0YzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxMTkzZjIyOTk2YWQ3NDgxNWQxZDFjYzgxODJkZTVmZjM1ZDdkMmEyYTcwMmFjZDUzNjc3M2JlMTZiOTdjNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5ZTA1OWFjN2JjODZjOWZlZTE4ZDU1MTQ0MmM3MWVhZDA0ZWY1ZTU3ZTY4ODI1OTBiYTBlZGZjZTUwOGFlYWEifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_dispatch.cpp",
+          "version": "repo-file-v1:sha256:f055b2407babb48f1a14db868db0697d3dfad3a3a53d431ffa4dc518ea020d3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_33f74999dc454da18a354dbd320334a7",
+      "statement": "Spectrum noise is represented as power spectral density in W/Hz across the signal chain, so passive stages scale noise by power gain and add thermal contributions while ADC uses configured NSD and active stages use NF-derived additions.",
+      "evidence": [
+        {
+          "resource": "repo://adc/include/adc_engine.h",
+          "version": "repo-file-v1:sha256:ee92b986e19919ae736e1cdb75b6f2a5be09cf697f45e491b327ccc5cd24612d"
+        },
+        {
+          "resource": "repo://amplifier/src/amplifier_engine.cpp#L171-L190",
+          "version": "repo-lines-v1:sha256:b039756dbedff891c4cab694735bc03861a3ab14a476f8753885201ff8d7b098:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmZTIxYjI5MDhlM2EyOWMyMGI1ZjEwZDllNGZlNzFlYjNhZGVkNzc1NzYwYWE3MmJhMGY4ZDYxNmY0ZTgyN2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5ZDJmYWUzMTRjODE3YzBmMGVlMjQ4ZTFhNjI4ZWFlNDExZmI1ODA0ZjgwOTk4ZDZkYjQ4MmYwNDRkZjMwYzUifQ"
+        },
+        {
+          "resource": "repo://attenuator/include/attenuator_engine.h",
+          "version": "repo-file-v1:sha256:12f708eff6fba19d914556775c5323046affd82bdb2b23d8971fbbd54b5b2f49"
+        },
+        {
+          "resource": "repo://common/spectrum.h",
+          "version": "repo-file-v1:sha256:30c2a7a890e3ee665e38e9d5ac02a6e51a39c17fd9cedf390dd9510165199ba2"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e081a011d764981a8e4e44901cc1d03",
+      "statement": "Component-library definitions are validated at the load boundary against registry-required fields, numeric ranges, and enum values, and canonical keys include attenuation_dB, conversion_gain_dB, and named RF-switch active_throw values.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L127-L152",
+          "version": "repo-lines-v1:sha256:5e59eaa6a089022ab28c91d42ae715d8dd021831a6d47dd3e23a3141deafe363:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1MDExMzEyOWM2MjhlNzE3MWQ2OTUzNWViYWRjNzVjYmUzOTJiYTJlZWJhMDFmMzdmZWI0NzI2OGNhZWQ3NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3ZTM2NzZkM2M5ZTUxYzI1NTYyNGYxYTUyY2I0ZmFmMWE5MjJjY2E3YWM5ZWVhYWM1ZjY4NzQ1ZTVmMTVjMDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1NmI5NDhkY2IxYWI4MTA1MzU2ZTdiMTNkYWJmMGY2OTdjZDBlZGY4NzVkMDBmZTQ4YjQ4OGM0NmM4ZmE1MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmNGJjNzk2ZGRmODkxZjYxNTc0MTc5ZWFlNTQyMTE3NGRkNDQ3YmU2ZDAwM2IyNTgxMjJkZmMxMzJlYjM2MTAifQ"
+        },
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L69-L84",
+          "version": "repo-lines-v1:sha256:1d401292051d9d23b36363190e78248ef32c513fa395e86341e14ad167220294:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZWFiNjlmMGMzYWQ1YjQyODI2ODkzMWNkZGFjODVhMWE0ZTE2Mjg1MDQzN2YzOGQ3YWNlOGJmZjRkNWZkNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNzQ5YzdmOWFiZWQ2YThkYjdmZTgzZjc1ODkwMTZkMjE3NmZiZDdlODEzNDZmYWMwMWU1YTJmMDBiYTAzZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIxNmQ0ZDNkMGJmNDUyYWJlNTFiMjU1MWVkN2M3M2NmNjdmMjkyMDBhZDQ2MzYxMmEwMjk0Y2EyZjIxNmIwZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0YzQ3ZDg4OTE5MWVkMDE1NmJiNzliNzlmZDliOTY1NDVhNTU0MWE3OTZmNGRmNDBlOTMyNGZlMmU3OTBmY2QifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_authoring.cpp#L190-L221",
+          "version": "repo-lines-v1:sha256:9de9ccbbee4244df625bd9eda221b48c4eb8d318ef2af37fecdd5c8236a53939:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5OWU5YWU3N2ZjMDgxZTQxYzRmMmZkZGU5ZjI3NTcxMjBlMDRhNTQ4NTQ4NDdiOWY5ZGFlYTBiYmE4ZGI3YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlM2I5ZmNlOGQyZTAyNjI2ZGVhY2RlZmNmOWNjZmM2ODY0NDM5ZGY2ZWY1ZTdjMGRiNTNlMTk2NzgwMGJhZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3MzY5NjJmYmYzN2E4Njk4MjA2NzcyNDI4Mzc3NzMyZGEzYmVjYWRmNTFhMWNhMTM1MGNlZGY3YTg0YzkyMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiMzkyMjk3ODMxODc3NTNkNGU0ODEzNmE3NWMwMTgxMGZmZTVlYjlmOTQ5MWM0ZGM1NThiZjJlNWYwNzNjNjYifQ"
+        },
+        {
+          "resource": "repo://tests/test_component_authoring.cpp#L99-L175",
+          "version": "repo-lines-v1:sha256:d9b4364aec806633ce1a0c6e2cc2b735173f6de44f6f648a18d9f72afc92333f:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzYWE3MmY5ZGY1OWU5ZTVjYzgyYmZmNjM0NjJmN2QzMTc0ODE0Njc1ZTFiZTYwMTU5NGVhMmRmODc0ZTdhZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4MWQ2NGIzMDFiNDY5ODIzOTY0ODMyN2ZhYjFhMTQzZDE5OTM0OWIzMTU1NDMyMTZkNTQwYzAwZjY0MjAyNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZkZjBhNTUzZjM3OWFiNmI0Y2QyYTZkNDc2ZTY0ZWQzYzIzMzM0ZGExZjNmMTk0NmFmOWVjNmJlMjE0ZTgyOGYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

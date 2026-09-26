@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:eeeb28e9333677c0a0ba96eec31b7536fb694c57d50d979955e4e2aa1e08be03",
+  "claims": [
+    {
+      "id": "claim_926d07510a374ae198262258e65f0186",
+      "statement": "The application bootstrap constructs the core and UI contexts, constructs RfSimulatorApp with graph and analyzer widgets, seeds initial components, and runs a per-frame callback that updates DSP before drawing UI.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L60-L173",
+          "version": "repo-lines-v1:sha256:a4720824a1223c4c941fbc525a8cb1ce3431ec10abe390e5ad0d21686a8ebd1a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmNTM0OGZmZTg2YjdmODA0ZjBjNDE1M2ZmMGNjOTkwNjgxZmViOGMwOWVmNjY3YjQ0Y2E0MTE0YmFmODlhMzUwIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIwZDQyMjhhYWRjNzRmMGZmYWI4NjZhMWYyYjg0ODI5MThmMjYwOWRlYTllODA0MWFjYmJiZWEzN2M5ZTI5YTM0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmYTZjNWNlZGVlMWI0ZDViYmNhNDg4M2U3YTExZmE1MGJkMDcwMjJmMmJjOTE4MzAyYzMxMjc3OWE2MGE1YzU2In0"
+        },
+        {
+          "resource": "repo://src/main.cpp",
+          "version": "repo-file-v1:sha256:9c25c66c0bc38342d58b18a9499307d727819897385bdf4fbbddc068d747c79d"
+        }
+      ]
+    },
+    {
+      "id": "claim_c5c61ce098ae4eb5b9fcac90fbd41405",
+      "statement": "Each DSP frame rewires component input pointers from graph links, computes a Kahn topological order, updates components in that order, and then publishes probe and PFB targets to analyzer and inspector widgets.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L849-L901",
+          "version": "repo-lines-v1:sha256:1bf79e608cec428631fedebf3d622ae046eb4aad344509683e12134cb34798eb:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmMmZjZmMzNGRhODFiNjJiNGJkYjdhODdlMmYyNTZkMDEwNDlhMjMyYTM3NGQyZmVlMmQyY2JmZTYxNWZhOWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwZTAzMjQ2YTg5Y2RkZThiY2YzYzI4MzI3NDVlMzU2MTA3Y2Q5Y2FiYTQ3NjE2Y2FmZmYxZWVkN2I0YzBjYTYifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L326-L386",
+          "version": "repo-lines-v1:sha256:06e17a94bffcb52b85561a7fc53d1b97ee07f8fbcdb9865af3b2a85a5f21fa8d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZDljYzEwYzRiYzk1Zjc5OGM3YjgzNDQ0OGM1NGMzZGM5N2U2OGQyNTQxNmZlMDY1ZGM2YjYyODFhZTExMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNTZmMDQ5YTQ3MzFhMzkwNGZjMmM2NTE4Y2ViZmFjM2EzYzlkNDRhYjNmNmEzNDI0NjkxNGFmODUzMDQyNjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5YjAyMjAwNzkxODdkZmIyNmExY2UxOGVjYzBiMTIzMTM1MzJmN2E1MTc5ZjY5YmFjOGNhMzY5YjNlY2VmODMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjRiOWI0NmU0OGIwYmY5NjNkMjdiODc0YmYyM2YwZTBkNDFiN2I4ZWEyMDAwMjg1NmEyZGRjZDgzNjVlMjIifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/rewire.cpp#L6-L43",
+          "version": "repo-lines-v1:sha256:04ced73058c49027f2a57483873713c3840fd8f417a87859ca0a9f9ce1710a6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2ZWVlNzRlM2JlYzA0ODczNGU2MjRiNzA0YTRmZjhhOTJmN2FlMmU3ZGIyYTA0ODY1OTYwMjg3ODQ2NjY4ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiNWJhYjJkOTAxM2JhOWI4ZjIyZDVhNjI0MmNmYjhhMjRjNzU1ZTQwMjQ0ZGZmOGMzNGQ5MzgxNzQ3NzRhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_208a21227e0149dab2964fb918839b67",
+      "statement": "Graph source resolution preserves the selected output-port index, so multi-output links and probes use the corresponding SignalNode output rather than always output zero.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L860-L883",
+          "version": "repo-lines-v1:sha256:9b150a32cecdea6d14a6e6b0a9420237546cd05dec909103be840e864672086e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTVkZDc3OGI1OTdlNzA5ODZjMjE1ODExMTRmNTgxMDYwMTYxY2Q2MmNjY2JlOTVlNGU5OTdhZjU0OTQ1YzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljY2EwNGIzODI1NjFhZjY1YjIzZDlmMTc4MGFkNDNlYWQzZTUwYTIzOTUyYzJhMTVjNWI2MGI1ZDlkODUwZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmMDAxNjhjN2JkN2ZkNjhjYzI5MTA0MDg0MzFhMjJiYjM5ZjUxODkzMzczMTlhNDRlMjlkOTA0NWJjNmY0ZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJkNzdhMmEzZDRiZDUzYTNlMTBkOWZiZjdkZTYyNjllMjYyZGVhNmI4YjZkYzEwMzllYjQ4NjQ1YTIzZWZhNzkifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L140-L174",
+          "version": "repo-lines-v1:sha256:23b4f4ca07267aba97beaff67530d61d9c3b5496e9a669d3fcc17e19a142c247:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhZGZmNzJmYzJhZDM3NWExMzNlYmMzNjBkZmFmMzRlNzM4ODVhM2E4ZjRiYzdhOTU3ZDM5Y2E5ZGYxMDZiNDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdiMDE3NDM5YjU5YjU5MjMyNjc3YjdlMTMyZjQ1NDg2NGZiMGRkMTQyMzIwMDhhOWQ4NWU3NjgxNjI1MWZhNzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NzBhOWZmYjFmNTQ1ODVhNzQ1NGEwMDU3M2QxMmJiYjkwMGZkOGY5OGI5NDQ2MjZhNmVjZmE2ODIwNzNlZmIifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L257-L291",
+          "version": "repo-lines-v1:sha256:f48b6f894b81af4297b7c51d98db5e32fee2c4ea6a8ccf127a384a4dbf3fbc39:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2OGRhNjRjODZmOTg5ZTM4NTk3ZGY5MDJhYTE1NjVmZjVlYzJhYzhhYzQzYzhjMTE5NDRlZjdlYjQxNWE4YjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNTZmMDQ5YTQ3MzFhMzkwNGZjMmM2NTE4Y2ViZmFjM2EzYzlkNDRhYjNmNmEzNDI0NjkxNGFmODUzMDQyNjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdiMDE3NDM5YjU5YjU5MjMyNjc3YjdlMTMyZjQ1NDg2NGZiMGRkMTQyMzIwMDhhOWQ4NWU3NjgxNjI1MWZhNzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU0M2ZmZjkzOTQxNjVkOTdmNWUzZTYzZWNjZDE4ZjRkZjBmOTBlYjAwZDY2OGM2NDc3MjM1MzZmOTMzZmQxMTEifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue42_multi_output.cpp#L52-L105",
+          "version": "repo-lines-v1:sha256:feff95c4ef0a2c6b56ceccdf1fcb1710aa592d6dca13b7e30d3729d8fc9ad2a6:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4MTZlOWIxOWJmMTJlZmMyMzY3MmZjNDc3MDc1Y2I4NTA3YzBjNjllYTM0MjI0NWY5MjE4Mjc4YThiOWZlNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiZjMzMTc2YjgxODgwMzUyYWYwYTEwNzI4MGI2NTBmZWMwYjNjYWUwYTE0ZmE4MDYwNDU3YTY3YjY1Yjg3NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxNDM5ZjQ1MzQ4MWU3ZDEyMjJiZTBlOTcyOGQ3ZWY5MThiZjdhMzZlMTRjMzk5ZTc0N2U4ZjRlY2NkNTJhYWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_28d311d97d73478598aba16a1a6c7b7b",
+      "statement": "Component caching skips unchanged single-input work using dirty state plus cached input pointer and generation, while multi-input engines must track pointer and generation state per input.",
+      "evidence": [
+        {
+          "resource": "repo://common/component_engine_base.h#L54-L79",
+          "version": "repo-lines-v1:sha256:94f59f629e2baa27058ae8a84813fd2d8bcad9ae4cd339c3e65450b088e2e7d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzMThmN2UxZjYwNDlhNzBlNTA4MTUzOTU5MDg4OTYzNTlhNWI1ZmY0M2Y2NTZmMzQ0M2FhMTBmMThhZTUyYzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyNzZhZjk1ZTRkMWZlYTI2Y2UyYmIzNjMwNjg3MGJlMjZhZTVjYzg0YjQyMTZiYmI4OTI5NGZhYmI0Y2U4NGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dd946362b6d44d09b2d53442cd8c60e2",
+      "statement": "The graph rejects occupied-input links and links that would create cycles; if a cycle nevertheless exists, topologicalOrder logs a warning and appends unordered nodes as a defensive fallback.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L75-L87",
+          "version": "repo-lines-v1:sha256:1f4709fa863499e1ef268ff449ae52ba0a1e3f59f1efae7298a7c0be4d011d6d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1NTBkY2ZhYjk4MjljZDViZWQ4MDRmNjRlNTUwNjA1Nzc4NDM3OWQ0NjAzZGNjNjhiNjYwZDU3Y2M1OTFmMDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExZjg0OTIxYWVjOGFjOTAwOWNmNTM3NmYzNDlmMDcyNTdhMzE4MjEzMjE4N2E2ZGEwODdhZmFmNzNlZjJkMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3ZGRkOTIxNGI4YjJjZDAxMzQzZjU3ZjM2N2E3NWIxYzY3N2IwOGU5MWI3YjIzNWYwYzgxMjI4ZTQ5YWI3NDAifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L183-L221",
+          "version": "repo-lines-v1:sha256:4ab13d75fafd44908e1c44e9f06572572697d62e8ae6f857dbbde90eb046950a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjNThlZjFmOGM0OWZlMzFmY2NlZDA0NWVlNmViZmI3MjMyZDRjM2E1MDA0OGFkNjNhZGIwZTU0OTAwZjFhMGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MmE5MDJmODkzMDgwZmY0ODg3OGE5MzYzMGNhZThiMmVkMDBkNDNiMGU4YTc2ZjQ4MGI3ZjA4MDYzNDk4MmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxZWYxNzE2MjU5ZWI3Y2Q3ZGRmMDZiYWQyYzg5MjA4YTFkODM0N2M3ZjcxNGJlYTlkMGExMjlkOTE1NzM1NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNlZmYxMmVkNmMyZDkxMjA3ZWFlNTRiOTdiOWNmZWI3NjUwNWQxNTIwZDliOTliNDE5NjdhMGEzM2QwYWY1ZmUifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L326-L386",
+          "version": "repo-lines-v1:sha256:06e17a94bffcb52b85561a7fc53d1b97ee07f8fbcdb9865af3b2a85a5f21fa8d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZDljYzEwYzRiYzk1Zjc5OGM3YjgzNDQ0OGM1NGMzZGM5N2U2OGQyNTQxNmZlMDY1ZGM2YjYyODFhZTExMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNTZmMDQ5YTQ3MzFhMzkwNGZjMmM2NTE4Y2ViZmFjM2EzYzlkNDRhYjNmNmEzNDI0NjkxNGFmODUzMDQyNjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5YjAyMjAwNzkxODdkZmIyNmExY2UxOGVjYzBiMTIzMTM1MzJmN2E1MTc5ZjY5YmFjOGNhMzY5YjNlY2VmODMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjRiOWI0NmU0OGIwYmY5NjNkMjdiODc0YmYyM2YwZTBkNDFiN2I4ZWEyMDAwMjg1NmEyZGRjZDgzNjVlMjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_952b5cd2b98d4f7ca5c85e5ad497c7b0",
+      "statement": "Removing a node removes its links and probes, cleans undersized groups and group boundary pins, and the app synchronously rewires surviving component inputs before rebuilding PFB views to prevent dangling raw Spectrum pointers during the same UI frame.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L88-L101",
+          "version": "repo-lines-v1:sha256:8b542155bafc17e138e69c3ffccaca93fa5d6f9d12e40ff804a58525b0034c78:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0MmZmMmZlNDU3M2ZiMDUzZjVjNmJkMGU5NTlhZDY4ZDI3MWZiYTYzNjNkZDdhMzIyNTQ4MWU0NGVmZGJmOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjllM2Q1MzJjZjY4M2M0MmU1ZTA4ZmUzZWY2MTYzMWE2NzIxNDE4NzIwMjlkMmMwZWQ1MWJkZmZjMzlkNzUwNGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxOWQ3MDY2ZjhkZmNjOGZjYzMzODNmOTU3ZjA0Y2RkNzFiNzZjOTg2NzQ1YWMzMTUzNGFlYWIzZDQ1ZTQyNmYifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L42-L91",
+          "version": "repo-lines-v1:sha256:eff64f8397fe5804dd3f39d9a8f04a411422e86bef1a9233f4333ad5d1ec560a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAzN2U5MTUyMzVkOGViN2U1MTViMDJiMjBiOWEwZWU2MzViNDJlZTI5MjY0YmFhMjQ2ODVkYzVlODVlYjg1YzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkOWQzZWY3MjRiMDc5MThhMjMyM2Q2N2NhZWUyMWE0MWU5OWQ4Yzk4NmFiMmIyZTNlNWY5ZGVjODdjMDdkYWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiZDVjMDhiMzJlYWRmYWYwYjIxMDViMjZiMTg5NjQyZDlhZTE3MzAwMDRiMTNmYTQ3OWU2YTIxNTIyNGRiZDIifQ"
+        },
+        {
+          "resource": "repo://node_graph/src/rewire.cpp#L6-L43",
+          "version": "repo-lines-v1:sha256:04ced73058c49027f2a57483873713c3840fd8f417a87859ca0a9f9ce1710a6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2ZWVlNzRlM2JlYzA0ODczNGU2MjRiNzA0YTRmZjhhOTJmN2FlMmU3ZGIyYTA0ODY1OTYwMjg3ODQ2NjY4ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiNWJhYjJkOTAxM2JhOWI4ZjIyZDVhNjI0MmNmYjhhMjRjNzU1ZTQwMjQ0ZGZmOGMzNGQ5MzgxNzQ3NzRhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue37_pfb_input_removal.cpp",
+          "version": "repo-file-v1:sha256:f908a1cf46180a5fb64362c9752541f639bc6462ad1bdf5928d4738bb178154a"
+        }
+      ]
+    },
+    {
+      "id": "claim_ef137e3d993f4516b5eef43503d08ff3",
+      "statement": "Groups persist names, collapsed state, and component membership, while load captures node positions before collapsed members leave the rendered ImNodes pool so collapsed layouts remain recoverable.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L285-L304",
+          "version": "repo-lines-v1:sha256:e0445b6754cf2b67f18cdefcdfe3386919bfc31a6e8d7d6528e9f1259d08cb59:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2NTQ4M2ZlYjMwNGFhMTY5MDIwNGZkYmNhYmI4YzFjM2UxZGMzY2E2NDhhMjI4Mzk5YjVjYTNkNTYwNTQ1OTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkNDhkYmVmMDM1M2QzMmVkMDA1MjQ5ZjU0ZTRhNmEwMmQwYWM2ZjQwODIwOWMzOWQxYjkxMjZiMzZmOWJlNTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhODMxZTUwMjM3NmNkNWY4ZmVlNGVkNjhhNzg3ZDY4MzA1OTYzNjVhNTJiYzJlNmJhMDliM2RiNmZhNTcwNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyMmZmZDJhNjEzNTEzNDQ4YjFiYjcyN2Q0ODIzNTYwYzQ2MjE3OWU2ZTZlMWU0Nzc2ZDQwNjJmZDQwOTAzY2UifQ"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L577-L583",
+          "version": "repo-lines-v1:sha256:51b8133b7a5b86e50539f20135e897a2761e6ba4b07daa41b68e2f998203c82e:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzMwNWQ1OWJiNDY2NjM2ODEwM2RjZDg1OTAwZWUzMDA4Y2U2NzliODFlMGE4YWRhNDgwZWI1NjMwNzJiMzdkMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGIwMGU2ZjNjODYwZTU0NGYzOGNlNzEyYWJjYjM5ZjI2Zjg4ZTY4OWFiN2EwMTRhNTk2YjA3OGMyZmI5NTNmMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmViZDdhZjcxZDU3MTJiMDMxNzRjMDEyMGY4ZjhiNTM0NWY2OGI2OGVkYTgyMDNhYjJhZmFjMDNhYzZlYmI4NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWE4MWYyYWM3YWZhMzc0NjE4NzhkMzE0MDRmNTE5NTE1YmFiNGUwN2M2MDRkZTI1NTBiYmQxYTUwZTU2YjQyNSJ9"
+        },
+        {
+          "resource": "repo://node_graph/src/node_graph_engine.cpp#L69-L90",
+          "version": "repo-lines-v1:sha256:b1869512c7c17b7b399e1fa42d4232a03bfd33c9d5b9d46b3dc29c63624ea558:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5NmEzMWM1NDkxYzZjMjdmNzk4MTYyZWI0N2NmZTBkMzk3ZDAyZGMxYjUxNDUzMDUwZDI3NjUyYWZmMzdkODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmN2Y2ODgzZmFjMTY3N2ZkMWRhMWFkNTQ1N2Y1Mzk0ZGYwYWVhZjZlNTI2ODhkYjU1ZTE1NGY3NGUxNzdjN2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU1ZmNiMWQ2OWM5MDFhMzkzODg4NzQ0YTg4YTdmNmFhZjgxYTg1NDYxZDQ5Y2ZlM2Y0YjFlMjA3ODVlNTk4MTUifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue116_collapsed_groups.cpp",
+          "version": "repo-file-v1:sha256:fd8bb653309f4ddf08a0aaeeb8f2e67e205b30fdb9e276b2537b1351b5baea40"
+        }
+      ]
+    },
+    {
+      "id": "claim_66e5cfb5c7ea4032ae5a7924dfcaea1e",
+      "statement": "The Network Analyzer is a singleton instrument that resolves a real graph path but measures through a throwaway scratch graph and clone registry, leaving the real graph and component registry untouched.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L175-L199",
+          "version": "repo-lines-v1:sha256:c0c96548806ab0c5fa017512000f6039f69f7d41a0b504654fad8bf880611601:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2NDI2M2U5NGM2M2M3NDc1YzQ4M2ZjYzZlNDUyMjhkOTI0YjIzZDRhZGExYjM2Y2NjNmExODJiOWRiZTA1ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiYzQzZWNhNTM0YTgyNDBhYjljMzJiNjczNDA4NTBiMzg4NWM5Y2M4N2EyYTg5MDk4NzFhOTdhYjZjNzE3ZjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFkMmFmOTU4OWNiYTk3ZGMzOTA4YTFhM2NkMWI4ZDgzZGRmMGE5NjBlODRhZjYzZWQ3MzVmYWExYjA1NWJhMzEifQ"
+        },
+        {
+          "resource": "repo://tests/test_network_analyzer.cpp#L2-L9",
+          "version": "repo-lines-v1:sha256:5f2a2fc5da06765530ad793495d7af1f5861d340f52c1a65366c4fdd79963c99:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTAxZWFkOTM2YTIyODFkNTNkY2MwNjRiN2UyYTJhYjBkNTNiOTJlZjNlZjdiMzRiNjY4NjczMDA3ODk1Yzg2MCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDVmMWIwYWJlZTE1M2ZkNjExZjA2M2E1MzUxODBlNDk4ZWRhNTRhZGY5YTViN2RmZmUxZjBhMGYzZTI1ZTJkZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjEsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzgxODAzM2YxMTE5MmVmOTQ2YTVmZjlhN2E0NDA5NmE2MzVkZWVkNWZhNjllZmFiZjlkNTQ0NmJlOTkxZDFhYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmU3YzNmNmFjYWUzNGJmMjA5Zjg5NDkyMDkyZTVhZjZlNGJiYzFmNzNhMjliODYxNGY4Njk5ZjdjZWUyMDllZiJ9"
+        },
+        {
+          "resource": "repo://tests/test_network_analyzer.cpp#L34-L87",
+          "version": "repo-lines-v1:sha256:fec886219a6b177acebca1d08cbccb1952768a94d1788c870a86843d0f54eaec:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhiNDM5YTBkNDZkZjRiNTExZTFlODFjOWUwYzU3MGM0NWNiZGM1NjU4MWY4ZjNiODI5MTVkZjYzY2FlZDA4OTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiMmUzNGI0NDZmODQ5Y2UwMzY3NGFhYTE3YTMzNmEyNjY1ZjQyY2JiNGRhN2JkMDE1YjRhZjA5NzBjZmJhZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4MzIzNjU4MzVkYTQyNjNlOGQ3ZmEwMWI5MjVjNjRhOGIwODQzNmViYmNkNzExYzk0MDgxOTNkY2U2MzcxMmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d97b2b0791874dfe9ff3203477bc0379",
+      "statement": "Project dirty state is set by graph, component, inspector, analyzer, calculator, and library edits; destructive New, Open, Exit, and Tutorial actions defer through an unsaved-changes pending action when dirty.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L126-L159",
+          "version": "repo-lines-v1:sha256:9808991773284c566f64e0def516ac260bbab34adbc08f22a9fc57ea6c5b4fac:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBiYWRiNDQxNmQwOWZlOGMyYWRiMWQ5YTY5MDhhYjU4NmZiZDc3M2E3ZDAxMTNmNTJkNjgyM2QwOGJlZDIxMWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0MDEyZjcwOTJhZTM3YjRmOGY5YzhjZGQ3YWY2MWI3ODMxYTRkMjJhZmMxNTZhYzhhOTA4OWQwYmU3ODY0ZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmMTJjNWNiZGJlMGZhYTcyNTNmYWIwNGIyNTMxMWIyZWEzZDEyMWE1YjI1OTM3MzcwY2I1YjI0MDY2MDU2MWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBiMDlmMWRhZjQ5ZmJjMGJiYTE1NjA4YWI3YjM4ZmJiZGE0YjM2OTE5YmI1NWIxNDI3MThlNDNhZGY3NDMxZjQifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L264-L309",
+          "version": "repo-lines-v1:sha256:6426dc45155a38a15a5b6fcfa51ea83557b7dd1cd3a4536465a4bf9e7de8b907:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2MGRkM2E1YjhiOTg1M2YwNzAyYWEwNjJmNDk0MDdmNWVlZjFiMjk0Nzc2ZjVlZDg1YjNmM2NhNjc3MWJjNzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4ODI5Yzc2ZGMxN2IyMzA2N2EwYzQ3ZTQxMjRiMGRkN2VlMzUzZWY2ZjY0NjU5NTdhNTcxYmU3NzY2NzFjYmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyZTRmZjI0ZTQ1NGZhY2I4ZDk3ZGZhYmQ1NTQ2NmMwYWUzMmFiMTA1ZjliNDQ4M2UzNWMzNTkzZTFkNGZhZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlZmIwNDE1NDNjYmM0NWJmNjBiZGNiNzhiNzI2MGNkMWViMjViMGYzMzk2Y2NiOWNkYTFjMWVlZjJhNTE3MGQifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L73-L86",
+          "version": "repo-lines-v1:sha256:4f5f66d5def325c16923edcf95781e59d73add56b4279a38ccd13a9e42a06a09:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjOTU3M2UwMTU4MWJlMGYzNjUxZjZiZjIzY2FlOWFlNjMyNWQxYTdhMTI1Yjk2YjJhNDA5ZDE1ZjIyMDNkNGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2N2JhYzc0M2Y0ZGQyMjQyYzNjMmIxNzQ0M2FiYTAxYmIyNjM3NThlMTJiMmI1YmE3ZDNlNTJlMGQwMGE5YjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIwMzg0NDZhNDkxNTZlY2VmNWI2ODJlZDg4MjJlYWYzNTQwMzc5NDQyY2Y5MGI3YmE4YWVkZWRkMThiMmRiMWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY5NGVmNGQwMDVhYjQzOTNjN2ViMWIzMjE5MzFlNDY5MGZlZDgxNmMxOWQ5YmMyYTAxZjRmMDg1ZWJkMTc2NTAifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L911-L943",
+          "version": "repo-lines-v1:sha256:8c9eff3b235083eb62f24c4d847021ef905ed61c24f4c9978e948859df9943e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhZTY1MzYzNTAyOTYxYjJlN2QyY2EwOTU1ODQ2NGEzZGM3ZWMwZGU0MzQzNzU0ZDBjMDQ2ZWQ2N2QzNGE2OTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxMjdkOGQ4YjdlM2ExNGU4NTAyNTljZDM2NDFjMzVkMTU1NTY1ODNmYzBmODg0NzY1MTY0NDMxZGI4MWJlNTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkNmQzODNhMDViMDU1NGZiODUzNDBhOGFkODRlMTM3OGIzZmU4Mjc1ODNiNTBkOGMwMWNhMzhlNTU4ZmUyODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE0N2FmYzQyZDM3YWI0MjdjMGUyMDg3NmJiZTc0NjkzODcyNzYyYTkwM2VlMDRjNWEzNTBjMzJjMGQxYjFlNjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5b6fabd0fd0a421fa5245f16c9096228",
+      "statement": "Project save serializes components, indexed-port links and probes, analyzer state, groups, window flags, and graph counters, and uses a temporary sibling file plus rename so write failures leave the previous target intact.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L168-L180",
+          "version": "repo-lines-v1:sha256:ba7053f50c61a087c26856e2eb47ea9444c0b82e7eb3967ffd360b2ffb8ff787:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2YmY4NjliNmUyZTBjMDk3OWEyZjgzYThmMGRlNjc2Y2IzY2ExZjRlMzMwZjJiZDI4ZjI5NWRlYjk5ODZhYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4Njc2MzFlN2UxMGRjOGZmYmE0OWU0Y2FlODg4ZWU1ODcyZjNmMmU4NGJiOTZiOWNlMGZkZmMxNzg2ODhhNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2ODEwNDYzNmNmY2U2MTBkMTEyNTZmZTE5ZWFmMjQyNmRkYzliMTM3NzZkODYyNmVjMTA3YjVlNzNjNjAyZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0NmFmYTllM2Q1NTQ1NDVmZjNmZGM4ZTZiMzc3YzJlNTMzMGRiMGRkYzI2MDljY2U1Mzc2ZTM1ZTZhMTg4Y2EifQ"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L182-L304",
+          "version": "repo-lines-v1:sha256:432e8bcb77613c1c9835f2759932e0bf3be7c0a12ebd74d916a3a95d8a33c752:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI1ODc1NzRkMTg3NjRmZDAxNmFiMWU5MGM0ZmZhZWJiYjEzNDYwMmFkYzRiNzA0YjMzZGY4NTQ5N2E0NTlmZGY1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZDQ4ZGJlZjAzNTNkMzJlZDAwNTI0OWY1NGU0YTZhMDJkMGFjNmY0MDgyMDljMzlkMWI5MTI2YjM2ZjliZTU1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyZmQwNjc0MTQyOTA0ZjFiMjg5M2M4NmYwNWU2M2Y1NWVlZTk3ZmNlN2UzMDczM2FjMDA4MjdhMWI1M2I0MGExIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwMjJmZmQyYTYxMzUxMzQ0OGIxYmI3MjdkNDgyMzU2MGM0NjIxNzllNmU2ZTFlNDc3NmQ0MDYyZmQ0MDkwM2NlIn0"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L314-L363",
+          "version": "repo-lines-v1:sha256:5ef91041d9a7855d936abb07d39c79001df68ec1b22ce2f35a3af14ebfdc759f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmMDVlOWVkOTdiZjhmMWY1NGRiNzA5NDJjMGRmZDI3YzNmODg4NmI3MmI1OWUwNjJjZjczMDMzNTAwNjllMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmYWM0ZTQzNjMwYWJmNjhjM2E0YTc1NzNmZDRjNDMwMDhiYTc5OGRkNzZjMzc1OWVlZWY1M2U2Y2ZmOGQyZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBhZjQzMDRhMzU3ZGQzMDUwZWFhNmNkYWNhZWMyNjM3N2E4ZWY4NTZhZjhlYzE1ZjFmY2Y2MzVhY2QwNDVmOWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjZjZkMWFhZWViMzZlZjdlOTViZWI5MDEzOTRhZGE4NmUxMmQ2YzIyZTRiMjkxNmJmNTZiMTQzNzhiYTgxMzQifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue77_save_failure.cpp",
+          "version": "repo-file-v1:sha256:2836c1dc1e08e8359790b2faa855794458422c098ecbc8f5f9bdc217b899dd38"
+        }
+      ]
+    },
+    {
+      "id": "claim_c26818d09476465fa44e977e440df8be",
+      "statement": "Project load validates top-level and singleton section shapes before reset, resets and fails for unusable top-level sections, but preserves the live project for pre-reset scalar validation failures.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L366-L431",
+          "version": "repo-lines-v1:sha256:9c0456606f7eee66201d300af567e18086d37f591f68b8863a7718b4ebe48e0a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVjOTY2YWQyM2M1NTY1MGM0NTFlYTNiNjlmMWM0MTIwYjU3ZjBjNjAxNWM4MzliYzNkYmU4N2Q0ZjkzOTQ1YWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExYmQwODA0NDhlMzU4NGE5ODM2OWQ2YzE5M2JlYjUxM2VkNThkMWM4MTZkYmE4OWNkZmViMmQ5NmFjYmRmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzNDhiN2NlYmIxYThiZTA4NGNmZDU0OGZiYTM0MWNkNzQ5NmQzNGM3YjdiZTIxMjQ0Y2NhNzUwMGIxYWQ1YzEifQ"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L433-L475",
+          "version": "repo-lines-v1:sha256:436cbfdb31b75db591c886b3edfcd957a9a1a3b8fa9694d2430fdae9a3b6f13b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3NDUyNDFlZjIzMjg0Yzk0NTUwYjI1MzBkMGYyMDc0YjUyYTM3MzE5NmIxZDlmMDY5ZTU1Mjk5YWRmOTE4MjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjOTk3MzEzNDdkYWM5OGUyY2E1OGU3M2IxMWVhMDVlMjVkNWQxMDc4MTUxYzRlZDg2ODI0YTJhZjMyMmI5N2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRhY2M1ZDg0M2ExMzc3YjIwYzc1NWI0MDQwN2QzMmQ4NmJmYjg0ZjYyZjlkOWU1MTRhN2E0Mzc0NmE0MTMzODQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0MGNkNWMyYjRkMDNlNmE5YTU2YjM1OGJkMWFiMDZjNTc5ZjFiZmIyNzM5NjlhNzA0MmE5ODFiYWFiNDM1ZjkifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue113_project_load.cpp",
+          "version": "repo-file-v1:sha256:3332ea704201111a9e7da2f4422221f72e7d55fac1b1df799bfcc2edbdaa0797"
+        }
+      ]
+    },
+    {
+      "id": "claim_add5d93850b44c0eace9bfd87aa020a5",
+      "statement": "Project loading isolates malformed component records and exceptions by preserving saved-index mappings, skipping invalid siblings, and rolling back partially registered components; valid links, probes, analyzer points, and groups are restored only through valid mappings.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L477-L575",
+          "version": "repo-lines-v1:sha256:ba26093595d41f659556d98ea2c7d9deeb5b42fbb9d817874173884cfc75a2ba:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1OGVlMmJmOGVhZjUwN2ZjM2M4MDk0YWYxNzU2ZjUwOTYwNGZkMmE1YmVkMzE4ZjZjZDhlYmQzODUyZThiMjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3MDhlODMyNTZjZDQ1ZDM2NzA5Njg5NDkxMjJlM2RiYjkyZmQyM2RkYTgxOWExYTVlMWYzNjdkMTc5YmIxNTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjllNDcyZDVhMzg1MWEyZmE0NjIwOWM2ZDBmODAwODAyYThlNjk4MDFiZGUyYTYxM2RlNjBlZTE4YmU5NDc2ZTkifQ"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L585-L685",
+          "version": "repo-lines-v1:sha256:8fc85b61ea2191ac5e51bf4e9784c261d9046c8277665e762f8d20d889f3d62c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0ZTc1NWY3NDNlZDYxMTVlOWI5ZTRlZmI5Mjg2NTQwMTdkZjEzOWY5YWJkNDJkODAyMTQzN2VmMGE1NjlmY2Q0IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlNmIwNDQ5MTQ2OTcyMmU4MzYzYTk0ZTQwNDQ1MzhlMDEzYTJhMjE3ZTM2YjFlNTY4YmE2MGFjYjdiNGM4ZjJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlNmUwNWIzMzk2NDA5YjJjMGViMzVlZWM4MTIxNzJlM2E3YmI1ZDg1Yzg4ZGMzNzg0NDc2ZDVlNjE1ZmRiNmU0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0NzZkMzYwMTM0YjM3OWU0YTg1OTA1M2I5ODM2ODM3N2VlZGFhZjY5MmVhNTYzMmYyNDY0ZjgxYTI0ZTc4M2U2In0"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L687-L780",
+          "version": "repo-lines-v1:sha256:e943df009c70faf2d391b826cd769207ff500856f92f837b64a1cca07d93e001:eyJzZWxlY3RlZExpbmVDb3VudCI6OTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4NTJiYzQ4NGQzNmIxY2I3ZGY1MDNmZDk1YzA1YzhkZjg1YWNlYWY4Y2FkMDQ2YzBmMmZmNTgwZjI3NDU5NWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhNzQ3NWVmZDViYzA4NWZjMjhlYTY0MDBjMGNjZDQ1OTNmYzI3NWRiNTExZDJkMzJjNGU0ODk4YmI4ZWYxMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiMjBlYTg5NzE3OTNkNjRiNmIxY2ZiOWUwYmVhYTBjODY0ZTUwZWZjMjhiYzc3MWNlZWYwZGVjMDQ1ZWI3OGQifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue48_json_loader.cpp",
+          "version": "repo-file-v1:sha256:e2eb3b4846c9533f9e0337d14d2c10f251c66e9365138aa35a69f98300819ebd"
+        }
+      ]
+    },
+    {
+      "id": "claim_6f1d2eb6900c43afba0eee47dc1497e5",
+      "statement": "SessionState persists UI geometry, visibility flags, and PFB channel selections separately from project graph state, using app.ini on Windows and no-op behavior on other platforms.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L211-L220",
+          "version": "repo-lines-v1:sha256:44a690cbe9361dcef615f05839843c9bd2c3e3ca6f701c39a87954aa7a6b0c90:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0ODM5NTIxZGIyOWYxYTcxOGU5ZGNkZWQ4MzFiMjBiMWY0OWUxNjVjZWFlNDY5MGIzMzBiZDI5ZTUwN2M1NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3NjQ1YTVhY2EyNDhhMTJhMTJhNWEwMDgzMDc2OWM0NjNiMzdjYjAwMmIwZjM3MTU3MWM3ZWU1MGUxZWNhY2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0NjBlYjBlOTc1NDIxNjNkMTY3ODczNWM2YjhiNmE4N2JlN2RiNmRjNWZkN2NiMTY1ZDdiNjAyZWQ2YjE2NmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxMjAxNzhmMzI2ODgyMTEzNDc1ZjE5MzZjYjViMzExZDM5ODhiMDZlOWE5NDQwZTZmNzUwMmE2OGYwNjk4NmYifQ"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp#L306-L309",
+          "version": "repo-lines-v1:sha256:ac13c9a4b819d1a2ef174d6de2fdd957e57fd0852e34bc1ec644692aadb6e596:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTM2NDM4YWRhODY2YTAxNzU5NDNjOTZmZGU4YmJiNzE2NWQ2ZmU1OWQ3MDVkZGJjNzQxYjk1YjQzZjEyMjI5OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTIzZjIxOGIyYjNiYjYxNmVkYjRjNDc1ODA1YWEyNWVkY2JhYzlhODRhZjM0MTFhNDNlZGNhMDFlNWU4YzNmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjhiYjg1N2RiMTYzYmU5ZmQ5ZmY5ZmI3ZjkxMjIyNGQ5MGY1MjY0MGVjZTUxZGZjY2UzZjUwMjA2NzA3ZTI5ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmI2NmYzN2U2NmZjODRiM2ZlYjA4ZjcxMTcwZjk1OWMzNDY3N2VjYjQ5MmRlYjVhYmJmNTk2ZGEzYzQ1MDBiZiJ9"
+        },
+        {
+          "resource": "repo://common/session_state.h",
+          "version": "repo-file-v1:sha256:ea7cf2e973308733da3e62b7a697594a85e190e26a9a26b24e9cc11712cdb975"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

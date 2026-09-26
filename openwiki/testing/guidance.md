@@ -1,242 +1,154 @@
 ---
-type: Testing Guide
+type: Engineering testing guide
 title: Testing Guide
-description: Guide to the RF Simulator test suite — how to run tests, test structure, writing new tests, CI configuration, and coverage priorities.
-tags: [testing, catch2, unit-tests, ui-tests]
+description: Explains the Catch2, standalone, UI, integration, regression, and GUI-free Test Flow strategy. Use it to select the right target, isolate state safely, and pair code changes with focused coverage.
+tags: [testing, catch2, ui-testing, integration-testing, regression-testing, test-flow]
+verified:
+  - by: openwiki/0.5.2
+    at: 2026-09-25T17:58:06.034Z
+sources:
+  - id: openwiki-source-4d1d392666be6dfdd7a91a2e
+    resource: repo://.github/workflows/release.yml
+  - id: openwiki-source-e7932f8366579c2ce8c1865d
+    resource: repo://app/src/test_flow_widget.cpp
+  - id: openwiki-source-8c357fec0d6783d0809a624a
+    resource: repo://test_engine/CMakeLists.txt
+  - id: openwiki-source-d421666d5c747b865626a28b
+    resource: repo://test_flow/AGENTS.md
+  - id: openwiki-source-5063b6aa8934c32dd8a94ee1
+    resource: repo://tests/AGENTS.md
+  - id: openwiki-source-fa68239bf614d837d7e5522c
+    resource: repo://tests/CMakeLists.txt
+  - id: openwiki-source-fb26cd54f157859706d14c13
+    resource: repo://tests/test_issue87_flow.cpp
+generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
 ---
 
 # Testing Guide
 
-RF Simulator has **~340 test cases** (306 `TEST_CASE` + 34 `TEST_CASE_METHOD`, including 14 benchmarks) across **34 test source files** (21 compiled into the main `tests` executable — 22 on Windows with `test_session_state.cpp` — plus **12 standalone executables**), covering all DSP engines, the node graph, touchstone parser, PFB channelizer, amplifier nonlinear model, P1dB, component library, project save/load, subcircuits, extensions, the network analyzer instrument, the guided tutorial, S-param path containment, malformed-JSON loader isolation (issue #48), and UI. The test suite uses **two frameworks**: Catch2 for unit/benchmark tests and **imgui_test_engine** for UI interaction tests.
+The repository has two test harnesses with different ownership boundaries:
 
----
+- **Catch2 v3** tests DSP engines, serialization, graph behavior, application integration, security boundaries, and the Test Flow library. The main `tests` target is supplemented by standalone Catch2 executables.
+- **imgui_test_engine** drives the application UI through `test_ui`. It verifies visible windows, menus, gestures, and panel interactions; it is not a substitute for testing the model or engine behind a panel.
 
-## Running Tests
+CTest discovers the main Catch2 cases and standalone targets from `tests/CMakeLists.txt`. Rebuild before running tests so CMake discovery and executables reflect the current registration.
+
+## Test-flow ownership
+
+A Test Flow is a JSON specification, not a second circuit. `test_flow` is a GUI-free static library: it loads and validates a flow, resolves condition paths against component `serialize()` snapshots, executes the cartesian product of condition values, and captures registered metrics from output ports. The app-owned `TestFlowWidget` supplies the live components and graph, protects the UI from oversized sweeps, snapshots and restores the whole circuit, and renders or exports the result.
+
+```mermaid
+flowchart TD
+    file["Flow JSON"] --> loader["test_flow LoadFlowFile"]
+    loader --> validate["ValidateFlow"]
+    validate -->|valid| panel["TestFlowWidget preview and Run"]
+    panel --> snapshot["Snapshot every live engine"]
+    snapshot --> runner["test_flow RunFlow"]
+    runner --> rows["FlowResult rows and metrics"]
+    rows --> restore["Widget restores snapshots and rewires inputs"]
+    restore --> display["Panel table and JSON export"]
+    validate -->|errors| displayError["Panel shows harness wording"]
+```
+
+*The harness owns flow semantics and measurements; the panel owns live-circuit lifecycle, UI limits, presentation, and restoration.*
+
+Flow conditions address the target engine's `serialize()` keys, using dot-separated keys and optional zero-based array indices such as `tones[0].power_dBm`; inspector labels are not valid substitutes. Component ids are positional engine ids and can silently refer to another component after deletion or reorder, so flows must be revalidated after circuit edits. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`; unavailable measurements become invalid/`NaN` in the model and JSON `null` in results.
+
+`ValidateFlow()` exhaustively checks every candidate value and measurement reference in the same order and wording used by `RunFlow()`. It resolves each condition slot once, then checks numeric type, finiteness, integral-ness, and range without mutating the circuit. The widget refuses a sweep above its `kMaxRunRows` budget before execution. On execution it snapshots every component, runs against the live engines, restores every snapshot independently, and rewires graph inputs. A restore failure is more serious than an ordinary run failure: it clears the result, latches the panel, and requires a circuit reload; successful restoration leaves component serialization, links, and the dirty flag unchanged.
+
+## Running the suite
 
 ```bash
-# All unit tests (excluding benchmarks and UI)
 cmake --build build
 ctest --test-dir build --output-on-failure
 
-# Benchmarks only
-build/bin/tests [bench]
-
-# Specific tag
+# Main Catch2 binary and tag filters
+build/bin/tests
 build/bin/tests [sparam]
 build/bin/tests [edge]
-build/bin/tests [amplifier]
+build/bin/tests [bench]
 
-# UI tests (requires display, may need Xvfb on headless Linux)
+# Focused Test Flow harness and widget model
+ctest --test-dir build -R 'test_issue87_flow|test_test_flow_widget' --output-on-failure
+
+# UI tests (a display server is required)
 build/bin/test_ui
+# Headless Linux
+xvfb-run --auto-servernum build/bin/test_ui
 ```
 
----
+`test_ui` registers all ImGui cases without an argv filter, so a panel-menu case cannot be selected like a Catch2 case. Run the whole target for UI behavior. The Test Flow model and harness remain filterable through `test_test_flow_widget` and `test_issue87_flow`.
 
-## Test Structure
+## Current Catch2 inventory
 
-### Catch2 Unit Tests (`tests/`)
+### Main `tests` target
 
-**Build target:** `tests` (links against `Catch2::Catch2WithMain`).
+`tests/CMakeLists.txt` currently compiles these sources into `tests` (with `test_session_state.cpp` additionally on Windows):
 
-These test files are compiled into the main `tests` executable (21 files; 22 on Windows with `test_session_state.cpp`). Twelve standalone executables are built separately: `test_attenuator` and `test_combiner` link only specific engine libraries; the newer ones link `simulator::app` or `simulator::tutorial` (and were kept out of the main `tests` binary because this project's MinGW-w64 toolchain silently drops TEST_CASEs registered beyond the ~223 already linked into `tests.exe`).
+`test_main.cpp`, `test_node_graph_engine.cpp`, `test_touchstone.cpp`, `test_adc.cpp`, `test_pfb.cpp`, `test_bench_dsp.cpp`, `test_bench_groups.cpp`, `test_ideal_filter.cpp`, `test_component_registry.cpp`, `test_component_library.cpp`, `test_coax_cable_presets.cpp`, `test_coax_cable_engine.cpp`, `test_group.cpp`, `test_project_file.cpp`, `test_amplifier_sparam.cpp`, `test_ideal_filter_sparam.cpp`, `test_equalizer.cpp`, `test_iq_plot.cpp`, `test_nonlinear_p1db.cpp`, `test_amplifier_p1db.cpp`, and `test_layout_manager.cpp`.
 
-| Test File | Tags | What It Tests |
-|---|---|---|
-| `test_main.cpp` | `[common]`, `[generator]`, `[splitter]`, `[mixer]`, `[amplifier]`, `[phase]` | Core math utils, generator, splitter, mixer, basic amplifier |
-| `test_node_graph_engine.cpp` | `[node_graph]`, `[appearance]` | Topology, linking, probes, `themeColor` (label→`NodeKind` mapping is covered by `test_component_dispatch`, see standalone executables) |
-| `test_touchstone.cpp` | `[touchstone]` | .sNp parser: real files, synthetic files, error cases |
-| `test_adc.cpp` | `[adc]` | ADC DDC, aliasing, NSD noise, Fs clamping |
-| `test_nonlinear_p1db.cpp` | `[nonlinear]`, `[p1db]` | NonlinearModel P1dB default, setter, OIP3 derivation |
-| `test_pfb.cpp` | `[pfb]` | PFB channel routing, noise distribution, two outputs, flatness |
-| `test_ideal_filter.cpp` | `[filter]`, `[edge]` | LPF/HPF/BPF/BSF, exact cutoff, noise, dirty flags |
-| `test_ideal_filter_sparam.cpp` | `[filter]`, `[sparam]` | Filter S-param mode |
-| `test_amplifier_p1db.cpp` | `[amplifier]`, `[p1db]` | P1dB default, setter, serialize/deserialize |
-| `test_amplifier_sparam.cpp` | `[amp]`, `[sparam]`, `[nf]`, `[nonlinear]` | Amp S-param mode, NF, nonlinearity |
-| `test_component_library.cpp` | `[library]` | JSON loading, directory scanning, instantiation for 8 component types, part number |
-| `test_component_registry.cpp` | `[registry]` | ComponentRegistry add/find/remove |
-| `test_coax_cable_engine.cpp` | `[coax]`, `[datasheet]`, `[noise]`, `[phase]`, `[connectors]`, `[edge]`, `[caching]` | Coax loss, phase, noise, connectors, clamping, caching |
-| `test_coax_cable_presets.cpp` | `[coax]`, `[presets]` | Cable preset table validation |
-| `test_equalizer.cpp` | `[equalizer]`, `[sparam]` | Equalizer ideal mode, S-param mode, NaN guards |
-| `test_group.cpp` | `[group]`, `[integration]` | Group operations, boundary pins, signal flow through groups |
-| `test_iq_plot.cpp` | `[iq_plot]` | `build_iq_spectrum` IFFT, Parseval, empty/degenerate grids |
-| `test_layout_manager.cpp` | `[layout]` | Layout path derivation, name sanitization, named-preset save/load |
-| `test_project_file.cpp` | `[project_file]` | Save/load round-trip: empty project, linked components, newProject, parameter values, groups, invalid JSON, S-param mode reload, Network Analyzer sweep params + probe points, stale-probe clearing |
-| `test_session_state.cpp` | `[session]` | Windows-only: INI save/load round-trip |
-| `test_bench_dsp.cpp` | `[bench]`, `[generator]`, `[amplifier]`, `[mixer]`, `[splitter]`, `[pfb]`, `[spectrum]` | Per-engine dirty/clean benchmarks |
-| `test_bench_groups.cpp` | `[benchmark]`, `[group]` | Group operation benchmarks |
+These cover core DSP and caching, node topology and probes, Touchstone formats and errors, ADC/DDC behavior, PFB routing and noise, ideal filters and S-parameter modes, component registry/library instantiation, coax/presets, groups, project round trips, amplifier and nonlinear/P1dB behavior, equalizer and IQ plotting, layout paths, and benchmarks. `test_project_file.cpp` is the broad application serialization integration point: it covers links, groups, parameter values, S-parameter and Network Analyzer state, stale-probe clearing, invalid JSON, and new-project behavior.
 
-**Standalone executables:**
+### Standalone Catch2 targets
 
-| Test File | Executable | What It Tests |
-|---|---|---|
-| `test_attenuator.cpp` | `test_attenuator` | Pass-through, flat attenuation, passive noise model, noise floor convergence, S-param, clamping, dirty-flag, hover |
-| `test_combiner.cpp` | `test_combiner` | Basic combination, single/both inputs, dirty-flag, S-param mode |
-| `test_rf_switch.cpp` | `test_rf_switch` | Forward SPDT routing, insertion/isolation loss, passive noise, clamping, serialization, hover summary |
-| `test_rf_switch_project.cpp` | `test_rf_switch_project` | Forward SPDT project serialization and round-trip behavior |
-| `test_rf_switch_2to1.cpp` | `test_rf_switch_2to1` | Reverse SPDT routing, two-input dirty checking, leakage/noise, clamping, serialization, hover summary |
-| `test_component_authoring.cpp` | `test_component_authoring` | ComponentTypeRegistry descriptors, ComponentLibrary validate, ComponentFormModel build/validate/round-trip |
-| `test_extensions.cpp` | `test_extensions` | Extension manifest parsing/rejection, discovery across built-in/global/project-local roots, ExternalToolRunner request/result flow |
-| `test_issue37_pfb_input_removal.cpp` | `test_issue37_pfb_input_removal` | Issue #37 regression: removing an upstream node immediately nulls downstream dangling input pointers |
-| `test_component_dispatch.cpp` | `test_component_dispatch` | Registry-driven dispatch: menu add marks project dirty, `kindForLabel` label→NodeKind mapping, all registered types, including both SPDT switch orientations, round-trip through save/load, legacy `.rfsim` type strings backward compat |
-| `test_issue42_multi_output.cpp` | `test_issue42_multi_output` | Issue #42 regression: Splitter OUT2 routes to Combiner IN1 via `outputs[1]`; probing Splitter/PFB OUT2 resolves output index 1 |
-| `test_network_analyzer.cpp` | `test_network_analyzer` | Network Analyzer v3 instrument: stimulus power reaches the isolated chain, gain accuracy (attenuator chain), NF accuracy (amplifier chain), probing does not perturb a real consumer, disconnected/ambiguous/combiner-crossing paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw with/without probe points |
-| `test_path_containment.cpp` | `test_path_containment` | S1/S2 security fixes (2026-08-09 codebase review): project load neutralizes S-param paths outside the project dir, save relativizes in-project paths, library `data_files` confined to the JSON's dir, TouchstoneParser 256 MiB size guard + 10M frequency-point cap |
-| `test_issue48_json_loader.cpp` | `test_issue48_json_loader` | Issue #48 regression (v0.19.2 JSON loader hardening): project loader skips malformed components and keeps valid siblings, rejects wrong-shaped top-level sections (zero components) without throwing, skips malformed probe/NA-point/group entries, rejects fractional and oversized integer fields (`checkedJsonInt`), rolls back a component whose nested `params` throw, resolves probes through skipped components; library loader skips wrong-typed required fields, keeps definitions with malformed optional entries and out-of-int-range `schema_version`, and scan continues after malformed files |
-| `test_signal_domain.cpp` | `test_signal_domain` | `is_complex_baseband` defaults and propagation through every engine, `conjugateSymmetricExpand` expansion |
-| `test_tutorial_state.cpp` | `test_tutorial_state` | TutorialState marker path derivation, completed/markCompleted round-trip, catalog non-empty and addressable, inactive until started, navigation stays within bounds |
+Each name below is an independently registered CTest target. The source is the same-named `tests/test_*.cpp` file unless noted otherwise.
 
-### UI Tests (`test_engine/`)
+- `test_attenuator`, `test_combiner`, `test_rf_switch`, and `test_rf_switch_2to1`: engine behavior, routing, noise, clamping, serialization, hover summaries, and orientation-specific multi-output behavior.
+- `test_rf_switch_project`: SPDT project type lookup, serialization, and restoration of a link on the second switch output.
+- `test_network_analyzer`: isolated-chain stimulus, gain/NF, non-perturbing probes, path ambiguity/disconnection, mixer translation, clamping, serialization, widget drawing, and probe points.
+- `test_power_meter` and `test_power_meter_app`: engine and app integration.
+- `test_component_authoring`, `test_component_dispatch`, `test_issue79_component_validation`: registry descriptors, authoring validation/round trips, menu dispatch, all registered component types, legacy type strings, load/upsert rejection, deserialize rollback, and path containment.
+- `test_extensions`, `test_issue45_extension_trust`, `test_issue80_extension_hardening`, and `test_issue130_extension_menu_labels`: manifest parsing/discovery, trust persistence and fail-closed approval, duplicate shadowing, workspace isolation and containment, result limits, and unique menu labels.
+- `test_issue37_pfb_input_removal`, `test_issue70_pfb_reconnect`, `test_issue42_multi_output`, `test_issue78_multi_output`, and `test_pfb_sampling_ratio`: dangling-input cleanup, reconnect behavior, correct OUT2 routing/probing and round trips, pin reporting, and sampling-ratio/output-grid/noise contracts.
+- `test_signal_domain`, `test_signal_generator_noise`, `test_adc_configuration`, `test_pfb_filter_design`, `test_pfb_calculator`, and `test_issue117_numeric_correctness`: cross-engine signal-domain propagation, source-versus-added noise, ADC configuration, filter design/calculator selection, and numeric regressions including signed-frequency, stale-noise, dirty propagation, combiner validation, and S-parameter latching.
+- `test_path_containment`: project/library S-parameter containment, Touchstone size and point limits, and safe component-authoring data-file names/copy destinations.
+- `test_issue48_json_loader`: malformed project/library JSON is isolated: valid siblings survive, wrong-shaped sections are rejected, malformed probes/groups are skipped, integer bounds are enforced, component rollback occurs, and scanning continues after malformed files.
+- `test_tutorial_state`: marker persistence, catalog addressing, inactive-before-start, and bounded navigation.
+- `test_issue87_flow`: flow loading/validation, type-preserving condition writes, authoring helpers, metric math, JSON encoding, atomic flow-file writes, rollback, and shared link policy.
+- `test_issue77_save_failure` and `test_issue113_project_load`: failed saves preserve dirty state/path and atomicity; failed loads clear unsafe save targets, reject malformed state shapes, and preserve the original file on save failure.
+- `test_issue116_collapsed_groups`: first-frame collapsed-group placement, links through both group boundaries, and rejection of duplicate-input and cyclic links.
+- `test_spectrum_jitter`, `test_spectrum_analyzer_snr`, and `test_node_hover_snr`: stable tone peaks despite display noise, analyzer SNR guards/read-only behavior, and node-hover first-output SNR/data fallback.
+- `test_test_flow_widget`: the app panel's snapshot/restore boundary, ordinary and latched failures, reload recovery, validation and row limits, authoring controls, preview, export, and bounded rendering.
 
-**Build target:** `test_ui` (links against `imgui_test_engine`).
+This inventory is intentionally derived from current CMake registration rather than a historical executable count. New targets must be registered with `add_standalone_test`; otherwise CTest will not run them.
 
-The UI test suite uses a **test helper library** (`test_engine/test_helpers.h` / `test_engine/test_helpers.cpp`) that provides reusable helpers:
+## Isolation and temporary state
 
-- `NodeHelper` — `addComponent()` (canvas context menu → click menu item), `selectNode()` (set imnodes selection), `deleteSelectedNode()` (press Delete), `findComponentNodeId<T>()`
-- `InspectorHelper` — `waitForPopulated()`, `clickButton()`, `toggleCheckbox()`, `setInputDouble()`, `selectComboItem()`
+Parallel CTest is useful but not universally safe. Scratch files must be under `temp_directory_path()` and include `test_temp_paths::processTag()` plus a per-process counter. A static counter alone collides because `catch_discover_tests` launches separate processes; random names are not a sufficient correctness guarantee.
 
-| Test Name | What It Tests |
+The following shared resources require care:
+
+- `test_extensions` and `test_issue45_extension_trust` both mutate the source-tree `extensions/` root, so CMake marks them `RUN_SERIAL`. Start with a clean root; an interrupted test can leave a manifest behind. `RUN_SERIAL` only coordinates one CTest invocation, not two concurrent invocations against the same build tree.
+- App-level executables share exe-relative `app.ini`; `LayoutManager` shares `layouts`, and `TutorialState` shares `.tutorial_completed`. `test_ui` and `test_test_flow_widget` are `RUN_SERIAL`; avoid a second CTest run against the same build tree. Tests that construct `RfSimulatorApp` must create ImGui, ImPlot, and ImNodes contexts first.
+- The UI target needs a real display. Linux CI supplies Xvfb; Windows release CI excludes `test_ui`. The Linux release job runs CTest under `xvfb-run`, while the ASan job excludes benchmarks and UI. Windows also checks that `build/bin/tests.exe --list-tests` stays above the verified registration floor; new Windows-required cases belong in standalone targets rather than after the main binary's MinGW-w64 registration ceiling.
+
+## Choosing coverage for a change
+
+Pair the smallest test that exercises the changed ownership boundary with an integration/regression test when state crosses boundaries:
+
+| Change | First focused coverage |
 |---|---|
-| `node_editor_exists` | Node Editor window is focusable |
-| `single_generator_present` | Default Generator 0 exists with Measure item |
-| `single_amplifier_present` | Default Amplifier 0 exists with Measure item |
-| `canvas_context_menu` | Right-click on canvas opens context menu |
-| `node_context_menu` | Right-click on node opens context menu |
-| `properties_window_exists` | Properties window is focusable |
-| `subcircuit_rubber_band_creates_group` | Shift-drag creates subcircuit group |
-| `subcircuit_create_group_and_verify_popup` | Second group creation |
-| `subcircuit_expand_and_collapse` | Expand/collapse rendering |
-| `inspector_amplifier_gain` | Set Gain (dB) on default amplifier via Inspector panel, verify engine state |
-| `inspector_amplifier_nf` | Set NF (dB) on default amplifier via Inspector panel, verify engine state |
-| `connection_valid_generator_to_amplifier` | Programmatic add/remove a valid link |
-| `connection_multi_fanout` | Programmatic fanout from one output to two inputs |
-| `connection_delete` | Programmatic link add then remove |
-| `connection_output_to_output_accepted` | Documents accepted output→output (validation gap — no validation) |
-| `connection_input_to_input_accepted` | Documents accepted input→input (validation gap — no validation) |
-| `connection_self_loop_accepted` | Documents accepted self-loop (validation gap — no validation) |
-| `connection_duplicate_accepted` | Documents accepted duplicate links (validation gap — no deduplication) |
-| `navigation_pan_programmatic` | Programmatic pan offset via imnodes API |
-| `navigation_drag_node` | Programmatic node drag via imnodes API + mouse click to flush cache |
-| `layout_save_as_creates_file` | View > Layouts Save As writes a named preset file |
-| `layout_manage_delete_removes_file` | View > Layouts Manage deletes a preset file |
-| `tutorial_launches_from_help_menu` | Help > Tutorial starts the walkthrough, shows "Tutorial Guide"; Exit deactivates |
-| `tutorial_start_guards_unsaved_changes` | Dirty project: tutorial waits behind the Unsaved Changes modal (Discard then starts) |
-| `tutorial_step_navigation` | Next/Back/Skip navigation stays within bounds; Skip jumps to last step without finishing |
-| `tutorial_completes_and_persists` | Walking to the last step + Finish writes the `.tutorial_completed` marker (not before Finish) |
-| `tutorial_first_run_prompt_marks_completed` | Dismissing the first-run "Welcome" offer ("Not Now") marks completed so it never nags again |
+| DSP engine math, noise, phase, filtering, dirty flags | engine test or `test_issue117_numeric_correctness`; cover nominal, zero/negative/non-finite input, clamping, and clean-vs-dirty updates |
+| Serialization, project load/save, component registry or library | `test_project_file`, `test_component_dispatch`, `test_issue48_json_loader`, `test_issue79_component_validation`, or issue #77/#113; assert round trips, malformed input, rollback, and dirty/path invariants |
+| Graph topology, links, probes, groups, multi-output ports | node/group tests plus issue #37/#42/#70/#78/#116; assert both pointer cleanup and persisted/reported port indices, not only rendered lines |
+| Extensions, external tools, paths, or trust | `test_extensions` plus the focused #45/#80/#130/path-containment targets; use unique temp roots and test refusal as well as success |
+| Test Flow grammar, metrics, authoring, or execution | `test_issue87_flow`; include invalid references, every sweep value, metric-unavailable results, atomic writes, and restore/rollback behavior |
+| Test Flow panel, preview, export, or state lifecycle | `test_test_flow_widget`; add a UI case only for visible interaction, and run `test_ui` for menu/window wiring |
+| UI display, menus, gestures, layout, tutorial, or tooltips | `test_engine/ui_tests.cpp` through `test_ui`, with model/data assertions in a standalone Catch2 test where ImGui text is not queryable |
 
----
+Do not put ImGui/GLFW dependencies into pure engine tests. Do not duplicate harness validation rules in the panel: call `ValidateFlow()` and preserve its wording. For new coverage, prefer a standalone target because MinGW-w64 can silently drop registrations appended beyond the main `tests` executable's ceiling; verify the target appears in CTest and run it directly when platform discovery is suspect.
 
-## Test Patterns
+## CI and local verification
 
-### Floating-Point Comparisons
+Release CI builds with CMake/Ninja, runs Linux tests under Xvfb excluding benchmarks, runs Windows tests excluding `test_ui`, and runs an ASan CTest pass excluding benchmarks and UI. The Windows job explicitly counts registered cases with `tests.exe --list-tests`; this catches silent registration loss rather than trusting source counts.
 
-Use `Catch::Approx` from `<catch2/catch_approx.hpp>`:
-
-```cpp
-REQUIRE(result == Catch::Approx(expected).margin(1e-12));
-```
-
-### DSP Engine Test Pattern
-
-```cpp
-TEST_CASE("AmplifierEngine applies gain", "[amplifier]") {
-    auto gen = std::make_unique<SignalGeneratorEngine>(...);
-    auto amp = std::make_unique<AmplifierEngine>(...);
-
-    gen->update(0.0);
-    amp->node().inputs[0] = &gen->node().outputs[0];
-    amp->update(0.0);
-
-    // Verify output
-    auto& out = amp->node().outputs[0];
-    REQUIRE(out.tones[0].power_dBm == Catch::Approx(expectedPower).margin(0.01));
-}
-```
-
-### Testing S-Param Mode
-
-```cpp
-TEST_CASE("Amplifier S-param applies S21 gain", "[amp][sparam]") {
-    auto amp = std::make_unique<AmplifierEngine>(...);
-    amp->setSParamFilepath(PROJECT_SOURCE_DIR "/component_data/amp.s2p");
-
-    // Connect generator
-    amp->node().inputs[0] = &gen->node().outputs[0];
-    amp->update(0.0);
-
-    REQUIRE(amp->node().outputs[0].tones[0].power_dBm ==
-            Catch::Approx(expected).margin(0.5));
-}
-```
-
-### Benchmark Pattern
-
-```cpp
-TEST_CASE("AmplifierEngine dirty/clean benchmark", "[bench][amplifier]") {
-    auto amp = makeAmplifier();
-
-    BENCHMARK("AmplifierEngine update (dirty)") {
-        amp->update(0.0);
-    };
-
-    BENCHMARK("AmplifierEngine update (clean)") {
-        amp->update(0.0);
-    };
-}
-```
-
----
-
-## CI Test Configuration
-
-Tests run in `.github/workflows/release.yml` on minor/major release tags:
-
-```yaml
-# Linux (GCC/Clang, Debug/Release): full suite under Xvfb
-xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
-
-# Windows (MinGW-w64): UI tests need a display; ADC DDC grid spans test excluded
-ctest --test-dir build --output-on-failure -E "Benchmark|test_ui|ADC DDC output grid spans"
-
-# AddressSanitizer job (Linux):
-cd build
-ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 ctest --output-on-failure -E "Benchmark|test_ui"
-```
-
-The Windows job also verifies the MinGW-w64 TEST_CASE registration floor: `tests.exe --list-tests` must register ≥ 223 cases (the toolchain silently drops any TEST_CASE beyond that ceiling in the main `tests` binary; new coverage that must run on Windows goes in a standalone executable instead). See `tests/AGENTS.md` and the `Verify MinGW TEST_CASE registration count` step in `release.yml`.
-
-The UI test engine requires a display server. For headless Linux CI, Xvfb is used (`xvfb-run --auto-servernum`). Locally, run:
+Before submitting a change:
 
 ```bash
-xvfb-run build/bin/test_ui
+cmake --build build
+ctest --test-dir build --output-on-failure
+ctest --test-dir build -j8 --output-on-failure   # only with clean extensions/ and one CTest invocation
+ctest --test-dir build -R 'test_issue87_flow|test_test_flow_widget' --output-on-failure
 ```
 
----
-
-## Writing Tests
-
-### Adding a New Test
-
-1. Create `tests/test_<component>.cpp`.
-2. Add the file to `tests/CMakeLists.txt` — **prefer a new standalone executable** (`add_standalone_test(test_<name> SOURCES ... LIBS ...)`) unless the main `tests` binary is far below the MinGW registration ceiling (~223 registered cases; new coverage that must run on Windows goes in a standalone executable — see `tests/AGENTS.md`). Follow the `test_issue48_json_loader` example for boundary-facing loader changes: standalone executable, `<atomic>`/`<filesystem>`/`<fstream>` RAII temp helpers (unique temp paths, scope-exit removal on assertion failure), and `RfSimulatorApp`/`ComponentLibrary` integration through the ImGui/ImPlot/ImNodes fixture.
-3. Choose descriptive tags: `[component]`, `[feature]` (e.g., `[coax][phase]`).
-4. Use meaningful section names that describe the scenario.
-
-### Test Coverage Priorities
-
-| Priority | What to Test |
-|---|---|
-| P0 | Core DSP correctness (gain, noise, phase, filtering) |
-| P0 | Edge cases (empty input, zero freq, negative freq, NaN, clamping) |
-| P1 | S-param mode (loading, S21 interpolation, out-of-band) |
-| P1 | Dirty-flag caching |
-| P2 | Parameter clamping and validation |
-| P2 | Signal chain integration (multiple components connected) |
-
-### Things to Watch For
-
-- **NaN guarding:** `log10(0)` must never reach math functions. Test with zero-frequency tones.
-- **Generation bumps:** Every parameter change must increment `outputs[0].generation`.
-- **Clamping:** Negative length (coax), frequencies below 1 Hz (equalizer ref freq), NF < 0 dB.
-- **S-param file errors:** Missing file, bad format, out-of-range frequency interpolation.
-- **Multi-output components:** Test both `outputs[0]` and `outputs[1]` for Splitter, PFB.
+For a new test: add the source/target to `tests/CMakeLists.txt`, use stable process-unique temporary paths, keep app fixtures behind the ImGui context fixture, choose descriptive tags, and confirm CTest discovery. For engine, serialization, graph, extension/path, or UI changes, the focused tests should fail before the fix and pass after it; that is the regression signal that matters more than a stale total count.

@@ -1,3 +1,3 @@
 # Files
 
-- [RF Components — DSP Engine Modules](rf-components.md) - Detailed reference for every RF signal-processing component in the simulator plus the network analyzer instrument, including design decisions, parameters, dual-mode operation, and test coverage.
+- [RF Components — DSP Engine Modules](rf-components.md) - Reference for RF signal sources, processing engines, topology nodes, digital DSP blocks, and analyzer instruments. Covers ports, parameters, signal and noise models, state and persistence, extension boundaries, and focused tests.

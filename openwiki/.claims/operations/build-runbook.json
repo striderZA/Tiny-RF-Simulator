@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:0a108bfb2def09c290c6b514f6d4e0b809bee5eeb5b11b34fbd3f4dad834bc20",
+  "claims": [
+    {
+      "id": "claim_0393e26b46664562aedb80f2199cf51f",
+      "statement": "The root CMake project requires CMake 3.20, enables C++20, emits runtime artifacts under build/bin and libraries under build/lib, exports compile_commands.json, and declares application version 0.25.0.",
+      "evidence": [
+        {
+          "resource": "repo://CMakeLists.txt#L4-L27",
+          "version": "repo-lines-v1:sha256:f848efe2b26d5b27cbe74212677480344285e239ed56d4cca3f5bea37d03a6c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxMmYxZjE5N2YxOGMwOTUwNmE2NmQ5ZWNkODAyNDBjNWVjODhhZmFlZDFjOTAxNjI0YWQyNWRmM2IwZjI4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNmVkZTg5YmE0NWFmMTA0ZWIxNjhmYzM1ZjllOTA3YjVlOGVhYTYzMzIzZGQ1YmJmZjU4N2M5OThlYmQ1NTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljYjFkNGE5ODkxMDU4YWFjYTQ2MmM0ZDdmNjAyMTg1YmRhZmI3OThjZGE5NTAxNTZiMjI1MzE0MTJhZTFiMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1N2Q2ZDg1YTgxZGI4YzcxNGJlNzE2ZTljYTNhZDM4ZTA1MGU1NzM0MzI0ZmM5YzdkNWQ3ZTYwYTgzM2NjYzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2199151638b648aaafd90940926a3052",
+      "statement": "The build uses CMake FetchContent with pinned references for imgui, implot, GLFW, Catch2, imgui_test_engine, imnodes, portable-file-dialogs, kissFFT, and nlohmann/json; dependencies are populated in the active build tree.",
+      "evidence": [
+        {
+          "resource": "repo://CMakeLists.txt#L29-L121",
+          "version": "repo-lines-v1:sha256:7ee2214b051ff1816b98aa4bfc53d18190c3398a5d29924c3cf3a160efcb71b0:eyJzZWxlY3RlZExpbmVDb3VudCI6OTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmNWY4ODgwNDliNzU5MWQ0NTBmZjQxNjhmMjVmYjJmZmUzYjU0YjUxNzY5YzAxYTE4ZjdlNWNmNjQyMWNkYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1MDU2OTk0NGRjYjBlNGYzNGZmOTMxNWEzZWRkYjc1MWJkNzJhZDc0MzVmNTMyZTJkNjc2YjVhMzViY2UyMjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwNjU0NGNlMWQxZmIxYmYyZjk5ODg5ZGMxOWJkY2M4NDc4NzkxZmNiZmJmOTM3ZmE3ZDE4YTc5MjEyZTUwODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhYWU2ZTAwZDYzZGVkOWY1Y2ZkMWNhYzRmNjBmNjIyZmZjYzk0ZWVmMTE2ODNhMzE0MjQ5MjE3ZTEzZDM0M2MifQ"
+        },
+        {
+          "resource": "repo://CONTRIBUTING.md#L29-L31",
+          "version": "repo-lines-v1:sha256:aac928e88a73d17456cd43fbaa19b2861536931c558278c666cc488255c209b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFhYzI5NTgyZWRkYmRhNWQzNDA5ODQwYmI1NzA4OGY3MmQwN2I4ODNhM2M5OGU5MmUyZTlmNTU4MjM4YjYyZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTZmNTEyNGM3ZThkZTg5OTAwYWVjYmFjNzNlMjMwNDFhNzAzYTZhM2M2ZjhhNjQ4ZmFhYjRlOWVhODM0MzI4MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDA2Y2FlNjQ3MDdlOTEwYTYwOTFiY2MzZDczZGQ4ZTQ3YTQwYjQzNDViZDhkOTdlYTVkM2MxNjFkYTI5Y2U3MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjQ0NGIzNThjMmU0ODVmNGEyZmFmMDc4ZjJkNjhiZWE3NGJhOWI3MDg3YzRjNmEyNGY1MmVlNDcwNzkwMDQ4ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1d85df7fd32c4656b3fca8dd0804e81d",
+      "statement": "Windows builds are validated with MSYS2 MinGW-w64 and the repository does not support MSVC; changing compilers requires clearing the build directory because compiler detection is cached.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L114-L126",
+          "version": "repo-lines-v1:sha256:62e25f4e9bcd8ca021b69466233aedffc7c3d262dfe1de59a96805ef20f5b5e2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0NzI2YTFjNDYxY2JlNDIwZjU4MWU0NDFhOGE2NDk4NmQzNGFmM2YzNzc5Zjk0MDFjNTQ2YTllYzg3MWYxY2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwNDcxMmIwNTJjNzk2M2ViNjk5OWYxMzMzZmI2NjlhNTAwN2FhZWM3YmFlY2RhYzliZWU5YTIxM2UzMTc0YjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0YjNkZDdjMzlhYjkwNGNkZjdkNzMwYzk2YjE0NjA0ZTcwNWYyZGJmOGEyMDE5ODcwZTEyM2JmZDJjNWE3NWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE5OTlmYzQyOTQxNWUxZWRlNGFmNjgxMTA4ZDVjOWRhMWQ1YWM2M2Q3YjE5NGFjNjE5ZDMzMzlkYWFmZGVlYWQifQ"
+        },
+        {
+          "resource": "repo://CONTRIBUTING.md#L16-L18",
+          "version": "repo-lines-v1:sha256:7f108c323dfbc97b57bcb285f980e49a1c053f2eba74edc0f827320307fe183b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjY2ZmNjYzJjMDU0ZGI5MjEwOGQ5YTEzNDNmNTY0MDBkMTU4OTc0ZDYzN2NlMmZmYWNlMzJjMjM5ZmE3MjEyZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTA2NWFjZjRjNzZhNWRiYTJhZWYwYTg5NTlkZWRlNzcyNGY4YWVkYjc4MWExZWY0NDg4ODdjNWRjYjVmNGMyZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGE5ZmJkNDVhYWI0ODQ5MjgzMjhhYmFkMWU0ZjEyZGYwZDUwMzBiZmRjZmMxNmJmNzMyNzk3MjY1ODFjNDViZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1379ed36be6d4e558cff61443224b27f",
+      "statement": "Installed runtime payloads place the executable, component_data, and extensions together under bin, while documentation is installed under share/doc/rf-simulator; CPack generates TGZ packages off Windows and ZIP packages on Windows.",
+      "evidence": [
+        {
+          "resource": "repo://CMakeLists.txt#L233-L270",
+          "version": "repo-lines-v1:sha256:233b9d36c04053f8c62e1a617c3ed884083afb31f4f54b9d2f8f3a2678a4b062:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2OWZiODMxMWZmYTI4MDg3Y2ZlYjc1NWZjNDg2MTUxMmU2OGJlYzJkYTFlOWM5ZTJiM2E2ZGQ4NjI5ZWJlNWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmOTc4NDJhYThhNjUxZDM5NWZhYTNiMzBmNTYzNjdhMWIwZDdjZTFjMDlkMDM0OWYyODI3OTFhMWU1YjViMWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI3ZmI2NjJjMTlkMjViMjYxYTk1MWU0Mzc5MjY5Yjg5YjI4YTRmNjgyYzI1ZTg0YmE3NzFkMWFhZWVkNmE0OGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_47dd99cb80f744ad8408e372146f22da",
+      "statement": "The application resolves built-in component data and extensions relative to the executable, with source-tree fallback for build-tree runs; extension discovery also considers user and project-local roots with source built-ins taking precedence, and project-local tools are trust-gated.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L333-L350",
+          "version": "repo-lines-v1:sha256:8c6b4adc86c4c04dc434ef1887c4c8bfb0d7cec74a12c8fb2999738aa23cec5c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3NGE2OTRmYzQwZThiOTJjNGFjOTFjNTAyMDE2ZTc4ZjczYmZhYjdiOGU1NTk5MjM5ZWQ5M2NkNzFmMjYxZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3MzRhNmFkNzFhYTlmMGMyODRjNzAzNzkwMDFmNTU0ZDg2OGE1OWRmOWU3MGFlNmRiMmFlMDMyNzEyZDFlOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkZmNmYWM4NmMyNDFiYjRlZDIxMDcyNjc2NjQzOGEzMGRlMmJiOGI1MGI5ZWJmZGQ1OTUwZWQwNzM3OWY0NWQifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L359-L369",
+          "version": "repo-lines-v1:sha256:83586f2d7e20954336b42bc2a8ff8a9b1cc784fcd2db437a7b45d6131b107486:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjFjY2NkMTAxNzVmZTg3ODQ1NTQxZTk4YmI2MWIyOGFmMTA2YzJkZTkzMzRiYzQ2YTgwM2VhMzg2ODc3MjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyYjQwNWJhMWE0ZGQyMmNiZDc3OTBjMDczNzJlNDI3YThhMzk0OTJiZmU3NDIyMGQ4MWFiYTIxOWQ3MTZmNGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1NWIwN2ZiYWE2MmVhNWI1MDg3NGYzNWI3MjAzYjlmNzNlNjc0YzAwMzk0OTBlNDliYzdiOGM4MjdmYjI4YWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiZDJkZGM0ODllMzJhMGY5NjE2NTE4NWE4MTA5YzAxMjg3OTc1MzM4M2Q1YjBkMDMzMWFiODcwMTcwOGE4OGIifQ"
+        },
+        {
+          "resource": "repo://app/src/extension_manager.cpp#L143-L166",
+          "version": "repo-lines-v1:sha256:8ae0b7fe02da665351943b292ac02367e9439d52f6bd88c0bbd8a8e530b2e85d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkYjYyNjUxMDMyOTQwMGVjOTgxNmEwZDVkMmIzMzVhZmU3ZWIwOGJmMmI2NzgxMTNhZmRmNmFjNjQzNjAyZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlNDZiNDU4ZTk2N2M2YWNhMzIxY2FjMzQ3MWIxY2U0NTBhN2QzZmJmNTM4Y2JhMTYwN2UxNGE0YTUxM2M5ZDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU0N2E4YzVlMGNiYWYxMDVlNzBiNWQ1MzAyZmRmM2E3NzZlMDA5ZTlkZGU1OWQyOGI3ZmMyODgzN2M2NzdmMTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_14787853227943998186efeb81b61008",
+      "statement": "Layout files, tutorial completion, and application session state are executable-relative shared state: layouts use <exe_dir>/rf_simulator_layout.ini and <exe_dir>/layouts, tutorial completion uses <exe_dir>/.tutorial_completed, and app-level state uses the executable-relative app.ini.",
+      "evidence": [
+        {
+          "resource": "repo://layout/src/layout_manager.cpp#L53-L74",
+          "version": "repo-lines-v1:sha256:8dc607a3c6ba84e8a732bd7e768da84be853964b618f818c88b3dcbe73fb8f01:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2MWMzNzg5MjNlYjlmMjVlOTkxNjRiMzNjZGEwMzgwOWFmOTBjNmNjYjAyNmMxOGVkMWUxMTdmYzQ5YjA0Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmYWM0ZTQzNjMwYWJmNjhjM2E0YTc1NzNmZDRjNDMwMDhiYTc5OGRkNzZjMzc1OWVlZWY1M2U2Y2ZmOGQyZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3ZDM0NTBkNDc3ZjBiZTg1NDk0NzdjY2JkODE2OTkzYWNlMGM0MDFjMDViMmZmNjBkY2JjNTIwOWI0NDY1NjcifQ"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L41-L43",
+          "version": "repo-lines-v1:sha256:3eb04ba9b870a940bfd25336f277a18420115771db38dc47e6423a041590daa3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU5NTBhODFiMDQyMmU1OGJiMzhhODU1ZTE5Nzg3NjgyMDZmNWNkOGZiN2RkNTMyNjU4ZjZiZDc0MGRkZTc0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ0M2ZiZmRlZGJiNzgxODRlMWRkMWE5NWI3NzBjM2RlZTM3MzE2ZGE2YzRiMGUwMWE3ZTk3YzIyYmMzZTg0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUxOTE4OWZkZmIzYTViNmIwY2U2M2FlYzE3MThiMDYxOWM5YTQxMjRmMmFiOWIyZTk0YTU5ODk0NDY5Nzg3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2NjZGUzZDQwNmUzMzE5NGViZmI2YWIwNTkwZjZlY2RlMjk4MGVlNDk2M2I5MDgxMzY2ZTcwNjk3ODJjMjI4NSJ9"
+        },
+        {
+          "resource": "repo://tutorial/src/tutorial_state.cpp#L53-L67",
+          "version": "repo-lines-v1:sha256:336bb7cff0c1eb1900124a23e544588163572fb4b15e39471af3e7cff1fa1459:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjNzM5OWU5MzNlNGVlNjAyNjZjN2ZmYjQ3MjFmNjQxNjA3ZWZlNGQ1YzM4OTAxYjIxYmE2YWQ1Yjc4MDMwM2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVhZTFiZDMzODBjZDg0ZDhiMzAyNmZlZTFjMjRjOGQzZDVlNGIzMTRmMzFjMjMyYmJhMTc2OTM3YThlZTI1YzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d33b7579e51940b1a65867c21a4ddea5",
+      "statement": "CTest discovers the main Catch2 tests and numerous standalone executables, while MinGW-w64 can silently drop registrations in the main tests executable; release CI enforces a floor of 223 registered cases and new coverage should use standalone targets when appropriate.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L156-L172",
+          "version": "repo-lines-v1:sha256:b56023cd5ff7efa7b956ad164df6ad9458f4c21d9c48929b7e70bfdcf0c581c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3OTFkZGI0NGEzNGQ2ZmMyMGQ4ZTNmNDE5NjdkMTUyNzUzNmUzNjMwNGE5MTFmZmI2MmNhOTJmNjlhZjUzNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmNTU5NzljZTczMDIwMzNlNmIyZmQ3ZDg4ZjUzN2EzYjhlMDkxZWEzMDVjODExZmZhMTI3NGJmNTc2NGVhNWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVjZjU0NDFkZGJlZWM5YjEwOWUxZWU2NDM0MjhjYjkzMTMxNTM2ZTViZTgxMTRjMmU4MmUyNGQ5ZDM5ZWZiOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiOGRmMWJmYWMyNjBhZWMwMTg4ZDRiNjdhMzdjNzhkMDZjMzIwYmE1N2QwYjgzOGVlMzE5MTJhODMzNDE2ZjEifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L126-L149",
+          "version": "repo-lines-v1:sha256:72e0930d6caa6b41f8f08b5b33d4f479107a49fe794cca4ea4faddab844defc0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5NmJjNmUxNDg2NmE0ODY0ZDM1N2ViMDBmZjMxZTNiMzljYmQ1MjFjMThlMWU2NjAzYWI4YWEyZTczMzM2MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwNTUzMjFkZTEwYzAxYTQ1NTQzMWMzMTRkYjJhNjk1YzVjN2Q1YmY4NmU0Mjk1YzUzOGViZmYxMzUzZTcxM2EifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L53-L76",
+          "version": "repo-lines-v1:sha256:d02d1786fdd1a063ab82ea04f9479bf556408063df3497b8249ef303ecccaa96:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNGMzMTE4MGRlM2VmZGUxOTBmNzZjNWZkYmUyM2FmYzMwNWMwMWFiNmU0MDFiMjFkODQyMzA2ODk5M2YxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmZDAxNzIwYjMxYjFkZTQ2MjA5MDBlNjZhOGY1NTY3MjM5NDBhYzE3MGM4MzFmMDQ0YmViZDBkOWEyZDg3MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiODE5ZjlmNTAwNmMzNzcyMDQ3OGMzOTQ5OGY5NjAzMmRjZjc4M2RmNmRiNzhjNjhjNDk1YzkwYzczZmVlZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNWM2NjY0M2NlZTA5MWIwMDNmODhmOTFkNzFhZmIzMWQwNTUwZWI3MDE1NTg3MjYyNTdhMDdmMmQyOTFmOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e8305d4526cd49b5a0226fd95428fcc8",
+      "statement": "Parallel CTest runs against one build tree are constrained by shared executable-relative state and mutable extension fixtures; relevant tests are marked RUN_SERIAL, but separate concurrent CTest invocations remain unsafe.",
+      "evidence": [
+        {
+          "resource": "repo://tests/AGENTS.md#L41-L45",
+          "version": "repo-lines-v1:sha256:61d2c4267bfdfc93c5ee5cb11e4354c9895bcf4aabb8ff32e350d45e832edf4f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU5NTBhODFiMDQyMmU1OGJiMzhhODU1ZTE5Nzg3NjgyMDZmNWNkOGZiN2RkNTMyNjU4ZjZiZDc0MGRkZTc0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIzZTBkZDA4YjJmNDFiNmJjZWZiZDhhYTk5MWYyMDgwYmJhMmNjOGM0M2RjNWVhMTQ2YmZjOGY4NzMyMWQ2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUxOTE4OWZkZmIzYTViNmIwY2U2M2FlYzE3MThiMDYxOWM5YTQxMjRmMmFiOWIyZTk0YTU5ODk0NDY5Nzg3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSJ9"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L258-L271",
+          "version": "repo-lines-v1:sha256:49a3f9749bf214e4df21563e0063235af00ab8be9522e29704f33e6d0a0f209f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMGRjY2ViNzRmZjBjOGEyOThhNzI3MDA3MmJhZDg3N2NlZWMzYWUwMjkxMTJkYWU1ZGMzNzhlMzIyM2I2OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjZmUxYTZiMmI5OGM1NmMwNWI3YzVhYmM0NWIzYzNkZDkzMmY3NDZmZjBjODkwOWRkNzA1YjAzMTk3YmE3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YzEzZjBkYmYzOGE1YzM1YjZiMGUwNmVjZmIwOWM4ZWVkMzgyMmZjZTRjMjEzMmE5OWQzODY0OGM3YTQ1YmUifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L370-L373",
+          "version": "repo-lines-v1:sha256:12931f5c2b134fd025e00a7517985b61a056c29020032e9f2ebacfe7f87df888:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTVlZGMwNmNjM2Q0NDI3NjE5N2U2ODBkMTFjYWNlNmZmMDliZDQwMGRjNDUxYTE3ZmY0ODQ3OTFlZmQ1YTExMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTNlYThlM2Y1MGE5OGJiMjkxZTE2ODY0ZTUyZjlkMzA3ZDk2ZGZjYmQxYjA5YmE1NWIxY2Y5YWM0MWJkNzZkNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzZiNDM4N2VlMzIzZTMzNGNkNzk3MThlNTJlM2RmMWZiNjUzMDU2NzUxM2MwMmRlMTUxMDQwMGJmZjg4NWVhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2932e183b8d241c8823677a3a79fe6fa",
+      "statement": "Release CI runs on v* tags, validates semantic version and changelog entries, selects a reduced Linux GCC 14 Debug strict matrix for patch tags and a Linux GCC, Linux Clang, and Windows MinGW matrix for minor or major tags, and always runs formatting, ASan, and optimized package builds before creating a draft release.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L174-L200",
+          "version": "repo-lines-v1:sha256:90c7fd28116d8214b740f7d35715144ee5fab08e7db65a6b17a33dab7b382153:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1YzJhYTVmMDA3MmZlYTYzMTA3NjQ0ZmVkMWZhNDZhYWJiZDZjM2IwNDg0M2FmNjUyMTQ0MWM2OGVkYWUzZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3ZGQ2MDMwOTYxYzY2ZWRhNmQ0NjE5MzJiOGFmNjEyNTZhZTI4M2ViNDNlZjZiOTkyZDQ1YWY4NDc5MmEwZWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjNWYzNjJmNzIxYjM2OWVjYmRhYmE3MWZiM2JkZGMxMGM0YTJmMzIyYzM0N2Q0YmJhZTNhYWIyMTI5YTgyM2IifQ"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L201-L318",
+          "version": "repo-lines-v1:sha256:44d2310fdfcf6687d5951eac45930dd3d1b5611b372a0979184faea3cc428b91:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMTQ0NTc4NDVmODkzOGU0MjgzMzhjZTA1ODljNmY3YTU2ZmVjMmIxMjA3NWZlYWVmZTNiY2ZlNmI5ODhlZjg1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJmYjRhMTdkMmU5ODcwOWM1MjEyYTJjZjY5NzAyNmRiYTg5MjVlZThkYjUxMWM1N2I4ZjE3Y2YwMmQ5YTlkZDJjIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjQ1NGY3MWI4NzUyOWE5YThlZDMyNjIwOGVlODFkMGUxZGRiYTVkZDdlYWNiN2NhODAxNjc1NmZlZDUxY2RhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiYTAxOTQxNjQxYzNmNGY4ZGNjMDgwNjVmZDJmODc1Zjc0NTkxYjQ5MDcwZWE1NmZlZDFiYzI2NGU0NTdhZGNhIn0"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L3-L46",
+          "version": "repo-lines-v1:sha256:5e7489f6dc3d88b011d992a1c143f85e24d28b6e198a209b5edcd8e1d8f27fd3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5NmRjNDgxNDlmNWE4M2QxZWQ2ZGJiMzliYmM3ZTJiOTAyYWEzZDM0ZDZiZDVhZTRiMjkxYjY4ZGYwY2E3OWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MDBiZjJmMTA1MDFlNDc0NDg2NzNlZGNlZWNlMTFmNmY4OTU4NjQ4ZjE5ZTBjMmViODEyNmFlMzI2YTFhZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmOWNhZTQxNDE4YTVmOGY0YTFhODI5ZmRkZDAyYmY3NzQ4MmUwYjkwMmQzYzBiNGZmYzExYTg3NGZlNGQxZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwMWNiYTFjODczMzgxOGRhYTNmMmVmYjQzMDU0ZDU4OWI3MzZmMzZiOTJhNDQ0MDY1Mjk1MmZlOWQ0Y2YyOGMifQ"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L328-L356",
+          "version": "repo-lines-v1:sha256:00f8fc21320bb07a171278d5fa3c94d4bbfe3bb9cb88dfebe1c0b7d82e47ad2c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMDNmNWYxYzE1ZjAwMDE0ODJjY2QzYzVjYjU5Zjg3OGViMjMyMTRmZGFkMGU4ZGE3YTM0NjliMTNmODM0MjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkNTdmM2FkMThiNWEzNWJiYTVjYjQ0NGQzOThkMTI4MmU5N2Y5NDA4M2E1MDNiZjkwZmM4YzlkMGI1NDlmODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0NDU4ZTU1M2M2MGU0M2QyZDk5MzQ4NmRjY2MzZmQ5Y2M0ZWNlYzAxOTg4MmUyOTE0MDI5Y2UxODc2NzU2NjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L49-L84",
+          "version": "repo-lines-v1:sha256:a1d50e3c5be9a4c1beb485900a94b11b1d2b3dbcdad4d8ab1291d778dce0a017:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5YWNjZGY0MDI4NTZjNTJkZjAzNGYyMjVkODY2NWJlYzRlMDUxNjFjY2RhYmFhYmRkNzFjNWQ4NTE4Y2VmZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiOGMwNzdmMTI4NzIyMjE2ZTllNjRhYWQyODhkNTBhY2E4MTc1NDJkMGFjZDI5NjUwZWU4ZDI2OWRkOWQ3NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1MDA2MWJjZDRjY2YyMzE1MmE5YjFhZDcxMzcwNzZlNGUyNmRkMzY3ZmU1OTI3Mzc2NTQyYWZmYzQyZjY2ZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NWYxM2VlYTQyNDBlMThhNDEwNmZmYWJkNmQ4NTgyOTBlYmYwNTlkMjU2YTViNWNhYWY2YWU5YTQ5M2ExMTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_44e1f678dd9e43c5a48ecdc1fe75872d",
+      "statement": "The release preparation script requires a semantic version and changelog section, prepares a release branch by default or can operate on master, runs format/build/test gates unless skipped, and tag mode only tags a clean matching master commit.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L6-L24",
+          "version": "repo-lines-v1:sha256:7901ad01c2c9579c7f225c9c582f8936245cbc16d12a32cc5885922a7858d51f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3ZGJkNWExYTVkZDNiNGJkZTdmNDQzYTI0NjRkOGVlYzZiOGY4ZjI2NWJlNDAxMmY3ZTM0YTg1YzJlYzk0ZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZlYWY3YmQ2OGNiMGUwNzQ5NTgxNWU4ZjE0MjBmZWM5ZjMxNGQxNGNjOWFiZDM0MzAxNDlmNzBjMDMzYzcyNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFmZWM3YWFmODc2M2I4OWUxYTM5MGNjYTdjZmJiNzE4YWIyYjY3OTBiNjk1MzcyODFjMGZiOWNmZDJiODI2NDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhjYjlhOTkxNDk3ODc0MzE3MTQzNDBmZmU0MDQ4MTYyMzk4ZWVhOWRmZjVkNjU5MjYxYmY4MmNkODNmMjFjZDIifQ"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L68-L81",
+          "version": "repo-lines-v1:sha256:3470fe9bb00c6a3fad3569a564369df2d027f79be0f7bebc47f2ff0804c7287f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0ZTYyOWVjN2M5YzNiMTU4MzFlYmFjYzA2ZmJiOWJlZDA4Y2EyOGI3NjEzNzZlMjk2NTdmM2U0Yzk3MTNhMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyODAzMzE5MzM0NTVkOGExNDZiMTFmMjI5NDQ5OTZmMmM3NDU5ZmZjZDQ1OTlmZGFmM2RlN2M5ZjY2NDMwNWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ1MmY2Y2NmOWY0OWRmNTc4ZTlmZTgzOTZjZmVkMWNlNTIwNmQ5NjI0MmEwYjQ1ZGY4MzQ3MWMyMmZhMWFmM2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkMmQxYjIwZDNjYjJiODMxMjViOWJjN2MyM2NkM2QzZWVjODk0ZWRiMGI2MWY2NjkyNDMxMGY4MDY0YjU0NTMifQ"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L85-L163",
+          "version": "repo-lines-v1:sha256:c2e036ebe7d7aea3914d84d644ea268f1019d7086df0c5284de8f25498805284:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkZDFiMGYyZjJhZmVmMzlhNDA5ZWNkOTc3MWIzZTJlYjMxM2YxMjkxNjhlZTlhYmVlYzA4MDk1NjllOWMwNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyMDAzNjYzMmRmYjUxY2QzOTNiNGM5MmVlNTU5NjczOGJlZTcwNDYwM2U5ODQ3ZDAxNzY3MzRjZGEyYzA3MTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkMmQxYjIwZDNjYjJiODMxMjViOWJjN2MyM2NkM2QzZWVjODk0ZWRiMGI2MWY2NjkyNDMxMGY4MDY0YjU0NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE3NjkyYTdjMzE5ODYxMjJhNWQ2NzZjMzQ2M2EwZDIwMzNjMWJlOWJiNDk3OTlmMGEwZTkwMGMyOTkwNTg5NDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4c1fdb5cf8264d9b9d8748509be58517",
+      "statement": "The formatting script is the shared implementation for local and CI checks, requires clang-format 18, and supports changed-file reformatting, dry-run checking, full checked-set operations, and explicit files.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L73-L84",
+          "version": "repo-lines-v1:sha256:f42c5caecbc39be04fedea39567ef984e167c1a70d0e7915329d0d6343ce52f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyNWM2NmMwMTRjZDQ0NmVkNGNkNmZlZmMzNzAzMjRmNDY1NDRjMmIwZmNiNGMzZWQ5YWM2NmFjYmEwZDFkMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiOGMwNzdmMTI4NzIyMjE2ZTllNjRhYWQyODhkNTBhY2E4MTc1NDJkMGFjZDI5NjUwZWU4ZDI2OWRkOWQ3NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyY2JlMWUxMDY3MmM2MGE5MmJkMTkyNjc5NTc0YzMyNTVjODQ3ZTBlMDM4Nzg3YzU4OWM5Yzc2OGFkODUxNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NWYxM2VlYTQyNDBlMThhNDEwNmZmYWJkNmQ4NTgyOTBlYmYwNTlkMjU2YTViNWNhYWY2YWU5YTQ5M2ExMTYifQ"
+        },
+        {
+          "resource": "repo://scripts/format.sh#L2-L16",
+          "version": "repo-lines-v1:sha256:68f908fbcefdce8e18bfa1bd780e6016a081c87fbb6f3c4a23fa96cefe1b10c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxZDk1ODAyN2Y5MGE1NWY0NzVjMTU1YTdkZDJkYzFiYTZiZWM4ZjlhY2ViNDE2Njk3MzE4YTBmYzg4MDM1ZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0ZmU0ZTZjY2ZlNTJhMjI0MWI0ZWNmMGQ1OTJjN2IwZGY0YmQ0YTNlZmY3NjNkMTljNjc4YTNhM2UyMjVhMGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoxLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlYTUyZDlmNmZjNzYzZjU2NmUzNDhiOGQ3ODVjNzAxYjgxNjllNGE2ZTRiMTI4Y2M4MjRiY2NlNDVjMTFhOGEifQ"
+        },
+        {
+          "resource": "repo://scripts/format.sh#L36-L79",
+          "version": "repo-lines-v1:sha256:6d4bca45263d77f0c899177ecafa819315a3be9de5650c19b8cd4434bdc16f74:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2OTYxZjQ0YmUwMzU0OTc2ZTZiOGM0MTQ4ZWM4NzZhMzM1YTIyMzhiYzNhNTU1YjYwMWE4MzNjNjlmZGU5ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4OGVhZWMzODYyZjE5YjVlMjhjNDA5MTAxMGQxYTRjMjc3NmUxZDNmNmE5MDY2YTEyMzQwYWY1YWUwMmMwMzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhNTU0MjkyYWIxMGJkYzNiNGYwMDc5ZjY3YjU2MDJkNDllZWM3MmFjMjdiZjgxZmFiZGExNGVjYTUyNTFkZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

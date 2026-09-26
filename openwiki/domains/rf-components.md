@@ -1,513 +1,165 @@
 ---
-type: Domain Guide
+type: Domain reference
 title: RF Components — DSP Engine Modules
-description: Detailed reference for every RF signal-processing component in the simulator plus the network analyzer instrument, including design decisions, parameters, dual-mode operation, and test coverage.
-tags: [rf-components, dsp-engine, reference]
+description: Reference for RF signal sources, processing engines, topology nodes, digital DSP blocks, and analyzer instruments. Covers ports, parameters, signal and noise models, state and persistence, extension boundaries, and focused tests.
+tags: [rf-components, dsp-engine, signal-chain, instruments]
+verified:
+  - by: openwiki/0.5.2
+    at: 2026-09-25T17:58:06.034Z
+sources:
+  - id: openwiki-source-e0fd99a5ab1663ac9509bb7f
+    resource: repo://adc/include/adc_engine.h
+  - id: openwiki-source-3b7269741963097c808f1c17
+    resource: repo://amplifier/src/amplifier_engine.cpp
+  - id: openwiki-source-12d90ca6eb6eefd9b169f36a
+    resource: repo://app/src/component_type_registry.cpp
+  - id: openwiki-source-08c1f1d06fd7f97af3fd1d4b
+    resource: repo://attenuator/include/attenuator_engine.h
+  - id: openwiki-source-a03296b080a6c815ee427e8b
+    resource: repo://coax/include/coax_cable_engine.h
+  - id: openwiki-source-6e88c62d1cda3b5f0227e31f
+    resource: repo://combiner/include/combiner_engine.h
+  - id: openwiki-source-e83e99f47c11c31e339b7c5d
+    resource: repo://common/component_engine_base.h
+  - id: openwiki-source-06fabb405d59fd0718569cdc
+    resource: repo://common/spectrum.h
+  - id: openwiki-source-5b93bae6a9f587bf84e00f46
+    resource: repo://equalizer/include/equalizer_engine.h
+  - id: openwiki-source-15ca33de130b29fa444fea9f
+    resource: repo://ideal_filter/include/ideal_filter_engine.h
+  - id: openwiki-source-5ee0da670319981d7296cd44
+    resource: repo://mixer/include/mixer_engine.h
+  - id: openwiki-source-318263a7857c897eac3da71e
+    resource: repo://network_analyzer/include/network_analyzer_engine.h
+  - id: openwiki-source-605cee387bb8dd9c0595ad81
+    resource: repo://pfb_channelizer/include/pfb_channelizer_engine.h
+  - id: openwiki-source-909bb791ee540622e8e8fe57
+    resource: repo://rf_switch_2to1/include/rf_switch_2to1_engine.h
+  - id: openwiki-source-a6790d9bb156d83a9977f71a
+    resource: repo://rf_switch/include/rf_switch_engine.h
+  - id: openwiki-source-84fbdbdffa4a2a9345d30e13
+    resource: repo://spectrum_analyzer/include/spectrum_analyzer_engine.h
+  - id: openwiki-source-c063649ec628c2c23017fa79
+    resource: repo://splitter/include/splitter_engine.h
+  - id: openwiki-source-569a2ee434d4f95a6ce49c33
+    resource: repo://tests/test_component_authoring.cpp
+  - id: openwiki-source-6e5fec8558c70deccdd0f8ec
+    resource: repo://tests/test_component_dispatch.cpp
+generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
 ---
 
 # RF Components — DSP Engine Modules
 
-Every RF component in the simulator follows the same pattern: a **pure-DSP engine** (`*Engine`) that inherits from `IComponentEngine` and a **widget** (`*Widget`) for the ImGui property editor. This page documents each component's purpose, parameters, design decisions, and implementation notes.
-
----
-
-## Signal Generator (`signal_generator/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/signal_generator_engine.h`, `include/signal_generator_widget.h` |
-| Type | Source node (no input, 1 output) |
-| CMake target | `simulator::signal_generator_engine` |
-
-**Purpose:** Produces discrete tones with configurable frequency, power, and phase.
-
-**Parameters:**
-- Tone list: `{freq_Hz, power_dBm, phase_deg}[]` (editable table in widget)
-- `Fs_Hz` — sample rate for downstream digital components
-
-**Design decisions:**
-- Output noise floor is **thermal noise** `k*T = 4.00e-21 W/Hz` (~ -174 dBm/Hz at 290 K).
-- Frequency grid is fixed at 10 MHz spacing across [-20 GHz, 20 GHz] (4000 bins).
-- Has no input pins — cannot receive signals.
-
-**Widget:** `SignalGeneratorWidget` — table UI with add/delete tone rows, "Measure" checkbox for probe.
-
----
-
-## Amplifier (`amplifier/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/amplifier_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::amplifier_engine` |
-
-**Purpose:** Applies gain, noise figure, optional nonlinear distortion (OIP2/OIP3), and S-parameter-based frequency response.
-
-**Parameters:**
-- `gain_dB` — flat gain
-- `nf_dB` — noise figure (clamped to >= 0 dB)
-- `p1db_dBm` — 1-dB compression point (default 100 dBm, disabled)
-- Nonlinear mode: OIP2 (dBm), OIP3 (dBm) — generates harmonics and IMD
-- S-param mode: toggle + `.sNp` file path
-
-**Dual mode operation:**
-- **Ideal mode:** `G(f) = flat gain`, additive noise from NF model.
-- **S-param mode:** `G(f) = |S21(f)|` from Touchstone data. NF still applied on top.
-
-**Design decisions:**
-- Noise figure model: `N_added = k * T * (10^(NF/10) - 1) * G_linear`
-- Nonlinearity computed on tones only: 2nd/3rd harmonics, IM2/IM3 for up to 3 fundamentals, gain compression.
-- `NonlinearModel` (`common/nonlinear_model.h`) is a reusable class extracted from the amplifier.
-- OIP2/OIP3 clamped to >= -30 dBm.
-- **P1dB** (v0.9.0): first-class 1-dB compression point with automatic OIP3 derivation (`OIP3 = P1dB + 9.6 dB`) when OIP3 is at default value (100 dBm). Explicit OIP3 setting is preserved when P1dB changes. Serialized in project save/load.
-- **Library data file import** (v0.10.0): when instantiated from a library JSON definition with `data_files` referencing an S-param file, the amplifier auto-loads the Touchstone file via `setSParamFilepath()` during `ComponentLibrary::instantiate()`. Falls back to single-point parameters if the file is missing or invalid.
-- No dedicated widget — properties edited via `InspectorPanel`.
-
-**Tests:** `test_amplifier_sparam.cpp`, coverage via `test_main.cpp`.
-
----
-
-## Mixer (`mixer/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/mixer_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::mixer_engine` |
-
-**Purpose:** Down/up-converts signals using an LO frequency.
-
-**Parameters:**
-- `lo_freq_Hz` — local oscillator frequency
-- `conv_gain_dB` — conversion gain
-- `nf_dB` — noise figure
-
-**Design decisions:**
-- Each input tone produces two output tones: `|f - LO|` (lower sideband) and `f + LO` (upper sideband).
-- Simple ideal mixer: no LO harmonics, no image rejection, no intermodulation.
-- Phase is preserved (not conjugated) on the lower sideband.
-- Noise figure applied as added noise density.
-
-**Tests:** Covered in `test_main.cpp`.
-
----
-
-## Splitter (`splitter/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/splitter_engine.h` |
-| Type | Processing node (1 input, **2 outputs**) |
-| CMake target | `simulator::splitter_engine` |
-
-**Purpose:** Splits input signal equally into two outputs.
-
-**Parameters:** None (hardcoded split loss).
-
-**Design decisions:**
-- Pure resistive model: `SPLIT_LOSS_DB = 3.0103 dB` per branch.
-- No added noise, no phase change.
-- Powers on tones and noise are divided equally.
-
-**Tests:** Covered in `test_main.cpp`.
-
----
-
-## Ideal Filter (`ideal_filter/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/ideal_filter_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::ideal_filter_engine` |
-
-**Purpose:** Perfect brickwall passband/stopband filter.
-
-**Parameters:**
-- `FilterType`: LPF, HPF, BPF, BSF
-- Cutoff frequency(ies): `freq1_Hz`, `freq2_Hz` (for BPF/BSF)
-- S-param mode: toggle + `.sNp` file path
-
-**Dual mode operation:**
-- **Ideal mode:** Binary `isInPassband()` — tones outside passband dropped entirely, noise zeroed in stopband.
-- **S-param mode:** S21 interpolation replaces binary decision.
-
-**Design decisions:**
-- Perfect rejection in stopband, zero insertion loss in passband.
-- No phase distortion in ideal mode.
-- Cutoff edge: tones exactly at cutoff **pass** (LPF) or **block** (HPF) per test.
-
-**Tests:** `test_ideal_filter.cpp`, `test_ideal_filter_sparam.cpp`.
-
----
-
-## Equalizer (`equalizer/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/equalizer_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::equalizer_engine` |
-| Added | July 2026 (S-param rework) |
-
-**Purpose:** Applies a configurable gain-vs-frequency slope.
-
-**Parameters:**
-- `ref_gain_dB` — reference gain
-- `ref_freq_Hz` — reference frequency (clamped to >= 1 Hz)
-- `slope_dB_per_decade` — gain slope per frequency decade
-- S-param mode: toggle + `.sNp` file path
-
-**Dual mode operation:**
-- **Ideal mode:** `G(f) = refGain + slope * log10(f / refFreq)`
-- **S-param mode:** S21 interpolation. No added noise.
-
-**Design decisions:**
-- Gains are referenced to a user-specified frequency.
-- Slope is in dB/decade (not dB/octave).
-- NaN protection: `log10(0)` clamped in both frequency and noise computations.
-- S-param mode applies complex S21 magnitude/phase to tones and `|S21|^2` to noise.
-
-**Tests:** `test_equalizer.cpp`.
-
----
-
-## Attenuator (`attenuator/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/attenuator_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::attenuator_engine` |
-| Added | July 2026 (v0.7.0) |
-
-**Purpose:** Passive attenuator with configurable attenuation, physically accurate noise model, and S-parameter mode.
-
-**Parameters:**
-- `atten_dB` — attenuation in dB (clamped 0–200 dB)
-- S-param mode: toggle + `.sNp` file path
-
-**Dual mode operation:**
-- **Manual mode:** Flat attenuation applied to all tones (`P_out = P_in - atten_dB`). Noise follows passive model: `noise_total = noise_in * G + k*T*(1 - G)` where `G = 10^(-atten/10)`.
-- **S-param mode:** S21 interpolation replaces flat attenuation. Complex S21 magnitude/phase applied to tones, `|S21|^2` scaling applied to noise. Same passive noise model.
-
-**Design decisions:**
-- Physically accurate noise model: as attenuation increases, output noise converges to `k*T` (thermal floor), never below it.
-- Phase unchanged in manual mode; S-param mode applies `arg(S21)` phase rotation.
-- Dedicated widget not required — properties edited via InspectorPanel with attenuation slider.
-- Zigzag schematic symbol in node graph.
-
-**Tests:** `test_attenuator.cpp` — pass-through at 0 dB, flat 6 dB attenuation, passive noise model, noise floor convergence at high attenuation, S-param mode, clamping, dirty-flag skip, hover summary.
-
----
-
-## Combiner (`combiner/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/combiner_engine.h` |
-| Type | Processing node (**2 inputs**, 1 output) |
-| CMake target | `simulator::combiner_engine` |
-| Added | July 2026 (v0.7.0) |
-
-**Purpose:** Passive 2-input → 1-output RF combiner with Wilkinson model and 3-port S-parameter mode.
-
-**Parameters:**
-- Manual / S-param mode toggle
-- S-param mode: `.sNp` file path (3-port .s3p files for S21, S31)
-
-**Dual mode operation:**
-- **Manual mode (Wilkinson):** Each input sees `COMBINER_LOSS_DB = 3.0103 dB` loss. Tones from both inputs are combined into a single output list. Noise is summed incoherently, then scaled by loss: `noise_out = G * (n0 + n1)`.
-- **S-param mode:** Uses 3-port Touchstone data. Port 0 = input 0, port 1 = input 1, port 2 = output. S21 applied to input 0 tones/noise, S31 applied to input 1 tones/noise. Passive noise model with thermal floor.
-
-**Design decisions:**
-- Exact dual of splitter (same -3 dB loss per path).
-- Coherent signal combination: tones from both inputs are preserved with their original frequencies, powers, and phases (minus combiner loss).
-- S-param mode supports true 3-port devices — S21 (in0→out) and S31 (in1→out) are interpolated separately.
-- Y-shaped schematic symbol in node graph.
-- No added noise in manual mode (ideal passive combiner); S-param mode adds thermal noise `k*T*(1 - |S21|^2 - |S31|^2)`.
-
-**Tests:** `test_combiner.cpp` — basic combination with -3 dB loss, single input, both inputs unconnected, dirty-flag skip, hover summary, S-param mode.
-
----
-
-## RF Switches (`rf_switch/`, `rf_switch_2to1/`)
-
-The two SPDT switch engines model opposite orientations of the same passive switch. Both are registered as authorable component types, expose T1/T2 selection in the inspector, and serialize `active_throw`, `insertion_loss_dB`, and `isolation_dB`. Defaults are 0.5 dB insertion loss and 40 dB isolation; setters clamp insertion loss to 0–60 dB and isolation to 0–120 dB. Neither supports S-parameter files.
+RF simulation is a graph of component engines. Graph-attached engines derive from `ComponentEngineBase` and own a `SignalNode`; each implements `type_name()`, `update()`, `serialize()`, and `deserialize()`. The base class owns the component/graph IDs and the single-input dirty-check cache. Two-input engines must track both input pointers and generations themselves: using the single-input `beginUpdate()` would allow a change on input 1 to leave the output stale.
 
 ```mermaid
 flowchart LR
-    IN["COM input"] --> SEL["Selected throw"]
-    IN --> LEAK["Unselected throw"]
-    SEL --> IL["Insertion loss"]
-    LEAK --> ISO["Isolation loss"]
-    IL --> OUT1["Output or COM"]
-    ISO --> OUT2["Leakage output or COM"]
+    SRC["Signal source"] --> DSP["RF processing engine"]
+    DSP --> TOPO["Splitter or switch"]
+    TOPO --> MORE["Processing or ADC"]
+    MORE --> PFB["PFB outputs"]
+    PFB --> PROBE["Graph probe"]
+    PROBE --> SA["Spectrum analyzer"]
+    PROBE --> NA["Network analyzer points A and B"]
 ```
 
-*The switch routes one throw at insertion loss while the other remains visible at the isolation floor; the 2:1 orientation reverses the direction of the ports.*
+*The normal path is graph computation and probing; analyzers observe it, while the network analyzer evaluates an isolated clone rather than mutating the live path.*
 
-### SPDT Switch (`rf_switch/`)
+## Authoring and lifecycle
 
-| Property | Value |
-|---|---|
-| Header | `include/rf_switch_engine.h` |
-| Type | Processing node (1 input `COM`, 2 outputs `T1`/`T2`) |
-| Engine type | `rf_switch_spdt` |
-| CMake target | `simulator::rf_switch_engine` |
+`ComponentTypeRegistry` is the application’s authoring boundary. The current authorable types are `adc`, `amplifier`, `attenuator`, `coax`, `combiner`, `equalizer`, `filter`, `generator`, `mixer`, `pfb`, `rf_switch_spdt`, `rf_switch_spdt_2to1`, and `splitter`. Descriptors define the canonical type, project type, fields, ranges/enums, S-parameter support, and a factory that inserts the engine into `ComponentRegistry`. `SpectrumAnalyzerEngine` and `NetworkAnalyzerEngine` are instruments, not registry components.
 
-The selected throw applies insertion loss; the unselected throw still emits the input at the isolation floor. Tones retain frequency and phase while their power is reduced by the selected or isolation loss. Each output uses the passive noise model `noise_total = G * noise_in + k*T*(1 - G)` and has its own generation counter. `active_throw` accepts `T1`/`T2` names when loading library-style JSON and integer values in project JSON.
+A component is dirty after construction and after a parameter setter or deserialization changes its state. On update, a single-input engine compares the input `Spectrum*` and its generation; unchanged clean inputs skip recomputation. Multi-output engines expose an output-pin lookup by index, so consumers must preserve the selected output port rather than assuming output 0. `SignalNode` carries the tone list, frequency grid, noise PSD, and generation used by downstream dirty checks.
 
-### SPDT Switch (2:1) (`rf_switch_2to1/`)
+The component-library authoring flow validates required fields, ranges, and enum values before insertion. Library JSON uses canonical descriptor keys (for example `attenuation_dB`, not the old `atten_dB` spelling); invalid definitions are rejected at `loadFile()`. Project persistence calls each engine’s `serialize()`/`deserialize()` and separately persists instrument state.
 
-| Property | Value |
-|---|---|
-| Header | `include/rf_switch_2to1_engine.h` |
-| Type | Processing node (2 inputs `T1`/`T2`, 1 output `COM`) |
-| Engine type | `rf_switch_spdt_2to1` |
-| CMake target | `simulator::rf_switch_2to1_engine` |
+## Signal sources
 
-The selected input reaches COM through insertion loss and the other input leaks through isolation loss. Tones from the two paths are concatenated rather than coherently vector-summed. Noise is combined as `G_IL * noise_selected + G_ISO * noise_unselected`, then thermal noise is added as `k*T*max(0, 1 - G_IL - G_ISO)`. Because it has two inputs, it uses `beginUpdate2()` to cache both input pointers and generations; changing either input or switch setting triggers recomputation.
+### Signal Generator (`signal_generator/`)
 
-**Tests:** `test_rf_switch.cpp`, `test_rf_switch_project.cpp`, and `test_rf_switch_2to1.cpp` cover routing, attenuation/isolation, passive noise, clamping, enum/integer serialization, hover summaries, project round-trip, two-input dirty checking, and dispatch integration.
+A one-output source creates the input `Spectrum` from editable tones (`freq_Hz`, `power_dBm`, `phase_deg`) and `Fs_Hz`. It has no input pin. Its baseline noise is the thermal floor `kT` (about `4.00e-21 W/Hz` at 290 K). The widget owns tone-table editing and the optional measurement/probe control; source parameters are serialized with the engine.
 
----
+### RF ADC (`adc/`)
 
-## Coaxial Cable (`coax/`)
+`AdcEngine` is a one-input, one-output sampling boundary. Its current controls are `fs_Hz`, `nsd_dBm_per_Hz`, `decimation`, and `nco_fs_fraction`. `fs_Hz` is clamped to at least 1 Hz; decimation is normalized to one of 1, 2, 4, or 8; NCO fraction is clamped to `[-0.5, 0.5]`. The update aliases tones into the sampled band, applies the NCO shift, injects NSD noise, and produces the corresponding decimated output grid. Earlier `bits` and `v_fs` parameters are not part of the current engine contract.
 
-| Property | Value |
-|---|---|
-| Headers | `include/coax_cable_engine.h`, `include/coax_presets.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::coax_cable_engine` |
+## RF processing
 
-**Purpose:** Models frequency-dependent loss and phase delay for coaxial cables.
+### Amplifier (`amplifier/`)
 
-**Parameters:**
-- `preset_index` — cable type from `kCoaxCablePresets[6]`
-- `length_m` — cable length (clamped 0–1000 m)
-- `connectors_loss_dB` — additional connector loss
+`AmplifierEngine` applies `gain_dB` and `nf_dB`, optionally loads a Touchstone file (`sparam_mode`, `sparam_filepath`, forward-index state), and can enable the reusable `NonlinearModel`. Nonlinear controls are `oip2_dBm`, `oip3_dBm`, and `p1db_dBm`; project JSON also records `enable_nonlinear`. In ideal mode gain is flat. In S-parameter mode complex S21 supplies frequency-dependent magnitude and phase, while the noise figure remains applied. The nonlinear model operates on tones, including harmonic/intermodulation products and compression. Library `data_files` can auto-load the referenced S-parameter file; a missing or invalid file falls back to ordinary parameters.
 
-**Preset cables (MilTech):**
-Only **MT 340** is fully populated. Others (MT 210, 230, 265, 300, 480) are stubbed as uncalibrated (`Uncalibrated — datasheet values needed`).
+### Mixer (`mixer/`)
 
-| Preset | K1 | K2 | Delay (ns/m) | Max Freq |
-|---|---|---|---|---|
-| MT 340 | 0.004710 | 0.000004 | 4.76 | 18.5 GHz |
+The one-input, one-output mixer uses `lo_freq_Hz`, `conversion_gain_dB`, and `nf_dB`. Each input tone creates lower and upper sidebands at `abs(f - LO)` and `f + LO`; this is an idealized model without LO harmonics, image rejection, or intermodulation. Noise is propagated and increased according to the noise figure. Check the canonical key `conversion_gain_dB` when writing library definitions; older prose or files using `conv_gain_dB` are not the registry contract.
 
-**Design decisions:**
-- Loss model: `loss_dB = (K1 * sqrt(f) + K2 * f) * length_m + connectors_loss_dB`
-- Phase shift: linear `-360 * (f/1e9) * length * delay` degrees.
-- Clamps frequency to preset `max_freq_GHz` with one-time warning.
-- Noise is attenuated by the inverse of loss (passive component behavior: noise in, quieter out).
-- Phase is applied per-bin and per-tone.
+### Ideal Filter (`ideal_filter/`)
 
-**Tests:** `test_coax_cable_engine.cpp`, `test_coax_cable_presets.cpp`.
+The filter has `filter_type` (`LPF`, `HPF`, `BPF`, or `BSF`), `fc_low_Hz`, and `fc_high_Hz`, plus optional S-parameter mode and filepath. Ideal mode applies a binary passband decision to tones and noise; S21 interpolation replaces that decision. Cutoff boundary behavior is intentionally asymmetric and test-defined: an exact edge passes for LPF and is blocked for HPF. Do not change edge comparisons without updating `test_ideal_filter.cpp`.
 
----
+### Equalizer (`equalizer/`)
 
-## RF ADC (`adc/`)
+The equalizer’s ideal model is `ref_gain_dB + slope_dB_per_decade * log10(f / ref_freq_Hz)`, with `ref_freq_Hz` protected from non-positive values. Its S-parameter mode applies complex S21 to tones and magnitude-squared S21 to noise. The implementation protects logarithm and zero-frequency paths from NaN; `test_equalizer.cpp` is the focused regression suite.
 
-| Property | Value |
-|---|---|
-| Headers | `include/adc_engine.h` |
-| Type | Processing node (1 input, 1 output) |
-| CMake target | `simulator::adc_engine` |
+### Attenuator (`attenuator/`)
 
-**Purpose:** Models an RF ADC with sampling, aliasing, and NSD noise.
+The passive one-input, one-output attenuator serializes `attenuation_dB`, S-parameter mode, and filepath. Manual attenuation is clamped to the supported range and applies `Pout = Pin - attenuation_dB`. Its passive noise equation is `noise_out = G * noise_in + kT * (1 - G)`, so a high-loss attenuator approaches the thermal floor rather than producing negative or vanishing physical noise. S21 mode applies complex magnitude/phase to tones and `|S21|²` to noise. `test_attenuator.cpp` covers pass-through, loss, noise, clamping, S-parameters, dirty skipping, and summaries.
 
-**Parameters:**
-- `fs_Hz` — sample rate (default 1 GHz)
-- `nsd_dBm_per_Hz` — noise spectral density (default -155 dBm/Hz)
+### Coaxial cable (`coax/`)
 
-**Design decisions:**
-- Semi-idealized sampling: tones alias into Nyquist zones via `alias_frequency()`.
-- Center frequency shifted by `-Fs/4` (digital down-conversion / NCO shift).
-- Noise density injected as `noise_added_W`.
-- Output grid spans `[-Fs/4, Fs/4)`.
-- Output `fs_Hz` = `Fs/2`.
-- Removed parameters: `bits` (dead), `v_fs` (dead) — these were removed in a recent cleanup.
+`CoaxCableEngine` uses `preset_index`, `length_m`, and `connectors_loss_dB`. Loss is `(K1 * sqrt(f) + K2 * f) * length + connector_loss`; phase is a frequency-dependent propagation delay. Length is bounded, and frequencies above a preset’s maximum are clamped with a one-time warning. The preset table currently contains fully populated MT 340 data; other MilTech entries are explicitly uncalibrated. Cable tests cover the engine and preset table.
 
-**Tests:** `test_adc.cpp`.
+## Multi-port and topology
 
----
+### Splitter and combiner
 
-## PFB Channelizer (`pfb_channelizer/`)
+`SplitterEngine` is one input to two outputs. Each branch applies the fixed 3.0103 dB split loss without phase change or added noise, dividing tone power and noise equally. `CombinerEngine` is two inputs to one output. Manual mode applies the same 3.0103 dB path loss, concatenates tones from both inputs, and sums noise incoherently before scaling. Its S-parameter mode reads a three-port Touchstone device: S21 maps input 0 to output and S31 maps input 1 to output, with passive thermal noise. Because both inputs matter, the combiner has a two-input generation cache and must recompute when either input changes.
 
-| Property | Value |
-|---|---|
-| Headers | `include/pfb_channelizer_engine.h`, `include/pfb_channelizer_widget.h` |
-| Type | Processing node (1 input, **2 outputs**) |
-| CMake target | `simulator::pfb_channelizer_engine` |
+### RF switches (`rf_switch/`, `rf_switch_2to1/`)
 
-**Purpose:** Decomposes wideband input into M equally-spaced channels using a polyphase filter bank.
+Both switches are authorable and persist `active_throw`, `insertion_loss_dB`, and `isolation_dB`. The defaults are 0.5 dB insertion loss and 40 dB isolation; setters clamp insertion loss to 0–60 dB and isolation to 0–120 dB. `active_throw` is authored as the enum name `T1` or `T2`; project deserialization also accepts its integer representation. Neither switch has S-parameter mode.
 
-**Parameters (PFBConfig):**
-- `M` — number of channels (2–2048)
-- `K` — taps per branch (1–64)
-- `Fs` — sample rate (auto-read from input `fs_Hz`)
-- `beta` — Kaiser window beta (0–20)
+- `rf_switch/` is COM input to T1/T2 outputs. The selected output uses insertion loss and the unselected output still emits leakage at the isolation loss. Each output has its own generation and passive noise calculation.
+- `rf_switch_2to1/` is T1/T2 inputs to COM. The selected input uses insertion loss and the other leaks through isolation. Tones are concatenated, not coherently vector-summed; noise combines both paths and adds bounded passive thermal noise. Its update path uses `beginUpdate2()`-style tracking for both inputs.
 
-**Outputs:**
-- `outputs[0]` — active channel (weighted bin zoom)
-- `outputs[1]` — full reconstructed spectrum (overlap-averaged for flatness)
+The important topology invariant is that a multi-output consumer must select the actual output pin, and a two-input engine must observe both generations. The switch, project round-trip, dispatch, and authoring tests exercise these boundaries.
 
-**Design decisions:**
-- Prototype filter: Kaiser window * sinc, window method.
-- Active channel query via `activeChannelId()`, `activeChannelBandwidth()`, `activeChannelCenterFreq()`.
-- Noise flatness at overlap boundaries: <1% ripple.
-- `Fs_Hz` is automatically read from the input Spectrum (set by ADC).
+## Digital DSP
 
-**Tests:** `test_pfb.cpp`.
+### PFB Channelizer (`pfb_channelizer/`)
 
----
+`PFBChannelizerEngine` accepts one input and exposes two structurally different outputs. `PFBConfig` contains `M`, `K`, `Fs_Hz`, `beta`, and `sampling_ratio`; setters rebuild the shared Kaiser-window/sinc prototype when design parameters change. Input sample rate can be adopted automatically (`Fs_Hz` from the input), while explicit configuration disables that mode.
 
-## Spectrum Analyzer (`spectrum_analyzer/`)
+Output 0 is the selected active-channel view; output 1 is the reconstructed full spectrum. `activeChannel`, center frequency, and bandwidth are derived from the channel set. Output sample rate is `Fs * sampling_ratio / M`. The engine caches channel frequencies, overlap counts, and tone-index data, and exposes `outputPinId(index)`. `test_pfb.cpp` is the focused test for channelization and output behavior. Consumers such as the network analyzer must carry the chosen `out_index` through cloning or they can silently measure the wrong spectrum.
 
-| Property | Value |
-|---|---|
-| Headers | `include/spectrum_analyzer_engine.h`, `include/spectrum_analyzer_widget.h` |
-| CMake target | `simulator::spectrum_analyzer_engine` |
+### IQ Plot (`iq_plot/`)
 
-**Purpose:** Renders spectrum traces from probed nodes onto an ImPlot display.
+IQ Plot is a display-side DSP tool rather than a graph engine. `build_iq_spectrum()` constructs a complex frequency vector from noise PSD and tones, and `runIDFT()` uses `kiss_fft` for the inverse transform. A 4096-sample ring buffer retains recent samples; EMA Y-axis smoothing and zoom/autoscale controls affect presentation only. `test_iq_plot.cpp` covers the pure DSP helper and widget-facing behavior.
 
-**Parameters:**
-- Span (start/stop frequency)
-- Reference level (dBm)
-- RBW (resolution bandwidth, Hz)
-- VBW (video bandwidth, Hz)
-- Noise jitter amplitude (default 1.5 dB)
+## Analyzer and instrument roles
 
-**Trace modes** (v0.11.0):
-- **ClearWrite** — default; displays the raw frame data with no persistence
-- **MaxHold** — per-bin maximum over time; accumulates the highest power seen at each frequency bin; cleared on mode switch
-- **MinHold** — per-bin minimum over time; accumulates the lowest power seen at each frequency bin; cleared on mode switch
-- **VideoAverage** — EWMA (exponentially weighted moving average) with configurable count (default 10); smooths frame-to-frame variation
+### Spectrum Analyzer (`spectrum_analyzer/`)
 
-Each trace mode uses per-trace history buffers (keyed on `Spectrum*`) stored in the engine, with auto-prune via `pruneHistory()` to remove stale entries when probes change. `resetTraceHistory()` clears all buffers on mode switch.
+The spectrum analyzer consumes probed `Spectrum` objects and renders dBm traces. It exposes start/stop span, min/max power, RBW, VBW, noise-jitter enable/sigma, trace mode, and video-average count. Rendering separates noise and tone power, applies cached RBW convolution, then applies VBW and optional noise-only jitter. RBW cache validity depends on the spectrum generation, RBW, and bin width; jitter and VBW still run per frame.
 
-**Performance features:**
-- **RBW caching:** Gaussian convolution result cached until spectrum generation or RBW changes.
-- **Jitter + VBW** applied every frame on top of cached RBW result.
-- **Combined spectrum:** sums per-bin power across all probed nodes.
+Trace modes are `ClearWrite`, `MaxHold`, `MinHold`, and `VideoAverage` (EWMA). Histories are keyed by `Spectrum*`, pruned when probes change, and reset on mode changes. Peak search, navigation, combined-spectrum rendering, and strongest-tone SNR are analyzer operations; they do not alter the engine signal. The analyzer’s current behavior is specified by `spectrum_analyzer_engine.h` and its focused tests/benchmarks.
 
-**Marker features:**
-- Peak search with snap-to-peak navigation.
-- Next/previous peak.
-- Drag-to-zoom on frequency axis with reset.
+### Network Analyzer (`network_analyzer/`)
 
-**Tests:** Benchmarks in `test_bench_dsp.cpp`.
+Network Analyzer is a singleton floating instrument, not an `IComponentEngine`: it has no node, pins, or `ComponentRegistry` row. Point A and Point B are real graph output-pin IDs. The instrument requires exactly one distinct simple path between them; no path, an ambiguous fan-out, a merge/selecting multi-input node, an unregistered node, or A equal to B yields NaN results. Duplicate links must not manufacture a second path.
 
----
+For a valid path, the host creates a private RAII scratch graph and clones each component using its canonical type and serialized parameters. A synthetic tone-comb stimulus is injected into the clone chain; the live graph is neither used as the measurement signal nor written. The path records the actual output port used at every step, which is required for PFB output 1 and other multi-output components. Gain is measured against stimulus power, and noise figure is derived from output noise, gain, and `kT`; unmatched tones or below-floor responses are represented as NaN.
 
-## IQ Plot (`iq_plot/`)
+The sweep controls are `start_freq`, `stop_freq`, `points` (clamped to 2–2001), and `stimulus_power_dBm`. A signature over sweep settings and each chain engine’s serialized state gates expensive recomputation. Instrument project state is stored under `root["network_analyzer"]`; window visibility belongs to `SessionState`. `test_network_analyzer.cpp` covers stimulus delivery, attenuator gain, amplifier NF, non-perturbation, invalid paths, mixer translation, clamping, serialization, and widget drawing; project round-trip coverage is in `test_project_file.cpp`.
 
-| Property | Value |
-|---|---|
-| Headers | `include/iq_plot_dsp.h`, `include/iq_plot_widget.h` |
-| CMake target | `simulator::iq_plot_widget` |
+## Shared signal and noise invariants
 
-**Purpose:** Converts frequency-domain spectrum to time-domain I/Q samples via IFFT and displays them.
+`Spectrum` carries noise as power spectral density in W/Hz throughout the chain. Engines must preserve the distinction between tone power and noise density: passive stages scale noise by power gain and add thermal noise where their physical model requires it. Amplifier and mixer NF models add noise; attenuator, cable, switch, and S-parameter passive paths use loss-based thermal behavior; ADC injects configured NSD. The deprecated per-bin helper `addedNoisePerBin_W()` should not be used for new engine code.
 
-**Key functions:**
-- `build_iq_spectrum()` — pure DSP helper: constructs complex frequency vector from noise PSD + tones.
-- `runIDFT()` — calls `kiss_fft` (backward IFFT).
+## Focused change checklist
 
-**Design decisions:**
-- Uses **kiss_fft** for IFFT (lightweight, no heavy dependency).
-- Ring buffer: `kMaxSamples = 4096`, new IFFT output appended, front trimmed.
-- EMA smoothing on Y-axis for stable auto-scaling.
-- Drag-to-zoom, reset-zoom, auto-scale buttons.
-
-**Tests:** `test_iq_plot.cpp`.
-
----
-
-## Network Analyzer (`network_analyzer/`)
-
-| Property | Value |
-|---|---|
-| Headers | `include/network_analyzer_engine.h`, `include/network_analyzer_widget.h` |
-| Type | **Instrument** (singleton floating panel, like the Spectrum Analyzer) — *not* an `IComponentEngine`, no graph node, no pins, no ComponentRegistry row |
-| CMake targets | `simulator::network_analyzer_engine`, `simulator::network_analyzer_widget` |
-| Added | v0.19.x (v3 rewrite of earlier wired-pin prototypes) |
-
-**Purpose:** Measures gain and noise figure of the signal chain between two probe points (Point A = reference/upstream, Point B = measured/downstream), swept across a frequency range.
-
-**Parameters:**
-- `start_freq` / `stop_freq` (default 1 GHz / 6 GHz)
-- `points` (default 201, clamped to [2, 2001])
-- `stimulus_power_dBm` (default −30 dBm, small-signal/linear)
-- `point_a_pin` / `point_b_pin` — real output pin ids from the graph (-1 = unset)
-
-**Design decisions:**
-- Requires **exactly one distinct simple path** from A's node to B's node; ambiguous paths (splitter fan-out), a Combiner crossing, `A == B`, or an unregistered node all yield NaN results (no data). Duplicate graph links collapse so they cannot fake an ambiguity.
-- **"Cheat" measurement:** the real chain is cloned onto a private, throwaway scratch graph and fed a synthetic tone-comb stimulus; the live simulation is never read for signal purposes and never written to. Clones are wired to the *actual output port* each node used (`out_index`), so multi-output components (e.g. PFB Channelizer OUT2) measure the right signal.
-- Gain = response tone power − stimulus power; points below −100 dB are treated as noise-floor-indistinguishable (NaN). Noise figure from `noise_out / gain_linear / (k·T)`.
-- **Signature-gated dirty check:** since the instrument has no wired input, a signature over each chain node's `serialize()` dump + sweep params gates recompute; v0.19.1 added 1 Hz cell bucketing for tone matching (O(N*M) → ~O(N+M)), fixing a ~22 ms/frame regression at 2001 points.
-- Not a component: state persists through `ProjectSerializer` under `root["network_analyzer"]` (sweep params + Point A/B as `{comp, port, is_output}`), and window visibility via `SessionState`.
-- Toggled via `View > Network Analyzer`; the widget's Point A/B pickers enumerate every real output pin in the graph each frame.
-
-**Tests:** `test_network_analyzer.cpp` (standalone executable, 12 cases: stimulus power reaches the chain, gain accuracy on attenuator chains, NF accuracy on amplifier chains, probing does not perturb a real consumer, disconnected/ambiguous/combiner paths → NaN, mixer LO translation, point clamping, serialize round-trip, widget draw). Project round-trip tests in `test_project_file.cpp`.
-
----
-
-## Component Data Files
-
-S-parameter measurement data files are stored in `component_data/` at the repository root, organized by type:
-
-| Directory | Contents |
-|---|---|
-| `amplifiers/` | Amplifier .s2p files |
-| `equalizers/` | Equalizer .s2p files |
-| `filters/` | Filter .s2p files |
-| `fixed_attenuators/` | Fixed pad .s2p data |
-| `splitters/` | Splitter .s2p data |
-| `step_attenuators/` | Step attenuator .s2p data |
-
-These feed the per-component S-param modes described above.
-
----
-
-## Component Library (`app/`)
-
-| Property | Value |
-|---|---|
-| Headers | `app/include/component_library.h`, `app/include/library_browser_widget.h` |
-| Type | Application-level feature (not a DSP engine) |
-| Added | v0.9.0 |
-
-**Purpose:** File-based component definition system with a library browser panel for one-click insertion into the node graph.
-
-**JSON definitions** live in `component_data/library/` organized by type → manufacturer:
-- `component_data/library/amplifiers/mini-circuits/mga-62563.json`
-- `component_data/library/amplifiers/mini-circuits/zx60-33ln.json`
-- `component_data/library/filters/mini-circuits/bfc-160.json`
-- (and corresponding entries for attenuators, splitters, mixers, equalizers, combiners, ADCs)
-
-Each JSON definition contains datasheet parameters (gain, NF, OIP3, P1dB) used to pre-populate the instantiated component.
-
-**Library Browser panel** (`LibraryBrowserWidget`):
-- Tree view grouped by component type → manufacturer
-- Text filter for quick search
-- One-click insert places the component in the node graph with all parameters pre-set
-- Three scan roots: built-in examples, global `~/.rf-sim/libraries/`, per-project `./rf-sim-libraries/`
-- Accessed via View menu
-
-**Part number display** (v0.9.1): instantiated component blocks in the node editor show the library part number as a subtitle below the title bar.
-
-**Tests:** `tests/test_component_library.cpp` — 15 test cases covering JSON loading, directory scanning, instantiation of all 8 component types, part number propagation, schema v2 data_files parsing, S-param auto-loading, and fallback on missing file.
-
----
-
-## Notes on the Noise Model
-
-The `Spectrum` data type stores noise as **power spectral density in W/Hz** throughout the signal chain. This was migrated from an earlier per-bin W model. The old helper function `addedNoisePerBin_W()` is deprecated in favor of PSD-based computation. Each engine adds noise density appropriate to its physical model:
-
-- **Signal Generator:** Thermal noise floor `k·T = 4.00e-21 W/Hz` (≈ −174 dBm/Hz at 290 K)
-- **Amplifier:** `N_added = k·T·(10^(NF/10) − 1)·G_linear`
-- **Attenuator:** Passive noise model where NF equals attenuation value
-- **Mixer:** Noise figure applied as added noise density
-- **ADC:** NSD (noise spectral density) in dBm/Hz
-- **Coax:** Noise from physical loss model
+1. Confirm canonical registry keys and serialization keys in both engine implementation and `ComponentTypeRegistry`; do not infer names from UI labels.
+2. For any topology change, verify input/output counts, output-pin indexing, both-input generation tracking, and the network analyzer’s unique-path rules.
+3. For model changes, test zero/high-loss limits, cutoff boundaries, NaN guards, noise units (W/Hz), and S-parameter fallback behavior.
+4. For persistence changes, run the component project round-trip and authoring/library validation tests, including named RF-switch throws and library `data_files`.
+5. For analyzer changes, distinguish cached RBW data from per-frame jitter/VBW and ensure analyzer probes do not mutate live graph state.

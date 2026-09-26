@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:26ac171b2ffedc67987e29371da3724d074266df02133c97091dc2295e02e4b5",
+  "claims": [
+    {
+      "id": "claim_54b76283270d4c22a85f126a0875a2c5",
+      "statement": "The repository separates Catch2 coverage from imgui_test_engine coverage: Catch2 tests engines, serialization, graph behavior, application integration, security boundaries, and Test Flow, while the `test_ui` target drives visible application interactions.",
+      "evidence": [
+        {
+          "resource": "repo://test_engine/CMakeLists.txt#L5-L19",
+          "version": "repo-lines-v1:sha256:eb0084dc9933728945c9802184ffb743f47b8581736b7b67a4745530b5692a4b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2ODdiYTFlMmIzYzI3ZTYwNjA5ZmVkNTM1YjBjZDBkZjEzMzI4Y2ZkNjhkOWZhMmUwMWMzMzAzNTRhMmIwMmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlNDk4YTgxZWViOWM2YWFiYzdiNTVjMWFhZTM5ZTFlNTI1OTQ1YWY1YzVmM2MxZWI3OTJlMGY1MzU3Y2U3ZWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4M2ZjOGUzZTlhMjBkYTkzZTg4OTBhMDVhZWU5ZThjMTU5NTI2ZTA2OTQxMmEwNDVlZjY1MTEyNDMyY2E4YTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyZWM1YTMyMWUwNGIyNDRjYjIyMDE0MzhkNjdmMTU5YjU2Y2ZmNTNiMWQ5YTgxODJjYWMxNGRhMTNlM2E4ZTgifQ"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L47-L54",
+          "version": "repo-lines-v1:sha256:9c987d4ab9ca26d637fa6eb11e33150c2a5b4f195d60d2b6d4d5d299aab87527:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjEyMTIzMzM0ZjBlMjdmYTllN2U5ODAwMzEzODRkMDlmNDZlYWM0NzE2ZTNiY2I2NGI2NzI4ZDE4MDMzNDc2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWZmZGIwMDhlZDdiYjY4OGNiNDNmYmNhODJhZTVjNzA0ZDc5NTU5YjlhNjkxYzY0MzM2YTQ4NjIwNDQwNWJmNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2NjZGUzZDQwNmUzMzE5NGViZmI2YWIwNTkwZjZlY2RlMjk4MGVlNDk2M2I5MDgxMzY2ZTcwNjk3ODJjMjI4NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjAxODA3Y2Y5NmQ3MmFjNzJjMmM1YzUwZGM4YmIxOTU4ZDAyZWVmMWUwNjFiNDM4MjJlNWUxMjIxNWI4Njc4YiJ9"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L53-L76",
+          "version": "repo-lines-v1:sha256:d02d1786fdd1a063ab82ea04f9479bf556408063df3497b8249ef303ecccaa96:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNGMzMTE4MGRlM2VmZGUxOTBmNzZjNWZkYmUyM2FmYzMwNWMwMWFiNmU0MDFiMjFkODQyMzA2ODk5M2YxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmZDAxNzIwYjMxYjFkZTQ2MjA5MDBlNjZhOGY1NTY3MjM5NDBhYzE3MGM4MzFmMDQ0YmViZDBkOWEyZDg3MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiODE5ZjlmNTAwNmMzNzcyMDQ3OGMzOTQ5OGY5NjAzMmRjZjc4M2RmNmRiNzhjNjhjNDk1YzkwYzczZmVlZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNWM2NjY0M2NlZTA5MWIwMDNmODhmOTFkNzFhZmIzMWQwNTUwZWI3MDE1NTg3MjYyNTdhMDdmMmQyOTFmOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b1744b02a52345e48820ec850b140863",
+      "statement": "The GUI-free `test_flow` library owns flow-file loading, validation, condition application, cartesian-product execution, and metric capture without linking the application or ImGui; the app-owned `TestFlowWidget` owns live-circuit snapshot/restore, UI row limits, presentation, and export.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L190-L227",
+          "version": "repo-lines-v1:sha256:935e201dda4f4a9aa0b2ee426b087888d359c295ab0f315f2bc097f9c87847d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4NWViNjMzZTAwZjZlMjk3NGFhMDc0MWM2MzdlMTM4OTEwOGRjY2M5ZmVhYWJkNzYxZDEwMGJkNGQzYjRhMGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNDA0ZGUxYzE4M2VkZjQxMDE3MDlhMjllNjZhNGNhM2M2YjNhYjJkYmY2NzkzZTljZmYyMTM2MWFkZDMxYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyNzdiMTY0ZGY0YTIxNDhkYTBmOWQ4YzMzM2I3NDAyNjQxNGJiOWVjNWE5NzY4Zjk4MTBkZDUwNzI0MjgxNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyMDAxODhjZDJlODE4YzRhZGQ3MjdhOTc3NjNkNWYxZWYwNmJkY2NlZmM3N2U4MjZiNTI5M2U0OGFhYjZhNTgifQ"
+        },
+        {
+          "resource": "repo://test_flow/AGENTS.md#L29-L33",
+          "version": "repo-lines-v1:sha256:8b50e6efedfc06927d09f0bd4a06690417f000a40f0fea502588a41269368795:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDBhZDE1MWM1Y2FmNTUzNmQ0Yzk5MzRhNzMxNWZlZGM1MTEwMzk4NjU3NmRlZGFmOTZkNDdkNjNkMmUwYTE1ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTM0OTFkOWIzMmIzZWY4MDMzZjJlMzQyYTVhMTdiOGUwZGQzMGU2NmM0NTU4MzUwMjA0ODI0YmZmYjU2YzdmYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWY3MTE0N2ZhNzkwYWE4YjhmZjMyYzU5Mjc2Zjg2NDEyYTkwZTNiMDY3MGFmOTBjZjAxMWJjN2Q0OTVlNWFiOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDk2OTkxZWY0MGVjZjRmY2NmMzViZjYzMTkwOTBjOTQwMDJmOGM4NWY1NGQzNjg0NGRiZDYwNjdmMDA1MzYwYiJ9"
+        },
+        {
+          "resource": "repo://test_flow/AGENTS.md#L5-L23",
+          "version": "repo-lines-v1:sha256:8bf44b52a09c7b2614ceb9f5caf7e898e983ae000633cff50e7a8b5933e99960:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0ZTBlODE5MGQxNzA5MGYzZDc3NWZmMmY3ZDExN2U0ODk1NGVlMjNiYmNkYmJlYmRlNTdhOWZjNTUxNzg2ZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0NWFkOTI2YjRjYzJlMWExM2Y2M2UzNDU2YjA0OTMxYjE3ZDk4NjBmYzRiOTBjNTE1ZDk5ZDIzNjhhNDdkNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgyZmYxMjA5MmViNDc1OGQ2YmI5N2NkZWMwZjRkYmM5ZjU2YzUwZDY3NjQzYWNiNGU3ODc2ZTZmYWViNDI4YTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdhYTQ0NmEyY2NjNjAyOWJmOTkwMWViMWNlMjI0ZTAyYjUyYTIzYTI1ODkxMWUzZmJmYmM4MGI5OWUzZjc1NWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f037475f9bbe415f8758d0e364ec60fd",
+      "statement": "Test Flow conditions address `serialize()` keys and are exhaustively validated before execution; `RunFlow()` and the panel share the harness validation order and wording, while the widget refuses sweeps above its row budget.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L190-L197",
+          "version": "repo-lines-v1:sha256:49562d63aa37f5e99ad43913bdac39f6604836f26becdcf6cd31c1d5ba241103:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzg1ZWI2MzNlMDBmNmUyOTc0YWEwNzQxYzYzN2UxMzg5MTA4ZGNjYzlmZWFhYmQ3NjFkMTAwYmQ0ZDNiNGEwZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODY4OWIxYWQyMTEzNTczNGM3MjA0YWJhNTBhZGExODhmZmYxYTFlZGU4YzA0OTkyZjRjY2Q1ZWM5NzliYjUzMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTI3N2IxNjRkZjRhMjE0OGRhMGY5ZDhjMzMzYjc0MDI2NDE0YmI5ZWM1YTk3NjhmOTgxMGRkNTA3MjQyODE0NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODgzYzIyNzY5ZDhjYjFhY2Y0MGI4YmU5NzJkMmU1ODU4N2Y2MzEyMTE4NDk1Y2EwOTIwNmYxZTc0MDU5MjUwZSJ9"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L768-L785",
+          "version": "repo-lines-v1:sha256:113e5006a701caebd29b7e7964a04d46e530b6132c26806f09a01b5402c2e89f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3NmIyNmViZTU1ZTc0MjM0M2ZiYTkwZTkzYTcxZDllMjZmYjU3MjY4MjJlNmFjYTNjMjNjYmUyMTZkYjc3OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1NjJlNzViMTZiNTg4YTVhZDA2MDVkYTMwNmEwZWEyMDZkYzg2MzMzZTRkYjU3MjZkZDBiNzQ2NTJmZmYxZDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFiMjg0NTY3N2E0MDZkOWI3MzIyYTgyZDk3OGU1ZWI2ODExZjAxNWJiODVmNDZiN2ZlZjZjZTQ1YTdiYzZkODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5MzQyM2EzOTIzZWViZTg1MTRhNTA3YjYzN2ZiOGRlMzY2NjYwODM5ZTUyYmYzNzY5Y2IyMWFjYTA5ZjVkMDIifQ"
+        },
+        {
+          "resource": "repo://test_flow/AGENTS.md#L27-L40",
+          "version": "repo-lines-v1:sha256:e86415f3d61b092ef82d1ff7c4afd684cd0a2f619f64961972dd04412f862644:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmM2RlMzlmMzc0YjhiMTgxMjMyNWE4Yjg0MTM5MmYxYzEwZjhjOTg0ZWQwMmVjZjJmMmQyMGVhNmNlNDNlZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwNjRiM2M5NjgwZjUxODllMmQ1OWQxYjg4MjQxMjBjMmU1NjY4YzgyZDI3MjNkMmNmNWFlOTQwYWE5OWM2NTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhYTQ0NmEyY2NjNjAyOWJmOTkwMWViMWNlMjI0ZTAyYjUyYTIzYTI1ODkxMWUzZmJmYmM4MGI5OWUzZjc1NWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIyNzA3ZjhmNjM4MTNiMzMwNzYyODViNmI2ZjkyNjNmMjI1NmNmMjA3YTM2OTcwYjliYTZjMmZkYTVlNGJkOWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a3459b9ec19641c89c9b5465f0f1342d",
+      "statement": "A Test Flow panel run snapshots every live component, executes against the live circuit, restores each snapshot, rewires graph inputs, and distinguishes ordinary execution failure from a latched restoration failure that requires circuit reload.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L200-L280",
+          "version": "repo-lines-v1:sha256:e555e7f02c9a5959547597c5eda605ec4ab67cbf7a6c740183047ede5a479d88:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5YTRiYWFkOWE1YTNhNzZkNjg0M2ZjOGMyOTczYWQ2NDgxNzEyNGVkNDk2MDE5NTBjZjFhODRkMmEyYWVjMmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2ODliMWFkMjExMzU3MzRjNzIwNGFiYTUwYWRhMTg4ZmZmMWExZWRlOGMwNDk5MmY0Y2NkNWVjOTc5YmI1MzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwMWU5NmNkMjQ0NWU3NjRjOTg3YmVjOGQ2MDM1OTZjMTNlNjY1YTMzMDU1MTA2MzFhMWFkZjI4OWU2OTJkZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0OTY3ZDU2OWZiODM4YmMwOWQwYjUyZDQ1NGE3ZTBiODk0OTNiMGM4N2ZkOTZhYTFjMzdmYTcyMjQwNjBlYzIifQ"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L26-L27",
+          "version": "repo-lines-v1:sha256:d2783dc8ec273e160b23b3d0a265a1afca4016510092e4781091c9269729597c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTMzYjAxYTQzM2RmNGVmZTFjMzViNWU5ZmQwMmNiZmU2MGUwNzJlMWU3NGM0M2UwOTRmOWI0ZGRiNDczNzFjOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTdkOTRjNzI0MTdmMTUyNTlhZWYzNGY2MjIzMmVlMGU3YTczNDU4MGQ5ZGQ0MWRhNDMzYzQ5ZmQzMDU4MDE0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGUyYWQwZTRkZTk0NzdkOTlhZGVmZTY3NTQ4NGQ3MjM3NTJiY2JkNzhkYmY3Nzg4OTIzNzQxODk5ZmZiM2I0NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWIwYWViZjI2NTQwNmU1MzBmMzBmZjUwYzhhNjFiZGY2NDJhY2I5Njc3MWYxYzgzMDI4NzkzMzUzMmRjYjkxNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2d5cee9ba9b944769cd099a85cb87f01",
+      "statement": "The current Catch2 inventory is registered through one main `tests` target plus explicitly registered standalone targets, and new coverage must be added to `tests/CMakeLists.txt` to appear in CTest.",
+      "evidence": [
+        {
+          "resource": "repo://tests/CMakeLists.txt#L360-L373",
+          "version": "repo-lines-v1:sha256:9c411548788286daea67a0816c89be1287a09f76a5041da9cc2354376e068849:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlN2M4MmJmYzNkNmRlOTU2ODFlOTE3MzY1M2UwNjE5NjkwYWM5NGZmZjY3Mzk0ZDEzMGExNTJjODVjMzkxN2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzZWE4ZTNmNTBhOThiYjI5MWUxNjg2NGU1MmY5ZDMwN2Q5NmRmY2JkMWIwOWJhNTViMWNmOWFjNDFiZDc2ZDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L5-L31",
+          "version": "repo-lines-v1:sha256:34e8c8a68691db8d5f8037be46d47cc0e12ff0746a1a3ce76e44cc16ad911a1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjNWE2ZWI5ZmFjZGQ1YjgwNzEzOTI3ZGUzZjUwZDZjNDJiODM5OTFkMGQ2MTBiNGU4MzcwOTg5Y2QyZWZlNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1ODBjNjIzMTY4ZWE2YzBhNzg5ZDNiZTAwMDg1MmE1NjlkZjUxOThlZWIzNjUwY2Y1YjJhNzVlODYzZjIxNzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5ODIzNmUwYzhkZTI0N2YzMDkxNGJlOTk5ZjZhZmY5OTg5MTVlNTEzZDVhNTE1YzJmMzFmZTlkODY0YzdmOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0N2YxMDVmNDQyMjI4NzkzNjc1Yjg4NWZkMGIzZmY4OGU2YTJlNjIwMGQ1MWNhMTFkMDI0MjdjOWRjZWQzNTYifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L68-L76",
+          "version": "repo-lines-v1:sha256:7366d951026023191f52815e462f0cdea91e3c936e886d9a1118be934dd01be8:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWFhN2MzNDQ2MDhlN2MwMTdkNmYzZTlkZDM0YWE4ZDhhMjJiODVmNTVkMDBhNjY1ODgwZDUwN2ZjN2E5Nzc2YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGZkMDE3MjBiMzFiMWRlNDYyMDkwMGU2NmE4ZjU1NjcyMzk0MGFjMTcwYzgzMWYwNDRiZWJkMGQ5YTJkODcyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWM2MTFkNDYwYmFlMjMyNGQ5ZTAyNzU5OTU4YTRjZjExNzAzNWMwY2M0ZThlZTFmYWY4ZmEwNTg3NDYyMmRmOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTE1YzY2NjQzY2VlMDkxYjAwM2Y4OGY5MWQ3MWFmYjMxZDA1NTBlYjcwMTU1ODcyNjI1N2EwN2YyZDI5MWY4ZiJ9"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L78-L100",
+          "version": "repo-lines-v1:sha256:213e75fafa3c29e72f7bfc003300ef18e3b4b0a32bb93eeff42e61672cf7c752:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1M2JjODc3ZWUyYTIwZTVjYTk5NzRkOWMwNWJjN2Y4ZTE4ZWM0ZmVkZTJiNWU4YmJjOWQ4MmJkZTY4OTUyMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzZjg3YjFmMTk4NTZiYjk3M2RlY2E3ZWRkNTNjMDlmMDI4N2I3YjcyMzQ0YTU4OGIxMDg0ZjY3OGE3YWYxZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMzOTFiMTQ4Y2ViOWEzOTM5M2RlM2IxMmMyOTEwNTM3NDAwMjk4MzM4YzU4NTEyNjE1MTQzMWU4NzVlMjhhZTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmNGNhZTFlYjYwYzFmY2QxMTcyZTdiY2JjNDViMjUyZjczZmVjMDYwMDMwOWYyMDM3ZWYzOWUzM2YxNDZiMzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b2b7b680627845fb82374e5311b7408c",
+      "statement": "Scratch files must be process-unique because `catch_discover_tests` can run separate test-case processes concurrently; app-level tests also share exe-relative `app.ini`, layouts, and tutorial marker state, and extension-root mutators are serialized.",
+      "evidence": [
+        {
+          "resource": "repo://test_engine/CMakeLists.txt#L21-L36",
+          "version": "repo-lines-v1:sha256:014dba8a09c7db02f13bf824215abca91b47295a21c7824612a5b9050d9cd758:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4OWIxN2IxMjcyYTQyZTRhYWQzYjNmM2E2ZGIwMzdkNzljOGVjYWM4MGU1NDk3YTUwYTIwOGI3M2NiOGFlMzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkNDQ0OWYwMDcwYWI3ODJmYmRjNzhmN2EyMTE4ZDAxYzNjYzE4ZWIwOWNmMjJhN2RjYWExYzdhZjNmYzg1YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwMmVhMGE4YTQwZGQwMDRiZTJlOThhNDQ4ZTIxOTUxZDM5ODY4OThhMzdjOWNiMjMzY2QwZGRhNDE3ZWEwYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L39-L45",
+          "version": "repo-lines-v1:sha256:98990ef78e9119f090029ee0e8f25562c2b2222f76b77482663638e5ee854051:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTMwM2VkYmU1ZWFhZWUyNjllZGY0ZGRkNDJkYmZiMzZmZmFmYmI3ZDI1NTBlYmJlZDhiY2VlODdiNWIwNmQzOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIzZTBkZDA4YjJmNDFiNmJjZWZiZDhhYTk5MWYyMDgwYmJhMmNjOGM0M2RjNWVhMTQ2YmZjOGY4NzMyMWQ2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNkNmEwZDg4MGNmOTRkZjU5ZDkyYzU0YjBlMzE4OGE4NjNmNzJiYzgyYjg5ZjY3NjdjNWNhOWY3ODhhYTFmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSJ9"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L258-L271",
+          "version": "repo-lines-v1:sha256:49a3f9749bf214e4df21563e0063235af00ab8be9522e29704f33e6d0a0f209f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMGRjY2ViNzRmZjBjOGEyOThhNzI3MDA3MmJhZDg3N2NlZWMzYWUwMjkxMTJkYWU1ZGMzNzhlMzIyM2I2OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjZmUxYTZiMmI5OGM1NmMwNWI3YzVhYmM0NWIzYzNkZDkzMmY3NDZmZjBjODkwOWRkNzA1YjAzMTk3YmE3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YzEzZjBkYmYzOGE1YzM1YjZiMGUwNmVjZmIwOWM4ZWVkMzgyMmZjZTRjMjEzMmE5OWQzODY0OGM3YTQ1YmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bd3d6894ffe14dcf8900ba29f6b27ce5",
+      "statement": "Pure DSP tests must not depend on ImGui or GLFW, while app-integration tests must create ImGui, ImPlot, and ImNodes contexts before constructing `RfSimulatorApp`.",
+      "evidence": [
+        {
+          "resource": "repo://tests/AGENTS.md#L47-L54",
+          "version": "repo-lines-v1:sha256:9c987d4ab9ca26d637fa6eb11e33150c2a5b4f195d60d2b6d4d5d299aab87527:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjEyMTIzMzM0ZjBlMjdmYTllN2U5ODAwMzEzODRkMDlmNDZlYWM0NzE2ZTNiY2I2NGI2NzI4ZDE4MDMzNDc2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWZmZGIwMDhlZDdiYjY4OGNiNDNmYmNhODJhZTVjNzA0ZDc5NTU5YjlhNjkxYzY0MzM2YTQ4NjIwNDQwNWJmNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2NjZGUzZDQwNmUzMzE5NGViZmI2YWIwNTkwZjZlY2RlMjk4MGVlNDk2M2I5MDgxMzY2ZTcwNjk3ODJjMjI4NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjAxODA3Y2Y5NmQ3MmFjNzJjMmM1YzUwZGM4YmIxOTU4ZDAyZWVmMWUwNjFiNDM4MjJlNWUxMjIxNWI4Njc4YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_101ce1ceb3974069bada3b8b278d2a83",
+      "statement": "The release workflow runs Linux CTest under Xvfb, excludes benchmarks, excludes `test_ui` on Windows, runs an ASan CTest pass without benchmarks or UI, and checks the Windows main-binary registration floor with `--list-tests`.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L139-L172",
+          "version": "repo-lines-v1:sha256:387adf318b96b8777aa8d66dd1998a304fde5f604e711b647693170a280c2e84:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzODYyZWNiYTI2M2Y1MzgzZTlkNDcwNDRiMDI0MmQ5Y2NiYzE1ZjhmM2Y4ZTEyZmNiZDExMGE5ZGM2OTc0ZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmNTU5NzljZTczMDIwMzNlNmIyZmQ3ZDg4ZjUzN2EzYjhlMDkxZWEzMDVjODExZmZhMTI3NGJmNTc2NGVhNWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhMGZlYjFhYTllYzc0ZDI0NDA3NzI0YmI2MjljYWI2NjRkM2JhZTk0OWM1YmViNjExM2IzYjUzODRmNzBhMGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiOGRmMWJmYWMyNjBhZWMwMTg4ZDRiNjdhMzdjNzhkMDZjMzIwYmE1N2QwYjgzOGVlMzE5MTJhODMzNDE2ZjEifQ"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L194-L199",
+          "version": "repo-lines-v1:sha256:ad906ad106da7ed933f92c591c17fdf29d7d60b12cd67c6743d020490c5a974f:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzJkOWRlMTUxOWYxNzc0MmM5Y2IzNjE0NDk0ZmFmMmNmNmQ4MzUyM2JkNTkwNDY3MWNhNTBlZTNjMDc2MzZkOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDRjNzZlMzA1N2IyNDE3ODg0MjQ1NTE2YTcyZTY3YzY0MzNlMTBhMzk0YWI2ZWI5M2FmOWUzODBiN2ZkMGUzMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWQxNzViNmQ2YTAzYjIzNzQzYzg3YmVhNDNkZmNhNzZmYjg5ZmNlMDdlOTU4MWE2MzM4YTMzMmE1ZGQ2NzBjNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmNjNTgxNThiYjU4MTY1MThlNzlhMmMwZGNiMmMyMDkwZDVmYzk2YzgwY2M3NzU1ZWFhOWI3Yzg2ZDRiODFhOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_37856b634b864c1e96084bb309e7a736",
+      "statement": "Regression coverage protects graph topology and multi-output routing, malformed JSON isolation and rollback, save/load atomicity and failed-save state, extension/path containment, collapsed-group rendering/link policies, and numeric correctness across engines.",
+      "evidence": [
+        {
+          "resource": "repo://tests/CMakeLists.txt#L151-L163",
+          "version": "repo-lines-v1:sha256:0c040fb7e835328e1c76fd18f801f2adc02552e79975ea506706d19854000c67:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3Njk4NzMwYTc1NDAxYTdhN2RhMTM0MTliNjc1NDZjOGE0OTQ5YjE1MjdmOWYzZjA1N2NmODQyMjY0YjgzODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmNzU3NzJlMjM4ZjRjYjU5YjdlMzhjYzY1OGViNTI4YjIwYWNhNjdhNzViN2ZjYmFjYjgwY2Q5YjVhYzc5NGQifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L182-L199",
+          "version": "repo-lines-v1:sha256:4a6adbc79028b4f120c107540ad5a12d4e03fceda02107e38392db15e5e2b753:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxY2I2ZjY4MjIyYzI5MzlkZjc5NmU2ZmJmYzMwYzEzMjU3M2ExNjc5ZWIzZGM0Y2Q4MzAyZjEwYzQwMjNmODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmMGMzYjdiNjBmY2FmN2I3ZGY2YTYyM2JlMGQ0YjUyZjY3NGJhOTllNTY0ODc2YjQ4ZWJlOWI0OTBiM2QxNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhNDRjYWMwMjNmMDY2NDdjMmJmNDM0OWM3ZWZjNGQ0YmM0MTE3ZGI3MmFkZDJmZmExZTJlNjdjM2I0MDI4YWYifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L299-L330",
+          "version": "repo-lines-v1:sha256:08a7d72531d615a4d93191c9bdbebbceb69acbf39d4b0de26c7e350e625709bf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzMjUzMTRlNjUzOWI4MjI1MmU1M2ZjNGE2M2ZlMDczNmUxYjRmYTE4OWNkMTJjMTVjNWVlMmYzNTY1YzE2YWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjOThiMGNjODgzY2Q1OTI0MTE0OTNjOWI4OTBlZGJiMGJjZDM5NDEzNDQ5ODIyMzRmMWEwZjRjMWFkMzE0MDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5N2ViYzA4NTZmNzBjNDJiOWQ3MzIzOThiYzdiNzNhMzk1MzY5MDEwOTk3YWRmMjVhZWQzMWU3NTA2MWNmZmYifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L307-L315",
+          "version": "repo-lines-v1:sha256:efd59217a854bb85e880c9f365ae0cf6ec0e4501f9d8ec218db9ba5a5a75a859:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWI2YzZjN2JkOWQ4NzRiZWM3YzA4YTcwZTMwNmNiY2JjMGVlMDk2YmQ2NDRkYzlhZjA2OTMwODc4Yzc1YTc1ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmFmYmEwNTI3YzM5NTNjNGI2ZTBlNWI1NzM5YmE4MzYxMmY4MDUzYmNkYzk0NjY3MzAxOTNjZDFkNTkwYjQwOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzIwOWY2MjBlMDQxN2E5OWQ4OWE3NDJkNTRjMjQwNjdlNWUzMTVjNmM2OWY0ZjNhMzllYTA4MTdkODMwMjkwZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjg0ODE2N2MyNzE5NDMxZjY3ZTQ5ZjAzNGViZWJjZjI2NTI3Y2NiMmU1ZGRkNGYyOTc4NWYyZTFkNmVlMGNjNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c94fade85c2c4507afd6ad8421e851ad",
+      "statement": "The Test Flow harness tests metrics, type-preserving parameter sweeps, authoring and atomic flow-file writes, validation and rollback, while the widget target tests whole-circuit restoration, failure latching, authoring, preview, export, and bounded rendering.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L234-L280",
+          "version": "repo-lines-v1:sha256:2e446e850e5a46082a7701363b4ad3ef656408b939e38c3d2e8f8a9197c5bbad:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4ODI2MDU1ZTE3ODNlYmY0ZmFiMTk0NmU3Njk1N2Q3YmU3MWRlYmQ0NzdmN2E0MDg4MjE4ODMxY2M4ZTBkMzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2ODliMWFkMjExMzU3MzRjNzIwNGFiYTUwYWRhMTg4ZmZmMWExZWRlOGMwNDk5MmY0Y2NkNWVjOTc5YmI1MzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcwODQ5YjcyY2M2NDBkNmQ5ODBlNDc3ZTYwYjlkOGRmNmNlNWViMzFkN2RmOTdjMjc0YWI3NjcyOTI5NjZlY2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0OTY3ZDU2OWZiODM4YmMwOWQwYjUyZDQ1NGE3ZTBiODk0OTNiMGM4N2ZkOTZhYTFjMzdmYTcyMjQwNjBlYzIifQ"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L18-L19",
+          "version": "repo-lines-v1:sha256:850077d182e35875fa9dcdeba92df26021194a266833b645ff57fa9a1774ffcc:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RjN2Y3MzI0ZjYyMjI1MzBkNTZhNTFhMmI2ODQ3ODRmZDdmYmMxM2Q4NDQ0NTcwNWIwMGMyZDc5MDE0MDAwMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTFmNDM1ZTIwOGFjYzgwOGZkM2EyNjcyMTg1YWNmYzhiOTQ1NTlmNTBiMmFkZmY1MjczOWFlMjAwNWVkYzdlZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjc5YTVjNDZlMTc1MjVlNTk1ODUxN2MwZTg2ZmZkZTUxOTZlODc0NDJmY2Y2YjNmMmI1MjhmOGI3YmIzZjk3ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWQ2N2Q3NjQyNjY3Yzk0YTY0ZjRiZjM1YzFlZTRmODU1MGEwMzc0MDJlMTU2ODExYzY0OGU1ZjAxY2NiNDgyNyJ9"
+        },
+        {
+          "resource": "repo://tests/AGENTS.md#L26-L27",
+          "version": "repo-lines-v1:sha256:d2783dc8ec273e160b23b3d0a265a1afca4016510092e4781091c9269729597c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTMzYjAxYTQzM2RmNGVmZTFjMzViNWU5ZmQwMmNiZmU2MGUwNzJlMWU3NGM0M2UwOTRmOWI0ZGRiNDczNzFjOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTdkOTRjNzI0MTdmMTUyNTlhZWYzNGY2MjIzMmVlMGU3YTczNDU4MGQ5ZGQ0MWRhNDMzYzQ5ZmQzMDU4MDE0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGUyYWQwZTRkZTk0NzdkOTlhZGVmZTY3NTQ4NGQ3MjM3NTJiY2JkNzhkYmY3Nzg4OTIzNzQxODk5ZmZiM2I0NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWIwYWViZjI2NTQwNmU1MzBmMzBmZjUwYzhhNjFiZGY2NDJhY2I5Njc3MWYxYzgzMDI4NzkzMzUzMmRjYjkxNiJ9"
+        },
+        {
+          "resource": "repo://tests/test_issue87_flow.cpp#L68-L106",
+          "version": "repo-lines-v1:sha256:bde0063ed74897d244d2aaba65f2edd679cc81e603f872c97efe0440e2cdc0b8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2YTk2OWFkNDEyOTE1MTU4ZjBlMTc3NDUyYzdlNjQwZWIwMjRmZTM5NjhkNDZhNTRlZDMwODI5NmM1NGNjOTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyN2U1YWVjMzA1OWM0NjgwMzQzNzc0YmVlYjgwYmEyZTg0ZDE0MzYzYWNlZTY2MDk1NDhmN2JkOGVhYTgzZjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlNzlmOTExNWQ2YWI1YzQ4YjE3MDdiNDkwYzVlMGU1YTg3ODEyZWY5OGQ0ZjY5ZDQzZWY0Y2Q4OWUwZGU0MWUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

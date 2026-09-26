@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:181c9a3e3f5f92875955922f6734235efc4d5c3f9e7b6cde49a50517c63960f8",
+  "claims": [
+    {
+      "id": "claim_118e102224fe415181c81b50a41406ce",
+      "statement": "The executable bootstrap creates the platform core and application, and the core owns GLFW, OpenGL2, ImGui, ImPlot, frame polling, rendering, viewport restoration, and shutdown while invoking the app callback each frame.",
+      "evidence": [
+        {
+          "resource": "repo://core/src/core.cpp",
+          "version": "repo-file-v1:sha256:aa1df903bf71e80745f215f6d193793a5fbfb9da0c232c2ad3e2ca07ad527222"
+        },
+        {
+          "resource": "repo://src/main.cpp",
+          "version": "repo-file-v1:sha256:9c25c66c0bc38342d58b18a9499307d727819897385bdf4fbbddc068d747c79d"
+        }
+      ]
+    },
+    {
+      "id": "claim_535ed585238f41c69c06d82b791d64ad",
+      "statement": "RfSimulatorApp updates DSP before UI drawing: it rewires component inputs, evaluates NodeGraphEngine's topological order, updates engines, then resolves probes by node and output index for the spectrum UI.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp",
+          "version": "repo-file-v1:sha256:28c9d3789ccf55e62645ee5c2e35fd43388d657a7410a52028a7197db811ab93"
+        },
+        {
+          "resource": "repo://src/main.cpp",
+          "version": "repo-file-v1:sha256:9c25c66c0bc38342d58b18a9499307d727819897385bdf4fbbddc068d747c79d"
+        }
+      ]
+    },
+    {
+      "id": "claim_b95540b7a83943cbb1065b3e7ccc89a2",
+      "statement": "Signal routing uses raw const Spectrum pointers in SignalNode inputs and owned Spectrum outputs, so component removal must rewire surviving inputs before same-frame consumers dereference them; multi-output routing preserves the selected output index.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp",
+          "version": "repo-file-v1:sha256:28c9d3789ccf55e62645ee5c2e35fd43388d657a7410a52028a7197db811ab93"
+        },
+        {
+          "resource": "repo://common/signal_node.h",
+          "version": "repo-file-v1:sha256:5467a19f126b78fa5b9cdbec5eb032c72e7448c62d9300beb7311cc993c25c4c"
+        },
+        {
+          "resource": "repo://common/spectrum.h",
+          "version": "repo-file-v1:sha256:30c2a7a890e3ee665e38e9d5ac02a6e51a39c17fd9cedf390dd9510165199ba2"
+        }
+      ]
+    },
+    {
+      "id": "claim_478d4ed369d14f38bdd9c09fce6bc240",
+      "statement": "ComponentRegistry owns live engine instances and maintains view, graph-node, and type_index indexes with rollback when registration fails; ComponentTypeRegistry separately owns canonical type descriptors and dispatch for factories, labels, inspectors, persistence, and authoring.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/component_registry.h",
+          "version": "repo-file-v1:sha256:411197d7ef847e0fe294639b0b3da25a0e3f38242f41a448e0300d159e212a51"
+        },
+        {
+          "resource": "repo://app/include/component_type_registry.h",
+          "version": "repo-file-v1:sha256:32eb07c318f02a3313871c766ab197e8510e2d8b6400311a332ac6ae2a120607"
+        },
+        {
+          "resource": "repo://app/src/app.cpp",
+          "version": "repo-file-v1:sha256:28c9d3789ccf55e62645ee5c2e35fd43388d657a7410a52028a7197db811ab93"
+        }
+      ]
+    },
+    {
+      "id": "claim_a58cb3fc4f4e409a923eae0bed828e2e",
+      "statement": "ProjectSerializer owns .rfsim save/load/new orchestration, persists portable component-index and port references rather than raw pin IDs, and restores components before links and probes.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/project_serializer.h",
+          "version": "repo-file-v1:sha256:e4de3a52d7ba956cd970f87e9420e309a3af8307fdc2f73bd95a9d7ef22e8d98"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp",
+          "version": "repo-file-v1:sha256:efd0c7918a6d146cb052b3efddaae6b0f75ae3d913ae3a00388abfcdccefd087"
+        }
+      ]
+    },
+    {
+      "id": "claim_f9899baa84a9469f8866a2221db17d91",
+      "statement": "Project loading validates JSON shapes and integer representability, skips malformed sibling records with stable -1 mappings, and removes partially restored components on nested failure instead of retaining half-created state.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/project_serializer.cpp",
+          "version": "repo-file-v1:sha256:efd0c7918a6d146cb052b3efddaae6b0f75ae3d913ae3a00388abfcdccefd087"
+        },
+        {
+          "resource": "repo://tests/test_issue48_json_loader.cpp",
+          "version": "repo-file-v1:sha256:e2eb3b4846c9533f9e0337d14d2c10f251c66e9365138aa35a69f98300819ebd"
+        }
+      ]
+    },
+    {
+      "id": "claim_d280559f22cb4235a5a9da30b1f8a079",
+      "statement": "Project S-parameter paths and library data-file paths are constrained to their owning roots, with project saves relativizing contained paths and rejected paths neutralized or ignored.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/component_library.cpp",
+          "version": "repo-file-v1:sha256:ca1780ea67545f24507e937e4c9dd5d4f5a6f666574172ee18f44cab398d8eb6"
+        },
+        {
+          "resource": "repo://app/src/project_serializer.cpp",
+          "version": "repo-file-v1:sha256:efd0c7918a6d146cb052b3efddaae6b0f75ae3d913ae3a00388abfcdccefd087"
+        },
+        {
+          "resource": "repo://tests/test_path_containment.cpp",
+          "version": "repo-file-v1:sha256:cf4f0603bce8ae15bc37b88145e98a66299620f45b05debd78724a3c86924b7a"
+        }
+      ]
+    },
+    {
+      "id": "claim_69bc0b9f62ef41f5b5716ca7c2d8c4f4",
+      "statement": "Extension manifests are untrusted filesystem input: manifest paths are confined to the extension root, invalid manifests remain visible with validation issues, duplicate menu identifiers are rejected, and external tools run only through explicit JSON request/result exchanges.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/extension_manager.cpp",
+          "version": "repo-file-v1:sha256:b28fead5fce349916cb2a4cb54453999e6d59634b9843dbd2ea865b738491e32"
+        },
+        {
+          "resource": "repo://app/src/extension_manifest.cpp",
+          "version": "repo-file-v1:sha256:240591d93582d95eb4d26f5b25c1b52db026bfd74467026a04968ce4c15919cc"
+        },
+        {
+          "resource": "repo://app/src/external_tool_runner.cpp",
+          "version": "repo-file-v1:sha256:6b4aaa3fde717c7653e7a19fe3590076c107a5ad764b1c43b512fc6bcc0f5a6d"
+        },
+        {
+          "resource": "repo://tests/test_issue45_extension_trust.cpp",
+          "version": "repo-file-v1:sha256:5f9b7b7fb67222ea73a86136252854e9b29d8a752dda9d2563e112fb6872538f"
+        }
+      ]
+    },
+    {
+      "id": "claim_d22c4faa30464d6dba20768728c829b9",
+      "statement": "Network Analyzer is a standalone instrument rather than an IComponentEngine or graph node; it finds a unique path, measures a private scratch clone, and uses a signature cache because it has no wired input generation.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp",
+          "version": "repo-file-v1:sha256:28c9d3789ccf55e62645ee5c2e35fd43388d657a7410a52028a7197db811ab93"
+        },
+        {
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h",
+          "version": "repo-file-v1:sha256:8b15fd423f0f0cde261758efc765d48625f038d8d19b7f9d130be3771011ae17"
+        },
+        {
+          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp",
+          "version": "repo-file-v1:sha256:1eebd29c552d5b1e414ba0c7f49af601593982131408bca0016c7593d8b022e2"
+        }
+      ]
+    },
+    {
+      "id": "claim_9fc6cfce6d5d471abcccac5d13b1d64a",
+      "statement": "SessionState, LayoutManager, and TutorialState own separate persistence concerns: window visibility, exe-relative ImGui layout and presets, and exe-relative tutorial completion respectively, rather than project circuit data.",
+      "evidence": [
+        {
+          "resource": "repo://common/session_state.h",
+          "version": "repo-file-v1:sha256:ea7cf2e973308733da3e62b7a697594a85e190e26a9a26b24e9cc11712cdb975"
+        },
+        {
+          "resource": "repo://core/src/core.cpp",
+          "version": "repo-file-v1:sha256:aa1df903bf71e80745f215f6d193793a5fbfb9da0c232c2ad3e2ca07ad527222"
+        },
+        {
+          "resource": "repo://layout/include/layout_manager.h",
+          "version": "repo-file-v1:sha256:82f65fa0cda4cca01dc7518ea4854423e3512ba79aea0d2634a6c2f4f0df2186"
+        },
+        {
+          "resource": "repo://tutorial/include/tutorial_state.h",
+          "version": "repo-file-v1:sha256:829317fcf8d5ecc2d919a007f8cf64d7512fc64e2cf6d88aba1ed32fae5162fa"
+        }
+      ]
+    },
+    {
+      "id": "claim_c6a0ee7f1c3d49818bc9d579b7eb3abd",
+      "statement": "The Test Flow panel delegates flow validation and execution semantics to the test_flow harness, snapshots and restores component state around runs, rewires afterward, and latches restoration failure until circuit reload.",
+      "evidence": [
+        {
+          "resource": "repo://CHANGELOG.md",
+          "version": "repo-file-v1:sha256:823fedd62662fb3eb9dfde2c45f806205dffb80399c0474806a82046046ffbef"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp",
+          "version": "repo-file-v1:sha256:77f9f7ab5782fc56192f2076740ce7f9ac563e666b385ceddaa100075874c3d7"
+        },
+        {
+          "resource": "repo://test_flow/include/flow_runner.h",
+          "version": "repo-file-v1:sha256:54b1b449edc4cd14ed1a0c5c2c2004bf895f3bf2d88e4d1930febb6b5bc81f41"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

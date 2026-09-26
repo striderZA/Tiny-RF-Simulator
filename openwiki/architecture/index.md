@@ -1,3 +1,3 @@
 # Files
 
-- [Architecture Overview](overview.md) - Four-layer architecture of the RF Simulator — platform core, common data model, DSP engines/widgets, and application orchestrator with node graph, dirty-flag caching, and project save/load.
+- [Architecture Overview](overview.md) - Ownership and dependency boundaries for the RF Simulator, from GLFW and ImGui bootstrap through graph-driven DSP, instruments, persistence, libraries, and trusted extension boundaries.

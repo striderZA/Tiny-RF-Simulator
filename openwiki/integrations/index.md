@@ -1,3 +1,3 @@
 # Files
 
-- [S-Parameter System](s-param-system.md) - Documentation for the Touchstone-based S-parameter system covering file parsing, interpolation, per-component S-param modes (amplifier, filter, equalizer, attenuator, combiner), and inspector panel integration.
+- [S-Parameter System](s-param-system.md) - Explains how Touchstone files become frequency-dependent component behavior, how project and library paths are resolved safely, and how S-parameter state survives save and reload.

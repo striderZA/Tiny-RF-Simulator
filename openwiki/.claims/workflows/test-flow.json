@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:0f163a8b92e9f5ef6ece726b0d2f3b6bfdf27d3e27dd30557ad44ed732bc7d1d",
+  "claims": [
+    {
+      "id": "claim_ee8d1e7910ce44b59945ef747f336042",
+      "statement": "The test-flow JSON contract is version 1 with optional name and conditions plus required non-empty measurements; the loader rejects malformed shape, types, empty lists, unknown metrics, and duplicate targets/readings, and resets the parsed spec on any load failure.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/include/flow_types.h#L63-L88",
+          "version": "repo-lines-v1:sha256:c903b1224b2d89536fd863a5f2894dbb371f5f69bfc5167f3142facef3869c44:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyOTU0YWIyODlkZGFiOTQyY2Q1NjFjMTdhNmYzMThkYTQ2NzlhNDQxZDg5MzM0MTg5NTc3OGJmMTk4MmQ2YzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJlMDlhYzg1MWQ3Y2FiZjc2ODNlNWE3NTYyNDE5ZjJjYTVhYTU2NjRkYzAzZjVkOTg2MzIzMjAxZTdkNWFiMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L70-L217",
+          "version": "repo-lines-v1:sha256:992603768fd54d44da791b8be42b5f74a6d988bbc8cc8770efc8c7bf55371dad:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQ4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhZWRlMDY0MzNjZjAyMGY2NzhlNGYyY2MzYTlhMDQ4ZTVlYjljOTBhYmE5MzRhZjc1OWYyOTk5ZTJkMDQ4NmQ5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzNTYyZTc1YjE2YjU4OGE1YWQwNjA1ZGEzMDZhMGVhMjA2ZGM4NjMzM2U0ZGI1NzI2ZGQwYjc0NjUyZmZmMWQ0IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjYTU3N2NiYzZhOGQ2NzMxNmZlZjlhMGQ3ZjU1ZDMzMTc5YjhmNjg4OWQ0MWFkZTc5OWJhYzhhYzc4NDY5ZWQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4YjIzMGI3YTA4NjQ3MzA1MjFhMTJiOWM5Yzg2MzlkYmZmYzYzZDNmMDQ3NmQ4YTNhNjYyNTZkNTBjMDNlNDBmIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_9ba17c8216a74c878a599d76dbd6aa3a",
+      "statement": "Flow component references use IComponentEngine::id() rather than graph-node IDs, and the panel and harness resolve them by scanning live engines; because these IDs are positional and can shift after circuit edits, flows must be revalidated against the current circuit.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L28-L37",
+          "version": "repo-lines-v1:sha256:a9a7f28a2af807f4b5643a57fc08a9b3cecc7ce8a259e33a1c6fe740ae02c92f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMTYxZTBjYTkxMDBiNjdiYzE4MzI2NTQwM2QzNGYyZDA2ZGIzMzQzOTVlZjcyZDQxOWFlYzJmOGViMzFhMzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiMmUzNGI0NDZmODQ5Y2UwMzY3NGFhYTE3YTMzNmEyNjY1ZjQyY2JiNGRhN2JkMDE1YjRhZjA5NzBjZmJhZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmZmFmOWFlMzY5ZjY2YzVhMDE4YzY1NDMxOWEyZjFkMzBmOTkyMzgxMzdhNWI4ZGNlMjg2YzY3MGM2MTYyMmEifQ"
+        },
+        {
+          "resource": "repo://test_flow/AGENTS.md#L27-L29",
+          "version": "repo-lines-v1:sha256:069375ffdad9f5704e5186a7909ffec6e77a5de561a07f8d4bdfcba851931513:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2YzZGUzOWYzNzRiOGIxODEyMzI1YThiODQxMzkyZjFjMTBmOGM5ODRlZDAyZWNmMmYyZDIwZWE2Y2U0M2VmNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDBhZDE1MWM1Y2FmNTUzNmQ0Yzk5MzRhNzMxNWZlZGM1MTEwMzk4NjU3NmRlZGFmOTZkNDdkNjNkMmUwYTE1ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2FhNDQ2YTJjY2M2MDI5YmY5OTAxZWIxY2UyMjRlMDJiNTJhMjNhMjU4OTExZTNmYmZiYzgwYjk5ZTNmNzU1YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjYwMDM4NzNhNTFlNjQyNWExNGY1MDkwMGY0MDYwMDQyM2FjNjBhMGQzODYxZWRlYTA0MzAwZTE2YTM0NGIwNyJ9"
+        },
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L34-L40",
+          "version": "repo-lines-v1:sha256:4b88f9de1a4f4380a4ea571d01ab604f23cfa67cfaebcafa14955a3736d4eab4:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODBkZTFlMTkyNDNjMjY0M2JmZjQ0NjAwOGMyMjJkOTAzNTc2Y2E2NTYyNmM4ZGUxOWQzYmZjZmYzM2UxYzY5MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmE3YzkzOTk2ZTYxNTJjMTkxM2ExYTA0NTU2M2E1NTk4MmFmYjNiMTA4MmE4Nzk3Mzc4YWYwOWFkYzZiYWMzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWU0OTRiZGFjNjVmNzRmN2VjNjllY2I4OWYyMTlhY2Y4YTQ5MDZmOTMxY2VjYjk5OTU4ZTMwZGM2ZjQxOTU4NiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_39f3a629c307418496cb35e856f1b7cb",
+      "statement": "Condition paths address serialize() JSON keys with dot and array-index syntax, and path discovery recursively exposes scalar leaves while preserving numeric/type applicability; the same resolved slot and arithmetic acceptance rules are shared by authoring, validation, and patching.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/include/flow_params.h#L23-L72",
+          "version": "repo-lines-v1:sha256:359470294b456edb7a495fd08031dda4879d92ea457818021cb9011907d0b746:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwMDljYjgyYjlhZjMyYWY2Zjg3ODI2ZTg0ZDRlY2RkNWM2MGU2YjUwNDFiYjMxYjJlMzc1ZDhhOTdiMWFmOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0M2EzMTY2M2RkZmY1Y2QxYzhkNWM3NjlmYjRmMTk1YWUzOGNkMWNlZWZjMzIwZTBjZWFmMGZjM2IxMTU2ZGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjNzQyN2E5ZTAzZjgyMjYyMzg2ZTI2NzI0ZGJkNzhmN2I3ZTIwZTg4MTM3M2FiZDg0Njg0OTcwYzgwYzhjYWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L220-L275",
+          "version": "repo-lines-v1:sha256:52da204026391c477a76dea614f42b120db717e832b62c278ed3d29f000a2851:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjA4MTI3ZDJlNzA0ZTY3NjE1NjJlN2VmOThiYTVhYmFiMmEyYzQ2ZjQxZWRhYWIwNGJkZGQyNzI3YzRjMmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4MjU4MTllNDBkNzg2OGVhZWQ3NDI1ZDRkYzU0ZWI4MTFhZTliNDI1OTFiODc1Mzk3ZWI5Y2IyOWU4Y2QyYzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyNjk3NzM5MTdiOWRkYzFiOGJmZGJhNWIzOTJlMjE2YTdiNzI0M2Y5ZjRjOWE5ODViNDJjYWY5ZjQyOWQyMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3OTIwNzYzZDJlZjZmNzY1ZTk5NzU1ZjZhZTI4ZmQ5ZjBhNTJhNTYzMjE0ODk2MTYwZmI3YmVlNTE4OGRlZDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d02b5385e2474adfbff1318d52a6d73c",
+      "statement": "ValidateFlow is a read-only, exhaustive pre-flight over every condition value and every measurement reference, and RunFlow invokes the same pass before execution so the panel cannot accept a flow the harness rejects.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/include/flow_runner.h#L19-L36",
+          "version": "repo-lines-v1:sha256:63c33252e7b1bcdeb634102a4b3cfedaf2d8d5002bafc85719b4b0a2d7fc4f87:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjYjkzYmMyN2E5ZWZkZDU0OWY1ODUxODBhNWNlMTZlNDBiYmIyNjVmNzJhN2I4MzViOGQxYzhkODYwZmZmZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzZmQzZjU3MWMzNzg0ZjFhMmRlMTY1MDE2YzY5ZGY1MjM0YzcyZjZiM2M0NWNjNmQwZjk4ODI0ZDMyMmRkZDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY1ZmQ4YTcwMWJmNTA1MWQ5OWM2YzQ3OTg1NTFkNGUwYTAzMTkwYmZlZDg2NTFlYjI2M2FmNTY3MTAyZWQ0Y2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyYzc4NGY5YTE5OTQ2Mjc4OGNhMTJkNmU4YjRjOTE3NzRhYjI5N2Y3OGNkOTI5NzE4ZDhjMGU3YmU3YmI2ZDMifQ"
+        },
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L220-L289",
+          "version": "repo-lines-v1:sha256:228f8b69282d4b5a6c21df78aea6009ac42d3766c8c438c93494ee8313d8f62f:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjA4MTI3ZDJlNzA0ZTY3NjE1NjJlN2VmOThiYTVhYmFiMmEyYzQ2ZjQxZWRhYWIwNGJkZGQyNzI3YzRjMmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyNjk3NzM5MTdiOWRkYzFiOGJmZGJhNWIzOTJlMjE2YTdiNzI0M2Y5ZjRjOWE5ODViNDJjYWY5ZjQyOWQyMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4YTZjOGZkOTNmMmExZmZhMjgxZjdiOGFkYzBkOWQ5MjU4NWI5MzI4YWExNjZjYzY5ODdlNzA2MDYzOWEyMDYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_940f08217a3f4e64bb3e018348109b9e",
+      "statement": "RunFlow rejects cyclic graphs, runs the Cartesian product from frozen targeted baselines with the last condition varying fastest, updates in graph order, and returns zero rows for fatal failures while attempting rollback after deserialization errors.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L278-L350",
+          "version": "repo-lines-v1:sha256:12f4cbc681f8df1eb1105659c6ad922050fc187889dc830b32ed44fff03652a9:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYWE5NWM2NjU4ZmJjNmRkYzVlMTlmOTllNGMyNGI4NWJjYTVhODYwM2VkZmEyNmJkYWRhODI0Y2ViMDEzMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2MGQ2MjhlOGM4Yjk2NDA3MjI1NGE5N2M2ZDdhNzY4NWY1OGYwYjVjZDc0OTU0NDc0NTljNGIyMzc1MWU0ZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUyMWYxODVkMWI1ZTk3NTAzMDlhN2QzNGFiYmMzMjAzZTljY2EyMDg1YzFmM2EwY2JlMGViNWE5YmZlNTM1MzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwYjgxMTE2Y2M0OWUxMjMzYmIzNmMzZTRjZjkyNGM1NjFkOGIwMzY2NzBhZjg1YmRlZGJjOWJjZTg1NmI0M2MifQ"
+        },
+        {
+          "resource": "repo://test_flow/src/flow_runner.cpp#L353-L455",
+          "version": "repo-lines-v1:sha256:202a7fd03aedc32e8f1e127adaf7040bd1b52bfbbcaa3ce50576c581844494f0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyY2E0OGZhNGVlOWMxZDZhZThhMTFiZmM4YjE5NDhhYTA5YWViZTcxYmY1ZWFlNmQwZTUxNzhhYjRiNTg1ODk5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1MTg1MWZlNDBkMjFmMTAxZTZmMzJlZWMzMGY4MDZiMjNmNDA4OTFiZDFlNGUyYTVhY2UyYmJhMGQ5MzFhNzJkIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_b029c64eb5ae4c9d859f5e5b2ec741d3",
+      "statement": "The app panel is an authoring/orchestration caller: its effective spec is the draft when present otherwise the loaded file, discovery comes from live engine serialization, and preview, run, and save all consume the same spec rather than implementing a second contract.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/test_flow_widget.h#L45-L57",
+          "version": "repo-lines-v1:sha256:a336533e9785336fcde9e75b8706dba19f6bea57b581f03e9ffba64ba3227b5a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyMWM5N2VmNjNlYWYyOTA0ZDg5Zjg0OGYwOTU0NzUxMWVkZDI5MDQ0MjVlYzEzNGE1OGVlOTQyYjVhZTQ2OTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNDgzMDYwZTVmNDhkYTBjZWNhMzEzNzM4ZTk1Nzg1NDRiMzI5Y2EzMjkyZTZlODA0ZTdmNTBkNzVhY2MwOGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExMzAxYjBmY2Q2ZGYwZDg4ODgzNWNkZGI1YWNiMWY4MjE2OTZmYzcxZTM3ZTc2OWFmNTQxYmZjNzAyYjlmYmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImViMmI3NDQyMTBkMjk3NTUwZTRlNTU5YmM5MWIwYjUxMzQwYTg1ZmM2YTE4ZDAyMTJmNDYyNzk2MTQwYmMzYWYifQ"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L121-L139",
+          "version": "repo-lines-v1:sha256:ff6a276736975f4b39da0359f40041d5e1a20ec5655247e32b89f43b31c56660:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3ZjdkODlmZGMyYjIxZTZjMWQ5OGIxMzNlMGQyYjdmYmQwN2RlOTVhNjk1NzMyMTk3MTA4NDQwY2MxMWRlMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmYjgyNWE0OTE5MWRjNjBjMDYxZmRkNzMzM2ExNDk0ZjljNDExZDU1NDlhMGQ3NDU4MjAyNzAyZWIyNjEyOGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwMTVmNjc2MTNiYzM3NWI5YWQwZGM1YWYyZjYwMjM0ZTQzM2ZmOWQ1NWYxZDIzNTdlMDM0MzU1ZTUxOWYxNmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjliOGQ3YTJkZWNjMmFlMmI0Y2Y2MjUwY2ZjOGI2ZjVjMGJkNWEzYWEyZjQ0ZGU4ZGIyOTI4MTVmM2I2NTIxNWIifQ"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L346-L373",
+          "version": "repo-lines-v1:sha256:57f6c76bf69ad20b6c8b1d18a6890b6bd5ed9baca444bbf7c9f80e3bca689ee8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3MzFiMDhiMWQ5ZDFiZmM1ODYxZGUxMjU3MDg5MThkYTFhMGYyMjdjY2MyMzU3NmI1Y2QxY2NjZjNjNTRiY2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1NjJlNzViMTZiNTg4YTVhZDA2MDVkYTMwNmEwZWEyMDZkYzg2MzMzZTRkYjU3MjZkZDBiNzQ2NTJmZmYxZDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2ZmQ3NmNjMTA0YTdjZmI5MDhjYzFmMWYwOWNkNGM1ZWIxZmYwOWFhNzJmYzEyNGNiZTM2M2FlNmRhYmFmMGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxZmIwODg5NzU3NThiYjNiYzM3ZDc3NDMyZmEwYjBkODYxMjNmMzNkNDJiYjhlNzQ1YmQ3ZTZiMWJlODQ3OTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ea3a2e78ffaf42ba90e09297585549ec",
+      "statement": "The panel imposes a 10,000-row ceiling because the harness is synchronous and uncapped, snapshots every live engine before running, restores snapshots independently afterward, rewires inputs, and latches restoration failure until a circuit reload.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/test_flow_widget.h#L16-L32",
+          "version": "repo-lines-v1:sha256:024d00653e3d866e1e854edbacbcd38413c6b069c1eddd958cc0695294c8f690:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyNDFmMTg2NDFkMDI5OWNjOTE2OThmMDVjMzIyMzYxZTljYTkzNTk4YjA2Nzc5YzliODRlOWY0NDc0MGNlYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5YjJmZjk2MTQ4ZTM1MDIxOWU1OTlkMzYzNjI4NjhmMTBlNTQ0YjBlZWZkNjRjY2M1MDJkMThmYzI2MDkyYWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjNDQ5NzhkODA4ZDIzMTgxNDY2MGZiMTAwZDg1OTUyZDQ1NjUxOTliNWU2ZjQ0M2RkZWVlMzY0ODJjZDQ4MDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlM2I0NjIyMjYyYTVmMGM5YzdlY2FkMDAwYzMxMDU1NjI2NTM0ODM1OTE1OWVmNjJkYzRlN2VjMDVlNDE3MDQifQ"
+        },
+        {
+          "resource": "repo://app/include/test_flow_widget.h#L270-L275",
+          "version": "repo-lines-v1:sha256:2ae35431a0362fd6f920bc2628ab8d1e22250abb4967389fbfa375e3d8fc45b4:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmQ2NDFhYjY2N2FiMzkwNzlmMjI4MjFhMDA1MDcwMGI1OTA2NTFhMDIyZDhmYzMxMDE4NzVlYzYxY2Q2Y2MxMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODI3YmRhYzMwNGFiN2JjMDIyNzM3YTFkMTg5ODU0YTljZDZhMGE3ZDA1N2RlMjhiNjQwODI4ZTU3MmMyNGU0NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGRhNTQwYzMyNTRhN2ZkZmQzOGZmMWM1ODRlMzRjZjg4ZWYzM2IyMjM4YzBmMGNkNGRjMTI0ODI3NjA2Y2U4YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTZkMGYyNTk4OTM2OTMyMGVkYzQ4NWM4NWQ0Mjg0MzA4ZjNhZWI5ODM2MzFlNmNhYzIwYmZkODEzNWZjNWM0MiJ9"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L179-L256",
+          "version": "repo-lines-v1:sha256:a578550599a317b6ce556b6405783e7fd2bb2408a0faeab963a64070dd658a3c:eyJzZWxlY3RlZExpbmVDb3VudCI6NzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNmM5ODE1MmFhYjJiYTVlNTEyMjM2ZjQyMGZiMTM2NTZlOTBlNjg2NjZmZGYxY2EyZDMwYjU5N2E3ZmRlZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxNjM5YTJlNTBkNzkzZGU3MWJjOTM3Zjc0Y2Q5YjdmYjE5ZGE2NWNmMWM2MzBmNTViY2ZjNTI2MjM3MWExZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3NTNlNzMxN2E3Y2FhNjZlYTk4NmFjZmZkZDQ2YzY2ODM1ZmQyZTIxNWQ4ZWI5M2U1NWUyZDJkNzcxNmUwNGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2NDk5YzdkMDRlYzYyOWVhMTVjZDljZWM1MDk0YmJjOWU0YWI5NGRmZmVjZTEzZTFlMDQzYTM4OGJlMmY5YzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_adc58e8354d2442aa67742011dd65be9",
+      "statement": "Circuit reload clears the restoration latch, result, and status while retaining the selected flow and draft for revalidation; test-flow session state is separate from persisted circuit state and the panel does not modify the app dirty flag.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/test_flow_widget.h#L16-L26",
+          "version": "repo-lines-v1:sha256:836596f80331fa396bd03c3ebecab6323cb1c9f0448848bec80dd507c472b1bc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyNDFmMTg2NDFkMDI5OWNjOTE2OThmMDVjMzIyMzYxZTljYTkzNTk4YjA2Nzc5YzliODRlOWY0NDc0MGNlYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4ODhjMTQzMWQyNDUwM2EwOTZkMjczMDM4ZDBiOGJkZTcwNmM1NDY0Zjc4NzYyNmUxOTkwNzY1MWYyMzFhZjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjNDQ5NzhkODA4ZDIzMTgxNDY2MGZiMTAwZDg1OTUyZDQ1NjUxOTliNWU2ZjQ0M2RkZWVlMzY0ODJjZDQ4MDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0MWIxMTk4ZGE3Nzc0NjVlZTIwZTM2ZWYyNTFjZDRkOGNhZmJiYzgxNTVjY2JjMmY1OTNiODdiMmEwMDZlMTEifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L610-L623",
+          "version": "repo-lines-v1:sha256:99bebd931624ab91a219b681c359539c9cc16f429a5794a05c782bbd65a29034:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzI0MmEzYjgzZjY1MWQ1NjYwYzBiN2M1MzYyYjE2MTQxMzNmMmJmY2YxZGQ0ZTI5MGZjNjhjNjI1MDVmZTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyZDg5MGE4MTFmNjhkZDQwZDE5OGMwMTQ1MjczM2QwNzUyYTkxZmYyZmI3ZTQ5YjJhYjJhZjIwMjdiYjM2ZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3ZTVlMjliN2U3YTllYjZkNmYyMTI5Njc2ZTg0ZWMxOTVmZDM3MTdkOTg2OTljY2JjODFjZjU1MGYxYTBhZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhNGUzMmU3MDA0OWQ3ZGI4ODMzN2VmOGVkMDczYzEwOGVmYjg2YjU3OGE0YzZkZDYwZTc5NDg3MDVmY2IzMDAifQ"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L1231-L1240",
+          "version": "repo-lines-v1:sha256:8e89870410293204627613b598b06dab92de3e48b86f33ea2259072f35ede1a8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5MWVjNDMxOGMyNTE1OTI1MjMzYjNjNTVkN2ZlMTVmNzViMTIxNzNjMTJkNjc5ZTE0OGI1ZmZkMWQzYWYzMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3MmY5ODE5NWU0Mjk1OGIwYzAwNTYxYzRiNzVkZDBkZDhmMDQ3ZDM0ZmFjZWRlZDE3ODIxMzk0NGU3NzU5NzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3af27b9ac98a41799f190a3888b7dd4c",
+      "statement": "Non-measurable metrics produce invalid samples rendered as N/A and encoded as JSON null with a separate valid flag, while such samples do not fail an otherwise successful run.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/test_flow_widget.h#L70-L77",
+          "version": "repo-lines-v1:sha256:251c5f81d0c772de50147a609b7c7228fbd1ef44cea128f21aa671975712e33a:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY3ZmIyNzdiNDlmNTk5YTc5YmM4MjM0ZDI2Mjc5ZDQ2NDViMmViODZiMjZiMWEwOTY0NjJmZGJmYWNmNjlmNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGEyNGIxOGQwOTM3ZmY2OWRkMTBkMTcxYTlmY2JlNDljMmY4MzFmYjE2NDU0YTFmYzI4ZjZjZmQxZjY4YWVjYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2M4ZDg5NTY2M2QzOTYwZjFkZThjOWRkZmE5MWNkZWQxYWU2Y2FiYzM5NzQ2YzY3NTFhZjg3MDQwYTllNzVlNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWI1MmY2YjU4ZTc0NDMxY2Y0ZGJmOWRjYzc5Y2I2MTNjZWMwNzA2NzhmZTYwM2Y4MjQ4NTg3OWM5NTNkOGNjZCJ9"
+        },
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L315-L323",
+          "version": "repo-lines-v1:sha256:3c8df410b9a1abf35a7676d08f2b81117e8e1c3cb8c92f7e2982a6c7e4cbbb53:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGFlYTkyN2U1YTk1M2VjY2RhMzE1NWM2YTFkNzJiOTc4ZDcxYTlkOTY4YzQzZjA0NWEzNDNkMmEwNGNkMTZmZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDBlNDk5ZGU2MDE5YWFjY2YzMzVlOGZhZjlkMjMzZjExMjZjOThkMjg5NTY1ZTg2ZjY2NWYyNTk4ODcyZjNhNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTFiZDA4MDQ0OGUzNTg0YTk4MzY5ZDZjMTkzYmViNTEzZWQ1OGQxYzgxNmRiYTg5Y2RmZWIyZDk2YWNiZGZjNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTYwZjkzOTU1YTdkMjg3ODY5M2FjOGY4NTVmM2VmNGE0YTUxYTk4MDNiOWQ2ZmIyMWE0MGFkODY1MTE2NGJhNiJ9"
+        },
+        {
+          "resource": "repo://test_flow/include/flow_result.h#L20-L29",
+          "version": "repo-lines-v1:sha256:841615fefd78f641d18f8dcf07cb52d428019156c5bcaaa5900767850c809f54:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxMTIzNDJjYWIwYzE0MDBlZDMyMTk2YTJhMDc4MmRkNDBjOTc3M2NhNzJjYTkwNzgxZDE5ODFhNjQzN2JmYjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiOWI0YzAyMGRlMzU0ZDZlOWYzMzk3N2U0ZWJlNDc3MTExOTlhMTA4YWE2ODFmZWYyM2MwOTc3N2Y0MmU0NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1YWE0NWYzNTVlNmYxNTZkYTA5ZmU4YjdlYWE2MWE2MzE0YjE2YTFkM2M0OTBkMjA1MGFjNzViYTQxMDZjMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b19531b9a6e44418beca74be7c6bf73a",
+      "statement": "Flow authoring uses a finite-number grammar and atomic sibling-temporary-file writes, while result export writes pretty JSON with a trailing newline and preserves the in-memory successful result when export fails.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/test_flow_widget.cpp#L286-L313",
+          "version": "repo-lines-v1:sha256:2823bf30e9afd92cd675dde1f01c993a98b11ddc06331a3ac38971623582dc97:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MzBkYWE2NmVkNDYwYzkxYjIzMDkxZGNlMWZmMzE3MWQwNzkzYjFlZTIxMjNhYTRhOTM2ZTI2MTYyNGMyYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExYmQwODA0NDhlMzU4NGE5ODM2OWQ2YzE5M2JlYjUxM2VkNThkMWM4MTZkYmE4OWNkZmViMmQ5NmFjYmRmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk4NzIyNzUzZDZlMDc0ZTQ4YmNiMGMwZDhiYjNhZjUzZjEzODRiODNmMzUyMzBkZDcxYWRmZjAyNWJiMjg1NzQifQ"
+        },
+        {
+          "resource": "repo://test_flow/include/flow_author.h#L23-L45",
+          "version": "repo-lines-v1:sha256:314b5c2cff598275c131cb2980beae8db625401032cdc9c9c42cec747e209240:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1Y2ZiMTA5OTEwZTM5NmRiYTM2MzgzMjJhOGZjMmVlMzY5N2ZkOWRjZjg5OTJiYjcwZmNjYTM4NzZhM2U2ZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiODVjNmYxODYzMzEzMzY1OGM5ZDdjZWJlYTBlYjYzZTgyYzZjZGZhMzllNmYyM2E3MzI5M2I1YjgyMGFiMzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQyNDQ2MGRlZDE5MTg0YTIzNGJiMmFlMzQ2YzMwMjU4MWZjYjYwODNlNjk1M2I5ZWM3NTczOWM2OWViZmZiNzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmNDk3Mjc2NDM3NmEyMDZmYjc5MjQ1MjM2ZjNkOWFjZDhiNjZiN2JhOWQ2MWNkODViYTU2MjA4MjExNzVhMjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c4ccbb625f1943c8960433645f1a8e92",
+      "statement": "The supported extension boundary keeps metrics, condition path rules, and UI-free authoring helpers in the test_flow library, with the widget driving those helpers rather than duplicating document or validation logic.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/AGENTS.md#L77-L83",
+          "version": "repo-lines-v1:sha256:42913feb3e37a70ab9c8995b0b18230c4c9710e5912d5f967753c81252fbbee8:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTI1MjZhNzNhZjNmNjI5MzgwODQxYjQ1M2JmOTk4MDRiZTU1NjRhMDMzZDBmNTlhODljNTRkNDQzNmRhMGNkNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2ZjMDdmMzhmNTk3NDBiZTc4NTYyMjExMDkzYzg1NjdmNTNjMmIyMGYxNGNhZDRjMzQ3NTgxZjc1ZTc3Zjk5ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzM4Y2MxNGM0MjRhOTg2MDU5N2U4MjU0YzlkNTM5YWI1ZmVkMmRlMWRlNjM0ZjI1ZWE1NDJhN2VmZWMwMDJiNSJ9"
+        },
+        {
+          "resource": "repo://test_flow/include/flow_author.h#L9-L21",
+          "version": "repo-lines-v1:sha256:a7c6678b62fad060057e7b76fac7c3ceb624aa9e4618618da357c96feb7b7abd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhOTBmOWM1YWQ2NTI2MGJhMTVjZDEyODM4NWExYmJkZTk2ZjRlYmM3NWE3Yzg2OWE1MjJmNzU0NDI1M2E1MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwNzE5NDUxYTk1YWU2ZjQ0MGVhNzE0NWJhNDdjNzY2NTk2Y2NmZDU4YTBkYTAwZWZjMWRlZDA5MDM1MzgzMGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjllYzQ2MGQxYzVjY2EzMTVjMmEyZmJlYThjOTdiYjNhM2MwZWU4NzY4NDRlMzJmZWNjMzgyZmI3ZTdjMDgyOTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmNWI2MjhjNjNjZjJkZjlhMmY3Nzc5ZDlkZDQ0ZDQ2MWYxNjc1MWNlZDNhZGY2MDdhODJlOTRhZDI1NGY1ZjMifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

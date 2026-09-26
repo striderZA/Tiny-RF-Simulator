@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:d7d757d46677b2e427308f80e1640ead1ee8e9abd4cf412ad037a2e322d3840c",
+  "claims": [
+    {
+      "id": "claim_ced728efb3764ce3b8b32999444d7dee",
+      "statement": "The project is configured as C++20 project version 0.25.0, uses CMake 3.20 minimum, places runtime outputs under build/bin, and fetches dependencies into the active build tree with CMake FetchContent.",
+      "evidence": [
+        {
+          "resource": "repo://CMakeLists.txt#L4-L30",
+          "version": "repo-lines-v1:sha256:0eda79fe4c908a9cea114ee9d2b0d7e7e3bc11ddf4ab03989c8211bd4e2f0661:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxMmYxZjE5N2YxOGMwOTUwNmE2NmQ5ZWNkODAyNDBjNWVjODhhZmFlZDFjOTAxNjI0YWQyNWRmM2IwZjI4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MDQ3OWMwNzJlMzM5OTU4ODkwY2FiZDAxNTlmNjQ5MjIzOGZlNTJjY2QxMTAxOTRiMmQ0NzFjYTBmOGIxNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljYjFkNGE5ODkxMDU4YWFjYTQ2MmM0ZDdmNjAyMTg1YmRhZmI3OThjZGE5NTAxNTZiMjI1MzE0MTJhZTFiMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAxYWVkZjQ5NGQ1NWZiYmJiZjZhMzIzMDcxZTdkZjI0MGYzNDc1MGExMmMzZmY2MDdlNGFmMzM3YTYxNDJiMDgifQ"
+        },
+        {
+          "resource": "repo://CMakeLists.txt#L62-L121",
+          "version": "repo-lines-v1:sha256:e620936f581d6849b3a66b157a2d49dfc08035c4dd4f745734e56059310c9e77:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2YzhmMTkzNTdiNWExNTg4OTQwYWI3YjhjYTMwNzU4OGM4Y2QxMjlkMjY4NzQ2NTIzY2Q3NGRkYTRiNDY3NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1MDU2OTk0NGRjYjBlNGYzNGZmOTMxNWEzZWRkYjc1MWJkNzJhZDc0MzVmNTMyZTJkNjc2YjVhMzViY2UyMjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzMzk0NzM2YzNmNGM3YzA5YTE4OGU2NWUyYmE1NDIzNTVjN2VmM2YwNzlmZTkzYjBhM2EwMmQ5ZjE0Y2Q5OTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhYWU2ZTAwZDYzZGVkOWY1Y2ZkMWNhYzRmNjBmNjIyZmZjYzk0ZWVmMTE2ODNhMzE0MjQ5MjE3ZTEzZDM0M2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d58ac5ff922a4ebc91e70b0fb624c6f9",
+      "statement": "The executable bootstrap constructs RfSimulatorCore and RfSimulatorApp, creates the ImNodes context, and runs a callback that calls update_dsp before draw_ui; the core owns the GLFW, ImGui, and ImPlot loop and teardown.",
+      "evidence": [
+        {
+          "resource": "repo://core/src/core.cpp#L46-L83",
+          "version": "repo-lines-v1:sha256:91e49b85f27e14d7ebfee35240cbbc8a8d03183f8a54c25a1135821235a2c7d2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1YWI3MWYwZWVlZmFhNDM5OWMzMzBiMmE1MzViZTEyNzA0MGE4MjRjNmQ2MTEyNDdiMjhmNzQ0MzhhZDQ5MTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlM2VkMWEzMDViZDA3OTI2NWFkNjYzOWFjNzc0ODU5YTA0NzM5ZTQ5ZjY3M2YzYTNkNjA1ZDdjMzFiOGVlZTUifQ"
+        },
+        {
+          "resource": "repo://core/src/core.cpp#L85-L130",
+          "version": "repo-lines-v1:sha256:8ec3072b6a3a54879f20f5edffe66ec7d023cb7c596c29c557d5c86e8d14cf64:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiNjJlNjAwYzljNGE0Njk0ZDQ4NDk0OGJjZWRhMmZmNzlkOTNjYWMxY2Y0Yjc0YjNiY2Q0MTVlMmNiYWQwOTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmY2YzNDRjNmU2NzQ5Nzc3NmMzZTdiZDZkMjZjMjc5ZTg1MzYxYmE2NTBiNzNhMThlNjZhNDUzMzQwYjIyNjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2Y2U1OTg2MThlNzI0NzUwYjcwMTlmNGVkZDc5ZDEwZjg4YzFkMjliMTRmMTRiYjQxMDJjMjA4MTJkMjViNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhZDUyODdlNzdmZWZjOWQxMWFhMzI3ZjE4ZTZmMGI5MTZjZjM2ZGFmZDUxMWYyNDMwZmM2NWQ1YmViYTE0NTUifQ"
+        },
+        {
+          "resource": "repo://src/main.cpp#L5-L14",
+          "version": "repo-lines-v1:sha256:47a9dda566e7867b9b6893949b835aa23f907b6cd16699fc344bb2cd471c8943:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiODUzNDFkMmExYzg4YzQ5NzEwYWZhOWMyZTdiZWE4OTdjMzk1ZTRkYWQ2YzZhNzkwMmEwNGYxMDJkZWQ1MmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZGM3NWQyOWQxZmY2NTJiYmI2MTEwNDFiMDM2ZmUzZmQ2NmJkODZlZGEwNDZlYjNkNTJiNzYzMjQ3YWNmMmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5MWY4NGUzNjZmNTMyYTBiNTBiYzlmMDkyOGEyMGJhNGFlZTJkMDY2ZjhlOGY3NzE4ZWNkN2E3MTlhM2JhZTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2ca3ffef660b49fca5b8af4fd2ed67d3",
+      "statement": "Built-in component-library data is resolved from the executable-relative component_data/library directory when available, with a current-working-directory component_data/library fallback for build-tree execution; user libraries are also scanned from the home and project-local roots.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app.cpp#L310-L349",
+          "version": "repo-lines-v1:sha256:dbf323bce34b124aad2f1187b764081085582fb51fd32ebbcbe96b0ea9087610:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1OTA1NTEzMDAxZmE4OWRkODZlNTA3OGQ3ZmIwOGI4OGEyOTU4ZjUzYzcwYWU1NWEyZGNlYmY3Njg1M2FiNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiZjM3MTI5MTE1ODk4Nzc2YzEyOTEzMjQyYmRiY2JhM2QwM2JmZDVmOGJlOTkxMGZiMDFlOTc0MDNjZTUzYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4NGZhMzQ0ZDUwMGE1Y2ZmNDQ1ZTIyNjkwNWVkOGJlODYwNWVjZDQ5NmJlMjEwZGIwZWIwYTAzMjE5ZTFlNDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cff064aa5bd84297833627ef142c450c",
+      "statement": "The test suite is split between an aggregate Catch2 tests executable and many standalone executables registered by add_standalone_test; tests/CMakeLists.txt is the authoritative inventory and documents the MinGW-w64 registration-ceiling reason for keeping important coverage standalone.",
+      "evidence": [
+        {
+          "resource": "repo://tests/CMakeLists.txt#L126-L149",
+          "version": "repo-lines-v1:sha256:72e0930d6caa6b41f8f08b5b33d4f479107a49fe794cca4ea4faddab844defc0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5NmJjNmUxNDg2NmE0ODY0ZDM1N2ViMDBmZjMxZTNiMzljYmQ1MjFjMThlMWU2NjAzYWI4YWEyZTczMzM2MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwNTUzMjFkZTEwYzAxYTQ1NTQzMWMzMTRkYjJhNjk1YzVjN2Q1YmY4NmU0Mjk1YzUzOGViZmYxMzUzZTcxM2EifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L182-L199",
+          "version": "repo-lines-v1:sha256:4a6adbc79028b4f120c107540ad5a12d4e03fceda02107e38392db15e5e2b753:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxY2I2ZjY4MjIyYzI5MzlkZjc5NmU2ZmJmYzMwYzEzMjU3M2ExNjc5ZWIzZGM0Y2Q4MzAyZjEwYzQwMjNmODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmMGMzYjdiNjBmY2FmN2I3ZGY2YTYyM2JlMGQ0YjUyZjY3NGJhOTllNTY0ODc2YjQ4ZWJlOWI0OTBiM2QxNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhNDRjYWMwMjNmMDY2NDdjMmJmNDM0OWM3ZWZjNGQ0YmM0MTE3ZGI3MmFkZDJmZmExZTJlNjdjM2I0MDI4YWYifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L53-L76",
+          "version": "repo-lines-v1:sha256:d02d1786fdd1a063ab82ea04f9479bf556408063df3497b8249ef303ecccaa96:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNGMzMTE4MGRlM2VmZGUxOTBmNzZjNWZkYmUyM2FmYzMwNWMwMWFiNmU0MDFiMjFkODQyMzA2ODk5M2YxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmZDAxNzIwYjMxYjFkZTQ2MjA5MDBlNjZhOGY1NTY3MjM5NDBhYzE3MGM4MzFmMDQ0YmViZDBkOWEyZDg3MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiODE5ZjlmNTAwNmMzNzcyMDQ3OGMzOTQ5OGY5NjAzMmRjZjc4M2RmNmRiNzhjNjhjNDk1YzkwYzczZmVlZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNWM2NjY0M2NlZTA5MWIwMDNmODhmOTFkNzFhZmIzMWQwNTUwZWI3MDE1NTg3MjYyNTdhMDdmMmQyOTFmOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3759a4cdf9384e4b8358a4069ee16d91",
+      "statement": "The test-flow subsystem is a GUI-free harness that loads versioned JSON flows, validates component paths and measurement targets, executes Cartesian parameter sweeps, and captures built-in measurements; flow component references use engine ids and serialization keys.",
+      "evidence": [
+        {
+          "resource": "repo://test_flow/AGENTS.md#L25-L44",
+          "version": "repo-lines-v1:sha256:9ef3d9c7c3e3dd919dee7b0b190e60579070a512f12cceb9e99db5c83c7c2653:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhMzZjYmM2NmQ2ZWI3MTdlMGZjNWQ2YWEyZmVjZWNkMjE1MGZkYWU2NTMyM2Q4ZGJiYTFkZmQwM2E1MGI5NTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyMzE3MGE2ZGY4M2IyNTlhNjA2NzFiYTYwNmFkNjJjNTZhYWE2OGZjMDA1NGQxNDI4YjI2ZGJhODA3ZGU2MDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhYTliZjBiMTRjN2NhNjRiNTllMGJiMTA2ZGRjZTgwZGNkZGU1MTJiM2U5MDA0MzI3ZjgzNTQwNTJjNWYxNDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBiMmUyZmE0OWU0OWI5ZDEzMjljNDkyZDJkMWJjNDEzYmQwZDM3ZDBmMzkxODg1NGUwOGU0NmMxNWNjMGJmNGIifQ"
+        },
+        {
+          "resource": "repo://test_flow/AGENTS.md#L5-L7",
+          "version": "repo-lines-v1:sha256:17386ad0690e14bc87dfcfdf5995d6f610baa2a12b4b1ea585db241228e6fb1f:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjRlMGU4MTkwZDE3MDkwZjNkNzc1ZmYyZjdkMTE3ZTQ4OTU0ZWUyM2JiY2RiYmViZGU1N2E5ZmM1NTE3ODZmZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdhZGRkZmFjMDVmZDdhZmQ2MzI4Yjc3YjFhYTE2Zjc1MzQ0YzBiODVhZGRhYjc5YWIyODg3YTFkOGE4MDllMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODJmZjEyMDkyZWI0NzU4ZDZiYjk3Y2RlYzBmNGRiYzlmNTZjNTBkNjc2NDNhY2I0ZTc4NzZlNmZhZWI0MjhhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWVlOTQ5NjUzMGRiMjRiMzZiOGRiMzY0MTJjNjFiNTQyOTc2ZDUzMjM5OTZlNmZkMjliZjBlYmVlYzNhMTgwOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_49058348b61f476189dbf3e0614ce92e",
+      "statement": "The application follows an engine/widget separation in which DSP engines are UI-independent and widgets provide ImGui presentation, while explicit node-graph routing carries Spectrum data between engines.",
+      "evidence": [
+        {
+          "resource": "repo://CONTRIBUTING.md#L93-L100",
+          "version": "repo-lines-v1:sha256:12e641590297b20535c0a3e61817c59ffe18c758a86e872cc28eb7785b82c253:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWJiNGQ3ZTRlZjE4YzY1YWZjZWFiZDg2MTk4OWJjN2ZlY2YwODY2YWRhNzMxODk1YjMzNGY2NWEyNGMzM2Y2NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzY1YjYzYzUxNDc5NGI4YzI4NjU0ODc5NWE1NGI5MzBkYTcyOWE0Yjg4ZjE2NzJkNGY5NjEwNDQyMzkxMGQ3ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjhhMGMwMWViZmM0MDVkZWRlYmZhNjZmMzk4ZGI3MGJjY2Y4MDJkNTcwZWI1ZDk1OTRjMTI5NGYwNTVhNGI4ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDE2MDA2ZDcxN2IyMmI4YWFmYTg2NGNiNjEzZWQzNDM0ODQ3ZjBkNjJmZWI3NjI1MjEwMmJiMTM2NTgzYmI1OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_f4144868c7834508bde8b515c090f4af",
+      "statement": "Project and component-library JSON are treated as untrusted input, and S-parameter path containment plus malformed-loader behavior have dedicated standalone test coverage.",
+      "evidence": [
+        {
+          "resource": "repo://tests/CMakeLists.txt#L182-L199",
+          "version": "repo-lines-v1:sha256:4a6adbc79028b4f120c107540ad5a12d4e03fceda02107e38392db15e5e2b753:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxY2I2ZjY4MjIyYzI5MzlkZjc5NmU2ZmJmYzMwYzEzMjU3M2ExNjc5ZWIzZGM0Y2Q4MzAyZjEwYzQwMjNmODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmMGMzYjdiNjBmY2FmN2I3ZGY2YTYyM2JlMGQ0YjUyZjY3NGJhOTllNTY0ODc2YjQ4ZWJlOWI0OTBiM2QxNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhNDRjYWMwMjNmMDY2NDdjMmJmNDM0OWM3ZWZjNGQ0YmM0MTE3ZGI3MmFkZDJmZmExZTJlNjdjM2I0MDI4YWYifQ"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L214-L229",
+          "version": "repo-lines-v1:sha256:166587f2fb2b23a3647ef65b03026e4f6d88ec7c6e34c2acaf40df109a5a8ec0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3NjkwMDYzY2M3YTlkZmI5OTA2ZTFiOGQ3ZTdjM2ZiYTU1MGE1NmQ4YTEyM2Y1OWJkNzdiNTdjNmM1YzcxYmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiZmRiYmE4MjZlY2UxYmMzOTliYmI2NzE1ZDNiZjk2YjU1OTMxODdlMWMxNzE4MDEyY2NmODViYTE3YWI4OGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4ZGE5NTllZWQ0MDE5MzBlMjA5NWNjZjVkOGZkZTMwMGJlOWFjZDMyYTAzOGQ2ODEzOTM0MjBmMjhjMDc3M2QifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.2",
+    "at": "2026-09-25T17:58:06.034Z"
+  }
+}

@@ -1,201 +1,126 @@
 ---
 type: Entry Point
 title: RF Simulator — Quickstart
-description: Entry point for the RF Simulator documentation. Covers repository layout, build & test commands, key architectural concepts, recent milestones, and links to all major wiki sections.
-tags: [quickstart, entrypoint, rf-simulator]
+description: Practical entry point for building, testing, running, and navigating the current C++20 RF Simulator repository. Includes the authoritative project version, runtime-data locations, and routes to focused architecture, workflow, domain, operations, and testing guidance.
+tags: [quickstart, entrypoint, build, testing, rf-simulator]
+verified:
+  - by: openwiki/0.5.2
+    at: 2026-09-25T17:58:06.034Z
+sources:
+  - id: openwiki-source-5f1fbd4979e8254a53e79f25
+    resource: repo://app/src/app.cpp
+  - id: openwiki-source-d44494ef3e497fea81240ef8
+    resource: repo://CMakeLists.txt
+  - id: openwiki-source-f317ee207e1653d2033c81a4
+    resource: repo://CONTRIBUTING.md
+  - id: openwiki-source-87a8648c20764eeabb54d18e
+    resource: repo://core/src/core.cpp
+  - id: openwiki-source-d364d949938a433276255c32
+    resource: repo://src/main.cpp
+  - id: openwiki-source-d421666d5c747b865626a28b
+    resource: repo://test_flow/AGENTS.md
+  - id: openwiki-source-fa68239bf614d837d7e5522c
+    resource: repo://tests/CMakeLists.txt
+generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
 ---
 
 # RF Simulator — Quickstart
 
-RF Simulator is a **modular RF signal chain simulator** with a real-time spectrum display. Design a cascade of RF components (generators, amplifiers, mixers, filters, ADCs, channelizers) in a visual node editor, probe any node, and see the spectrum update live.
+RF Simulator is a C++20 desktop RF signal-chain simulator. The application combines a node-graph editor with real-time spectrum, I/Q, power-meter, and network-analyzer views; components expose pure DSP engines and optional ImGui widgets.
 
-**Language:** C++20 | **Build:** CMake 3.20+ / Ninja | **UI:** Dear ImGui (docking) + ImPlot + imnodes | **Tests:** Catch2 v3.4.0 + imgui_test_engine | **Version:** v0.19.2
+**Current project version:** `0.25.0` (from `CMakeLists.txt`) · **Build:** CMake 3.20+ and Ninja · **UI:** GLFW, OpenGL, Dear ImGui, ImPlot, and imnodes · **Tests:** Catch2 v3.4.0 plus ImGui Test Engine.
 
----
+## Build and run
 
-## Quick Start
-
-### Prerequisites
-
-| Dependency | Minimum | Notes |
-|---|---|---|
-| Compiler | C++20 | GCC 11+ (MinGW-w64 on Windows), Clang 14+ |
-| CMake | >= 3.20 | [cmake.org/download](https://cmake.org/download) |
-| Ninja | >= 1.10 | [ninja-build.org](https://ninja-build.org) |
-| OpenGL | 2.1+ | System-provided on all platforms |
-
-> **Windows:** MSVC is not supported. Use MinGW-w64. Delete `build/` if switching compilers.
-
-### Build & Run
+Prerequisites are C++20-capable GCC/Clang, CMake, Ninja, OpenGL 2.1+, and Git (CMake `FetchContent` needs it). Windows builds use MinGW-w64; MSVC is not supported. Delete `build/` when changing compilers.
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc
 cmake --build build
-build/bin/tiny-rf-simulator.exe        # Windows
-# build/bin/tiny-rf-simulator          # Linux/macOS
+
+# Linux/macOS
+build/bin/tiny-rf-simulator
+# Windows
+build/bin/tiny-rf-simulator.exe
 ```
 
-First build takes 60–90s (FetchContent downloads all dependencies). Subsequent builds are fast.
+The first configure/build downloads pinned dependencies into `build/_deps/<name>-src/`; build products go to `build/bin/`. Neither directory is source-tree runtime data.
 
-### Run Tests
+Run the registered tests after building:
 
 ```bash
 ctest --test-dir build --output-on-failure
 
-# Benchmarks only
+# DSP benchmarks (use .exe on Windows)
 build/bin/tests [bench]
 ```
 
----
+For a clean contributor gate, also run `bash scripts/format.sh --check`. The release workflow is tag-driven rather than pull-request-driven; see [Build & Operations](operations/build-runbook.md).
 
-## Repository Layout
+## Runtime data and state
 
-| Path | Purpose |
+When running from a build tree, start the executable with the repository root as the working directory if you need source-tree examples. The built-in component library is loaded from `<executable>/component_data/library` when present (the install/package layout), otherwise from `component_data/library` relative to the current working directory. Extensions likewise use built-in, global, and project-local roots; the source-tree built-in `extensions/` directory is optional and the repository's fixtures are under `tests/fixtures/extensions/`.
+
+Layout and first-run tutorial completion are executable-relative state. A project’s `.rfsim` path controls project-relative library/extension context; unsaved projects use the current working directory. Build outputs and fetched dependency sources remain under `build/` and are not the application’s persistent data store.
+
+At startup `src/main.cpp` creates `RfSimulatorCore`, creates the imnodes context, constructs `RfSimulatorApp`, and gives the core loop a callback that updates DSP before drawing UI. The core owns the GLFW/ImGui/ImPlot lifecycle and shuts those contexts down after the loop.
+
+```mermaid
+sequenceDiagram
+    participant Main as src/main.cpp
+    participant Core as RfSimulatorCore
+    participant App as RfSimulatorApp
+    participant Graph as Node graph
+    Main->>Core: construct and run
+    Main->>App: construct
+    Core->>App: update_dsp()
+    App->>Graph: route and evaluate frame
+    Core->>App: draw_ui()
+    Core-->>Main: loop ends and contexts are destroyed
+```
+
+This is the application bootstrap and per-frame callback order; graph evaluation details belong in [DSP Pipeline & Runtime Workflows](workflows/dsp-pipeline.md).
+
+## Repository landmarks
+
+| Area | Responsibility |
 |---|---|
-| `app/` | Application orchestrator (`RfSimulatorApp`), component registry, library browser, inspector panel |
-| `core/` | GLFW window, ImGui/ImPlot lifecycle, main loop (`RfSimulatorCore`, PIMPL in `core/src/core.cpp`) |
-| `common/` | Header-only data model: `Spectrum`, `SignalNode`, `IComponentEngine`, `ViewManager`, `Group` |
-| `signal_generator/` | Tone generator engine + widget |
-| `amplifier/` | Gain + noise figure + nonlinearity (OIP2/OIP3) + S-param mode |
-| `mixer/` | Frequency conversion with LO, sum/difference |
-| `splitter/` | 1-to-2 power splitter (-3 dB) |
-| `ideal_filter/` | Brickwall LPF/HPF/BPF/BSF + S-param mode |
-| `equalizer/` | Gain-slope (dB/decade) equalizer + S-param mode |
-| `attenuator/` | Passive attenuator with manual dB control + S-param mode, passive noise model |
-| `combiner/` | 2-input, 1-output passive RF combiner (Wilkinson -3 dB model) + 3-port S-param mode |
-| `rf_switch/` | 1-input, 2-output SPDT switch with selectable throw, insertion loss, and isolation |
-| `rf_switch_2to1/` | 2-input, 1-output reverse SPDT switch with selectable throw, insertion loss, and isolation |
-| `coax/` | Coaxial cable loss/phase model (MilTech presets) |
-| `adc/` | RF ADC with sampling, aliasing, NSD noise model |
-| `pfb_channelizer/` | Polyphase filter bank (M channels, K taps) |
-| `spectrum_analyzer/` | Real-time spectrum display (RBW, VBW, jitter, markers, peaks) |
-| `network_analyzer/` | Singleton network analyzer instrument: Point A/B probe pins, gain + noise-figure sweep over a cloned private chain ("cheat" mode) |
-| `iq_plot/` | Time-domain I/Q waveform (IFFT from spectrum) with ring buffer and zoom |
-| `node_graph/` | Node graph topology engine + imnodes-based editor + subcircuit groups |
-| `touchstone/` | Touchstone .sNp file parser + S-parameter interpolation |
-| `help/` | Help window with F1 hotkey and Help menu entry, data-driven quick-reference sections |
-| `tutorial/` | Interactive first-run guided walkthrough: data-driven step catalog, `TutorialState` (pure logic + completion marker), `TutorialWidget` (panel highlight) |
-| `layout/` | Exe-relative ImGui layout persistence (default + named presets) |
-| `logging/` | Singleton logger with ImGui viewer |
-| `tests/` | Catch2 unit tests plus many standalone executables (including the RF switch suites and `test_issue48_json_loader`) and benchmarks |
-| `test_engine/` | ImGui test engine UI tests |
-| `component_data/` | S-parameter data files (.s2p/.sNp) + JSON component library definitions (amplifiers, filters, equalizers, etc.) |
-| `src/` | `main.cpp` entry point |
-| `docs/` | Engineering docs (nonlinear model, PFB, ADC, Touchstone specs) |
+| `src/` and `core/` | Process entry point and GLFW/ImGui/ImPlot main-loop lifecycle |
+| `app/` | `RfSimulatorApp`, component registry, project serializer, library browser, panels, extensions |
+| `common/` and `node_graph/` | Shared `Spectrum`/engine contracts and graph topology/routing |
+| Component modules | `signal_generator/`, `amplifier/`, `mixer/`, `ideal_filter/`, `equalizer/`, `attenuator/`, `splitter/`, `combiner/`, `rf_switch/`, `rf_switch_2to1/`, `coax/`, `adc/`, and `pfb_channelizer/` |
+| Instruments | `spectrum_analyzer/`, `iq_plot/`, `power_meter/`, and `network_analyzer/` |
+| `touchstone/` and `component_data/` | Touchstone parsing/interpolation and library/S-parameter data |
+| `test_flow/` | GUI-free JSON test-flow loading, validation, parameter sweeps, and measurements |
+| `tests/` and `test_engine/` | Catch2/standalone coverage and ImGui UI tests |
 
-> The extension system's built-in root (`<source>/extensions/`) is scanned only if present — the repo ships no built-in extension payload; test fixtures live in `tests/fixtures/extensions/`. Global (`~/.rf-sim/extensions/`) and project-local (`<project>/rf-sim-extensions/`) roots are scanned too.
+## Task routing
 
----
-
-## Documentation Map
-
-| Page | What It Covers |
-|---|---|
-| [Architecture Overview](architecture/overview.md) | Engine+Widget pattern, signal chain, dirty flags, generation counters |
-| [RF Components](domains/rf-components.md) | Every DSP engine module + instrument (network analyzer): purpose, parameters, design decisions |
-| [DSP Pipeline & Workflows](workflows/dsp-pipeline.md) | Frame loop, signal routing, topological sort, probe system |
-| [S-Parameter System](integrations/s-param-system.md) | Touchstone parser, per-component S-param mode, interpolation |
-| [Testing Guide](testing/guidance.md) | Unit tests, benchmarks, UI tests — structure and patterns |
-| [Build & Operations](operations/build-runbook.md) | Building, CI, debugging, configuration, common issues |
-
----
-
-## Task Routing
-
-| Change area / intent | Wiki page | Source entry points | Key symbols / types | Focused tests | Minimal validation |
-|---|---|---|---|---|---|
-| Add / modify a DSP engine component | [RF Components](domains/rf-components.md), [Architecture](architecture/overview.md) | `app/src/component_type_registry.cpp`, `<component>/src/*_engine.cpp`, `app/src/inspector_panel.cpp` (`drawerMap()`) | `IComponentEngine`, `ComponentTypeDescriptor`, `ComponentRegistry` | `tests/test_<component>.cpp` | `ctest --test-dir build -R <component> --output-on-failure` |
-| Modify an SPDT switch | [RF Components](domains/rf-components.md#rf-switches-rf_switch-rf_switch_2to1) | `rf_switch/src/rf_switch_engine.cpp`, `rf_switch_2to1/src/rf_switch_2to1_engine.cpp`, `app/src/component_type_registry.cpp` | `RFSwitchEngine`, `RFSwitch2to1Engine` | `test_rf_switch`, `test_rf_switch_project`, `test_rf_switch_2to1` | `ctest --test-dir build -R "rf_switch" --output-on-failure` |
-| Change the node graph / topology / probes | [DSP Pipeline](workflows/dsp-pipeline.md) | `node_graph/src/node_graph_engine.cpp`, `node_graph/src/node_graph_widget.cpp` | `NodeGraphEngine`, `GraphNode`, `GraphLink`, `SignalSource` | `test_node_graph_engine.cpp`, `test_issue42_multi_output.cpp` | `ctest --test-dir build -R "node_graph|issue42" --output-on-failure` |
-| S-parameter / Touchstone work | [S-Parameter System](integrations/s-param-system.md) | `touchstone/src/touchstone_parser.cpp`, `touchstone/src/s_parameter_data.cpp`, `app/src/project_serializer.cpp`, `app/src/component_library.cpp` | `TouchstoneParser`, `SParameterData`, `resolveSparamPath` | `test_touchstone.cpp`, `test_*_sparam.cpp`, `test_path_containment.cpp` | `ctest --test-dir build -R "touchstone|sparam|path_containment" --output-on-failure` |
-| Project save/load (`.rfsim`) | [Architecture](architecture/overview.md) | `app/src/project_serializer.cpp`, engine `serialize()`/`deserialize()` | `ProjectSerializer`, `checkedJsonInt` | `test_project_file.cpp` (17 cases), `test_issue48_json_loader.cpp` (project cases) | `build/bin/test_project_file` or `ctest --test-dir build -R test_project_file --output-on-failure` |
-| Malformed project / library JSON (issue #48) | [Architecture](architecture/overview.md#json-loader-hardening-issue-48) | `app/src/project_serializer.cpp` (`load()`), `app/src/component_library.cpp` (`loadFile()`/`scan()`) | `ProjectSerializer::load`, `ComponentLibrary::loadFile`, `checkedJsonInt` | `tests/test_issue48_json_loader.cpp` (11 cases) | `build/bin/test_issue48_json_loader` |
-| Network Analyzer instrument | [Architecture](architecture/overview.md#network-analyzer-instrument), [RF Components](domains/rf-components.md#network-analyzer-network_analyzer) | `network_analyzer/src/network_analyzer_engine.cpp`, `network_analyzer/src/network_analyzer_widget.cpp`, `app/src/app.cpp` (`NaHost`/`NaScratch`) | `NetworkAnalyzerEngine`, `INetworkAnalyzerHost`, `INetworkAnalyzerScratch` | `test_network_analyzer.cpp`, NA round-trip cases in `test_project_file.cpp` | `build/bin/test_network_analyzer` |
-| Extensions / external tools | [Architecture](architecture/overview.md) | `app/src/extension_manager.cpp`, `app/src/extension_manifest.cpp`, `app/src/external_tool_runner.cpp` | `ExtensionManager`, `ExtensionManifest`, `ExternalToolRunner` | `test_extensions.cpp` | `build/bin/test_extensions` |
-| Tutorial / first-run flow | [Architecture](architecture/overview.md) | `tutorial/src/tutorial_widget.cpp`, `tutorial/include/tutorial_state.h`, `app/src/app.cpp` | `TutorialState`, `TutorialWidget` | `test_tutorial_state.cpp`, UI tests `tutorial_*` | `build/bin/test_tutorial_state`; `xvfb-run build/bin/test_ui` |
-| Library browser / component authoring | [RF Components](domains/rf-components.md) | `app/src/component_library.cpp`, `app/src/component_form_model.cpp`, `app/src/component_form_widget.cpp` | `ComponentLibrary`, `ComponentFormModel`, `ComponentFormWidget` | `test_component_library.cpp`, `test_component_authoring.cpp` | `build/bin/test_component_authoring` |
-| UI / ImGui panel work | [DSP Pipeline](workflows/dsp-pipeline.md) | `app/src/app.cpp` (`draw_ui`), `<component>/src/*_widget.cpp` | widget classes, `RfSimulatorApp::draw_ui` | UI tests in `test_engine/ui_tests.cpp` | `xvfb-run build/bin/test_ui` |
-
----
-
-## Key Concepts
-
-**Engine + Widget separation** — Every RF component is split into a pure-DSP `*Engine` (no UI includes) and an optional `*Widget` (ImGui UI). Only widget files include `<imgui.h>`.
-
-**Spectrum data structure** — All signals flow as `Spectrum` objects containing a frequency grid, discrete tones (`{freq, power_dBm, phase_deg}`), and noise PSD vectors in **W/Hz** (migrated from per-bin W; the old `addedNoisePerBin_W()` helper is deprecated).
-
-**Noise model** — Noise is stored as power spectral density (W/Hz) throughout the signal chain. Each engine adds noise density appropriate to its model (thermal noise floor at kT ≈ −174 dBm/Hz, noise figure, or NSD).
-
-**Project save/load** — Full circuit persistence to `.rfsim` JSON files (v0.8.0). Every engine implements `serialize()`/`deserialize()` via nlohmann/json. Graph topology, node positions, links, and probes are all round-tripped. Unsaved-changes dialog with dirty tracking.
-
-**S-parameter mode** — Five components (amplifier, ideal filter, equalizer, attenuator, combiner) support dual-mode operation: ideal parametric OR Touchstone .sNp file driven. S-parameter data files live in `component_data/`.
-
-**Component library** — File-based library browser (v0.9.0) with global and per-project JSON component definitions. Supports 8 library categories (amplifiers, attenuators, splitters, filters, mixers, equalizers, combiners, ADCs) with datasheet parameters (gain, NF, OIP3, P1dB). The registry also includes the authorable SPDT switch types, which use direct inspector fields rather than S-parameter data. One-click insert into the node graph via View menu. In-app authoring (v0.16.0) adds a New/Edit Component form (`ComponentFormModel`/`ComponentFormWidget`) that writes schema-v2 JSON, validated against the [ComponentTypeRegistry](architecture/overview.md) schema; built-in `component_data/library/` entries are read-only.
-
-**P1dB parameter** — First-class 1-dB compression point support (v0.9.0) on `NonlinearModel` and `AmplifierEngine`. Automatic OIP3 ↔ P1dB derivation (OIP3 = P1dB + 9.6 dB) when OIP3 is at default. Persisted in project save/load.
-
-**Subcircuit groups** — The node graph supports grouping nodes into subcircuits with automatic boundary pin synthesis, collapse/expand, and rename.
-
-**Dirty-flag caching** — Each `Spectrum` has a `generation` counter. Engines cache `(input*, generation)` pairs and skip recomputation when nothing changed (~5 ns overhead for cached skip).
-
-**Node graph** — Components are wired visually in an imnodes-based editor. The `NodeGraphEngine` provides topological sort (Kahn's algorithm) for correct DAG evaluation order. Subcircuit groups provide visual-only collapse/expand. Routing and probes resolve `SignalSource{node, output_index}` pairs so multi-output components (Splitter, PFB) connect to the correct port (`outputs[1]`, not always `outputs[0]`).
-
-**Guided tutorial** (v0.17.0) — New users get a one-time first-run "Welcome" modal offering a data-driven 6-step walkthrough (`tutorial/` module, sibling to `help/`/`layout/`). Each step highlights its target panel via a foreground-drawlist outline and a floating "Tutorial Guide" window with Back/Next/Skip/Exit. Completion persists to an exe-relative `.tutorial_completed` marker (mirrors `LayoutManager`; deliberately not `SessionState`, which is Windows-only), so the offer never repeats. `Help > Tutorial` re-runs it, routed through the same unsaved-changes guard as New/Open/Exit. See [architecture overview](architecture/overview.md) and [testing guide](testing/guidance.md).
-
-**Extension system** (v0.16.0) — Manifest-based plugins (`plugin.json`) for data packs and external tools. `ExtensionManager` discovers them across built-in (`<source>/extensions/`, scanned if present), global (`~/.rf-sim/extensions/`), and project-local (`<project>/rf-sim-extensions/`) roots; `ExternalToolRunner` executes approved tools via a JSON request/result file handshake. Surfaced through a Tools menu and an Extensions panel. See [architecture overview](architecture/overview.md).
-
-**Network analyzer** (v0.19.x) — A singleton instrument panel (like the Spectrum Analyzer) that measures gain and noise figure of the signal chain between two probe points, Point A (reference) and Point B (measured). It is **not** an `IComponentEngine`: it has no graph node, no pins, no registry row. The v3 engine (`NetworkAnalyzerEngine`) walks the real graph's links, requires exactly one distinct path from A to B that never crosses a Combiner's combined input, then clones the discovered chain onto a private, throwaway scratch graph (`INetworkAnalyzerScratch`) and sweeps a synthetic tone-comb stimulus across 2–2001 points — the live simulation is never read for signal purposes nor written to ("cheat" mode). Sweep params and Point A/B survive project save/load; a signature-gated dirty check (each chain node's `serialize()` dump + sweep params) skips the expensive clone-and-cascade when nothing changed. Toggled via `View > Network Analyzer`. See [architecture overview](architecture/overview.md), [RF components](domains/rf-components.md), and [DSP pipeline](workflows/dsp-pipeline.md).
-
-**S-param path containment** (v0.19.x, 2026-08-09 codebase review) — Two security hardenings: S1 confines S-parameter file paths to the project directory on `.rfsim` load (`ProjectSerializer::resolveSparamPath`) and to the library JSON's directory on instantiation (`ComponentLibrary::resolveDataFilePath`), relativizing in-project paths on save; S2 caps Touchstone input at 256 MiB and 10M frequency points enforced during the parse loop. Covered by the `test_path_containment` standalone suite. See [S-parameter system](integrations/s-param-system.md).
-
-**JSON loader hardening** (v0.19.2, issue #48) — Project and component-library JSON are treated as untrusted input at their two load boundaries. `ProjectSerializer::load()` validates every optional top-level section shape before resetting state, validates each component record (object → string `type` → object `params`) before typed access, uses `checkedJsonInt` (an int-representability guard) for all integer fields in links/probes/Network Analyzer points/groups, rolls back a partially created component when nested `deserialize()` throws, and resolves saved indexes through a preserved mapping so skipped records never shift later valid entries. `ComponentLibrary::loadFile()`/`scan()` validate required fields, range-check `schema_version`, default malformed optional strings, skip malformed `data_files` entries individually, and keep scanning across bad files/subtrees. Malformed entries are logged and skipped; the load returns a bounded, logged failure instead of throwing. Covered by the standalone `test_issue48_json_loader` executable (must be run directly — outside the MinGW `tests.exe` registration ceiling). See [architecture overview](architecture/overview.md) and [testing guide](testing/guidance.md).
-
----
-
-## Recent Milestones
-
-| Milestone | Date | Description |
+| Intent | Start here | Typical source/tests |
 |---|---|---|
-| Network Analyzer v3 + perf fix | v0.19.x | Singleton gain/NF instrument with Point A/B probe pins and private clone-chain sweep; `View > Network Analyzer`; `.rfsim` round-trip of sweep params + points; v0.19.1 fixes O(N*M) tone matching with 1 Hz cell bucketing + signature-gated dirty check; `test_network_analyzer.cpp` (12 cases) |
-| JSON loader hardening | v0.19.2 | Malformed-but-valid project/library JSON is isolated at the two load boundaries: top-level shape checks, per-record type validation, `checkedJsonInt` representability guard, exception-safe rollback of partially created components, per-entry skipping in `data_files`/links/probes/NA points/groups; standalone `test_issue48_json_loader` (11 cases) |
-| S-param path containment | v0.19.x | S1: `.rfsim` load confines `sparam_filepath` to the project dir, save relativizes in-project paths; library `data_files` confined to the JSON's dir. S2: Touchstone parser 256 MiB size cap + 10M in-loop frequency-point cap. `test_path_containment.cpp` |
-| Interactive tutorial mode | v0.17.0 | Data-driven 6-step guided walkthrough with panel highlight, first-run "Welcome" offer, exe-relative `.tutorial_completed` marker; `Help > Tutorial` guarded by the unsaved-changes modal; `test_tutorial_state.cpp` + 5 UI tests |
-| Extension system | v0.16.0 | `plugin.json` manifests for data packs + external tools, discovery across built-in/global/project-local roots, JSON request/result `ExternalToolRunner`, Tools menu + Extensions panel; test fixtures in `tests/fixtures/extensions/` (repo ships no built-in extension payload) |
-| Component registry unification | v0.16.0 | Single `ComponentTypeRegistry` dispatch table for all component types (canvas menu, add, duplicate, save/load, inspector, NodeKind); `RfSimulatorApp` decomposed into `ProjectSerializer` + `PFBViewManager`; S-param modes now reload on project deserialize |
-| SPDT RF switches | Latest | Added forward `rf_switch_spdt` (COM → T1/T2) and reverse `rf_switch_spdt_2to1` (T1/T2 → COM) nodes with selectable throw, insertion loss, isolation, passive noise, serialization, and focused tests |
-| Spectrum analyzer trace modes | v0.11.0 | 4 trace modes (ClearWrite, MaxHold, MinHold, VideoAverage EWMA) with per-trace history buffers, auto-prune, mode-switch reset; UI controls for trace mode + video average count |
-| Library S-param data file import | v0.10.0 | JSON schema v2 with `data_files` array for Touchstone references; auto-load S-param on library instantiation; graceful fallback to single-point params; `[DATA]` indicator in browser |
-| Part number display | v0.9.1 | Component blocks show library part number subtitle; 7 new component categories in library |
-| Component library | v0.9.0 | File-based library manager with JSON definitions, tree-browser panel, one-click insert; P1dB parameter on AmplifierEngine/NonlinearModel with auto OIP3 derivation; 3 example amplifiers (AM1143, ZX60-33LN+, MGA-62563) |
-| Duplicate components | v0.8.4 | Right-click → duplicate copies a component with all parameters (offset position, no connections copied) |
-| Marker fix | v0.8.2 | Markers now only consider actively displayed traces; per-trace visibility tracking |
-| Project save/load | v0.8.0 | File menu, keyboard shortcuts, unsaved-changes dialog, serialization on all 12 component types, 9 round-trip tests |
-| Combiner component | July 14 | 2-input passive RF combiner (Wilkinson -3 dB model), 3-port Touchstone S-param mode, Y-shaped symbol |
-| Attenuator component | July 14 | Passive attenuator with manual dB control, passive noise model (NF = atten), S-param mode |
-| Touchstone validation | Latest | Input validation, `log10(0)` clamp, `lower_bound` interpolation |
-| IQ plot DSP extraction | Latest | Extracted `build_iq_spectrum()` from widget to testable function, added Fs guard |
-| Equalizer NaN guards | Latest | NaN guards for `log10(0)`, clamp ref freq |
-| Coax phase/presets | Latest | Fixed phase calc (removed redundant 1e-3), clamp connector loss, corrected MT 340 preset |
-| ADC cleanup | Latest | Removed dead bits/v_fs params, clamp Fs, use dbToLinear |
-| NF/OIP clamp | Latest | Clamp NF ≥ 0 dB, OIP2/OIP3 ≥ −30 dBm |
-| S-param rework | July 6 | Deleted generic `SParamEngine`, added per-component S-param modes (amplifier, filter, equalizer) |
-| EqualizerEngine | July 6 | New component: gain-slope + S-param mode |
-| Subcircuit groups | June 21 | Expandable/collapsible node groups |
-| Coax cable | June 18 | MilTech cable presets with K1/K2 loss model |
-| v0.3.0 | June 22 | Project save/load (JSON serialization) |
+| Understand ownership, engines/widgets, persistence, registry, or extensions | [Architecture Overview](architecture/overview.md) | `app/`, `common/`, `node_graph/`; `test_project_file`, `test_extensions` |
+| Change runtime DSP, routing, probes, caching, or project lifecycle | [DSP Pipeline & Runtime Workflows](workflows/dsp-pipeline.md) | `RfSimulatorApp::update_dsp`, `NodeGraphEngine`; node-graph and multi-output tests |
+| Add or tune a component/instrument | [RF Components](domains/rf-components.md) | `<component>/*_engine.cpp`, registry, focused `test_<component>` executable |
+| Change Touchstone or S-parameter behavior | [S-Parameter System](integrations/s-param-system.md) | `touchstone/`, `ProjectSerializer`, component library; `touchstone`, `*_sparam`, and containment tests |
+| Author or execute JSON Test Flow sweeps | [Test Flow Authoring & Execution](workflows/test-flow.md) | `test_flow/`; flow validation/runner and authoring tests |
+| Build, package, troubleshoot, or understand CI | [Build & Operations](operations/build-runbook.md) | `CMakeLists.txt`, `scripts/`, `.github/workflows/release.yml` |
+| Choose coverage or add unit/UI/integration tests | [Testing Guide](testing/guidance.md) | `tests/CMakeLists.txt`, Catch2 tests, `test_engine/` |
 
-> Note: the repository history was squashed into a single commit, so per-milestone commit refs are no longer available. Milestone dates/descriptions come from `CHANGELOG.md` and source evidence; note that `CHANGELOG.md` itself lags the app version (latest entry 0.11.0 vs current v0.19.2) — the v0.12.0–v0.19.2 rows above are grounded in source (e.g. `network_analyzer/`, `tutorial/`, `app/include/extension_manager.h`, `component_type_registry.h`, `tests/test_path_containment.cpp`, `tests/test_issue48_json_loader.cpp`).
+The focused command pattern is:
 
----
+```bash
+ctest --test-dir build -R '<name-or-regex>' --output-on-failure
+# Standalone targets can also be run directly:
+build/bin/test_network_analyzer
+build/bin/test_issue48_json_loader
+```
 
-## Backlog
+`tests/CMakeLists.txt` is authoritative for which suites are in the aggregate `tests` binary versus standalone executables. New coverage may be deliberately standalone because MinGW-w64 can silently drop registrations beyond its test ceiling.
 
-Documented in `ROADMAP.md`, not yet implemented:
+## Core invariants to remember
 
-| Area | Source anchor | Reason deferred |
-|---|---|---|
-| Pulsed signal generation | `ROADMAP.md` item 7 | Time-domain pulse capability, no design yet |
-| Time-domain view improvements | `ROADMAP.md` item 6 | Beyond the current IQ plot (scroll mode, time/div) |
-| Modulation components (AM/FM/PM/QAM/PSK/OFDM) | `ROADMAP.md` item 20 | Fundamental comms blocks, future scope |
-| Measurement instruments (power meter, SNR/THD/SFDR) | `ROADMAP.md` item 21 | The network analyzer partially addresses this; meters still planned |
-| Plugin SDK for custom components | `ROADMAP.md` item 19 | Extension system covers data packs/tools; component SDK design still TBD |
+- Engines own DSP state and do not include UI headers; widgets own presentation. Signal routing is explicit through `NodeGraphEngine` and must preserve output-port identity for multi-output components.
+- `Spectrum` noise is represented as PSD in W/Hz, and generation/dirty tracking lets engines skip unchanged work; see the architecture and DSP pages before changing evaluation order.
+- Project and library JSON are untrusted inputs: malformed records are logged/skipped or fail in a bounded way, and S-parameter paths are contained by their project/library roots. Use the dedicated JSON-loader and path-containment suites when changing these boundaries.
+
+For historical release notes, consult `CHANGELOG.md`; for planned work, consult `ROADMAP.md`.
