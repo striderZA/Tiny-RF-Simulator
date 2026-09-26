@@ -97,6 +97,7 @@ Default section order:
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 - Superpowers plan/spec documents are working materials and must not be committed.
 - Never run filesystem-wide searches (`find /`, `dir /s`, global greps from the drive root) — they hang headless agent runs past their watchdog. A fresh git worktree has no local `build/`; dependency *sources* are browsable in the canonical checkout's `build/_deps/<name>-src`, and a fresh checkout can configure deps itself with `cmake -B build -G Ninja` (~90 s). Read `CMakeLists.txt` `FetchContent_Declare` pins for versions.
+- README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
 
 ## Release Contract
 
