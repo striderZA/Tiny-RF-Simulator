@@ -17,6 +17,14 @@
 
 ---
 
+## 🎬 Demo
+
+<p align="center">
+  <em>Building a signal chain, probing nodes, and reading the spectrum in real time.</em>
+</p>
+
+<video src="https://github.com/user-attachments/assets/485a0066-385e-4c6b-bf4e-6d2ae6bc48cf" controls></video>
+
 ## ✨ Features
 
 - 🔧 **13 component types** — Amplifiers, attenuators, equalizers, mixers, filters, splitters, combiners, RF switches (1:2 and 2:1), coax cable, RF ADC, signal generator, and PFB channelizer
