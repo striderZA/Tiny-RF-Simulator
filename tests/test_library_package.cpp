@@ -469,6 +469,38 @@ TEST_CASE("exportLibraryPackage refuses a missing referenced asset", "[library][
     REQUIRE_FALSE(fs::exists(out));
 }
 
+TEST_CASE("exportLibraryPackage refuses malformed data_files values and entries",
+          "[library][package]") {
+    TempDir tmp("malformed_data_files");
+    const fs::path root = tmp.root / "root";
+    const std::vector<nlohmann::json> malformed_values = {
+        "not an array",
+        nlohmann::json::object(),
+        nlohmann::json::array({nlohmann::json::object()}),
+        nlohmann::json::array({{{"type", 7}, {"path", "asset.s2p"}}}),
+        nlohmann::json::array({{{"type", "s_parameters"}, {"path", 7}}}),
+    };
+
+    for (std::size_t i = 0; i < malformed_values.size(); ++i) {
+        const std::string filename = "malformed-" + std::to_string(i) + ".json";
+        writeText(root / filename, amplifierDefinition("MALFORMED-" + std::to_string(i),
+                                                       {{"data_files", malformed_values[i]}})
+                                       .dump(2));
+        const fs::path out = tmp.root / ("malformed-" + std::to_string(i) + ".rflib");
+
+        const LibraryPackageExportResult result = exportLibraryPackage(root, out);
+
+        INFO("error: " << result.error);
+        REQUIRE_FALSE(result.ok);
+        REQUIRE(result.error.find(filename) != std::string::npos);
+        REQUIRE_FALSE(fs::exists(out));
+
+        std::error_code ec;
+        fs::remove(root / filename, ec);
+        REQUIRE_FALSE(ec);
+    }
+}
+
 TEST_CASE("exportLibraryPackage rewrites an absolute sparam_path and dedupes a shared asset",
           "[library][package]") {
     TempDir tmp("shared");
@@ -564,6 +596,64 @@ TEST_CASE("exportLibraryPackage writes one member for one file referenced by two
     for (const auto &component : manifest.at("components"))
         for (const auto &listed : component.at("assets"))
             REQUIRE(members.count(listed.get<std::string>()) == 1);
+}
+
+TEST_CASE("exportLibraryPackage preserves a relative symlink asset reference on round trip",
+          "[library][package]") {
+    TempDir tmp("symlink_asset_reference");
+    const fs::path source = tmp.root / "source";
+    const fs::path amp_dir = source / "amplifiers";
+    const std::string asset_bytes = writeS2p(amp_dir / "target.s2p");
+    std::error_code symlink_ec;
+    fs::create_symlink("target.s2p", amp_dir / "link.s2p", symlink_ec);
+    if (symlink_ec) {
+        SUCCEED("SKIP: cannot create a symlink on this platform: " + symlink_ec.message());
+        return;
+    }
+    REQUIRE(fs::is_symlink(amp_dir / "link.s2p"));
+    writeText(amp_dir / "amp.json",
+              amplifierDefinition("SYMLINK-AMP",
+                                  {{"data_files", nlohmann::json::array({{{"type", "s_parameters"},
+                                                                          {"path", "link.s2p"}}})}})
+                  .dump(2));
+
+    const fs::path package = tmp.root / "symlink-amp.rflib";
+    const LibraryPackageExportResult exported = exportLibraryPackage(source, package);
+    INFO("export error: " << exported.error);
+    REQUIRE(exported.ok);
+
+    const auto members = readArchive(package);
+    REQUIRE(members.count("library/amplifiers/link.s2p") == 1);
+    REQUIRE(members.count("library/amplifiers/target.s2p") == 0);
+    REQUIRE(members.at("library/amplifiers/link.s2p") == asset_bytes);
+    const auto manifest = parseMember(members, "manifest.json");
+    REQUIRE(manifest.at("components").at(0).at("assets") ==
+            nlohmann::json::array({"library/amplifiers/link.s2p"}));
+    const auto packaged = parseMember(members, "library/amplifiers/amp.json");
+    REQUIRE(packaged.at("data_files").at(0).at("path") == "link.s2p");
+
+    const fs::path global_root = tmp.root / "global";
+    const LibraryPackageImportResult imported = importLibraryPackage(package, global_root);
+    INFO("import error: " << imported.error);
+    REQUIRE(imported.ok);
+    const fs::path installed = imported.installed_dir;
+    REQUIRE(fs::is_regular_file(installed / "amplifiers" / "link.s2p"));
+    REQUIRE(readFileBytes(installed / "amplifiers" / "link.s2p") == asset_bytes);
+
+    ComponentLibrary reloaded;
+    reloaded.scan(installed.string());
+    REQUIRE(reloaded.all().size() == 1);
+    REQUIRE(reloaded.all().front()->data_files.size() == 1);
+    REQUIRE(reloaded.all().front()->data_files.front().path == "link.s2p");
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+    auto *engine = reloaded.instantiate(*reloaded.all().front(), 700, registry, graph);
+    REQUIRE(engine != nullptr);
+    const auto *amp_engine = dynamic_cast<const AmplifierEngine *>(engine);
+    REQUIRE(amp_engine != nullptr);
+    REQUIRE(amp_engine->sparamLoaded());
 }
 
 TEST_CASE("exportLibraryPackage removes the partial output when the writer cannot start",

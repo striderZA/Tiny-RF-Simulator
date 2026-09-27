@@ -100,14 +100,18 @@ std::string toLowerAscii(std::string s) {
     return s;
 }
 
-// `target` under `base`, both canonical; used to turn an absolute reference
-// into a path relative to its own definition directory.
-std::string relativeTo(const fs::path &target, const fs::path &base) {
-    std::error_code ec;
-    const fs::path rel = fs::relative(target, base, ec);
-    if (ec)
-        return toSlash(target);
-    return toSlash(rel);
+// The canonical target validates containment and supplies bytes, but package
+// names must follow the lexical path the author referenced (not a symlink's
+// target name).
+std::optional<fs::path> authoredPathRelativeTo(const fs::path &base, const std::string &reference) {
+    const fs::path authored(reference);
+    const fs::path relative = authored.is_absolute()
+                                  ? authored.lexically_normal().lexically_relative(base)
+                                  : authored.lexically_normal();
+    if (relative.empty() || relative.is_absolute() || relative.has_root_name() ||
+        relative.has_root_directory() || containsParentTraversal(relative))
+        return std::nullopt;
+    return relative;
 }
 
 std::string zipError(const mz_zip_archive &zip) {
@@ -231,7 +235,7 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
         }
     }
 
-    std::set<std::string> seen_references;
+    std::map<std::string, std::string> seen_references;
 
     const auto addAsset = [&](const std::string &raw_reference) {
         const auto resolved = resolveContained(json_dir, raw_reference);
@@ -246,37 +250,48 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
                     json_path.string() + ") does not exist";
             return false;
         }
-        // Dedupe on the exact canonical path: two spellings of the same file
-        // share it, while case-distinct files stay distinct so the writer's
-        // collision guard can still see them.
-        const std::string key = resolved->generic_string();
-        if (!seen_references.insert(key).second)
-            return true;
 
-        std::error_code rel_ec;
-        const fs::path relative_asset = fs::relative(*resolved, source_root, rel_ec);
-        if (rel_ec) {
+        const fs::path authored(raw_reference);
+        const fs::path lexical_path =
+            (authored.is_absolute() ? authored : json_dir / authored).lexically_normal();
+        const fs::path relative_asset = lexical_path.lexically_relative(source_root);
+        if (relative_asset.empty() || relative_asset.is_absolute() ||
+            relative_asset.has_root_name() || relative_asset.has_root_directory() ||
+            containsParentTraversal(relative_asset)) {
             error = "referenced data file '" + raw_reference + "' for '" + def.part_number +
                     "' is outside the library root: " + json_path.string();
             return false;
         }
 
+        const std::string archive_name = "library/" + toSlash(relative_asset);
+        const auto [seen, inserted] = seen_references.emplace(archive_name, resolved->string());
+        if (!inserted) {
+            std::error_code equivalent_ec;
+            if (fs::equivalent(seen->second, *resolved, equivalent_ec) && !equivalent_ec)
+                return true;
+            error = "referenced data files collide at package member '" + archive_name + "' in " +
+                    json_path.string();
+            return false;
+        }
+
         ExportEntry::Asset asset;
-        asset.archive_name = "library/" + toSlash(relative_asset);
+        asset.archive_name = archive_name;
         asset.source_path = resolved->string();
         asset.raw_reference = raw_reference;
         entry.assets.push_back(std::move(asset));
         return true;
     };
 
-    // data_files: rewrite the in-memory copy when the spelling is an absolute
-    // path inside the definition directory; relative spellings are preserved.
-    if (raw.contains("data_files") && raw["data_files"].is_array()) {
+    if (raw.contains("data_files") && !raw["data_files"].is_array()) {
+        error = "malformed data_files field (expected an array) in " + json_path.string();
+        return false;
+    }
+    // data_files: absolute references are rewritten to the authored lexical
+    // path relative to this definition; relative spellings are preserved.
+    if (raw.contains("data_files")) {
         for (auto &df : raw["data_files"]) {
             if (!df.is_object() || !df.contains("type") || !df["type"].is_string() ||
                 !df.contains("path") || !df["path"].is_string()) {
-                // loadFile() isolates these, but the packaged copy must not
-                // carry a reference export cannot account for.
                 error = "malformed data_files entry in " + json_path.string();
                 return false;
             }
@@ -286,8 +301,13 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
 
             const fs::path authored(raw_reference);
             if (authored.is_absolute()) {
-                const auto resolved = resolveContained(json_dir, raw_reference);
-                df["path"] = relativeTo(*resolved, json_dir);
+                const auto relative = authoredPathRelativeTo(json_dir, raw_reference);
+                if (!relative) {
+                    error = "cannot derive a safe relative path for '" + raw_reference + "' in " +
+                            json_path.string();
+                    return false;
+                }
+                df["path"] = toSlash(*relative);
             }
         }
     }
@@ -303,9 +323,15 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
             const std::string raw_reference = raw["parameters"][key].get<std::string>();
             if (!addAsset(raw_reference))
                 return false;
-            if (fs::path(raw_reference).is_absolute())
-                raw["parameters"][key] =
-                    relativeTo(*resolveContained(json_dir, raw_reference), json_dir);
+            if (fs::path(raw_reference).is_absolute()) {
+                const auto relative = authoredPathRelativeTo(json_dir, raw_reference);
+                if (!relative) {
+                    error = "cannot derive a safe relative path for '" + raw_reference + "' in " +
+                            json_path.string();
+                    return false;
+                }
+                raw["parameters"][key] = toSlash(*relative);
+            }
         }
     }
 
