@@ -1149,9 +1149,8 @@ TEST_CASE("importLibraryPackage refuses a parent-traversal member", "[library][p
 
 TEST_CASE("importLibraryPackage refuses a payload member rooted by a double slash",
           "[library][package]") {
-    // `library//etc/passwd` passes the archive-spelling check (no backslash, no
-    // `..`, not absolute as spelled) but `//etc/passwd` is absolute on POSIX,
-    // so joining it onto staging would write outside the staging tree.
+    // `library//etc/passwd` contains an empty path component and is rejected as
+    // a non-normalized ZIP member before it can be joined onto staging.
     TempDir tmp("import_double_slash");
     const fs::path package = tmp.root / "slash.rflib";
     PackageSpec spec;
@@ -1164,7 +1163,7 @@ TEST_CASE("importLibraryPackage refuses a payload member rooted by a double slas
     const fs::path root = tmp.root / "global";
     writeText(root / "notes.txt", "keep me\n");
 
-    requireRefusal(package, root, "not a library/ payload member");
+    requireRefusal(package, root, "unsafe package member path");
 }
 
 TEST_CASE("importLibraryPackage refuses an empty payload member after the library/ prefix",
@@ -1184,6 +1183,32 @@ TEST_CASE("importLibraryPackage refuses an empty payload member after the librar
     writeText(root / "notes.txt", "keep me\n");
 
     requireRefusal(package, root, "unsafe package member path");
+}
+
+TEST_CASE("importLibraryPackage rejects normalized ZIP member aliases before staging",
+          "[library][package]") {
+    TempDir tmp("import_normalized_alias");
+    const fs::path package = tmp.root / "alias.rflib";
+    const std::string json_member = "library/foo/foo.json";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "alias",
+        nlohmann::json::array({componentEntry(
+            json_member, "amplifier", "Test Corp", "ALIAS-AMP",
+            nlohmann::json::array({"library/foo/asset.s2p", "library/foo/./asset.s2p"}))}));
+    spec.members.push_back({json_member, amplifierPayload("Test Corp", "ALIAS-AMP", "asset.s2p")});
+    spec.members.push_back({"library/foo/asset.s2p", kS2pBytes});
+    spec.members.push_back({"library/foo/./asset.s2p", "different bytes"});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "initially-absent-global";
+    REQUIRE_FALSE(fs::exists(root));
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.find("path") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(root));
 }
 
 TEST_CASE("importLibraryPackage refuses a payload member with a drive-letter root name",

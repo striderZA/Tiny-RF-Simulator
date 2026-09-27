@@ -386,8 +386,10 @@ std::optional<fs::path> payloadRelative(const std::string &member) {
         return std::nullopt;
 
     const fs::path relative(remainder);
-    if (relative.empty() || relative.is_absolute() || relative.has_root_name() ||
-        relative.has_root_directory() || containsParentTraversal(relative))
+    if (remainder.find('\\') != std::string::npos || relative.empty() || relative.is_absolute() ||
+        relative.has_root_name() || relative.has_root_directory() ||
+        containsParentTraversal(relative) ||
+        relative.lexically_normal().generic_string() != remainder)
         return std::nullopt;
     return relative;
 }
@@ -416,7 +418,16 @@ bool isSafeMemberPath(const std::string &member) {
     const fs::path path(member);
     if (path.is_absolute() || path.has_root_name() || path.has_root_directory())
         return false;
-    return !containsParentTraversal(path);
+    // Drive roots are not recognized by the POSIX path grammar, but are never
+    // valid archive-relative POSIX member names.
+    const bool drive_rooted =
+        member.size() >= 2 && member[1] == ':' &&
+        ((member[0] >= 'A' && member[0] <= 'Z') || (member[0] >= 'a' && member[0] <= 'z'));
+    if (drive_rooted)
+        return false;
+
+    // POSIX path; this rejects '.', '..', repeated separators, and root aliases.
+    return !containsParentTraversal(path) && path.lexically_normal().generic_string() == member;
 }
 
 // Removes the staging directory on every return path of importLibraryPackage.
@@ -696,6 +707,7 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
     };
     std::map<std::string, MemberInfo> members_by_name; // exact archive spelling
     std::set<std::string> lowered_names;               // case-insensitive duplicates
+    std::set<std::string> normalized_destination_paths;
     std::uint64_t declared_total = 0;
 
     for (mz_uint i = 0; i < member_count; ++i) {
@@ -721,6 +733,11 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         declared_total += stat.m_uncomp_size;
         if (declared_total > library_package::kMaxExpandedBytes) {
             result.error = "archive expands beyond the package size limit";
+            return result;
+        }
+        const std::string normalized_name = fs::path(name).lexically_normal().generic_string();
+        if (!normalized_destination_paths.insert(toLowerAscii(normalized_name)).second) {
+            result.error = "duplicate normalized package member path '" + name + "'";
             return result;
         }
         if (!lowered_names.insert(toLowerAscii(name)).second) {
