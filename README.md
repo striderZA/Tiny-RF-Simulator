@@ -38,6 +38,8 @@
 - ⚡ **Power Meter** — total power readout at any node in the chain
 - 🔌 **Extensions** — manifest-based plugins for data packs and external Tools-menu actions
 - 📘 **Guided tutorial** — first-run walkthrough with panel highlighting
+- 🧪 **Test Flow** — author repeatable parameter sweeps on a live circuit, capture built-in measurements, preview results, and export them as JSON (`View > Test Flow`)
+- 🧮 **PFB Filter Calculator** — plot the Kaiser prototype response, compare filter metrics with a rejection target, and apply designs to PFB channelizers (`View > Filter Calculator`)
 
 
 ## 🚀 Quick Start
