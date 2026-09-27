@@ -63,16 +63,16 @@ static std::string appExeDir() {
 // Windows and $HOME elsewhere. One definition, used by refreshExtensions() (the
 // scan root), the component form's "Save To: Global" destination, and the
 // library-package import destination, so the three can never disagree.
-// nullopt when neither variable is set: the callers keep their existing
+// nullopt when the variable is unset or empty: the callers keep their existing
 // fallback (no scan; the project-local "rf-sim-libraries" root) instead of
-// composing a nonsense "/.rf-sim/libraries".
+// composing a CWD-relative ".rf-sim/libraries".
 static std::optional<std::filesystem::path> userLibraryRoot() {
 #ifdef _WIN32
     const char *home = std::getenv("USERPROFILE");
 #else
     const char *home = std::getenv("HOME");
 #endif
-    if (!home)
+    if (!home || !*home)
         return std::nullopt;
     return std::filesystem::path(home) / ".rf-sim" / "libraries";
 }
@@ -741,18 +741,19 @@ void RfSimulatorApp::exportLibraryPackageDialog() {
 }
 
 void RfSimulatorApp::importLibraryPackageDialog() {
+    // Refuse before opening the native picker when no global destination exists.
+    const auto destination = userLibraryRoot();
+    if (!destination) {
+        setLibraryPackageStatus(
+            "Import failed: no user library root (HOME/USERPROFILE is unset or empty)");
+        return;
+    }
+
     const auto selected = pfd::open_file("Import Library Package", ".",
                                          {"RF Simulator library package (*.rflib)", "*.rflib"})
                               .result();
     if (selected.empty())
         return;
-    // Without a home directory there is no global library to install into; the
-    // import is refused before writing anything under a bogus root.
-    const auto destination = userLibraryRoot();
-    if (!destination) {
-        setLibraryPackageStatus("Import failed: no user library root (HOME/USERPROFILE is unset)");
-        return;
-    }
     importLibraryPackageFrom(selected[0], destination->string());
 }
 

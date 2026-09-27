@@ -32,12 +32,14 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
 #include <miniz.h>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <set>
 #include <string>
 #include <system_error>
@@ -1382,6 +1384,37 @@ struct ImGuiFixture {
     }
 };
 
+// Temporarily empties the platform home variable and restores its exact prior
+// state even when a Catch assertion exits the test early.
+struct EmptyUserHome {
+#ifdef _WIN32
+    static constexpr const char *name = "USERPROFILE";
+#else
+    static constexpr const char *name = "HOME";
+#endif
+    std::optional<std::string> previous;
+
+    EmptyUserHome() {
+        if (const char *value = std::getenv(name))
+            previous = value;
+#ifdef _WIN32
+        REQUIRE(_putenv_s(name, "") == 0);
+#else
+        REQUIRE(setenv(name, "", 1) == 0);
+#endif
+    }
+    ~EmptyUserHome() {
+#ifdef _WIN32
+        _putenv_s(name, previous ? previous->c_str() : "");
+#else
+        if (previous)
+            setenv(name, previous->c_str(), 1);
+        else
+            unsetenv(name);
+#endif
+    }
+};
+
 // The app constructs the first-run tutorial prompt; deactivating it keeps the
 // frame under test free of a blocking modal (and the widget's draw) without
 // touching the completion marker on disk.
@@ -1503,6 +1536,22 @@ TEST_CASE_METHOD(ImGuiFixture, "App import reports mixed conflicts and installs 
     ComponentLibrary merged;
     merged.scan(dest.string());
     CHECK(merged.all().size() == 2); // the pre-existing entry plus the new one
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "App import refuses an empty global home before opening a picker",
+                 "[library][package][app]") {
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+    const fs::path relative_global_root = fs::current_path() / ".rf-sim" / "libraries";
+    REQUIRE_FALSE(fs::exists(relative_global_root));
+
+    EmptyUserHome empty_home;
+    app.importLibraryPackageDialog();
+
+    CHECK(app.testLibraryPackageStatus().find("Import failed:") != std::string::npos);
+    CHECK(app.testLibraryPackageStatus().find("no user library root") != std::string::npos);
+    CHECK(app.testLibraryPackageStatus().find("unset or empty") != std::string::npos);
+    CHECK_FALSE(fs::exists(relative_global_root));
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "App import refusal returns false with the diagnostic and no rescan",
