@@ -198,6 +198,38 @@ add_library(imnodes STATIC
 target_include_directories(imnodes PUBLIC ${imnodes_SOURCE_DIR})
 target_link_libraries(imnodes PUBLIC imgui)
 
+# Fetch miniz (single-file ZIP reader/writer for library packages), pinned to
+# an immutable commit (the 3.0.2 release commit). miniz publishes release tags
+# (3.0.2 is current); prefer the release commit on upgrade. Resolved with:
+#   git ls-remote https://github.com/richgel999/miniz.git refs/tags/3.0.2
+FetchContent_Declare(
+    miniz
+    GIT_REPOSITORY https://github.com/richgel999/miniz.git
+    GIT_TAG 293d4db1b7d0ffee9756d035b9ac6f7431ef8492
+)
+# Use Populate (not MakeAvailable) because miniz 3.0.2 ships a CMakeLists.txt
+# whose cmake_minimum_required(VERSION 3.0) is rejected by CMake 4.x (support
+# for CMake < 3.5 was removed). We define the static library target manually
+# below, mirroring the pfd/imnodes FetchContent approach.
+FetchContent_Populate(miniz)
+
+add_library(miniz STATIC
+    ${miniz_SOURCE_DIR}/miniz.c
+    ${miniz_SOURCE_DIR}/miniz_tdef.c
+    ${miniz_SOURCE_DIR}/miniz_tinfl.c
+    ${miniz_SOURCE_DIR}/miniz_zip.c
+)
+target_include_directories(miniz PUBLIC
+    ${miniz_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+# miniz's headers include a generated miniz_export.h; generate it and define
+# MINIZ_STATIC_DEFINE so consumers don't see __declspec(dllimport) symbols.
+include(GenerateExportHeader)
+generate_export_header(miniz)
+target_compile_definitions(miniz PUBLIC MINIZ_STATIC_DEFINE)
+add_library(simulator::miniz ALIAS miniz)
+
 # Include sub-projects.
 add_subdirectory("core")
 add_subdirectory("signal_generator")

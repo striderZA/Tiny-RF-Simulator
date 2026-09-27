@@ -70,6 +70,13 @@ target_link_libraries(app
         common
 )
 
+# miniz is an implementation detail of the library-packaging code; keep it
+# PRIVATE so its headers/includes don't leak into app consumers.
+target_link_libraries(app
+    PRIVATE
+        simulator::miniz
+)
+
 # Capture git commit hash at configure time
 execute_process(COMMAND git log -1 --format=%h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
