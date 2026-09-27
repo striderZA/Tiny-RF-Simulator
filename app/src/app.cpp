@@ -687,6 +687,16 @@ void RfSimulatorApp::setLibraryPackageStatus(std::string status) {
         m_library_browser->setStatus(m_library_package_status);
 }
 
+std::optional<std::string> RfSimulatorApp::libraryPackageImportDestination() {
+    const auto destination = userLibraryRoot();
+    if (!destination) {
+        setLibraryPackageStatus(
+            "Import failed: no user library root (HOME/USERPROFILE is unset or empty)");
+        return std::nullopt;
+    }
+    return destination->string();
+}
+
 bool RfSimulatorApp::exportLibraryPackageTo(const std::string &source_root,
                                             const std::string &output_path) {
     const LibraryPackageExportResult result = exportLibraryPackage(source_root, output_path);
@@ -741,20 +751,16 @@ void RfSimulatorApp::exportLibraryPackageDialog() {
 }
 
 void RfSimulatorApp::importLibraryPackageDialog() {
-    // Refuse before opening the native picker when no global destination exists.
-    const auto destination = userLibraryRoot();
-    if (!destination) {
-        setLibraryPackageStatus(
-            "Import failed: no user library root (HOME/USERPROFILE is unset or empty)");
+    const auto destination = libraryPackageImportDestination();
+    if (!destination)
         return;
-    }
 
     const auto selected = pfd::open_file("Import Library Package", ".",
                                          {"RF Simulator library package (*.rflib)", "*.rflib"})
                               .result();
     if (selected.empty())
         return;
-    importLibraryPackageFrom(selected[0], destination->string());
+    importLibraryPackageFrom(selected[0], *destination);
 }
 
 void RfSimulatorApp::openFileDialog() {

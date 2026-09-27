@@ -45,6 +45,9 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -1398,14 +1401,26 @@ struct EmptyUserHome {
         if (const char *value = std::getenv(name))
             previous = value;
 #ifdef _WIN32
-        REQUIRE(_putenv_s(name, "") == 0);
+        // _putenv_s deletes a variable when given an empty value. Seed the CRT
+        // entry, then empty it directly so getenv() sees a present empty value.
+        REQUIRE(_putenv_s(name, "test-home") == 0);
+        char *value = std::getenv(name);
+        REQUIRE(value != nullptr);
+        value[0] = '\0';
+        REQUIRE(SetEnvironmentVariableA(name, "") != 0);
 #else
         REQUIRE(setenv(name, "", 1) == 0);
 #endif
     }
     ~EmptyUserHome() {
 #ifdef _WIN32
-        _putenv_s(name, previous ? previous->c_str() : "");
+        if (previous) {
+            _putenv_s(name, previous->c_str());
+            SetEnvironmentVariableA(name, previous->c_str());
+        } else {
+            _putenv_s(name, "");
+            SetEnvironmentVariableA(name, nullptr);
+        }
 #else
         if (previous)
             setenv(name, previous->c_str(), 1);
@@ -1546,7 +1561,7 @@ TEST_CASE_METHOD(ImGuiFixture, "App import refuses an empty global home before o
     REQUIRE_FALSE(fs::exists(relative_global_root));
 
     EmptyUserHome empty_home;
-    app.importLibraryPackageDialog();
+    CHECK_FALSE(app.testLibraryPackageImportAvailable());
 
     CHECK(app.testLibraryPackageStatus().find("Import failed:") != std::string::npos);
     CHECK(app.testLibraryPackageStatus().find("no user library root") != std::string::npos);

@@ -171,6 +171,11 @@ class RfSimulatorApp {
     void importLibraryPackageDialog();
     // Last package result, as shown in the library browser.
     const std::string &testLibraryPackageStatus() const { return m_library_package_status; }
+    // Queries the same destination guard as the import dialog without opening
+    // its native picker, so the unavailable-home path can be tested headlessly.
+    bool testLibraryPackageImportAvailable() {
+        return libraryPackageImportDestination().has_value();
+    }
     LibraryBrowserWidget &testLibraryBrowser() { return *m_library_browser; }
     // Component Library panel visibility; the panel is a private member like the
     // calculator's, so an app-level test toggles it through this entry point.
@@ -180,6 +185,7 @@ class RfSimulatorApp {
 
   private:
     void load_window_states();
+    std::optional<std::string> libraryPackageImportDestination();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the
     // project is clean, otherwise via PendingAction::Tutorial).
     void requestTutorial();
