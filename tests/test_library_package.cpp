@@ -16,8 +16,13 @@
 // reason documented in tests/AGENTS.md and tests/CMakeLists.txt.
 
 #include "amplifier_engine.h"
+#include "app.h"
 #include "component_library.h"
 #include "component_registry.h"
+#include "imgui.h"
+#include "imnodes.h"
+#include "implot.h"
+#include "library_browser_widget.h"
 #include "library_package.h"
 #include "node_graph_engine.h"
 #include "test_temp_paths.h"
@@ -1073,4 +1078,253 @@ TEST_CASE("importLibraryPackage refuses a packaged asset outside its definition 
     writeText(root / "notes.txt", "keep me\n");
 
     requireRefusal(package, root, "containment");
+}
+
+// --- App integration (browser buttons, status, rescan) ----------------------
+//
+// These drive the same production methods the native dialogs call
+// (RfSimulatorApp::exportLibraryPackageTo / importLibraryPackageFrom) so the
+// wiring under test cannot drift from a re-implementation here. The dialogs
+// themselves are pfd calls and cannot run headless.
+
+namespace {
+
+// ImGui/ImPlot/ImNodes contexts for the widget that RfSimulatorApp constructs;
+// there is no renderer backend, so the font atlas is built explicitly (a bare
+// context's NewFrame() asserts TexIsBuilt without RendererHasTextures).
+struct ImGuiFixture {
+    ImGuiFixture() {
+        ImGui::CreateContext();
+        ImPlot::CreateContext();
+        ImNodes::CreateContext();
+        ImGui::GetIO().DisplaySize = ImVec2(1920, 1080);
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char *atlas_pixels = nullptr;
+        int atlas_w = 0, atlas_h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&atlas_pixels, &atlas_w, &atlas_h);
+    }
+    ~ImGuiFixture() {
+        ImNodes::DestroyContext();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+    }
+};
+
+// The app constructs the first-run tutorial prompt; deactivating it keeps the
+// frame under test free of a blocking modal (and the widget's draw) without
+// touching the completion marker on disk.
+void quiesceTutorial(RfSimulatorApp &app) {
+    app.m_show_tutorial_first_run_prompt = false;
+    app.m_tutorial_state.exit();
+    app.m_show_tutorial = false;
+}
+
+std::string readBrowserStatus(RfSimulatorApp &app) { return app.testLibraryBrowser().status(); }
+
+} // namespace
+
+TEST_CASE_METHOD(ImGuiFixture, "App export then import round trip installs and rescans the library",
+                 "[library][package][app]") {
+    TempDir tmp("app_roundtrip");
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+
+    // Source root: two amplifiers, one of which references an S2P asset (so the
+    // export status has to report both definitions and assets).
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "library" / "amplifiers", "APP-AM1143");
+    const fs::path json2 = source / "library" / "amplifiers" / "APP-AM2200.json";
+    writeText(json2, amplifierDefinition("APP-AM2200").dump(2));
+
+    const fs::path package = tmp.root / "lab-parts.rflib";
+    const fs::path dest = tmp.root / "global";
+
+    REQUIRE(app.exportLibraryPackageTo(source.string(), package.string()));
+    CHECK(fs::exists(package));
+    CHECK(app.testLibraryPackageStatus() ==
+          "Exported 2 definitions and 1 assets to " + package.string());
+    CHECK(readBrowserStatus(app) == app.testLibraryPackageStatus());
+
+    REQUIRE(app.importLibraryPackageFrom(package.string(), dest.string()));
+    // The status reports the installed count; the package name is the archive
+    // stem, so the installed tree is <dest>/lab-parts.
+    CHECK(app.testLibraryPackageStatus() ==
+          "Imported 2 components (0 skipped as already installed)");
+    CHECK(readBrowserStatus(app) == app.testLibraryPackageStatus());
+    REQUIRE(fs::exists(dest / "lab-parts"));
+
+    // The rescan is observable through the fresh ComponentLibrary the app built
+    // over the destination: both identities are present and instantiable.
+    ComponentLibrary installed;
+    installed.scan(dest.string());
+    CHECK(installed.all().size() == 2);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "App package import does not duplicate already loaded definitions",
+                 "[library][package][app]") {
+    TempDir tmp("app_no_duplicate");
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+
+    const auto definitions = app.testComponentLibrary().all();
+    const ComponentDefinition *seed = nullptr;
+    for (const auto *definition : definitions) {
+        if (definition->data_files.empty() && fs::exists(definition->source_path)) {
+            seed = definition;
+            break;
+        }
+    }
+    REQUIRE(seed != nullptr);
+    const std::string seeded_type = seed->type;
+    const std::string seeded_manufacturer = seed->manufacturer;
+    const std::string seeded_part_number = seed->part_number;
+
+    const fs::path destination = tmp.root / "global";
+    const fs::path seeded_json =
+        destination / "seeded" / seed->type / (seed->part_number + ".json");
+    fs::create_directories(seeded_json.parent_path());
+    fs::copy_file(seed->source_path, seeded_json);
+
+    const fs::path source = tmp.root / "source";
+    const fs::path new_definition = source / "library" / "amplifiers" / "NEW-APP-PART.json";
+    writeText(new_definition, amplifierDefinition("NEW-APP-PART").dump(2));
+    const fs::path package = tmp.root / "new-part.rflib";
+    REQUIRE(app.exportLibraryPackageTo(source.string(), package.string()));
+    REQUIRE(app.importLibraryPackageFrom(package.string(), destination.string()));
+
+    const auto after = app.testComponentLibrary().all();
+    const auto count_identity = [&after](const std::string &type, const std::string &manufacturer,
+                                         const std::string &part_number) {
+        return std::count_if(
+            after.begin(), after.end(), [&](const ComponentDefinition *definition) {
+                return definition->type == type && definition->manufacturer == manufacturer &&
+                       definition->part_number == part_number;
+            });
+    };
+    CHECK(count_identity(seeded_type, seeded_manufacturer, seeded_part_number) == 1);
+    CHECK(count_identity("amplifier", "Test Corp", "NEW-APP-PART") == 1);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "App import reports mixed conflicts and installs the rest",
+                 "[library][package][app]") {
+    TempDir tmp("app_conflict");
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+
+    // Destination already holds APP-AM1143 (same identity the package carries).
+    const fs::path dest = tmp.root / "global";
+    writeText(dest / "existing" / "APP-AM1143.json", amplifierDefinition("APP-AM1143").dump(2));
+
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "library", "APP-AM1143");
+    writeAmpWithDataFile(source / "library", "APP-AM9999");
+    const fs::path package = tmp.root / "mixed.rflib";
+    REQUIRE(app.exportLibraryPackageTo(source.string(), package.string()));
+
+    REQUIRE(app.importLibraryPackageFrom(package.string(), dest.string()));
+    const std::string status = app.testLibraryPackageStatus();
+    CHECK(status.find("Imported 1 components") != std::string::npos);
+    CHECK(status.find("1 skipped as already installed") != std::string::npos);
+    // The skipped identity is named, not just counted.
+    CHECK(status.find("amplifier Test Corp APP-AM1143") != std::string::npos);
+
+    ComponentLibrary merged;
+    merged.scan(dest.string());
+    CHECK(merged.all().size() == 2); // the pre-existing entry plus the new one
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "App import refusal returns false with the diagnostic and no rescan",
+                 "[library][package][app]") {
+    TempDir tmp("app_refusal");
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+
+    const fs::path dest = tmp.root / "global";
+    fs::create_directories(dest);
+
+    // A package directory already exists under the destination: the importer
+    // refuses the whole package rather than merging into it.
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "library", "APP-REFUSED");
+    const fs::path package = tmp.root / "taken.rflib";
+    REQUIRE(app.exportLibraryPackageTo(source.string(), package.string()));
+    const std::string sentinel = "do not touch\n";
+    writeBinary(dest / "taken" / "sentinel.txt", sentinel);
+
+    REQUIRE_FALSE(app.importLibraryPackageFrom(package.string(), dest.string()));
+    CHECK(app.testLibraryPackageStatus().find("Import failed: ") != std::string::npos);
+    CHECK(app.testLibraryPackageStatus().find("already exists") != std::string::npos);
+    CHECK_FALSE(fs::exists(dest / "taken" / "Test Corp"));
+    CHECK(readFileBytes(dest / "taken" / "sentinel.txt") == sentinel);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "App browser draws a headless frame with an empty then populated status",
+                 "[library][package][app]") {
+    TempDir tmp("app_frame");
+    RfSimulatorApp app;
+    quiesceTutorial(app);
+
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "library", "APP-FRAME");
+    const fs::path package = tmp.root / "frame.rflib";
+    const fs::path dest = tmp.root / "global";
+
+    app.testShowLibrary() = true;
+    REQUIRE(app.testLibraryBrowser().status().empty());
+
+    // Frame 1: the panel opens with no package operation yet — the buttons and
+    // the export notice still have to render without a status line.
+    ImGui::NewFrame();
+    app.draw_ui();
+    ImGui::EndFrame();
+    CHECK(app.testShowLibrary());
+    CHECK(app.testLibraryBrowser().status().empty());
+
+    // Exercise the production path, then a second frame renders the status.
+    REQUIRE(app.exportLibraryPackageTo(source.string(), package.string()));
+    REQUIRE(app.importLibraryPackageFrom(package.string(), dest.string()));
+
+    ImGui::NewFrame();
+    app.draw_ui();
+    ImGui::EndFrame();
+    CHECK(app.testLibraryBrowser().status().find("Imported 1 components") != std::string::npos);
+    CHECK(app.testShowLibrary());
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Library browser keeps the package status as its own replaceable line",
+                 "[library][package][app]") {
+    ComponentLibrary library;
+    LibraryBrowserWidget widget(library);
+    bool open = true;
+
+    // A frozen-empty status is what the export/import notice renders around, so
+    // both states must draw the panel without crashing (the app-level frame case
+    // covers the assembled UI; this one covers the widget's own states).
+    REQUIRE(widget.status().empty());
+    ImGui::NewFrame();
+    widget.draw("Component Library", &open);
+    ImGui::Render();
+    CHECK(open);
+
+    widget.setStatus("Exported 2 definitions and 1 assets to C:/tmp/lab.rflib");
+    CHECK(widget.status() == "Exported 2 definitions and 1 assets to C:/tmp/lab.rflib");
+    ImGui::NewFrame();
+    widget.draw("Component Library", &open);
+    ImGui::Render();
+    CHECK(open);
+
+    // Each package operation replaces the previous result rather than appending,
+    // so the panel never accumulates stale outcomes.
+    widget.setStatus("Import failed: package directory already exists: C:/tmp/global/x");
+    CHECK(widget.status() == "Import failed: package directory already exists: C:/tmp/global/x");
+    ImGui::NewFrame();
+    widget.draw("Component Library", &open);
+    ImGui::Render();
+    CHECK(open);
+
+    // An empty status is a valid state again (the pre-operation panel).
+    widget.setStatus(std::string());
+    CHECK(widget.status().empty());
 }

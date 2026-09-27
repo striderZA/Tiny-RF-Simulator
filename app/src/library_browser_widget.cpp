@@ -4,8 +4,11 @@
 #include <cstring>
 #include <imgui.h>
 #include <map>
+#include <utility>
 
 LibraryBrowserWidget::LibraryBrowserWidget(ComponentLibrary &library) : m_library(&library) {}
+
+void LibraryBrowserWidget::setStatus(std::string status) { m_status = std::move(status); }
 
 bool LibraryBrowserWidget::matchesFilter(const ComponentDefinition &def) const {
     if (m_filter_buffer[0] == '\0')
@@ -25,9 +28,27 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
         ImGui::End();
         return;
     }
-    if (ImGui::Button("New Component...")) {
+    if (ImGui::Button("New Component...##library_new_component")) {
         if (onNewComponent)
             onNewComponent();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Export Package...##library_export_package")) {
+        if (onExportPackage)
+            onExportPackage();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Import Package...##library_import_package")) {
+        if (onImportPackage)
+            onImportPackage();
+    }
+    // Spec requirement: an export copies the referenced measurement files, and
+    // the tool makes no licensing decision on the user's behalf.
+    ImGui::TextWrapped("Exporting copies the data files each definition references. You are "
+                       "responsible for having permission to share them.");
+    if (!m_status.empty()) {
+        ImGui::Separator();
+        ImGui::TextWrapped("%s", m_status.c_str());
     }
     ImGui::Separator();
 

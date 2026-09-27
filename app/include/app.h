@@ -152,6 +152,32 @@ class RfSimulatorApp {
     void exportTestFlowDialog();
     void saveTestFlowDialog();
 
+    // --- Component-library packages (.rflib) --------------------------------
+    // The production paths the library browser buttons and their dialogs call.
+    // exportLibraryPackageTo(): writes `source_root` to `output_path` and
+    // reports the definition/asset counts; the library is untouched, so there
+    // is nothing to rescan. importLibraryPackageFrom(): installs the package
+    // under `destination_root` (production: the global user library), reports
+    // imported/skipped-conflict counts, and rescans the destination only when
+    // something was actually installed — a refused import leaves the library
+    // exactly as it was.
+    bool exportLibraryPackageTo(const std::string &source_root, const std::string &output_path);
+    bool importLibraryPackageFrom(const std::string &package_path,
+                                  const std::string &destination_root);
+    // Native dialogs: export picks a source root then an output file (the
+    // .rflib extension is appended when missing); import picks a package and
+    // installs it into userLibraryRoot(). A canceled dialog is a no-op.
+    void exportLibraryPackageDialog();
+    void importLibraryPackageDialog();
+    // Last package result, as shown in the library browser.
+    const std::string &testLibraryPackageStatus() const { return m_library_package_status; }
+    LibraryBrowserWidget &testLibraryBrowser() { return *m_library_browser; }
+    // Component Library panel visibility; the panel is a private member like the
+    // calculator's, so an app-level test toggles it through this entry point.
+    bool &testShowLibrary() { return m_show_library; }
+
+    const ComponentLibrary &testComponentLibrary() const { return m_library; }
+
   private:
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the
@@ -166,6 +192,8 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     void drawExtensionTrustPrompt();
+    // Publishes a package result to m_library_package_status and the browser.
+    void setLibraryPackageStatus(std::string status);
     // Trust state, identity details, and the Trust/Revoke control for a
     // project-local external tool record in the Extensions panel.
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
@@ -213,6 +241,8 @@ class RfSimulatorApp {
     std::unique_ptr<LibraryBrowserWidget> m_library_browser;
     std::unique_ptr<PfbCalculatorWidget> m_calculator_widget;
     bool m_show_library = false;
+    // Last .rflib export/import result, rendered by the library browser.
+    std::string m_library_package_status;
     bool m_show_calculator = false;
     bool m_show_component_form = false;
     bool m_component_form_is_edit = false;
