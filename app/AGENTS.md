@@ -18,7 +18,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots, plus the project-local provenance query the trust gate reads
 - `ExtensionTrustStore` — exe-relative (`<exe_dir>/extension_trust.json`) record of the extension directories the user allowed to execute, keyed by canonical extension root
 - `ExternalToolRunner` — structured request/result execution for approved external tools
-- `library_package` — `.rflib` ZIP export/import: exports loader-valid component definitions and only their referenced assets; imports validate the whole package before writes, skip/report conflicts by component identity, and stage accepted entries before installing under the global user library root
+- `library_package` — `.rflib` ZIP export/import: exports loader-valid component definitions and only their referenced assets; imports check archive/manifest paths and limits before extraction, validate payload in temporary staging before final installation, skip/report conflicts by component identity, and stage accepted entries under the global user library root
 
 ## Local Contracts
 - `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`; all `.rfsim` JSON serialization lives in `ProjectSerializer`
