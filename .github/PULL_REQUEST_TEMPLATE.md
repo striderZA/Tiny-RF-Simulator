@@ -1,10 +1,10 @@
 ## Summary
 
-<!-- One sentence summary of what this PR does -->
+<!-- What changed and why? Mention user-visible behavior or API changes. -->
 
 ## Related issue
 
-<!-- Closes #ISSUE_NUMBER or "N/A" -->
+<!-- Closes #ISSUE_NUMBER, relates to #ISSUE_NUMBER, or N/A -->
 
 ## Type of change
 
@@ -14,15 +14,12 @@
 - [ ] Documentation
 - [ ] Build / CI
 
-## Test plan
+## Verification
 
-- [ ] `cmake -B build -G Ninja && cmake --build build`
-- [ ] `ctest --test-dir build --output-on-failure`
-- [ ] Manual verification steps (if applicable):
+<!-- List the exact commands or scenarios run and their outcomes.
+     Include tests, formatting, and manual checks only if actually performed.
+     If not run, say so and give the reason. PRs do not run CI. -->
 
-## Checklist
+## Notes for reviewers
 
-- [ ] My code follows the existing code style (see `.clang-format`)
-- [ ] I ran `clang-format -i` on changed files
-- [ ] I added or updated tests where appropriate
-- [ ] Existing tests still pass
+<!-- Risks, compatibility details, or anything reviewers should focus on; otherwise "None". -->
