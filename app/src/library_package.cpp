@@ -395,36 +395,59 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
         return fail("cannot add the package manifest: " + zipError(zip));
     }
 
-    // Lowercased member name -> lowercased source path. Re-claiming a member
-    // from the same source is the intended dedupe; a different source claiming
-    // it means two distinct files map to one case-insensitive archive name, so
-    // the package would be ambiguous (and its importer would reject it).
-    std::map<std::string, std::string> written_members;
-    written_members.emplace("manifest.json", "manifest.json");
+    // One entry per on-disk file, keyed by identity rather than spelling.
+    // Hold onto each source path so a later candidate can be compared with
+    // fs::equivalent, which is true for two spellings of one file (and on
+    // case-insensitive filesystems for two different casings of one name) but
+    // false for two genuinely distinct files such as A.s2p and a.s2p where
+    // both exist. Collapsing by lowercased spelling instead would drop a
+    // case-distinct file the manifest already lists, leaving the archive with
+    // a member name it never wrote and ok == true.
+    struct Member {
+        std::string archive_name;
+        fs::path source_path;
+    };
+    std::vector<Member> written_members;
+    written_members.push_back({"manifest.json", fs::path("manifest.json")});
+
+    // A member name already claimed by a file that is not equivalent to the
+    // candidate. Resolving this by skipping the candidate is never correct:
+    // two distinct files cannot share one archive slot, so refuse the package.
+    const auto claim_member = [&](const std::string &archive_name, const fs::path &source_path,
+                                  bool &already_written) {
+        already_written = false;
+        for (const auto &member : written_members) {
+            if (member.archive_name != archive_name)
+                continue;
+            std::error_code equivalent_ec;
+            if (fs::equivalent(member.source_path, source_path, equivalent_ec))
+                already_written = true; // the same file, referenced again: one member
+            return true;                // same name: written or refused, never re-added
+        }
+        written_members.push_back({archive_name, source_path});
+        return false;
+    };
 
     for (const auto &entry : entries) {
-        const std::string member_key = toLowerAscii(entry.archive_name);
-        const std::string source_key = toLowerAscii(entry.source_path);
-        const auto existing = written_members.find(member_key);
-        if (existing != written_members.end() && existing->second != source_key)
+        bool already_written = false;
+        if (claim_member(entry.archive_name, entry.source_path, already_written))
             return fail("duplicate package member '" + entry.archive_name + "'");
-        written_members[member_key] = source_key;
 
         if (mz_zip_writer_add_mem(&zip, entry.archive_name.c_str(), entry.content.data(),
                                   entry.content.size(), MZ_BEST_COMPRESSION) != MZ_TRUE) {
             return fail("cannot add '" + entry.archive_name + "' to the package: " + zipError(zip));
         }
         for (const auto &asset : entry.assets) {
-            const std::string asset_key = toLowerAscii(asset.archive_name);
-            const std::string asset_source = toLowerAscii(asset.source_path);
-            const auto asset_existing = written_members.find(asset_key);
-            if (asset_existing != written_members.end()) {
-                if (asset_existing->second == asset_source)
+            already_written = false;
+            const bool name_taken =
+                claim_member(asset.archive_name, asset.source_path, already_written);
+            if (name_taken) {
+                if (already_written)
                     continue; // the same file, referenced again: one member
-                return fail("package members '" + asset.archive_name +
-                            "' collide case-insensitively with another entry");
+                return fail("package members '" + asset.archive_name + "' from '" +
+                            asset.source_path +
+                            "' collide with a different file already written at that name");
             }
-            written_members[asset_key] = asset_source;
 
             if (mz_zip_writer_add_file(&zip, asset.archive_name.c_str(), asset.source_path.c_str(),
                                        nullptr, 0, MZ_BEST_COMPRESSION) != MZ_TRUE) {

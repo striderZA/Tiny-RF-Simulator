@@ -348,6 +348,63 @@ TEST_CASE("exportLibraryPackage rewrites an absolute sparam_path and dedupes a s
         REQUIRE(component.at("assets") == nlohmann::json::array({"library/shared.s2p"}));
 }
 
+TEST_CASE("exportLibraryPackage writes one member for one file referenced by two definitions",
+          "[library][package]") {
+    // The writer-level half of the identity dedupe, and the half that is
+    // observable on this host. Both definitions name the same on-disk file
+    // through different spellings, so the entry-level dedupe (which keys on
+    // the exact canonical path) collapses neither of them: each entry carries
+    // its own asset record and the writer must recognize both as one file by
+    // identity (fs::equivalent) rather than by spelling.
+    //
+    // The case-distinct sibling of this scenario -- A.s2p and a.s2p as two
+    // real files, which must both survive on a case-sensitive filesystem --
+    // cannot be expressed with two files here: a case-insensitive host cannot
+    // even create them side by side. This test pins the identity comparison
+    // that makes that behaviour fall out on a host that can.
+    TempDir tmp("identity");
+    const fs::path root = tmp.root / "root";
+    const fs::path asset = root / "IDENTITY.s2p";
+    const std::string asset_bytes = writeS2p(asset);
+
+    writeText(root / "def_a.json",
+              amplifierDefinition(
+                  "IDENTITY-A",
+                  {{"data_files",
+                    nlohmann::json::array({{{"type", "s_parameters"}, {"path", "IDENTITY.s2p"}}})}})
+                  .dump(2));
+    // Same file, different spelling: an absolute path that relativeTo() maps
+    // back to "IDENTITY.s2p", so both entries produce the same member name
+    // from the same source. The strings differ; the file does not.
+    writeText(root / "def_b.json",
+              amplifierDefinition(
+                  "IDENTITY-B",
+                  {{"data_files",
+                    nlohmann::json::array({{{"type", "s_parameters"}, {"path", asset.string()}}})}})
+                  .dump(2));
+
+    const fs::path out = tmp.root / "identity.rflib";
+    const LibraryPackageExportResult result = exportLibraryPackage(root, out);
+    INFO("error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.definitions == 2);
+    REQUIRE(result.assets == 1); // one on-disk file, referenced by two definitions
+
+    const auto members = readArchive(out);
+    // manifest + two definitions + one asset, and only one asset member.
+    REQUIRE(members.size() == 4);
+    REQUIRE(members.count("library/IDENTITY.s2p") == 1);
+    REQUIRE(members.at("library/IDENTITY.s2p") == asset_bytes);
+
+    // The invariant the writer's identity dedupe must preserve: every asset
+    // the manifest names is written as a member. A silent `continue` on a
+    // collision would leave the manifest naming a member the archive lacks.
+    const auto manifest = parseMember(members, "manifest.json");
+    for (const auto &component : manifest.at("components"))
+        for (const auto &listed : component.at("assets"))
+            REQUIRE(members.count(listed.get<std::string>()) == 1);
+}
+
 TEST_CASE("exportLibraryPackage refuses an escaping referenced asset", "[library][package]") {
     TempDir tmp("escape");
     const fs::path root = tmp.root / "root";
