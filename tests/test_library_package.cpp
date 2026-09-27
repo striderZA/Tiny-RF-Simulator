@@ -641,6 +641,30 @@ TEST_CASE("exportLibraryPackage refuses duplicate identities", "[library][packag
     REQUIRE(result.error.find("DUP-AMP") != std::string::npos);
     REQUIRE_FALSE(fs::exists(out));
 }
+TEST_CASE("exportLibraryPackage refuses a JSON symlink that escapes the source root",
+          "[library][package]") {
+    TempDir tmp("json_symlink_escape");
+    const fs::path root = tmp.root / "root";
+    writeText(root / "inside.json", amplifierDefinition("INSIDE-AMP").dump(2));
+
+    const fs::path outside_json = tmp.root / "outside.json";
+    writeText(outside_json, amplifierDefinition("OUTSIDE-AMP").dump(2));
+    std::error_code symlink_ec;
+    fs::create_symlink(outside_json, root / "outside-link.json", symlink_ec);
+    if (symlink_ec) {
+        SUCCEED("SKIP: cannot create a symlink on this platform: " + symlink_ec.message());
+        return;
+    }
+    REQUIRE(fs::is_symlink(root / "outside-link.json"));
+
+    const fs::path out = tmp.root / "symlink-escape.rflib";
+    const LibraryPackageExportResult result = exportLibraryPackage(root, out);
+
+    INFO("error: " << result.error);
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.find("outside-link.json") != std::string::npos);
+    REQUIRE_FALSE(fs::exists(out));
+}
 
 // --- Spaces ----------------------------------------------------------------
 
@@ -850,6 +874,44 @@ TEST_CASE("importLibraryPackage reports an all-conflict import without writing a
     REQUIRE(result.installed_dir.empty());
     REQUIRE_FALSE(fs::exists(root / "conflict-pkg"));
     REQUIRE(snapshotTree(root) == before);
+}
+
+TEST_CASE("importLibraryPackage refuses manifest identities associated with the wrong JSON paths",
+          "[library][package]") {
+    TempDir tmp("import_identity_association");
+    const fs::path package = tmp.root / "swapped.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "swapped", nlohmann::json::array(
+                       {componentEntry("library/a.json", "amplifier", "Test Corp", "PART-B"),
+                        componentEntry("library/b.json", "amplifier", "Test Corp", "PART-A")}));
+    spec.members.push_back({"library/a.json", amplifierPayload("Test Corp", "PART-A")});
+    spec.members.push_back({"library/b.json", amplifierPayload("Test Corp", "PART-B")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "identity");
+}
+
+TEST_CASE("importLibraryPackage refuses an actual JSON asset omitted from manifest and archive",
+          "[library][package]") {
+    TempDir tmp("import_unlisted_asset");
+    const fs::path package = tmp.root / "unlisted-asset.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "unlisted-asset",
+        nlohmann::json::array({componentEntry("library/Test Corp/UNLISTED-AMP.json", "amplifier",
+                                              "Test Corp", "UNLISTED-AMP")}));
+    spec.members.push_back({"library/Test Corp/UNLISTED-AMP.json",
+                            amplifierPayload("Test Corp", "UNLISTED-AMP", "UNLISTED-AMP.s2p")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "asset");
 }
 
 // --- Import: refusals -------------------------------------------------------

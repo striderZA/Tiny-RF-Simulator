@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -171,12 +172,25 @@ std::vector<const char *> referenceParameterKeys() { return {"sparam_filepath", 
 bool collectEntry(const fs::path &source_root, const fs::path &json_path, ExportEntry &entry,
                   std::string &error) {
     std::error_code ec;
-    const fs::path canonical_json = fs::weakly_canonical(json_path, ec);
+    const fs::path canonical_json = fs::canonical(json_path, ec);
     if (ec) {
-        error = "cannot read library file: " + json_path.string();
+        error = "cannot resolve library definition: " + json_path.string();
+        return false;
+    }
+    if (!pathWithinRoot(source_root, canonical_json)) {
+        error = "library definition resolves outside the selected root: " + json_path.string();
         return false;
     }
     const fs::path json_dir = canonical_json.parent_path();
+
+    // Keep the in-root directory entry spelling in the archive, but only after
+    // checking that a symlink did not redirect the JSON outside the chosen root.
+    const fs::path relative_json = json_path.lexically_relative(source_root);
+    if (relative_json.empty() || relative_json.is_absolute() || relative_json.has_root_name() ||
+        relative_json.has_root_directory() || containsParentTraversal(relative_json)) {
+        error = "cannot derive a safe package path for: " + json_path.string();
+        return false;
+    }
 
     // Load through the exact production loader contract in an isolated
     // instance: anything that does not yield exactly one definition is
@@ -196,12 +210,6 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
     entry.manufacturer = def.manufacturer;
     entry.part_number = def.part_number;
 
-    std::error_code relative_ec;
-    const fs::path relative_json = fs::relative(canonical_json, source_root, relative_ec);
-    if (relative_ec) {
-        error = "cannot derive a package path for: " + json_path.string();
-        return false;
-    }
     entry.archive_name = "library/" + toSlash(relative_json);
 
     // Parse the raw file: the packaged JSON is the parsed object dumped with
@@ -405,8 +413,15 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
         return result;
     }
 
+    std::error_code root_ec;
+    const fs::path canonical_source_root = fs::canonical(source_root, root_ec);
+    if (root_ec) {
+        result.error = "cannot resolve library root: " + source_root.string();
+        return result;
+    }
+
     std::vector<fs::path> json_files;
-    if (!walkRoot(source_root, json_files, result.error))
+    if (!walkRoot(canonical_source_root, json_files, result.error))
         return result;
 
     if (json_files.empty()) {
@@ -420,7 +435,7 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
 
     for (const auto &json_path : json_files) {
         ExportEntry entry;
-        if (!collectEntry(source_root, json_path, entry, result.error))
+        if (!collectEntry(canonical_source_root, json_path, entry, result.error))
             return result;
 
         const std::string identity = toLowerAscii(entry.type) + '\x1f' +
@@ -709,6 +724,7 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
 
     std::vector<ManifestComponent> components;
     std::set<std::string> declared_identities;
+    std::set<std::string> declared_json_members;
     for (const auto &entry : manifest["components"]) {
         if (!entry.is_object() || !entry.contains("json") || !entry["json"].is_string() ||
             !entry.contains("type") || !entry["type"].is_string() ||
@@ -737,6 +753,11 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         if (!declared_identities.insert(identity).second) {
             result.error = "duplicate component identity '" + component.type + "/" +
                            component.manufacturer + "/" + component.part_number + "' in manifest";
+            return result;
+        }
+        if (!declared_json_members.insert(toLowerAscii(component.json_member)).second) {
+            result.error =
+                "duplicate component JSON reference '" + component.json_member + "' in manifest";
             return result;
         }
         components.push_back(std::move(component));
@@ -781,27 +802,13 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         result.error = "package directory already exists: " + final_dir.string();
         return result;
     }
-
-    // Only definitions the loader actually accepted count as installed: scan()
-    // logs and drops malformed files, so an invalid sentinel is not a conflict.
+    // Inventory existing definitions before creating staging; conflicts are
+    // not reported until all package structure and definitions validate.
     ComponentLibrary existing;
     existing.scan(global_library_root.string());
     std::set<std::string> installed_identities;
     for (const auto *def : existing.all())
         installed_identities.insert(identityKey(def->type, def->manufacturer, def->part_number));
-
-    std::vector<std::size_t> accepted;
-    for (std::size_t i = 0; i < components.size(); ++i) {
-        const auto &component = components[i];
-        const std::string identity =
-            identityKey(component.type, component.manufacturer, component.part_number);
-        if (installed_identities.count(identity)) {
-            result.conflicts.push_back(component.type + " " + component.manufacturer + " " +
-                                       component.part_number + ": already installed");
-            continue;
-        }
-        accepted.push_back(i);
-    }
 
     // --- Stage the whole payload, then validate it as the loader sees it ----
 
@@ -865,54 +872,150 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         }
     }
 
-    // The staged scan is the package-level validation: a payload the loader
-    // drops (or a declared identity it never sees) refuses the whole package.
     ComponentLibrary staged;
     staged.scan(staging.string());
     const auto staged_definitions = staged.all();
-    if (staged_definitions.size() != components.size()) {
-        // Name the first manifest member the loader did not turn into a
-        // definition, so the refusal points at a file the author can fix.
-        std::set<std::string> loaded_paths;
-        for (const auto *def : staged_definitions) {
-            std::error_code canonical_ec;
-            loaded_paths.insert(
-                fs::weakly_canonical(def->source_path, canonical_ec).generic_string());
-        }
-        std::string offending;
-        for (const auto &component : components) {
-            std::error_code canonical_ec;
-            const fs::path expected = fs::weakly_canonical(
-                staging / *payloadRelative(component.json_member), canonical_ec);
-            if (!loaded_paths.count(expected.generic_string())) {
-                offending = component.json_member;
-                break;
-            }
-        }
-        result.error = "package payload validation failed: loaded " +
-                       std::to_string(staged_definitions.size()) + " of " +
-                       std::to_string(components.size()) + " definition(s)";
-        if (!offending.empty())
-            result.error += " ('" + offending + "' did not load)";
+
+    // Each manifest JSON path must map to exactly one loader-accepted file.
+    // This path-indexed map prevents set equality from allowing identities to
+    // be silently exchanged between definitions.
+    std::map<std::string, const ComponentDefinition *> definitions_by_path;
+    std::error_code staging_canonical_ec;
+    const fs::path canonical_staging = fs::weakly_canonical(staging, staging_canonical_ec);
+    if (staging_canonical_ec) {
+        result.error = "cannot resolve the staged package directory";
         return result;
     }
-    std::set<std::string> staged_identities;
-    for (const auto *def : staged_definitions)
-        staged_identities.insert(identityKey(def->type, def->manufacturer, def->part_number));
-    for (const auto &component : components) {
-        if (!staged_identities.count(
-                identityKey(component.type, component.manufacturer, component.part_number))) {
-            result.error = "package payload validation failed: expected definition '" +
-                           component.type + "/" + component.manufacturer + "/" +
-                           component.part_number + "' did not load";
+    for (const auto *def : staged_definitions) {
+        std::error_code definition_ec;
+        const fs::path definition_path = fs::weakly_canonical(def->source_path, definition_ec);
+        if (definition_ec || !pathWithinRoot(canonical_staging, definition_path)) {
+            result.error = "package payload validation failed: definition path is outside staging";
+            return result;
+        }
+        const fs::path relative_path = definition_path.lexically_relative(canonical_staging);
+        if (relative_path.empty() || relative_path.is_absolute() ||
+            containsParentTraversal(relative_path) ||
+            !definitions_by_path.emplace(toSlash(relative_path), def).second) {
+            result.error =
+                "package payload validation failed: multiple definitions map to one JSON path";
             return result;
         }
     }
-
-    // Every packaged asset must resolve inside its definition's directory,
-    // exactly like ComponentLibrary::instantiate() resolves data_files.
     for (const auto &component : components) {
-        const fs::path json_dir = staging / payloadRelative(component.json_member)->parent_path();
+        const std::string expected = toSlash(*payloadRelative(component.json_member));
+        if (!definitions_by_path.count(expected)) {
+            result.error = "package payload validation failed: JSON path '" +
+                           component.json_member + "' did not load";
+            return result;
+        }
+    }
+    if (definitions_by_path.size() != components.size()) {
+        result.error =
+            "package payload validation failed: multiple definitions map to manifest JSON paths";
+        return result;
+    }
+
+    const std::set<std::string> extracted_members(payload_members.begin(), payload_members.end());
+    for (const auto &component : components) {
+        const fs::path relative_json = *payloadRelative(component.json_member);
+        const std::string relative_json_key = toSlash(relative_json);
+        const auto definition_it = definitions_by_path.find(relative_json_key);
+        if (definition_it == definitions_by_path.end()) {
+            result.error = "package payload validation failed: JSON path '" +
+                           component.json_member + "' did not load";
+            return result;
+        }
+        const ComponentDefinition &definition = *definition_it->second;
+        if (identityKey(definition.type, definition.manufacturer, definition.part_number) !=
+            identityKey(component.type, component.manufacturer, component.part_number)) {
+            result.error = "package payload identity mismatch for '" + component.json_member +
+                           "': manifest declares '" + component.type + "/" +
+                           component.manufacturer + "/" + component.part_number +
+                           "', JSON defines '" + definition.type + "/" + definition.manufacturer +
+                           "/" + definition.part_number + "'";
+            return result;
+        }
+
+        const fs::path json_path = staging / relative_json;
+        const fs::path json_dir = json_path.parent_path();
+        json definition_json;
+        try {
+            std::ifstream ifs(json_path);
+            if (!ifs.is_open())
+                throw std::runtime_error("cannot open staged JSON");
+            ifs >> definition_json;
+        } catch (const std::exception &e) {
+            result.error = "cannot inspect JSON asset references in '" + component.json_member +
+                           "': " + e.what();
+            return result;
+        }
+
+        std::set<std::string> actual_asset_ids;
+        const auto add_actual_reference = [&](const std::string &reference) {
+            const auto resolved = resolveContained(json_dir, reference);
+            std::error_code asset_ec;
+            if (!resolved || !fs::is_regular_file(*resolved, asset_ec) || asset_ec ||
+                !pathWithinRoot(canonical_staging, *resolved)) {
+                result.error = "actual JSON asset reference '" + reference + "' for '" +
+                               component.part_number +
+                               "' is missing or outside its definition directory";
+                return false;
+            }
+            std::error_code relative_ec;
+            const fs::path relative_asset = fs::relative(*resolved, canonical_staging, relative_ec);
+            if (relative_ec || relative_asset.empty() || relative_asset.is_absolute() ||
+                containsParentTraversal(relative_asset)) {
+                result.error = "cannot resolve actual JSON asset reference '" + reference + "'";
+                return false;
+            }
+            const std::string expected_member = "library/" + toSlash(relative_asset);
+            if (members_by_name.find(expected_member) == members_by_name.end() ||
+                !extracted_members.count(expected_member)) {
+                result.error = "actual JSON asset '" + expected_member + "' for '" +
+                               component.part_number +
+                               "' is not listed in the manifest and extracted";
+                return false;
+            }
+            actual_asset_ids.insert(resolved->generic_string());
+            return true;
+        };
+
+        if (definition_json.contains("data_files")) {
+            if (!definition_json["data_files"].is_array()) {
+                result.error = "malformed data_files references in '" + component.json_member + "'";
+                return result;
+            }
+            for (const auto &data_file : definition_json["data_files"]) {
+                if (!data_file.is_object() || !data_file.contains("type") ||
+                    !data_file["type"].is_string() || !data_file.contains("path") ||
+                    !data_file["path"].is_string()) {
+                    result.error = "malformed data_files entry in '" + component.json_member + "'";
+                    return result;
+                }
+                if (!add_actual_reference(data_file["path"].get<std::string>()))
+                    return result;
+            }
+        }
+        if (definition_json.contains("parameters")) {
+            if (!definition_json["parameters"].is_object()) {
+                result.error = "malformed parameters in '" + component.json_member + "'";
+                return result;
+            }
+            for (const char *key : referenceParameterKeys()) {
+                if (!definition_json["parameters"].contains(key))
+                    continue;
+                if (!definition_json["parameters"][key].is_string()) {
+                    result.error = "malformed " + std::string(key) + " reference in '" +
+                                   component.json_member + "'";
+                    return result;
+                }
+                if (!add_actual_reference(definition_json["parameters"][key].get<std::string>()))
+                    return result;
+            }
+        }
+
+        std::set<std::string> listed_asset_ids;
         for (const auto &asset : component.assets) {
             const fs::path asset_path = staging / *payloadRelative(asset);
             std::error_code asset_ec;
@@ -922,9 +1025,35 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
                                "' is outside its definition directory (containment violation)";
                 return result;
             }
+            std::error_code canonical_asset_ec;
+            const fs::path canonical_asset = fs::canonical(asset_path, canonical_asset_ec);
+            if (canonical_asset_ec) {
+                result.error = "cannot resolve packaged asset '" + asset + "'";
+                return result;
+            }
+            listed_asset_ids.insert(canonical_asset.generic_string());
+        }
+        if (listed_asset_ids != actual_asset_ids) {
+            result.error = "manifest asset list does not match actual JSON asset references for '" +
+                           component.json_member + "'";
+            return result;
         }
     }
 
+    // Report and act on pre-existing identities only after validation completes.
+
+    std::vector<std::size_t> accepted;
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        const auto &component = components[i];
+        const std::string identity =
+            identityKey(component.type, component.manufacturer, component.part_number);
+        if (installed_identities.count(identity)) {
+            result.conflicts.push_back(component.type + " " + component.manufacturer + " " +
+                                       component.part_number + ": already installed");
+            continue;
+        }
+        accepted.push_back(i);
+    }
     if (accepted.empty()) {
         // All good, but every identity already exists: install nothing.
         result.ok = true;
