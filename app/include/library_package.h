@@ -10,6 +10,7 @@ namespace library_package {
 inline constexpr int kFormatVersion = 1;
 inline constexpr const char *kFormatId = "rf-sim-library-package";
 inline constexpr std::size_t kMaxArchiveMembers = 4096;
+inline constexpr std::uint64_t kMaxMemberBytes = 256ull * 1024 * 1024;    // per member
 inline constexpr std::uint64_t kMaxExpandedBytes = 1024ull * 1024 * 1024; // 1 GiB total
 
 } // namespace library_package
@@ -35,3 +36,12 @@ struct LibraryPackageImportResult {
 // `output_path`. A failure removes any partial output.
 LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &source_root,
                                                 const std::filesystem::path &output_path);
+
+// Validates the whole package, then installs the non-conflicting subset under
+// `global_library_root/<package_name>/`. Creates the root when missing; never
+// merges into an existing package directory (reported as a whole-package
+// refusal). Each identity already present in the root is skipped and reported
+// in `conflicts`; `installed_dir` is set only when at least one component was
+// installed.
+LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &package_path,
+                                                const std::filesystem::path &global_library_root);

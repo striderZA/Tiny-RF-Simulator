@@ -15,19 +15,28 @@
 // Kept out of the main `tests` binary for the MinGW-w64 registration-ceiling
 // reason documented in tests/AGENTS.md and tests/CMakeLists.txt.
 
+#include "amplifier_engine.h"
 #include "component_library.h"
+#include "component_registry.h"
 #include "library_package.h"
+#include "node_graph_engine.h"
 #include "test_temp_paths.h"
+#include "view_manager.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <miniz.h>
 #include <nlohmann/json.hpp>
+#include <set>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -171,6 +180,150 @@ nlohmann::json parseMember(const std::map<std::string, std::string> &members,
                            const std::string &name) {
     REQUIRE(members.count(name) == 1);
     return nlohmann::json::parse(members.at(name));
+}
+
+// --- Import fixtures ---------------------------------------------------------
+
+// A package assembled by hand: manifest + payload members. Tests that must
+// produce layouts export can never emit (traversal, duplicate spellings,
+// missing assets, unknown format versions) build the ZIP themselves.
+struct PackageSpec {
+    nlohmann::json manifest;
+    // member name -> decompressed bytes; written after manifest.json.
+    std::vector<std::pair<std::string, std::string>> members;
+};
+
+void writePackage(const fs::path &archive_path, const PackageSpec &spec) {
+    const std::string manifest_text = spec.manifest.dump(2);
+
+    mz_zip_archive zip;
+    mz_zip_zero_struct(&zip);
+    REQUIRE(mz_zip_writer_init_file(&zip, archive_path.string().c_str(), 0) == MZ_TRUE);
+    REQUIRE(mz_zip_writer_add_mem(&zip, "manifest.json", manifest_text.data(), manifest_text.size(),
+                                  MZ_BEST_COMPRESSION) == MZ_TRUE);
+    for (const auto &member : spec.members) {
+        REQUIRE(mz_zip_writer_add_mem(&zip, member.first.c_str(), member.second.data(),
+                                      member.second.size(), MZ_BEST_COMPRESSION) == MZ_TRUE);
+    }
+    REQUIRE(mz_zip_writer_finalize_archive(&zip) == MZ_TRUE);
+    REQUIRE(mz_zip_writer_end(&zip) == MZ_TRUE);
+}
+
+nlohmann::json importManifest(const std::string &package_name, const nlohmann::json &components) {
+    return nlohmann::json{
+        {"format", library_package::kFormatId},
+        {"format_version", library_package::kFormatVersion},
+        {"package_name", package_name},
+        {"notes", ""},
+        {"components", components},
+    };
+}
+
+nlohmann::json componentEntry(const std::string &json_member, const std::string &type,
+                              const std::string &manufacturer, const std::string &part_number,
+                              const nlohmann::json &assets = nlohmann::json::array()) {
+    return nlohmann::json{{"json", json_member},
+                          {"type", type},
+                          {"manufacturer", manufacturer},
+                          {"part_number", part_number},
+                          {"assets", assets}};
+}
+
+// An amplifier definition with an optional data_files reference, serialized as
+// a payload member's bytes. Mirrors the export fixture so a round trip can
+// compare what the library loader sees on both ends.
+std::string amplifierPayload(const std::string &manufacturer, const std::string &part_number,
+                             const std::string &data_file = std::string()) {
+    nlohmann::json def = {
+        {"schema_version", 2},
+        {"type", "amplifier"},
+        {"part_number", part_number},
+        {"manufacturer", manufacturer},
+        {"parameters", {{"gain_dB", 20.0}, {"nf_dB", 1.0}}},
+    };
+    if (!data_file.empty()) {
+        def["data_files"] =
+            nlohmann::json::array({{{"type", "s_parameters"}, {"path", data_file}}});
+    }
+    return def.dump(2);
+}
+
+// A one-component package (definition + S2P asset) that a hand-built or
+// exported archive can both carry.
+PackageSpec singleAmpPackage(const std::string &package_name, const std::string &manufacturer,
+                             const std::string &part_number) {
+    const std::string base = "library/" + manufacturer + "/" + part_number;
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        package_name, nlohmann::json::array(
+                          {componentEntry(base + ".json", "amplifier", manufacturer, part_number,
+                                          nlohmann::json::array({base + ".s2p"}))}));
+    spec.members.push_back(
+        {base + ".json", amplifierPayload(manufacturer, part_number, part_number + ".s2p")});
+    spec.members.push_back({base + ".s2p", kS2pBytes});
+    return spec;
+}
+
+// Recursive file listing of a directory tree: relative generic path -> bytes.
+// The refusal cases assert the destination root is byte-identical, which means
+// no file added, removed, renamed, or rewritten.
+std::map<std::string, std::string> snapshotTree(const fs::path &root) {
+    std::map<std::string, std::string> snapshot;
+    std::error_code ec;
+    if (!fs::exists(root, ec)) {
+        REQUIRE(!ec);
+        return snapshot;
+    }
+    fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+    REQUIRE(!ec);
+    const fs::recursive_directory_iterator end;
+    for (; it != end; it.increment(ec)) {
+        REQUIRE(!ec);
+        std::error_code type_ec;
+        if (!it->is_regular_file(type_ec) || type_ec)
+            continue;
+        std::error_code rel_ec;
+        const fs::path relative = fs::relative(it->path(), root, rel_ec);
+        REQUIRE(!rel_ec);
+
+        std::ifstream ifs(it->path(), std::ios::binary);
+        REQUIRE(ifs.is_open());
+        snapshot.emplace(relative.generic_string(), std::string(std::istreambuf_iterator<char>(ifs),
+                                                                std::istreambuf_iterator<char>()));
+    }
+    return snapshot;
+}
+
+std::string readFileBytes(const fs::path &path) {
+    std::ifstream ifs(path, std::ios::binary);
+    REQUIRE(ifs.is_open());
+    return std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+}
+
+// Identity key the importer reports conflicts by, spelled for assertions.
+std::string conflictLine(const std::string &type, const std::string &manufacturer,
+                         const std::string &part_number) {
+    return type + " " + manufacturer + " " + part_number + ": already installed";
+}
+
+bool hasConflict(const LibraryPackageImportResult &result, const std::string &line) {
+    return std::find(result.conflicts.begin(), result.conflicts.end(), line) !=
+           result.conflicts.end();
+}
+
+// Every refusal contract at once: not ok, diagnostic present, nothing
+// installed, and the destination root byte-identical (no staged leftovers).
+void requireRefusal(const fs::path &package_path, const fs::path &root,
+                    const std::string &error_substring) {
+    const auto before = snapshotTree(root);
+    const LibraryPackageImportResult result = importLibraryPackage(package_path, root);
+    INFO("error: " << result.error);
+    REQUIRE_FALSE(result.ok);
+    if (!error_substring.empty())
+        REQUIRE(result.error.find(error_substring) != std::string::npos);
+    REQUIRE(result.imported == 0);
+    REQUIRE(result.installed_dir.empty());
+    REQUIRE(snapshotTree(root) == before);
 }
 
 } // namespace
@@ -522,4 +675,327 @@ TEST_CASE("exportLibraryPackage keeps directories and names containing spaces in
     REQUIRE(reloaded.all().front()->part_number == "AMP 100");
     REQUIRE(reloaded.all().front()->data_files.size() == 1);
     REQUIRE(reloaded.all().front()->data_files.front().path == "AMP 100.s2p");
+}
+
+// --- Import: happy path -----------------------------------------------------
+
+TEST_CASE("importLibraryPackage installs every component and the payload stays loadable",
+          "[library][package]") {
+    TempDir tmp("import_roundtrip");
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "amps", "AM1143");
+    writeText(source / "resistors" / "R100.json", amplifierDefinition("R100").dump(2));
+
+    const fs::path package = tmp.root / "lab-parts.rflib";
+    const LibraryPackageExportResult exported = exportLibraryPackage(source, package);
+    INFO("export error: " << exported.error);
+    REQUIRE(exported.ok);
+
+    const fs::path root = tmp.root / "global";
+    REQUIRE_FALSE(fs::exists(root));
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.error.empty());
+    REQUIRE(result.imported == 2);
+    REQUIRE(result.conflicts.empty());
+    REQUIRE(result.installed_dir == (root / "lab-parts").string());
+
+    const fs::path installed = result.installed_dir;
+    REQUIRE(fs::is_regular_file(installed / "amps" / "AM1143.json"));
+    REQUIRE(fs::is_regular_file(installed / "amps" / "AM1143.s2p"));
+    REQUIRE(fs::is_regular_file(installed / "resistors" / "R100.json"));
+    REQUIRE(readFileBytes(installed / "amps" / "AM1143.s2p") == kS2pBytes);
+
+    // The staging directory is gone: the package directory is the only entry.
+    for (const auto &entry : fs::directory_iterator(root))
+        REQUIRE_FALSE(entry.path().filename().string().rfind(".import-", 0) == 0);
+
+    ComponentLibrary rescan;
+    rescan.scan(installed.string());
+    REQUIRE(rescan.all().size() == 2);
+
+    const ComponentDefinition *amp = nullptr;
+    bool found_resistor = false;
+    for (const auto *def : rescan.all()) {
+        if (def->part_number == "AM1143")
+            amp = def;
+        if (def->part_number == "R100")
+            found_resistor = true;
+    }
+    REQUIRE(amp != nullptr);
+    REQUIRE(found_resistor);
+
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+    auto *engine = rescan.instantiate(*amp, 700, registry, graph);
+    REQUIRE(engine != nullptr);
+    auto *amp_engine = dynamic_cast<AmplifierEngine *>(engine);
+    REQUIRE(amp_engine != nullptr);
+    REQUIRE(amp_engine->sparamLoaded());
+}
+
+TEST_CASE("importLibraryPackage creates a missing destination root", "[library][package]") {
+    TempDir tmp("import_createroot");
+    const fs::path package = tmp.root / "solo.rflib";
+    writePackage(package, singleAmpPackage("solo", "Test Corp", "SOLO-AMP"));
+
+    const fs::path root = tmp.root / "nested" / "global";
+    REQUIRE_FALSE(fs::exists(root));
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.imported == 1);
+    REQUIRE(fs::is_directory(root));
+    REQUIRE(result.installed_dir == (root / "solo").string());
+    REQUIRE(fs::is_regular_file(root / "solo" / "Test Corp" / "SOLO-AMP.json"));
+    REQUIRE(fs::is_regular_file(root / "solo" / "Test Corp" / "SOLO-AMP.s2p"));
+}
+
+// --- Import: conflicts ------------------------------------------------------
+
+TEST_CASE("importLibraryPackage skips conflicting identities and leaves existing files alone",
+          "[library][package]") {
+    TempDir tmp("import_mixed");
+    const fs::path source = tmp.root / "source";
+    writeAmpWithDataFile(source / "amps", "AM1143");
+    writeText(source / "resistors" / "R100.json", amplifierDefinition("R100").dump(2));
+
+    const fs::path package = tmp.root / "mixed.rflib";
+    REQUIRE(exportLibraryPackage(source, package).ok);
+
+    const fs::path root = tmp.root / "global";
+    // Same identity as the incoming R100, distinct sentinel content.
+    writeText(
+        root / "exist" / "R100.json",
+        amplifierDefinition("R100", {{"parameters", {{"gain_dB", 99.0}, {"nf_dB", 9.0}}}}).dump(2));
+    // An unrelated installed component (and a non-component file) must survive.
+    writeText(root / "exist" / "OTHER.json", amplifierDefinition("OTHER-AMP").dump(2));
+    writeText(root / "notes.txt", "keep me\n");
+
+    const std::string sentinel_json = readFileBytes(root / "exist" / "R100.json");
+    const std::string sentinel_other = readFileBytes(root / "exist" / "OTHER.json");
+    const std::string sentinel_notes = readFileBytes(root / "notes.txt");
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.imported == 1);
+    REQUIRE(result.conflicts.size() == 1);
+    REQUIRE(hasConflict(result, conflictLine("amplifier", "Test Corp", "R100")));
+    REQUIRE(result.installed_dir == (root / "mixed").string());
+
+    REQUIRE(fs::is_regular_file(root / "mixed" / "amps" / "AM1143.json"));
+    REQUIRE(fs::is_regular_file(root / "mixed" / "amps" / "AM1143.s2p"));
+    REQUIRE_FALSE(fs::exists(root / "mixed" / "resistors" / "R100.json"));
+
+    REQUIRE(readFileBytes(root / "exist" / "R100.json") == sentinel_json);
+    REQUIRE(readFileBytes(root / "exist" / "OTHER.json") == sentinel_other);
+    REQUIRE(readFileBytes(root / "notes.txt") == sentinel_notes);
+}
+
+TEST_CASE("importLibraryPackage matches conflicting identities case-insensitively",
+          "[library][package]") {
+    TempDir tmp("import_case");
+    const fs::path package = tmp.root / "case-pkg.rflib";
+    {
+        PackageSpec spec;
+        spec.manifest = importManifest(
+            "case-pkg", nlohmann::json::array({componentEntry("library/lower/lower.json",
+                                                              "amplifier", "anatech", "am1143")}));
+        spec.members.push_back({"library/lower/lower.json", amplifierPayload("anatech", "am1143")});
+        writePackage(package, spec);
+    }
+    const fs::path root = tmp.root / "global";
+    writeText(root / "exist" / "existing.json", amplifierPayload("Anatech", "AM1143"));
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.imported == 0);
+    REQUIRE(result.installed_dir.empty());
+    REQUIRE(hasConflict(result, conflictLine("amplifier", "anatech", "am1143")));
+    REQUIRE_FALSE(fs::exists(root / "case-pkg"));
+    REQUIRE(fs::is_regular_file(root / "exist" / "existing.json"));
+}
+
+TEST_CASE("importLibraryPackage reports an all-conflict import without writing a package",
+          "[library][package]") {
+    TempDir tmp("import_allconflict");
+    const fs::path package = tmp.root / "conflict-pkg.rflib";
+    writePackage(package, singleAmpPackage("conflict-pkg", "Test Corp", "R100"));
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "exist" / "R100.json", amplifierDefinition("R100").dump(2));
+    const auto before = snapshotTree(root);
+
+    const LibraryPackageImportResult result = importLibraryPackage(package, root);
+    INFO("import error: " << result.error);
+    REQUIRE(result.ok);
+    REQUIRE(result.error.empty());
+    REQUIRE(result.imported == 0);
+    REQUIRE(result.conflicts.size() == 1);
+    REQUIRE(hasConflict(result, conflictLine("amplifier", "Test Corp", "R100")));
+    REQUIRE(result.installed_dir.empty());
+    REQUIRE_FALSE(fs::exists(root / "conflict-pkg"));
+    REQUIRE(snapshotTree(root) == before);
+}
+
+// --- Import: refusals -------------------------------------------------------
+
+TEST_CASE("importLibraryPackage refuses a truncated archive", "[library][package]") {
+    TempDir tmp("import_truncated");
+    const fs::path good = tmp.root / "good.rflib";
+    writePackage(good, singleAmpPackage("good", "Test Corp", "TRUNC-AMP"));
+
+    const std::string bytes = readFileBytes(good);
+    REQUIRE(bytes.size() > 8);
+    const fs::path truncated = tmp.root / "truncated.rflib";
+    writeBinary(truncated, bytes.substr(0, bytes.size() / 2));
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+    requireRefusal(truncated, root, "package");
+}
+
+TEST_CASE("importLibraryPackage refuses an unknown format version", "[library][package]") {
+    TempDir tmp("import_version");
+    const fs::path package = tmp.root / "future.rflib";
+    PackageSpec spec = singleAmpPackage("future", "Test Corp", "FUTURE-AMP");
+    spec.manifest["format_version"] = library_package::kFormatVersion + 1;
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "format_version");
+}
+
+TEST_CASE("importLibraryPackage refuses a parent-traversal member", "[library][package]") {
+    TempDir tmp("import_traversal");
+    const fs::path package = tmp.root / "evil.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "evil", nlohmann::json::array({componentEntry("../evil.json", "amplifier", "Evil Corp",
+                                                      "EVIL", nlohmann::json::array())}));
+    spec.members.push_back({"../evil.json", amplifierPayload("Evil Corp", "EVIL")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "../evil.json");
+}
+
+TEST_CASE("importLibraryPackage refuses case-duplicate member names", "[library][package]") {
+    TempDir tmp("import_case_dup");
+    const fs::path package = tmp.root / "dup.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "dup", nlohmann::json::array({componentEntry("library/A.json", "amplifier", "Test Corp",
+                                                     "A-AMP", nlohmann::json::array())}));
+    spec.members.push_back({"library/A.json", amplifierPayload("Test Corp", "A-AMP")});
+    spec.members.push_back({"library/a.json", amplifierPayload("Test Corp", "A-AMP")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "duplicate");
+}
+
+TEST_CASE("importLibraryPackage refuses a manifest-listed asset missing from the archive",
+          "[library][package]") {
+    TempDir tmp("import_missing_asset");
+    const fs::path package = tmp.root / "missing.rflib";
+    PackageSpec spec = singleAmpPackage("missing", "Test Corp", "MISS-AMP");
+    // Drop the asset member the manifest names.
+    spec.members.pop_back();
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "MISS-AMP.s2p");
+}
+
+TEST_CASE("importLibraryPackage refuses a package name that is not a bare segment",
+          "[library][package]") {
+    TempDir tmp("import_name");
+    const fs::path package = tmp.root / "escape-name.rflib";
+    writePackage(package, singleAmpPackage("../evil", "Test Corp", "NAME-AMP"));
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "package_name");
+}
+
+TEST_CASE("importLibraryPackage refuses an existing package directory", "[library][package]") {
+    TempDir tmp("import_existing");
+    const fs::path package = tmp.root / "taken.rflib";
+    writePackage(package, singleAmpPackage("taken", "Test Corp", "TAKEN-AMP"));
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "taken" / "sentinel.txt", "do not touch\n");
+    const std::string sentinel = readFileBytes(root / "taken" / "sentinel.txt");
+
+    requireRefusal(package, root, "already exists");
+    REQUIRE(readFileBytes(root / "taken" / "sentinel.txt") == sentinel);
+    REQUIRE_FALSE(fs::exists(root / "taken" / "Test Corp"));
+}
+
+TEST_CASE("importLibraryPackage refuses an archive over the member-count limit",
+          "[library][package]") {
+    TempDir tmp("import_members");
+    const fs::path package = tmp.root / "huge.rflib";
+    PackageSpec spec = singleAmpPackage("huge", "Test Corp", "HUGE-AMP");
+    // manifest.json + these == one over the limit.
+    for (std::size_t i = 0; i < library_package::kMaxArchiveMembers; ++i)
+        spec.members.push_back({"library/tiny-" + std::to_string(i), "x"});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "limit");
+}
+
+TEST_CASE("importLibraryPackage refuses a payload definition the loader drops",
+          "[library][package]") {
+    TempDir tmp("import_badpayload");
+    const fs::path package = tmp.root / "badpayload.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "badpayload", nlohmann::json::array({componentEntry("library/bad.json", "amplifier",
+                                                            "Test Corp", "BAD-AMP")}));
+    spec.members.push_back({"library/bad.json", "{}"});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "library/bad.json");
+}
+
+TEST_CASE("importLibraryPackage refuses a packaged asset outside its definition directory",
+          "[library][package]") {
+    TempDir tmp("import_asset_escape");
+    const fs::path package = tmp.root / "asset-escape.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest("asset-escape",
+                                   nlohmann::json::array({componentEntry(
+                                       "library/foo/a.json", "amplifier", "Test Corp", "ASSET-AMP",
+                                       nlohmann::json::array({"library/other/a.s2p"}))}));
+    spec.members.push_back({"library/foo/a.json", amplifierPayload("Test Corp", "ASSET-AMP")});
+    spec.members.push_back({"library/other/a.s2p", kS2pBytes});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "containment");
 }

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -12,6 +13,12 @@
 #include <string>
 #include <system_error>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <miniz.h>
 #include <nlohmann/json.hpp>
@@ -298,6 +305,74 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
     return true;
 }
 
+// --- Import helpers ----------------------------------------------------------
+
+// One manifest-listed component, validated before any extraction happens.
+struct ManifestComponent {
+    std::string json_member; // archive spelling, library/<rel>
+    std::string type;
+    std::string manufacturer;
+    std::string part_number;
+    std::vector<std::string> assets; // archive spellings
+};
+
+std::string identityKey(const std::string &type, const std::string &manufacturer,
+                        const std::string &part_number) {
+    return toLowerAscii(type) + '\x1f' + toLowerAscii(manufacturer) + '\x1f' +
+           toLowerAscii(part_number);
+}
+
+// `library/<rel>` -> `<rel>`. The manifest, the archive members, and staging
+// all speak this one spelling so an extracted payload mirrors the source tree
+// exactly (and `manifest.json` is never itself staged).
+constexpr const char *kPayloadPrefix = "library/";
+constexpr std::size_t kPayloadPrefixLength = 8;
+
+std::optional<fs::path> payloadRelative(const std::string &member) {
+    if (member.rfind(kPayloadPrefix, 0) != 0 || member.size() <= kPayloadPrefixLength)
+        return std::nullopt;
+    return fs::path(member.substr(kPayloadPrefixLength));
+}
+
+// Process-unique half of the staging-directory tag; the retry counter appended
+// by the caller makes it unique across concurrent imports in one process too.
+unsigned long processId() {
+#ifdef _WIN32
+    return static_cast<unsigned long>(_getpid());
+#else
+    return static_cast<unsigned long>(getpid());
+#endif
+}
+
+// A path a ZIP member may carry. The rules are the containment discipline from
+// component_library.cpp, applied to archive spellings: no absolute paths, no
+// backslashes (a Windows-style separator would resolve differently than the
+// forward-slash spelling the manifest validated), no traversal, no empty or
+// directory members.
+bool isSafeMemberPath(const std::string &member) {
+    if (member.empty() || member.back() == '/')
+        return false; // empty or a directory entry
+    if (member.find('\\') != std::string::npos)
+        return false;
+
+    const fs::path path(member);
+    if (path.is_absolute() || path.has_root_name() || path.has_root_directory())
+        return false;
+    return !containsParentTraversal(path);
+}
+
+// Removes the staging directory on every return path of importLibraryPackage.
+struct StagingGuard {
+    fs::path path;
+
+    ~StagingGuard() {
+        if (path.empty())
+            return;
+        std::error_code ec;
+        fs::remove_all(path, ec);
+    }
+};
+
 } // namespace
 
 LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &source_root,
@@ -475,5 +550,419 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
     result.assets = asset_count;
     LOG_INFO("Exported %d component definition(s) and %d asset(s) to %s", result.definitions,
              result.assets, result.output_path.c_str());
+    return result;
+}
+LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &package_path,
+                                                const std::filesystem::path &global_library_root) {
+    LibraryPackageImportResult result;
+
+    if (package_path.empty()) {
+        result.error = "no package path given";
+        return result;
+    }
+    if (global_library_root.empty()) {
+        result.error = "no destination root given";
+        return result;
+    }
+
+    // --- Open and inventory the archive -------------------------------------
+
+    mz_zip_archive zip;
+    mz_zip_zero_struct(&zip);
+    if (mz_zip_reader_init_file(&zip, package_path.string().c_str(), 0) != MZ_TRUE) {
+        result.error = "cannot open package file '" + package_path.string() + "': " + zipError(zip);
+        return result;
+    }
+    // Every return below goes through this guard so the reader is always ended.
+    struct ZipCloser {
+        mz_zip_archive *zip;
+        ~ZipCloser() { mz_zip_reader_end(zip); }
+    } zip_closer{&zip};
+
+    const mz_uint member_count = mz_zip_reader_get_num_files(&zip);
+    if (member_count > library_package::kMaxArchiveMembers) {
+        result.error = "archive has " + std::to_string(member_count) + " members (limit " +
+                       std::to_string(library_package::kMaxArchiveMembers) + ")";
+        return result;
+    }
+
+    struct MemberInfo {
+        mz_uint index = 0;
+        std::uint64_t size = 0;
+    };
+    std::map<std::string, MemberInfo> members_by_name; // exact archive spelling
+    std::set<std::string> lowered_names;               // case-insensitive duplicates
+    std::uint64_t declared_total = 0;
+
+    for (mz_uint i = 0; i < member_count; ++i) {
+        mz_zip_archive_file_stat stat;
+        if (mz_zip_reader_file_stat(&zip, i, &stat) != MZ_TRUE) {
+            result.error = "cannot read archive member " + std::to_string(i) + ": " + zipError(zip);
+            return result;
+        }
+        const std::string name(stat.m_filename);
+
+        if (!isSafeMemberPath(name)) {
+            result.error = "unsafe package member path '" + name + "'";
+            return result;
+        }
+        if (mz_zip_reader_is_file_a_directory(&zip, i) == MZ_TRUE) {
+            result.error = "archive member '" + name + "' is a directory entry";
+            return result;
+        }
+        if (stat.m_uncomp_size > library_package::kMaxMemberBytes) {
+            result.error = "archive member '" + name + "' exceeds the per-member size limit";
+            return result;
+        }
+        declared_total += stat.m_uncomp_size;
+        if (declared_total > library_package::kMaxExpandedBytes) {
+            result.error = "archive expands beyond the package size limit";
+            return result;
+        }
+        if (!lowered_names.insert(toLowerAscii(name)).second) {
+            result.error = "duplicate package member '" + name + "'";
+            return result;
+        }
+        members_by_name.emplace(name, MemberInfo{i, stat.m_uncomp_size});
+    }
+
+    // --- Manifest -----------------------------------------------------------
+
+    const auto manifest_it = members_by_name.find("manifest.json");
+    if (manifest_it == members_by_name.end()) {
+        result.error = "package has no manifest.json";
+        return result;
+    }
+    std::string manifest_text(static_cast<std::size_t>(manifest_it->second.size), '\0');
+    if (!manifest_text.empty() &&
+        mz_zip_reader_extract_to_mem(&zip, manifest_it->second.index, manifest_text.data(),
+                                     manifest_text.size(), 0) != MZ_TRUE) {
+        result.error = "cannot read the package manifest: " + zipError(zip);
+        return result;
+    }
+
+    json manifest;
+    try {
+        manifest = json::parse(manifest_text);
+    } catch (const json::exception &e) {
+        result.error = std::string("package manifest is not valid JSON: ") + e.what();
+        return result;
+    }
+
+    if (!manifest.is_object()) {
+        result.error = "package manifest is not a JSON object";
+        return result;
+    }
+    if (!manifest.contains("format") || !manifest["format"].is_string() ||
+        manifest["format"].get<std::string>() != library_package::kFormatId) {
+        result.error = "not an RF Simulator library package";
+        return result;
+    }
+    if (!manifest.contains("format_version") || !manifest["format_version"].is_number_integer() ||
+        manifest["format_version"].get<long long>() != library_package::kFormatVersion) {
+        result.error = "unsupported package format_version (expected " +
+                       std::to_string(library_package::kFormatVersion) + ")";
+        return result;
+    }
+
+    if (!manifest.contains("package_name") || !manifest["package_name"].is_string()) {
+        result.error = "package_name is missing or not a string";
+        return result;
+    }
+    const std::string package_name = manifest["package_name"].get<std::string>();
+    if (package_name.empty() || sanitizePathSegment(package_name, "") != package_name) {
+        result.error = "invalid package_name '" + package_name + "' (must be a bare path segment)";
+        return result;
+    }
+
+    if (!manifest.contains("components") || !manifest["components"].is_array() ||
+        manifest["components"].empty()) {
+        result.error = "package has no components";
+        return result;
+    }
+
+    std::vector<ManifestComponent> components;
+    std::set<std::string> declared_identities;
+    for (const auto &entry : manifest["components"]) {
+        if (!entry.is_object() || !entry.contains("json") || !entry["json"].is_string() ||
+            !entry.contains("type") || !entry["type"].is_string() ||
+            !entry.contains("manufacturer") || !entry["manufacturer"].is_string() ||
+            !entry.contains("part_number") || !entry["part_number"].is_string() ||
+            !entry.contains("assets") || !entry["assets"].is_array()) {
+            result.error = "malformed manifest component entry";
+            return result;
+        }
+
+        ManifestComponent component;
+        component.json_member = entry["json"].get<std::string>();
+        component.type = entry["type"].get<std::string>();
+        component.manufacturer = entry["manufacturer"].get<std::string>();
+        component.part_number = entry["part_number"].get<std::string>();
+        for (const auto &asset : entry["assets"]) {
+            if (!asset.is_string()) {
+                result.error = "malformed asset entry for '" + component.part_number + "'";
+                return result;
+            }
+            component.assets.push_back(asset.get<std::string>());
+        }
+
+        const std::string identity =
+            identityKey(component.type, component.manufacturer, component.part_number);
+        if (!declared_identities.insert(identity).second) {
+            result.error = "duplicate component identity '" + component.type + "/" +
+                           component.manufacturer + "/" + component.part_number + "' in manifest";
+            return result;
+        }
+        components.push_back(std::move(component));
+    }
+
+    // Every manifest-listed member must be a safe library/ payload member that
+    // the archive actually carries. Collect the extraction list in manifest
+    // order, deduplicated (an asset shared by two definitions is one member).
+    std::vector<std::string> payload_members;
+    std::set<std::string> seen_payload;
+    const auto require_payload = [&](const std::string &member,
+                                     const std::string &part_number) -> bool {
+        if (!payloadRelative(member)) {
+            result.error = "packaged member '" + member + "' for '" + part_number +
+                           "' is not a library/ payload member";
+            return false;
+        }
+        if (members_by_name.find(member) == members_by_name.end()) {
+            result.error = "packaged member '" + member + "' for '" + part_number +
+                           "' is missing from the archive";
+            return false;
+        }
+        if (seen_payload.insert(member).second)
+            payload_members.push_back(member);
+        return true;
+    };
+
+    for (const auto &component : components) {
+        if (!require_payload(component.json_member, component.part_number))
+            return result;
+        for (const auto &asset : component.assets) {
+            if (!require_payload(asset, component.part_number))
+                return result;
+        }
+    }
+
+    // --- Destination and conflicts ------------------------------------------
+
+    const fs::path final_dir = global_library_root / package_name;
+    std::error_code exists_ec;
+    if (fs::exists(final_dir, exists_ec)) {
+        result.error = "package directory already exists: " + final_dir.string();
+        return result;
+    }
+
+    // Only definitions the loader actually accepted count as installed: scan()
+    // logs and drops malformed files, so an invalid sentinel is not a conflict.
+    ComponentLibrary existing;
+    existing.scan(global_library_root.string());
+    std::set<std::string> installed_identities;
+    for (const auto *def : existing.all())
+        installed_identities.insert(identityKey(def->type, def->manufacturer, def->part_number));
+
+    std::vector<std::size_t> accepted;
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        const auto &component = components[i];
+        const std::string identity =
+            identityKey(component.type, component.manufacturer, component.part_number);
+        if (installed_identities.count(identity)) {
+            result.conflicts.push_back(component.type + " " + component.manufacturer + " " +
+                                       component.part_number + ": already installed");
+            continue;
+        }
+        accepted.push_back(i);
+    }
+
+    // --- Stage the whole payload, then validate it as the loader sees it ----
+
+    std::error_code root_ec;
+    fs::create_directories(global_library_root, root_ec);
+    if (root_ec && !fs::is_directory(global_library_root)) {
+        result.error = "cannot create destination root '" + global_library_root.string() +
+                       "': " + root_ec.message();
+        return result;
+    }
+
+    fs::path staging;
+    {
+        const std::string base = ".import-" + package_name + "-" + std::to_string(processId());
+        for (int attempt = 0; attempt < 1000 && staging.empty(); ++attempt) {
+            const fs::path candidate = global_library_root / (base + "-" + std::to_string(attempt));
+            if (!fs::exists(candidate))
+                staging = candidate;
+        }
+        if (staging.empty()) {
+            result.error =
+                "cannot reserve a staging directory under '" + global_library_root.string() + "'";
+            return result;
+        }
+    }
+    // Removes the staging tree on every return from here on (rename clears it).
+    StagingGuard staging_guard{staging};
+
+    std::error_code staging_ec;
+    fs::create_directories(staging, staging_ec);
+    if (staging_ec) {
+        result.error =
+            "cannot create staging directory '" + staging.string() + "': " + staging_ec.message();
+        return result;
+    }
+
+    std::uint64_t extracted_total = 0;
+    for (const auto &member : payload_members) {
+        const auto info = members_by_name.find(member);
+        const fs::path relative = *payloadRelative(member);
+        const fs::path destination = staging / relative;
+
+        extracted_total += info->second.size;
+        if (extracted_total > library_package::kMaxExpandedBytes) {
+            result.error =
+                "package expands beyond the size limit while extracting '" + member + "'";
+            return result;
+        }
+
+        std::error_code dir_ec;
+        fs::create_directories(destination.parent_path(), dir_ec);
+        if (dir_ec) {
+            result.error = "cannot create a directory for package member '" + member +
+                           "': " + dir_ec.message();
+            return result;
+        }
+        if (mz_zip_reader_extract_to_file(&zip, info->second.index, destination.string().c_str(),
+                                          0) != MZ_TRUE) {
+            result.error = "cannot extract package member '" + member + "': " + zipError(zip);
+            return result;
+        }
+    }
+
+    // The staged scan is the package-level validation: a payload the loader
+    // drops (or a declared identity it never sees) refuses the whole package.
+    ComponentLibrary staged;
+    staged.scan(staging.string());
+    const auto staged_definitions = staged.all();
+    if (staged_definitions.size() != components.size()) {
+        // Name the first manifest member the loader did not turn into a
+        // definition, so the refusal points at a file the author can fix.
+        std::set<std::string> loaded_paths;
+        for (const auto *def : staged_definitions) {
+            std::error_code canonical_ec;
+            loaded_paths.insert(
+                fs::weakly_canonical(def->source_path, canonical_ec).generic_string());
+        }
+        std::string offending;
+        for (const auto &component : components) {
+            std::error_code canonical_ec;
+            const fs::path expected = fs::weakly_canonical(
+                staging / *payloadRelative(component.json_member), canonical_ec);
+            if (!loaded_paths.count(expected.generic_string())) {
+                offending = component.json_member;
+                break;
+            }
+        }
+        result.error = "package payload validation failed: loaded " +
+                       std::to_string(staged_definitions.size()) + " of " +
+                       std::to_string(components.size()) + " definition(s)";
+        if (!offending.empty())
+            result.error += " ('" + offending + "' did not load)";
+        return result;
+    }
+    std::set<std::string> staged_identities;
+    for (const auto *def : staged_definitions)
+        staged_identities.insert(identityKey(def->type, def->manufacturer, def->part_number));
+    for (const auto &component : components) {
+        if (!staged_identities.count(
+                identityKey(component.type, component.manufacturer, component.part_number))) {
+            result.error = "package payload validation failed: expected definition '" +
+                           component.type + "/" + component.manufacturer + "/" +
+                           component.part_number + "' did not load";
+            return result;
+        }
+    }
+
+    // Every packaged asset must resolve inside its definition's directory,
+    // exactly like ComponentLibrary::instantiate() resolves data_files.
+    for (const auto &component : components) {
+        const fs::path json_dir = staging / payloadRelative(component.json_member)->parent_path();
+        for (const auto &asset : component.assets) {
+            const fs::path asset_path = staging / *payloadRelative(asset);
+            std::error_code asset_ec;
+            if (!pathWithinRoot(json_dir, asset_path) ||
+                !fs::is_regular_file(asset_path, asset_ec) || asset_ec) {
+                result.error = "packaged asset '" + asset + "' for '" + component.part_number +
+                               "' is outside its definition directory (containment violation)";
+                return result;
+            }
+        }
+    }
+
+    if (accepted.empty()) {
+        // All good, but every identity already exists: install nothing.
+        result.ok = true;
+        LOG_INFO("Imported nothing from %s: all %zu component(s) already installed",
+                 package_path.string().c_str(), components.size());
+        return result;
+    }
+
+    // --- Install the accepted subset ---------------------------------------
+
+    // Staging mirrored the whole validated payload; drop the conflicting
+    // components so the renamed package contains only what was accepted. An
+    // asset shared with an accepted component stays.
+    std::set<std::size_t> accepted_set(accepted.begin(), accepted.end());
+    std::set<std::string> accepted_assets;
+    for (std::size_t i : accepted) {
+        for (const auto &asset : components[i].assets)
+            accepted_assets.insert(asset);
+    }
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        if (accepted_set.count(i))
+            continue;
+        const auto &component = components[i];
+        std::error_code remove_ec;
+        fs::remove(staging / *payloadRelative(component.json_member), remove_ec);
+        for (const auto &asset : component.assets) {
+            if (accepted_assets.count(asset))
+                continue;
+            fs::remove(staging / *payloadRelative(asset), remove_ec);
+        }
+    }
+
+    // Drop directories emptied by those removals (deepest first), so the
+    // installed package has no stale branches from skipped components.
+    {
+        std::vector<fs::path> directories;
+        std::error_code walk_ec;
+        fs::recursive_directory_iterator it(staging, fs::directory_options::skip_permission_denied,
+                                            walk_ec);
+        const fs::recursive_directory_iterator end;
+        for (; !walk_ec && it != end; it.increment(walk_ec)) {
+            std::error_code type_ec;
+            if (it->is_directory(type_ec) && !type_ec)
+                directories.push_back(it->path());
+        }
+        for (auto dir_it = directories.rbegin(); dir_it != directories.rend(); ++dir_it) {
+            std::error_code remove_ec;
+            fs::remove(*dir_it, remove_ec); // non-empty directories are left in place
+        }
+    }
+
+    std::error_code rename_ec;
+    fs::rename(staging, final_dir, rename_ec);
+    if (rename_ec) {
+        result.error =
+            "cannot install package directory '" + final_dir.string() + "': " + rename_ec.message();
+        return result; // staging_guard removes the staging tree
+    }
+    staging_guard.path.clear(); // the tree now lives at final_dir
+
+    result.ok = true;
+    result.imported = static_cast<int>(accepted.size());
+    result.installed_dir = final_dir.string();
+    LOG_INFO("Imported %d component definition(s) from %s into %s", result.imported,
+             package_path.string().c_str(), result.installed_dir.c_str());
     return result;
 }
