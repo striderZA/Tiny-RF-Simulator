@@ -691,6 +691,62 @@ TEST_CASE("exportLibraryPackage preserves a relative symlink asset reference on 
     REQUIRE(amp_engine != nullptr);
     REQUIRE(amp_engine->sparamLoaded());
 }
+TEST_CASE("exportLibraryPackage resolves JSON symlink references from the lexical directory",
+          "[library][package]") {
+    TempDir tmp("symlink_json_reference");
+    const fs::path source = tmp.root / "source";
+    const fs::path alias_dir = source / "alias";
+    const fs::path real_dir = source / "real";
+    fs::create_directories(alias_dir);
+    const fs::path target = real_dir / "component.data";
+    writeText(target,
+              amplifierDefinition(
+                  "LEXICAL-AMP", {{"data_files", nlohmann::json::array({{{"type", "s_parameters"},
+                                                                         {"path", "asset.s2p"}}})}})
+                  .dump(2));
+    const std::string lexical_asset_bytes = writeS2p(alias_dir / "asset.s2p");
+    writeS2p(real_dir / "asset.s2p"); // Same-named decoy at the canonical JSON directory.
+
+    std::error_code symlink_ec;
+    fs::create_symlink(target, alias_dir / "component.json", symlink_ec);
+    if (symlink_ec) {
+        SUCCEED("SKIP: cannot create a JSON symlink on this platform: " + symlink_ec.message());
+        return;
+    }
+    REQUIRE(fs::is_symlink(alias_dir / "component.json"));
+
+    const fs::path package = tmp.root / "lexical.rflib";
+    const LibraryPackageExportResult exported = exportLibraryPackage(source, package);
+    INFO("export error: " << exported.error);
+    REQUIRE(exported.ok);
+
+    const auto members = readArchive(package);
+    REQUIRE(members.count("library/alias/asset.s2p") == 1);
+    REQUIRE(members.count("library/real/asset.s2p") == 0);
+    REQUIRE(members.at("library/alias/asset.s2p") == lexical_asset_bytes);
+    REQUIRE(
+        parseMember(members, "library/alias/component.json").at("data_files").at(0).at("path") ==
+        "asset.s2p");
+    const auto manifest = parseMember(members, "manifest.json");
+    REQUIRE(manifest.at("components").at(0).at("assets") ==
+            nlohmann::json::array({"library/alias/asset.s2p"}));
+
+    const fs::path global_root = tmp.root / "global";
+    const LibraryPackageImportResult imported = importLibraryPackage(package, global_root);
+    INFO("import error: " << imported.error);
+    REQUIRE(imported.ok);
+    ComponentLibrary reloaded;
+    reloaded.scan(imported.installed_dir);
+    REQUIRE(reloaded.all().size() == 1);
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry registry(graph, view);
+    auto *engine = reloaded.instantiate(*reloaded.all().front(), 701, registry, graph);
+    REQUIRE(engine != nullptr);
+    const auto *amp_engine = dynamic_cast<const AmplifierEngine *>(engine);
+    REQUIRE(amp_engine != nullptr);
+    REQUIRE(amp_engine->sparamLoaded());
+}
 
 TEST_CASE("exportLibraryPackage removes the partial output when the writer cannot start",
           "[library][package]") {
@@ -1188,6 +1244,34 @@ TEST_CASE("importLibraryPackage refuses a manifest-listed asset missing from the
     writeText(root / "notes.txt", "keep me\n");
 
     requireRefusal(package, root, "MISS-AMP.s2p");
+}
+TEST_CASE("importLibraryPackage removes a newly created destination root after semantic refusal",
+          "[library][package]") {
+    TempDir tmp("missing_root_semantic_refusal");
+    const fs::path package = tmp.root / "omitted-asset.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "omitted-asset", nlohmann::json::array({componentEntry("library/amp.json", "amplifier",
+                                                               "Test Corp", "OMITTED-AMP")}));
+    spec.members.push_back(
+        {"library/amp.json", amplifierPayload("Test Corp", "OMITTED-AMP", "missing.s2p")});
+    writePackage(package, spec);
+
+    const fs::path parent = tmp.root / "new-parent";
+    fs::create_directories(parent);
+
+    const fs::path root = parent / "nested" / "global";
+    REQUIRE(fs::exists(parent));
+    REQUIRE_FALSE(fs::exists(root));
+
+    const LibraryPackageImportResult imported = importLibraryPackage(package, root);
+    INFO("import error: " << imported.error);
+    REQUIRE_FALSE(imported.ok);
+    REQUIRE(imported.error.find("missing.s2p") != std::string::npos);
+    REQUIRE(imported.imported == 0);
+    REQUIRE(imported.installed_dir.empty());
+    REQUIRE_FALSE(fs::exists(root));
+    REQUIRE_FALSE(fs::exists(parent / "nested"));
 }
 
 TEST_CASE("importLibraryPackage refuses a package name that is not a bare segment",

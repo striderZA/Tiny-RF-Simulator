@@ -185,7 +185,10 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
         error = "library definition resolves outside the selected root: " + json_path.string();
         return false;
     }
-    const fs::path json_dir = canonical_json.parent_path();
+    // Authored references follow the JSON path passed to the loader, including
+    // an in-root JSON symlink's lexical directory. Canonicalization above is
+    // solely the security check; it must not change loader resolution rules.
+    const fs::path json_dir = json_path.parent_path();
 
     // Keep the in-root directory entry spelling in the archive, but only after
     // checking that a symlink did not redirect the JSON outside the chosen root.
@@ -425,6 +428,19 @@ struct StagingGuard {
             return;
         std::error_code ec;
         fs::remove_all(path, ec);
+    }
+};
+// Removes only empty destination directories this import found missing before
+// it created the root. Declared before StagingGuard so staged payload cleanup
+// runs first on every refusal path.
+struct CreatedDirectoryGuard {
+    std::vector<fs::path> paths; // deepest first
+
+    ~CreatedDirectoryGuard() {
+        for (const auto &path : paths) {
+            std::error_code ec;
+            fs::remove(path, ec);
+        }
     }
 };
 
@@ -864,6 +880,24 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
 
     // --- Stage the whole payload, then validate it as the loader sees it ----
 
+    CreatedDirectoryGuard root_guard;
+    for (fs::path cursor = global_library_root; !cursor.empty();) {
+        std::error_code exists_ec;
+        const bool exists = fs::exists(cursor, exists_ec);
+        if (exists_ec) {
+            result.error =
+                "cannot inspect destination root '" + cursor.string() + "': " + exists_ec.message();
+            return result;
+        }
+        if (exists)
+            break;
+        root_guard.paths.push_back(cursor);
+        const fs::path parent = cursor.parent_path();
+        if (parent == cursor)
+            break;
+        cursor = parent;
+    }
+
     std::error_code root_ec;
     fs::create_directories(global_library_root, root_ec);
     if (root_ec && !fs::is_directory(global_library_root)) {
@@ -1188,6 +1222,7 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         return result; // staging_guard removes the staging tree
     }
     staging_guard.path.clear(); // the tree now lives at final_dir
+    root_guard.paths.clear();   // the package now occupies the created destination tree
 
     result.ok = true;
     result.imported = static_cast<int>(accepted.size());
