@@ -231,9 +231,10 @@ bool collectEntry(const fs::path &source_root, const fs::path &json_path, Export
                     json_path.string() + ") does not exist";
             return false;
         }
-        // Case-insensitive dedupe: two references to the same file (or two
-        // spellings differing only in case) become one archive member.
-        const std::string key = toLowerAscii(resolved->generic_string());
+        // Dedupe on the exact canonical path: two spellings of the same file
+        // share it, while case-distinct files stay distinct so the writer's
+        // collision guard can still see them.
+        const std::string key = resolved->generic_string();
         if (!seen_references.insert(key).second)
             return true;
 

@@ -351,15 +351,19 @@ TEST_CASE("exportLibraryPackage rewrites an absolute sparam_path and dedupes a s
 TEST_CASE("exportLibraryPackage refuses an escaping referenced asset", "[library][package]") {
     TempDir tmp("escape");
     const fs::path root = tmp.root / "root";
+    const fs::path def_dir = root / "nested";
+    // The referenced file exists at the location the raw '../' reference
+    // resolves to; only the containment refusal can reject it.
     const fs::path outside = root / "outside.s2p";
     writeS2p(outside);
-    writeText(root / "amp.json",
+    writeText(def_dir / "amp.json",
               amplifierDefinition(
                   "ESCAPE-AMP",
                   {{"data_files", nlohmann::json::array(
                                       {{{"type", "s_parameters"}, {"path", "../outside.s2p"}}})}})
                   .dump(2));
-    REQUIRE(fs::exists(outside)); // the file exists; it escapes the definition directory
+    REQUIRE(fs::exists(outside));
+    REQUIRE_FALSE(fs::exists(def_dir / "outside.s2p"));
 
     const fs::path out = tmp.root / "escape.rflib";
     const LibraryPackageExportResult result = exportLibraryPackage(root, out);
