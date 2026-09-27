@@ -325,13 +325,34 @@ std::string identityKey(const std::string &type, const std::string &manufacturer
 // `library/<rel>` -> `<rel>`. The manifest, the archive members, and staging
 // all speak this one spelling so an extracted payload mirrors the source tree
 // exactly (and `manifest.json` is never itself staged).
+//
+// The stripped form is re-validated, not just the archive spelling: a member
+// like `library//etc/passwd` (or `library/C:/evil.json`) is harmless as
+// spelled but its remainder is rooted, so joining it onto staging would escape
+// it. Reject an empty remainder, an absolute/rooted remainder, and parent
+// traversal components.
 constexpr const char *kPayloadPrefix = "library/";
 constexpr std::size_t kPayloadPrefixLength = 8;
 
 std::optional<fs::path> payloadRelative(const std::string &member) {
     if (member.rfind(kPayloadPrefix, 0) != 0 || member.size() <= kPayloadPrefixLength)
         return std::nullopt;
-    return fs::path(member.substr(kPayloadPrefixLength));
+
+    const std::string remainder = member.substr(kPayloadPrefixLength);
+    // A Windows drive root name ("C:") is not a root name under the POSIX path
+    // grammar, so reject it explicitly: archive spellings are always relative
+    // POSIX-style paths, so a drive prefix is never a legitimate payload path.
+    const bool drive_rooted = remainder.size() >= 2 && remainder[1] == ':' &&
+                              ((remainder[0] >= 'A' && remainder[0] <= 'Z') ||
+                               (remainder[0] >= 'a' && remainder[0] <= 'z'));
+    if (drive_rooted)
+        return std::nullopt;
+
+    const fs::path relative(remainder);
+    if (relative.empty() || relative.is_absolute() || relative.has_root_name() ||
+        relative.has_root_directory() || containsParentTraversal(relative))
+        return std::nullopt;
+    return relative;
 }
 
 // Process-unique half of the staging-directory tag; the retry counter appended
@@ -641,6 +662,11 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         return result;
     }
 
+    if (manifest_text.empty()) {
+        result.error = "package manifest is empty";
+        return result;
+    }
+
     json manifest;
     try {
         manifest = json::parse(manifest_text);
@@ -922,17 +948,37 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         if (accepted_set.count(i))
             continue;
         const auto &component = components[i];
+
+        // A removal that fails leaves a stale conflicting file behind and the
+        // rename below would install it as if accepted, so refuse. `remove()`
+        // only sets the error code when it actually failed (a file already
+        // gone by a shared-asset removal reports no error).
         std::error_code remove_ec;
-        fs::remove(staging / *payloadRelative(component.json_member), remove_ec);
+        const fs::path json_path = staging / *payloadRelative(component.json_member);
+        fs::remove(json_path, remove_ec);
+        if (remove_ec) {
+            result.error = "cannot remove conflicting package file '" + json_path.string() +
+                           "': " + remove_ec.message();
+            return result; // staging_guard removes the staging tree
+        }
         for (const auto &asset : component.assets) {
             if (accepted_assets.count(asset))
                 continue;
-            fs::remove(staging / *payloadRelative(asset), remove_ec);
+            const fs::path asset_path = staging / *payloadRelative(asset);
+            std::error_code asset_ec;
+            fs::remove(asset_path, asset_ec);
+            if (asset_ec) {
+                result.error = "cannot remove conflicting package file '" + asset_path.string() +
+                               "': " + asset_ec.message();
+                return result;
+            }
         }
     }
 
     // Drop directories emptied by those removals (deepest first), so the
-    // installed package has no stale branches from skipped components.
+    // installed package has no stale branches from skipped components. This is
+    // best-effort: `remove()` refuses non-empty directories, so an accepted
+    // entry can never be deleted here, and a leftover empty branch is harmless.
     {
         std::vector<fs::path> directories;
         std::error_code walk_ec;
@@ -947,6 +993,9 @@ LibraryPackageImportResult importLibraryPackage(const std::filesystem::path &pac
         for (auto dir_it = directories.rbegin(); dir_it != directories.rend(); ++dir_it) {
             std::error_code remove_ec;
             fs::remove(*dir_it, remove_ec); // non-empty directories are left in place
+            if (remove_ec)
+                LOG_WARN("Import: cannot prune emptied staging directory %s: %s",
+                         dir_it->string().c_str(), remove_ec.message().c_str());
         }
     }
 

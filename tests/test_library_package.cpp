@@ -193,20 +193,23 @@ struct PackageSpec {
     std::vector<std::pair<std::string, std::string>> members;
 };
 
-void writePackage(const fs::path &archive_path, const PackageSpec &spec) {
-    const std::string manifest_text = spec.manifest.dump(2);
-
+void writeRawPackage(const fs::path &archive_path, const std::string &manifest_text,
+                     const std::vector<std::pair<std::string, std::string>> &members) {
     mz_zip_archive zip;
     mz_zip_zero_struct(&zip);
     REQUIRE(mz_zip_writer_init_file(&zip, archive_path.string().c_str(), 0) == MZ_TRUE);
     REQUIRE(mz_zip_writer_add_mem(&zip, "manifest.json", manifest_text.data(), manifest_text.size(),
                                   MZ_BEST_COMPRESSION) == MZ_TRUE);
-    for (const auto &member : spec.members) {
+    for (const auto &member : members) {
         REQUIRE(mz_zip_writer_add_mem(&zip, member.first.c_str(), member.second.data(),
                                       member.second.size(), MZ_BEST_COMPRESSION) == MZ_TRUE);
     }
     REQUIRE(mz_zip_writer_finalize_archive(&zip) == MZ_TRUE);
     REQUIRE(mz_zip_writer_end(&zip) == MZ_TRUE);
+}
+
+void writePackage(const fs::path &archive_path, const PackageSpec &spec) {
+    writeRawPackage(archive_path, spec.manifest.dump(2), spec.members);
 }
 
 nlohmann::json importManifest(const std::string &package_name, const nlohmann::json &components) {
@@ -888,6 +891,78 @@ TEST_CASE("importLibraryPackage refuses a parent-traversal member", "[library][p
     writeText(root / "notes.txt", "keep me\n");
 
     requireRefusal(package, root, "../evil.json");
+}
+
+TEST_CASE("importLibraryPackage refuses a payload member rooted by a double slash",
+          "[library][package]") {
+    // `library//etc/passwd` passes the archive-spelling check (no backslash, no
+    // `..`, not absolute as spelled) but `//etc/passwd` is absolute on POSIX,
+    // so joining it onto staging would write outside the staging tree.
+    TempDir tmp("import_double_slash");
+    const fs::path package = tmp.root / "slash.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "slash", nlohmann::json::array({componentEntry("library//etc/passwd", "amplifier",
+                                                       "Evil Corp", "SLASH-AMP")}));
+    spec.members.push_back({"library//etc/passwd", amplifierPayload("Evil Corp", "SLASH-AMP")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "not a library/ payload member");
+}
+
+TEST_CASE("importLibraryPackage refuses an empty payload member after the library/ prefix",
+          "[library][package]") {
+    // `library/` strips to an empty relative path: the archive inventory
+    // rejects the trailing slash before staging is even reserved.
+    TempDir tmp("import_empty_remainder");
+    const fs::path package = tmp.root / "empty.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "empty",
+        nlohmann::json::array({componentEntry("library/", "amplifier", "Evil Corp", "EMPTY-AMP")}));
+    spec.members.push_back({"library/", ""});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "unsafe package member path");
+}
+
+TEST_CASE("importLibraryPackage refuses a payload member with a drive-letter root name",
+          "[library][package]") {
+    // `library/C:/evil.json` strips to `C:/evil.json`, a root-name path whose
+    // join with staging discards staging entirely on Windows.
+    TempDir tmp("import_drive_root");
+    const fs::path package = tmp.root / "drive.rflib";
+    PackageSpec spec;
+    spec.manifest = importManifest(
+        "drive", nlohmann::json::array({componentEntry("library/C:/evil.json", "amplifier",
+                                                       "Evil Corp", "DRIVE-AMP")}));
+    spec.members.push_back({"library/C:/evil.json", amplifierPayload("Evil Corp", "DRIVE-AMP")});
+    writePackage(package, spec);
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "not a library/ payload member");
+}
+
+TEST_CASE("importLibraryPackage refuses a zero-byte manifest", "[library][package]") {
+    // An empty manifest.json extracts to an empty string; the refusal must say
+    // so instead of blaming the JSON parser.
+    TempDir tmp("import_empty_manifest");
+    const fs::path package = tmp.root / "empty-manifest.rflib";
+    writeRawPackage(package, "",
+                    {{"library/A.json", amplifierPayload("Test Corp", "EMPTY-MANIFEST-AMP")}});
+
+    const fs::path root = tmp.root / "global";
+    writeText(root / "notes.txt", "keep me\n");
+
+    requireRefusal(package, root, "package manifest is empty");
 }
 
 TEST_CASE("importLibraryPackage refuses case-duplicate member names", "[library][package]") {
