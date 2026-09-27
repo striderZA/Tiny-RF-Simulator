@@ -352,7 +352,10 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
 #endif
 
     int asset_count = 0;
-    std::set<std::string> asset_members; // case-insensitive member names
+    // Exact archive member names, not lowercased spellings: on a
+    // case-sensitive host A.s2p and a.s2p are two distinct members and must
+    // count as two, so the reported total always matches the archive.
+    std::set<std::string> asset_members;
     for (const auto &entry : entries) {
         json component = {{"json", entry.archive_name},
                           {"type", entry.type},
@@ -361,7 +364,7 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
                           {"assets", json::array()}};
         for (const auto &asset : entry.assets) {
             component["assets"].push_back(asset.archive_name);
-            if (asset_members.insert(toLowerAscii(asset.archive_name)).second)
+            if (asset_members.insert(asset.archive_name).second)
                 ++asset_count;
         }
         manifest["components"].push_back(std::move(component));

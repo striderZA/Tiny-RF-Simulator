@@ -405,6 +405,27 @@ TEST_CASE("exportLibraryPackage writes one member for one file referenced by two
             REQUIRE(members.count(listed.get<std::string>()) == 1);
 }
 
+TEST_CASE("exportLibraryPackage removes the partial output when the writer cannot start",
+          "[library][package]") {
+    // The writer-init refusal is the only cleanup path reachable before any
+    // member exists: an output path whose parent directory is missing makes
+    // mz_zip_writer_init_file() fail after the whole package has been
+    // assembled. The brief requires that failure to end the writer and leave
+    // no file at the output path.
+    TempDir tmp("writerinit");
+    const fs::path root = tmp.root / "root";
+    writeText(root / "amp.json", amplifierDefinition("INIT-AMP").dump(2));
+
+    const fs::path out = tmp.root / "no-such-dir" / "init.rflib";
+    REQUIRE_FALSE(fs::exists(out.parent_path()));
+
+    const LibraryPackageExportResult result = exportLibraryPackage(root, out);
+
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.find(out.string()) != std::string::npos);
+    REQUIRE_FALSE(fs::exists(out));
+}
+
 TEST_CASE("exportLibraryPackage refuses an escaping referenced asset", "[library][package]") {
     TempDir tmp("escape");
     const fs::path root = tmp.root / "root";
