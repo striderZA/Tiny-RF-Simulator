@@ -554,24 +554,45 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
     // candidate. Resolving this by skipping the candidate is never correct:
     // two distinct files cannot share one archive slot, so refuse the package.
     const auto claim_member = [&](const std::string &archive_name, const fs::path &source_path,
-                                  bool &already_written) {
+                                  bool &already_written, bool &case_folded_collision,
+                                  std::string &colliding_name) {
         already_written = false;
+        case_folded_collision = false;
         for (const auto &member : written_members) {
-            if (member.archive_name != archive_name)
-                continue;
-            std::error_code equivalent_ec;
-            if (fs::equivalent(member.source_path, source_path, equivalent_ec))
-                already_written = true; // the same file, referenced again: one member
-            return true;                // same name: written or refused, never re-added
+            if (member.archive_name == archive_name) {
+                std::error_code equivalent_ec;
+                if (fs::equivalent(member.source_path, source_path, equivalent_ec) &&
+                    !equivalent_ec)
+                    already_written = true; // the same file, referenced again: one member
+                return true;                // exact name: written or refused, never re-added
+            }
+            if (toLowerAscii(member.archive_name) == toLowerAscii(archive_name)) {
+                case_folded_collision = true;
+                colliding_name = member.archive_name;
+                return true;
+            }
         }
         written_members.push_back({archive_name, source_path});
         return false;
     };
 
+    const auto collision_error = [](const std::string &claimed_name, const std::string &new_name) {
+        return "case-insensitive package member collision between '" + claimed_name + "' and '" +
+               new_name + "'";
+    };
+
     for (const auto &entry : entries) {
         bool already_written = false;
-        if (claim_member(entry.archive_name, entry.source_path, already_written))
+        bool case_folded_collision = false;
+        std::string colliding_name;
+        if (claim_member(entry.archive_name, entry.source_path, already_written,
+                         case_folded_collision, colliding_name)) {
+            if (case_folded_collision)
+                return fail(collision_error(colliding_name, entry.archive_name));
+            if (already_written)
+                continue;
             return fail("duplicate package member '" + entry.archive_name + "'");
+        }
 
         if (mz_zip_writer_add_mem(&zip, entry.archive_name.c_str(), entry.content.data(),
                                   entry.content.size(), MZ_BEST_COMPRESSION) != MZ_TRUE) {
@@ -579,9 +600,14 @@ LibraryPackageExportResult exportLibraryPackage(const std::filesystem::path &sou
         }
         for (const auto &asset : entry.assets) {
             already_written = false;
+            case_folded_collision = false;
+            colliding_name.clear();
             const bool name_taken =
-                claim_member(asset.archive_name, asset.source_path, already_written);
+                claim_member(asset.archive_name, asset.source_path, already_written,
+                             case_folded_collision, colliding_name);
             if (name_taken) {
+                if (case_folded_collision)
+                    return fail(collision_error(colliding_name, asset.archive_name));
                 if (already_written)
                     continue; // the same file, referenced again: one member
                 return fail("package members '" + asset.archive_name + "' from '" +

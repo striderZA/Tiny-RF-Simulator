@@ -598,6 +598,42 @@ TEST_CASE("exportLibraryPackage writes one member for one file referenced by two
             REQUIRE(members.count(listed.get<std::string>()) == 1);
 }
 
+TEST_CASE("exportLibraryPackage refuses case-folded collisions between distinct assets",
+          "[library][package]") {
+    TempDir tmp("case_folded_asset_collision");
+    const fs::path root = tmp.root / "root";
+    const fs::path upper = root / "A.s2p";
+    const fs::path lower = root / "a.s2p";
+    writeS2p(upper);
+    writeS2p(lower);
+
+    std::error_code equivalent_ec;
+    const bool same_file = fs::equivalent(upper, lower, equivalent_ec);
+    REQUIRE_FALSE(equivalent_ec);
+    if (same_file)
+        SKIP("host filesystem treats A.s2p and a.s2p as equivalent");
+
+    writeText(root / "one.json",
+              amplifierDefinition("CASE-UPPER",
+                                  {{"data_files", nlohmann::json::array({{{"type", "s_parameters"},
+                                                                          {"path", "A.s2p"}}})}})
+                  .dump(2));
+    writeText(root / "two.json",
+              amplifierDefinition("CASE-LOWER",
+                                  {{"data_files", nlohmann::json::array({{{"type", "s_parameters"},
+                                                                          {"path", "a.s2p"}}})}})
+                  .dump(2));
+
+    const fs::path out = tmp.root / "case-collision.rflib";
+    const LibraryPackageExportResult result = exportLibraryPackage(root, out);
+
+    REQUIRE_FALSE(result.ok);
+    CHECK(result.error.find("case-insensitive") != std::string::npos);
+    CHECK(result.error.find("library/A.s2p") != std::string::npos);
+    CHECK(result.error.find("library/a.s2p") != std::string::npos);
+    CHECK_FALSE(fs::exists(out));
+}
+
 TEST_CASE("exportLibraryPackage preserves a relative symlink asset reference on round trip",
           "[library][package]") {
     TempDir tmp("symlink_asset_reference");
