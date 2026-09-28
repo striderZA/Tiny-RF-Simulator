@@ -6,6 +6,7 @@
 #include "signal_node.h"
 #include "spectrum.h"
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 struct PFBChannel {
@@ -64,6 +65,10 @@ class PFBChannelizerEngine : public ComponentEngineBase {
                                  : 0.0;
     }
     const std::vector<PFBChannel> &channels() const { return m_channels; }
+
+    // Strongest finite active-channel tone relative to the channel's integrated
+    // noise power. Unavailable when the channel has no finite tone or noise.
+    std::optional<double> computeActiveChannelSNRdB() const;
 
     double activeChannelCenter_Hz() const {
         return m_active_channel >= 0 && m_active_channel < static_cast<int>(m_channels.size())

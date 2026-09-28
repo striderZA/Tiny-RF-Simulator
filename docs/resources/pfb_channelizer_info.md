@@ -178,6 +178,21 @@ is included when `|f_bin − f_k| <= channel_bw` and is weighted by
 fall inside each channel and the reported output rate/bandwidth grow. A full-band output that
 averages overlapping channel contributions keeps its flat PSD.
 
+The engine also reports per-channel integrated noise power as
+`sum(input PSD × |H|² × input-bin width)`, and its effective noise bandwidth
+(`ENBW`) as `sum(|H|² × input-bin width)` over the same finite channel support.
+These are discrete quantities on the current input frequency grid, including
+the configured sampling ratio; for flat input noise density, channel noise
+power equals that density times the effective ENBW. The PFB properties
+inspector displays the active channel's integrated noise in dBm and its ENBW
+in MHz. Both PFB Spectrum outputs remain spectral densities (W/Hz), so the
+Spectrum Analyzer continues to display them integrated over its configured RBW.
+
+The PFB node-hover SNR uses the strongest tone on the active-channel output and
+compares it with that channel's integrated noise power. It is therefore
+independent of the Spectrum Analyzer's RBW; ordinary node SNR measurements
+continue to use the analyzer RBW.
+
 This is a **spectral model, not a temporal one**. It does not implement a time-domain oversampled
 polyphase/commutator path running at `2·Fs/M`, and it does not perform an `M/2`-stride polyphase
 overlap-add. "Oversampling" here is the frequency-domain equivalent only. Ratios above `2x` are

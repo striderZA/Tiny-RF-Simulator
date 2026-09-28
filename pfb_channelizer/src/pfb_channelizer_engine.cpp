@@ -359,6 +359,27 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
     m_dirty = true;
 }
 
+std::optional<double> PFBChannelizerEngine::computeActiveChannelSNRdB() const {
+    if (m_active_channel < 0 || m_active_channel >= static_cast<int>(m_channels.size()))
+        return std::nullopt;
+
+    const auto &channel = m_channels[m_active_channel];
+    if (!(channel.noise_W > 0.0) || !std::isfinite(channel.noise_W))
+        return std::nullopt;
+
+    double strongest_tone_dBm = -std::numeric_limits<double>::infinity();
+    for (const auto &tone : channel.tones) {
+        if (std::isfinite(tone.power_dBm))
+            strongest_tone_dBm = std::max(strongest_tone_dBm, tone.power_dBm);
+    }
+    if (!std::isfinite(strongest_tone_dBm))
+        return std::nullopt;
+
+    const double noise_dBm = 10.0 * std::log10(channel.noise_W) + 30.0;
+    const double snr_dB = strongest_tone_dBm - noise_dBm;
+    return std::isfinite(snr_dB) ? std::optional<double>(snr_dB) : std::nullopt;
+}
+
 std::string PFBChannelizerEngine::hoverSummary() const {
     return "PFB M=" + std::to_string(m_cfg.M) + " K=" + std::to_string(m_cfg.K) +
            " Ch=" + std::to_string(m_active_channel) +
