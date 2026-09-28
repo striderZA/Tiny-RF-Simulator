@@ -367,6 +367,17 @@ add_standalone_test(test_test_flow_widget
     LIBS simulator::app simulator::test_flow
 )
 
+# Standalone coverage for component-library package export (and, from Task 3
+# on, import): a root is packaged into one .rflib ZIP containing the manifest,
+# every loader-valid definition, and only referenced assets. The archive is
+# read back with the raw miniz API, so simulator::miniz is linked explicitly —
+# app links it PRIVATE, which does not propagate include directories. Kept out
+# of tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_library_package
+    SOURCES test_library_package.cpp
+    LIBS simulator::app simulator::miniz
+)
+
 # App-level tests share the exe-relative build/bin/app.ini that
 # RfSimulatorApp::~RfSimulatorApp() writes, exactly like test_ui: a concurrent
 # run would read-modify-write that one file from two processes.

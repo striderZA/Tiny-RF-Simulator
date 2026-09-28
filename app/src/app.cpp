@@ -5,6 +5,7 @@
 #include "graph_link_policy.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include "library_package.h"
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <optional>
 #include <portable-file-dialogs.h>
 #include <unordered_map>
 #include <utility>
@@ -55,6 +57,24 @@ static std::string appExeDir() {
     if (parent.empty())
         return std::filesystem::current_path().string();
     return parent.string();
+}
+
+// The global user library root: <home>/.rf-sim/libraries, from %USERPROFILE% on
+// Windows and $HOME elsewhere. One definition, used by refreshExtensions() (the
+// scan root), the component form's "Save To: Global" destination, and the
+// library-package import destination, so the three can never disagree.
+// nullopt when the variable is unset or empty: the callers keep their existing
+// fallback (no scan; the project-local "rf-sim-libraries" root) instead of
+// composing a CWD-relative ".rf-sim/libraries".
+static std::optional<std::filesystem::path> userLibraryRoot() {
+#ifdef _WIN32
+    const char *home = std::getenv("USERPROFILE");
+#else
+    const char *home = std::getenv("HOME");
+#endif
+    if (!home || !*home)
+        return std::nullopt;
+    return std::filesystem::path(home) / ".rf-sim" / "libraries";
 }
 
 RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
@@ -147,6 +167,10 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_library_browser->onEditComponent = [this](const ComponentDefinition &def) {
         openEditComponentForm(def);
     };
+    // The dialogs live on the app (like the Test Flow ones): the widget only
+    // raises the request and renders whatever status comes back.
+    m_library_browser->onExportPackage = [this]() { exportLibraryPackageDialog(); };
+    m_library_browser->onImportPackage = [this]() { importLibraryPackageDialog(); };
 
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_graph_engine);
@@ -319,14 +343,8 @@ void RfSimulatorApp::refreshExtensions() {
     m_extension_manager.rescan(project_root);
     m_library = ComponentLibrary{};
 
-#ifdef _WIN32
-    const char *home = std::getenv("USERPROFILE");
-#else
-    const char *home = std::getenv("HOME");
-#endif
-    if (home) {
-        m_library.scan((fs::path(home) / ".rf-sim" / "libraries").string());
-    }
+    if (const auto global_root = userLibraryRoot())
+        m_library.scan(global_root->string());
     if (fs::exists("rf-sim-libraries")) {
         m_library.scan("rf-sim-libraries");
     }
@@ -642,6 +660,109 @@ void RfSimulatorApp::saveTestFlowDialog() {
         m_test_flow_widget->saveFlow(path);
 }
 
+// --- Component-library packages (.rflib) ------------------------------------
+
+// Appends at most `max_lines` conflicts, then one "and N more" tail: a mixed
+// import can skip hundreds of identities, and the browser renders this as one
+// wrapped line.
+static std::string summarizeConflicts(const std::vector<std::string> &conflicts,
+                                      std::size_t max_lines = 4) {
+    std::string text;
+    const std::size_t shown = std::min(conflicts.size(), max_lines);
+    for (std::size_t i = 0; i < shown; ++i) {
+        if (i)
+            text += "; ";
+        text += conflicts[i];
+    }
+    if (conflicts.size() > shown)
+        text += "; and " + std::to_string(conflicts.size() - shown) + " more";
+    return text;
+}
+
+// Publishing the same status to both surfaces keeps the browser and the test
+// accessor from ever disagreeing.
+void RfSimulatorApp::setLibraryPackageStatus(std::string status) {
+    m_library_package_status = std::move(status);
+    if (m_library_browser)
+        m_library_browser->setStatus(m_library_package_status);
+}
+
+std::optional<std::string> RfSimulatorApp::libraryPackageImportDestination() {
+    const auto destination = userLibraryRoot();
+    if (!destination) {
+        setLibraryPackageStatus(
+            "Import failed: no user library root (HOME/USERPROFILE is unset or empty)");
+        return std::nullopt;
+    }
+    return destination->string();
+}
+
+bool RfSimulatorApp::exportLibraryPackageTo(const std::string &source_root,
+                                            const std::string &output_path) {
+    const LibraryPackageExportResult result = exportLibraryPackage(source_root, output_path);
+    if (!result.ok) {
+        setLibraryPackageStatus("Export failed: " + result.error);
+        return false;
+    }
+    // Nothing was written into any library root, so there is no rescan to do.
+    setLibraryPackageStatus("Exported " + std::to_string(result.definitions) + " definitions and " +
+                            std::to_string(result.assets) + " assets to " + result.output_path);
+    return true;
+}
+
+bool RfSimulatorApp::importLibraryPackageFrom(const std::string &package_path,
+                                              const std::string &destination_root) {
+    const LibraryPackageImportResult result = importLibraryPackage(package_path, destination_root);
+    if (!result.ok) {
+        // A refusal wrote nothing: the library stays exactly as it was.
+        setLibraryPackageStatus("Import failed: " + result.error);
+        return false;
+    }
+
+    std::string status = "Imported " + std::to_string(result.imported) + " components (" +
+                         std::to_string(result.conflicts.size()) + " skipped as already installed)";
+    if (!result.conflicts.empty())
+        status += ": " + summarizeConflicts(result.conflicts);
+    setLibraryPackageStatus(std::move(status));
+
+    // Scan only the newly installed package so existing library roots are not
+    // appended a second time to the already-populated app library.
+    if (result.imported > 0) {
+        m_library.scan(result.installed_dir);
+        if (m_library_browser)
+            m_library_browser->setStatus(m_library_package_status);
+    }
+    return true;
+}
+
+void RfSimulatorApp::exportLibraryPackageDialog() {
+    // A library root first (what to package), then a destination file.
+    const std::string source = pfd::select_folder("Export Library", ".").result();
+    if (source.empty())
+        return;
+    std::string path = pfd::save_file("Export Library Package", ".",
+                                      {"RF Simulator library package (*.rflib)", "*.rflib"})
+                           .result();
+    if (path.empty())
+        return;
+    if (path.size() < 6 || path.compare(path.size() - 6, 6, ".rflib") != 0)
+        path += ".rflib";
+    exportLibraryPackageTo(source, path);
+}
+
+void RfSimulatorApp::importLibraryPackageDialog() {
+    const auto destination = libraryPackageImportDestination();
+    if (!destination)
+        return;
+
+    const auto selected = pfd::open_file("Import Library Package", ".",
+                                         {"RF Simulator library package (*.rflib)", "*.rflib"})
+                              .result();
+    if (selected.empty())
+        return;
+    importLibraryPackageFrom(selected[0], *destination);
+}
+
 void RfSimulatorApp::openFileDialog() {
     auto result = pfd::open_file("Open Project", ".",
                                  {"RF Simulator Project (*.rfsim)", "*.rfsim", "All Files", "*"})
@@ -811,17 +932,9 @@ void RfSimulatorApp::drawComponentFormModal() {
             const char *roots[] = {"Project (./rf-sim-libraries)", "Global (~/.rf-sim/libraries)"};
             static int root_idx = 0;
             ImGui::Combo("Save To", &root_idx, roots, 2);
-            const char *home = std::getenv(
-#ifdef _WIN32
-                "USERPROFILE"
-#else
-                "HOME"
-#endif
-            );
-            m_component_form_destination_root =
-                root_idx == 0 ? "rf-sim-libraries"
-                : home        ? (std::filesystem::path(home) / ".rf-sim" / "libraries").string()
-                              : "rf-sim-libraries";
+            m_component_form_destination_root = root_idx == 0       ? "rf-sim-libraries"
+                                                : userLibraryRoot() ? userLibraryRoot()->string()
+                                                                    : "rf-sim-libraries";
             ImGui::Separator();
         }
 

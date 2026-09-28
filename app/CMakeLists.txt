@@ -21,6 +21,7 @@ add_library(app STATIC
     src/pfb_view_manager.cpp
     src/pfb_calculator_widget.cpp
     src/project_serializer.cpp
+    src/library_package.cpp
     src/test_flow_widget.cpp
 )
 add_library(simulator::app ALIAS app)
@@ -68,6 +69,13 @@ target_link_libraries(app
         simulator::tutorial
         simulator::test_flow
         common
+)
+
+# miniz is an implementation detail of the library-packaging code; keep it
+# PRIVATE so its headers/includes don't leak into app consumers.
+target_link_libraries(app
+    PRIVATE
+        simulator::miniz
 )
 
 # Capture git commit hash at configure time
