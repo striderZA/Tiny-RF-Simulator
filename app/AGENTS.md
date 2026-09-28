@@ -1,7 +1,7 @@
 # app/AGENTS.md
 
 ## Purpose
-Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `PfbCalculatorWidget`, `TestFlowWidget`, and `ProjectSerializer`.
+Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, `PfbCalculatorWidget`, `TestFlowWidget`, `ProjectSerializer`, and `library_package`.
 
 ## Ownership
 - `RfSimulatorApp` — application boot, frame loop, DSP update, UI orchestration (project save/load logic lives in `ProjectSerializer`)
@@ -18,6 +18,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `ExtensionManager` — extension manifest discovery and status tracking across built-in/global/project-local roots, plus the project-local provenance query the trust gate reads
 - `ExtensionTrustStore` — exe-relative (`<exe_dir>/extension_trust.json`) record of the extension directories the user allowed to execute, keyed by canonical extension root
 - `ExternalToolRunner` — structured request/result execution for approved external tools
+- `library_package` — `.rflib` ZIP export/import: exports loader-valid component definitions and only their referenced assets; imports validate the whole package before writes, skip/report conflicts by component identity, and stage accepted entries before installing under the global user library root
 
 ## Local Contracts
 - `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`; all `.rfsim` JSON serialization lives in `ProjectSerializer`
@@ -43,6 +44,7 @@ Application orchestrator layer containing `RfSimulatorApp`, `ComponentRegistry`,
 - `runExternalTool()` refuses an untrusted project-local manifest first (see the trust gate above), then serializes the clicked action label as `action_label`, runs only under the canonical `temp/rf-sim-extension-run` root (extension `id`s are allowlist-validated at parse; canonical containment is re-checked before launch), refreshes discovery after a successful run, and updates `m_extension_result_message`
 - `externalToolActions()` is the single policy for launchable tool actions: declared `menus[]` entries pass through unchanged; tools with no menus get one synthetic `"tools"` action using `manifest.name`. Because a label is the action's only identifier at run time (`action_label`) and the menu item is keyed on it, `parseMenus()` rejects a manifest declaring two entries with the same `(location, label)` pair — the same fatal treatment as every other manifest validation failure, rather than keeping an entry that cannot be addressed (issue #130)
 - `refreshExtensions()` rescans built-in, global, and project-local roots for the current project path and rebuilds the component library before the browser/UI reads from it
+- `.rflib` packages contain a versioned `rf-sim-library-package` manifest and component JSON plus only referenced `data_files`, `sparam_filepath`, and `sparam_path` assets; import validates every manifest, definition, asset reference, path, and archive limit before writing anything. Malformed packages are refused with no writes. Component identity conflicts already present in the global library root are skipped and reported individually; non-conflicting entries install as a staged set under `<global_root>/<package_name>`, and an existing destination package directory is refused wholesale rather than merged. The Library browser's export/import dialogs are native `.rflib` file dialogs; imports target the global user library, not a project-local library.
 - `draw_ui()` and `drawExtensionsPanel()` both dispatch through `externalToolActions()`; the Tools menu iterates `toolsMenuEntries()` (external tools the trust gate allows) and renders only actions whose `location == "tools"`, while the Extensions panel shows every declared action (or a single fallback Run button) once the tool is trusted. Both views disambiguate the ImGui item ID with the manifest id while passing the raw label to `runExternalTool()` — the Tools menu always adds the action index (`<label>##<id>-<i>`), the Extensions panel only where there are declared actions (`Run##<id>` for the no-menus fallback). Extension ids are deduplicated but labels are not, so a shared ID would let a click on one tool's row launch another's (issue #130)
 - App-level integration tests may use `testExtensionManager()` and `testExtensionResultMessage()` with an ImGui/ImPlot/ImNodes fixture
 - The Spectrum Analyzer plot fills the panel's remaining height above a `SpectrumAnalyzerWidget::kMinPlotHeight` floor and reserves the readout rows below it (including the marker block while enabled), so the panel can be resized without dead space; the `test_engine` layout regression reads the plot rect black-box via `ctx->ItemInfo("Spectrum")`
