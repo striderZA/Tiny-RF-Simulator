@@ -15,7 +15,10 @@ struct PFBChannel {
 
     std::vector<int> bin_indices;
     std::vector<double> bin_weights;
-    double noise_W = 0.0;
+    double noise_W = 0.0; // Integrated channel noise power (W).
+    // Discrete ENBW on the current input grid: sum(|H|^2 * bin_width) over
+    // this channel's finite modeled support.
+    double enbw_Hz = 0.0;
     std::vector<Spectrum::Tone> tones;
 };
 

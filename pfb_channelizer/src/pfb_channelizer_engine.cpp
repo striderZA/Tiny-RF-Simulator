@@ -184,6 +184,7 @@ void PFBChannelizerEngine::update(double) {
 
     for (auto &ch : m_channels) {
         ch.noise_W = 0.0;
+        ch.enbw_Hz = 0.0;
         ch.tones.clear();
 
         for (size_t i = 0; i < ch.bin_indices.size(); ++i) {
@@ -193,7 +194,9 @@ void PFBChannelizerEngine::update(double) {
             double psd = (idx < static_cast<int>(in_ptr->noise_total_W.size()))
                              ? in_ptr->noise_total_W[idx]
                              : 0.0;
-            ch.noise_W += psd * weight * weight * bin_width;
+            const double weighted_bin_width = weight * weight * bin_width;
+            ch.enbw_Hz += weighted_bin_width;
+            ch.noise_W += psd * weighted_bin_width;
         }
 
         for (const auto &tone : in_ptr->tones) {

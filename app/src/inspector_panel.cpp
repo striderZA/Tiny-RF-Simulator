@@ -17,6 +17,7 @@
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 #include "utils.h"
+#include <cmath>
 #include <cstring>
 #include <map>
 #include <portable-file-dialogs.h>
@@ -882,7 +883,17 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
                     active.center_freq_Hz / 1e6, active.bandwidth_Hz / 1e3);
         ImGui::Text("Bins in channel: %zu", active.bin_indices.size());
         ImGui::Text("Tones: %zu", active.tones.size());
-        ImGui::Text("Noise: %.3e W", active.noise_W);
+        if (active.noise_W > 0.0 && std::isfinite(active.noise_W)) {
+            const double noise_dBm = 10.0 * std::log10(active.noise_W) + 30.0;
+            ImGui::Text("Integrated channel noise: %.2f dBm", noise_dBm);
+        } else {
+            ImGui::Text("Integrated channel noise: -- dBm");
+        }
+        if (active.enbw_Hz > 0.0 && std::isfinite(active.enbw_Hz)) {
+            ImGui::Text("Effective noise bandwidth: %.3f MHz", active.enbw_Hz / 1e6);
+        } else {
+            ImGui::Text("Effective noise bandwidth: --");
+        }
     }
 
     if (m_pfb_iq_visible && m_selected_pfb_index >= 0 &&
