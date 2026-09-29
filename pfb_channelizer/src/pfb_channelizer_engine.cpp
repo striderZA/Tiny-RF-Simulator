@@ -184,6 +184,7 @@ void PFBChannelizerEngine::update(double) {
 
     for (auto &ch : m_channels) {
         ch.noise_W = 0.0;
+        ch.enbw_Hz = 0.0;
         ch.tones.clear();
 
         for (size_t i = 0; i < ch.bin_indices.size(); ++i) {
@@ -193,7 +194,9 @@ void PFBChannelizerEngine::update(double) {
             double psd = (idx < static_cast<int>(in_ptr->noise_total_W.size()))
                              ? in_ptr->noise_total_W[idx]
                              : 0.0;
-            ch.noise_W += psd * weight * weight * bin_width;
+            const double weighted_bin_width = weight * weight * bin_width;
+            ch.enbw_Hz += weighted_bin_width;
+            ch.noise_W += psd * weighted_bin_width;
         }
 
         for (const auto &tone : in_ptr->tones) {
@@ -354,6 +357,27 @@ void PFBChannelizerEngine::deserialize(const nlohmann::json &j) {
     if (m_cfg.M > 0 && m_active_channel >= m_cfg.M)
         m_active_channel = m_cfg.M - 1;
     m_dirty = true;
+}
+
+std::optional<double> PFBChannelizerEngine::computeActiveChannelSNRdB() const {
+    if (m_active_channel < 0 || m_active_channel >= static_cast<int>(m_channels.size()))
+        return std::nullopt;
+
+    const auto &channel = m_channels[m_active_channel];
+    if (!(channel.noise_W > 0.0) || !std::isfinite(channel.noise_W))
+        return std::nullopt;
+
+    double strongest_tone_dBm = -std::numeric_limits<double>::infinity();
+    for (const auto &tone : channel.tones) {
+        if (std::isfinite(tone.power_dBm))
+            strongest_tone_dBm = std::max(strongest_tone_dBm, tone.power_dBm);
+    }
+    if (!std::isfinite(strongest_tone_dBm))
+        return std::nullopt;
+
+    const double noise_dBm = 10.0 * std::log10(channel.noise_W) + 30.0;
+    const double snr_dB = strongest_tone_dBm - noise_dBm;
+    return std::isfinite(snr_dB) ? std::optional<double>(snr_dB) : std::nullopt;
 }
 
 std::string PFBChannelizerEngine::hoverSummary() const {

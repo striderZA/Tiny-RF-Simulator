@@ -92,6 +92,7 @@ Default section order:
 
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
 - PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
+- The active PFB channel's integrated noise readout is based on the channel response integrated over the current input frequency grid; show its channel noise in dBm with effective ENBW. The PFB node-hover SNR compares its strongest active-channel tone against this integrated noise and is independent of analyzer RBW; ordinary analyzer traces/SNR remain RBW-based.
 - Spectrum-display noise jitter is a cosmetic effect on the noise floor only; it must never perturb deterministic signal tones, so tone peaks stay fixed frame to frame.
 - The spectrum analyzer's RBW and VBW controls span 1 kHz – 100 MHz and are labelled in kHz, so the 1 kHz floor is typeable without fractional MHz values. The range lives at the widget's `utils::inputFrequency()` call (its trailing `displayUnit_Hz` picks the unit); the engine setters stay unclamped so tests and API callers can drive any value.
 - When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md

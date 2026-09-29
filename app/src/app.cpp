@@ -102,16 +102,19 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_components.hoverSummary(id);
-        // The analyzer owns the SNR measurement (binning, RBW integration, grid
-        // snapping), so the row is filled here from the app's current analyzer
-        // state rather than in the widget. Only the first output is measured:
-        // multi-output ports are probed individually (see the node tooltip's
-        // "Ctrl+click an output pin" hint), and a node with no output at all has
-        // nothing to measure.
+        // The first output is the SNR target. A PFB's first output is its active
+        // channel, whose noise is already integrated across the channel
+        // response; other components use the analyzer's current RBW measurement.
         if (IComponentEngine *component = m_components.find(id)) {
             const auto &outputs = component->node().outputs;
-            if (!outputs.empty())
-                info.snr_dB = m_spectrum_engine.computeStrongestToneSNRdB(outputs[0]);
+            if (!outputs.empty()) {
+                if (component->type_name() == "pfb") {
+                    info.snr_dB =
+                        static_cast<PFBChannelizerEngine *>(component)->computeActiveChannelSNRdB();
+                } else {
+                    info.snr_dB = m_spectrum_engine.computeStrongestToneSNRdB(outputs[0]);
+                }
+            }
         }
         return info;
     };

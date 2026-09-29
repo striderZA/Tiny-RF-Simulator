@@ -125,6 +125,36 @@ TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filt
     REQUIRE(mean > 0.5e-20);
     REQUIRE(mean < 1.5e-20);
 }
+TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
+          "[pfb_filter_design][enbw]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    in.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        in.frequencies[i] = -200e6 + i * 1e6;
+    constexpr double input_psd_W_per_Hz = 1e-20;
+    in.noise_total_W.assign(in.frequencies.size(), input_psd_W_per_Hz);
+
+    pfb.setFs_Hz(400e6);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &critical = pfb.channels().at(16);
+    double expected_enbw_Hz = 0.0;
+    for (double weight : critical.bin_weights)
+        expected_enbw_Hz += weight * weight * 1e6;
+    REQUIRE(critical.enbw_Hz == Approx(expected_enbw_Hz).epsilon(1e-12));
+    REQUIRE(critical.noise_W == Approx(input_psd_W_per_Hz * expected_enbw_Hz).epsilon(1e-12));
+    const double critical_enbw_Hz = critical.enbw_Hz;
+
+    pfb.setSamplingRatio(2);
+    pfb.update(0.0);
+    const auto &oversampled = pfb.channels().at(16);
+    REQUIRE(oversampled.enbw_Hz > 1.8 * critical_enbw_Hz);
+    REQUIRE(oversampled.noise_W == Approx(input_psd_W_per_Hz * oversampled.enbw_Hz).epsilon(1e-12));
+}
 
 TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_design]") {
     NodeGraphEngine graph;
