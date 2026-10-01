@@ -37,10 +37,4 @@ advisors:
       
       ## Tests
       
-      The project follows strict TDD.
-      
-      Watch specifically for tests that:
-      - encode the implementation rather than behaviour
-      - accidentally make the regression impossible to reproduce
-      - use tolerances that conceal numerical errors
-      - fail to test boundary conditions relevant to DSP/RF behaviour
+      The project follows strict TDD. Review whether tests verify behavior, make regressions reproducible, use meaningful numerical tolerances, and cover relevant DSP/RF boundaries; reject tests that merely encode the implementation.
