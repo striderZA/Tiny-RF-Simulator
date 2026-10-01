@@ -1,3 +1,13 @@
+## [0.25.1] - 2026-10-01
+
+### Fixed
+
+- **Network Analyzer through 2:1 RF switches** — follow the exact linked input and output ports along the measured path, so a singly-fed switch reports the response of the connected throw. Dual-fed switches and combiner paths remain unsupported and report no data.
+
+### Testing
+
+- Add Network Analyzer coverage for both switch throws, unsupported dual-fed switch paths, and the production app clone adapter.
+
 ## [0.25.0] - 2026-09-25
 
 ### Added
