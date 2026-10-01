@@ -112,8 +112,10 @@ add_standalone_test(test_network_analyzer
          simulator::amplifier_engine simulator::mixer_engine
          simulator::splitter_engine simulator::combiner_engine
          simulator::rf_switch_2to1_engine simulator::node_graph_engine
+         simulator::app
 )
 
+set_tests_properties(test_network_analyzer PROPERTIES RUN_SERIAL TRUE)
 add_standalone_test(test_power_meter
     SOURCES test_power_meter.cpp
     LIBS simulator::power_meter_engine

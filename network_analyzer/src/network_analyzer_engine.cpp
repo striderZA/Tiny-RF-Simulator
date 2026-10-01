@@ -10,6 +10,7 @@
 #include <functional>
 #include <limits>
 #include <optional>
+#include <tuple>
 #include <unordered_map>
 
 NetworkAnalyzerEngine::NetworkAnalyzerEngine(NodeGraphEngine &graph, INetworkAnalyzerHost &host)
@@ -80,24 +81,30 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
     if (start_node < 0 || end_node < 0 || start_node == end_node)
         return std::nullopt;
 
-    // Forward adjacency: node -> [(output port index, node reachable via that
-    // port's real link)]. The port index is kept (not just the next node) so
-    // the clone chain later reads the SAME output a multi-output component
-    // (e.g. a PFB Channelizer's two structurally different outputs) actually
-    // used on the real graph, instead of guessing port 0. Duplicate links
-    // (same start pin -> same end pin, which the graph allows) collapse into
-    // a single edge so they cannot fake an ambiguous path.
-    std::unordered_map<int, std::vector<std::pair<int, int>>> next_of;
+    // Forward adjacency: node -> [(output port, next node, next input port)].
+    // Keeping both pin indices lets the clone chain reproduce the exact path
+    // through multi-port components instead of assuming either port is zero.
+    // Duplicate links (same start pin -> same end pin, which the graph allows)
+    // collapse into a single edge so they cannot fake an ambiguous path.
+    using Edge = std::tuple<int, int, int>;
+    std::unordered_map<int, int> input_port_by_pin;
     for (const auto &node : m_graph.nodes()) {
-        std::vector<std::pair<int, int>> nexts;
+        for (size_t ii = 0; ii < node.input_pin_ids.size(); ++ii)
+            input_port_by_pin.emplace(node.input_pin_ids[ii], static_cast<int>(ii));
+    }
+
+    std::unordered_map<int, std::vector<Edge>> next_of;
+    for (const auto &node : m_graph.nodes()) {
+        std::vector<Edge> nexts;
         for (size_t oi = 0; oi < node.output_pin_ids.size(); ++oi) {
             const int out_pin = node.output_pin_ids[oi];
             for (const auto &link : m_graph.links()) {
-                if (link.start_pin_id == out_pin) {
-                    const int nxt = m_graph.nodeIdForPin(link.end_pin_id);
-                    if (nxt >= 0)
-                        nexts.emplace_back(static_cast<int>(oi), nxt);
-                }
+                if (link.start_pin_id != out_pin)
+                    continue;
+                const int next_node = m_graph.nodeIdForPin(link.end_pin_id);
+                const auto input = input_port_by_pin.find(link.end_pin_id);
+                if (next_node >= 0 && input != input_port_by_pin.end())
+                    nexts.emplace_back(static_cast<int>(oi), next_node, input->second);
             }
         }
         std::sort(nexts.begin(), nexts.end());
@@ -106,25 +113,28 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
             next_of.emplace(node.node_id, std::move(nexts));
     }
 
-    // A chain that enters a node with more than one input pin is inherently
-    // ambiguous: such a node merges (combiner) or selects between (2:1 switch)
-    // the two primary paths arriving on its inputs, while the private chain
-    // below can reproduce only one of them -- it always feeds a clone's
-    // inputs[0], and the DFS records only the output port a node departs by,
-    // never the input pin it was entered through, so the tool cannot even
-    // confirm which of the two the probed path really enters. Reject
-    // structurally, not by type name: CombinerEngine and RFSwitch2to1Engine
-    // are the only engines with a second input pin today, so combiner
-    // behaviour is unchanged and no single-input component is affected.
-    // Degrading to no-data is the honest answer -- e.g. a link entering a 2:1
-    // switch through T2 with throw 2 active would otherwise be measured on T1
-    // and report the isolation floor instead of the insertion loss, a wrong
-    // number with no NaN to signal it. The start node is exempt: its output is
-    // the injection point, replaced by the stimulus, so a multi-input start
-    // node is upstream of the measurement and never part of the chain.
-    const auto enters_multi_input_node = [&](int node_id) {
+    // A switch can be reproduced when its exact path input is known and its
+    // other input is unconnected. A second linked throw contributes signal and
+    // noise the private single-path clone cannot reproduce, so reject it just
+    // like a merging component rather than report a plausible but wrong NF.
+    const auto enters_unsupported_multi_input_node = [&](int node_id) {
         auto *comp = m_host.componentForNode(node_id);
-        return comp && comp->numInputPins() > 1;
+        if (!comp || comp->numInputPins() <= 1)
+            return false;
+        if (comp->type_name() != "rf_switch_spdt_2to1")
+            return true;
+
+        for (const auto &node : m_graph.nodes()) {
+            if (node.node_id != node_id)
+                continue;
+            const auto connected_inputs = std::count_if(
+                m_graph.links().begin(), m_graph.links().end(), [&](const auto &link) {
+                    return std::find(node.input_pin_ids.begin(), node.input_pin_ids.end(),
+                                     link.end_pin_id) != node.input_pin_ids.end();
+                });
+            return connected_inputs != 1;
+        }
+        return true;
     };
 
     // DFS enumerating distinct simple paths, bailing out as soon as a second
@@ -137,10 +147,11 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
     // consistent with every other ambiguous/unsupported topology here.
     constexpr int kMaxDfsSteps = 100000;
     std::vector<int> path;
-    std::vector<int> path_out_idx; // path_out_idx[j] = output port path[j] used
-                                   // to reach path[j+1]; size = path.size()-1
+    std::vector<int> path_out_idx; // output port path[j] uses to reach path[j+1]
+    std::vector<int> path_in_idx;  // input port path[j+1] is entered through
     std::vector<int> found_path;
     std::vector<int> found_out_idx;
+    std::vector<int> found_in_idx;
     int path_count = 0;
     int steps = 0;
 
@@ -151,21 +162,24 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
             ++path_count;
             found_path = path;
             found_out_idx = path_out_idx;
+            found_in_idx = path_in_idx;
             return;
         }
         auto it = next_of.find(node);
         if (it == next_of.end())
             return;
-        for (const auto &[oi, nxt] : it->second) {
+        for (const auto &[oi, nxt, input_index] : it->second) {
             if (path_count >= 2 || steps > kMaxDfsSteps)
                 return;
-            if (enters_multi_input_node(nxt))
+            if (enters_unsupported_multi_input_node(nxt))
                 continue;
             if (std::find(path.begin(), path.end(), nxt) != path.end())
                 continue; // simple paths only (no revisits)
             path.push_back(nxt);
             path_out_idx.push_back(oi);
+            path_in_idx.push_back(input_index);
             dfs(nxt);
+            path_in_idx.pop_back();
             path_out_idx.pop_back();
             path.pop_back();
         }
@@ -186,6 +200,7 @@ std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniq
         result.nodes.push_back(comp);
     }
     result.out_index = std::move(found_out_idx);
+    result.in_index = std::move(found_in_idx);
     return result;
 }
 
@@ -224,6 +239,8 @@ void NetworkAnalyzerEngine::computeMeasurement() {
         signature += path->nodes[i]->serialize().dump();
         if (i < path->out_index.size())
             signature += ':' + std::to_string(path->out_index[i]);
+        if (i < path->in_index.size())
+            signature += ':' + std::to_string(path->in_index[i]);
         signature += '|';
     }
     char sweep_buf[192];
@@ -260,22 +277,26 @@ void NetworkAnalyzerEngine::computeMeasurement() {
 
     // Wire by directly assigning SignalNode* pointers (no scratch-graph links
     // needed), the same technique RfSimulatorApp::rewireInputs() uses. Each
-    // clone's input reads the SPECIFIC output port that node actually used on
-    // the real graph (path->out_index[i]) — not hardcoded port 0, which would
-    // silently clone the wrong signal for a multi-output component like a PFB
-    // Channelizer whose two outputs carry structurally different spectra.
+    // clone reads the exact output and input ports used by the discovered
+    // graph path; this is required for multi-output components and RF switch
+    // throws alike.
     for (size_t i = 0; i < clones.size(); ++i) {
+        if (i >= path->in_index.size())
+            return; // defensive: one recorded input port per path edge
         auto &inputs = clones[i]->node().inputs;
-        if (inputs.empty())
-            return; // a chain component must have an input to feed
+        const size_t input_port = static_cast<size_t>(path->in_index[i]);
+        if (input_port >= inputs.size())
+            return; // defensive: clone pin counts must match the live engine
         if (i == 0) {
-            inputs[0] = &m_stimulus;
+            inputs[input_port] = &m_stimulus;
         } else {
+            if (i >= path->out_index.size())
+                return; // defensive: one recorded output port per path edge
             const int out_port = path->out_index[i];
             auto &prev_outputs = clones[i - 1]->node().outputs;
             if (out_port < 0 || static_cast<size_t>(out_port) >= prev_outputs.size())
                 return; // defensive: should never happen, same type = same pin counts
-            inputs[0] = &prev_outputs[static_cast<size_t>(out_port)];
+            inputs[input_port] = &prev_outputs[static_cast<size_t>(out_port)];
         }
         // Mixer clones borrow the real, live LO input (read-only). The current
         // MixerEngine has a single RF input (the LO is the lo_freq_Hz

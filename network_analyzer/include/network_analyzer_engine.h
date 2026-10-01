@@ -54,13 +54,12 @@ class INetworkAnalyzerHost {
 // ComponentRegistry row. Two probe points (Point A = reference/upstream,
 // Point B = measured/downstream) pick real output pins in the graph; the
 // instrument walks the real graph's real links forward from A's node to B's
-// node, requires exactly one distinct path that never enters a node with more
-// than one input pin (such a node merges or selects between primary paths,
-// while the private chain can only feed one of them), and measures that chain
-// on a private, throwaway clone chain fed a synthetic tone-comb stimulus
-// ("cheat" mode — the real,
-// live simulation and every real component's real state are never read for
-// signal purposes and never written to).
+// node, requires exactly one distinct path that does not enter a merging
+// multi-input component (a combiner). It preserves the exact input and output
+// ports used by the path, allowing a switch with only one linked throw input
+// to be measured; the chain runs on a private clone fed a synthetic tone-comb
+// stimulus ("cheat" mode — the real, live simulation and every real component's
+// state are never read for signal purposes and never written to).
 //
 // v3 replaces the v1/v2 wired-pin engine entirely: no ComponentEngineBase, no
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
@@ -134,26 +133,23 @@ class NetworkAnalyzerEngine {
     // A discovered chain: nodes[0] is Point A's own node (never cloned — its
     // signal is replaced by the stimulus), nodes[1..] are the components to
     // clone and measure, in order, ending at Point B's node. out_index[i] is
-    // the output PORT that nodes[i] actually used on the real graph to reach
-    // nodes[i+1] (size == nodes.size()-1) — required because some components
-    // (e.g. the PFB Channelizer) have multiple, structurally different
-    // outputs; hardcoding port 0 would silently clone the wrong signal.
+    // the output PORT of nodes[i] that reaches nodes[i+1], and in_index[i] is
+    // the input PORT of nodes[i+1] reached by that link (both sized
+    // nodes.size()-1). Preserving both ports matters for multi-port components
+    // such as PFB outputs and RF switch throws.
     struct PathResult {
         std::vector<IComponentEngine *> nodes;
         std::vector<int> out_index;
+        std::vector<int> in_index;
     };
 
     // DFS over m_graph's real links from Point A's owning node forward,
     // enumerating simple paths to Point B's owning node. Returns nullopt for
-    // zero or more-than-one distinct path, or for any path that would enter a
-    // node with more than one input pin — a combiner (which merges) or a 2:1
-    // SPDT switch (which selects) — because the clone chain below always feeds
-    // a clone's inputs[0] and this walk records only the port a node departs
-    // by, never the input it was entered through, so a multi-input node would
-    // be measured on a branch the probed path never used (the start node is
-    // exempt: its output is the injection point, replaced by the stimulus).
-    // Bail out early once 2 distinct paths are found — only "unique or not"
-    // matters.
+    // zero or more-than-one distinct path, or for any path that enters a
+    // multi-input component other than a singly-fed RF switch (whose selected
+    // input can be reproduced by wiring the discovered port). A second linked
+    // switch input or a combiner would add a path the clone cannot represent.
+    // The start node is exempt because its output is replaced by the stimulus.
     std::optional<PathResult> findUniquePath() const;
     void computeMeasurement();
 };
