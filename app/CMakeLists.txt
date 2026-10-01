@@ -25,6 +25,7 @@ target_link_libraries(circuit_runtime
 # --------------------------------------------------
 add_library(app STATIC
     src/app.cpp
+    src/graph_editor_actions.cpp
     src/inspector_panel.cpp
     src/component_library.cpp
     src/library_browser_widget.cpp

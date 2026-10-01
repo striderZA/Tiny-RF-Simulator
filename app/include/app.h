@@ -13,6 +13,7 @@
 #include "extension_manager.h"
 #include "extension_trust_store.h"
 #include "external_tool_runner.h"
+#include "graph_editor_actions.h"
 
 #include "help_widget.h"
 #include "ideal_filter_engine.h"
@@ -160,7 +161,7 @@ class RfSimulatorApp {
     // Resets to a fresh seeded sandbox and activates the walkthrough.
     void startTutorial();
     void rewireInputs();
-    void duplicateComponent(int graph_node_id);
+    bool duplicateComponent(int graph_node_id);
     void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
@@ -200,6 +201,7 @@ class RfSimulatorApp {
     };
 
     NodeGraphEngine m_graph_engine;
+    GraphEditorActions m_graph_editor_actions;
     ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
     PowerMeterEngine m_power_meter_engine;

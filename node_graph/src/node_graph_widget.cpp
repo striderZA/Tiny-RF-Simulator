@@ -7,8 +7,10 @@
 #include <cstring>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
-NodeGraphWidget::NodeGraphWidget(NodeGraphEngine &engine) : m_engine(engine), m_context(nullptr) {
+NodeGraphWidget::NodeGraphWidget(const NodeGraphEngine &engine, NodeGraphWidgetActions actions)
+    : m_engine(engine), m_actions(std::move(actions)), m_context(nullptr) {
     m_context = ImNodes::EditorContextCreate();
     ImNodes::EditorContextSet(m_context);
 }
@@ -108,7 +110,8 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
                 ImGui::InputText("Name", name_buf, sizeof(name_buf));
 
                 if (ImGui::Button("Create")) {
-                    m_engine.addGroup(name_buf, m_rubber_band_members);
+                    if (m_actions.createGroup)
+                        m_actions.createGroup(name_buf, m_rubber_band_members);
                     m_show_create_popup = false;
                     last_member_count = -1;
                     ImGui::CloseCurrentPopup();
@@ -357,15 +360,39 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         const Group *g = m_engine.groupById(m_context_menu_group_id);
         if (g) {
             if (ImGui::MenuItem(g->collapsed ? "Expand" : "Collapse")) {
-                m_engine.setGroupCollapsed(m_context_menu_group_id, !g->collapsed);
+                if (m_actions.setGroupCollapsed)
+                    m_actions.setGroupCollapsed(m_context_menu_group_id, !g->collapsed);
             }
             if (ImGui::MenuItem("Rename")) {
                 m_pending_rename_group_id = m_context_menu_group_id;
                 std::strncpy(m_rename_buffer, g->name.c_str(), sizeof(m_rename_buffer) - 1);
                 m_rename_buffer[sizeof(m_rename_buffer) - 1] = '\0';
+                ImGui::OpenPopup("RenameSubcircuit");
             }
             if (ImGui::MenuItem("Ungroup")) {
-                m_engine.removeGroup(m_context_menu_group_id);
+                if (m_actions.removeGroup)
+                    m_actions.removeGroup(m_context_menu_group_id);
+            }
+        }
+        ImGui::EndPopup();
+    }
+    if (m_pending_rename_group_id >= 0 &&
+        ImGui::BeginPopupModal("RenameSubcircuit", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!m_engine.groupById(m_pending_rename_group_id)) {
+            m_pending_rename_group_id = -1;
+            ImGui::CloseCurrentPopup();
+        } else {
+            ImGui::InputText("Name", m_rename_buffer, sizeof(m_rename_buffer));
+            if (ImGui::Button("Rename")) {
+                if (m_actions.renameGroup)
+                    m_actions.renameGroup(m_pending_rename_group_id, m_rename_buffer);
+                m_pending_rename_group_id = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                m_pending_rename_group_id = -1;
+                ImGui::CloseCurrentPopup();
             }
         }
         ImGui::EndPopup();
@@ -373,20 +400,19 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
 
     if (ImGui::BeginPopup("node_context_menu")) {
         if (ImGui::MenuItem("Duplicate")) {
-            if (onDuplicateNode)
-                onDuplicateNode(m_context_menu_node);
+            if (m_actions.duplicateComponent)
+                m_actions.duplicateComponent(m_context_menu_node);
         }
         if (ImGui::MenuItem("Remove")) {
-            if (onRemoveNode)
-                onRemoveNode(m_context_menu_node);
+            if (m_actions.removeComponent)
+                m_actions.removeComponent(m_context_menu_node);
         }
         ImGui::EndPopup();
     }
 
     if (ImGui::BeginPopup("link_context_menu")) {
-        if (ImGui::MenuItem("Remove")) {
-            removeLinkFromEngine(m_context_menu_link_id);
-        }
+        if (ImGui::MenuItem("Remove"))
+            removeLink(m_context_menu_link_id);
         ImGui::EndPopup();
     }
 
@@ -417,25 +443,8 @@ void NodeGraphWidget::handleLinkCreation() {
                 end_pin = it->second;
         }
         if (start_pin < 100000 && end_pin < 100000) {
-            if (onLinkCreating && !onLinkCreating(start_pin, end_pin))
-                return;
-            m_engine.addLink(start_pin, end_pin);
-            // Find which node owns each pin
-            int start_node = m_engine.nodeIdForPin(start_pin);
-            int end_node = m_engine.nodeIdForPin(end_pin);
-
-            // Rebuild boundary pins for any affected group
-            for (const auto &g : m_engine.groups()) {
-                for (int nid : g.member_node_ids) {
-                    if (nid == start_node || nid == end_node) {
-                        m_engine.rebuildGroupBoundaryPins(g.id);
-                        break;
-                    }
-                }
-            }
-
-            if (onLinkChanged)
-                onLinkChanged();
+            if (m_actions.connectLink)
+                m_actions.connectLink(start_pin, end_pin);
         }
     }
 }
@@ -443,17 +452,12 @@ void NodeGraphWidget::handleLinkCreation() {
 void NodeGraphWidget::handleLinkDeletion() {
     int link_id;
     if (ImNodes::IsLinkDestroyed(&link_id))
-        removeLinkFromEngine(link_id);
+        removeLink(link_id);
 }
 
-void NodeGraphWidget::removeLinkFromEngine(int link_id) {
-    m_engine.removeLink(link_id);
-    // Rebuild boundary pins for all groups to reflect the removed link
-    for (const auto &g : m_engine.groups()) {
-        m_engine.rebuildGroupBoundaryPins(g.id);
-    }
-    if (onLinkChanged)
-        onLinkChanged();
+void NodeGraphWidget::removeLink(int link_id) {
+    if (m_actions.disconnectLink)
+        m_actions.disconnectLink(link_id);
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
@@ -465,7 +469,7 @@ void NodeGraphWidget::handleNodeDeletion() {
             std::vector<int> selected_links(num_selected_links);
             ImNodes::GetSelectedLinks(selected_links.data());
             for (int link_id : selected_links)
-                removeLinkFromEngine(link_id);
+                removeLink(link_id);
             ImNodes::ClearLinkSelection();
         }
 
@@ -474,11 +478,8 @@ void NodeGraphWidget::handleNodeDeletion() {
             std::vector<int> selected_nodes(num_selected);
             ImNodes::GetSelectedNodes(selected_nodes.data());
             for (int node_id : selected_nodes) {
-                size_t links_before = m_engine.links().size();
-                if (onRemoveNode)
-                    onRemoveNode(node_id);
-                if (m_engine.links().size() < links_before && onLinkChanged)
-                    onLinkChanged();
+                if (m_actions.removeComponent)
+                    m_actions.removeComponent(node_id);
                 // Remove from position caches so they don't accumulate stale entries
                 m_node_screen_positions.erase(node_id);
                 m_cached_grid_positions.erase(node_id);
@@ -542,10 +543,12 @@ void NodeGraphWidget::handleProbeClick() {
                 }
             }
             if (target_pin >= 0) {
-                if (ctrl)
-                    m_engine.addProbePin(target_pin);
-                else if (shift)
-                    m_engine.removeProbePin(target_pin);
+                if (ctrl) {
+                    if (m_actions.addProbePin)
+                        m_actions.addProbePin(target_pin);
+                } else if (shift && m_actions.removeProbePin) {
+                    m_actions.removeProbePin(target_pin);
+                }
             }
         }
 

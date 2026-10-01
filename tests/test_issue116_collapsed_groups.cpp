@@ -10,6 +10,7 @@
 //   4. the GUI accepted cycles that the test-flow harness rejects.
 #include "amplifier_engine.h"
 #include "app.h"
+#include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -17,11 +18,14 @@
 #include "node_graph_widget.h"
 #include "signal_generator_engine.h"
 #include "test_temp_paths.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -107,8 +111,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     // their members' positions.
     const int group_a = graph.addGroup("Group A", {id_a, id_b});
     const int group_b = graph.addGroup("Group B", {id_c, id_d});
-    graph.setGroupCollapsed(group_a, false);
-    graph.setGroupCollapsed(group_b, false);
+    // The groups start expanded, so the widget can snapshot member positions.
 
     // Cross-group link plus an internal link in each group.
     graph.addLink(graph.nodes()[0].output_pin_ids[0],
@@ -117,8 +120,43 @@ TEST_CASE_METHOD(ImGuiFixture,
                   graph.nodes()[1].input_pin_ids[0]); // A.out -> B.in (internal)
     graph.addLink(graph.nodes()[2].output_pin_ids[0],
                   graph.nodes()[3].input_pin_ids[0]); // C.out -> D.in (internal)
+    GraphEditorActions editor_actions(graph);
+    editor_actions.topologyChanged();
 
-    NodeGraphWidget widget(graph);
+    const NodeGraphEngine &graph_view = graph;
+    NodeGraphWidgetActions actions;
+    actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
+        if (!graph.canAddLink(start_pin_id, end_pin_id))
+            return std::nullopt;
+        const int link_id = graph.addLink(start_pin_id, end_pin_id);
+        editor_actions.topologyChanged();
+        return link_id;
+    };
+    actions.disconnectLink = [&](int link_id) {
+        const auto &links = graph.links();
+        const bool exists =
+            std::any_of(links.begin(), links.end(),
+                        [link_id](const GraphLink &link) { return link.link_id == link_id; });
+        if (!exists)
+            return false;
+        graph.removeLink(link_id);
+        editor_actions.topologyChanged();
+        return true;
+    };
+    actions.createGroup = [&](std::string name, std::vector<int> members) {
+        return editor_actions.createGroup(std::move(name), std::move(members));
+    };
+    actions.removeGroup = [&](int group_id) { return editor_actions.removeGroup(group_id); };
+    actions.renameGroup = [&](int group_id, std::string name) {
+        return editor_actions.renameGroup(group_id, std::move(name));
+    };
+    actions.setGroupCollapsed = [&](int group_id, bool collapsed) {
+        return editor_actions.setGroupCollapsed(group_id, collapsed);
+    };
+    actions.selectGroup = [&](int group_id) { editor_actions.selectGroup(group_id); };
+    actions.setGroupCollapsed(group_a, false);
+    actions.setGroupCollapsed(group_b, false);
+    NodeGraphWidget widget(graph_view, actions);
     bool open = true;
 
     ImNodes::EditorContextSet(widget.context());
@@ -135,10 +173,8 @@ TEST_CASE_METHOD(ImGuiFixture,
     ImGui::EndFrame();
 
     // Collapse both groups; the members are no longer drawn.
-    graph.setGroupCollapsed(group_a, true);
-    graph.setGroupCollapsed(group_b, true);
-    graph.rebuildGroupBoundaryPins(group_a);
-    graph.rebuildGroupBoundaryPins(group_b);
+    actions.setGroupCollapsed(group_a, true);
+    actions.setGroupCollapsed(group_b, true);
 
     // Frame 2: both blocks must render from the cached positions, and the
     // A.out -> C.in link must be drawn through both groups' boundary pins.
@@ -156,6 +192,60 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(graph.groupById(group_a)->boundary_pins[0].is_output);
     REQUIRE(graph.groupById(group_b)->boundary_pins.size() == 1);
     REQUIRE_FALSE(graph.groupById(group_b)->boundary_pins[0].is_output);
+}
+
+TEST_CASE_METHOD(
+    ImGuiFixture,
+    "Issue #116: widget link requests commit only through callbacks and refresh boundaries",
+    "[issue116][widget][actions]") {
+    NodeGraphEngine graph;
+    SignalNode a, b, c, d;
+    const int node_a = graph.addNode("A", &a, 1, 1);
+    const int node_b = graph.addNode("B", &b, 1, 1);
+    const int node_c = graph.addNode("C", &c, 1, 1);
+    const int node_d = graph.addNode("D", &d, 1, 1);
+    const int group_a = graph.addGroup("A group", {node_a, node_b});
+    const int group_b = graph.addGroup("B group", {node_c, node_d});
+    GraphEditorActions editor_actions(graph);
+    NodeGraphWidgetActions actions;
+    actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
+        if (!graph.canAddLink(start_pin_id, end_pin_id))
+            return std::nullopt;
+        const int link_id = graph.addLink(start_pin_id, end_pin_id);
+        editor_actions.topologyChanged();
+        return link_id;
+    };
+    actions.disconnectLink = [&](int link_id) {
+        const auto &links = graph.links();
+        const bool exists =
+            std::any_of(links.begin(), links.end(),
+                        [link_id](const GraphLink &link) { return link.link_id == link_id; });
+        if (!exists)
+            return false;
+        graph.removeLink(link_id);
+        editor_actions.topologyChanged();
+        return true;
+    };
+    const NodeGraphEngine &graph_view = graph;
+    NodeGraphWidget widget(graph_view, actions);
+    (void)widget;
+
+    const int accepted_link =
+        *actions.connectLink(graph.nodes()[0].output_pin_ids[0], graph.nodes()[2].input_pin_ids[0]);
+    REQUIRE(graph.links().size() == 1);
+    REQUIRE(graph.groupById(group_a)->boundary_pins.size() == 1);
+    REQUIRE(graph.groupById(group_a)->boundary_pins[0].is_output);
+    REQUIRE(graph.groupById(group_b)->boundary_pins.size() == 1);
+    REQUIRE_FALSE(graph.groupById(group_b)->boundary_pins[0].is_output);
+
+    REQUIRE_FALSE(
+        actions.connectLink(graph.nodes()[1].output_pin_ids[0], graph.nodes()[2].input_pin_ids[0]));
+    REQUIRE(graph.links().size() == 1);
+
+    REQUIRE(actions.disconnectLink(accepted_link));
+    REQUIRE(graph.links().empty());
+    REQUIRE(graph.groupById(group_a)->boundary_pins.empty());
+    REQUIRE(graph.groupById(group_b)->boundary_pins.empty());
 }
 
 // ---------------------------------------------------------------------------

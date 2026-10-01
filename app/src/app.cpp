@@ -57,8 +57,77 @@ static std::string appExeDir() {
     return parent.string();
 }
 
-RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) {
-    m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine);
+RfSimulatorApp::RfSimulatorApp()
+    : m_graph_editor_actions(m_graph_engine), m_components(m_graph_engine, m_view_manager) {
+    NodeGraphWidgetActions editor_actions;
+    editor_actions.connectLink = [this](int start_pin, int end_pin) -> std::optional<int> {
+        if (!m_graph_widget || !m_graph_widget->onLinkCreating ||
+            !m_graph_widget->onLinkCreating(start_pin, end_pin))
+            return std::nullopt;
+        const int link_id = m_graph_engine.addLink(start_pin, end_pin);
+        m_graph_editor_actions.topologyChanged();
+        markDirty();
+        return link_id;
+    };
+    editor_actions.disconnectLink = [this](int link_id) {
+        const auto &links = m_graph_engine.links();
+        const auto it = std::find_if(links.begin(), links.end(), [link_id](const GraphLink &link) {
+            return link.link_id == link_id;
+        });
+        if (it == links.end())
+            return false;
+        m_graph_engine.removeLink(link_id);
+        m_graph_editor_actions.topologyChanged();
+        markDirty();
+        return true;
+    };
+    const auto remove_component = [this](int id) {
+        if (!m_components.remove(id))
+            return false;
+        // Remove the destroyed engine's Spectrum pointers before later panels draw.
+        rewireInputs();
+        m_pfb_views.rebuild(m_components, m_state);
+        m_graph_editor_actions.topologyChanged();
+        markDirty();
+        return true;
+    };
+    editor_actions.removeComponent = remove_component;
+    editor_actions.duplicateComponent = [this](int id) { return duplicateComponent(id); };
+    editor_actions.addProbePin = [this](int pin_id) {
+        return m_graph_editor_actions.addProbePin(pin_id);
+    };
+    editor_actions.removeProbePin = [this](int pin_id) {
+        return m_graph_editor_actions.removeProbePin(pin_id);
+    };
+    editor_actions.createGroup = [this](std::string name, std::vector<int> members) {
+        const int group_id =
+            m_graph_editor_actions.createGroup(std::move(name), std::move(members));
+        if (group_id >= 0)
+            markDirty();
+        return group_id;
+    };
+    editor_actions.removeGroup = [this](int group_id) {
+        const bool removed = m_graph_editor_actions.removeGroup(group_id);
+        if (removed)
+            markDirty();
+        return removed;
+    };
+    editor_actions.renameGroup = [this](int group_id, std::string name) {
+        const bool renamed = m_graph_editor_actions.renameGroup(group_id, std::move(name));
+        if (renamed)
+            markDirty();
+        return renamed;
+    };
+    editor_actions.setGroupCollapsed = [this](int group_id, bool collapsed) {
+        const bool updated = m_graph_editor_actions.setGroupCollapsed(group_id, collapsed);
+        if (updated)
+            markDirty();
+        return updated;
+    };
+    editor_actions.selectGroup = [this](int group_id) {
+        m_graph_editor_actions.selectGroup(group_id);
+    };
+    m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine, std::move(editor_actions));
     m_serializer = std::make_unique<ProjectSerializer>(
         m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
         m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor, m_na_engine);
@@ -71,7 +140,6 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
     }
     m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
-    m_graph_widget->onLinkChanged = [this]() { markDirty(); };
     m_graph_widget->onLinkCreating = [this](int start_pin, int end_pin) {
         const int target_node_id = m_graph_engine.nodeIdForPin(end_pin);
         auto *target = m_components.find(target_node_id);
@@ -79,26 +147,9 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         auto *source = m_components.find(source_node_id);
         if (!graphLinkAllowed(source, target, start_pin, end_pin))
             return false;
-        // Reject a second link into an occupied input pin (the single-source
-        // rewire pass would silently honour only the first) and any link that
-        // would close a cycle (update order would become order-dependent).
-        // Issue #116.
         return m_graph_engine.canAddLink(start_pin, end_pin);
     };
-    m_graph_widget->onRemoveNode = [this](int id) {
-        markDirty();
-        m_components.remove(id);
-        // Immediately re-wire remaining components' inputs against the current graph
-        // topology. Node removal only strips graph links/pin bookkeeping; it does not
-        // touch SignalNode::inputs pointers held by surviving components, and the next
-        // scheduled rewire (update_dsp(), start of next frame) hasn't run yet. Any
-        // component downstream of the removed node still holds a raw Spectrum* into the
-        // just-destroyed engine's SignalNode. Widgets that dereference node().inputs[]
-        // directly during this same draw_ui() call (e.g. PFBChannelizerWidget::draw() /
-        // rebuildCache(), InspectorPanel) would otherwise use-after-free. See issue #37.
-        rewireInputs();
-        m_pfb_views.rebuild(m_components, m_state);
-    };
+    m_graph_widget->onRemoveNode = [remove_component](int id) { remove_component(id); };
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_components.hoverSummary(id);
@@ -118,13 +169,13 @@ RfSimulatorApp::RfSimulatorApp() : m_components(m_graph_engine, m_view_manager) 
         }
         return info;
     };
-    m_graph_widget->onDuplicateNode = [this](int id) { duplicateComponent(id); };
 
     m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)
         .addTone(100e6, -20.0);
     m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
 
-    m_inspector_panel = std::make_unique<InspectorPanel>(m_graph_engine, m_components);
+    m_inspector_panel =
+        std::make_unique<InspectorPanel>(m_graph_engine, m_components, m_graph_editor_actions);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         if (m_graph_widget->onRemoveNode)
@@ -223,10 +274,10 @@ void RfSimulatorApp::load_window_states() {
     m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
 }
 
-void RfSimulatorApp::duplicateComponent(int graph_node_id) {
+bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     IComponentEngine *src = m_components.find(graph_node_id);
     if (!src)
-        return;
+        return false;
 
     // Capture source position before creating the new node
     ImNodes::EditorContextSet(m_graph_widget->context());
@@ -246,7 +297,7 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // serialize/deserialize. Removes the 11-way dynamic_cast chain.
     const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
     if (!desc)
-        return;
+        return false;
     IComponentEngine *copy = desc->create(m_components, m_graph_engine, m_next_component_id++);
     copy->deserialize(src->serialize());
     int new_nid = copy->graphNodeId();
@@ -255,15 +306,15 @@ void RfSimulatorApp::duplicateComponent(int graph_node_id) {
     ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
     // Copy library part number
     if (!src_part_number.empty())
-        m_graph_engine.setNodePartNumber(new_nid, src_part_number);
+        m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
     // PFB also needs IQ plot widget and grid widget (same as addComponent)
     if (desc->type == "pfb") {
         m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(copy), m_state);
     }
 
     markDirty();
+    return true;
 }
-
 void RfSimulatorApp::newProject() {
     m_power_meter_widget->clearSource();
     m_serializer->reset();
