@@ -1,5 +1,4 @@
 advisors:
-  - name: default
   - name: Engineering Review
     instructions: |2-
       # RF Simulator Review Guidance
