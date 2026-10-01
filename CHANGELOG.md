@@ -1,5 +1,9 @@
 ## [0.25.1] - 2026-10-01
 
+### Added
+
+- **PFB integrated channel noise and SNR** — the PFB inspector reports the active channel's integrated noise power and effective noise bandwidth, and its hover SNR compares the strongest channel tone against that integrated noise, independent of analyzer RBW.
+
 ### Fixed
 
 - **Network Analyzer through 2:1 RF switches** — follow the exact linked input and output ports along the measured path, so a singly-fed switch reports the response of the connected throw. Dual-fed switches and combiner paths remain unsupported and report no data.
@@ -7,6 +11,7 @@
 ### Testing
 
 - Add Network Analyzer coverage for both switch throws, unsupported dual-fed switch paths, and the production app clone adapter.
+- Add PFB coverage for channel-integrated noise and hover SNR in `test_node_hover_snr` and `test_pfb_filter_design`.
 
 ## [0.25.0] - 2026-09-25
 
