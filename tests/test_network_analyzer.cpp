@@ -434,58 +434,73 @@ TEST_CASE("NetworkAnalyzer: path through a Combiner yields all-NaN", "[network_a
 }
 
 // ---------------------------------------------------------------------------
-// 8. RF Switch 2:1 in path — a switch has two input pins, so the same
-//    reasoning as the combiner applies structurally: the private clone chain
-//    below always feeds a clone's inputs[0] (T1 for a 2:1 switch), and the
-//    DFS records only the output port a chain node departs by — never the
-//    input pin it was entered through — so the tool cannot confirm which
-//    throw the probed path really enters. Left unguarded, a link entering
-//    through T2 with throw 2 active is measured on T1 and reports the
-//    isolation floor (-40 dB at the shipped defaults) instead of the
-//    insertion loss (-0.5 dB): a wrong number, with no NaN to signal it.
-//    Both entry ports therefore degrade to all-NaN, like the combiner above.
-//    The rf_switch_spdt_2to1 branch in TestNaScratch is what makes this a
-//    regression test for the guard: without it the path would degrade to
-//    all-NaN as an "unknown type" clone and the assertions below would still
-//    hold with the guard removed.
+// 8. RF Switch 2:1 in path — the analyzer must preserve the input port used
+//    by the discovered graph path, so its stimulus reaches the selected throw
+//    even when that is T2.
 // ---------------------------------------------------------------------------
-TEST_CASE("NetworkAnalyzer: path through an RF Switch 2:1 yields all-NaN", "[network_analyzer]") {
+TEST_CASE("NetworkAnalyzer: path through an RF Switch 2:1 follows the selected throw",
+          "[network_analyzer]") {
     const auto measure_through_throw = [](int throw_index, int input_port) {
         NodeGraphEngine graph;
         SignalGeneratorEngine gen(1, graph);
         RFSwitch2to1Engine sw(2, graph);
         sw.setActiveThrow(throw_index);
-        AttenuatorEngine end(3, graph); // Point B
         graph.addLink(gen.outputPinId(), sw.inputPinId(input_port));
-        graph.addLink(sw.outputPinId(), end.inputPinId());
-        TestNaHost host({&gen, &sw, &end});
+        TestNaHost host({&gen, &sw});
         NetworkAnalyzerEngine na(graph, host);
         na.setStartFrequency(1e9);
         na.setStopFrequency(2e9);
         na.setPoints(11);
         na.setPointA(gen.outputPinId());
-        na.setPointB(end.outputPinId());
+        na.setPointB(sw.outputPinId());
         na.update();
 
-        // Sanity: the graph really does connect A to B (via the switch) — so
-        // the all-NaN result is the multi-input rejection, not a missing link.
         REQUIRE(graph.nodeIdForPin(sw.outputPinId()) == sw.graphNodeId());
-        REQUIRE(graph.nodeIdForPin(end.inputPinId()) == end.graphNodeId());
         REQUIRE(graph.nodeIdForPin(gen.outputPinId()) == gen.graphNodeId());
-        INFO("entered through input port " << input_port << " with throw " << throw_index
-                                           << " active; gain[0] = " << na.gainDb()[0]);
-        for (double g : na.gainDb())
-            REQUIRE(std::isnan(g));
-        for (double nf : na.noiseFigureDb())
-            REQUIRE(std::isnan(nf));
+        INFO("entered through input port " << input_port << " with throw " << throw_index);
+        REQUIRE(na.gainDb().size() == 11);
+        for (double g : na.gainDb()) {
+            const double expected_gain = (throw_index == input_port) ? -0.5 : -40.0;
+            REQUIRE_THAT(g, WithinAbs(expected_gain, 0.05));
+        }
+        // The isolation-path NF includes the switch's added-noise term:
+        // 10*log10((1 - G_IL) / G_ISO) ~= 30.36 dB for the shipped defaults.
+        for (double nf : na.noiseFigureDb()) {
+            const double expected_nf = (throw_index == input_port) ? 0.5 : 30.36;
+            REQUIRE_THAT(nf, WithinAbs(expected_nf, 0.1));
+        }
     };
 
-    // The wiring that exposed the defect: the link enters through the second
-    // input (T2) and the second throw is selected.
     measure_through_throw(1, 1);
-    // Entered through T1 with throw 1 active — the guard is port-independent,
-    // so this is rejected for the same reason.
     measure_through_throw(0, 0);
+    measure_through_throw(0, 1);
+    measure_through_throw(1, 0);
+}
+
+TEST_CASE("NetworkAnalyzer: path through a dual-fed RF Switch 2:1 yields all-NaN",
+          "[network_analyzer]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine probed_gen(1, graph);
+    SignalGeneratorEngine active_gen(2, graph);
+    RFSwitch2to1Engine sw(3, graph);
+    sw.setActiveThrow(0); // T1 is active; the probed signal arrives on T2.
+    AttenuatorEngine end(4, graph);
+    graph.addLink(active_gen.outputPinId(), sw.inputPinId(0));
+    graph.addLink(probed_gen.outputPinId(), sw.inputPinId(1));
+    graph.addLink(sw.outputPinId(), end.inputPinId());
+    TestNaHost host({&probed_gen, &active_gen, &sw, &end});
+    NetworkAnalyzerEngine na(graph, host);
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(11);
+    na.setPointA(probed_gen.outputPinId());
+    na.setPointB(end.outputPinId());
+    na.update();
+
+    for (double g : na.gainDb())
+        REQUIRE(std::isnan(g));
+    for (double nf : na.noiseFigureDb())
+        REQUIRE(std::isnan(nf));
 }
 
 // ---------------------------------------------------------------------------
@@ -576,17 +591,19 @@ TEST_CASE("NetworkAnalyzer: engine serialize/deserialize round-trip", "[network_
 // Widget smoke test — RAII ImGui/ImPlot contexts (DestroyContext on every
 // path, including assertion failures: the fixture destructor always runs).
 // ---------------------------------------------------------------------------
+#include "app.h"
 #include "imgui.h"
+#include "imnodes.h"
 #include "implot.h"
 // The axis ranges ImPlot settles on are only observable through its internals
-// (ImPlot::GetPlot); the pinned implot commit makes that stable.
+// (the pinned implot commit makes that stable).
 #include "implot_internal.h"
-
 namespace {
 struct ImGuiFixture {
     ImGuiFixture() {
         ImGui::CreateContext();
         ImPlot::CreateContext();
+        ImNodes::CreateContext();
         // A bare ImGui context starts with a (-1,-1) DisplaySize sentinel and a
         // default imgui.ini path; give the widget a real frame to draw into and
         // keep the test run pristine (CWD is the repo root).
@@ -595,15 +612,40 @@ struct ImGuiFixture {
         // No renderer backend here, so the font atlas must be built explicitly
         // (NewFrame() asserts TexIsBuilt when RendererHasTextures is not set).
         unsigned char *atlas_pixels = nullptr;
-        int atlas_w = 0, atlas_h = 0;
+        int atlas_w = 0;
+        int atlas_h = 0;
         ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&atlas_pixels, &atlas_w, &atlas_h);
     }
     ~ImGuiFixture() {
+        ImNodes::DestroyContext();
         ImPlot::DestroyContext();
         ImGui::DestroyContext();
     }
 };
 } // namespace
+
+TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: app scratch adapter measures switch COM output",
+                 "[network_analyzer][app]") {
+    RfSimulatorApp app;
+    auto &graph = app.testGraphEngine();
+    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, graph);
+    auto &sw = app.testComponents().add<RFSwitch2to1Engine>(10002, graph);
+    graph.addLink(gen.outputPinId(), sw.inputPinId(0));
+
+    auto &na = app.testNetworkAnalyzerEngine();
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(11);
+    na.setPointA(gen.outputPinId());
+    na.setPointB(sw.outputPinId());
+    na.update();
+
+    REQUIRE(na.gainDb().size() == 11);
+    for (double gain : na.gainDb())
+        REQUIRE_THAT(gain, WithinAbs(-0.5, 0.05));
+    for (double nf : na.noiseFigureDb())
+        REQUIRE_THAT(nf, WithinAbs(0.5, 0.1));
+}
 
 TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: widget draws with and without probe points",
                  "[network_analyzer][widget]") {
