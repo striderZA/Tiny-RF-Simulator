@@ -119,9 +119,22 @@ class RfSimulatorApp {
     void markDirty();
     bool m_dirty = false;
     void testMakeDirty();
-    // Test helpers exposed for project file round-trip tests
-    NodeGraphEngine &testGraphEngine() { return m_graph_engine; }
-    ComponentRegistry &testComponents() { return m_components; }
+    // Test-only commands keep fixture mutations explicit; read accessors below are const.
+    IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
+    IComponentEngine *testCreateComponent(
+        const std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)>
+            &factory,
+        int engine_id);
+    std::optional<int> testConnectLink(int start_pin_id, int end_pin_id);
+    bool testDisconnectLink(int link_id);
+    bool testRemoveComponent(int graph_node_id);
+    bool testAddProbePin(int pin_id);
+    bool testRemoveProbePin(int pin_id);
+    int testCreateGroup(std::string name, std::vector<int> member_node_ids);
+    bool testRemoveGroup(int group_id);
+    bool testSetGroupCollapsed(int group_id, bool collapsed);
+    const NodeGraphEngine &testGraphEngine() const { return m_graph_engine; }
+    const ComponentRegistry &testComponents() const { return m_components; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }

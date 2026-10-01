@@ -360,6 +360,78 @@ void RfSimulatorApp::startTutorial() {
 
 void RfSimulatorApp::testMakeDirty() { markDirty(); }
 
+IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int engine_id) {
+    const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
+    return descriptor ? testCreateComponent(descriptor->create, engine_id) : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testCreateComponent(
+    const std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)> &factory,
+    int engine_id) {
+    return factory ? factory(m_components, m_graph_engine, engine_id) : nullptr;
+}
+
+std::optional<int> RfSimulatorApp::testConnectLink(int start_pin_id, int end_pin_id) {
+    if (!m_graph_widget || !m_graph_widget->onLinkCreating ||
+        !m_graph_widget->onLinkCreating(start_pin_id, end_pin_id))
+        return std::nullopt;
+
+    const int link_id = m_graph_engine.addLink(start_pin_id, end_pin_id);
+    m_graph_editor_actions.topologyChanged();
+    return link_id;
+}
+
+bool RfSimulatorApp::testDisconnectLink(int link_id) {
+    const auto &links = m_graph_engine.links();
+    const auto it = std::find_if(links.begin(), links.end(), [link_id](const GraphLink &link) {
+        return link.link_id == link_id;
+    });
+    if (it == links.end())
+        return false;
+
+    m_graph_engine.removeLink(link_id);
+    m_graph_editor_actions.topologyChanged();
+    return true;
+}
+
+bool RfSimulatorApp::testRemoveComponent(int graph_node_id) {
+    if (!m_graph_widget || !m_graph_widget->onRemoveNode || !m_components.find(graph_node_id))
+        return false;
+
+    m_graph_widget->onRemoveNode(graph_node_id);
+    return true;
+}
+
+bool RfSimulatorApp::testAddProbePin(int pin_id) {
+    return m_graph_editor_actions.addProbePin(pin_id);
+}
+
+bool RfSimulatorApp::testRemoveProbePin(int pin_id) {
+    return m_graph_editor_actions.removeProbePin(pin_id);
+}
+
+int RfSimulatorApp::testCreateGroup(std::string name, std::vector<int> member_node_ids) {
+    const int group_id =
+        m_graph_editor_actions.createGroup(std::move(name), std::move(member_node_ids));
+    if (group_id >= 0)
+        markDirty();
+    return group_id;
+}
+
+bool RfSimulatorApp::testRemoveGroup(int group_id) {
+    const bool removed = m_graph_editor_actions.removeGroup(group_id);
+    if (removed)
+        markDirty();
+    return removed;
+}
+
+bool RfSimulatorApp::testSetGroupCollapsed(int group_id, bool collapsed) {
+    const bool updated = m_graph_editor_actions.setGroupCollapsed(group_id, collapsed);
+    if (updated)
+        markDirty();
+    return updated;
+}
+
 void RfSimulatorApp::markDirty() { m_dirty = true; }
 void RfSimulatorApp::refreshExtensions() {
     namespace fs = std::filesystem;

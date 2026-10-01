@@ -1,3 +1,4 @@
+#include "circuit_runtime.h"
 // Regression test for issue #51: adding an Equalizer from the canvas context
 // menu must mark the project dirty.
 //
@@ -113,13 +114,12 @@ TEST_CASE_METHOD(ImGuiFixture,
     // the only place draw_inspector is populated; a forgotten branch would
     // otherwise pass CI silently.
     RfSimulatorApp app;
-    int next_id = 1;
+    CircuitRuntime runtime;
     for (const auto *d : ComponentTypeRegistry::instance().all()) {
         CAPTURE(d->type);
         REQUIRE(bool(d->create));
         REQUIRE(bool(d->draw_inspector));
-        IComponentEngine *engine =
-            d->create(app.testComponents(), app.testGraphEngine(), next_id++);
+        IComponentEngine *engine = runtime.createComponent(d->create);
         REQUIRE(engine != nullptr);
         REQUIRE(engine->type_name() == d->type);
     }

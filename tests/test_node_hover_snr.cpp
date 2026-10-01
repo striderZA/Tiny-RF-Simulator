@@ -56,7 +56,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Node hover carries the analyzer SNR of the first
                  "[app][snr]") {
     RfSimulatorApp app;
 
-    auto &splitter = app.testComponents().add<SplitterEngine>(10001, app.testGraphEngine());
+    auto &splitter = static_cast<SplitterEngine &>(*app.testCreateComponent("splitter", 10001));
     REQUIRE(splitter.node().outputs.size() == 2);
 
     // Output 0 is the stronger of the two so that reading the wrong port is
@@ -102,7 +102,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Node hover carries the analyzer SNR of the first
 TEST_CASE_METHOD(ImGuiFixture, "PFB node hover SNR uses integrated channel noise",
                  "[app][snr][pfb]") {
     RfSimulatorApp app;
-    auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10002, app.testGraphEngine());
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10002));
 
     Spectrum input;
     input.frequencies.resize(401);

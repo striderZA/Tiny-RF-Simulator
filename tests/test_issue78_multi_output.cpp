@@ -53,7 +53,7 @@ static std::string tempPath() {
         .string();
 }
 
-template <typename T> static T *findOne(ComponentRegistry &registry) {
+template <typename T> static T *findOne(const ComponentRegistry &registry) {
     auto found = registry.byType<T>();
     return found.empty() ? nullptr : found.front();
 }
@@ -96,18 +96,19 @@ TEST_CASE_METHOD(Issue78ImGuiFixture,
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10101, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10101));
         gen.addTone(100e6, -20.0);
-        auto &splitter = app.testComponents().add<SplitterEngine>(10102, app.testGraphEngine());
-        auto &combiner = app.testComponents().add<CombinerEngine>(10103, app.testGraphEngine());
+        auto &splitter = static_cast<SplitterEngine &>(*app.testCreateComponent("splitter", 10102));
+        auto &combiner = static_cast<CombinerEngine &>(*app.testCreateComponent("combiner", 10103));
 
-        app.testGraphEngine().addLink(gen.outputPinId(), splitter.inputPinId());
-        app.testGraphEngine().addLink(splitter.outputPinId(0), combiner.inputPinId(0));
+        REQUIRE(app.testConnectLink(gen.outputPinId(), splitter.inputPinId()).has_value());
+        REQUIRE(app.testConnectLink(splitter.outputPinId(0), combiner.inputPinId(0)).has_value());
         // The OUT2 link (output port 1) is the behavior under test.
-        app.testGraphEngine().addLink(splitter.outputPinId(1), combiner.inputPinId(1));
+        REQUIRE(app.testConnectLink(splitter.outputPinId(1), combiner.inputPinId(1)).has_value());
 
         REQUIRE(splitter.numOutputPins() == 2);
-        REQUIRE(app.testGraphEngine().addProbePin(splitter.outputPinId(1)));
+        REQUIRE(app.testAddProbePin(splitter.outputPinId(1)));
 
         app.saveProject(path);
     }
@@ -149,19 +150,20 @@ TEST_CASE_METHOD(Issue78ImGuiFixture,
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10201, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10201));
         gen.addTone(100e6, -20.0);
-        auto &adc = app.testComponents().add<AdcEngine>(10202, app.testGraphEngine());
-        auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10203, app.testGraphEngine());
-        auto &amp = app.testComponents().add<AmplifierEngine>(10204, app.testGraphEngine());
+        auto &adc = static_cast<AdcEngine &>(*app.testCreateComponent("adc", 10202));
+        auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10203));
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10204));
 
-        app.testGraphEngine().addLink(gen.outputPinId(), adc.inputPinId());
-        app.testGraphEngine().addLink(adc.outputPinId(), pfb.inputPinId());
+        REQUIRE(app.testConnectLink(gen.outputPinId(), adc.inputPinId()).has_value());
+        REQUIRE(app.testConnectLink(adc.outputPinId(), pfb.inputPinId()).has_value());
         // The OUT2 link (output port 1) is the behavior under test.
-        app.testGraphEngine().addLink(pfb.outputPinId(1), amp.inputPinId());
+        REQUIRE(app.testConnectLink(pfb.outputPinId(1), amp.inputPinId()).has_value());
 
         REQUIRE(pfb.numOutputPins() == 2);
-        REQUIRE(app.testGraphEngine().addProbePin(pfb.outputPinId(1)));
+        REQUIRE(app.testAddProbePin(pfb.outputPinId(1)));
 
         app.saveProject(path);
     }

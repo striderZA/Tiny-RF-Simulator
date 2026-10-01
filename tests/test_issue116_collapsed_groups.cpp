@@ -257,28 +257,24 @@ TEST_CASE_METHOD(ImGuiFixture,
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &gen2 = app.testComponents().add<SignalGeneratorEngine>(10002, app.testGraphEngine());
-    auto &amp1 = app.testComponents().add<AmplifierEngine>(10003, app.testGraphEngine());
-
-    REQUIRE(app.testGraphWidget().onLinkCreating);
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &gen2 = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10002));
+    auto &amp1 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10003));
 
     // First link into amp1's input is accepted and committed.
-    REQUIRE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), amp1.inputPinId()));
-    app.testGraphEngine().addLink(gen.outputPinId(), amp1.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), amp1.inputPinId()).has_value());
 
     // A second source into the occupied input is rejected.
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen2.outputPinId(), amp1.inputPinId()));
+    REQUIRE_FALSE(app.testConnectLink(gen2.outputPinId(), amp1.inputPinId()).has_value());
 
     // Cycle: amp3 -> amp4 then amp4 -> amp3.
-    auto &amp3 = app.testComponents().add<AmplifierEngine>(10004, app.testGraphEngine());
-    auto &amp4 = app.testComponents().add<AmplifierEngine>(10005, app.testGraphEngine());
-    REQUIRE(app.testGraphWidget().onLinkCreating(amp3.outputPinId(), amp4.inputPinId()));
-    app.testGraphEngine().addLink(amp3.outputPinId(), amp4.inputPinId());
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(amp4.outputPinId(), amp3.inputPinId()));
+    auto &amp3 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10004));
+    auto &amp4 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10005));
+    REQUIRE(app.testConnectLink(amp3.outputPinId(), amp4.inputPinId()).has_value());
+    REQUIRE_FALSE(app.testConnectLink(amp4.outputPinId(), amp3.inputPinId()).has_value());
 
     // Control: a fresh acyclic link with a free input is accepted.
-    REQUIRE(app.testGraphWidget().onLinkCreating(amp1.outputPinId(), amp3.inputPinId()));
+    REQUIRE(app.testConnectLink(amp1.outputPinId(), amp3.inputPinId()).has_value());
 }
 
 // ---------------------------------------------------------------------------

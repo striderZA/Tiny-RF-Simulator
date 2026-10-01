@@ -78,7 +78,7 @@ struct ComponentState {
     nlohmann::json state;
 };
 
-std::vector<ComponentState> snapshotComponents(ComponentRegistry &components) {
+std::vector<ComponentState> snapshotComponents(const ComponentRegistry &components) {
     std::vector<ComponentState> out;
     for (IComponentEngine *component : components.all()) {
         if (!component)
@@ -88,7 +88,7 @@ std::vector<ComponentState> snapshotComponents(ComponentRegistry &components) {
     return out;
 }
 
-std::vector<std::array<int, 3>> snapshotLinks(NodeGraphEngine &graph) {
+std::vector<std::array<int, 3>> snapshotLinks(const NodeGraphEngine &graph) {
     std::vector<std::array<int, 3>> out;
     for (const GraphLink &link : graph.links())
         out.push_back({link.link_id, link.start_pin_id, link.end_pin_id});
@@ -212,7 +212,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     // Flow files address engines by IComponentEngine::id(); a graph node id
     // would resolve to nothing. Pin that here so the fixture cannot silently
@@ -262,7 +262,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     TestFlowWidget &widget = app.testTestFlowWidget();
 
@@ -527,7 +527,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     const fs::path path = uniqueTempPath("preview");
     writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 3));
@@ -608,7 +608,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     TestFlowWidget &widget = app.testTestFlowWidget();
 
@@ -762,7 +762,7 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: export writes pretty JSON with a
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     const fs::path path = uniqueTempPath("export_flow");
     writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 3));
@@ -812,7 +812,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     const fs::path path = uniqueTempPath("export_failure_flow");
     writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 3));
@@ -846,7 +846,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     const fs::path path = uniqueTempPath("reload");
     writeText(path, sweepFlowJson(generator.id(), amplifier.id(), 3));
@@ -890,12 +890,13 @@ TEST_CASE_METHOD(ImGuiFixture,
     ScopedRemove second_flow_cleanup{second_flow};
     ScopedRemove project_cleanup{project_path};
 
-    SignalGeneratorEngine &second_generator =
-        app.testComponents().add<SignalGeneratorEngine>(900, app.testGraphEngine());
+    auto &second_generator =
+        static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 900));
     second_generator.addTone(100e6, -20.0);
-    AmplifierEngine &second_amplifier =
-        app.testComponents().add<AmplifierEngine>(901, app.testGraphEngine());
-    app.testGraphEngine().addLink(second_generator.outputPinId(), second_amplifier.inputPinId());
+    auto &second_amplifier =
+        static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 901));
+    REQUIRE(app.testConnectLink(second_generator.outputPinId(), second_amplifier.inputPinId())
+                .has_value());
     writeText(second_flow, sweepFlowJson(900, 901, 3));
 
     REQUIRE(widget.loadFlow(second_flow.string()));
@@ -947,7 +948,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     TestFlowWidget &widget = app.testTestFlowWidget();
     const fs::path flow_path = uniqueTempPath("failed_load_flow");
@@ -986,11 +987,15 @@ TEST_CASE_METHOD(ImGuiFixture,
     constexpr double kRejectedBaseline = 1.0;
     constexpr int kRejectingId = 950;
     constexpr int kMeasuredId = 951;
-    auto &rejecting = app.testComponents().add<BaselineRejectingEngine>(
-        kRejectingId, app.testGraphEngine(), kRejectedBaseline);
+    auto &rejecting = static_cast<BaselineRejectingEngine &>(*app.testCreateComponent(
+        [kRejectedBaseline](ComponentRegistry &components, NodeGraphEngine &graph, int id) {
+            return static_cast<IComponentEngine *>(
+                &components.add<BaselineRejectingEngine>(id, graph, kRejectedBaseline));
+        },
+        kRejectingId));
     AmplifierEngine &measured =
-        app.testComponents().add<AmplifierEngine>(kMeasuredId, app.testGraphEngine());
-    app.testGraphEngine().addLink(rejecting.outputPinId(), measured.inputPinId());
+        static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", kMeasuredId));
+    REQUIRE(app.testConnectLink(rejecting.outputPinId(), measured.inputPinId()).has_value());
 
     const fs::path rejecting_flow = uniqueTempPath("failed_load_rejecting_flow");
     ScopedRemove rejecting_cleanup{rejecting_flow};
@@ -1038,7 +1043,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     TestFlowWidget &widget = app.testTestFlowWidget();
 
@@ -1120,7 +1125,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     // `path` addresses the engine's serialize() keys, never an inspector label:
     // a mistyped key is the likeliest hand-authoring mistake, and the panel must
@@ -1440,7 +1445,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
 
     TestFlowWidget &widget = app.testTestFlowWidget();
     REQUIRE(widget.newFlowFromCircuit());
@@ -1938,7 +1943,7 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: the authoring buttons drive thei
     SignalGeneratorEngine &generator =
         *app.testComponents().byType<SignalGeneratorEngine>().front();
     AmplifierEngine &amplifier = *app.testComponents().byType<AmplifierEngine>().front();
-    app.testGraphEngine().addLink(generator.outputPinId(), amplifier.inputPinId());
+    REQUIRE(app.testConnectLink(generator.outputPinId(), amplifier.inputPinId()).has_value());
     TestFlowWidget &widget = app.testTestFlowWidget();
 
     const auto noop = []() {};
