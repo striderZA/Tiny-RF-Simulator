@@ -35,6 +35,7 @@
 #include "power_meter_engine.h"
 #include "power_meter_widget.h"
 #include "project_serializer.h"
+#include "receiver_requirements.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -143,6 +144,7 @@ class RfSimulatorApp {
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
+    ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
     TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
@@ -243,6 +245,7 @@ class RfSimulatorApp {
     // The adapter and analyzer follow their dependencies and outlive the serializer.
     NaHost m_na_host{m_circuit_runtime.components()};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
+    ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;

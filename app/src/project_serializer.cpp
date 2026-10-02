@@ -147,17 +147,54 @@ std::optional<int> checkedJsonInt(const nlohmann::json &j) {
     return std::nullopt;
 }
 
+ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value) {
+    ReceiverRequirementsState state;
+    const auto invalidate = [&state](std::string reason) {
+        state.config.reset();
+        state.invalid_reason = std::move(reason);
+        return state;
+    };
+    if (!value.is_object())
+        return invalidate("Receiver requirements must be a JSON object.");
+    if (value.contains("invalid_configuration")) {
+        if (value["invalid_configuration"].is_boolean() &&
+            value["invalid_configuration"].get<bool>()) {
+            if (value.contains("diagnostic") && value["diagnostic"].is_string() &&
+                !value["diagnostic"].get<std::string>().empty())
+                return invalidate(value["diagnostic"].get<std::string>());
+            return invalidate("Saved receiver requirements are marked invalid.");
+        }
+        return invalidate("Receiver requirements contain a malformed invalid marker.");
+    }
+
+    constexpr std::array<const char *, 5> keys = {"band_start_hz", "band_stop_hz", "gain_min_db",
+                                                  "gain_max_db", "nf_max_db"};
+    double fields[5]{};
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        if (!value.contains(keys[i]) || !value[keys[i]].is_number())
+            return invalidate(std::string("Receiver requirements field '") + keys[i] +
+                              "' must be a number.");
+        fields[i] = value[keys[i]].get<double>();
+    }
+    ReceiverRequirementsConfig config{fields[0], fields[1], fields[2], fields[3], fields[4]};
+    if (auto reason = validateReceiverRequirementsConfig(config))
+        return invalidate(*reason);
+    state.config = config;
+    return state;
+}
+
 } // namespace
 
 ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     SessionState &state, bool &show_log, bool &show_spectrum,
-                                     bool &show_properties, bool &show_node_editor,
-                                     NetworkAnalyzerEngine &na_engine)
+                                     SessionState &state,
+                                     ReceiverRequirementsState &receiver_requirements,
+                                     bool &show_log, bool &show_spectrum, bool &show_properties,
+                                     bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
     : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_state(state), m_show_log(show_log), m_show_spectrum(show_spectrum),
-      m_show_properties(show_properties), m_show_node_editor(show_node_editor),
-      m_na_engine(na_engine) {}
+      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_state(state),
+      m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
+      m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
 const ComponentRegistry &ProjectSerializer::components() const { return m_runtime.components(); }
 
@@ -173,6 +210,17 @@ std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
 bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json root;
     root["version"] = 1;
+    if (m_receiver_requirements.config) {
+        const auto &config = *m_receiver_requirements.config;
+        root["receiver_requirements"] = {{"band_start_hz", config.band_start_Hz},
+                                         {"band_stop_hz", config.band_stop_Hz},
+                                         {"gain_min_db", config.gain_min_dB},
+                                         {"gain_max_db", config.gain_max_dB},
+                                         {"nf_max_db", config.nf_max_dB}};
+    } else if (!m_receiver_requirements.invalid_reason.empty()) {
+        root["receiver_requirements"] = {{"invalid_configuration", true},
+                                         {"diagnostic", m_receiver_requirements.invalid_reason}};
+    }
 
     auto pos = path.find_last_of("\\/");
     std::string fname = (pos != std::string::npos) ? path.substr(pos + 1) : path;
@@ -478,6 +526,12 @@ bool ProjectSerializer::load(const std::string &path) {
 
         m_last_load_reset = true;
         reset();
+        if (root.contains("receiver_requirements")) {
+            m_receiver_requirements = parseReceiverRequirements(root["receiver_requirements"]);
+            if (!m_receiver_requirements.invalid_reason.empty())
+                LOG_WARN("Invalid receiver requirements in project file %s: %s", path.c_str(),
+                         m_receiver_requirements.invalid_reason.c_str());
+        }
 
         // Map: type string \u2192 factory lambda
         std::vector<nlohmann::json::iterator> comp_order;
@@ -847,6 +901,7 @@ bool ProjectSerializer::load(const std::string &path) {
 void ProjectSerializer::reset() {
     m_runtime.clearComponentsAndResetIds();
     m_editor_actions.resetForProjectReplacement();
+    m_receiver_requirements = {};
 
     // Clear the Network Analyzer's probe points too — otherwise a stale pin
     // id survives into the next project and can alias a newly allocated pin.
