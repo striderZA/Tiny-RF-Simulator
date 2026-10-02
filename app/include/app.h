@@ -35,6 +35,8 @@
 #include "power_meter_engine.h"
 #include "power_meter_widget.h"
 #include "project_serializer.h"
+#include "receiver_requirements.h"
+#include "receiver_requirements_widget.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -65,6 +67,7 @@ class RfSimulatorApp {
     bool m_show_log = true;
     bool m_show_spectrum = true;
     bool m_show_na = false;
+    bool m_show_receiver_requirements = false;
     bool m_show_power_meter = false;
     // Test Flow panel visibility; persisted through SessionState
     // (WindowState/TestFlow) exactly like the other panel toggles.
@@ -143,6 +146,7 @@ class RfSimulatorApp {
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
+    ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
     TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
@@ -221,6 +225,7 @@ class RfSimulatorApp {
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
     std::unique_ptr<PowerMeterWidget> m_power_meter_widget;
+    std::unique_ptr<ReceiverRequirementsWidget> m_receiver_requirements_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
@@ -243,6 +248,7 @@ class RfSimulatorApp {
     // The adapter and analyzer follow their dependencies and outlive the serializer.
     NaHost m_na_host{m_circuit_runtime.components()};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
+    ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;

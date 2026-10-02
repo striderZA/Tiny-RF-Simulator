@@ -40,6 +40,8 @@ add_library(app STATIC
     src/pfb_calculator_widget.cpp
     src/project_serializer.cpp
     src/test_flow_widget.cpp
+    src/receiver_requirements.cpp
+    src/receiver_requirements_widget.cpp
 )
 add_library(simulator::app ALIAS app)
 
@@ -47,6 +49,7 @@ add_library(simulator::app ALIAS app)
 # Include directories
 # --------------------------------------------------
 target_include_directories(app PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/include
     ${pfd_SOURCE_DIR}
 )

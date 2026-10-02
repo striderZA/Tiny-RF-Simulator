@@ -1,5 +1,6 @@
 #pragma once
 
+#include "receiver_requirements.h"
 #include <array>
 #include <string>
 #include <utility>
@@ -19,8 +20,9 @@ class ProjectSerializer {
   public:
     ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                       NodeGraphWidget &graph_widget, PFBViewManager &pfb_views, SessionState &state,
-                      bool &show_log, bool &show_spectrum, bool &show_properties,
-                      bool &show_node_editor, NetworkAnalyzerEngine &na_engine);
+                      ReceiverRequirementsState &receiver_requirements, bool &show_log,
+                      bool &show_spectrum, bool &show_properties, bool &show_node_editor,
+                      NetworkAnalyzerEngine &na_engine);
 
     bool save(const std::string &path); // false on open/write/flush/close failure (logged)
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
@@ -43,6 +45,7 @@ class ProjectSerializer {
     GraphEditorActions &m_editor_actions;
     NodeGraphWidget &m_graph_widget;
     PFBViewManager &m_pfb_views;
+    ReceiverRequirementsState &m_receiver_requirements;
     SessionState &m_state;
     bool &m_show_log;
     bool &m_show_spectrum;

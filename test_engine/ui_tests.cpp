@@ -10,6 +10,8 @@
 #include "mixer_engine.h"
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <imnodes.h>
 #undef Yield
@@ -1059,5 +1061,157 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!s_app->m_show_test_flow);
         ImGuiWindow *panel = ImGui::FindWindowByName("Test Flow");
         IM_CHECK(panel == nullptr || !panel->Active);
+    };
+    t = IM_REGISTER_TEST(
+        e, "rf_simulator",
+        "receiver_requirements_view_updates_shared_analyzer_with_either_panel_visible");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *existing = ImGui::FindWindowByName("Receiver Requirements");
+        if (existing && existing->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+
+        // This click intentionally precedes all graph mutations: before the
+        // feature exists, the missing menu item is the behavioral RED.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        ImGuiWindow *opened = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(opened != nullptr && opened->Active);
+        if (!opened || !opened->Active)
+            return;
+
+        auto &na = s_app->testNetworkAnalyzerEngine();
+        IComponentEngine *generator = s_app->testCreateComponent("generator", 9001);
+        IComponentEngine *attenuator = s_app->testCreateComponent("attenuator", 9002);
+        IM_CHECK(generator != nullptr);
+        IM_CHECK(attenuator != nullptr);
+        if (!generator || !attenuator)
+            return;
+        const auto &graph = s_app->testGraphEngine();
+        const int generator_out = generator->outputPinId();
+        const int attenuator_in = attenuator->inputPinId(0);
+        const int attenuator_out = attenuator->outputPinId();
+        IM_CHECK(generator_out >= 0);
+        IM_CHECK(attenuator_in >= 0);
+        IM_CHECK(attenuator_out >= 0);
+        const auto link = s_app->testConnectLink(generator_out, attenuator_in);
+        IM_CHECK(link.has_value());
+        na.setPointA(generator_out);
+        na.setPointB(attenuator_out);
+        na.setStartFrequency(1.0e6);
+        na.setStopFrequency(10.0e6);
+        na.setPoints(21);
+        s_app->m_show_na = false;
+        ctx->Yield(4);
+        const auto finite = [](const std::vector<double> &values) {
+            return !values.empty() && std::all_of(values.begin(), values.end(), [](double value) {
+                return std::isfinite(value);
+            });
+        };
+        IM_CHECK_EQ(na.sweepFrequencies().size(), 21);
+        IM_CHECK_EQ(na.gainDb().size(), 21);
+        IM_CHECK_EQ(na.noiseFigureDb().size(), 21);
+        IM_CHECK(finite(na.gainDb()));
+        IM_CHECK(finite(na.noiseFigureDb()));
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        na.setPoints(11);
+        s_app->m_show_na = true;
+        ctx->Yield(4);
+        IM_CHECK_EQ(na.sweepFrequencies().size(), 11);
+        IM_CHECK_EQ(na.gainDb().size(), 11);
+        IM_CHECK_EQ(na.noiseFigureDb().size(), 11);
+        IM_CHECK(finite(na.gainDb()));
+        IM_CHECK(finite(na.noiseFigureDb()));
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Network Analyzer");
+        ctx->SetRef("");
+        s_app->m_show_na = false;
+        s_app->testRemoveComponent(attenuator->graphNodeId());
+        s_app->testRemoveComponent(generator->graphNodeId());
+        na.setPointA(-1);
+        na.setPointB(-1);
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_editor_applies_only_complete_valid_values");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+        auto &state = s_app->testReceiverRequirementsState();
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemInputValue("Band start (Hz)", "2000000");
+        ctx->ItemInputValue("Band stop (Hz)", "1000000");
+        ctx->ItemInputValue("Gain min (dB)", "-3");
+        ctx->ItemInputValue("Gain max (dB)", "3");
+        ctx->ItemInputValue("NF max (dB)", "5");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(!state.config.has_value());
+        IM_CHECK(!s_app->isDirty());
+
+        ctx->ItemInputValue("Band start (Hz)", "1000000");
+        ctx->ItemInputValue("Band stop (Hz)", "10000000");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        IM_CHECK(s_app->m_show_receiver_requirements);
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
+            IM_CHECK_EQ(state.config->band_stop_Hz, 1.0e7);
+            IM_CHECK_EQ(state.config->gain_min_dB, -3.0);
+            IM_CHECK_EQ(state.config->gain_max_dB, 3.0);
+            IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
+        }
+        IM_CHECK(s_app->isDirty());
+
+        state.config.reset();
+        state.invalid_reason = "malformed project data";
+        s_app->m_dirty = false;
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemInputValue("Band start (Hz)", "1000000");
+        ctx->ItemInputValue("Band stop (Hz)", "10000000");
+        ctx->ItemInputValue("Gain min (dB)", "-3");
+        ctx->ItemInputValue("Gain max (dB)", "3");
+        ctx->ItemInputValue("NF max (dB)", "5");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        IM_CHECK(state.invalid_reason.empty());
+        IM_CHECK(s_app->isDirty());
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
     };
 }

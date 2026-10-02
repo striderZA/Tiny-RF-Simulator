@@ -386,3 +386,16 @@ add_standalone_test(test_graph_editor_actions
     SOURCES test_graph_editor_actions.cpp
     LIBS simulator::app
 )
+
+# Standalone UI-free validator/evaluator and draft-application coverage.
+add_standalone_test(test_receiver_requirements
+    SOURCES test_receiver_requirements.cpp
+    LIBS simulator::app
+)
+# Standalone app/serializer persistence coverage; kept outside tests.exe for
+# the MinGW-w64 registration ceiling.
+add_standalone_test(test_receiver_requirements_project
+    SOURCES test_receiver_requirements_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_receiver_requirements_project PROPERTIES RUN_SERIAL TRUE)
