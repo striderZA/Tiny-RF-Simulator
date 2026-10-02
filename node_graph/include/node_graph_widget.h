@@ -24,20 +24,28 @@ struct NodeHoverInfo {
     std::optional<double> snr_dB;
 };
 
+struct NodeGraphWidgetActions {
+    std::function<std::optional<int>(int, int)> connectLink;
+    std::function<bool(int)> disconnectLink;
+    std::function<bool(int)> removeComponent;
+    std::function<bool(int)> duplicateComponent;
+    std::function<bool(int)> addProbePin;
+    std::function<bool(int)> removeProbePin;
+    std::function<int(std::string, std::vector<int>)> createGroup;
+    std::function<bool(int)> removeGroup;
+    std::function<bool(int, std::string)> renameGroup;
+    std::function<bool(int, bool)> setGroupCollapsed;
+    std::function<void(int)> selectGroup;
+};
+
 class NodeGraphWidget {
   public:
-    NodeGraphWidget(NodeGraphEngine &engine);
+    NodeGraphWidget(const NodeGraphEngine &engine, NodeGraphWidgetActions actions);
     ~NodeGraphWidget();
 
     void draw(const char *title, bool *p_open = nullptr);
 
-    // Callbacks for app to create/destroy components
     std::function<void()> onNodeMoved;
-    std::function<void(int node_id)> onRemoveNode;
-    std::function<void(int node_id)> onDuplicateNode;
-    std::function<void()> onLinkChanged;
-    // Return false to reject a user-created link before it reaches the topology engine.
-    std::function<bool(int start_pin_id, int end_pin_id)> onLinkCreating;
     std::function<NodeHoverInfo(int graph_node_id)> onNodeHover;
 
     // Data-driven canvas menu: app populates from ComponentTypeRegistry.
@@ -86,7 +94,8 @@ class NodeGraphWidget {
     }
 
   private:
-    NodeGraphEngine &m_engine;
+    const NodeGraphEngine &m_engine;
+    NodeGraphWidgetActions m_actions;
     ImNodesEditorContext *m_context;
 
     // Interaction state tracking
@@ -108,9 +117,8 @@ class NodeGraphWidget {
     void handleLinkDeletion();
     void handleNodeDeletion();
     void handleProbeClick();
-    // Removes a link from the engine and performs the follow-up the editor
-    // needs: group boundary-pin rebuild + onLinkChanged notification.
-    void removeLinkFromEngine(int link_id);
+    // Link mutation and boundary refresh are delegated to the action bundle.
+    void removeLink(int link_id);
 
     // Subcircuit state
     std::unordered_map<int, int> m_synth_pin_to_real_pin; // rebuilt every frame
@@ -153,7 +161,7 @@ class NodeGraphWidget {
     void rebuildSynthMaps();
     void drawGroupBackgrounds();
     void drawGroupCollapsedBlocks();
-    void drawGroupTitleBar(Group &g, const ImVec2 &top_left);
+    void drawGroupTitleBar(const Group &g, const ImVec2 &top_left);
 
     // Theme & symbol drawing
     void setupDarkTheme();

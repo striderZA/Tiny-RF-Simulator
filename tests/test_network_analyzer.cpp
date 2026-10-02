@@ -627,10 +627,10 @@ struct ImGuiFixture {
 TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: app scratch adapter measures switch COM output",
                  "[network_analyzer][app]") {
     RfSimulatorApp app;
-    auto &graph = app.testGraphEngine();
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, graph);
-    auto &sw = app.testComponents().add<RFSwitch2to1Engine>(10002, graph);
-    graph.addLink(gen.outputPinId(), sw.inputPinId(0));
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &sw =
+        static_cast<RFSwitch2to1Engine &>(*app.testCreateComponent("rf_switch_spdt_2to1", 10002));
+    REQUIRE(app.testConnectLink(gen.outputPinId(), sw.inputPinId(0)).has_value());
 
     auto &na = app.testNetworkAnalyzerEngine();
     na.setStartFrequency(1e9);

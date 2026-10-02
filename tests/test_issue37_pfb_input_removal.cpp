@@ -1,19 +1,15 @@
 // Regression test for GitHub issue #37:
 // "Segmentation Fault when removing PFB Channelizer input"
 //
-// Root cause: NodeGraphWidget::onRemoveNode (app.cpp) destroys the removed
-// component's engine (and its owned SignalNode/Spectrum outputs) synchronously
-// mid-frame, inside draw_ui(). Downstream components that had wired
-// node().inputs[k] to point at the removed engine's Spectrum output were only
-// re-wired at the *start* of update_dsp(), which does not run again until the
-// next frame. Any widget that dereferences node().inputs[] directly while
-// drawing later in the same frame (PFBChannelizerWidget::draw()/rebuildCache())
-// therefore used a dangling pointer into freed memory -> segfault.
+// Root cause: removing a component destroys its engine and owned SignalNode/Spectrum
+// outputs synchronously mid-frame. Downstream inputs were only rewired at the start
+// of update_dsp(), before the current frame's panels finished drawing, so a widget
+// dereferencing node().inputs[] could observe a dangling pointer.
 //
-// Fix: RfSimulatorApp::onRemoveNode now calls the new rewireInputs() helper
-// immediately after ComponentRegistry::remove(), so every surviving
-// component's node().inputs[] reflects the current graph topology (nulled out
-// for any severed source) before draw_ui() continues rendering widgets.
+// Fix: CircuitRuntime::removeComponent() rewires surviving inputs immediately after
+// registry removal. The app's shared removal action then rebuilds PFB views and group
+// boundaries before drawing continues, preventing later panels from using stale
+// Spectrum pointers.
 #include "adc_engine.h"
 #include "app.h"
 #include "imgui.h"
@@ -43,24 +39,20 @@ TEST_CASE_METHOD(ImGuiFixture,
     RfSimulatorApp app;
     app.newProject(); // start from an empty graph
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &adc = app.testComponents().add<AdcEngine>(10002, app.testGraphEngine());
-    auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10003, app.testGraphEngine());
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &adc = static_cast<AdcEngine &>(*app.testCreateComponent("adc", 10002));
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10003));
 
-    app.testGraphEngine().addLink(gen.outputPinId(), adc.inputPinId());
-    app.testGraphEngine().addLink(adc.outputPinId(), pfb.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), adc.inputPinId()).has_value());
+    REQUIRE(app.testConnectLink(adc.outputPinId(), pfb.inputPinId()).has_value());
 
     // Normal frame: wires PFB's input to the ADC's output Spectrum.
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == &adc.node().outputs[0]);
 
     int adc_graph_id = adc.graphNodeId();
-    REQUIRE(app.testGraphWidget().onRemoveNode);
-
-    // Simulate the user deleting the ADC node mid-frame (as the node graph
-    // widget's context menu / Delete key / InspectorPanel "Delete" button do),
-    // which synchronously destroys the AdcEngine and its owned SignalNode.
-    app.testGraphWidget().onRemoveNode(adc_graph_id);
+    // Simulate deleting the ADC through the app's fixture command.
+    REQUIRE(app.testRemoveComponent(adc_graph_id));
 
     // The ADC engine (and the Spectrum object pfb.node().inputs[0] pointed at)
     // has now been freed. Without the fix this pointer would still be

@@ -62,7 +62,7 @@ void NodeGraphWidget::drawGroupBackgrounds() {
         dl->AddRect(tl_screen, br_screen, IM_COL32(120, 120, 180, 96));
 
         // Title bar at the top of the rectangle (in screen space)
-        drawGroupTitleBar(const_cast<Group &>(g), top_left);
+        drawGroupTitleBar(g, top_left);
     }
 }
 
@@ -160,16 +160,16 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
         ImGui::Dummy(ImVec2(0, 4)); // small vertical spacer
         if (ImGui::Button("Expand", ImVec2(120, 0))) {
-            m_engine.setGroupCollapsed(g.id, false);
+            if (m_actions.setGroupCollapsed)
+                m_actions.setGroupCollapsed(g.id, false);
         }
-
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
     }
 }
 
-void NodeGraphWidget::drawGroupTitleBar(Group &g, const ImVec2 &top_left_screen) {
+void NodeGraphWidget::drawGroupTitleBar(const Group &g, const ImVec2 &top_left_screen) {
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 tl_screen = top_left_screen - ImVec2(16, 16);
     ImVec2 br_screen = top_left_screen + ImVec2(180, 8);
@@ -194,10 +194,10 @@ void NodeGraphWidget::drawGroupTitleBar(Group &g, const ImVec2 &top_left_screen)
 
     // Hit-test the button
     if (ImGui::IsMouseClicked(0) && btn_hovered) {
-        m_engine.setGroupCollapsed(g.id, true);
+        if (m_actions.setGroupCollapsed)
+            m_actions.setGroupCollapsed(g.id, true);
     }
 }
-
 void NodeGraphWidget::detectNodeMoves() {
     // Require BOTH a mouse release AND an actual position change.
     // This prevents false positives: clicking menu items won't trigger,
@@ -288,11 +288,13 @@ void NodeGraphWidget::handleGroupSelection() {
     if (ImGui::IsMouseClicked(0) && ImNodes::IsNodeHovered(&hovered_node)) {
         if (hovered_node >= 50000 && hovered_node < 100000) {
             // It's a group
-            m_engine.setSelectedGroupId(hovered_node);
+            if (m_actions.selectGroup)
+                m_actions.selectGroup(hovered_node);
             ImNodes::ClearNodeSelection();
         } else {
             // It's a regular node; deselect any group
-            m_engine.setSelectedGroupId(-1);
+            if (m_actions.selectGroup)
+                m_actions.selectGroup(-1);
         }
     }
     if (ImGui::IsMouseClicked(0)) {
@@ -302,7 +304,8 @@ void NodeGraphWidget::handleGroupSelection() {
         int link_id = -1;
         bool link_hovered = ImNodes::IsLinkHovered(&link_id);
         if (editor_hovered && !node_hovered && !link_hovered) {
-            m_engine.setSelectedGroupId(-1);
+            if (m_actions.selectGroup)
+                m_actions.selectGroup(-1);
         }
     }
 }

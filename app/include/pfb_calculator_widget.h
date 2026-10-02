@@ -16,7 +16,7 @@ struct ImVec2;
 // pfb_channelizer core (PfbFilterDesign); this widget only binds/renders.
 class PfbCalculatorWidget {
   public:
-    PfbCalculatorWidget(ComponentRegistry &components);
+    PfbCalculatorWidget(const ComponentRegistry &components);
     void draw(const char *title, bool *p_open = nullptr);
     std::function<void()> onParamChange; // fired after Apply writes engine params
 
@@ -27,7 +27,7 @@ class PfbCalculatorWidget {
     void drawPlot(ImDrawList *dl, const ImVec2 &origin, float w, float h,
                   const std::vector<float> &db, double y_min, double y_max);
 
-    ComponentRegistry *m_components;
+    const ComponentRegistry *m_components;
     int m_M = 32;
     int m_K = 8;
     float m_beta = 8.0f; // float for ImGui::SliderFloat

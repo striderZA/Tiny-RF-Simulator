@@ -36,30 +36,28 @@ TEST_CASE_METHOD(Issue70ImGuiFixture, "PFB enforces ADC-only input across reconn
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
     gen.addTone(100e6, -20.0);
-    auto &adc = app.testComponents().add<AdcEngine>(10002, app.testGraphEngine());
-    auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10003, app.testGraphEngine());
+    auto &adc = static_cast<AdcEngine &>(*app.testCreateComponent("adc", 10002));
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10003));
 
-    REQUIRE(app.testGraphWidget().onLinkCreating);
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), pfb.inputPinId()));
+    REQUIRE_FALSE(app.testConnectLink(gen.outputPinId(), pfb.inputPinId()).has_value());
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == nullptr);
     REQUIRE(pfb.fs_Hz() == 0.0);
     REQUIRE(pfb.node().outputs[0].frequencies.empty());
 
-    app.testGraphEngine().addLink(gen.outputPinId(), adc.inputPinId());
-    app.testGraphEngine().addLink(adc.outputPinId(), pfb.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), adc.inputPinId()).has_value());
+    REQUIRE(app.testConnectLink(adc.outputPinId(), pfb.inputPinId()).has_value());
     app.update_dsp();
     REQUIRE(pfb.fs_Hz() == Catch::Approx(500e6));
     REQUIRE_FALSE(pfb.node().outputs[0].frequencies.empty());
 
-    REQUIRE(app.testGraphWidget().onRemoveNode);
-    app.testGraphWidget().onRemoveNode(adc.graphNodeId());
+    REQUIRE(app.testRemoveComponent(adc.graphNodeId()));
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == nullptr);
 
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), pfb.inputPinId()));
+    REQUIRE_FALSE(app.testConnectLink(gen.outputPinId(), pfb.inputPinId()).has_value());
     app.update_dsp();
     REQUIRE(pfb.node().inputs[0] == nullptr);
     REQUIRE(pfb.fs_Hz() == 0.0);

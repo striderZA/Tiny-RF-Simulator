@@ -6,7 +6,7 @@ class NodeGraphEngine;
 
 class PowerMeterWidget {
   public:
-    PowerMeterWidget(PowerMeterEngine &engine, NodeGraphEngine &graph);
+    PowerMeterWidget(PowerMeterEngine &engine, const NodeGraphEngine &graph);
 
     void draw(const char *title, bool *p_open = nullptr);
     int sourcePin() const { return m_source_pin; }
@@ -15,6 +15,6 @@ class PowerMeterWidget {
 
   private:
     PowerMeterEngine &m_engine;
-    NodeGraphEngine &m_graph;
+    const NodeGraphEngine &m_graph;
     int m_source_pin = -1;
 };

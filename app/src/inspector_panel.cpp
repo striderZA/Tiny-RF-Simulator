@@ -24,8 +24,9 @@
 
 #include "component_registry.h"
 
-InspectorPanel::InspectorPanel(NodeGraphEngine &graph, ComponentRegistry &components)
-    : m_graph(graph), m_components(&components) {}
+InspectorPanel::InspectorPanel(const NodeGraphEngine &graph, const ComponentRegistry &components,
+                               GraphEditorActions &editor_actions)
+    : m_graph(graph), m_components(&components), m_editor_actions(editor_actions) {}
 
 namespace {
 
@@ -137,10 +138,13 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         ImGui::End();
         return;
     }
+    m_param_edited = false;
 
-    int gid = m_graph.selectedGroupId();
+    const int gid = m_graph.selectedGroupId();
     if (gid >= 0) {
         drawGroupPanel(gid);
+        if (m_param_edited && onParamChange)
+            onParamChange();
         ImGui::End();
         return;
     }
@@ -781,7 +785,7 @@ void InspectorPanel::drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int 
 void InspectorPanel::drawGroupPanel(int group_id) {
     const Group *g = m_graph.groupById(group_id);
     if (!g) {
-        m_graph.setSelectedGroupId(-1);
+        m_editor_actions.selectGroup(-1);
         return;
     }
 
@@ -795,8 +799,8 @@ void InspectorPanel::drawGroupPanel(int group_id) {
 
     ImGui::InputText("Name", name_buf, sizeof(name_buf));
     if (ImGui::IsItemDeactivatedAfterEdit()) {
-        m_graph.renameGroup(group_id, name_buf);
-        m_param_edited = true;
+        if (m_editor_actions.renameGroup(group_id, name_buf))
+            m_param_edited = true;
     }
 
     ImGui::Separator();
@@ -825,12 +829,12 @@ void InspectorPanel::drawGroupPanel(int group_id) {
 
     ImGui::Separator();
     if (ImGui::Button("Ungroup")) {
-        m_graph.removeGroup(group_id);
-        last_gid = -1;
-        m_param_edited = true;
+        if (m_editor_actions.removeGroup(group_id)) {
+            last_gid = -1;
+            m_param_edited = true;
+        }
     }
 }
-
 void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
     int M = engine.channelCount();
     int K = engine.tapsPerBranch();

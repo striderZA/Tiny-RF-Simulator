@@ -94,10 +94,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // The plot only exists when at least one pin is probed (the widget
         // early-returns on an empty trace list), so probe the seeded
         // generator's output for the duration of this test.
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         int gen_out = graph.outputPinId(1);
         IM_CHECK(gen_out >= 0);
-        IM_CHECK(graph.addProbePin(gen_out));
+        IM_CHECK(s_app->testAddProbePin(gen_out));
         s_app->m_show_spectrum = true;
         ctx->Yield(3);
 
@@ -160,7 +160,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
         IM_CHECK(ctx->GetWindowByRef("Spectrum Analyzer")->Size.y <= 241.0f);
 
-        IM_CHECK(graph.removeProbePin(gen_out));
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
         ctx->Yield(2);
     };
 
@@ -178,14 +178,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
 
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         size_t initial_links = graph.links().size();
         int gen_out = graph.outputPinId(1);
         int amp_in = graph.inputPinId(2);
         IM_CHECK(gen_out >= 0);
         IM_CHECK(amp_in >= 0);
-        int link_id = graph.addLink(gen_out, amp_in);
-        IM_CHECK(link_id >= 0);
+        const auto link = s_app->testConnectLink(gen_out, amp_in);
+        IM_CHECK(link.has_value());
+        const int link_id = link.value_or(-1);
         IM_CHECK_EQ(graph.links().size(), initial_links + 1);
 
         ctx->Yield(4); // let imnodes draw + register the new link
@@ -214,7 +215,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
 
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         size_t initial_links = graph.links().size();
         int gen_out = graph.outputPinId(1);
         int amp_in = graph.inputPinId(2);
@@ -235,8 +236,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImNodes::SetNodeScreenSpacePos(2, ImVec2(anchor_x + 140.0f, anchor_y + 40.0f));
         ctx->Yield(4);
 
-        int link_id = graph.addLink(gen_out, amp_in);
-        IM_CHECK(link_id >= 0);
+        const auto created_link = s_app->testConnectLink(gen_out, amp_in);
+        IM_CHECK(created_link.has_value());
+        const int link_id = created_link.value_or(-1);
         IM_CHECK_EQ(graph.links().size(), initial_links + 1);
         ctx->Yield(4); // let imnodes draw the link
 
@@ -341,7 +343,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
 
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         const int gen_node = NodeHelper::findComponentNodeId<SignalGeneratorEngine>(*s_app);
         const int amp_node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
         IM_CHECK(gen_node >= 0);
@@ -404,8 +406,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // -- link: the drawn link is a bezier between the two nodes' pins, which
         //    sit below the middle of each node rect, so sweep the gap between the
         //    node rects from the bottom row upwards - the first row usually hits --
-        const int link_id = graph.addLink(gen_out, amp_in);
-        IM_CHECK(link_id >= 0);
+        const auto created_link = s_app->testConnectLink(gen_out, amp_in);
+        IM_CHECK(created_link.has_value());
+        const int link_id = created_link.value_or(-1);
         ctx->Yield(4);
         ImVec2 c1 =
             ImNodes::GetNodeScreenSpacePos(gen_node) + ImNodes::GetNodeDimensions(gen_node) * 0.5f;
@@ -425,13 +428,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
         IM_CHECK(tooltip_visible());
 
-        graph.removeLink(link_id);
+        IM_CHECK(s_app->testDisconnectLink(link_id));
         ctx->Yield(2);
 
         // -- collapsed subcircuit block (block ids live in 50000..99999) --
-        const int group_id = graph.addGroup("Tooltip Subcircuit", {gen_node, amp_node});
+        const int group_id = s_app->testCreateGroup("Tooltip Subcircuit", {gen_node, amp_node});
         IM_CHECK(group_id > 0);
-        graph.setGroupCollapsed(group_id, true);
+        IM_CHECK(s_app->testSetGroupCollapsed(group_id, true));
         ctx->Yield(4);
         // The link was removed above, so this block has no cross-boundary link —
         // the case where Ctrl+click has nothing to probe and the tooltip must not
@@ -444,7 +447,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
         IM_CHECK(tooltip_visible());
 
-        graph.removeGroup(group_id);
+        IM_CHECK(s_app->testRemoveGroup(group_id));
         ctx->Yield(2);
 
         // Restore the seeded nodes to their default origin positions so the
@@ -650,25 +653,26 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_valid_generator_to_amplifier");
     t->TestFunc = [](ImGuiTestContext *ctx) {
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         size_t initial_links = graph.links().size();
         int gen_out = graph.outputPinId(1);
         int amp_in = graph.inputPinId(2);
         IM_CHECK(gen_out >= 0);
         IM_CHECK(amp_in >= 0);
-        int link_id = graph.addLink(gen_out, amp_in);
-        IM_CHECK(link_id >= 0);
+        const auto link = s_app->testConnectLink(gen_out, amp_in);
+        IM_CHECK(link.has_value());
+        const int link_id = link.value_or(-1);
         IM_CHECK_EQ(graph.links().size(), initial_links + 1);
-        const auto &link = graph.links().back();
-        IM_CHECK_EQ(link.start_pin_id, gen_out);
-        IM_CHECK_EQ(link.end_pin_id, amp_in);
-        graph.removeLink(link_id);
+        const auto &created = graph.links().back();
+        IM_CHECK_EQ(created.start_pin_id, gen_out);
+        IM_CHECK_EQ(created.end_pin_id, amp_in);
+        IM_CHECK(s_app->testDisconnectLink(link_id));
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_multi_fanout");
     t->TestFunc = [](ImGuiTestContext *ctx) {
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         size_t initial_links = graph.links().size();
         int split_out = graph.outputPinId(3);
         int amp_in = graph.inputPinId(2);
@@ -676,25 +680,26 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(split_out >= 0);
         IM_CHECK(amp_in >= 0);
         IM_CHECK(mixer_in >= 0);
-        int link1 = graph.addLink(split_out, amp_in);
-        int link2 = graph.addLink(split_out, mixer_in);
-        IM_CHECK(link1 >= 0);
-        IM_CHECK(link2 >= 0);
+        const auto link1 = s_app->testConnectLink(split_out, amp_in);
+        const auto link2 = s_app->testConnectLink(split_out, mixer_in);
+        IM_CHECK(link1.has_value());
+        IM_CHECK(link2.has_value());
         IM_CHECK_EQ(graph.links().size(), initial_links + 2);
-        graph.removeLink(link1);
-        graph.removeLink(link2);
+        IM_CHECK(s_app->testDisconnectLink(link1.value_or(-1)));
+        IM_CHECK(s_app->testDisconnectLink(link2.value_or(-1)));
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_delete");
     t->TestFunc = [](ImGuiTestContext *ctx) {
-        auto &graph = s_app->testGraphEngine();
+        const auto &graph = s_app->testGraphEngine();
         size_t initial_links = graph.links().size();
         int gen_out = graph.outputPinId(1);
         int amp_in = graph.inputPinId(2);
-        int link_id = graph.addLink(gen_out, amp_in);
+        const auto link = s_app->testConnectLink(gen_out, amp_in);
+        IM_CHECK(link.has_value());
         IM_CHECK_EQ(graph.links().size(), initial_links + 1);
-        graph.removeLink(link_id);
+        IM_CHECK(s_app->testDisconnectLink(link.value_or(-1)));
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
 
@@ -707,60 +712,67 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_output_to_output_accepted");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Documents: Engine currently accepts output→output connections (no validation)
-        auto &graph = s_app->testGraphEngine();
-        size_t initial_links = graph.links().size();
-        int amp_out = graph.outputPinId(2);
-        int gen_out = graph.outputPinId(1);
+        NodeGraphEngine graph;
+        SignalNode amp_node, generator_node;
+        const int amp_id = graph.addNode("Amplifier", &amp_node, 1, 1);
+        const int generator_id = graph.addNode("Generator", &generator_node, 1, 1);
+        const int amp_out = graph.outputPinId(amp_id);
+        const int generator_out = graph.outputPinId(generator_id);
         IM_CHECK(amp_out >= 0);
-        IM_CHECK(gen_out >= 0);
-        int link_id = graph.addLink(amp_out, gen_out);
+        IM_CHECK(generator_out >= 0);
+        const int link_id = graph.addLink(amp_out, generator_out);
         IM_CHECK(link_id >= 0);
-        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        IM_CHECK_EQ(graph.links().size(), 1);
         graph.removeLink(link_id);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_input_to_input_accepted");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Documents: Engine currently accepts input→input connections (no validation)
-        auto &graph = s_app->testGraphEngine();
-        size_t initial_links = graph.links().size();
-        int amp_in = graph.inputPinId(2);
-        int splitter_in = graph.inputPinId(3);
-        IM_CHECK(amp_in >= 0);
+        NodeGraphEngine graph;
+        SignalNode amplifier_node, splitter_node;
+        const int amplifier_id = graph.addNode("Amplifier", &amplifier_node, 1, 1);
+        const int splitter_id = graph.addNode("Splitter", &splitter_node, 1, 1);
+        const int amplifier_in = graph.inputPinId(amplifier_id);
+        const int splitter_in = graph.inputPinId(splitter_id);
+        IM_CHECK(amplifier_in >= 0);
         IM_CHECK(splitter_in >= 0);
-        int link_id = graph.addLink(amp_in, splitter_in);
+        const int link_id = graph.addLink(amplifier_in, splitter_in);
         IM_CHECK(link_id >= 0);
-        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        IM_CHECK_EQ(graph.links().size(), 1);
         graph.removeLink(link_id);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_self_loop_accepted");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Documents: Engine currently accepts self-loops (no validation)
-        auto &graph = s_app->testGraphEngine();
-        size_t initial_links = graph.links().size();
-        int amp_out = graph.outputPinId(2);
-        int amp_in = graph.inputPinId(2);
+        NodeGraphEngine graph;
+        SignalNode amplifier_node;
+        const int amplifier_id = graph.addNode("Amplifier", &amplifier_node, 1, 1);
+        const int amp_out = graph.outputPinId(amplifier_id);
+        const int amp_in = graph.inputPinId(amplifier_id);
         IM_CHECK(amp_out >= 0);
         IM_CHECK(amp_in >= 0);
-        int link_id = graph.addLink(amp_out, amp_in);
+        const int link_id = graph.addLink(amp_out, amp_in);
         IM_CHECK(link_id >= 0);
-        IM_CHECK_EQ(graph.links().size(), initial_links + 1);
+        IM_CHECK_EQ(graph.links().size(), 1);
         graph.removeLink(link_id);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_duplicate_accepted");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         // Documents: Engine currently creates duplicate links (no deduplication)
-        auto &graph = s_app->testGraphEngine();
-        size_t initial_links = graph.links().size();
-        int gen_out = graph.outputPinId(1);
-        int amp_in = graph.inputPinId(2);
-        int link1 = graph.addLink(gen_out, amp_in);
-        int link2 = graph.addLink(gen_out, amp_in);
+        NodeGraphEngine graph;
+        SignalNode generator_node, amplifier_node;
+        const int generator_id = graph.addNode("Generator", &generator_node, 0, 1);
+        const int amplifier_id = graph.addNode("Amplifier", &amplifier_node, 1, 1);
+        const int gen_out = graph.outputPinId(generator_id);
+        const int amp_in = graph.inputPinId(amplifier_id);
+        const int link1 = graph.addLink(gen_out, amp_in);
+        const int link2 = graph.addLink(gen_out, amp_in);
         IM_CHECK(link1 >= 0);
         IM_CHECK(link2 >= 0);
-        IM_CHECK_EQ(graph.links().size(), initial_links + 2);
+        IM_CHECK_EQ(graph.links().size(), 2);
         graph.removeLink(link1);
         graph.removeLink(link2);
     };

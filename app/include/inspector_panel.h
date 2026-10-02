@@ -2,6 +2,7 @@
 
 #include "component_interface.h"
 #include "component_type_registry.h"
+#include "graph_editor_actions.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include <functional>
@@ -34,7 +35,8 @@ struct ViewToggles {
 
 class InspectorPanel {
   public:
-    explicit InspectorPanel(NodeGraphEngine &graph, ComponentRegistry &components);
+    InspectorPanel(const NodeGraphEngine &graph, const ComponentRegistry &components,
+                   GraphEditorActions &editor_actions);
 
     void draw(const char *title, bool *p_open = nullptr);
     void setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs) {
@@ -90,8 +92,9 @@ class InspectorPanel {
     void drawGroupPanel(int group_id);
 
   private:
-    NodeGraphEngine &m_graph;
-    ComponentRegistry *m_components = nullptr;
+    const NodeGraphEngine &m_graph;
+    const ComponentRegistry *m_components = nullptr;
+    GraphEditorActions &m_editor_actions;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     int m_selected_pfb_index = 0;
     // Graph-selected PFB id that the combo selection is anchored to; -1 means

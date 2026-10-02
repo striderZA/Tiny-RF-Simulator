@@ -51,17 +51,18 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: SPDT switch params and its T2 link s
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-        auto &sw = app.testComponents().add<RFSwitchEngine>(10002, app.testGraphEngine());
-        auto &att = app.testComponents().add<AttenuatorEngine>(10003, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+        auto &sw = static_cast<RFSwitchEngine &>(*app.testCreateComponent("rf_switch_spdt", 10002));
+        auto &att = static_cast<AttenuatorEngine &>(*app.testCreateComponent("attenuator", 10003));
 
         sw.setActiveThrow(1); // T2 active
         sw.setInsertionLoss_dB(1.25);
         sw.setIsolation_dB(55.0);
         gen.addTone(100e6, -20.0);
 
-        app.testGraphEngine().addLink(gen.outputPinId(), sw.inputPinId());
-        app.testGraphEngine().addLink(sw.outputPinId(1), att.inputPinId());
+        REQUIRE(app.testConnectLink(gen.outputPinId(), sw.inputPinId()).has_value());
+        REQUIRE(app.testConnectLink(sw.outputPinId(1), att.inputPinId()).has_value());
 
         app.saveProject(path);
     }

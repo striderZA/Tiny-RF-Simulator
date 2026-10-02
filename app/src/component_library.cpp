@@ -6,12 +6,13 @@
 #include <filesystem>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <system_error>
 
 #include "amplifier_engine.h"
+#include "circuit_runtime.h"
 #include "component_interface.h"
-#include "component_registry.h"
-#include "node_graph_engine.h"
+#include "graph_editor_actions.h"
 #include <fstream>
 
 namespace {
@@ -376,9 +377,9 @@ std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::str
     return result;
 }
 
-IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, int id,
-                                                ComponentRegistry &registry,
-                                                NodeGraphEngine &graph) {
+IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
+                                                CircuitRuntime &runtime,
+                                                GraphEditorActions &editor_actions) {
     const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
     if (!descriptor) {
         LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
@@ -397,13 +398,13 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, 
         return nullptr;
     }
 
-    IComponentEngine *result = descriptor->create(registry, graph, id);
+    IComponentEngine *result = runtime.createComponent(descriptor->create);
     if (!result)
         return nullptr;
 
-    // The engine is registered in the registry and node graph from create();
-    // any failure below rolls it back so no partially configured component
-    // survives and no exception escapes to the caller.
+    // The runtime factory registers the engine in its owned registry and graph;
+    // any failure below rolls it back through runtime removal so no partial
+    // component survives and no post-creation exception escapes to the caller.
     try {
         const std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
         // Issue #79: path-bearing *parameters* are resolved against the library
@@ -455,8 +456,9 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, 
             }
         }
 
-        if (!def.part_number.empty())
-            graph.setNodePartNumber(result->graphNodeId(), def.part_number);
+        if (!def.part_number.empty() &&
+            !editor_actions.setNodePartNumber(result->graphNodeId(), def.part_number))
+            throw std::logic_error("failed to set component part number");
     } catch (const std::exception &e) {
         // A definition that passes field validation can still trip an engine
         // deserialize() on an engine-state key the library schema does not
@@ -464,7 +466,7 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def, 
         LOG_WARN("ComponentLibrary: failed to instantiate '%s' (%s): %s", def.part_number.c_str(),
                  def.type.c_str(), e.what());
         try {
-            registry.remove(result->graphNodeId());
+            runtime.removeComponent(result->graphNodeId());
         } catch (...) {
             // Removal failure must not mask the rollback outcome.
         }

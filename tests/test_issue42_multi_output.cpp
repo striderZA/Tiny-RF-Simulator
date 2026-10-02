@@ -40,7 +40,7 @@ struct ImGuiFixture {
 };
 
 // Find a graph node's pin id by owning SignalNode and port.
-static int outputPinFor(NodeGraphEngine &graph, SignalNode *node, int port) {
+static int outputPinFor(const NodeGraphEngine &graph, SignalNode *node, int port) {
     for (const auto &gn : graph.nodes()) {
         if (gn.signal_node == node && port >= 0 &&
             static_cast<size_t>(port) < gn.output_pin_ids.size())
@@ -54,15 +54,15 @@ TEST_CASE_METHOD(ImGuiFixture, "Splitter OUT2 routes to Combiner IN1 with output
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &splitter = app.testComponents().add<SplitterEngine>(10002, app.testGraphEngine());
-    auto &combiner = app.testComponents().add<CombinerEngine>(10003, app.testGraphEngine());
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &splitter = static_cast<SplitterEngine &>(*app.testCreateComponent("splitter", 10002));
+    auto &combiner = static_cast<CombinerEngine &>(*app.testCreateComponent("combiner", 10003));
 
     gen.addTone(100e6, -20.0);
 
-    app.testGraphEngine().addLink(gen.outputPinId(), splitter.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), splitter.inputPinId()).has_value());
     // Splitter OUT2 -> Combiner IN1 (second input port)
-    app.testGraphEngine().addLink(splitter.outputPinId(1), combiner.inputPinId(1));
+    REQUIRE(app.testConnectLink(splitter.outputPinId(1), combiner.inputPinId(1)).has_value());
 
     app.update_dsp();
 
@@ -84,14 +84,14 @@ TEST_CASE_METHOD(ImGuiFixture, "Probing Splitter OUT2 resolves output index 1 (i
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &splitter = app.testComponents().add<SplitterEngine>(10002, app.testGraphEngine());
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &splitter = static_cast<SplitterEngine &>(*app.testCreateComponent("splitter", 10002));
 
-    app.testGraphEngine().addLink(gen.outputPinId(), splitter.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), splitter.inputPinId()).has_value());
 
     int out2_pin = splitter.outputPinId(1);
     REQUIRE(out2_pin >= 0);
-    REQUIRE(app.testGraphEngine().addProbePin(out2_pin));
+    REQUIRE(app.testAddProbePin(out2_pin));
 
     app.update_dsp();
 
@@ -109,17 +109,17 @@ TEST_CASE_METHOD(ImGuiFixture, "Probing PFB OUT2 resolves output index 1 (issue 
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &adc = app.testComponents().add<AdcEngine>(10002, app.testGraphEngine());
-    auto &pfb = app.testComponents().add<PFBChannelizerEngine>(10003, app.testGraphEngine());
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &adc = static_cast<AdcEngine &>(*app.testCreateComponent("adc", 10002));
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10003));
 
-    app.testGraphEngine().addLink(gen.outputPinId(), adc.inputPinId());
-    app.testGraphEngine().addLink(adc.outputPinId(), pfb.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), adc.inputPinId()).has_value());
+    REQUIRE(app.testConnectLink(adc.outputPinId(), pfb.inputPinId()).has_value());
 
     // PFB OUT2 = full-band output (outputs[1]).
     int out2_pin = outputPinFor(app.testGraphEngine(), &pfb.node(), 1);
     REQUIRE(out2_pin >= 0);
-    REQUIRE(app.testGraphEngine().addProbePin(out2_pin));
+    REQUIRE(app.testAddProbePin(out2_pin));
 
     app.update_dsp();
 

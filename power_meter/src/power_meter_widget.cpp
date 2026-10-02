@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-PowerMeterWidget::PowerMeterWidget(PowerMeterEngine &engine, NodeGraphEngine &graph)
+PowerMeterWidget::PowerMeterWidget(PowerMeterEngine &engine, const NodeGraphEngine &graph)
     : m_engine(engine), m_graph(graph) {}
 
 void PowerMeterWidget::draw(const char *title, bool *p_open) {

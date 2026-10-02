@@ -18,7 +18,8 @@ constexpr float kPlotBottomReserve = 88.0f;
 constexpr float kMarkerControlsReserve = 44.0f;
 } // namespace
 
-SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm)
+SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine,
+                                               const ViewManager &vm)
     : m_engine(engine), m_view_manager(vm) {}
 
 void SpectrumAnalyzerWidget::setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs) {

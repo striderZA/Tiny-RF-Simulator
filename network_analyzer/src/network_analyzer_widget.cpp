@@ -69,7 +69,8 @@ PlotLimits plotLimitsFor(const std::vector<double> &freqs, const std::vector<dou
 
 } // namespace
 
-NetworkAnalyzerWidget::NetworkAnalyzerWidget(NetworkAnalyzerEngine &engine, NodeGraphEngine &graph)
+NetworkAnalyzerWidget::NetworkAnalyzerWidget(NetworkAnalyzerEngine &engine,
+                                             const NodeGraphEngine &graph)
     : m_engine(engine), m_graph(graph) {}
 
 void NetworkAnalyzerWidget::draw(const char *title, bool *p_open) {

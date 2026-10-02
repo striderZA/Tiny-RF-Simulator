@@ -13,7 +13,8 @@
 #include <tuple>
 #include <unordered_map>
 
-NetworkAnalyzerEngine::NetworkAnalyzerEngine(NodeGraphEngine &graph, INetworkAnalyzerHost &host)
+NetworkAnalyzerEngine::NetworkAnalyzerEngine(const NodeGraphEngine &graph,
+                                             INetworkAnalyzerHost &host)
     : m_graph(graph), m_host(host) {}
 
 void NetworkAnalyzerEngine::setStartFrequency(double hz) {

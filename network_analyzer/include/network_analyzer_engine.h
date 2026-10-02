@@ -65,7 +65,7 @@ class INetworkAnalyzerHost {
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
 class NetworkAnalyzerEngine {
   public:
-    NetworkAnalyzerEngine(NodeGraphEngine &graph, INetworkAnalyzerHost &host);
+    NetworkAnalyzerEngine(const NodeGraphEngine &graph, INetworkAnalyzerHost &host);
 
     void setStartFrequency(double hz);
     void setStopFrequency(double hz);
@@ -111,7 +111,7 @@ class NetworkAnalyzerEngine {
     void deserialize(const nlohmann::json &);
 
   private:
-    NodeGraphEngine &m_graph;
+    const NodeGraphEngine &m_graph;
     INetworkAnalyzerHost &m_host; // resolves live engines + builds clone passes
 
     double m_start_freq = 1e9;

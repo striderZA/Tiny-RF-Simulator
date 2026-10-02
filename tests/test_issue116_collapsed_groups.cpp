@@ -10,6 +10,9 @@
 //   4. the GUI accepted cycles that the test-flow harness rejects.
 #include "amplifier_engine.h"
 #include "app.h"
+#include "circuit_runtime.h"
+#include "component_type_registry.h"
+#include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -17,11 +20,14 @@
 #include "node_graph_widget.h"
 #include "signal_generator_engine.h"
 #include "test_temp_paths.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -96,29 +102,73 @@ TEST_CASE("NodeGraphEngine rejects duplicate input links and cycles", "[issue116
 TEST_CASE_METHOD(ImGuiFixture,
                  "Issue #116: collapsed blocks render and cross-group links are drawn",
                  "[issue116][widget]") {
-    NodeGraphEngine graph;
-    SignalNode a, b, c, d;
-    const int id_a = graph.addNode("A", &a, 1, 1);
-    const int id_b = graph.addNode("B", &b, 1, 1);
-    const int id_c = graph.addNode("C", &c, 1, 1);
-    const int id_d = graph.addNode("D", &d, 1, 1);
+    const auto *generator_factory = ComponentTypeRegistry::instance().find("generator");
+    const auto *amplifier_factory = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(generator_factory != nullptr);
+    REQUIRE(amplifier_factory != nullptr);
+
+    CircuitRuntime runtime;
+    GraphEditorActions editor_actions(runtime);
+    auto *a = runtime.createComponent(generator_factory->create);
+    auto *b = runtime.createComponent(amplifier_factory->create);
+    auto *c = runtime.createComponent(amplifier_factory->create);
+    auto *d = runtime.createComponent(amplifier_factory->create);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(c != nullptr);
+    REQUIRE(d != nullptr);
+    const auto &graph = runtime.graph();
+    const int id_a = a->graphNodeId();
+    const int id_b = b->graphNodeId();
+    const int id_c = c->graphNodeId();
+    const int id_d = d->graphNodeId();
 
     // Two independent groups, expanded for the first frame so the widget caches
     // their members' positions.
-    const int group_a = graph.addGroup("Group A", {id_a, id_b});
-    const int group_b = graph.addGroup("Group B", {id_c, id_d});
-    graph.setGroupCollapsed(group_a, false);
-    graph.setGroupCollapsed(group_b, false);
+    const int group_a = editor_actions.createGroup("Group A", {id_a, id_b});
+    const int group_b = editor_actions.createGroup("Group B", {id_c, id_d});
+    // The groups start expanded, so the widget can snapshot member positions.
 
     // Cross-group link plus an internal link in each group.
-    graph.addLink(graph.nodes()[0].output_pin_ids[0],
-                  graph.nodes()[2].input_pin_ids[0]); // A.out -> C.in
-    graph.addLink(graph.nodes()[0].output_pin_ids[0],
-                  graph.nodes()[1].input_pin_ids[0]); // A.out -> B.in (internal)
-    graph.addLink(graph.nodes()[2].output_pin_ids[0],
-                  graph.nodes()[3].input_pin_ids[0]); // C.out -> D.in (internal)
+    REQUIRE(runtime.connect(graph.nodes()[0].output_pin_ids[0],
+                            graph.nodes()[2].input_pin_ids[0])
+                .has_value()); // A.out -> C.in
+    REQUIRE(runtime.connect(graph.nodes()[0].output_pin_ids[0],
+                            graph.nodes()[1].input_pin_ids[0])
+                .has_value()); // A.out -> B.in (internal)
+    REQUIRE(runtime.connect(graph.nodes()[2].output_pin_ids[0],
+                            graph.nodes()[3].input_pin_ids[0])
+                .has_value()); // C.out -> D.in (internal)
+    editor_actions.topologyChanged();
 
-    NodeGraphWidget widget(graph);
+    const NodeGraphEngine &graph_view = graph;
+    NodeGraphWidgetActions actions;
+    actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
+        auto link_id = runtime.connect(start_pin_id, end_pin_id);
+        if (link_id)
+            editor_actions.topologyChanged();
+        return link_id;
+    };
+    actions.disconnectLink = [&](int link_id) {
+        const bool disconnected = runtime.disconnect(link_id);
+        if (disconnected)
+            editor_actions.topologyChanged();
+        return disconnected;
+    };
+    actions.createGroup = [&](std::string name, std::vector<int> members) {
+        return editor_actions.createGroup(std::move(name), std::move(members));
+    };
+    actions.removeGroup = [&](int group_id) { return editor_actions.removeGroup(group_id); };
+    actions.renameGroup = [&](int group_id, std::string name) {
+        return editor_actions.renameGroup(group_id, std::move(name));
+    };
+    actions.setGroupCollapsed = [&](int group_id, bool collapsed) {
+        return editor_actions.setGroupCollapsed(group_id, collapsed);
+    };
+    actions.selectGroup = [&](int group_id) { editor_actions.selectGroup(group_id); };
+    actions.setGroupCollapsed(group_a, false);
+    actions.setGroupCollapsed(group_b, false);
+    NodeGraphWidget widget(graph_view, actions);
     bool open = true;
 
     ImNodes::EditorContextSet(widget.context());
@@ -135,10 +185,8 @@ TEST_CASE_METHOD(ImGuiFixture,
     ImGui::EndFrame();
 
     // Collapse both groups; the members are no longer drawn.
-    graph.setGroupCollapsed(group_a, true);
-    graph.setGroupCollapsed(group_b, true);
-    graph.rebuildGroupBoundaryPins(group_a);
-    graph.rebuildGroupBoundaryPins(group_b);
+    actions.setGroupCollapsed(group_a, true);
+    actions.setGroupCollapsed(group_b, true);
 
     // Frame 2: both blocks must render from the cached positions, and the
     // A.out -> C.in link must be drawn through both groups' boundary pins.
@@ -158,6 +206,67 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE_FALSE(graph.groupById(group_b)->boundary_pins[0].is_output);
 }
 
+TEST_CASE_METHOD(
+    ImGuiFixture,
+    "Issue #116: widget link requests commit only through callbacks and refresh boundaries",
+    "[issue116][widget][actions]") {
+    const auto *generator_factory = ComponentTypeRegistry::instance().find("generator");
+    const auto *amplifier_factory = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(generator_factory != nullptr);
+    REQUIRE(amplifier_factory != nullptr);
+
+    CircuitRuntime runtime;
+    GraphEditorActions editor_actions(runtime);
+    auto *a = runtime.createComponent(generator_factory->create);
+    auto *b = runtime.createComponent(amplifier_factory->create);
+    auto *c = runtime.createComponent(amplifier_factory->create);
+    auto *d = runtime.createComponent(amplifier_factory->create);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(c != nullptr);
+    REQUIRE(d != nullptr);
+    const auto &graph = runtime.graph();
+    const int node_a = a->graphNodeId();
+    const int node_b = b->graphNodeId();
+    const int node_c = c->graphNodeId();
+    const int node_d = d->graphNodeId();
+    const int group_a = editor_actions.createGroup("A group", {node_a, node_b});
+    const int group_b = editor_actions.createGroup("B group", {node_c, node_d});
+    NodeGraphWidgetActions actions;
+    actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
+        auto link_id = runtime.connect(start_pin_id, end_pin_id);
+        if (link_id)
+            editor_actions.topologyChanged();
+        return link_id;
+    };
+    actions.disconnectLink = [&](int link_id) {
+        const bool disconnected = runtime.disconnect(link_id);
+        if (disconnected)
+            editor_actions.topologyChanged();
+        return disconnected;
+    };
+    const NodeGraphEngine &graph_view = graph;
+    NodeGraphWidget widget(graph_view, actions);
+    (void)widget;
+
+    const int accepted_link =
+        *actions.connectLink(graph.nodes()[0].output_pin_ids[0], graph.nodes()[2].input_pin_ids[0]);
+    REQUIRE(graph.links().size() == 1);
+    REQUIRE(graph.groupById(group_a)->boundary_pins.size() == 1);
+    REQUIRE(graph.groupById(group_a)->boundary_pins[0].is_output);
+    REQUIRE(graph.groupById(group_b)->boundary_pins.size() == 1);
+    REQUIRE_FALSE(graph.groupById(group_b)->boundary_pins[0].is_output);
+
+    REQUIRE_FALSE(
+        actions.connectLink(graph.nodes()[1].output_pin_ids[0], graph.nodes()[2].input_pin_ids[0]));
+    REQUIRE(graph.links().size() == 1);
+
+    REQUIRE(actions.disconnectLink(accepted_link));
+    REQUIRE(graph.links().empty());
+    REQUIRE(graph.groupById(group_a)->boundary_pins.empty());
+    REQUIRE(graph.groupById(group_b)->boundary_pins.empty());
+}
+
 // ---------------------------------------------------------------------------
 // 3 & 4 — the app's link-creation callback enforces the policy
 // ---------------------------------------------------------------------------
@@ -167,28 +276,24 @@ TEST_CASE_METHOD(ImGuiFixture,
     RfSimulatorApp app;
     app.newProject();
 
-    auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-    auto &gen2 = app.testComponents().add<SignalGeneratorEngine>(10002, app.testGraphEngine());
-    auto &amp1 = app.testComponents().add<AmplifierEngine>(10003, app.testGraphEngine());
-
-    REQUIRE(app.testGraphWidget().onLinkCreating);
+    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+    auto &gen2 = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10002));
+    auto &amp1 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10003));
 
     // First link into amp1's input is accepted and committed.
-    REQUIRE(app.testGraphWidget().onLinkCreating(gen.outputPinId(), amp1.inputPinId()));
-    app.testGraphEngine().addLink(gen.outputPinId(), amp1.inputPinId());
+    REQUIRE(app.testConnectLink(gen.outputPinId(), amp1.inputPinId()).has_value());
 
     // A second source into the occupied input is rejected.
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(gen2.outputPinId(), amp1.inputPinId()));
+    REQUIRE_FALSE(app.testConnectLink(gen2.outputPinId(), amp1.inputPinId()).has_value());
 
     // Cycle: amp3 -> amp4 then amp4 -> amp3.
-    auto &amp3 = app.testComponents().add<AmplifierEngine>(10004, app.testGraphEngine());
-    auto &amp4 = app.testComponents().add<AmplifierEngine>(10005, app.testGraphEngine());
-    REQUIRE(app.testGraphWidget().onLinkCreating(amp3.outputPinId(), amp4.inputPinId()));
-    app.testGraphEngine().addLink(amp3.outputPinId(), amp4.inputPinId());
-    REQUIRE_FALSE(app.testGraphWidget().onLinkCreating(amp4.outputPinId(), amp3.inputPinId()));
+    auto &amp3 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10004));
+    auto &amp4 = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10005));
+    REQUIRE(app.testConnectLink(amp3.outputPinId(), amp4.inputPinId()).has_value());
+    REQUIRE_FALSE(app.testConnectLink(amp4.outputPinId(), amp3.inputPinId()).has_value());
 
     // Control: a fresh acyclic link with a free input is accepted.
-    REQUIRE(app.testGraphWidget().onLinkCreating(amp1.outputPinId(), amp3.inputPinId()));
+    REQUIRE(app.testConnectLink(amp1.outputPinId(), amp3.inputPinId()).has_value());
 }
 
 // ---------------------------------------------------------------------------

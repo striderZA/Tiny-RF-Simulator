@@ -276,7 +276,7 @@ std::vector<FlowError> ValidateFlow(const FlowSpec &spec,
 }
 
 FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> components,
-                   NodeGraphEngine &graph) {
+                   const NodeGraphEngine &graph) {
     // 1. Resolve every reference before the first run, so a fatal error still
     //    yields zero rows and a partial experiment can never look complete. This
     //    is the very pass an attached UI pre-flight runs, so a panel can never

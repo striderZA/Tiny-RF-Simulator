@@ -1,3 +1,4 @@
+#include "circuit_runtime.h"
 // Regression test for issue #51: adding an Equalizer from the canvas context
 // menu must mark the project dirty.
 //
@@ -113,13 +114,12 @@ TEST_CASE_METHOD(ImGuiFixture,
     // the only place draw_inspector is populated; a forgotten branch would
     // otherwise pass CI silently.
     RfSimulatorApp app;
-    int next_id = 1;
+    CircuitRuntime runtime;
     for (const auto *d : ComponentTypeRegistry::instance().all()) {
         CAPTURE(d->type);
         REQUIRE(bool(d->create));
         REQUIRE(bool(d->draw_inspector));
-        IComponentEngine *engine =
-            d->create(app.testComponents(), app.testGraphEngine(), next_id++);
+        IComponentEngine *engine = runtime.createComponent(d->create);
         REQUIRE(engine != nullptr);
         REQUIRE(engine->type_name() == d->type);
     }
@@ -194,7 +194,7 @@ TEST_CASE_METHOD(ImGuiFixture, "kindForLabel resolves the longest matching label
     // Amplifier for the longer label, so this pins order-independence rather
     // than the current registration order of the real registry.
     NodeGraphEngine engine;
-    NodeGraphWidget widget(engine);
+    NodeGraphWidget widget(static_cast<const NodeGraphEngine &>(engine), {});
     widget.registerNodeKind("Amp", NodeKind::Amplifier);
     widget.registerNodeKind("Amplifier", NodeKind::Splitter);
 
@@ -204,7 +204,7 @@ TEST_CASE_METHOD(ImGuiFixture, "kindForLabel resolves the longest matching label
 
     // The same overlapping pair registered longest-first must give identical
     // answers: a last-match scan would otherwise return Amplifier here.
-    NodeGraphWidget reversed(engine);
+    NodeGraphWidget reversed(static_cast<const NodeGraphEngine &>(engine), {});
     reversed.registerNodeKind("Amplifier", NodeKind::Splitter);
     reversed.registerNodeKind("Amp", NodeKind::Amplifier);
 
@@ -215,7 +215,7 @@ TEST_CASE_METHOD(ImGuiFixture, "kindForLabel resolves the longest matching label
 TEST_CASE_METHOD(ImGuiFixture, "kindForLabel separates the 1:2 and 2:1 SPDT prefixes",
                  "[dispatch]") {
     NodeGraphEngine engine;
-    NodeGraphWidget widget(engine);
+    NodeGraphWidget widget(static_cast<const NodeGraphEngine &>(engine), {});
     widget.registerNodeKind("SPDT Switch", NodeKind::RFSwitchSPDT);
     widget.registerNodeKind("SPDT Switch (2:1)", NodeKind::RFSwitchSPDT2to1);
 

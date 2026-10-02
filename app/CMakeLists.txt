@@ -3,12 +3,30 @@ cmake_minimum_required(VERSION 3.20)
 project(app LANGUAGES CXX)
 
 # --------------------------------------------------
+# UI-independent circuit runtime library
+# --------------------------------------------------
+add_library(circuit_runtime STATIC
+    src/circuit_runtime.cpp
+    src/component_registry.cpp
+)
+add_library(simulator::circuit_runtime ALIAS circuit_runtime)
+target_include_directories(circuit_runtime PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(circuit_runtime
+    PUBLIC
+        common
+        simulator::node_graph_engine
+        simulator::logging_core
+)
+
+# --------------------------------------------------
 # App library
 # --------------------------------------------------
 add_library(app STATIC
     src/app.cpp
+    src/graph_editor_actions.cpp
     src/inspector_panel.cpp
-    src/component_registry.cpp
     src/component_library.cpp
     src/library_browser_widget.cpp
     src/component_type_registry.cpp
@@ -38,6 +56,7 @@ target_include_directories(app PUBLIC
 # --------------------------------------------------
 target_link_libraries(app
     PUBLIC
+        simulator::circuit_runtime
         simulator::core
         simulator::signal_generator_engine
         simulator::signal_generator_widget

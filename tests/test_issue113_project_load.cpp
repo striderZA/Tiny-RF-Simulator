@@ -142,7 +142,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     {
         RfSimulatorApp seed;
         seed.newProject();
-        seed.testComponents().add<SignalGeneratorEngine>(10001, seed.testGraphEngine());
+        seed.testCreateComponent("generator", 10001);
         seed.saveProject(base.string());
     }
     // Non-default singleton values so the assertions can tell "untouched" from

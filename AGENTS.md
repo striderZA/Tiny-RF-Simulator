@@ -125,7 +125,7 @@ Default section order:
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
 - [node_graph/AGENTS.md](node_graph/AGENTS.md) — Topology-only graph engine + ImNodes editor widget, schematic symbols, and the shared `rewireComponentInputs()` DSP pass
 - [power_meter/AGENTS.md](power_meter/AGENTS.md) — UI-independent total-power measurement engine and singleton observer panel
-- [app/AGENTS.md](app/AGENTS.md) — Application orchestrator (`RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
+- [app/AGENTS.md](app/AGENTS.md) — UI-free circuit runtime and editor actions plus the application orchestrator (`CircuitRuntime`, `GraphEditorActions`, `RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
 - [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit + benchmark tests
 - [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
 - [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)

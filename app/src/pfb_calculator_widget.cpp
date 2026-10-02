@@ -23,7 +23,7 @@ ImVec4 statusColor(RejectionStatus s) {
 }
 } // namespace
 
-PfbCalculatorWidget::PfbCalculatorWidget(ComponentRegistry &components)
+PfbCalculatorWidget::PfbCalculatorWidget(const ComponentRegistry &components)
     : m_components(&components) {}
 
 PFBChannelizerEngine *

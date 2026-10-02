@@ -57,7 +57,7 @@ class NodeGraphEngine;
 //     rule and the file the panel writes is the file its loader reads.
 class TestFlowWidget {
   public:
-    TestFlowWidget(ComponentRegistry &components, NodeGraphEngine &graph);
+    TestFlowWidget(const ComponentRegistry &components, const NodeGraphEngine &graph);
 
     // Replaces the selection and clears the previous result before parsing, so
     // a failed load can never leave stale rows behind. Returns false when the
@@ -349,8 +349,8 @@ class TestFlowWidget {
     // panel can only ever name something the circuit and the harness know.
     void drawAuthoringForms();
 
-    ComponentRegistry &m_components;
-    NodeGraphEngine &m_graph;
+    const ComponentRegistry &m_components;
+    const NodeGraphEngine &m_graph;
     std::string m_selected_path;
     FlowLoadResult m_load_state;
     // The in-tool draft (issue #155): set by newFlowFromCircuit() or the first

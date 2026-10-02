@@ -79,8 +79,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: single generator and amplifier with 
 
         int start_pin = comps[0]->outputPinId();
         int end_pin = comps[1]->inputPinId(0);
-        int link_id = app.testGraphEngine().addLink(start_pin, end_pin);
-        REQUIRE(link_id > 0);
+        const auto link = app.testConnectLink(start_pin, end_pin);
+        REQUIRE(link.has_value());
+        REQUIRE(*link > 0);
         REQUIRE(app.testGraphEngine().links().size() == 1);
 
         app.saveProject(path);
@@ -254,20 +255,21 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: parameter values survive save/load",
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
         gen.addTone(200e6, -10.0);
         gen.setFs_Hz(500e6);
 
-        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10002));
         amp.setGain_dB(20.0);
         amp.setNF_dB(3.5);
 
-        auto &mixer = app.testComponents().add<MixerEngine>(10003, app.testGraphEngine());
+        auto &mixer = static_cast<MixerEngine &>(*app.testCreateComponent("mixer", 10003));
         mixer.setLoFreq_Hz(2.4e9);
         mixer.setConversionGain_dB(8.0);
         mixer.setNF_dB(5.0);
 
-        auto &coax = app.testComponents().add<CoaxCableEngine>(10004, app.testGraphEngine());
+        auto &coax = static_cast<CoaxCableEngine &>(*app.testCreateComponent("coax", 10004));
         coax.setLengthM(2.5);
 
         REQUIRE(app.componentCount() == 4);
@@ -318,16 +320,16 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: groups survive save/load", "[project
         RfSimulatorApp app;
         app.newProject();
 
-        app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-        app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
-        app.testComponents().add<MixerEngine>(10003, app.testGraphEngine());
+        app.testCreateComponent("generator", 10001);
+        app.testCreateComponent("amplifier", 10002);
+        app.testCreateComponent("mixer", 10003);
         REQUIRE(app.componentCount() == 3);
 
         // Group the first two components
         auto comps = app.testComponents().all();
         REQUIRE(comps.size() == 3);
         std::vector<int> member_ids = {comps[0]->graphNodeId(), comps[1]->graphNodeId()};
-        int gid = app.testGraphEngine().addGroup("RF Frontend", member_ids);
+        int gid = app.testCreateGroup("RF Frontend", member_ids);
         REQUIRE(gid >= 0);
         REQUIRE(app.testGraphEngine().numGroups() == 1);
 
@@ -357,13 +359,14 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: Attenuator, Combiner, Equalizer", "[
         RfSimulatorApp app;
         app.newProject();
 
-        auto &atten = app.testComponents().add<AttenuatorEngine>(10001, app.testGraphEngine());
+        auto &atten =
+            static_cast<AttenuatorEngine &>(*app.testCreateComponent("attenuator", 10001));
         atten.setAttenuation(15.5);
 
-        auto &comb = app.testComponents().add<CombinerEngine>(10002, app.testGraphEngine());
+        auto &comb = static_cast<CombinerEngine &>(*app.testCreateComponent("combiner", 10002));
         comb.setManualMode(true);
 
-        auto &eq = app.testComponents().add<EqualizerEngine>(10003, app.testGraphEngine());
+        auto &eq = static_cast<EqualizerEngine &>(*app.testCreateComponent("equalizer", 10003));
         eq.setRefGain_dB(-3.0);
         eq.setRefFreq_Hz(500e6);
         eq.setSlope_dBPerDecade(6.0);
@@ -403,7 +406,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save/load preserves amplifier P1dB", "[p
         RfSimulatorApp app;
         app.newProject();
 
-        auto &amp = app.testComponents().add<AmplifierEngine>(100, app.testGraphEngine());
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 100));
         amp.setGain_dB(20.0);
         amp.setNF_dB(2.5);
         amp.setP1dB_dBm(15.0);
@@ -435,8 +438,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: component positions survive save/loa
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10002));
         REQUIRE(app.componentCount() == 2);
 
         // Register nodes in the pool first, then set explicit positions
@@ -482,8 +486,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: default component positions are (0,0
         RfSimulatorApp app;
         app.newProject();
 
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(10001, app.testGraphEngine());
-        auto &amp = app.testComponents().add<AmplifierEngine>(10002, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10002));
 
         // syncNodesFromEngine called by constructor registers default positions.
         // Save without moving nodes — should preserve (0,0).
@@ -546,23 +551,24 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         RfSimulatorApp app;
         app.newProject();
 
-        auto &amp = app.testComponents().add<AmplifierEngine>(10001, app.testGraphEngine());
+        auto &amp = static_cast<AmplifierEngine &>(*app.testCreateComponent("amplifier", 10001));
         amp.setSParamFilepath(local_s2p);
         REQUIRE(amp.sparamLoaded());
 
-        auto &flt = app.testComponents().add<IdealFilterEngine>(10002, app.testGraphEngine());
+        auto &flt = static_cast<IdealFilterEngine &>(*app.testCreateComponent("filter", 10002));
         flt.setSParamFilepath(local_s2p);
         REQUIRE(flt.sparamLoaded());
 
-        auto &eq = app.testComponents().add<EqualizerEngine>(10003, app.testGraphEngine());
+        auto &eq = static_cast<EqualizerEngine &>(*app.testCreateComponent("equalizer", 10003));
         eq.setSParamFilepath(local_s2p);
         REQUIRE(eq.sparamLoaded());
 
-        auto &atten = app.testComponents().add<AttenuatorEngine>(10004, app.testGraphEngine());
+        auto &atten =
+            static_cast<AttenuatorEngine &>(*app.testCreateComponent("attenuator", 10004));
         atten.setSParamFilepath(local_s2p);
         REQUIRE(atten.sparamMode());
 
-        auto &comb = app.testComponents().add<CombinerEngine>(10005, app.testGraphEngine());
+        auto &comb = static_cast<CombinerEngine &>(*app.testCreateComponent("combiner", 10005));
         comb.setSParamFilepath(local_s3p);
         REQUIRE(comb.sparamMode());
 
@@ -586,14 +592,16 @@ TEST_CASE_METHOD(ImGuiFixture, "Round-trip: S-param mode survives save/load (iss
         // a tone through the loaded amplifier via the app DSP chain and
         // compare the output against the S21-derived expectation (mirrors
         // tests/test_amplifier_sparam.cpp).
-        auto &gen = app.testComponents().add<SignalGeneratorEngine>(20001, app.testGraphEngine());
+        auto &gen =
+            static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 20001));
         gen.addTone(1e9, -20.0);
         gen.update(0.0);
 
         int gen_pin = gen.outputPinId();
         int amp_pin = amps[0]->inputPinId();
-        int link_id = app.testGraphEngine().addLink(gen_pin, amp_pin);
-        REQUIRE(link_id > 0);
+        const auto link_id = app.testConnectLink(gen_pin, amp_pin);
+        REQUIRE(link_id.has_value());
+        REQUIRE(*link_id > 0);
 
         app.update_dsp();
 
