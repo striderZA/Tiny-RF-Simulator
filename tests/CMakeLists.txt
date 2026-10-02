@@ -386,3 +386,9 @@ add_standalone_test(test_graph_editor_actions
     SOURCES test_graph_editor_actions.cpp
     LIBS simulator::app
 )
+
+# Standalone UI-free validator/evaluator and draft-application coverage.
+add_standalone_test(test_receiver_requirements
+    SOURCES test_receiver_requirements.cpp
+    LIBS simulator::app
+)
