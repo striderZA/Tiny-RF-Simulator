@@ -45,6 +45,7 @@
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
 #include "view_manager.h"
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>

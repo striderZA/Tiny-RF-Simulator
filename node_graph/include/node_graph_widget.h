@@ -47,10 +47,6 @@ class NodeGraphWidget {
 
     std::function<void()> onNodeMoved;
     std::function<NodeHoverInfo(int graph_node_id)> onNodeHover;
-    // App callbacks retained for policy and fixture integration; editor events
-    // themselves are routed through NodeGraphWidgetActions.
-    std::function<bool(int start_pin_id, int end_pin_id)> onLinkCreating;
-    std::function<void(int node_id)> onRemoveNode;
 
     // Data-driven canvas menu: app populates from ComponentTypeRegistry.
     struct AddableComponent {

@@ -131,7 +131,6 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     }
     m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
-    m_graph_widget->onRemoveNode = [remove_component](int id) { remove_component(id); };
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_circuit_runtime.components().hoverSummary(id);
@@ -162,9 +161,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_inspector_panel = std::make_unique<InspectorPanel>(
         m_circuit_runtime.graph(), m_circuit_runtime.components(), m_graph_editor_actions);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
-    m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
-        if (m_graph_widget->onRemoveNode)
-            m_graph_widget->onRemoveNode(graph_node_id);
+    m_inspector_panel->onRemoveNode = [remove_component](int graph_node_id) {
+        (void)remove_component(graph_node_id);
     };
 
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,

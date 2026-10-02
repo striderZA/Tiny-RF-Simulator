@@ -1,19 +1,15 @@
 // Regression test for GitHub issue #37:
 // "Segmentation Fault when removing PFB Channelizer input"
 //
-// Root cause: NodeGraphWidget::onRemoveNode (app.cpp) destroys the removed
-// component's engine (and its owned SignalNode/Spectrum outputs) synchronously
-// mid-frame, inside draw_ui(). Downstream components that had wired
-// node().inputs[k] to point at the removed engine's Spectrum output were only
-// re-wired at the *start* of update_dsp(), which does not run again until the
-// next frame. Any widget that dereferences node().inputs[] directly while
-// drawing later in the same frame (PFBChannelizerWidget::draw()/rebuildCache())
-// therefore used a dangling pointer into freed memory -> segfault.
+// Root cause: removing a component destroys its engine and owned SignalNode/Spectrum
+// outputs synchronously mid-frame. Downstream inputs were only rewired at the start
+// of update_dsp(), before the current frame's panels finished drawing, so a widget
+// dereferencing node().inputs[] could observe a dangling pointer.
 //
-// Fix: RfSimulatorApp::onRemoveNode now calls the new rewireInputs() helper
-// immediately after ComponentRegistry::remove(), so every surviving
-// component's node().inputs[] reflects the current graph topology (nulled out
-// for any severed source) before draw_ui() continues rendering widgets.
+// Fix: CircuitRuntime::removeComponent() rewires surviving inputs immediately after
+// registry removal. The app's shared removal action then rebuilds PFB views and group
+// boundaries before drawing continues, preventing later panels from using stale
+// Spectrum pointers.
 #include "adc_engine.h"
 #include "app.h"
 #include "imgui.h"
