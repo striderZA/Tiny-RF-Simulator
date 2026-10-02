@@ -29,6 +29,35 @@ void setNumber(std::array<char, 128> &buffer, double value) {
                   value);
 }
 } // namespace
+ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementStatus status) {
+    switch (status) {
+    case ReceiverRequirementStatus::Pass:
+        return ReceiverRequirementStatusTone::PassGreen;
+    case ReceiverRequirementStatus::Fail:
+        return ReceiverRequirementStatusTone::FailRed;
+    case ReceiverRequirementStatus::NotConfigured:
+    case ReceiverRequirementStatus::InvalidConfiguration:
+    case ReceiverRequirementStatus::Incomplete:
+        return ReceiverRequirementStatusTone::Neutral;
+    }
+    return ReceiverRequirementStatusTone::Neutral;
+}
+
+namespace {
+void drawStatusRow(const char *label, ReceiverRequirementStatus status) {
+    switch (receiverRequirementStatusTone(status)) {
+    case ReceiverRequirementStatusTone::PassGreen:
+        ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "%s: %s", label, statusText(status));
+        break;
+    case ReceiverRequirementStatusTone::FailRed:
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s: %s", label, statusText(status));
+        break;
+    case ReceiverRequirementStatusTone::Neutral:
+        ImGui::TextDisabled("%s: %s", label, statusText(status));
+        break;
+    }
+}
+} // namespace
 
 bool ReceiverRequirementsWidget::stateMatchesSnapshot(
     const ReceiverRequirementsState &state) const {
@@ -102,8 +131,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
     if (!m_error.empty())
         ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", m_error.c_str());
     else if (!state.invalid_reason.empty())
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "Invalid configuration: %s",
-                           state.invalid_reason.c_str());
+        ImGui::TextDisabled("Invalid configuration: %s", state.invalid_reason.c_str());
     else if (!state.config)
         ImGui::TextDisabled("Not configured");
 
@@ -111,14 +139,14 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
         ImGui::TextDisabled("Unapplied edits");
     else if (state.invalid_reason.empty() && state.config) {
         ImGui::Separator();
-        ImGui::Text("Gain: %s", statusText(result.gain.status));
+        drawStatusRow("Gain", result.gain.status);
         if (result.gain.observed_min_dB && result.gain.observed_max_dB)
             ImGui::Text("Observed gain: %.3f to %.3f dB", *result.gain.observed_min_dB,
                         *result.gain.observed_max_dB);
-        ImGui::Text("Noise figure: %s", statusText(result.noise_figure.status));
+        drawStatusRow("Noise figure", result.noise_figure.status);
         if (result.noise_figure.observed_max_dB)
             ImGui::Text("Observed NF max: %.3f dB", *result.noise_figure.observed_max_dB);
-        ImGui::Text("Overall: %s", statusText(result.overall));
+        drawStatusRow("Overall", result.overall);
     }
     ImGui::End();
 }

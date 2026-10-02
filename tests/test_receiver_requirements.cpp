@@ -1,4 +1,5 @@
 #include "receiver_requirements.h"
+#include "receiver_requirements_widget.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -233,4 +234,18 @@ TEST_CASE("ReceiverRequirements draft Apply rejects incomplete limits and repair
     CHECK(state.config->gain_min_dB == Approx(10.0));
     CHECK(state.config->gain_max_dB == Approx(20.0));
     CHECK(state.config->nf_max_dB == Approx(5.0));
+}
+
+TEST_CASE("ReceiverRequirements maps outcomes to status tones", "[receiver_requirements]") {
+    CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Pass) ==
+          ReceiverRequirementStatusTone::PassGreen);
+    CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Fail) ==
+          ReceiverRequirementStatusTone::FailRed);
+
+    CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::NotConfigured) ==
+          ReceiverRequirementStatusTone::Neutral);
+    CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::InvalidConfiguration) ==
+          ReceiverRequirementStatusTone::Neutral);
+    CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Incomplete) ==
+          ReceiverRequirementStatusTone::Neutral);
 }

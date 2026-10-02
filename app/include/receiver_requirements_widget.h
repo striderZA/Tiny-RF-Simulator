@@ -5,6 +5,10 @@
 #include <functional>
 #include <string>
 
+enum class ReceiverRequirementStatusTone { Neutral, PassGreen, FailRed };
+
+ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementStatus status);
+
 class ReceiverRequirementsWidget {
   public:
     void draw(const char *title, bool *p_open, ReceiverRequirementsState &state,
