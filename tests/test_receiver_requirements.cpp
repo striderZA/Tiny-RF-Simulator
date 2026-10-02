@@ -110,6 +110,55 @@ TEST_CASE("ReceiverRequirements requires configured sweep endpoints to enclose t
     CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
 }
+TEST_CASE("ReceiverRequirements preserves violations in a partly covered band",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const std::vector<double> f = {1.0e9, 1.5e9, 2.0e9};
+    const std::vector<double> gain = {15.0, 9.0, 15.0};
+    const std::vector<double> nf = {3.0, 3.0, 3.0};
+
+    const auto result = evaluate(state, 1.0e9, 1.5e9, f, gain, nf);
+    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Fail);
+}
+
+TEST_CASE("ReceiverRequirements scans aligned samples in short measurement vectors",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const std::vector<double> f = {1.0e9, 1.5e9, 2.0e9};
+    const std::vector<double> gain = {15.0, 9.0};
+    const std::vector<double> nf = {3.0, 3.0, 3.0};
+
+    const auto result = evaluate(state, 1.0e9, 2.0e9, f, gain, nf);
+    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.overall == ReceiverRequirementStatus::Fail);
+}
+
+TEST_CASE("ReceiverRequirements identifies an invalid present config", "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->gain_min_dB = 21.0;
+
+    const auto result = evaluate(state, 0.9e9, 2.1e9, frequencies(), std::vector<double>(5, 15.0),
+                                 std::vector<double>(5, 3.0));
+    CHECK(result.gain.status == ReceiverRequirementStatus::InvalidConfiguration);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::InvalidConfiguration);
+    CHECK(result.overall == ReceiverRequirementStatus::InvalidConfiguration);
+}
+
+TEST_CASE("ReceiverRequirements keeps size mismatch incompleteness metric-specific",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const std::vector<double> f = frequencies();
+    const std::vector<double> gain(f.size(), 15.0);
+    const std::vector<double> short_nf(f.size() - 1, 3.0);
+
+    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, short_nf);
+    CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
+}
 
 TEST_CASE("ReceiverRequirements does not pass a band with no discrete in-band samples",
           "[receiver_requirements]") {
@@ -154,7 +203,7 @@ TEST_CASE("ReceiverRequirements treats mismatched measurement vectors as incompl
 
     const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
     CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
 }
 

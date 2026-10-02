@@ -57,12 +57,11 @@ ReceiverMetricEvaluation unavailable(ReceiverRequirementStatus status) { return 
 
 ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
                                 const std::vector<double> &values, double low_Hz, double high_Hz,
-                                bool gain, double min_dB, double max_dB) {
-    if (frequencies.size() != values.size())
-        return unavailable(ReceiverRequirementStatus::Incomplete);
-    bool any = false, missing = false, failed = false;
+                                bool gain, double min_dB, double max_dB, bool band_covered) {
+    bool any = false, missing = frequencies.size() != values.size(), failed = false;
     double observed_min = 0.0, observed_max = 0.0;
-    for (std::size_t i = 0; i < frequencies.size(); ++i) {
+    const std::size_t aligned_size = std::min(frequencies.size(), values.size());
+    for (std::size_t i = 0; i < aligned_size; ++i) {
         const double f = frequencies[i];
         if (!std::isfinite(f) || f < low_Hz || f > high_Hz)
             continue;
@@ -84,9 +83,10 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
     ReceiverMetricEvaluation result;
     result.observed_min_dB = any ? std::optional<double>(observed_min) : std::nullopt;
     result.observed_max_dB = any ? std::optional<double>(observed_max) : std::nullopt;
-    result.status = failed ? ReceiverRequirementStatus::Fail
-                           : (!any || missing ? ReceiverRequirementStatus::Incomplete
-                                              : ReceiverRequirementStatus::Pass);
+    result.status = failed
+                        ? ReceiverRequirementStatus::Fail
+                        : (!band_covered || !any || missing ? ReceiverRequirementStatus::Incomplete
+                                                            : ReceiverRequirementStatus::Pass);
     return result;
 }
 } // namespace
@@ -109,23 +109,20 @@ evaluateReceiverRequirements(const ReceiverRequirementsState &state, double swee
         return result;
     }
     const auto &c = *state.config;
-    if (validateReceiverRequirementsConfig(c) || !std::isfinite(sweep_start_Hz) ||
-        !std::isfinite(sweep_stop_Hz) || sweep_start_Hz > sweep_stop_Hz ||
-        sweep_start_Hz > c.band_start_Hz || sweep_stop_Hz < c.band_stop_Hz) {
-        result.gain = result.noise_figure = unavailable(ReceiverRequirementStatus::Incomplete);
-    } else {
-        result.gain = assess(frequencies_Hz, gain_dB, c.band_start_Hz, c.band_stop_Hz, true,
-                             c.gain_min_dB, c.gain_max_dB);
-        result.noise_figure = assess(frequencies_Hz, noise_figure_dB, c.band_start_Hz,
-                                     c.band_stop_Hz, false, 0.0, c.nf_max_dB);
-        if (frequencies_Hz.size() != gain_dB.size() ||
-            frequencies_Hz.size() != noise_figure_dB.size()) {
-            if (result.gain.status != ReceiverRequirementStatus::Fail)
-                result.gain.status = ReceiverRequirementStatus::Incomplete;
-            if (result.noise_figure.status != ReceiverRequirementStatus::Fail)
-                result.noise_figure.status = ReceiverRequirementStatus::Incomplete;
-        }
+    if (validateReceiverRequirementsConfig(c)) {
+        result.gain = result.noise_figure =
+            unavailable(ReceiverRequirementStatus::InvalidConfiguration);
+        result.overall = ReceiverRequirementStatus::InvalidConfiguration;
+        return result;
     }
+    const bool sweep_valid = std::isfinite(sweep_start_Hz) && std::isfinite(sweep_stop_Hz) &&
+                             sweep_start_Hz <= sweep_stop_Hz;
+    const bool band_covered =
+        sweep_valid && sweep_start_Hz <= c.band_start_Hz && sweep_stop_Hz >= c.band_stop_Hz;
+    result.gain = assess(frequencies_Hz, gain_dB, c.band_start_Hz, c.band_stop_Hz, true,
+                         c.gain_min_dB, c.gain_max_dB, band_covered);
+    result.noise_figure = assess(frequencies_Hz, noise_figure_dB, c.band_start_Hz, c.band_stop_Hz,
+                                 false, 0.0, c.nf_max_dB, band_covered);
     const auto g = result.gain.status, n = result.noise_figure.status;
     result.overall =
         (g == ReceiverRequirementStatus::Fail || n == ReceiverRequirementStatus::Fail)
