@@ -188,6 +188,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine,
                                                                  m_circuit_runtime.viewManager());
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_circuit_runtime.graph());
+    m_receiver_requirements_widget = std::make_unique<ReceiverRequirementsWidget>();
+    m_receiver_requirements_widget->onChange = [this]() { markDirty(); };
     m_power_meter_widget =
         std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_circuit_runtime.graph());
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
@@ -256,6 +258,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
+    m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
     m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
 }
@@ -1066,6 +1069,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Log", nullptr, &m_show_log);
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
+            ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
             ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
@@ -1355,9 +1359,16 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
-    if (m_show_na) {
+    if (m_show_na || m_show_receiver_requirements)
         m_na_engine.update();
+    if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
+    if (m_show_receiver_requirements) {
+        const auto result = evaluateReceiverRequirements(
+            m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
+            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb());
+        m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
+                                             m_receiver_requirements, result);
     }
 
     if (m_show_power_meter)
@@ -1408,6 +1419,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
     m_state.saveBool("WindowState", "PowerMeter", m_show_power_meter);
+    m_state.saveBool("WindowState", "ReceiverRequirements", m_show_receiver_requirements);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_circuit_runtime.components(), m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);

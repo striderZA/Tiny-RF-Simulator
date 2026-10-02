@@ -36,6 +36,7 @@
 #include "power_meter_widget.h"
 #include "project_serializer.h"
 #include "receiver_requirements.h"
+#include "receiver_requirements_widget.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -66,6 +67,7 @@ class RfSimulatorApp {
     bool m_show_log = true;
     bool m_show_spectrum = true;
     bool m_show_na = false;
+    bool m_show_receiver_requirements = false;
     bool m_show_power_meter = false;
     // Test Flow panel visibility; persisted through SessionState
     // (WindowState/TestFlow) exactly like the other panel toggles.
@@ -223,6 +225,7 @@ class RfSimulatorApp {
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
     std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
     std::unique_ptr<PowerMeterWidget> m_power_meter_widget;
+    std::unique_ptr<ReceiverRequirementsWidget> m_receiver_requirements_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
