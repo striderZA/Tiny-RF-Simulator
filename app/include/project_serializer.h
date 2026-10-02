@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+class CircuitRuntime;
+class GraphEditorActions;
 class ComponentRegistry;
 class NetworkAnalyzerEngine;
 class NodeGraphEngine;
@@ -15,11 +17,10 @@ class SessionState;
 // RfSimulatorApp (issue #51: 1320-line god-object).
 class ProjectSerializer {
   public:
-    ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
+    ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                       NodeGraphWidget &graph_widget, PFBViewManager &pfb_views, SessionState &state,
-                      int &next_component_id, bool &show_log, bool &show_spectrum,
-                      bool &show_properties, bool &show_node_editor,
-                      NetworkAnalyzerEngine &na_engine);
+                      bool &show_log, bool &show_spectrum, bool &show_properties,
+                      bool &show_node_editor, NetworkAnalyzerEngine &na_engine);
 
     bool save(const std::string &path); // false on open/write/flush/close failure (logged)
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
@@ -35,12 +36,14 @@ class ProjectSerializer {
     using WindowFlag = std::pair<const char *, bool *>;
     std::array<WindowFlag, 4> windowFlags();
 
-    ComponentRegistry &m_components;
-    NodeGraphEngine &m_graph;
+    const ComponentRegistry &components() const;
+    const NodeGraphEngine &graph() const;
+
+    CircuitRuntime &m_runtime;
+    GraphEditorActions &m_editor_actions;
     NodeGraphWidget &m_graph_widget;
     PFBViewManager &m_pfb_views;
     SessionState &m_state;
-    int &m_next_component_id;
     bool &m_show_log;
     bool &m_show_spectrum;
     bool &m_show_properties;

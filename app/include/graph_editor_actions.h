@@ -1,12 +1,12 @@
 #pragma once
 
-#include "node_graph_engine.h"
+#include "circuit_runtime.h"
 #include <string>
 #include <vector>
 
 class GraphEditorActions {
   public:
-    explicit GraphEditorActions(NodeGraphEngine &graph);
+    explicit GraphEditorActions(CircuitRuntime &runtime);
 
     bool addProbePin(int pin_id);
     bool removeProbePin(int pin_id);
@@ -23,5 +23,5 @@ class GraphEditorActions {
     void topologyChanged();
 
   private:
-    NodeGraphEngine &m_graph;
+    CircuitRuntime &m_runtime;
 };

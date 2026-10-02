@@ -8,7 +8,7 @@ class NetworkAnalyzerWidget {
   public:
     // engine: the singleton instrument engine (params + results); graph: used
     // to enumerate every real output pin for the Point A/B pickers.
-    NetworkAnalyzerWidget(NetworkAnalyzerEngine &engine, NodeGraphEngine &graph);
+    NetworkAnalyzerWidget(NetworkAnalyzerEngine &engine, const NodeGraphEngine &graph);
 
     // Fired once at the end of a draw() frame in which the user changed any
     // sweep parameter or the Point A/B pickers. Wired to
@@ -19,6 +19,6 @@ class NetworkAnalyzerWidget {
 
   private:
     NetworkAnalyzerEngine &m_engine;
-    NodeGraphEngine &m_graph;
+    const NodeGraphEngine &m_graph;
     bool m_param_edited = false;
 };

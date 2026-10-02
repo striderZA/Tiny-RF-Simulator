@@ -37,4 +37,4 @@ std::vector<FlowError> ValidateFlow(const FlowSpec &spec,
 
 // Executes a loaded flow against a live circuit (see Task 5).
 FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> components,
-                   NodeGraphEngine &graph);
+                   const NodeGraphEngine &graph);

@@ -24,7 +24,7 @@ struct DragZoomState {
 
 class SpectrumAnalyzerWidget {
   public:
-    SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, ViewManager &vm);
+    SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine, const ViewManager &vm);
 
     void draw(const char *title, bool *p_open = nullptr);
     void setProbeLabels(const std::vector<std::string> &labels) { m_probe_labels = labels; }
@@ -37,7 +37,7 @@ class SpectrumAnalyzerWidget {
 
   private:
     SpectrumAnalyzerEngine &m_engine;
-    ViewManager &m_view_manager;
+    const ViewManager &m_view_manager;
     std::vector<std::string> m_probe_labels;
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
     MarkerState m_marker;

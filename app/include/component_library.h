@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-class ComponentRegistry;
-class NodeGraphEngine;
+class CircuitRuntime;
+class GraphEditorActions;
 class IComponentEngine;
 
 struct DataFileRef {
@@ -56,8 +56,8 @@ class ComponentLibrary {
     std::vector<const ComponentDefinition *> all() const;
     void scan(const std::string &directory);
     std::vector<const ComponentDefinition *> byType(const std::string &type) const;
-    IComponentEngine *instantiate(const ComponentDefinition &def, int id,
-                                  ComponentRegistry &registry, NodeGraphEngine &graph);
+    IComponentEngine *instantiate(const ComponentDefinition &def, CircuitRuntime &runtime,
+                                  GraphEditorActions &editor_actions);
     std::vector<ValidationIssue> validate(const std::string &type,
                                           const nlohmann::json &parameters) const;
     void upsert(const ComponentDefinition &def);

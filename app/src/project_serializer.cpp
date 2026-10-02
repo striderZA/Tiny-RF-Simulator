@@ -1,7 +1,8 @@
 #include "project_serializer.h"
+#include "circuit_runtime.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
-#include "graph_link_policy.h"
+#include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -148,15 +149,19 @@ std::optional<int> checkedJsonInt(const nlohmann::json &j) {
 
 } // namespace
 
-ProjectSerializer::ProjectSerializer(ComponentRegistry &components, NodeGraphEngine &graph,
+ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     SessionState &state, int &next_component_id, bool &show_log,
-                                     bool &show_spectrum, bool &show_properties,
-                                     bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
-    : m_components(components), m_graph(graph), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_state(state), m_next_component_id(next_component_id),
-      m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
-      m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
+                                     SessionState &state, bool &show_log, bool &show_spectrum,
+                                     bool &show_properties, bool &show_node_editor,
+                                     NetworkAnalyzerEngine &na_engine)
+    : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
+      m_pfb_views(pfb_views), m_state(state), m_show_log(show_log), m_show_spectrum(show_spectrum),
+      m_show_properties(show_properties), m_show_node_editor(show_node_editor),
+      m_na_engine(na_engine) {}
+
+const ComponentRegistry &ProjectSerializer::components() const { return m_runtime.components(); }
+
+const NodeGraphEngine &ProjectSerializer::graph() const { return m_runtime.graph(); }
 
 std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
     return {{{"log", &m_show_log},
@@ -183,7 +188,7 @@ bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json comps_arr = nlohmann::json::array();
     // S1: S-param paths are persisted relative to the project dir for portability.
     const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
-    for (auto *comp : m_components.all()) {
+    for (auto *comp : components().all()) {
         nlohmann::json cj;
         const auto *desc = ComponentTypeRegistry::instance().find(comp->type_name());
         cj["type"] = desc ? desc->project_type : "Unknown";
@@ -198,7 +203,7 @@ bool ProjectSerializer::save(const std::string &path) {
         cj["pos"]["y"] = pos_n.y;
 
         // Save library part number if set
-        for (const auto &gn : m_graph.nodes()) {
+        for (const auto &gn : graph().nodes()) {
             if (gn.node_id == nid && !gn.part_number.empty()) {
                 cj["part_number"] = gn.part_number;
                 break;
@@ -218,10 +223,10 @@ bool ProjectSerializer::save(const std::string &path) {
         bool is_output;
     };
     std::unordered_map<int, PinInfo> pin_map;
-    for (size_t i = 0; i < m_components.size(); ++i) {
-        auto *comp = m_components.all()[i];
+    for (size_t i = 0; i < components().size(); ++i) {
+        auto *comp = components().all()[i];
         int nid = comp->graphNodeId();
-        for (const auto &gn : m_graph.nodes()) {
+        for (const auto &gn : graph().nodes()) {
             if (gn.node_id == nid) {
                 for (size_t p = 0; p < gn.input_pin_ids.size(); ++p)
                     pin_map[gn.input_pin_ids[p]] = {i, (int)p, false};
@@ -231,7 +236,7 @@ bool ProjectSerializer::save(const std::string &path) {
             }
         }
     }
-    for (const auto &link : m_graph.links()) {
+    for (const auto &link : graph().links()) {
         auto from_it = pin_map.find(link.start_pin_id);
         auto to_it = pin_map.find(link.end_pin_id);
         if (from_it == pin_map.end() || to_it == pin_map.end())
@@ -247,7 +252,7 @@ bool ProjectSerializer::save(const std::string &path) {
 
     // Save probes as component-index + port
     nlohmann::json probes_arr = nlohmann::json::array();
-    for (int probe_pin : m_graph.probePins()) {
+    for (int probe_pin : graph().probePins()) {
         auto it = pin_map.find(probe_pin);
         if (it != pin_map.end()) {
             nlohmann::json pj;
@@ -286,10 +291,10 @@ bool ProjectSerializer::save(const std::string &path) {
     nlohmann::json groups_arr = nlohmann::json::array();
     // Build node_id \u2192 comp_index map
     std::unordered_map<int, size_t> nid_to_comp;
-    for (size_t i = 0; i < m_components.size(); ++i)
-        nid_to_comp[m_components.all()[i]->graphNodeId()] = i;
+    for (size_t i = 0; i < components().size(); ++i)
+        nid_to_comp[components().all()[i]->graphNodeId()] = i;
 
-    for (const auto &g : m_graph.groups()) {
+    for (const auto &g : graph().groups()) {
         nlohmann::json gj;
         gj["name"] = g.name;
         gj["collapsed"] = g.collapsed;
@@ -309,7 +314,7 @@ bool ProjectSerializer::save(const std::string &path) {
         root["window_state"][key] = *member;
 
     // Graph state counters (for later additions)
-    root["graph_state"]["next_component_id"] = m_next_component_id;
+    root["graph_state"]["next_component_id"] = m_runtime.nextComponentId();
 
     // Atomic save (issue #113): the previous contents must survive a failed
     // write so issue #77's retry contract never retries against a truncated
@@ -519,7 +524,7 @@ bool ProjectSerializer::load(const std::string &path) {
                     new_node_ids.push_back(-1);
                     continue;
                 }
-                comp = desc->create(m_components, m_graph, m_next_component_id++);
+                comp = m_runtime.createComponent(desc->create);
                 // S1: resolve S-param paths against the project file's
                 // directory and neutralize any path that escapes it (the
                 // engine's deserialize() only sees the raw params JSON and
@@ -550,8 +555,8 @@ bool ProjectSerializer::load(const std::string &path) {
 
                 // Restore library part number (only when it is a string)
                 if (cj.contains("part_number") && cj["part_number"].is_string())
-                    m_graph.setNodePartNumber(comp->graphNodeId(),
-                                              cj["part_number"].get<std::string>());
+                    m_editor_actions.setNodePartNumber(comp->graphNodeId(),
+                                                       cj["part_number"].get<std::string>());
 
                 // Record the saved-index → node mapping only after every step
                 // that can throw, so the saved index stays in step with the
@@ -567,9 +572,9 @@ bool ProjectSerializer::load(const std::string &path) {
                 // for it, so a malformed record is neither counted nor linked
                 // while valid sibling components still load.
                 if (comp) {
-                    m_components.remove(comp->graphNodeId());
+                    m_runtime.removeComponent(comp->graphNodeId());
                     if (desc && desc->type == "pfb")
-                        m_pfb_views.rebuild(m_components, m_state);
+                        m_pfb_views.rebuild(components(), m_state);
                 }
                 new_node_ids.push_back(-1);
             }
@@ -620,20 +625,15 @@ bool ProjectSerializer::load(const std::string &path) {
             if (from_node < 0 || to_node < 0)
                 continue;
 
-            auto *from_comp = m_components.find(from_node);
-            auto *to_comp = m_components.find(to_node);
+            auto *from_comp = components().find(from_node);
+            auto *to_comp = components().find(to_node);
             if (!from_comp || !to_comp)
                 continue;
 
-            int start_pin = from_comp->outputPinId(from_port);
-            int end_pin = to_comp->inputPinId(to_port);
-            if (start_pin >= 0 && end_pin >= 0 &&
-                graphLinkAllowed(from_comp, to_comp, start_pin, end_pin) &&
-                m_graph.canAddLink(start_pin, end_pin)) {
-                m_graph.addLink(start_pin, end_pin);
-            } else if (start_pin >= 0 && end_pin >= 0) {
+            const int start_pin = from_comp->outputPinId(from_port);
+            const int end_pin = to_comp->inputPinId(to_port);
+            if (start_pin >= 0 && end_pin >= 0 && !m_runtime.connect(start_pin, end_pin))
                 LOG_WARN("Skipping invalid link in project file %s", path.c_str());
-            }
         }
 
         // Restore probes. Malformed entries are logged and skipped so valid
@@ -676,12 +676,12 @@ bool ProjectSerializer::load(const std::string &path) {
             const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
             if (node_id < 0)
                 continue; // saved index maps to a skipped/malformed record
-            auto *comp = m_components.find(node_id);
+            auto *comp = components().find(node_id);
             if (!comp)
                 continue; // no component for this mapping; nothing to probe
             int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
             if (pin >= 0)
-                m_graph.addProbePin(pin);
+                m_editor_actions.addProbePin(pin);
         }
 
         // Restore the singleton Network Analyzer instrument state: the four
@@ -747,7 +747,7 @@ bool ProjectSerializer::load(const std::string &path) {
                 const int node_id = new_node_ids[static_cast<size_t>(comp_idx)];
                 if (node_id < 0)
                     return;
-                auto *comp = m_components.find(node_id);
+                auto *comp = components().find(node_id);
                 if (!comp)
                     return;
                 const int pin = is_output ? comp->outputPinId(port) : comp->inputPinId(port);
@@ -806,11 +806,13 @@ bool ProjectSerializer::load(const std::string &path) {
                 continue;
             }
             if (member_ids.size() >= 2) {
-                int gid = m_graph.addGroup(name, member_ids);
-                if (gid >= 0)
-                    m_graph.setGroupCollapsed(gid, collapsed);
+                const int group_id = m_editor_actions.createGroup(name, member_ids);
+                if (group_id >= 0)
+                    m_editor_actions.setGroupCollapsed(group_id, collapsed);
             }
         }
+        // Rebuild derived group boundaries once, after all restored topology and groups exist.
+        m_editor_actions.topologyChanged();
 
         // Restore window state. These fields were shape-validated before
         // reset(), so a present key is guaranteed boolean; an absent key keeps
@@ -827,7 +829,7 @@ bool ProjectSerializer::load(const std::string &path) {
         // next_component_id is a non-negative int, so no wrap/truncation.
         auto &gs = root["graph_state"];
         if (!gs.is_null() && gs.contains("next_component_id"))
-            m_next_component_id = gs["next_component_id"].get<int>();
+            m_runtime.setNextComponentId(gs["next_component_id"].get<int>());
     } catch (const std::exception &e) {
         // Broadened from nlohmann::json::exception: any exception escaping
         // restoration (including non-JSON engine/container errors on
@@ -843,38 +845,14 @@ bool ProjectSerializer::load(const std::string &path) {
 }
 
 void ProjectSerializer::reset() {
-    // Remove all links from the graph engine first
-    m_graph.removeAllLinks();
-
-    // Remove all components — ComponentRegistry handles cleanup
-    // Collect IDs first to avoid iterator invalidation
-    std::vector<int> ids;
-    for (auto *comp : m_components.all())
-        ids.push_back(comp->graphNodeId());
-    for (int id : ids)
-        m_components.remove(id);
-
-    // Clear probes
-    m_graph.clearProbes();
+    m_runtime.clearComponentsAndResetIds();
+    m_editor_actions.resetForProjectReplacement();
 
     // Clear the Network Analyzer's probe points too — otherwise a stale pin
-    // id survives into the next project, and since pin ids are reallocated
-    // deterministically from the same base below, it can silently alias an
-    // unrelated pin belonging to a different component (issue found in
-    // review: load()'s restore only *sets* Point A/B when present in the
-    // save file, so an absent/unset point left the previous project's pin
-    // id in place).
+    // id survives into the next project and can alias a newly allocated pin.
     m_na_engine.setPointA(-1);
     m_na_engine.setPointB(-1);
 
-    // Reset IQ / PFB widgets
     m_pfb_views.clear();
-
-    // Reset graph counters
-    m_graph.setNextIds(1, 100, 1000);
-    m_graph.setNextGroupId(50000);
-    m_graph.setNextBoundaryPinId(100000);
-
-    m_next_component_id = 100;
     m_graph_widget.clearPositionCache();
 }

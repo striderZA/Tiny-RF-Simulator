@@ -1,15 +1,15 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
+#include "circuit_runtime.h"
 #include "combiner_engine.h"
 #include "component_library.h"
-#include "component_registry.h"
 #include "equalizer_engine.h"
+#include "graph_editor_actions.h"
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "splitter_engine.h"
 #include "test_temp_paths.h"
-#include "view_manager.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -106,11 +106,10 @@ TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]"
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 100, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
@@ -133,11 +132,10 @@ TEST_CASE("ComponentLibrary instantiates attenuator from definition", "[library]
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 101, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *att = dynamic_cast<AttenuatorEngine *>(engine);
     REQUIRE(att != nullptr);
@@ -155,11 +153,10 @@ TEST_CASE("ComponentLibrary instantiates splitter from definition", "[library]")
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 102, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *spl = dynamic_cast<SplitterEngine *>(engine);
     REQUIRE(spl != nullptr);
@@ -176,11 +173,10 @@ TEST_CASE("ComponentLibrary instantiates filter from definition", "[library]") {
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 103, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *flt = dynamic_cast<IdealFilterEngine *>(engine);
     REQUIRE(flt != nullptr);
@@ -200,11 +196,10 @@ TEST_CASE("ComponentLibrary instantiates mixer from definition", "[library]") {
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 104, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *mix = dynamic_cast<MixerEngine *>(engine);
     REQUIRE(mix != nullptr);
@@ -224,11 +219,10 @@ TEST_CASE("ComponentLibrary instantiates equalizer from definition", "[library]"
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 105, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *eq = dynamic_cast<EqualizerEngine *>(engine);
     REQUIRE(eq != nullptr);
@@ -248,11 +242,10 @@ TEST_CASE("ComponentLibrary instantiates combiner from definition", "[library]")
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 106, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *comb = dynamic_cast<CombinerEngine *>(engine);
     REQUIRE(comb != nullptr);
@@ -270,11 +263,10 @@ TEST_CASE("ComponentLibrary instantiates adc from definition", "[library]") {
     lib.loadFile(path);
     auto defs = lib.all();
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 107, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
     auto *adc = dynamic_cast<AdcEngine *>(engine);
     REQUIRE(adc != nullptr);
@@ -295,11 +287,11 @@ TEST_CASE("ComponentLibrary sets part_number on graph node", "[library]") {
     REQUIRE(defs.size() == 1);
     REQUIRE(defs[0]->part_number == "ZX60-33LN+");
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    const auto &graph = runtime.graph();
 
-    auto *engine = lib.instantiate(*defs[0], 200, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     // Verify part_number was set on the graph node
@@ -412,11 +404,10 @@ TEST_CASE("ComponentLibrary instantiates amplifier with S-param file", "[library
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 300, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
@@ -457,11 +448,10 @@ TEST_CASE("ComponentLibrary falls back when S-param file missing", "[library]") 
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
 
-    auto *engine = lib.instantiate(*defs[0], 301, registry, graph);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);

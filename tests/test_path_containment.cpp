@@ -18,16 +18,16 @@
 // in tests/CMakeLists.txt).
 #include "amplifier_engine.h"
 #include "app.h"
+#include "circuit_runtime.h"
 #include "component_form_model.h"
 #include "component_library.h"
-#include "component_registry.h"
+#include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
 #include "node_graph_engine.h"
 #include "test_temp_paths.h"
 #include "touchstone_parser.h"
-#include "view_manager.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -223,10 +223,9 @@ TEST_CASE("Library instantiate skips S-param data files outside the library dir"
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
-    auto *engine = lib.instantiate(*defs[0], 400, registry, graph);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
@@ -265,10 +264,9 @@ TEST_CASE("Library instantiate rejects when every S-param data file escapes",
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
-    auto *engine = lib.instantiate(*defs[0], 401, registry, graph);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
@@ -423,10 +421,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Component authoring save keeps the copied S-para
     ComponentLibrary lib;
     lib.loadFile(json_path.string());
     REQUIRE(lib.all().size() == 1);
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
-    auto *engine = lib.instantiate(*lib.all().front(), 402, registry, graph);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*lib.all().front(), runtime, actions);
     REQUIRE(engine != nullptr);
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
     REQUIRE(amp != nullptr);

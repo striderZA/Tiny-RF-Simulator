@@ -6,6 +6,7 @@
 #include "component_form_model.h"
 #include "component_form_widget.h"
 
+#include "circuit_runtime.h"
 #include "component_library.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
@@ -114,7 +115,7 @@ class RfSimulatorApp {
     void loadProject(const std::string &path);
     void newProject();
     bool isDirty() const { return m_dirty; }
-    size_t componentCount() const { return m_components.size(); }
+    size_t componentCount() const { return m_circuit_runtime.components().size(); }
     std::string m_current_project_path;
     void markDirty();
     bool m_dirty = false;
@@ -133,8 +134,8 @@ class RfSimulatorApp {
     int testCreateGroup(std::string name, std::vector<int> member_node_ids);
     bool testRemoveGroup(int group_id);
     bool testSetGroupCollapsed(int group_id, bool collapsed);
-    const NodeGraphEngine &testGraphEngine() const { return m_graph_engine; }
-    const ComponentRegistry &testComponents() const { return m_components; }
+    const NodeGraphEngine &testGraphEngine() const { return m_circuit_runtime.graph(); }
+    const ComponentRegistry &testComponents() const { return m_circuit_runtime.components(); }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
@@ -173,7 +174,6 @@ class RfSimulatorApp {
     void requestTutorial();
     // Resets to a fresh seeded sandbox and activates the walkthrough.
     void startTutorial();
-    void rewireInputs();
     bool duplicateComponent(int graph_node_id);
     void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
     void openNewComponentForm(const std::string &type);
@@ -195,12 +195,12 @@ class RfSimulatorApp {
     class NaScratch;
     class NaHost final : public INetworkAnalyzerHost {
       public:
-        explicit NaHost(ComponentRegistry &components);
+        explicit NaHost(const ComponentRegistry &components);
         IComponentEngine *componentForNode(int graph_node_id) const override;
         std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override;
 
       private:
-        ComponentRegistry &m_components;
+        const ComponentRegistry &m_components;
     };
     class NaScratch final : public INetworkAnalyzerScratch {
       public:
@@ -213,9 +213,8 @@ class RfSimulatorApp {
         ComponentRegistry m_registry; // constructed with (m_graph, m_view)
     };
 
-    NodeGraphEngine m_graph_engine;
+    CircuitRuntime m_circuit_runtime;
     GraphEditorActions m_graph_editor_actions;
-    ViewManager m_view_manager;
     SpectrumAnalyzerEngine m_spectrum_engine;
     PowerMeterEngine m_power_meter_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
@@ -237,25 +236,13 @@ class RfSimulatorApp {
     std::string m_component_form_error;
     std::unique_ptr<InspectorPanel> m_inspector_panel;
 
-    ComponentRegistry m_components;
-    // References m_components and m_graph_engine, so it is declared after both
-    // and destroyed before they are.
+    // These depend on live runtime engines and must be destroyed before the runtime.
     std::unique_ptr<TestFlowWidget> m_test_flow_widget;
-    // Declared after m_components so the manager (and its widget references to
-    // engines) is destroyed before the engines themselves.
     PFBViewManager m_pfb_views;
-    // Adapter implementing the engine's injected lookups; declared after
-    // m_components (which it references) and before m_na_engine (which holds a
-    // reference to it — the adapter must outlive the engine).
-    NaHost m_na_host{m_components};
-    // Singleton Network Analyzer instrument engine — a plain value member
-    // exactly like m_spectrum_engine (not an IComponentEngine, no registry
-    // row, no graph node).
-    NetworkAnalyzerEngine m_na_engine{m_graph_engine, m_na_host};
-    // Owns .rfsim save/load/new; declared after m_graph_widget and m_pfb_views
-    // so it is destroyed before both (it holds references to them).
+    // The adapter and analyzer follow their dependencies and outlive the serializer.
+    NaHost m_na_host{m_circuit_runtime.components()};
+    NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     std::unique_ptr<ProjectSerializer> m_serializer;
-    int m_next_component_id = 100;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
 };

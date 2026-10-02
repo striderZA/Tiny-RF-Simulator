@@ -2,13 +2,11 @@
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
-#include "graph_link_policy.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
-#include "rewire.h"
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -57,36 +55,28 @@ static std::string appExeDir() {
     return parent.string();
 }
 
-RfSimulatorApp::RfSimulatorApp()
-    : m_graph_editor_actions(m_graph_engine), m_components(m_graph_engine, m_view_manager) {
+RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     NodeGraphWidgetActions editor_actions;
     editor_actions.connectLink = [this](int start_pin, int end_pin) -> std::optional<int> {
-        if (!m_graph_widget || !m_graph_widget->onLinkCreating ||
-            !m_graph_widget->onLinkCreating(start_pin, end_pin))
+        const auto link_id = m_circuit_runtime.connect(start_pin, end_pin);
+        if (!link_id)
             return std::nullopt;
-        const int link_id = m_graph_engine.addLink(start_pin, end_pin);
         m_graph_editor_actions.topologyChanged();
         markDirty();
         return link_id;
     };
     editor_actions.disconnectLink = [this](int link_id) {
-        const auto &links = m_graph_engine.links();
-        const auto it = std::find_if(links.begin(), links.end(), [link_id](const GraphLink &link) {
-            return link.link_id == link_id;
-        });
-        if (it == links.end())
+        if (!m_circuit_runtime.disconnect(link_id))
             return false;
-        m_graph_engine.removeLink(link_id);
         m_graph_editor_actions.topologyChanged();
         markDirty();
         return true;
     };
     const auto remove_component = [this](int id) {
-        if (!m_components.remove(id))
+        if (!m_circuit_runtime.removeComponent(id))
             return false;
         // Remove the destroyed engine's Spectrum pointers before later panels draw.
-        rewireInputs();
-        m_pfb_views.rebuild(m_components, m_state);
+        m_pfb_views.rebuild(m_circuit_runtime.components(), m_state);
         m_graph_editor_actions.topologyChanged();
         markDirty();
         return true;
@@ -127,9 +117,10 @@ RfSimulatorApp::RfSimulatorApp()
     editor_actions.selectGroup = [this](int group_id) {
         m_graph_editor_actions.selectGroup(group_id);
     };
-    m_graph_widget = std::make_unique<NodeGraphWidget>(m_graph_engine, std::move(editor_actions));
+    m_graph_widget =
+        std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
     m_serializer = std::make_unique<ProjectSerializer>(
-        m_components, m_graph_engine, *m_graph_widget, m_pfb_views, m_state, m_next_component_id,
+        m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views, m_state,
         m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor, m_na_engine);
 
     std::vector<NodeGraphWidget::AddableComponent> addable;
@@ -140,23 +131,14 @@ RfSimulatorApp::RfSimulatorApp()
     }
     m_graph_widget->setAddableComponents(std::move(addable));
     m_graph_widget->onNodeMoved = [this]() { markDirty(); };
-    m_graph_widget->onLinkCreating = [this](int start_pin, int end_pin) {
-        const int target_node_id = m_graph_engine.nodeIdForPin(end_pin);
-        auto *target = m_components.find(target_node_id);
-        const int source_node_id = m_graph_engine.nodeIdForPin(start_pin);
-        auto *source = m_components.find(source_node_id);
-        if (!graphLinkAllowed(source, target, start_pin, end_pin))
-            return false;
-        return m_graph_engine.canAddLink(start_pin, end_pin);
-    };
     m_graph_widget->onRemoveNode = [remove_component](int id) { remove_component(id); };
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
-        info.summary = m_components.hoverSummary(id);
+        info.summary = m_circuit_runtime.components().hoverSummary(id);
         // The first output is the SNR target. A PFB's first output is its active
         // channel, whose noise is already integrated across the channel
         // response; other components use the analyzer's current RBW measurement.
-        if (IComponentEngine *component = m_components.find(id)) {
+        if (IComponentEngine *component = m_circuit_runtime.components().find(id)) {
             const auto &outputs = component->node().outputs;
             if (!outputs.empty()) {
                 if (component->type_name() == "pfb") {
@@ -170,12 +152,15 @@ RfSimulatorApp::RfSimulatorApp()
         return info;
     };
 
-    m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)
-        .addTone(100e6, -20.0);
-    m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
+    if (const auto *descriptor = ComponentTypeRegistry::instance().find("generator")) {
+        if (auto *engine = m_circuit_runtime.createComponent(descriptor->create))
+            static_cast<SignalGeneratorEngine *>(engine)->addTone(100e6, -20.0);
+    }
+    if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
+        m_circuit_runtime.createComponent(descriptor->create);
 
-    m_inspector_panel =
-        std::make_unique<InspectorPanel>(m_graph_engine, m_components, m_graph_editor_actions);
+    m_inspector_panel = std::make_unique<InspectorPanel>(
+        m_circuit_runtime.graph(), m_circuit_runtime.components(), m_graph_editor_actions);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         if (m_graph_widget->onRemoveNode)
@@ -191,8 +176,7 @@ RfSimulatorApp::RfSimulatorApp()
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
-        auto *engine =
-            m_library.instantiate(def, m_next_component_id++, m_components, m_graph_engine);
+        auto *engine = m_library.instantiate(def, m_circuit_runtime, m_graph_editor_actions);
         if (engine)
             markDirty();
     };
@@ -202,16 +186,19 @@ RfSimulatorApp::RfSimulatorApp()
         openEditComponentForm(def);
     };
 
-    m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine, m_view_manager);
-    m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_graph_engine);
-    m_power_meter_widget = std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_graph_engine);
+    m_spectrum_widget = std::make_unique<SpectrumAnalyzerWidget>(m_spectrum_engine,
+                                                                 m_circuit_runtime.viewManager());
+    m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_circuit_runtime.graph());
+    m_power_meter_widget =
+        std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_circuit_runtime.graph());
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
     // state (persisted by ProjectSerializer) — mark the project dirty exactly
     // like InspectorPanel::onParamChange does for component params.
     m_na_widget->onParamChange = [this]() { markDirty(); };
-    m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_components);
+    m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_circuit_runtime.components());
     m_calculator_widget->onParamChange = [this]() { markDirty(); };
-    m_test_flow_widget = std::make_unique<TestFlowWidget>(m_components, m_graph_engine);
+    m_test_flow_widget =
+        std::make_unique<TestFlowWidget>(m_circuit_runtime.components(), m_circuit_runtime.graph());
 
     // Ensure all engine nodes are registered with the widget's imnodes context
     // so saveProject() can read node positions (GetNodeEditorSpacePos) without
@@ -233,7 +220,7 @@ RfSimulatorApp::RfSimulatorApp()
 // graph+registry per measurement pass, destroyed (RAII) at pass end so the
 // real graph/registry are never touched by the clone-chain measurement.
 
-RfSimulatorApp::NaHost::NaHost(ComponentRegistry &components) : m_components(components) {}
+RfSimulatorApp::NaHost::NaHost(const ComponentRegistry &components) : m_components(components) {}
 
 IComponentEngine *RfSimulatorApp::NaHost::componentForNode(int graph_node_id) const {
     return m_components.find(graph_node_id);
@@ -253,7 +240,7 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
 }
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
-    IComponentEngine *comp = desc->create(m_components, m_graph_engine, m_next_component_id++);
+    IComponentEngine *comp = m_circuit_runtime.createComponent(desc->create);
     ImNodes::EditorContextSet(m_graph_widget->context());
     ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
     if (desc->type == "pfb") {
@@ -275,7 +262,7 @@ void RfSimulatorApp::load_window_states() {
 }
 
 bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
-    IComponentEngine *src = m_components.find(graph_node_id);
+    IComponentEngine *src = m_circuit_runtime.components().find(graph_node_id);
     if (!src)
         return false;
 
@@ -286,7 +273,7 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
 
     // Capture source part number for copying to the duplicate
     std::string src_part_number;
-    for (const auto &gn : m_graph_engine.nodes()) {
+    for (const auto &gn : m_circuit_runtime.graph().nodes()) {
         if (gn.node_id == graph_node_id) {
             src_part_number = gn.part_number;
             break;
@@ -298,7 +285,7 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
     if (!desc)
         return false;
-    IComponentEngine *copy = desc->create(m_components, m_graph_engine, m_next_component_id++);
+    IComponentEngine *copy = m_circuit_runtime.createComponent(desc->create);
     copy->deserialize(src->serialize());
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
@@ -342,9 +329,12 @@ void RfSimulatorApp::startTutorial() {
     // Reset to the same Generator + Amplifier pair the app seeds on first launch,
     // so every step's instruction matches what the user is actually looking at.
     newProject();
-    m_components.add<SignalGeneratorEngine>(m_next_component_id++, m_graph_engine)
-        .addTone(100e6, -20.0);
-    m_components.add<AmplifierEngine>(m_next_component_id++, m_graph_engine);
+    if (const auto *descriptor = ComponentTypeRegistry::instance().find("generator")) {
+        if (auto *engine = m_circuit_runtime.createComponent(descriptor->create))
+            static_cast<SignalGeneratorEngine *>(engine)->addTone(100e6, -20.0);
+    }
+    if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
+        m_circuit_runtime.createComponent(descriptor->create);
     m_graph_widget->syncNodesFromEngine();
 
     // Every panel a step highlights must be on screen for the highlight to
@@ -368,37 +358,46 @@ IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int
 IComponentEngine *RfSimulatorApp::testCreateComponent(
     const std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)> &factory,
     int engine_id) {
-    return factory ? factory(m_components, m_graph_engine, engine_id) : nullptr;
+    if (!factory)
+        return nullptr;
+    const int next_component_id = m_circuit_runtime.nextComponentId();
+    const auto test_factory = [&factory, engine_id](ComponentRegistry &components,
+                                                    NodeGraphEngine &graph, int) {
+        return factory(components, graph, engine_id);
+    };
+    try {
+        IComponentEngine *engine = m_circuit_runtime.createComponent(test_factory);
+        m_circuit_runtime.setNextComponentId(next_component_id);
+        return engine;
+    } catch (...) {
+        m_circuit_runtime.setNextComponentId(next_component_id);
+        throw;
+    }
 }
 
 std::optional<int> RfSimulatorApp::testConnectLink(int start_pin_id, int end_pin_id) {
-    if (!m_graph_widget || !m_graph_widget->onLinkCreating ||
-        !m_graph_widget->onLinkCreating(start_pin_id, end_pin_id))
+    const auto link_id = m_circuit_runtime.connect(start_pin_id, end_pin_id);
+    if (!link_id)
         return std::nullopt;
-
-    const int link_id = m_graph_engine.addLink(start_pin_id, end_pin_id);
     m_graph_editor_actions.topologyChanged();
     return link_id;
 }
 
 bool RfSimulatorApp::testDisconnectLink(int link_id) {
-    const auto &links = m_graph_engine.links();
-    const auto it = std::find_if(links.begin(), links.end(), [link_id](const GraphLink &link) {
-        return link.link_id == link_id;
-    });
-    if (it == links.end())
+    if (!m_circuit_runtime.disconnect(link_id))
         return false;
 
-    m_graph_engine.removeLink(link_id);
     m_graph_editor_actions.topologyChanged();
     return true;
 }
 
 bool RfSimulatorApp::testRemoveComponent(int graph_node_id) {
-    if (!m_graph_widget || !m_graph_widget->onRemoveNode || !m_components.find(graph_node_id))
+    if (!m_circuit_runtime.removeComponent(graph_node_id))
         return false;
 
-    m_graph_widget->onRemoveNode(graph_node_id);
+    m_pfb_views.rebuild(m_circuit_runtime.components(), m_state);
+    m_graph_editor_actions.topologyChanged();
+    markDirty();
     return true;
 }
 
@@ -972,28 +971,22 @@ void RfSimulatorApp::drawComponentFormModal() {
     }
 }
 
-void RfSimulatorApp::rewireInputs() { rewireComponentInputs(m_components.all(), m_graph_engine); }
-
 void RfSimulatorApp::update_dsp() {
-    rewireInputs();
+    m_circuit_runtime.update(0.0);
 
-    auto order = m_graph_engine.topologicalOrder();
-    for (int node_id : order) {
-        if (auto *comp = m_components.find(node_id))
-            comp->update(0.0);
-    }
-
+    const auto &graph = m_circuit_runtime.graph();
+    const auto &view_manager = m_circuit_runtime.viewManager();
     // Update spectrum view based on probed pins. Each probe resolves to a
     // (node, output-index) pair so OUT2 of a splitter/PFB probes the right
     // Spectrum instead of always outputs[0].
-    auto probed_sources = m_graph_engine.probedSignalNodes();
+    const auto probed_sources = graph.probedSignalNodes();
     std::vector<std::string> probe_labels;
     std::vector<std::pair<SignalNode *, int>> probe_targets;
     probe_targets.reserve(probed_sources.size());
     for (const auto &ps : probed_sources) {
         std::string label;
         if (ps.node) {
-            for (const auto &node : m_graph_engine.nodes()) {
+            for (const auto &node : graph.nodes()) {
                 if (node.signal_node == ps.node) {
                     label = node.label + " OUT";
                     if (ps.output_index > 0)
@@ -1008,7 +1001,7 @@ void RfSimulatorApp::update_dsp() {
     m_spectrum_widget->setProbeLabels(probe_labels);
     m_spectrum_widget->setProbeTargets(probe_targets);
 
-    for (auto *node : m_view_manager.nodes()) {
+    for (auto *node : view_manager.nodes()) {
         if (node) {
             node->view_enabled = std::find_if(probed_sources.begin(), probed_sources.end(),
                                               [node](const SignalSource &ps) {
@@ -1018,7 +1011,7 @@ void RfSimulatorApp::update_dsp() {
     }
 
     // Sync PFB pointers to spectrum analyzer and inspector panel
-    auto pfb_ptrs = m_components.byType<PFBChannelizerEngine>();
+    auto pfb_ptrs = m_circuit_runtime.components().byType<PFBChannelizerEngine>();
     std::vector<PFBChannelizerEngine *> pfb_vec(pfb_ptrs.begin(), pfb_ptrs.end());
     m_spectrum_widget->setPFBs(pfb_vec);
     m_inspector_panel->setPFBs(pfb_vec);
@@ -1417,7 +1410,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
     m_state.saveBool("WindowState", "PowerMeter", m_show_power_meter);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
-    m_pfb_views.saveVisibility(m_components, m_state);
+    m_pfb_views.saveVisibility(m_circuit_runtime.components(), m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);

@@ -21,9 +21,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "amplifier_engine.h"
+#include "circuit_runtime.h"
 #include "component_library.h"
-#include "component_registry.h"
-#include "view_manager.h"
+#include "graph_editor_actions.h"
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -198,14 +198,14 @@ TEST_CASE("ComponentLibrary instantiate recomputes validation when cached "
     def.parameters = {{"gain_dB", 9999.0}}; // out of range
     REQUIRE(def.issues.empty());            // caller never ran validate()
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    const auto &graph = runtime.graph();
 
-    auto *engine = lib.instantiate(def, 705, registry, graph);
+    auto *engine = lib.instantiate(def, runtime, actions);
 
     REQUIRE(engine == nullptr);
-    REQUIRE(registry.size() == 0);
+    REQUIRE(runtime.components().size() == 0);
     REQUIRE(graph.nodes().empty());
 }
 
@@ -231,15 +231,15 @@ TEST_CASE("ComponentLibrary instantiate rolls back when engine deserialize throw
     REQUIRE(defs.size() == 1); // passes descriptor validation: no issues
     REQUIRE(defs[0]->issues.empty());
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    const auto &graph = runtime.graph();
 
     IComponentEngine *engine = nullptr;
-    REQUIRE_NOTHROW(engine = lib.instantiate(*defs[0], 701, registry, graph));
+    REQUIRE_NOTHROW(engine = lib.instantiate(*defs[0], runtime, actions));
 
     REQUIRE(engine == nullptr);
-    REQUIRE(registry.size() == 0); // no partially registered component
+    REQUIRE(runtime.components().size() == 0); // no partially registered component
     REQUIRE(graph.nodes().empty());
 
     // Insertion state stays consistent: a later valid insert works.
@@ -250,9 +250,9 @@ TEST_CASE("ComponentLibrary instantiate rolls back when engine deserialize throw
     })");
     ComponentLibrary lib2;
     lib2.loadFile((dir.root / "att.json").string());
-    auto *att = lib2.instantiate(*lib2.all()[0], 702, registry, graph);
+    auto *att = lib2.instantiate(*lib2.all()[0], runtime, actions);
     REQUIRE(att != nullptr);
-    REQUIRE(registry.size() == 1);
+    REQUIRE(runtime.components().size() == 1);
     REQUIRE(graph.nodes().size() == 1);
 }
 
@@ -280,10 +280,9 @@ TEST_CASE("Library instantiate neutralizes S-param path parameters that escape "
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
-    auto *engine = lib.instantiate(*defs[0], 703, registry, graph);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr); // falls back to single-point params
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);
@@ -313,10 +312,9 @@ TEST_CASE("Library instantiate resolves contained S-param path parameters "
     auto defs = lib.all();
     REQUIRE(defs.size() == 1);
 
-    NodeGraphEngine graph;
-    ViewManager view;
-    ComponentRegistry registry(graph, view);
-    auto *engine = lib.instantiate(*defs[0], 704, registry, graph);
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
     REQUIRE(engine != nullptr);
 
     auto *amp = dynamic_cast<AmplifierEngine *>(engine);

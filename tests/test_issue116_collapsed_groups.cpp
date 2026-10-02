@@ -10,6 +10,8 @@
 //   4. the GUI accepted cycles that the test-flow harness rejects.
 #include "amplifier_engine.h"
 #include "app.h"
+#include "circuit_runtime.h"
+#include "component_type_registry.h"
 #include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imnodes.h"
@@ -100,48 +102,58 @@ TEST_CASE("NodeGraphEngine rejects duplicate input links and cycles", "[issue116
 TEST_CASE_METHOD(ImGuiFixture,
                  "Issue #116: collapsed blocks render and cross-group links are drawn",
                  "[issue116][widget]") {
-    NodeGraphEngine graph;
-    SignalNode a, b, c, d;
-    const int id_a = graph.addNode("A", &a, 1, 1);
-    const int id_b = graph.addNode("B", &b, 1, 1);
-    const int id_c = graph.addNode("C", &c, 1, 1);
-    const int id_d = graph.addNode("D", &d, 1, 1);
+    const auto *generator_factory = ComponentTypeRegistry::instance().find("generator");
+    const auto *amplifier_factory = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(generator_factory != nullptr);
+    REQUIRE(amplifier_factory != nullptr);
+
+    CircuitRuntime runtime;
+    GraphEditorActions editor_actions(runtime);
+    auto *a = runtime.createComponent(generator_factory->create);
+    auto *b = runtime.createComponent(amplifier_factory->create);
+    auto *c = runtime.createComponent(amplifier_factory->create);
+    auto *d = runtime.createComponent(amplifier_factory->create);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(c != nullptr);
+    REQUIRE(d != nullptr);
+    const auto &graph = runtime.graph();
+    const int id_a = a->graphNodeId();
+    const int id_b = b->graphNodeId();
+    const int id_c = c->graphNodeId();
+    const int id_d = d->graphNodeId();
 
     // Two independent groups, expanded for the first frame so the widget caches
     // their members' positions.
-    const int group_a = graph.addGroup("Group A", {id_a, id_b});
-    const int group_b = graph.addGroup("Group B", {id_c, id_d});
+    const int group_a = editor_actions.createGroup("Group A", {id_a, id_b});
+    const int group_b = editor_actions.createGroup("Group B", {id_c, id_d});
     // The groups start expanded, so the widget can snapshot member positions.
 
     // Cross-group link plus an internal link in each group.
-    graph.addLink(graph.nodes()[0].output_pin_ids[0],
-                  graph.nodes()[2].input_pin_ids[0]); // A.out -> C.in
-    graph.addLink(graph.nodes()[0].output_pin_ids[0],
-                  graph.nodes()[1].input_pin_ids[0]); // A.out -> B.in (internal)
-    graph.addLink(graph.nodes()[2].output_pin_ids[0],
-                  graph.nodes()[3].input_pin_ids[0]); // C.out -> D.in (internal)
-    GraphEditorActions editor_actions(graph);
+    REQUIRE(runtime.connect(graph.nodes()[0].output_pin_ids[0],
+                            graph.nodes()[2].input_pin_ids[0])
+                .has_value()); // A.out -> C.in
+    REQUIRE(runtime.connect(graph.nodes()[0].output_pin_ids[0],
+                            graph.nodes()[1].input_pin_ids[0])
+                .has_value()); // A.out -> B.in (internal)
+    REQUIRE(runtime.connect(graph.nodes()[2].output_pin_ids[0],
+                            graph.nodes()[3].input_pin_ids[0])
+                .has_value()); // C.out -> D.in (internal)
     editor_actions.topologyChanged();
 
     const NodeGraphEngine &graph_view = graph;
     NodeGraphWidgetActions actions;
     actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
-        if (!graph.canAddLink(start_pin_id, end_pin_id))
-            return std::nullopt;
-        const int link_id = graph.addLink(start_pin_id, end_pin_id);
-        editor_actions.topologyChanged();
+        auto link_id = runtime.connect(start_pin_id, end_pin_id);
+        if (link_id)
+            editor_actions.topologyChanged();
         return link_id;
     };
     actions.disconnectLink = [&](int link_id) {
-        const auto &links = graph.links();
-        const bool exists =
-            std::any_of(links.begin(), links.end(),
-                        [link_id](const GraphLink &link) { return link.link_id == link_id; });
-        if (!exists)
-            return false;
-        graph.removeLink(link_id);
-        editor_actions.topologyChanged();
-        return true;
+        const bool disconnected = runtime.disconnect(link_id);
+        if (disconnected)
+            editor_actions.topologyChanged();
+        return disconnected;
     };
     actions.createGroup = [&](std::string name, std::vector<int> members) {
         return editor_actions.createGroup(std::move(name), std::move(members));
@@ -198,33 +210,40 @@ TEST_CASE_METHOD(
     ImGuiFixture,
     "Issue #116: widget link requests commit only through callbacks and refresh boundaries",
     "[issue116][widget][actions]") {
-    NodeGraphEngine graph;
-    SignalNode a, b, c, d;
-    const int node_a = graph.addNode("A", &a, 1, 1);
-    const int node_b = graph.addNode("B", &b, 1, 1);
-    const int node_c = graph.addNode("C", &c, 1, 1);
-    const int node_d = graph.addNode("D", &d, 1, 1);
-    const int group_a = graph.addGroup("A group", {node_a, node_b});
-    const int group_b = graph.addGroup("B group", {node_c, node_d});
-    GraphEditorActions editor_actions(graph);
+    const auto *generator_factory = ComponentTypeRegistry::instance().find("generator");
+    const auto *amplifier_factory = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(generator_factory != nullptr);
+    REQUIRE(amplifier_factory != nullptr);
+
+    CircuitRuntime runtime;
+    GraphEditorActions editor_actions(runtime);
+    auto *a = runtime.createComponent(generator_factory->create);
+    auto *b = runtime.createComponent(amplifier_factory->create);
+    auto *c = runtime.createComponent(amplifier_factory->create);
+    auto *d = runtime.createComponent(amplifier_factory->create);
+    REQUIRE(a != nullptr);
+    REQUIRE(b != nullptr);
+    REQUIRE(c != nullptr);
+    REQUIRE(d != nullptr);
+    const auto &graph = runtime.graph();
+    const int node_a = a->graphNodeId();
+    const int node_b = b->graphNodeId();
+    const int node_c = c->graphNodeId();
+    const int node_d = d->graphNodeId();
+    const int group_a = editor_actions.createGroup("A group", {node_a, node_b});
+    const int group_b = editor_actions.createGroup("B group", {node_c, node_d});
     NodeGraphWidgetActions actions;
     actions.connectLink = [&](int start_pin_id, int end_pin_id) -> std::optional<int> {
-        if (!graph.canAddLink(start_pin_id, end_pin_id))
-            return std::nullopt;
-        const int link_id = graph.addLink(start_pin_id, end_pin_id);
-        editor_actions.topologyChanged();
+        auto link_id = runtime.connect(start_pin_id, end_pin_id);
+        if (link_id)
+            editor_actions.topologyChanged();
         return link_id;
     };
     actions.disconnectLink = [&](int link_id) {
-        const auto &links = graph.links();
-        const bool exists =
-            std::any_of(links.begin(), links.end(),
-                        [link_id](const GraphLink &link) { return link.link_id == link_id; });
-        if (!exists)
-            return false;
-        graph.removeLink(link_id);
-        editor_actions.topologyChanged();
-        return true;
+        const bool disconnected = runtime.disconnect(link_id);
+        if (disconnected)
+            editor_actions.topologyChanged();
+        return disconnected;
     };
     const NodeGraphEngine &graph_view = graph;
     NodeGraphWidget widget(graph_view, actions);

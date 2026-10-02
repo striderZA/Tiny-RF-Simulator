@@ -105,7 +105,7 @@ void recordItemRect(float out[4]) {
 
 } // namespace
 
-TestFlowWidget::TestFlowWidget(ComponentRegistry &components, NodeGraphEngine &graph)
+TestFlowWidget::TestFlowWidget(const ComponentRegistry &components, const NodeGraphEngine &graph)
     : m_components(components), m_graph(graph) {
     // The measurement form is usable as soon as a component is picked, so its
     // metric starts at the panel's default rather than empty.
