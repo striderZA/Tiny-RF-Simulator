@@ -1182,6 +1182,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        IM_CHECK(s_app->m_show_receiver_requirements);
         IM_CHECK(state.config.has_value());
         if (state.config) {
             IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
@@ -1195,10 +1198,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         state.config.reset();
         state.invalid_reason = "malformed project data";
         s_app->m_dirty = false;
-        ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Receiver Requirements");
-        ctx->SetRef("");
-        ctx->Yield(3);
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");

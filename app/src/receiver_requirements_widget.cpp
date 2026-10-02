@@ -119,8 +119,6 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
             resetDraft(state);
             if (onChange)
                 onChange();
-            if (p_open)
-                *p_open = false;
         }
     }
     ImGui::SameLine();
