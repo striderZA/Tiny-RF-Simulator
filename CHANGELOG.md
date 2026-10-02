@@ -1,3 +1,17 @@
+## [0.26.0] - 2026-10-02
+
+### Added
+
+- **Receiver Requirements panel** — configure a frequency band, acceptable gain range, and maximum noise figure, then compare the analyzer sweep against those limits with per-metric and overall pass, fail, or incomplete status. Requirements persist with the project.
+
+### Changed
+
+- **UI-independent circuit runtime** — move graph/component ownership, topology edits, and signal updates into `CircuitRuntime`, separating editor-specific actions into `GraphEditorActions`. Project loading routes topology changes through the runtime.
+
+### Testing
+
+- Add receiver-requirements evaluation, project-persistence, and panel workflow coverage, plus headless circuit-runtime and graph-editor-action tests.
+
 ## [0.25.1] - 2026-10-01
 
 ### Added
