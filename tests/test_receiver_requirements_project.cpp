@@ -419,6 +419,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed persisted receiver requirements are in
         savedProjectWithRequirements(path, malformed);
         RfSimulatorApp app;
         app.loadProject(path);
+        CHECK(app.m_current_project_path == path);
         CHECK(app.componentCount() == 2);
         CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
         CHECK_FALSE(app.testReceiverRequirementsState().invalid_reason.empty());
