@@ -399,3 +399,9 @@ add_standalone_test(test_receiver_requirements_project
     LIBS simulator::app
 )
 set_tests_properties(test_receiver_requirements_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone real-engine coverage for the UI-free receiver measurement engine,
+# including the maximum full-grid IIP3 recompute/cached-update benchmark.
+add_standalone_test(test_receiver_performance_measurements
+    SOURCES test_receiver_performance_measurements.cpp
+    LIBS simulator::app
+)
