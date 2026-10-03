@@ -1203,8 +1203,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(s_app->m_show_receiver_requirements);
         IM_CHECK(receiver.isInProgress());
         const auto resumed = receiver.measurements();
-        IM_CHECK(finiteCount(resumed.output_power_dBm) >=
-                 finiteCount(paused.output_power_dBm));
+        IM_CHECK(finiteCount(resumed.output_power_dBm) >= finiteCount(paused.output_power_dBm));
 
         for (int frame = 0; frame < 1000 && receiver.isInProgress(); ++frame)
             ctx->Yield();

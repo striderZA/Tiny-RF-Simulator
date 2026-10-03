@@ -1370,9 +1370,9 @@ void RfSimulatorApp::draw_ui() {
         if (measurement_config.output_power &&
             !measurement_config.measurement_conditions.output_reference_tone_frequency_Hz)
             measurement_config.measurement_conditions.output_reference_tone_frequency_Hz = -1.0;
-        m_receiver_performance_engine.update(
-            measurement_config, m_na_engine.pointAPin(), m_na_engine.pointBPin(),
-            m_na_engine.sweepFrequencies());
+        m_receiver_performance_engine.update(measurement_config, m_na_engine.pointAPin(),
+                                             m_na_engine.pointBPin(),
+                                             m_na_engine.sweepFrequencies());
 
         std::vector<ReceiverGeneratorToneOption> source_tones;
         const int source_node_id = m_circuit_runtime.graph().nodeIdForPin(m_na_engine.pointAPin());

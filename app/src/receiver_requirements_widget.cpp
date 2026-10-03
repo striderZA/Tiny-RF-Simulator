@@ -6,11 +6,11 @@
 #include <string>
 
 namespace {
-constexpr const char *kLabels[] = {"Band start (Hz)", "Band stop (Hz)", "Gain min (dB)",
-                                   "Gain max (dB)", "NF max (dB)", "Output power min (dBm)",
-                                   "Output power max (dBm)", "IIP3 min (dBm)",
-                                   "IIP3 tone spacing (Hz)", "IIP3 input start (dBm)",
-                                   "IIP3 input stop (dBm)", "IIP3 input step (dB)"};
+constexpr const char *kLabels[] = {
+    "Band start (Hz)",        "Band stop (Hz)",        "Gain min (dB)",
+    "Gain max (dB)",          "NF max (dB)",           "Output power min (dBm)",
+    "Output power max (dBm)", "IIP3 min (dBm)",        "IIP3 tone spacing (Hz)",
+    "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)"};
 
 const char *statusText(ReceiverRequirementStatus status) {
     switch (status) {
@@ -37,8 +37,7 @@ bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDra
     return a.band_start_Hz == b.band_start_Hz && a.band_stop_Hz == b.band_stop_Hz &&
            a.gain_min_dB == b.gain_min_dB && a.gain_max_dB == b.gain_max_dB &&
            a.nf_max_dB == b.nf_max_dB && a.output_power_min_dBm == b.output_power_min_dBm &&
-           a.output_power_max_dBm == b.output_power_max_dBm &&
-           a.iip3_min_dBm == b.iip3_min_dBm &&
+           a.output_power_max_dBm == b.output_power_max_dBm && a.iip3_min_dBm == b.iip3_min_dBm &&
            a.iip3_tone_spacing_Hz == b.iip3_tone_spacing_Hz &&
            a.iip3_input_start_dBm == b.iip3_input_start_dBm &&
            a.iip3_input_stop_dBm == b.iip3_input_stop_dBm &&
@@ -92,7 +91,8 @@ ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementS
     return ReceiverRequirementStatusTone::Neutral;
 }
 
-bool ReceiverRequirementsWidget::stateMatchesSnapshot(const ReceiverRequirementsState &state) const {
+bool ReceiverRequirementsWidget::stateMatchesSnapshot(
+    const ReceiverRequirementsState &state) const {
     if (state.invalid_reason != m_snapshot.invalid_reason ||
         state.config.has_value() != m_snapshot.config.has_value())
         return false;
@@ -111,15 +111,14 @@ bool ReceiverRequirementsWidget::stateMatchesSnapshot(const ReceiverRequirements
            a.measurement_conditions.output_reference_tone_frequency_Hz ==
                b.measurement_conditions.output_reference_tone_frequency_Hz &&
            a.measurement_conditions.iip3.has_value() == b.measurement_conditions.iip3.has_value() &&
-           (!a.measurement_conditions.iip3 ||
-            (a.measurement_conditions.iip3->tone_spacing_Hz ==
-                 b.measurement_conditions.iip3->tone_spacing_Hz &&
-             a.measurement_conditions.iip3->input_start_dBm ==
-                 b.measurement_conditions.iip3->input_start_dBm &&
-             a.measurement_conditions.iip3->input_stop_dBm ==
-                 b.measurement_conditions.iip3->input_stop_dBm &&
-             a.measurement_conditions.iip3->input_step_dB ==
-                 b.measurement_conditions.iip3->input_step_dB));
+           (!a.measurement_conditions.iip3 || (a.measurement_conditions.iip3->tone_spacing_Hz ==
+                                                   b.measurement_conditions.iip3->tone_spacing_Hz &&
+                                               a.measurement_conditions.iip3->input_start_dBm ==
+                                                   b.measurement_conditions.iip3->input_start_dBm &&
+                                               a.measurement_conditions.iip3->input_stop_dBm ==
+                                                   b.measurement_conditions.iip3->input_stop_dBm &&
+                                               a.measurement_conditions.iip3->input_step_dB ==
+                                                   b.measurement_conditions.iip3->input_step_dB));
 }
 
 ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
