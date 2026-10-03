@@ -12,9 +12,12 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_view_manager.h"
 #include "session_state.h"
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -145,6 +148,92 @@ std::optional<int> checkedJsonInt(const nlohmann::json &j) {
             return static_cast<int>(v);
     }
     return std::nullopt;
+}
+
+// nlohmann::json rejects a valid JSON number such as 1e400 when conversion
+// to double overflows. Normalize only such number tokens before parsing so a
+// malformed optional field can be handled by its normal typed validator,
+// without losing the rest of the project. Quoted strings are copied verbatim.
+std::string normalizeNonFiniteJsonNumbers(const std::string &text) {
+    std::string normalized;
+    normalized.reserve(text.size());
+    bool in_string = false;
+    bool escaped = false;
+    for (std::size_t i = 0; i < text.size();) {
+        const char ch = text[i];
+        if (in_string) {
+            normalized.push_back(ch);
+            ++i;
+            if (escaped)
+                escaped = false;
+            else if (ch == '\\')
+                escaped = true;
+            else if (ch == '"')
+                in_string = false;
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            normalized.push_back(ch);
+            ++i;
+            continue;
+        }
+
+        if (ch == '-' || (ch >= '0' && ch <= '9')) {
+            std::size_t end = i;
+            if (text[end] == '-')
+                ++end;
+            if (end < text.size() && text[end] == '0') {
+                ++end;
+            } else if (end < text.size() && text[end] >= '1' && text[end] <= '9') {
+                do {
+                    ++end;
+                } while (end < text.size() && text[end] >= '0' && text[end] <= '9');
+            } else {
+                normalized.push_back(ch);
+                ++i;
+                continue;
+            }
+            if (end < text.size() && text[end] == '.') {
+                ++end;
+                const std::size_t fraction_start = end;
+                while (end < text.size() && text[end] >= '0' && text[end] <= '9')
+                    ++end;
+                if (end == fraction_start) {
+                    normalized.push_back(ch);
+                    ++i;
+                    continue;
+                }
+            }
+            if (end < text.size() && (text[end] == 'e' || text[end] == 'E')) {
+                ++end;
+                if (end < text.size() && (text[end] == '+' || text[end] == '-'))
+                    ++end;
+                const std::size_t exponent_start = end;
+                while (end < text.size() && text[end] >= '0' && text[end] <= '9')
+                    ++end;
+                if (end == exponent_start) {
+                    normalized.push_back(ch);
+                    ++i;
+                    continue;
+                }
+            }
+
+            const std::string token = text.substr(i, end - i);
+            char *parsed_end = nullptr;
+            const double value = std::strtod(token.c_str(), &parsed_end);
+            if (parsed_end == token.c_str() + token.size() && !std::isfinite(value))
+                normalized += "null";
+            else
+                normalized += token;
+            i = end;
+            continue;
+        }
+
+        normalized.push_back(ch);
+        ++i;
+    }
+    return normalized;
 }
 
 ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value) {
@@ -520,7 +609,9 @@ bool ProjectSerializer::load(const std::string &path) {
 
     nlohmann::json root;
     try {
-        in >> root;
+        std::string source((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        source = normalizeNonFiniteJsonNumbers(source);
+        root = nlohmann::json::parse(source);
     } catch (const nlohmann::json::exception &e) {
         LOG_ERROR("Invalid project file: %s", e.what());
         return false;
