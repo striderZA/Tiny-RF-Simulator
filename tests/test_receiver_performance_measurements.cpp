@@ -5,16 +5,16 @@
 #include "receiver_performance_measurement.h"
 #include "receiver_requirements.h"
 #include "signal_generator_engine.h"
+#include <algorithm>
 #include <catch2/benchmark/catch_benchmark_all.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
-#include <algorithm>
-#include <utility>
 #include <limits>
 #include <map>
 #include <memory>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -34,12 +34,11 @@ class TestAmplifier final : public AmplifierEngine {
         const double high = tones[1].freq_Hz;
         if (m_dropped == DroppedTone::LowerIm3OnlyTwoLevels && tones[0].power_dBm <= -76.0)
             return;
-        const double target = m_dropped == DroppedTone::LowerIm3 ||
-                                      m_dropped == DroppedTone::LowerIm3OnlyTwoLevels
-                                  ? 2.0 * low - high
-                              : m_dropped == DroppedTone::UpperIm3
-                                  ? 2.0 * high - low
-                              : low;
+        const double target =
+            m_dropped == DroppedTone::LowerIm3 || m_dropped == DroppedTone::LowerIm3OnlyTwoLevels
+                ? 2.0 * low - high
+            : m_dropped == DroppedTone::UpperIm3 ? 2.0 * high - low
+                                                 : low;
         auto &output_tones = node().outputs[0].tones;
         std::erase_if(output_tones, [target](const Spectrum::Tone &tone) {
             return std::abs(tone.freq_Hz - target) < 1.0;
@@ -94,6 +93,7 @@ class Host final : public IMeasurementChainHost {
         return std::make_unique<Scratch>(m_dropped);
     }
     mutable int scratch_passes = 0;
+
   private:
     DroppedTone m_dropped;
     std::map<int, IComponentEngine *> by_node;
@@ -222,8 +222,8 @@ TEST_CASE("Receiver IIP3 estimates single and cascaded nonlinear stages on both 
     ReceiverPerformanceMeasurementEngine cascade_engine(c.graph, cascade_host);
     cascade_engine.update(settings, c.generator.outputPinId(), cascade->outputPinId(), {1.0e9});
     REQUIRE(finite(cascade_engine.measurements().iip3_dBm[0]));
-    const double expected = -10.0 * std::log10(std::pow(10.0, -30.0 / 10.0) +
-                                                std::pow(10.0, -21.0 / 10.0));
+    const double expected =
+        -10.0 * std::log10(std::pow(10.0, -30.0 / 10.0) + std::pow(10.0, -21.0 / 10.0));
     CHECK(cascade_engine.measurements().iip3_dBm[0] == Catch::Approx(expected).margin(2.0));
     CHECK(receiverIIP3LevelCount(*settings.measurement_conditions.iip3) == 16);
 }
