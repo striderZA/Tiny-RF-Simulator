@@ -19,20 +19,24 @@
 namespace {
 constexpr double kUnavailable = std::numeric_limits<double>::quiet_NaN();
 
-bool closeFrequency(double actual, double expected) {
-    if (!std::isfinite(actual) || !std::isfinite(expected))
+bool closeFrequency(double actual, double expected,
+                    double maximum_tolerance = std::numeric_limits<double>::infinity()) {
+    if (!std::isfinite(actual) || !std::isfinite(expected) || !(maximum_tolerance > 0.0))
         return false;
-    return std::abs(actual - expected) <= std::max(1.0, std::abs(expected) * 1.0e-12);
+    const double tolerance =
+        std::min(std::max(1.0, std::abs(expected) * 1.0e-12), maximum_tolerance);
+    return std::abs(actual - expected) <= tolerance;
 }
 
-std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz) {
+std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz,
+                                double maximum_tolerance = std::numeric_limits<double>::infinity()) {
     if (!spectrum || !std::isfinite(frequency_Hz))
         return std::nullopt;
 
     double reference_dBm = -std::numeric_limits<double>::infinity();
     std::vector<const Spectrum::Tone *> matches;
     for (const auto &tone : spectrum->tones) {
-        if (!closeFrequency(tone.freq_Hz, frequency_Hz))
+        if (!closeFrequency(tone.freq_Hz, frequency_Hz, maximum_tolerance))
             continue;
         if (!std::isfinite(tone.power_dBm) || !std::isfinite(tone.phase_deg))
             return std::nullopt;
@@ -58,6 +62,7 @@ std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz) {
     const double power_dBm = reference_dBm + 20.0 * std::log10(resultant);
     return std::isfinite(power_dBm) ? std::optional<double>(power_dBm) : std::nullopt;
 }
+
 
 struct LineFit {
     double slope;
@@ -204,7 +209,19 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
             return false;
         const double low = center - spacing / 2.0;
         const double high = center + spacing / 2.0;
-        return low > 0.0 && std::isfinite(high);
+        const double lower_im3 = 2.0 * low - high;
+        const double upper_im3 = 2.0 * high - low;
+        if (!(low > 0.0) || !std::isfinite(high) || !std::isfinite(lower_im3) ||
+            !std::isfinite(upper_im3))
+            return false;
+        const double frequencies[] = {low, high, lower_im3, upper_im3};
+        for (std::size_t i = 0; i < 4; ++i) {
+            for (std::size_t j = i + 1; j < 4; ++j) {
+                if (frequencies[i] == frequencies[j])
+                    return false;
+            }
+        }
+        return true;
     };
 
     if (!same_request) {
@@ -233,7 +250,7 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
             return;
         m_runner = std::move(runner);
 
-        if (generator) {
+        if (config.output_power && generator) {
             const auto &tones = generator->tones();
             const auto selector = config.measurement_conditions.output_reference_tone_frequency_Hz;
             const Spectrum::Tone *selected_tone = nullptr;
@@ -337,13 +354,14 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
         stimulus.frequencies = {center};
         stimulus.tones = {{low, input_dBm, 0.0}, {high, input_dBm, 0.0}};
         const Spectrum *output = m_runner->run(stimulus);
-        if (const auto power = tonePower(output, low))
+        const double frequency_tolerance = settings.tone_spacing_Hz * 0.25;
+        if (const auto power = tonePower(output, low, frequency_tolerance))
             m_lower_fundamental.emplace_back(input_dBm, *power);
-        if (const auto power = tonePower(output, high))
+        if (const auto power = tonePower(output, high, frequency_tolerance))
             m_upper_fundamental.emplace_back(input_dBm, *power);
-        if (const auto power = tonePower(output, 2.0 * low - high))
+        if (const auto power = tonePower(output, 2.0 * low - high, frequency_tolerance))
             m_lower_im3.emplace_back(input_dBm, *power);
-        if (const auto power = tonePower(output, 2.0 * high - low))
+        if (const auto power = tonePower(output, 2.0 * high - low, frequency_tolerance))
             m_upper_im3.emplace_back(input_dBm, *power);
         ++m_current_iip3_level;
     }
