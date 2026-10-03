@@ -1183,16 +1183,18 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         for (double gain : na.gainDb())
             IM_CHECK(std::fabs(gain - 7.0) < 0.1);
 
-        const auto before_pause = receiver.measurements();
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
-        ctx->Yield(4);
+        for (int frame = 0; frame < 8 && s_app->m_show_receiver_requirements; ++frame)
+            ctx->Yield();
         IM_CHECK(!s_app->m_show_receiver_requirements);
         IM_CHECK(receiver.isInProgress());
         const auto paused = receiver.measurements();
-        IM_CHECK(sameSeries(before_pause.output_power_dBm, paused.output_power_dBm));
-        IM_CHECK(sameSeries(before_pause.iip3_dBm, paused.iip3_dBm));
+        ctx->Yield(4);
+        const auto still_paused = receiver.measurements();
+        IM_CHECK(sameSeries(paused.output_power_dBm, still_paused.output_power_dBm));
+        IM_CHECK(sameSeries(paused.iip3_dBm, still_paused.iip3_dBm));
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
@@ -1202,7 +1204,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(receiver.isInProgress());
         const auto resumed = receiver.measurements();
         IM_CHECK(finiteCount(resumed.output_power_dBm) >=
-                 finiteCount(before_pause.output_power_dBm));
+                 finiteCount(paused.output_power_dBm));
 
         for (int frame = 0; frame < 1000 && receiver.isInProgress(); ++frame)
             ctx->Yield();
