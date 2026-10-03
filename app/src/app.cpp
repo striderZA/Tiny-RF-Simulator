@@ -214,12 +214,9 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_show_tutorial_first_run_prompt = !m_tutorial_state.completed();
 }
 
-// --- Network Analyzer host adapter -----------------------------------------
-// RfSimulatorApp implements the engine's injected lookups (see app.h and
-// network_analyzer_engine.h's layering comment): componentForNode wraps
-// ComponentRegistry::find; beginScratchPass hands out one throwaway scratch
-// graph+registry per measurement pass, destroyed (RAII) at pass end so the
-// real graph/registry are never touched by the clone-chain measurement.
+// --- Measurement-chain host adapter ----------------------------------------
+// The app resolves live engines through ComponentRegistry and creates each
+// private clone pass with its own graph/registry and type-registry factory.
 
 RfSimulatorApp::NaHost::NaHost(const ComponentRegistry &components) : m_components(components) {}
 
@@ -227,7 +224,7 @@ IComponentEngine *RfSimulatorApp::NaHost::componentForNode(int graph_node_id) co
     return m_components.find(graph_node_id);
 }
 
-std::unique_ptr<INetworkAnalyzerScratch> RfSimulatorApp::NaHost::beginScratchPass() const {
+std::unique_ptr<IMeasurementChainScratch> RfSimulatorApp::NaHost::beginScratchPass() const {
     return std::make_unique<RfSimulatorApp::NaScratch>();
 }
 

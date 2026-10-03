@@ -190,24 +190,22 @@ class RfSimulatorApp {
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
     bool saveComponentForm();
 
-    // --- Network Analyzer host adapter --------------------------------------
-    // The engine lives in the DSP-engines layer below app/ and never sees app
-    // types; RfSimulatorApp implements its two injected lookups (see
-    // network_analyzer_engine.h's layering comment). componentForNode wraps
-    // ComponentRegistry::find; beginScratchPass hands out one private,
-    // throwaway scratch graph+registry per measurement pass whose clones are
-    // destroyed with it (RAII), so a pass never touches the real graph/registry.
+    // --- Measurement-chain host adapter ------------------------------------
+    // The reusable network-analyzer runner depends only on common and
+    // node_graph_engine. This app adapter resolves live engines through the
+    // ComponentRegistry and provides a private graph/registry clone factory
+    // through the ComponentTypeRegistry.
     class NaScratch;
-    class NaHost final : public INetworkAnalyzerHost {
+    class NaHost final : public IMeasurementChainHost {
       public:
         explicit NaHost(const ComponentRegistry &components);
         IComponentEngine *componentForNode(int graph_node_id) const override;
-        std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override;
+        std::unique_ptr<IMeasurementChainScratch> beginScratchPass() const override;
 
       private:
         const ComponentRegistry &m_components;
     };
-    class NaScratch final : public INetworkAnalyzerScratch {
+    class NaScratch final : public IMeasurementChainScratch {
       public:
         NaScratch();
         IComponentEngine *createClone(std::string_view type, int id) override;

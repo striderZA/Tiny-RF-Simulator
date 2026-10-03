@@ -1,20 +1,16 @@
 #include "network_analyzer_engine.h"
 
 #include "common.h"
-#include "component_interface.h"
-#include "node_graph_engine.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <functional>
 #include <limits>
 #include <optional>
-#include <tuple>
 #include <unordered_map>
 
 NetworkAnalyzerEngine::NetworkAnalyzerEngine(const NodeGraphEngine &graph,
-                                             INetworkAnalyzerHost &host)
+                                             IMeasurementChainHost &host)
     : m_graph(graph), m_host(host) {}
 
 void NetworkAnalyzerEngine::setStartFrequency(double hz) {
@@ -76,279 +72,34 @@ void NetworkAnalyzerEngine::rebuildStimulus() {
     m_nf_dB.assign(m_stimulus_freqs.size(), std::numeric_limits<double>::quiet_NaN());
 }
 
-std::optional<NetworkAnalyzerEngine::PathResult> NetworkAnalyzerEngine::findUniquePath() const {
-    const int start_node = m_graph.nodeIdForPin(m_point_a_pin);
-    const int end_node = m_graph.nodeIdForPin(m_point_b_pin);
-    if (start_node < 0 || end_node < 0 || start_node == end_node)
-        return std::nullopt;
-
-    // Forward adjacency: node -> [(output port, next node, next input port)].
-    // Keeping both pin indices lets the clone chain reproduce the exact path
-    // through multi-port components instead of assuming either port is zero.
-    // Duplicate links (same start pin -> same end pin, which the graph allows)
-    // collapse into a single edge so they cannot fake an ambiguous path.
-    using Edge = std::tuple<int, int, int>;
-    std::unordered_map<int, int> input_port_by_pin;
-    for (const auto &node : m_graph.nodes()) {
-        for (size_t ii = 0; ii < node.input_pin_ids.size(); ++ii)
-            input_port_by_pin.emplace(node.input_pin_ids[ii], static_cast<int>(ii));
-    }
-
-    std::unordered_map<int, std::vector<Edge>> next_of;
-    for (const auto &node : m_graph.nodes()) {
-        std::vector<Edge> nexts;
-        for (size_t oi = 0; oi < node.output_pin_ids.size(); ++oi) {
-            const int out_pin = node.output_pin_ids[oi];
-            for (const auto &link : m_graph.links()) {
-                if (link.start_pin_id != out_pin)
-                    continue;
-                const int next_node = m_graph.nodeIdForPin(link.end_pin_id);
-                const auto input = input_port_by_pin.find(link.end_pin_id);
-                if (next_node >= 0 && input != input_port_by_pin.end())
-                    nexts.emplace_back(static_cast<int>(oi), next_node, input->second);
-            }
-        }
-        std::sort(nexts.begin(), nexts.end());
-        nexts.erase(std::unique(nexts.begin(), nexts.end()), nexts.end());
-        if (!nexts.empty())
-            next_of.emplace(node.node_id, std::move(nexts));
-    }
-
-    // A switch can be reproduced when its exact path input is known and its
-    // other input is unconnected. A second linked throw contributes signal and
-    // noise the private single-path clone cannot reproduce, so reject it just
-    // like a merging component rather than report a plausible but wrong NF.
-    const auto enters_unsupported_multi_input_node = [&](int node_id) {
-        auto *comp = m_host.componentForNode(node_id);
-        if (!comp || comp->numInputPins() <= 1)
-            return false;
-        if (comp->type_name() != "rf_switch_spdt_2to1")
-            return true;
-
-        for (const auto &node : m_graph.nodes()) {
-            if (node.node_id != node_id)
-                continue;
-            const auto connected_inputs = std::count_if(
-                m_graph.links().begin(), m_graph.links().end(), [&](const auto &link) {
-                    return std::find(node.input_pin_ids.begin(), node.input_pin_ids.end(),
-                                     link.end_pin_id) != node.input_pin_ids.end();
-                });
-            return connected_inputs != 1;
-        }
-        return true;
-    };
-
-    // DFS enumerating distinct simple paths, bailing out as soon as a second
-    // one is found (only "unique or not" matters). Also capped by total
-    // visited steps: `path_count >= 2` alone only bounds successful paths, not
-    // wasted exploration of branches that never reach end_node — a graph with
-    // many dead-end branches could otherwise still visit an exponential
-    // number of simple-path prefixes. 100000 is far beyond any plausible
-    // project size; hitting it degrades to "no unique path" (no-data),
-    // consistent with every other ambiguous/unsupported topology here.
-    constexpr int kMaxDfsSteps = 100000;
-    std::vector<int> path;
-    std::vector<int> path_out_idx; // output port path[j] uses to reach path[j+1]
-    std::vector<int> path_in_idx;  // input port path[j+1] is entered through
-    std::vector<int> found_path;
-    std::vector<int> found_out_idx;
-    std::vector<int> found_in_idx;
-    int path_count = 0;
-    int steps = 0;
-
-    std::function<void(int)> dfs = [&](int node) {
-        if (path_count >= 2 || ++steps > kMaxDfsSteps)
-            return;
-        if (node == end_node) {
-            ++path_count;
-            found_path = path;
-            found_out_idx = path_out_idx;
-            found_in_idx = path_in_idx;
-            return;
-        }
-        auto it = next_of.find(node);
-        if (it == next_of.end())
-            return;
-        for (const auto &[oi, nxt, input_index] : it->second) {
-            if (path_count >= 2 || steps > kMaxDfsSteps)
-                return;
-            if (enters_unsupported_multi_input_node(nxt))
-                continue;
-            if (std::find(path.begin(), path.end(), nxt) != path.end())
-                continue; // simple paths only (no revisits)
-            path.push_back(nxt);
-            path_out_idx.push_back(oi);
-            path_in_idx.push_back(input_index);
-            dfs(nxt);
-            path_in_idx.pop_back();
-            path_out_idx.pop_back();
-            path.pop_back();
-        }
-    };
-
-    path.push_back(start_node);
-    dfs(start_node);
-
-    if (path_count != 1)
-        return std::nullopt; // no path, or more than one distinct path
-
-    PathResult result;
-    result.nodes.reserve(found_path.size());
-    for (int node_id : found_path) {
-        auto *comp = m_host.componentForNode(node_id);
-        if (!comp)
-            return std::nullopt; // unregistered node — cannot clone it
-        result.nodes.push_back(comp);
-    }
-    result.out_index = std::move(found_out_idx);
-    result.in_index = std::move(found_in_idx);
-    return result;
-}
-
 void NetworkAnalyzerEngine::computeMeasurement() {
     const size_t N = m_stimulus_freqs.size();
 
-    auto path = findUniquePath();
-    // No path, ambiguous path, or Point A == Point B -> all-NaN. The chain
-    // must contain at least one component: the stimulus is injected at Point
-    // A's output, which replaces the start node's own output.
-    if (!path || path->nodes.size() < 2) {
+    auto path = findMeasurementChainPath(m_graph, m_host, m_point_a_pin, m_point_b_pin);
+    if (!path || path->components.size() < 2) {
         m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
         m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
         m_cached_signature.clear();
         return;
     }
 
-    // Dirty-check: everything below here re-runs each path component's full
-    // DSP across up to 2001 points -- real, non-trivial work (a nonlinear
-    // stage's harmonics/IMD generation scales with tone count) -- and this
-    // function runs unconditionally every ImGui frame the panel is visible.
-    // This instrument has no wired input to compare a cached pointer +
-    // generation against (every other engine's dirty-check), since it reads
-    // a chain of REAL, externally-owned components it gets no change
-    // notification from. Stand in with a signature of the discovered chain
-    // (each node's live serialize() dump -- %.17g-precise doubles round-trip
-    // exactly, so this only changes when a value actually changes) plus the
-    // sweep params and both probe pins; skip the clone-and-cascade below,
-    // reusing last frame's m_gain_dB/m_nf_dB, when nothing in it moved.
-    std::string signature;
-    signature.reserve(256);
-    for (size_t i = 0; i < path->nodes.size(); ++i) {
-        signature += path->nodes[i]->type_name();
-        signature += ':';
-        signature += std::to_string(path->nodes[i]->id());
-        signature += path->nodes[i]->serialize().dump();
-        if (i < path->out_index.size())
-            signature += ':' + std::to_string(path->out_index[i]);
-        if (i < path->in_index.size())
-            signature += ':' + std::to_string(path->in_index[i]);
-        signature += '|';
-    }
+    std::string signature = path->signature();
     char sweep_buf[192];
     std::snprintf(sweep_buf, sizeof(sweep_buf), "%.17g,%.17g,%d,%.17g,%d,%d", m_start_freq,
                   m_stop_freq, m_points, m_stimulus_power_dBm, m_point_a_pin, m_point_b_pin);
     signature += sweep_buf;
-
     if (signature == m_cached_signature)
-        return; // unchanged since last frame -- m_gain_dB/m_nf_dB already hold the answer
+        return;
     m_cached_signature = std::move(signature);
 
     m_gain_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
     m_nf_dB.assign(N, std::numeric_limits<double>::quiet_NaN());
-
-    // Private, throwaway clone chain: a fresh scratch graph+registry for this
-    // pass only, destroyed at function exit. The real graph/registry are never
-    // read for signal purposes and never written to.
-    auto scratch = m_host.beginScratchPass();
-    if (!scratch)
+    IsolatedChainRunner runner(m_host);
+    if (!runner.prepare(*path))
         return;
-
-    // Chain = path nodes after Point A's node, through Point B's node (the
-    // stimulus replaces Point A's signal, so A's own node is not measured).
-    std::vector<IComponentEngine *> clones;
-    clones.reserve(path->nodes.size() - 1);
-    for (size_t i = 1; i < path->nodes.size(); ++i) {
-        IComponentEngine *real = path->nodes[i];
-        IComponentEngine *clone = scratch->createClone(real->type_name(), real->id());
-        if (!clone)
-            return; // unknown type -> no data
-        clone->deserialize(real->serialize());
-        clones.push_back(clone);
-    }
-
-    // Wire by directly assigning SignalNode* pointers (no scratch-graph links
-    // needed), the same technique RfSimulatorApp::rewireInputs() uses. Each
-    // clone reads the exact output and input ports used by the discovered
-    // graph path; this is required for multi-output components and RF switch
-    // throws alike.
-    for (size_t i = 0; i < clones.size(); ++i) {
-        if (i >= path->in_index.size())
-            return; // defensive: one recorded input port per path edge
-        auto &inputs = clones[i]->node().inputs;
-        const size_t input_port = static_cast<size_t>(path->in_index[i]);
-        if (input_port >= inputs.size())
-            return; // defensive: clone pin counts must match the live engine
-        if (i == 0) {
-            inputs[input_port] = &m_stimulus;
-        } else {
-            if (i >= path->out_index.size())
-                return; // defensive: one recorded output port per path edge
-            const int out_port = path->out_index[i];
-            auto &prev_outputs = clones[i - 1]->node().outputs;
-            if (out_port < 0 || static_cast<size_t>(out_port) >= prev_outputs.size())
-                return; // defensive: should never happen, same type = same pin counts
-            inputs[input_port] = &prev_outputs[static_cast<size_t>(out_port)];
-        }
-        // Mixer clones borrow the real, live LO input (read-only). The current
-        // MixerEngine has a single RF input (the LO is the lo_freq_Hz
-        // parameter, already copied exactly by deserialize(real->serialize())),
-        // so this is a no-op today; it keeps the clone faithful if a mixer
-        // model with a separate LO signal input appears.
-        if (clones[i]->type_name() == "mixer" && inputs.size() > 1) {
-            const auto &real_inputs = path->nodes[i + 1]->node().inputs;
-            if (real_inputs.size() > 1)
-                inputs[1] = real_inputs[1];
-        }
-    }
-
-    for (auto *clone : clones)
-        clone->update(0.0);
-
-    // Read the response from Point B's OWN output port — resolved directly
-    // against the graph's raw output_pin_ids (not IComponentEngine::
-    // outputPinId(port), which several multi-output engines, e.g. the PFB
-    // Channelizer, do not override — relying on it would silently fall back
-    // to port 0 exactly like the bug this function fixes). Point B may be
-    // wired to any of its node's output pins (e.g. a PFB Channelizer's OUT2).
-    int point_b_port = 0;
-    for (const auto &node : m_graph.nodes()) {
-        auto it = std::find(node.output_pin_ids.begin(), node.output_pin_ids.end(), m_point_b_pin);
-        if (it != node.output_pin_ids.end()) {
-            point_b_port = static_cast<int>(std::distance(node.output_pin_ids.begin(), it));
-            break;
-        }
-    }
-    auto &final_outputs = clones.back()->node().outputs;
-    if (point_b_port < 0 || static_cast<size_t>(point_b_port) >= final_outputs.size())
+    const Spectrum *response = runner.run(m_stimulus);
+    if (!response)
         return;
-
-    // Match tones by frequency value against the last clone's output, exactly
-    // like the prior gain/NF formula (k/T/dbToLinear reused from common.h; no
-    // Friis math re-derived). A dropped/mistranslated point degrades to NaN.
-    //
-    // response->tones/frequencies can carry a few thousand entries once
-    // harmonics/IMD tones from a nonlinear stage are appended, and N (the
-    // sweep point count) goes up to 2001 -- linearly rescanning both arrays
-    // for EVERY stimulus point was O(N*M): measured ~22ms per update() at
-    // 2001 points (vs. ~0.03ms at 21), run unconditionally every ImGui frame
-    // while the panel is open. This was the "serious performance
-    // degradation when enabled" regression. Bucket both arrays once into
-    // 1 Hz cells (O(M)) so each of the N lookups below is O(1) amortized;
-    // checking a cell plus its two neighbors preserves exact-epsilon
-    // matching across cell boundaries, and picking the lowest tone/frequency
-    // index within range keeps the same "first match in array order"
-    // tie-break as the old linear scan.
-    const Spectrum *response = &final_outputs[static_cast<size_t>(point_b_port)];
     constexpr double kFreqEpsilonHz = 1.0;
     const auto cell_of = [](double f) {
         return static_cast<long long>(std::floor(f / kFreqEpsilonHz));

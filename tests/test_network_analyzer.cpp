@@ -1,16 +1,16 @@
 // Network Analyzer v3 — engine + widget tests (Task 3 rewrite).
 //
 // The v3 engine is a singleton instrument panel, not an IComponentEngine: it
-// is constructed directly with (NodeGraphEngine&, INetworkAnalyzerHost&) and
+// is constructed directly with (NodeGraphEngine&, IMeasurementChainHost&) and
 // measures a chain of REAL graph components on a private, throwaway clone
 // chain ("cheat" mode — the real simulation is never read for signal purposes
 // and never written to; see network_analyzer_engine.h). These tests build
 // small real DUT chains (plain engines + NodeGraphEngine links), inject a
-// test-local INetworkAnalyzerHost, and verify the measurement semantics from
-// the design spec.
+// test-local IMeasurementChainHost, and verify runner and analyzer measurement semantics.
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
 #include "combiner_engine.h"
+#include "measurement_chain_runner.h"
 #include "mixer_engine.h"
 #include "network_analyzer_engine.h"
 #include "network_analyzer_widget.h"
@@ -38,7 +38,7 @@ namespace {
 // applied afterwards via deserialize()). Hand-rolled here because the
 // app-layer adapter (RfSimulatorApp::NaHost) is a private nested class that
 // cannot be reused without dragging the whole app into this standalone target.
-class TestNaScratch final : public INetworkAnalyzerScratch {
+class TestNaScratch final : public IMeasurementChainScratch {
   public:
     IComponentEngine *createClone(std::string_view type, int id) override {
         if (type == "generator")
@@ -70,7 +70,7 @@ class TestNaScratch final : public INetworkAnalyzerScratch {
     }
 };
 
-class TestNaHost final : public INetworkAnalyzerHost {
+class TestNaHost final : public IMeasurementChainHost {
   public:
     explicit TestNaHost(std::vector<IComponentEngine *> chain) {
         for (auto *comp : chain)
@@ -82,7 +82,7 @@ class TestNaHost final : public INetworkAnalyzerHost {
         return it == m_by_node.end() ? nullptr : it->second;
     }
 
-    std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override {
+    std::unique_ptr<IMeasurementChainScratch> beginScratchPass() const override {
         return std::make_unique<TestNaScratch>();
     }
 
@@ -139,6 +139,163 @@ double expectedCompressionDb(const std::vector<Spectrum::Tone> &input_tones, dou
 }
 
 } // namespace
+
+TEST_CASE("MeasurementChainRunner: one prepared chain accepts successive stimuli",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AttenuatorEngine atten(2, graph);
+    atten.setAttenuation(10.0);
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    TestNaHost host({&gen, &atten});
+
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(path.has_value());
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+
+    Spectrum first;
+    first.tones.push_back({1e9, -20.0, 0.0});
+    Spectrum second;
+    second.tones.push_back({1e9, -35.0, 0.0});
+    const Spectrum *first_result = runner.run(first);
+    REQUIRE(first_result != nullptr);
+    REQUIRE(first_result->tones.size() == 1);
+    REQUIRE_THAT(first_result->tones[0].power_dBm, WithinAbs(-30.0, 0.05));
+    const Spectrum *second_result = runner.run(second);
+    REQUIRE(second_result != nullptr);
+    REQUIRE(second_result->tones.size() == 1);
+    REQUIRE_THAT(second_result->tones[0].power_dBm, WithinAbs(-45.0, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: path preserves exact multi-output ports",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    SplitterEngine splitter(2, graph);
+    AttenuatorEngine atten(3, graph);
+    graph.addLink(gen.outputPinId(), splitter.inputPinId());
+    graph.addLink(splitter.outputPinId(1), atten.inputPinId());
+    TestNaHost host({&gen, &splitter, &atten});
+    auto point_b_path =
+        findMeasurementChainPath(graph, host, gen.outputPinId(), splitter.outputPinId(1));
+    REQUIRE(point_b_path.has_value());
+    REQUIRE(point_b_path->output_ports[0] == 0);
+    REQUIRE(point_b_path->point_b_output_port == 1);
+    IsolatedChainRunner point_b_runner(host);
+    REQUIRE(point_b_runner.prepare(*point_b_path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    const Spectrum *point_b_result = point_b_runner.run(stimulus);
+    REQUIRE(point_b_result != nullptr);
+    REQUIRE(point_b_result->tones.size() == 1);
+    REQUIRE_THAT(point_b_result->tones[0].power_dBm, WithinAbs(-23.0103, 0.05));
+
+    auto edge_path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(edge_path.has_value());
+    REQUIRE(edge_path->output_ports.size() == 2);
+    REQUIRE(edge_path->output_ports[1] == 1);
+    IsolatedChainRunner edge_runner(host);
+    REQUIRE(edge_runner.prepare(*edge_path));
+    const Spectrum *edge_result = edge_runner.run(stimulus);
+    REQUIRE(edge_result != nullptr);
+    REQUIRE_THAT(edge_result->tones[0].power_dBm, WithinAbs(-23.0103, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: singly fed RF switch path is supported",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    RFSwitch2to1Engine sw(2, graph);
+    sw.setActiveThrow(1);
+    graph.addLink(gen.outputPinId(), sw.inputPinId(1));
+    TestNaHost host({&gen, &sw});
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), sw.outputPinId());
+    REQUIRE(path.has_value());
+    REQUIRE(path->input_ports.size() == 1);
+    REQUIRE(path->input_ports[0] == 1);
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    const Spectrum *result = runner.run(stimulus);
+    REQUIRE(result != nullptr);
+    REQUIRE(result->tones.size() == 1);
+    REQUIRE_THAT(result->tones[0].power_dBm, WithinAbs(-20.5, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: unsupported and ambiguous paths are rejected",
+          "[network_analyzer][runner]") {
+    SECTION("combiner") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(1, graph);
+        CombinerEngine combiner(2, graph);
+        AttenuatorEngine end(3, graph);
+        graph.addLink(gen.outputPinId(), combiner.inputPinId(0));
+        graph.addLink(combiner.outputPinId(), end.inputPinId());
+        TestNaHost host({&gen, &combiner, &end});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen.outputPinId(), end.outputPinId()));
+    }
+    SECTION("dual-fed switch") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen_a(1, graph);
+        SignalGeneratorEngine gen_b(2, graph);
+        RFSwitch2to1Engine sw(3, graph);
+        graph.addLink(gen_a.outputPinId(), sw.inputPinId(0));
+        graph.addLink(gen_b.outputPinId(), sw.inputPinId(1));
+        TestNaHost host({&gen_a, &gen_b, &sw});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen_a.outputPinId(), sw.outputPinId()));
+    }
+    SECTION("ambiguous") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(1, graph);
+        SplitterEngine splitter(2, graph);
+        AttenuatorEngine branch_a(3, graph);
+        AttenuatorEngine branch_b(4, graph);
+        AttenuatorEngine end(5, graph);
+        graph.addLink(gen.outputPinId(), splitter.inputPinId());
+        graph.addLink(splitter.outputPinId(0), branch_a.inputPinId());
+        graph.addLink(splitter.outputPinId(1), branch_b.inputPinId());
+        graph.addLink(branch_a.outputPinId(), end.inputPinId());
+        graph.addLink(branch_b.outputPinId(), end.inputPinId());
+        TestNaHost host({&gen, &splitter, &branch_a, &branch_b, &end});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen.outputPinId(), end.outputPinId()));
+    }
+}
+
+TEST_CASE("MeasurementChainRunner: scratch run does not mutate live engine state",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AttenuatorEngine atten(2, graph);
+    gen.addTone(1e9, -20.0);
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    gen.update(0.0);
+    atten.node().inputs[0] = &gen.node().outputs[0];
+    atten.update(0.0);
+    TestNaHost host({&gen, &atten});
+    const auto gen_state = gen.serialize();
+    const auto atten_state = atten.serialize();
+    const Spectrum gen_output_before = gen.node().outputs[0];
+    const Spectrum atten_output_before = atten.node().outputs[0];
+    const Spectrum *const live_input_before = atten.node().inputs[0];
+    const size_t link_count_before = graph.links().size();
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(path.has_value());
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    REQUIRE(runner.run(stimulus) != nullptr);
+    REQUIRE(gen.serialize() == gen_state);
+    REQUIRE(atten.serialize() == atten_state);
+    REQUIRE(atten.node().inputs[0] == live_input_before);
+    REQUIRE(graph.links().size() == link_count_before);
+    REQUIRE(gen.node().outputs[0].tones.size() == gen_output_before.tones.size());
+    REQUIRE(atten.node().outputs[0].tones.size() == atten_output_before.tones.size());
+    REQUIRE(gen.node().outputs[0].tones[0].power_dBm == gen_output_before.tones[0].power_dBm);
+    REQUIRE(atten.node().outputs[0].tones[0].power_dBm == atten_output_before.tones[0].power_dBm);
+}
 
 // ---------------------------------------------------------------------------
 // 1. Stimulus correctness — points() frequencies, evenly spaced start->stop.
