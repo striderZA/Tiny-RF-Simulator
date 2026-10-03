@@ -1064,82 +1064,196 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     };
     t = IM_REGISTER_TEST(
         e, "rf_simulator",
-        "receiver_requirements_view_updates_shared_analyzer_with_either_panel_visible");
+        "receiver_requirements_view_updates_analyzer_and_resumes_receiver_measurements");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->Yield(2);
-        ImGuiWindow *existing = ImGui::FindWindowByName("Receiver Requirements");
-        if (existing && existing->Active) {
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
             ctx->SetRef("##MainMenuBar");
             ctx->MenuClick("View/Receiver Requirements");
             ctx->SetRef("");
             ctx->Yield(2);
         }
-
-        // This click intentionally precedes all graph mutations: before the
-        // feature exists, the missing menu item is the behavioral RED.
+        s_app->m_show_na = false;
+        auto &state = s_app->testReceiverRequirementsState();
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
         ctx->Yield(3);
-        ImGuiWindow *opened = ImGui::FindWindowByName("Receiver Requirements");
-        IM_CHECK(opened != nullptr && opened->Active);
-        if (!opened || !opened->Active)
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
             return;
 
-        auto &na = s_app->testNetworkAnalyzerEngine();
-        IComponentEngine *generator = s_app->testCreateComponent("generator", 9001);
-        IComponentEngine *attenuator = s_app->testCreateComponent("attenuator", 9002);
+        auto *generator = dynamic_cast<SignalGeneratorEngine *>(
+            s_app->testCreateComponent("generator", 9201));
+        auto *attenuator =
+            dynamic_cast<AttenuatorEngine *>(s_app->testCreateComponent("attenuator", 9202));
+        auto *amplifier =
+            dynamic_cast<AmplifierEngine *>(s_app->testCreateComponent("amplifier", 9203));
         IM_CHECK(generator != nullptr);
         IM_CHECK(attenuator != nullptr);
-        if (!generator || !attenuator)
+        IM_CHECK(amplifier != nullptr);
+        if (!generator || !attenuator || !amplifier)
             return;
-        const auto &graph = s_app->testGraphEngine();
+
+        generator->addTone(5.0e6, -20.0);
+        attenuator->setAttenuation(3.0);
+        amplifier->setGain_dB(10.0);
+        amplifier->setNF_dB(4.0);
+        amplifier->setEnableNonlinear(true);
+        amplifier->setOIP3_dBm(40.0);
+
         const int generator_out = generator->outputPinId();
         const int attenuator_in = attenuator->inputPinId(0);
         const int attenuator_out = attenuator->outputPinId();
+        const int amplifier_in = amplifier->inputPinId(0);
+        const int amplifier_out = amplifier->outputPinId();
         IM_CHECK(generator_out >= 0);
         IM_CHECK(attenuator_in >= 0);
         IM_CHECK(attenuator_out >= 0);
-        const auto link = s_app->testConnectLink(generator_out, attenuator_in);
-        IM_CHECK(link.has_value());
+        IM_CHECK(amplifier_in >= 0);
+        IM_CHECK(amplifier_out >= 0);
+        const auto first_link = s_app->testConnectLink(generator_out, attenuator_in);
+        const auto second_link = s_app->testConnectLink(attenuator_out, amplifier_in);
+        IM_CHECK(first_link.has_value());
+        IM_CHECK(second_link.has_value());
+        if (!first_link || !second_link)
+            return;
+
+        auto &na = s_app->testNetworkAnalyzerEngine();
         na.setPointA(generator_out);
-        na.setPointB(attenuator_out);
+        na.setPointB(amplifier_out);
         na.setStartFrequency(1.0e6);
         na.setStopFrequency(10.0e6);
         na.setPoints(21);
-        s_app->m_show_na = false;
-        ctx->Yield(4);
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 10.0e6;
+        config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
+        config.iip3_min_dBm = 0.0;
+        config.measurement_conditions.output_reference_tone_frequency_Hz = 5.0e6;
+        config.measurement_conditions.iip3 =
+            ReceiverIIP3TestSettings{1.0e6, -80.0, -40.0, 0.4};
+        state.config = config;
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
         const auto finite = [](const std::vector<double> &values) {
-            return !values.empty() && std::all_of(values.begin(), values.end(), [](double value) {
-                return std::isfinite(value);
-            });
+            return !values.empty() &&
+                   std::all_of(values.begin(), values.end(),
+                               [](double value) { return std::isfinite(value); });
         };
+        const auto finiteCount = [](const std::vector<double> &values) {
+            return static_cast<std::size_t>(std::count_if(
+                values.begin(), values.end(), [](double value) { return std::isfinite(value); }));
+        };
+        const auto sameSeries = [](const std::vector<double> &a, const std::vector<double> &b) {
+            if (a.size() != b.size())
+                return false;
+            for (std::size_t i = 0; i < a.size(); ++i) {
+                if (std::isnan(a[i]) && std::isnan(b[i]))
+                    continue;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        };
+        auto &receiver = s_app->testReceiverPerformanceMeasurementEngine();
+        const auto &partial = receiver.measurements();
+        IM_CHECK(receiver.isInProgress());
+        IM_CHECK_EQ(partial.output_power_dBm.size(), 21);
+        IM_CHECK_EQ(partial.iip3_dBm.size(), 21);
+        IM_CHECK(finiteCount(partial.output_power_dBm) > 0);
+
+        // Requirements-only visibility still updates the existing analyzer
+        // while its own window remains hidden.
         IM_CHECK_EQ(na.sweepFrequencies().size(), 21);
         IM_CHECK_EQ(na.gainDb().size(), 21);
         IM_CHECK_EQ(na.noiseFigureDb().size(), 21);
         IM_CHECK(finite(na.gainDb()));
         IM_CHECK(finite(na.noiseFigureDb()));
+        for (double gain : na.gainDb())
+            IM_CHECK(std::fabs(gain - 7.0) < 0.1);
+
+        const auto before_pause = receiver.measurements();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(4);
+        IM_CHECK(!s_app->m_show_receiver_requirements);
+        IM_CHECK(receiver.isInProgress());
+        const auto paused = receiver.measurements();
+        IM_CHECK(sameSeries(before_pause.output_power_dBm, paused.output_power_dBm));
+        IM_CHECK(sameSeries(before_pause.iip3_dBm, paused.iip3_dBm));
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
-        na.setPoints(11);
-        s_app->m_show_na = true;
-        ctx->Yield(4);
-        IM_CHECK_EQ(na.sweepFrequencies().size(), 11);
-        IM_CHECK_EQ(na.gainDb().size(), 11);
-        IM_CHECK_EQ(na.noiseFigureDb().size(), 11);
-        IM_CHECK(finite(na.gainDb()));
-        IM_CHECK(finite(na.noiseFigureDb()));
+        ctx->Yield(1);
+        IM_CHECK(s_app->m_show_receiver_requirements);
+        IM_CHECK(receiver.isInProgress());
+        const auto resumed = receiver.measurements();
+        IM_CHECK(finiteCount(resumed.output_power_dBm) >=
+                 finiteCount(before_pause.output_power_dBm));
+
+        for (int frame = 0; frame < 1000 && receiver.isInProgress(); ++frame)
+            ctx->Yield();
+        const auto &complete = receiver.measurements();
+        IM_CHECK(!receiver.isInProgress());
+        IM_CHECK(finite(complete.output_power_dBm));
+        IM_CHECK(finite(complete.iip3_dBm));
+        for (double power : complete.output_power_dBm)
+            IM_CHECK(std::fabs(power + 13.0) < 0.25);
+        for (double iip3 : complete.iip3_dBm)
+            IM_CHECK(std::fabs(iip3 - 33.0) < 3.0);
+
+        // A passing status is green only for the applied configuration. Draft
+        // edits must replace it with the neutral unapplied state.
+        const auto has_pass_green = [](ImGuiWindow *window) {
+            if (!window || !window->DrawList)
+                return false;
+            const ImU32 pass_green =
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.25f, 0.85f, 0.35f, 1.0f));
+            for (int i = 0; i < window->DrawList->VtxBuffer.Size; ++i) {
+                if (window->DrawList->VtxBuffer[i].col == pass_green)
+                    return true;
+            }
+            return false;
+        };
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(has_pass_green(panel));
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemInputValue("Band stop (Hz)", "9000000");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        IM_CHECK_EQ(state.config->band_stop_Hz, 10.0e6);
+        IM_CHECK(!s_app->isDirty());
+        IM_CHECK(!has_pass_green(panel));
+        ctx->ItemClick("Cancel");
+        ctx->Yield(2);
+        IM_CHECK(has_pass_green(panel));
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Network Analyzer");
+        ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
-        s_app->m_show_na = false;
-        s_app->testRemoveComponent(attenuator->graphNodeId());
-        s_app->testRemoveComponent(generator->graphNodeId());
+        ctx->Yield(2);
         na.setPointA(-1);
         na.setPointB(-1);
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->testRemoveComponent(amplifier->graphNodeId());
+        s_app->testRemoveComponent(attenuator->graphNodeId());
+        s_app->testRemoveComponent(generator->graphNodeId());
+        s_app->m_dirty = false;
         ctx->Yield(2);
     };
 
@@ -1168,6 +1282,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         s_app->m_dirty = false;
 
         ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable gain");
+        ctx->ItemCheck("Enable noise figure");
         ctx->ItemInputValue("Band start (Hz)", "2000000");
         ctx->ItemInputValue("Band stop (Hz)", "1000000");
         ctx->ItemInputValue("Gain min (dB)", "-3");
@@ -1199,6 +1315,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         state.invalid_reason = "malformed project data";
         s_app->m_dirty = false;
         ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable gain");
+        ctx->ItemCheck("Enable noise figure");
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
         ctx->ItemInputValue("Gain min (dB)", "-3");
@@ -1212,6 +1330,358 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
+        ctx->Yield(2);
+    };
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_optional_metrics_stage_validate_and_cancel");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
+        auto &state = s_app->testReceiverRequirementsState();
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+        ctx->SetRef("Receiver Requirements");
+        const auto setEnabled = [ctx](const char *label, bool enabled) {
+            if (ctx->ItemIsChecked(label) == enabled)
+                return;
+            if (enabled)
+                ctx->ItemCheck(label);
+            else
+                ctx->ItemUncheck(label);
+            ctx->Yield(1);
+        };
+        const auto apply = [ctx]() {
+            ctx->ItemClick("Apply requirements");
+            ctx->Yield(2);
+        };
+
+        setEnabled("Enable gain", true);
+        setEnabled("Enable noise figure", true);
+        setEnabled("Enable output power", true);
+        setEnabled("Enable IIP3", true);
+        ctx->ItemInputValue("Band start (Hz)", "1000000");
+        ctx->ItemInputValue("Band stop (Hz)", "10000000");
+        ctx->ItemInputValue("Gain min (dB)", "-3");
+        ctx->ItemInputValue("Gain max (dB)", "3");
+        ctx->ItemInputValue("NF max (dB)", "5");
+        ctx->ItemInputValue("Output power min (dBm)", "-20");
+        ctx->ItemInputValue("Output power max (dBm)", "-30");
+        ctx->ItemInputValue("IIP3 min (dBm)", "10");
+        ctx->ItemInputValue("IIP3 tone spacing (Hz)", "1000000");
+        ctx->ItemInputValue("IIP3 input start (dBm)", "-20");
+        ctx->ItemInputValue("IIP3 input stop (dBm)", "-30");
+        ctx->ItemInputValue("IIP3 input step (dB)", "5");
+        apply();
+        IM_CHECK(!state.config.has_value());
+        IM_CHECK(!s_app->isDirty());
+
+        // Invalid values in disabled metrics must not block a valid Apply.
+        setEnabled("Enable output power", false);
+        setEnabled("Enable IIP3", false);
+        apply();
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK(state.config->gain.has_value());
+            IM_CHECK(state.config->nf_max_dB.has_value());
+            IM_CHECK(!state.config->output_power.has_value());
+            IM_CHECK(!state.config->iip3_min_dBm.has_value());
+        }
+        IM_CHECK(s_app->isDirty());
+
+        setEnabled("Enable output power", true);
+        setEnabled("Enable IIP3", true);
+        ctx->ItemInputValue("IIP3 min (dBm)", "10");
+        ctx->ItemInputValue("Output power min (dBm)", "-40");
+        ctx->ItemInputValue("Output power max (dBm)", "0");
+        ctx->ItemInputValue("IIP3 tone spacing (Hz)", "2000000");
+        ctx->ItemInputValue("IIP3 input start (dBm)", "-60");
+        ctx->ItemInputValue("IIP3 input stop (dBm)", "-40");
+        ctx->ItemInputValue("IIP3 input step (dB)", "2");
+        apply();
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        IM_CHECK(s_app->m_show_receiver_requirements);
+        IM_CHECK(state.config.has_value());
+        if (!state.config)
+            return;
+        IM_CHECK(state.config->gain.has_value());
+        IM_CHECK(state.config->nf_max_dB.has_value());
+        IM_CHECK(state.config->output_power.has_value());
+        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
+        IM_CHECK_EQ(state.config->band_stop_Hz, 1.0e7);
+        IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
+        IM_CHECK_EQ(state.config->iip3_min_dBm, 10.0);
+        if (state.config->gain) {
+            IM_CHECK_EQ(state.config->gain->minimum_dB, -3.0);
+            IM_CHECK_EQ(state.config->gain->maximum_dB, 3.0);
+        }
+        if (state.config->output_power) {
+            IM_CHECK_EQ(state.config->output_power->minimum_dBm, -40.0);
+            IM_CHECK_EQ(state.config->output_power->maximum_dBm, 0.0);
+        }
+        IM_CHECK(state.config->measurement_conditions.iip3.has_value());
+        if (state.config->measurement_conditions.iip3) {
+            IM_CHECK_EQ(state.config->measurement_conditions.iip3->tone_spacing_Hz, 2.0e6);
+            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_start_dBm, -60.0);
+            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_stop_dBm, -40.0);
+            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_step_dB, 2.0);
+        }
+        IM_CHECK(s_app->isDirty());
+
+        const auto applied = *state.config;
+        s_app->m_dirty = false;
+        ctx->ItemInputValue("Band stop (Hz)", "9000000");
+        ctx->ItemInputValue("Output power max (dBm)", "-5");
+        setEnabled("Enable gain", false);
+        ctx->ItemClick("Cancel");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK_EQ(state.config->band_stop_Hz, applied.band_stop_Hz);
+            IM_CHECK(state.config->gain.has_value());
+            IM_CHECK(state.config->output_power.has_value());
+            IM_CHECK_EQ(state.config->output_power->maximum_dBm,
+                        applied.output_power->maximum_dBm);
+            IM_CHECK_EQ(state.config->iip3_min_dBm, applied.iip3_min_dBm);
+        }
+        IM_CHECK(!s_app->isDirty());
+
+        setEnabled("Enable gain", false);
+        apply();
+        IM_CHECK(state.config.has_value() && !state.config->gain.has_value());
+        IM_CHECK(state.config->nf_max_dB.has_value());
+        IM_CHECK(state.config->output_power.has_value());
+        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        setEnabled("Enable gain", true);
+        apply();
+        IM_CHECK(state.config.has_value() && state.config->gain.has_value());
+
+        setEnabled("Enable noise figure", false);
+        apply();
+        IM_CHECK(state.config.has_value() && !state.config->nf_max_dB.has_value());
+        IM_CHECK(state.config->gain.has_value());
+        IM_CHECK(state.config->output_power.has_value());
+        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        setEnabled("Enable noise figure", true);
+        apply();
+        IM_CHECK(state.config.has_value() && state.config->nf_max_dB.has_value());
+
+        setEnabled("Enable output power", false);
+        apply();
+        IM_CHECK(state.config.has_value() && !state.config->output_power.has_value());
+        IM_CHECK(state.config->gain.has_value());
+        IM_CHECK(state.config->nf_max_dB.has_value());
+        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        setEnabled("Enable output power", true);
+        apply();
+        IM_CHECK(state.config.has_value() && state.config->output_power.has_value());
+
+        setEnabled("Enable IIP3", false);
+        apply();
+        IM_CHECK(state.config.has_value() && !state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state.config->gain.has_value());
+        IM_CHECK(state.config->nf_max_dB.has_value());
+        IM_CHECK(state.config->output_power.has_value());
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_source_tone_selection_never_falls_back");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+
+        auto *generator = dynamic_cast<SignalGeneratorEngine *>(
+            s_app->testCreateComponent("generator", 9301));
+        auto *attenuator =
+            dynamic_cast<AttenuatorEngine *>(s_app->testCreateComponent("attenuator", 9302));
+        auto *amplifier =
+            dynamic_cast<AmplifierEngine *>(s_app->testCreateComponent("amplifier", 9303));
+        IM_CHECK(generator != nullptr);
+        IM_CHECK(attenuator != nullptr);
+        IM_CHECK(amplifier != nullptr);
+        if (!generator || !attenuator || !amplifier)
+            return;
+        generator->addTone(1.0e6, -20.0);
+        const int generator_out = generator->outputPinId();
+        const int attenuator_out = attenuator->outputPinId();
+        const int amplifier_out = amplifier->outputPinId();
+        const auto first_link =
+            s_app->testConnectLink(generator_out, attenuator->inputPinId(0));
+        const auto second_link =
+            s_app->testConnectLink(attenuator_out, amplifier->inputPinId(0));
+        IM_CHECK(first_link.has_value());
+        IM_CHECK(second_link.has_value());
+        if (!first_link || !second_link)
+            return;
+
+        auto &na = s_app->testNetworkAnalyzerEngine();
+        na.setPointA(generator_out);
+        na.setPointB(amplifier_out);
+        na.setStartFrequency(1.0e6);
+        na.setStopFrequency(10.0e6);
+        na.setPoints(9);
+        s_app->m_show_na = false;
+        auto &state = s_app->testReceiverRequirementsState();
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
+        const auto fillOutputDraft = [ctx]() {
+            ctx->SetRef("Receiver Requirements");
+            ctx->ItemInputValue("Band start (Hz)", "1000000");
+            ctx->ItemInputValue("Band stop (Hz)", "10000000");
+            ctx->ItemInputValue("Output power min (dBm)", "-40");
+            ctx->ItemInputValue("Output power max (dBm)", "0");
+        };
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable output power");
+        ctx->Yield(1);
+        fillOutputDraft();
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK(state.config->measurement_conditions
+                         .output_reference_tone_frequency_Hz.has_value());
+            if (state.config->measurement_conditions.output_reference_tone_frequency_Hz)
+                IM_CHECK_EQ(*state.config->measurement_conditions
+                                 .output_reference_tone_frequency_Hz,
+                            1.0e6);
+        }
+
+        generator->addTone(2.0e6, -25.0);
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        state.config.reset();
+        s_app->m_dirty = false;
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable output power");
+        ctx->Yield(1);
+        fillOutputDraft();
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(!state.config ||
+                 !state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+
+        const auto makeOutputConfig = [](std::optional<double> reference_tone) {
+            ReceiverRequirementsConfig config;
+            config.band_start_Hz = 1.0e6;
+            config.band_stop_Hz = 10.0e6;
+            config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
+            config.measurement_conditions.output_reference_tone_frequency_Hz = reference_tone;
+            return config;
+        };
+        auto &receiver = s_app->testReceiverPerformanceMeasurementEngine();
+        const auto verifyIncompleteWithoutFallback = [&](const ReceiverRequirementsConfig &config) {
+            state.config = config;
+            state.invalid_reason.clear();
+            ctx->Yield(3);
+            const auto &measurements = receiver.measurements();
+            IM_CHECK_EQ(na.sweepFrequencies().size(), 9);
+            IM_CHECK_EQ(measurements.output_power_dBm.size(), 9);
+            IM_CHECK(std::all_of(measurements.output_power_dBm.begin(),
+                                 measurements.output_power_dBm.end(),
+                                 [](double value) { return std::isnan(value); }));
+            const auto result = evaluateReceiverRequirements(
+                state, 1.0e6, 10.0e6, na.sweepFrequencies(), na.gainDb(), na.noiseFigureDb(),
+                measurements.output_power_dBm, measurements.iip3_dBm);
+            IM_CHECK_EQ(result.output_power.status, ReceiverRequirementStatus::Incomplete);
+            IM_CHECK_EQ(result.overall, ReceiverRequirementStatus::Incomplete);
+        };
+        verifyIncompleteWithoutFallback(makeOutputConfig(std::nullopt));
+
+        ctx->SetRef("Receiver Requirements");
+        ctx->ComboClick("Output reference tone");
+        ctx->Yield(1);
+        ctx->ItemClick("2 MHz");
+        ctx->Yield(1);
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        if (state.config)
+            IM_CHECK_EQ(state.config->measurement_conditions
+                            .output_reference_tone_frequency_Hz,
+                        2.0e6);
+
+        for (int frame = 0; frame < 40 && receiver.isInProgress(); ++frame)
+            ctx->Yield();
+        IM_CHECK_EQ(receiver.measurements().output_power_dBm.size(), 9);
+        IM_CHECK(std::all_of(receiver.measurements().output_power_dBm.begin(),
+                             receiver.measurements().output_power_dBm.end(),
+                             [](double value) { return std::isfinite(value); }));
+        verifyIncompleteWithoutFallback(makeOutputConfig(3.0e6));
+
+        generator->removeTone(1);
+        generator->removeTone(0);
+        verifyIncompleteWithoutFallback(makeOutputConfig(2.0e6));
+
+        generator->addTone(2.0e6, -20.0);
+        generator->addTone(2.0e6, -25.0);
+        verifyIncompleteWithoutFallback(makeOutputConfig(2.0e6));
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        na.setPointA(-1);
+        na.setPointB(-1);
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->testRemoveComponent(amplifier->graphNodeId());
+        s_app->testRemoveComponent(attenuator->graphNodeId());
+        s_app->testRemoveComponent(generator->graphNodeId());
+        s_app->m_dirty = false;
         ctx->Yield(2);
     };
 }
