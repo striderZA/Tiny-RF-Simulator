@@ -18,7 +18,14 @@
 #include <vector>
 
 namespace {
-enum class DroppedTone { None, LowerIm3, LowerIm3OnlyTwoLevels, UpperIm3, LowerFundamental };
+enum class DroppedTone {
+    None,
+    LowerIm3,
+    LowerIm3OnlyTwoLevels,
+    LowerIm3AtOneLevel,
+    UpperIm3,
+    LowerFundamental
+};
 
 class TestAmplifier final : public AmplifierEngine {
   public:
@@ -34,8 +41,12 @@ class TestAmplifier final : public AmplifierEngine {
         const double high = tones[1].freq_Hz;
         if (m_dropped == DroppedTone::LowerIm3OnlyTwoLevels && tones[0].power_dBm <= -78.0)
             return;
+        if (m_dropped == DroppedTone::LowerIm3AtOneLevel &&
+            std::abs(tones[0].power_dBm + 60.0) > 1e-9)
+            return;
         const double target =
-            m_dropped == DroppedTone::LowerIm3 || m_dropped == DroppedTone::LowerIm3OnlyTwoLevels
+            m_dropped == DroppedTone::LowerIm3 || m_dropped == DroppedTone::LowerIm3OnlyTwoLevels ||
+                    m_dropped == DroppedTone::LowerIm3AtOneLevel
                 ? 2.0 * low - high
             : m_dropped == DroppedTone::UpperIm3 ? 2.0 * high - low
                                                  : low;
@@ -248,7 +259,7 @@ TEST_CASE("Receiver IIP3 retains fixed spacing and rejects unsupported edges and
     engine.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().iip3_dBm[0]));
     CHECK(receiverIIP3LevelCount(*settings.measurement_conditions.iip3) == 11);
-    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -50.0, -40.0, 0.1};
+    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -50.0, -40.0, 0.09};
     CHECK_FALSE(receiverIIP3LevelCount(*settings.measurement_conditions.iip3).has_value());
 }
 
@@ -283,6 +294,12 @@ TEST_CASE("Receiver IIP3 rejects a missing fundamental and requires both IM3 sid
     ReceiverPerformanceMeasurementEngine one_side(c.graph, missing_side);
     one_side.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(one_side.measurements().iip3_dBm[0]));
+
+    Host one_missing_level{{&c.generator, &c.attenuator, &c.amplifier},
+                           DroppedTone::LowerIm3AtOneLevel};
+    ReceiverPerformanceMeasurementEngine one_missing_level_engine(c.graph, one_missing_level);
+    one_missing_level_engine.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK(isFinite(one_missing_level_engine.measurements().iip3_dBm[0]));
 
     Host insufficient_side{{&c.generator, &c.attenuator, &c.amplifier},
                            DroppedTone::LowerIm3OnlyTwoLevels};
