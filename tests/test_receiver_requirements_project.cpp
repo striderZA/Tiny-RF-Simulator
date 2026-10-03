@@ -291,12 +291,11 @@ TEST_CASE_METHOD(ImGuiFixture, "New project clears receiver requirements",
              {"gain_min_db", 10.0},
              {"gain_max_db", 20.0},
              {"nf_max_db", 5.0},
-             {"measurement_conditions",
-              json{{"output_reference_tone_frequency_hz", 1.5e9},
-                   {"iip3", json{{"tone_spacing_hz", 1.0e6},
-                                 {"input_start_dbm", -30.0},
-                                 {"input_stop_dbm", -20.0},
-                                 {"input_step_db", 5.0}}}}}};
+             {"measurement_conditions", json{{"output_reference_tone_frequency_hz", 1.5e9},
+                                             {"iip3", json{{"tone_spacing_hz", 1.0e6},
+                                                           {"input_start_dbm", -30.0},
+                                                           {"input_stop_dbm", -20.0},
+                                                           {"input_step_db", 5.0}}}}}};
     saveJson(path, project);
     {
         RfSimulatorApp app;
@@ -305,7 +304,8 @@ TEST_CASE_METHOD(ImGuiFixture, "New project clears receiver requirements",
         REQUIRE(app.testReceiverRequirementsState().config.has_value());
         CHECK(app.testReceiverRequirementsState()
                   .config->measurement_conditions.output_reference_tone_frequency_Hz.has_value());
-        REQUIRE(app.testReceiverRequirementsState().config->measurement_conditions.iip3.has_value());
+        REQUIRE(
+            app.testReceiverRequirementsState().config->measurement_conditions.iip3.has_value());
         app.newProject();
         CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
         CHECK(app.testReceiverRequirementsState().invalid_reason.empty());
@@ -339,18 +339,13 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed persisted receiver requirements are in
                                   {"band_stop_hz", 2.0e9},
                                   {"gain_min_db", 10.0},
                                   {"gain_max_db", 20.0}}},
-        {"half_gain", json{{"band_start_hz", 1.0e9},
-                           {"band_stop_hz", 2.0e9},
-                           {"gain_min_db", 10.0}}},
-        {"half_output_power", json{{"band_start_hz", 1.0e9},
-                                   {"band_stop_hz", 2.0e9},
-                                   {"output_power_min_dbm", -30.0}}},
-        {"wrong_nf", json{{"band_start_hz", 1.0e9},
-                          {"band_stop_hz", 2.0e9},
-                          {"nf_max_db", false}}},
-        {"wrong_iip3_limit", json{{"band_start_hz", 1.0e9},
-                                  {"band_stop_hz", 2.0e9},
-                                  {"iip3_min_dbm", "10"}}},
+        {"half_gain",
+         json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}, {"gain_min_db", 10.0}}},
+        {"half_output_power",
+         json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}, {"output_power_min_dbm", -30.0}}},
+        {"wrong_nf", json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}, {"nf_max_db", false}}},
+        {"wrong_iip3_limit",
+         json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}, {"iip3_min_dbm", "10"}}},
         {"reversed_gain", json{{"band_start_hz", 1.0e9},
                                {"band_stop_hz", 2.0e9},
                                {"gain_min_db", 20.0},
@@ -366,52 +361,48 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed persisted receiver requirements are in
         {"conditions_array", json{{"band_start_hz", 1.0e9},
                                   {"band_stop_hz", 2.0e9},
                                   {"measurement_conditions", json::array()}}},
-        {"wrong_tone_selector", json{{"band_start_hz", 1.0e9},
-                                     {"band_stop_hz", 2.0e9},
-                                     {"measurement_conditions",
-                                      json{{"output_reference_tone_frequency_hz", "1.5e9"}}}}},
-        {"null_tone_selector", json{{"band_start_hz", 1.0e9},
-                                    {"band_stop_hz", 2.0e9},
-                                    {"measurement_conditions",
-                                     json{{"output_reference_tone_frequency_hz", nullptr}}}}},
+        {"wrong_tone_selector",
+         json{{"band_start_hz", 1.0e9},
+              {"band_stop_hz", 2.0e9},
+              {"measurement_conditions", json{{"output_reference_tone_frequency_hz", "1.5e9"}}}}},
+        {"null_tone_selector",
+         json{{"band_start_hz", 1.0e9},
+              {"band_stop_hz", 2.0e9},
+              {"measurement_conditions", json{{"output_reference_tone_frequency_hz", nullptr}}}}},
         {"iip3_not_object", json{{"band_start_hz", 1.0e9},
                                  {"band_stop_hz", 2.0e9},
                                  {"measurement_conditions", json{{"iip3", 4}}}}},
         {"iip3_missing_nested_field",
          json{{"band_start_hz", 1.0e9},
               {"band_stop_hz", 2.0e9},
-              {"measurement_conditions",
-               json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
-                                  {"input_start_dbm", -30.0},
-                                  {"input_stop_dbm", -20.0}}}}}}},
+              {"measurement_conditions", json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
+                                                            {"input_start_dbm", -30.0},
+                                                            {"input_stop_dbm", -20.0}}}}}}},
         {"malformed_iip3_while_disabled",
          json{{"band_start_hz", 1.0e9},
               {"band_stop_hz", 2.0e9},
-              {"measurement_conditions",
-               json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
-                                  {"input_start_dbm", -30.0},
-                                  {"input_stop_dbm", -20.0},
-                                  {"input_step_db", "5"}}}}}}},
+              {"measurement_conditions", json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
+                                                            {"input_start_dbm", -30.0},
+                                                            {"input_stop_dbm", -20.0},
+                                                            {"input_step_db", "5"}}}}}}},
         {"enabled_iip3_without_settings",
          json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}, {"iip3_min_dbm", 10.0}}},
         {"enabled_iip3_with_invalid_settings",
          json{{"band_start_hz", 1.0e9},
               {"band_stop_hz", 2.0e9},
               {"iip3_min_dbm", 10.0},
-              {"measurement_conditions",
-               json{{"iip3", json{{"tone_spacing_hz", 0.0},
-                                  {"input_start_dbm", -30.0},
-                                  {"input_stop_dbm", -20.0},
-                                  {"input_step_db", 5.0}}}}}}},
+              {"measurement_conditions", json{{"iip3", json{{"tone_spacing_hz", 0.0},
+                                                            {"input_start_dbm", -30.0},
+                                                            {"input_stop_dbm", -20.0},
+                                                            {"input_step_db", 5.0}}}}}}},
         {"iip3_sweep_over_101_levels",
          json{{"band_start_hz", 1.0e9},
               {"band_stop_hz", 2.0e9},
               {"iip3_min_dbm", 10.0},
-              {"measurement_conditions",
-               json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
-                                  {"input_start_dbm", -30.0},
-                                  {"input_stop_dbm", -19.9},
-                                  {"input_step_db", 0.1}}}}}}}};
+              {"measurement_conditions", json{{"iip3", json{{"tone_spacing_hz", 1.0e6},
+                                                            {"input_start_dbm", -30.0},
+                                                            {"input_stop_dbm", -19.9},
+                                                            {"input_step_db", 0.1}}}}}}}};
 
     std::size_t index = 0;
     for (const auto &[label, malformed] : malformed_cases) {
@@ -454,7 +445,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Finite stale receiver tone selector remains vali
                .config->measurement_conditions.output_reference_tone_frequency_Hz == 3.0e9);
     app.saveProject(path);
     CHECK(loadJson(path)["receiver_requirements"]["measurement_conditions"]
-                       ["output_reference_tone_frequency_hz"] == 3.0e9);
+                        ["output_reference_tone_frequency_hz"] == 3.0e9);
     app.loadProject(path);
     REQUIRE(app.testReceiverRequirementsState().config.has_value());
     CHECK(*app.testReceiverRequirementsState()
