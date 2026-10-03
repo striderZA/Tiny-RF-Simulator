@@ -27,17 +27,35 @@ bool closeFrequency(double actual, double expected) {
 std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz) {
     if (!spectrum || !std::isfinite(frequency_Hz))
         return std::nullopt;
-    const Spectrum::Tone *match = nullptr;
+
+    double reference_dBm = -std::numeric_limits<double>::infinity();
+    std::vector<const Spectrum::Tone *> matches;
     for (const auto &tone : spectrum->tones) {
         if (!closeFrequency(tone.freq_Hz, frequency_Hz))
             continue;
-        if (match)
+        if (!std::isfinite(tone.power_dBm) || !std::isfinite(tone.phase_deg))
             return std::nullopt;
-        match = &tone;
+        reference_dBm = std::max(reference_dBm, tone.power_dBm);
+        matches.push_back(&tone);
     }
-    if (!match || !std::isfinite(match->power_dBm))
+    if (matches.empty())
         return std::nullopt;
-    return match->power_dBm;
+
+    // Normalize against the strongest record to avoid overflow/underflow while
+    // adding RMS-voltage phasors. Power ratios become voltage ratios in dB.
+    double in_phase = 0.0;
+    double quadrature = 0.0;
+    for (const auto *tone : matches) {
+        const double amplitude = std::pow(10.0, (tone->power_dBm - reference_dBm) / 20.0);
+        const double phase = tone->phase_deg * (std::acos(-1.0) / 180.0);
+        in_phase += amplitude * std::cos(phase);
+        quadrature += amplitude * std::sin(phase);
+    }
+    const double resultant = std::hypot(in_phase, quadrature);
+    if (!(resultant > 0.0) || !std::isfinite(resultant))
+        return std::nullopt;
+    const double power_dBm = reference_dBm + 20.0 * std::log10(resultant);
+    return std::isfinite(power_dBm) ? std::optional<double>(power_dBm) : std::nullopt;
 }
 
 struct LineFit {
@@ -210,14 +228,14 @@ void ReceiverPerformanceMeasurementEngine::update(
                               config.measurement_conditions.iip3.has_value();
     const auto iip3_levels = iip3_enabled
                                  ? receiverIIP3LevelCount(*config.measurement_conditions.iip3)
-    std::uint64_t stimulus_generation = 0;
                                  : std::nullopt;
+    std::uint64_t stimulus_generation = 0;
     for (std::size_t i = 0; i < sweep_frequencies_Hz.size(); ++i) {
         const double center = sweep_frequencies_Hz[i];
         if (selected_tone && std::isfinite(center) && center > 0.0 &&
             std::isfinite(selected_tone->power_dBm)) {
-            stimulus.generation = ++stimulus_generation;
             Spectrum stimulus;
+            stimulus.generation = ++stimulus_generation;
             stimulus.tones.push_back({center, selected_tone->power_dBm, selected_tone->phase_deg});
             if (const auto output = tonePower(runner.run(stimulus), center))
                 m_measurements.output_power_dBm[i] = *output;
@@ -240,29 +258,26 @@ void ReceiverPerformanceMeasurementEngine::update(
         upper_fundamental.reserve(*iip3_levels);
         lower_im3.reserve(*iip3_levels);
         upper_im3.reserve(*iip3_levels);
-        bool invalid_level = false;
         for (std::size_t level = 0; level < *iip3_levels; ++level) {
             const double input_dBm = settings.input_start_dBm +
                                      static_cast<double>(level) * settings.input_step_dB;
-            stimulus.generation = ++stimulus_generation;
             Spectrum stimulus;
+            stimulus.generation = ++stimulus_generation;
             stimulus.tones = {{low, input_dBm, 0.0}, {high, input_dBm, 0.0}};
             const Spectrum *output = runner.run(stimulus);
             const auto low_fund = tonePower(output, low);
             const auto high_fund = tonePower(output, high);
             const auto low_im = tonePower(output, 2.0 * low - high);
             const auto high_im = tonePower(output, 2.0 * high - low);
-            if (!low_fund || !high_fund || !low_im || !high_im) {
-                invalid_level = true;
-                continue;
-            }
-            lower_fundamental.emplace_back(input_dBm, *low_fund);
-            upper_fundamental.emplace_back(input_dBm, *high_fund);
-            lower_im3.emplace_back(input_dBm, *low_im);
-            upper_im3.emplace_back(input_dBm, *high_im);
+            if (low_fund)
+                lower_fundamental.emplace_back(input_dBm, *low_fund);
+            if (high_fund)
+                upper_fundamental.emplace_back(input_dBm, *high_fund);
+            if (low_im)
+                lower_im3.emplace_back(input_dBm, *low_im);
+            if (high_im)
+                upper_im3.emplace_back(input_dBm, *high_im);
         }
-        if (invalid_level)
-            continue;
         const auto lower = estimateIIP3(lower_fundamental, lower_im3);
         const auto upper = estimateIIP3(upper_fundamental, upper_im3);
         if (lower && upper)
