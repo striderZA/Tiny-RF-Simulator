@@ -1240,7 +1240,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             }
             return false;
         };
+        ctx->WindowCollapse("Receiver Requirements", false);
+        ctx->Yield(2);
         panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        IM_CHECK(panel && !panel->Collapsed);
+        IM_CHECK(panel && panel->DrawList && panel->DrawList->VtxBuffer.Size > 0);
         IM_CHECK(has_pass_green(panel));
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band stop (Hz)", "9000000");
