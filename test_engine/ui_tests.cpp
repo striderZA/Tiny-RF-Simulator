@@ -1108,9 +1108,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         amplifier->setOIP3_dBm(40.0);
 
         const int generator_out = generator->outputPinId();
-        const int attenuator_in = attenuator->inputPinId(0);
+        const int attenuator_in = attenuator->inputPinId();
         const int attenuator_out = attenuator->outputPinId();
-        const int amplifier_in = amplifier->inputPinId(0);
+        const int amplifier_in = amplifier->inputPinId();
         const int amplifier_out = amplifier->outputPinId();
         IM_CHECK(generator_out >= 0);
         IM_CHECK(attenuator_in >= 0);
@@ -1537,9 +1537,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const int attenuator_out = attenuator->outputPinId();
         const int amplifier_out = amplifier->outputPinId();
         const auto first_link =
-            s_app->testConnectLink(generator_out, attenuator->inputPinId(0));
+            s_app->testConnectLink(generator_out, attenuator->inputPinId());
         const auto second_link =
-            s_app->testConnectLink(attenuator_out, amplifier->inputPinId(0));
+            s_app->testConnectLink(attenuator_out, amplifier->inputPinId());
         IM_CHECK(first_link.has_value());
         IM_CHECK(second_link.has_value());
         if (!first_link || !second_link)
