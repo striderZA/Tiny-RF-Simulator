@@ -141,8 +141,9 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
-TEST_CASE("ReceiverRequirements validates supplied measurement conditions when metrics are disabled",
-          "[receiver_requirements]") {
+TEST_CASE(
+    "ReceiverRequirements validates supplied measurement conditions when metrics are disabled",
+    "[receiver_requirements]") {
     auto config = allConfigured();
     config.iip3_min_dBm.reset();
     config.measurement_conditions.iip3->tone_spacing_Hz = 0.0;
