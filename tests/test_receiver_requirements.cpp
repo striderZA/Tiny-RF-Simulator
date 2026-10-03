@@ -139,6 +139,22 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     c.measurement_conditions.output_reference_tone_frequency_Hz =
         std::numeric_limits<double>::quiet_NaN();
     CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.band_start_Hz = std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.band_start_Hz = 2.0e9;
+    c.band_stop_Hz = 1.0e9;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.gain->minimum_dB = c.gain->maximum_dB + 1.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.gain->maximum_dB = std::numeric_limits<double>::infinity();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.nf_max_dB = std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
 TEST_CASE(
@@ -222,6 +238,77 @@ TEST_CASE("ReceiverRequirements applies inclusive bounds and reports unit-neutra
     CHECK(result.iip3.observed_min == Approx(10.0));
     CHECK(result.iip3.observed_max == Approx(20.0));
     CHECK(result.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("ReceiverRequirements reports upper and lower limit violations over incomplete coverage",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const std::vector<double> frequencies = {1.25e9, 1.75e9};
+    const std::vector<double> good_nf = {3.0, 4.0};
+    const std::vector<double> good_output = {-30.0, 0.0};
+    const std::vector<double> good_iip3 = {15.0, 20.0};
+    const auto evaluateSamples = [&](const std::vector<double> &gain,
+                                     const std::vector<double> &nf,
+                                     const std::vector<double> &output) {
+        return evaluateReceiverRequirements(state, 1.0e9, 1.75e9, frequencies, gain, nf, output,
+                                            good_iip3);
+    };
+
+    const auto gain_upper = evaluateSamples({15.0, 21.0}, good_nf, good_output);
+    CHECK(gain_upper.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(gain_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(gain_upper.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto nf_upper = evaluateSamples({15.0, 20.0}, {3.0, 6.0}, good_output);
+    CHECK(nf_upper.noise_figure.status == ReceiverRequirementStatus::Fail);
+    CHECK(nf_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(nf_upper.gain.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto output_lower = evaluateSamples({15.0, 20.0}, good_nf, {-31.0, -20.0});
+    CHECK(output_lower.output_power.status == ReceiverRequirementStatus::Fail);
+    CHECK(output_lower.overall == ReceiverRequirementStatus::Fail);
+    CHECK(output_lower.gain.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto output_upper = evaluateSamples({15.0, 20.0}, good_nf, {-20.0, 1.0});
+    CHECK(output_upper.output_power.status == ReceiverRequirementStatus::Fail);
+    CHECK(output_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(output_upper.gain.status == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply clears diagnostic",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.invalid_reason = "retained diagnostic";
+    std::string error;
+    auto malformed = gainDraft();
+    malformed.gain_max_dB = "nan";
+    CHECK_FALSE(applyReceiverRequirementsDraft(state, malformed, error));
+    REQUIRE(state.config.has_value());
+    CHECK(state.config->band_start_Hz == 1.0e9);
+    CHECK(state.config->band_stop_Hz == 2.0e9);
+    REQUIRE(state.config->gain.has_value());
+    CHECK(state.config->gain->minimum_dB == 10.0);
+    CHECK(state.config->gain->maximum_dB == 20.0);
+    CHECK(state.config->nf_max_dB == 5.0);
+    REQUIRE(state.config->output_power.has_value());
+    CHECK(state.config->output_power->minimum_dBm == -30.0);
+    CHECK(state.config->output_power->maximum_dBm == 0.0);
+    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    REQUIRE(state.config->measurement_conditions.iip3.has_value());
+    CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
+    CHECK(state.config->measurement_conditions.iip3->input_start_dBm == -30.0);
+    CHECK(state.config->measurement_conditions.iip3->input_stop_dBm == -20.0);
+    CHECK(state.config->measurement_conditions.iip3->input_step_dB == 5.0);
+
+    CHECK(state.config->iip3_min_dBm == 10.0);
+    CHECK(state.invalid_reason == "retained diagnostic");
+
+    REQUIRE(applyReceiverRequirementsDraft(state, gainDraft(), error));
+    CHECK(state.invalid_reason.empty());
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->gain.has_value());
+    CHECK(state.config->gain->minimum_dB == 10.0);
+    CHECK(state.config->gain->maximum_dB == 20.0);
 }
 
 TEST_CASE("ReceiverRequirements uses aligned IIP3 input levels and requires three points",
