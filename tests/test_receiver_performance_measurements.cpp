@@ -24,7 +24,9 @@ enum class DroppedTone {
     LowerIm3OnlyTwoLevels,
     LowerIm3AtOneLevel,
     UpperIm3,
-    LowerFundamental
+    LowerFundamental,
+    DuplicateSamePhase,
+    DuplicateQuadrature
 };
 
 class TestAmplifier final : public AmplifierEngine {
@@ -33,10 +35,28 @@ class TestAmplifier final : public AmplifierEngine {
         : AmplifierEngine(id, graph), m_dropped(dropped) {}
     void update(double dt) override {
         AmplifierEngine::update(dt);
-        if (m_dropped == DroppedTone::None || node().inputs.empty() || !node().inputs[0] ||
-            node().inputs[0]->tones.size() != 2 || node().outputs.empty())
+        if (node().inputs.empty() || !node().inputs[0] || node().outputs.empty())
             return;
         const auto &tones = node().inputs[0]->tones;
+        if (tones.size() == 1 &&
+            (m_dropped == DroppedTone::DuplicateSamePhase ||
+             m_dropped == DroppedTone::DuplicateQuadrature)) {
+            auto &output_tones = node().outputs[0].tones;
+            const auto fundamental = std::find_if(output_tones.begin(), output_tones.end(),
+                                                  [&tones](const Spectrum::Tone &tone) {
+                                                      return std::abs(tone.freq_Hz -
+                                                                      tones.front().freq_Hz) < 1.0;
+                                                  });
+            if (fundamental != output_tones.end()) {
+                auto duplicate = *fundamental;
+                if (m_dropped == DroppedTone::DuplicateQuadrature)
+                    duplicate.phase_deg += 90.0;
+                output_tones.push_back(duplicate);
+            }
+            return;
+        }
+        if (m_dropped == DroppedTone::None || tones.size() != 2)
+            return;
         const double low = tones[0].freq_Hz;
         const double high = tones[1].freq_Hz;
         if (m_dropped == DroppedTone::LowerIm3OnlyTwoLevels && tones[0].power_dBm <= -78.0)
@@ -151,6 +171,32 @@ TEST_CASE("Receiver measurement engine measures selected generator-reference out
     CHECK(m.output_power_dBm[0] == Catch::Approx(-5.0).margin(1e-8));
     CHECK(m.output_power_dBm[1] == Catch::Approx(-5.0).margin(1e-8));
     CHECK(c.generator.serialize() == before);
+}
+
+TEST_CASE("Receiver output power coherently combines duplicate-frequency tones by phase",
+          "[receiver_measurements]") {
+    Circuit c;
+    auto selected = config();
+    selected.iip3_min_dBm.reset();
+
+    ReceiverPerformanceMeasurementEngine single(c.graph, c.host);
+    single.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    REQUIRE(isFinite(single.measurements().output_power_dBm[0]));
+    const double single_power = single.measurements().output_power_dBm[0];
+
+    Host same_phase_host{{&c.generator, &c.attenuator, &c.amplifier},
+                         DroppedTone::DuplicateSamePhase};
+    ReceiverPerformanceMeasurementEngine same_phase(c.graph, same_phase_host);
+    same_phase.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK(same_phase.measurements().output_power_dBm[0] ==
+          Catch::Approx(single_power + 6.020599913).margin(1e-6));
+
+    Host quadrature_host{{&c.generator, &c.attenuator, &c.amplifier},
+                         DroppedTone::DuplicateQuadrature};
+    ReceiverPerformanceMeasurementEngine quadrature(c.graph, quadrature_host);
+    quadrature.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK(quadrature.measurements().output_power_dBm[0] ==
+          Catch::Approx(single_power + 3.010299957).margin(1e-6));
 }
 
 TEST_CASE("Receiver source resolves one tone automatically and explicit selection among tones",
