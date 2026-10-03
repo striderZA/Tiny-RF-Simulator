@@ -116,11 +116,11 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
         return "Output power limits must be finite.";
     if (config.output_power && config.output_power->minimum_dBm > config.output_power->maximum_dBm)
         return "Minimum output power must not exceed maximum output power.";
-    if (config.iip3_min_dBm) {
-        if (!std::isfinite(*config.iip3_min_dBm))
-            return "IIP3 limit must be finite.";
-        if (!config.measurement_conditions.iip3)
-            return "IIP3 test settings are required when the IIP3 metric is enabled.";
+    if (config.iip3_min_dBm && !std::isfinite(*config.iip3_min_dBm))
+        return "IIP3 limit must be finite.";
+    if (config.iip3_min_dBm && !config.measurement_conditions.iip3)
+        return "IIP3 test settings are required when the IIP3 metric is enabled.";
+    if (config.measurement_conditions.iip3) {
         const auto &settings = *config.measurement_conditions.iip3;
         if (!std::isfinite(settings.tone_spacing_Hz) || settings.tone_spacing_Hz <= 0.0)
             return "IIP3 tone spacing must be finite and positive.";

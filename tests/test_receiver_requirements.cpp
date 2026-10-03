@@ -141,6 +141,20 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
+TEST_CASE("ReceiverRequirements validates supplied measurement conditions when metrics are disabled",
+          "[receiver_requirements]") {
+    auto config = allConfigured();
+    config.iip3_min_dBm.reset();
+    config.measurement_conditions.iip3->tone_spacing_Hz = 0.0;
+    CHECK(validateReceiverRequirementsConfig(config).has_value());
+
+    config = allConfigured();
+    config.output_power.reset();
+    config.measurement_conditions.output_reference_tone_frequency_Hz =
+        std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(config).has_value());
+}
+
 TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone selector",
           "[receiver_requirements]") {
     auto state = configuredState();
