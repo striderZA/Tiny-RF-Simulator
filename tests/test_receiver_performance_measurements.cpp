@@ -44,12 +44,12 @@ class TestAmplifier final : public AmplifierEngine {
         if (m_dropped == DroppedTone::LowerIm3AtOneLevel &&
             std::abs(tones[0].power_dBm + 60.0) > 1e-9)
             return;
-        const double target =
-            m_dropped == DroppedTone::LowerIm3 || m_dropped == DroppedTone::LowerIm3OnlyTwoLevels ||
-                    m_dropped == DroppedTone::LowerIm3AtOneLevel
-                ? 2.0 * low - high
-            : m_dropped == DroppedTone::UpperIm3 ? 2.0 * high - low
-                                                 : low;
+        const double target = m_dropped == DroppedTone::LowerIm3 ||
+                                      m_dropped == DroppedTone::LowerIm3OnlyTwoLevels ||
+                                      m_dropped == DroppedTone::LowerIm3AtOneLevel
+                                  ? 2.0 * low - high
+                              : m_dropped == DroppedTone::UpperIm3 ? 2.0 * high - low
+                                                                   : low;
         auto &output_tones = node().outputs[0].tones;
         std::erase_if(output_tones, [target](const Spectrum::Tone &tone) {
             return std::abs(tone.freq_Hz - target) < 1.0;
@@ -344,7 +344,8 @@ TEST_CASE("Receiver measurement cache reuses unchanged request and invalidates c
     CHECK(c.host.scratch_passes > prepared);
 }
 
-TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer grid", "[bench]") {
+TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer grid",
+          "[.bench][bench]") {
     Circuit c;
     c.amplifier.setEnableNonlinear(true);
     c.amplifier.setOIP3_dBm(40.0);
