@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,10 +30,10 @@ struct ReceiverIIP3TestSettings {
     double input_step_dB;
 };
 
-struct ReceiverMeasurementConditions {
-    std::optional<double> output_reference_tone_frequency_Hz;
-    std::optional<ReceiverIIP3TestSettings> iip3;
-};
+constexpr std::size_t kMaxReceiverIIP3InputLevels = 101;
+
+std::optional<std::size_t>
+receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings);
 
 struct ReceiverRequirementsConfig {
     double band_start_Hz = 0.0;

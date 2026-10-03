@@ -1,4 +1,5 @@
 #include "app.h"
+#include "receiver_requirements.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -89,6 +90,76 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist valid project sett
     std::filesystem::remove(path);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics and conditions",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_optional");
+    RfSimulatorApp app;
+    auto &state = app.testReceiverRequirementsState();
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    config.nf_max_dB = 5.0;
+    config.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
+    config.iip3_min_dBm = 10.0;
+    config.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
+    state.config = config;
+    app.saveProject(path);
+
+    const auto saved = loadJson(path);
+    const auto &requirements = saved["receiver_requirements"];
+    CHECK(requirements["output_power_min_dbm"] == -30.0);
+    CHECK(requirements["output_power_max_dbm"] == 0.0);
+    CHECK(requirements["iip3_min_dbm"] == 10.0);
+    CHECK(requirements["measurement_conditions"]["output_reference_tone_frequency_hz"] == 1.5e9);
+    CHECK(requirements["measurement_conditions"]["iip3"]["tone_spacing_hz"] == 1.0e6);
+    CHECK(requirements["measurement_conditions"]["iip3"]["input_start_dbm"] == -30.0);
+    CHECK(requirements["measurement_conditions"]["iip3"]["input_stop_dbm"] == -20.0);
+    CHECK(requirements["measurement_conditions"]["iip3"]["input_step_db"] == 5.0);
+    app.loadProject(path);
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->output_power.has_value());
+    CHECK(state.config->output_power->minimum_dBm == -30.0);
+    CHECK(state.config->output_power->maximum_dBm == 0.0);
+    CHECK(state.config->iip3_min_dBm == config.iip3_min_dBm);
+    REQUIRE(state.config->measurement_conditions.iip3.has_value());
+    CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
+    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist gain-only and NF-only configs",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_partial");
+    RfSimulatorApp app;
+    auto &state = app.testReceiverRequirementsState();
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    state.config = config;
+    app.saveProject(path);
+    app.loadProject(path);
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->gain.has_value());
+    CHECK(state.config->gain->minimum_dB == 10.0);
+    CHECK(state.config->gain->maximum_dB == 20.0);
+    CHECK_FALSE(state.config->nf_max_dB.has_value());
+    CHECK_FALSE(loadJson(path)["receiver_requirements"].contains("nf_max_db"));
+
+    config.gain.reset();
+    config.nf_max_dB = 5.0;
+    state.config = config;
+    app.saveProject(path);
+    app.loadProject(path);
+    REQUIRE(state.config.has_value());
+    CHECK_FALSE(state.config->gain.has_value());
+    CHECK(state.config->nf_max_dB == 5.0);
+    CHECK_FALSE(loadJson(path)["receiver_requirements"].contains("gain_min_db"));
+    std::filesystem::remove(path);
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements absent from a legacy project remain absent",
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_legacy");
@@ -130,7 +201,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     }
     SECTION("missing field") {
         auto malformed = validRequirements;
-        malformed.erase("nf_max_db");
+        malformed.erase("band_stop_hz");
         const auto path = tempPath("_missing");
         savedProjectWithRequirements(path, malformed);
         RfSimulatorApp app;

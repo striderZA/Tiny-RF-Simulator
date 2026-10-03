@@ -16,32 +16,12 @@ std::optional<double> parseNumber(const std::string &text) {
     return value;
 }
 
-std::optional<std::size_t> iip3LevelCount(const ReceiverIIP3TestSettings &settings) {
-    if (!std::isfinite(settings.input_start_dBm) || !std::isfinite(settings.input_stop_dBm) ||
-        !std::isfinite(settings.input_step_dB) || settings.input_step_dB <= 0.0 ||
-        settings.input_start_dBm >= settings.input_stop_dBm)
-        return std::nullopt;
-
-    std::size_t count = 0;
-    for (std::size_t n = 0;; ++n) {
-        const double level =
-            settings.input_start_dBm + static_cast<double>(n) * settings.input_step_dB;
-        if (!std::isfinite(level) || level > settings.input_stop_dBm)
-            break;
-        if (count == std::numeric_limits<std::size_t>::max())
-            return std::nullopt;
-        ++count;
-        if (n == std::numeric_limits<std::size_t>::max())
-            return std::nullopt;
-    }
-    return count;
-}
-
 ReceiverMetricEvaluation unavailable(ReceiverRequirementStatus status) { return {status, {}, {}}; }
 
 ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
                                 const std::vector<double> &values, double low_Hz, double high_Hz,
-                                bool gain, double minimum, double maximum, bool band_covered) {
+                                std::optional<double> minimum, std::optional<double> maximum,
+                                bool band_covered) {
     bool any = false;
     bool missing = frequencies.size() != values.size();
     bool failed = false;
@@ -64,42 +44,8 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
             observed_max = std::max(observed_max, value);
         }
         any = true;
-        if ((gain && (value < minimum || value > maximum)) || (!gain && value > maximum))
+        if ((minimum && value < *minimum) || (maximum && value > *maximum))
             failed = true;
-    }
-    const auto status =
-        failed ? ReceiverRequirementStatus::Fail
-               : (!band_covered || !any || missing ? ReceiverRequirementStatus::Incomplete
-                                                   : ReceiverRequirementStatus::Pass);
-    return {status, any ? std::optional<double>(observed_min) : std::nullopt,
-            any ? std::optional<double>(observed_max) : std::nullopt};
-}
-
-ReceiverMetricEvaluation assessIIP3(const std::vector<double> &frequencies,
-                                    const std::vector<double> &values, double low_Hz,
-                                    double high_Hz, double minimum, bool band_covered) {
-    bool missing = frequencies.size() != values.size();
-    bool any = false;
-    bool failed = false;
-    double observed_min = 0.0;
-    double observed_max = 0.0;
-    const std::size_t aligned_size = std::min(frequencies.size(), values.size());
-    for (std::size_t i = 0; i < aligned_size; ++i) {
-        const double frequency = frequencies[i];
-        if (!std::isfinite(frequency) || frequency < low_Hz || frequency > high_Hz)
-            continue;
-        if (!std::isfinite(values[i])) {
-            missing = true;
-            continue;
-        }
-        if (!any)
-            observed_min = observed_max = values[i];
-        else {
-            observed_min = std::min(observed_min, values[i]);
-            observed_max = std::max(observed_max, values[i]);
-        }
-        any = true;
-        failed = failed || values[i] < minimum;
     }
     const auto status =
         failed ? ReceiverRequirementStatus::Fail
@@ -128,6 +74,31 @@ ReceiverRequirementStatus aggregate(const ReceiverRequirementsEvaluation &result
 }
 } // namespace
 
+std::optional<std::size_t>
+receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
+    if (!std::isfinite(settings.input_start_dBm) || !std::isfinite(settings.input_stop_dBm) ||
+        !std::isfinite(settings.input_step_dB) || settings.input_step_dB <= 0.0 ||
+        settings.input_start_dBm >= settings.input_stop_dBm)
+        return std::nullopt;
+
+    std::size_t count = 0;
+    double previous = settings.input_start_dBm;
+    for (; count <= kMaxReceiverIIP3InputLevels; ++count) {
+        const double level = settings.input_start_dBm +
+                             static_cast<double>(count) * settings.input_step_dB;
+        if (!std::isfinite(level))
+            return std::nullopt;
+        if (level > settings.input_stop_dBm)
+            break;
+        if (count > 0 && level <= previous)
+            return std::nullopt;
+        previous = level;
+    }
+    if (count < 3 || count > kMaxReceiverIIP3InputLevels)
+        return std::nullopt;
+    return count;
+}
+
 std::optional<std::string>
 validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
     if (!std::isfinite(config.band_start_Hz) || !std::isfinite(config.band_stop_Hz))
@@ -154,11 +125,9 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
         const auto &settings = *config.measurement_conditions.iip3;
         if (!std::isfinite(settings.tone_spacing_Hz) || settings.tone_spacing_Hz <= 0.0)
             return "IIP3 tone spacing must be finite and positive.";
-        const auto count = iip3LevelCount(settings);
+        const auto count = receiverIIP3LevelCount(settings);
         if (!count)
-            return "IIP3 input sweep must be finite, ordered, and have a positive step.";
-        if (*count < 3)
-            return "IIP3 input sweep must generate at least three levels.";
+            return "IIP3 input sweep must have 3–101 finite, advancing levels.";
     }
     if (config.measurement_conditions.output_reference_tone_frequency_Hz &&
         (!std::isfinite(*config.measurement_conditions.output_reference_tone_frequency_Hz) ||
@@ -281,18 +250,19 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
                               sweep_stop_Hz >= config.band_stop_Hz;
     if (config.gain)
         result.gain = assess(frequencies_Hz, gain_dB, config.band_start_Hz, config.band_stop_Hz,
-                             true, config.gain->minimum_dB, config.gain->maximum_dB, band_covered);
+                             config.gain->minimum_dB, config.gain->maximum_dB, band_covered);
     if (config.nf_max_dB)
         result.noise_figure =
             assess(frequencies_Hz, noise_figure_dB, config.band_start_Hz, config.band_stop_Hz,
-                   false, 0.0, *config.nf_max_dB, band_covered);
+                   std::nullopt, *config.nf_max_dB, band_covered);
     if (config.output_power)
-        result.output_power = assess(frequencies_Hz, output_power_dBm, config.band_start_Hz,
-                                     config.band_stop_Hz, true, config.output_power->minimum_dBm,
-                                     config.output_power->maximum_dBm, band_covered);
+        result.output_power =
+            assess(frequencies_Hz, output_power_dBm, config.band_start_Hz, config.band_stop_Hz,
+                   config.output_power->minimum_dBm, config.output_power->maximum_dBm,
+                   band_covered);
     if (config.iip3_min_dBm)
-        result.iip3 = assessIIP3(frequencies_Hz, iip3_dBm, config.band_start_Hz,
-                                 config.band_stop_Hz, *config.iip3_min_dBm, band_covered);
+        result.iip3 = assess(frequencies_Hz, iip3_dBm, config.band_start_Hz, config.band_stop_Hz,
+                             *config.iip3_min_dBm, std::nullopt, band_covered);
     result.overall = aggregate(result);
     return result;
 }

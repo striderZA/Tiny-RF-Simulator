@@ -141,7 +141,18 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
-TEST_CASE("ReceiverRequirements treats output samples as authoritative without a tone selector",
+TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone selector",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                                  std::numeric_limits<double>::quiet_NaN()});
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("ReceiverRequirements reports incomplete output data without a tone selector",
           "[receiver_requirements]") {
     auto state = configuredState();
     state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
@@ -208,6 +219,81 @@ TEST_CASE("ReceiverRequirements uses aligned IIP3 input levels and requires thre
     c = allConfigured();
     c.measurement_conditions.iip3->input_step_dB = 10.0;
     CHECK(validateReceiverRequirementsConfig(c).has_value());
+}
+
+TEST_CASE("ReceiverRequirements bounds IIP3 input-level counting",
+          "[receiver_requirements]") {
+    CHECK(receiverIIP3LevelCount({1.0e6, -30.0, -20.0, 5.0}) == 3);
+    CHECK(receiverIIP3LevelCount({1.0e6, -100.0, 0.0, 1.0}) ==
+          kMaxReceiverIIP3InputLevels);
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, -21.0, 5.0}).has_value());
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, 71.0, 1.0}).has_value());
+    CHECK_FALSE(receiverIIP3LevelCount(
+                     {1.0e6, -std::numeric_limits<double>::max(),
+                      std::numeric_limits<double>::max(), 1.0})
+                    .has_value());
+    CHECK_FALSE(receiverIIP3LevelCount(
+                     {1.0e6, 1.0, 2.0, std::numeric_limits<double>::denorm_min()})
+                    .has_value());
+    CHECK_FALSE(receiverIIP3LevelCount(
+                     {0.0, 0.0, std::numeric_limits<double>::max(),
+                      std::numeric_limits<double>::max()})
+                    .has_value());
+}
+
+TEST_CASE("ReceiverRequirements applies common coverage, alignment, and precedence rules",
+          "[receiver_requirements]") {
+    const auto full_state = configuredState();
+    auto partial = evaluate(full_state, {0, 10, 9, 20, 0}, {0, 3, 4, 5, 0},
+                            {0, -30, -20, 0, 0},
+                            {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                             std::numeric_limits<double>::quiet_NaN()},
+                            1.1e9, 1.9e9);
+    CHECK(partial.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(partial.overall == ReceiverRequirementStatus::Fail);
+
+    const auto prefix = evaluate(full_state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                 {0, -30, -20, 0, 0},
+                                 {std::numeric_limits<double>::quiet_NaN(), 9, 15},
+                                 0.9e9, 2.1e9);
+    CHECK(prefix.iip3.status == ReceiverRequirementStatus::Fail);
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto no_in_band = evaluateReceiverRequirements(
+        full_state, 0.9e9, 2.1e9, {0.9e9, 2.1e9}, {0, 0}, {0, 0}, {0, 0}, {nan, nan});
+    CHECK(no_in_band.gain.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(no_in_band.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements marks each mismatched metric vector incomplete",
+          "[receiver_requirements]") {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto check = [&](int short_metric) {
+        auto state = configuredState();
+        const std::vector<double> full = {0, 10, 15, 20, 0};
+        const std::vector<double> short_values = {0, 10, 15, 20};
+        return evaluate(state, short_metric == 0 ? short_values : full,
+                        short_metric == 1 ? short_values : std::vector<double>{0, 3, 4, 5, 0},
+                        short_metric == 2 ? short_values : std::vector<double>{0, -30, -20, 0, 0},
+                        short_metric == 3 ? std::vector<double>{nan, 10, 15, 20} :
+                                            std::vector<double>{nan, 10, 15, 20, nan});
+    };
+    CHECK(check(0).gain.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(1).noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(2).output_power.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(3).iip3.status == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements marks invalid state and configuration invalid",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.invalid_reason = "invalid";
+    CHECK(evaluate(state, {}, {}, {}, {}).overall ==
+          ReceiverRequirementStatus::InvalidConfiguration);
+    state.invalid_reason.clear();
+    state.config->band_stop_Hz = state.config->band_start_Hz;
+    CHECK(evaluate(state, {}, {}, {}, {}).overall ==
+          ReceiverRequirementStatus::InvalidConfiguration);
 }
 
 TEST_CASE("ReceiverRequirements preserves valid failures when other metric data is missing",

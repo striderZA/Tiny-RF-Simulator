@@ -167,20 +167,74 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
         return invalidate("Receiver requirements contain a malformed invalid marker.");
     }
 
-    constexpr std::array<const char *, 5> keys = {"band_start_hz", "band_stop_hz", "gain_min_db",
-                                                  "gain_max_db", "nf_max_db"};
-    double fields[5]{};
-    for (std::size_t i = 0; i < keys.size(); ++i) {
-        if (!value.contains(keys[i]) || !value[keys[i]].is_number())
-            return invalidate(std::string("Receiver requirements field '") + keys[i] +
-                              "' must be a number.");
-        fields[i] = value[keys[i]].get<double>();
-    }
+    if (!value.contains("band_start_hz") || !value["band_start_hz"].is_number() ||
+        !value.contains("band_stop_hz") || !value["band_stop_hz"].is_number())
+        return invalidate("Receiver requirements band endpoints must be numbers.");
+
     ReceiverRequirementsConfig config;
-    config.band_start_Hz = fields[0];
-    config.band_stop_Hz = fields[1];
-    config.gain = ReceiverGainLimits{fields[2], fields[3]};
-    config.nf_max_dB = fields[4];
+    config.band_start_Hz = value["band_start_hz"].get<double>();
+    config.band_stop_Hz = value["band_stop_hz"].get<double>();
+    const auto readOptionalNumber = [&value](const char *key, std::optional<double> &field) {
+        if (!value.contains(key))
+            return true;
+        if (!value[key].is_number())
+            return false;
+        field = value[key].get<double>();
+        return true;
+    };
+
+    std::optional<double> gain_minimum;
+    std::optional<double> gain_maximum;
+    if (!readOptionalNumber("gain_min_db", gain_minimum) ||
+        !readOptionalNumber("gain_max_db", gain_maximum))
+        return invalidate("Receiver gain limits must be numbers.");
+    if (gain_minimum.has_value() != gain_maximum.has_value())
+        return invalidate("Receiver gain minimum and maximum must be saved together.");
+    if (gain_minimum)
+        config.gain = ReceiverGainLimits{*gain_minimum, *gain_maximum};
+    if (!readOptionalNumber("nf_max_db", config.nf_max_dB))
+        return invalidate("Receiver noise figure limit must be a number.");
+
+    std::optional<double> output_minimum;
+    std::optional<double> output_maximum;
+    if (!readOptionalNumber("output_power_min_dbm", output_minimum) ||
+        !readOptionalNumber("output_power_max_dbm", output_maximum))
+        return invalidate("Receiver output power limits must be numbers.");
+    if (output_minimum.has_value() != output_maximum.has_value())
+        return invalidate("Receiver output power minimum and maximum must be saved together.");
+    if (output_minimum)
+        config.output_power = ReceiverOutputPowerLimits{*output_minimum, *output_maximum};
+    if (!readOptionalNumber("iip3_min_dbm", config.iip3_min_dBm))
+        return invalidate("Receiver IIP3 limit must be a number.");
+
+    if (value.contains("measurement_conditions")) {
+        const auto &conditions = value["measurement_conditions"];
+        if (!conditions.is_object())
+            return invalidate("Receiver measurement conditions must be an object.");
+        if (conditions.contains("output_reference_tone_frequency_hz")) {
+            if (!conditions["output_reference_tone_frequency_hz"].is_number())
+                return invalidate("Output reference tone frequency must be a number.");
+            config.measurement_conditions.output_reference_tone_frequency_Hz =
+                conditions["output_reference_tone_frequency_hz"].get<double>();
+        }
+        if (conditions.contains("iip3")) {
+            const auto &iip3 = conditions["iip3"];
+            constexpr std::array<const char *, 4> iip3_keys = {
+                "tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"};
+            double iip3_fields[4]{};
+            if (!iip3.is_object())
+                return invalidate("IIP3 test settings must be an object.");
+            for (std::size_t i = 0; i < iip3_keys.size(); ++i) {
+                if (!iip3.contains(iip3_keys[i]) || !iip3[iip3_keys[i]].is_number())
+                    return invalidate(std::string("IIP3 test field '") + iip3_keys[i] +
+                                      "' must be a number.");
+                iip3_fields[i] = iip3[iip3_keys[i]].get<double>();
+            }
+            config.measurement_conditions.iip3 =
+                ReceiverIIP3TestSettings{iip3_fields[0], iip3_fields[1], iip3_fields[2],
+                                         iip3_fields[3]};
+        }
+    }
     if (auto reason = validateReceiverRequirementsConfig(config))
         return invalidate(*reason);
     state.config = config;
@@ -216,11 +270,34 @@ bool ProjectSerializer::save(const std::string &path) {
     root["version"] = 1;
     if (m_receiver_requirements.config) {
         const auto &config = *m_receiver_requirements.config;
-        root["receiver_requirements"] = {{"band_start_hz", config.band_start_Hz},
-                                         {"band_stop_hz", config.band_stop_Hz},
-                                         {"gain_min_db", config.gain->minimum_dB},
-                                         {"gain_max_db", config.gain->maximum_dB},
-                                         {"nf_max_db", *config.nf_max_dB}};
+        nlohmann::json requirements = {{"band_start_hz", config.band_start_Hz},
+                                       {"band_stop_hz", config.band_stop_Hz}};
+        if (config.gain) {
+            requirements["gain_min_db"] = config.gain->minimum_dB;
+            requirements["gain_max_db"] = config.gain->maximum_dB;
+        }
+        if (config.nf_max_dB)
+            requirements["nf_max_db"] = *config.nf_max_dB;
+        if (config.output_power) {
+            requirements["output_power_min_dbm"] = config.output_power->minimum_dBm;
+            requirements["output_power_max_dbm"] = config.output_power->maximum_dBm;
+        }
+        if (config.iip3_min_dBm)
+            requirements["iip3_min_dbm"] = *config.iip3_min_dBm;
+        nlohmann::json conditions = nlohmann::json::object();
+        if (config.measurement_conditions.output_reference_tone_frequency_Hz)
+            conditions["output_reference_tone_frequency_hz"] =
+                *config.measurement_conditions.output_reference_tone_frequency_Hz;
+        if (config.measurement_conditions.iip3) {
+            const auto &settings = *config.measurement_conditions.iip3;
+            conditions["iip3"] = {{"tone_spacing_hz", settings.tone_spacing_Hz},
+                                  {"input_start_dbm", settings.input_start_dBm},
+                                  {"input_stop_dbm", settings.input_stop_dBm},
+                                  {"input_step_db", settings.input_step_dB}};
+        }
+        if (!conditions.empty())
+            requirements["measurement_conditions"] = std::move(conditions);
+        root["receiver_requirements"] = std::move(requirements);
     } else if (!m_receiver_requirements.invalid_reason.empty()) {
         root["receiver_requirements"] = {{"invalid_configuration", true},
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
