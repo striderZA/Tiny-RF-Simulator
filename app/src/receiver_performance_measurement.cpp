@@ -6,6 +6,7 @@
 #include "signal_generator_engine.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <limits>
 #include <nlohmann/json.hpp>
@@ -209,11 +210,13 @@ void ReceiverPerformanceMeasurementEngine::update(
                               config.measurement_conditions.iip3.has_value();
     const auto iip3_levels = iip3_enabled
                                  ? receiverIIP3LevelCount(*config.measurement_conditions.iip3)
+    std::uint64_t stimulus_generation = 0;
                                  : std::nullopt;
     for (std::size_t i = 0; i < sweep_frequencies_Hz.size(); ++i) {
         const double center = sweep_frequencies_Hz[i];
         if (selected_tone && std::isfinite(center) && center > 0.0 &&
             std::isfinite(selected_tone->power_dBm)) {
+            stimulus.generation = ++stimulus_generation;
             Spectrum stimulus;
             stimulus.tones.push_back({center, selected_tone->power_dBm, selected_tone->phase_deg});
             if (const auto output = tonePower(runner.run(stimulus), center))
@@ -241,6 +244,7 @@ void ReceiverPerformanceMeasurementEngine::update(
         for (std::size_t level = 0; level < *iip3_levels; ++level) {
             const double input_dBm = settings.input_start_dBm +
                                      static_cast<double>(level) * settings.input_step_dB;
+            stimulus.generation = ++stimulus_generation;
             Spectrum stimulus;
             stimulus.tones = {{low, input_dBm, 0.0}, {high, input_dBm, 0.0}};
             const Spectrum *output = runner.run(stimulus);
