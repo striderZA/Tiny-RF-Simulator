@@ -74,8 +74,7 @@ ReceiverRequirementStatus aggregate(const ReceiverRequirementsEvaluation &result
 }
 } // namespace
 
-std::optional<std::size_t>
-receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
+std::optional<std::size_t> receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
     if (!std::isfinite(settings.input_start_dBm) || !std::isfinite(settings.input_stop_dBm) ||
         !std::isfinite(settings.input_step_dB) || settings.input_step_dB <= 0.0 ||
         settings.input_start_dBm >= settings.input_stop_dBm)
@@ -84,8 +83,8 @@ receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
     std::size_t count = 0;
     double previous = settings.input_start_dBm;
     for (; count <= kMaxReceiverIIP3InputLevels; ++count) {
-        const double level = settings.input_start_dBm +
-                             static_cast<double>(count) * settings.input_step_dB;
+        const double level =
+            settings.input_start_dBm + static_cast<double>(count) * settings.input_step_dB;
         if (!std::isfinite(level))
             return std::nullopt;
         if (level > settings.input_stop_dBm)
@@ -256,10 +255,9 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
             assess(frequencies_Hz, noise_figure_dB, config.band_start_Hz, config.band_stop_Hz,
                    std::nullopt, *config.nf_max_dB, band_covered);
     if (config.output_power)
-        result.output_power =
-            assess(frequencies_Hz, output_power_dBm, config.band_start_Hz, config.band_stop_Hz,
-                   config.output_power->minimum_dBm, config.output_power->maximum_dBm,
-                   band_covered);
+        result.output_power = assess(frequencies_Hz, output_power_dBm, config.band_start_Hz,
+                                     config.band_stop_Hz, config.output_power->minimum_dBm,
+                                     config.output_power->maximum_dBm, band_covered);
     if (config.iip3_min_dBm)
         result.iip3 = assess(frequencies_Hz, iip3_dBm, config.band_start_Hz, config.band_stop_Hz,
                              *config.iip3_min_dBm, std::nullopt, band_covered);

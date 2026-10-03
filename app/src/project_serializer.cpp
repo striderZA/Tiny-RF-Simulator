@@ -219,8 +219,8 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
         }
         if (conditions.contains("iip3")) {
             const auto &iip3 = conditions["iip3"];
-            constexpr std::array<const char *, 4> iip3_keys = {
-                "tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"};
+            constexpr std::array<const char *, 4> iip3_keys = {"tone_spacing_hz", "input_start_dbm",
+                                                               "input_stop_dbm", "input_step_db"};
             double iip3_fields[4]{};
             if (!iip3.is_object())
                 return invalidate("IIP3 test settings must be an object.");
@@ -230,9 +230,8 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
                                       "' must be a number.");
                 iip3_fields[i] = iip3[iip3_keys[i]].get<double>();
             }
-            config.measurement_conditions.iip3 =
-                ReceiverIIP3TestSettings{iip3_fields[0], iip3_fields[1], iip3_fields[2],
-                                         iip3_fields[3]};
+            config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{
+                iip3_fields[0], iip3_fields[1], iip3_fields[2], iip3_fields[3]};
         }
     }
     if (auto reason = validateReceiverRequirementsConfig(config))

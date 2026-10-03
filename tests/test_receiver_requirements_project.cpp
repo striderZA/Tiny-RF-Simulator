@@ -1,8 +1,8 @@
 #include "app.h"
-#include "receiver_requirements.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "receiver_requirements.h"
 #include "test_temp_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
