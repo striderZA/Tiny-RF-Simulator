@@ -1242,6 +1242,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         };
         ctx->WindowCollapse("Receiver Requirements", false);
         ctx->Yield(2);
+        ctx->ScrollToBottom("Receiver Requirements");
+        ctx->Yield(2);
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
         IM_CHECK(panel && !panel->Collapsed);
@@ -1255,6 +1257,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!s_app->isDirty());
         IM_CHECK(!has_pass_green(panel));
         ctx->ItemClick("Cancel");
+        ctx->Yield(2);
+        ctx->ScrollToBottom("Receiver Requirements");
         ctx->Yield(2);
         IM_CHECK(has_pass_green(panel));
 
