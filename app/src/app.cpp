@@ -1361,12 +1361,35 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
     if (m_show_receiver_requirements) {
+        ReceiverRequirementsConfig measurement_config;
+        if (m_receiver_requirements.config && m_receiver_requirements.invalid_reason.empty())
+            measurement_config = *m_receiver_requirements.config;
+        // The engine can auto-select a lone tone for UI-free callers. The
+        // app's applied selector is authoritative: a missing selection must
+        // remain incomplete until the editor applies its preselection.
+        if (measurement_config.output_power &&
+            !measurement_config.measurement_conditions.output_reference_tone_frequency_Hz)
+            measurement_config.measurement_conditions.output_reference_tone_frequency_Hz = -1.0;
+        m_receiver_performance_engine.update(
+            measurement_config, m_na_engine.pointAPin(), m_na_engine.pointBPin(),
+            m_na_engine.sweepFrequencies());
+
+        std::vector<ReceiverGeneratorToneOption> source_tones;
+        const int source_node_id = m_circuit_runtime.graph().nodeIdForPin(m_na_engine.pointAPin());
+        if (IComponentEngine *source = m_circuit_runtime.components().find(source_node_id);
+            source && source->type_name() == "generator") {
+            const auto *generator = static_cast<const SignalGeneratorEngine *>(source);
+            source_tones.reserve(generator->tones().size());
+            for (const auto &tone : generator->tones())
+                source_tones.push_back({tone.freq_Hz, tone.power_dBm});
+        }
+        const auto &measurements = m_receiver_performance_engine.measurements();
         const auto result = evaluateReceiverRequirements(
             m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
-            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(), {},
-            {});
+            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
+            measurements.output_power_dBm, measurements.iip3_dBm);
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
-                                             m_receiver_requirements, result);
+                                             m_receiver_requirements, result, source_tones);
     }
 
     if (m_show_power_meter)

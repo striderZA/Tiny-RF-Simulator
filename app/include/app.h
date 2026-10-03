@@ -35,6 +35,7 @@
 #include "power_meter_engine.h"
 #include "power_meter_widget.h"
 #include "project_serializer.h"
+#include "receiver_performance_measurement.h"
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
 #include "session_state.h"
@@ -140,7 +141,9 @@ class RfSimulatorApp {
     bool testSetGroupCollapsed(int group_id, bool collapsed);
     const NodeGraphEngine &testGraphEngine() const { return m_circuit_runtime.graph(); }
     const ComponentRegistry &testComponents() const { return m_circuit_runtime.components(); }
-    NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
+    ReceiverPerformanceMeasurementEngine &testReceiverPerformanceMeasurementEngine() {
+        return m_receiver_performance_engine;
+    }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
@@ -245,6 +248,8 @@ class RfSimulatorApp {
     PFBViewManager m_pfb_views;
     // The adapter and analyzer follow their dependencies and outlive the serializer.
     NaHost m_na_host{m_circuit_runtime.components()};
+    ReceiverPerformanceMeasurementEngine m_receiver_performance_engine{m_circuit_runtime.graph(),
+                                                                       m_na_host};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
