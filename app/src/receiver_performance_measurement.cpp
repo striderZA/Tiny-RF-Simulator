@@ -6,8 +6,9 @@
 #include "signal_generator_engine.h"
 
 #include <algorithm>
-#include <cstdint>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -109,9 +110,8 @@ std::optional<double> estimateIIP3(const std::vector<std::pair<double, double>> 
     // slopes of 1 and 3 dB/dB in their uncompressed region. The ±0.35 slope
     // window and 1 dB RMS residual ceiling admit their measured model deviations
     // while rejecting the compressed/non-cubic -20..20 dBm fixture.
-    if (std::abs(fundamental_fit->slope - 1.0) > 0.35 ||
-        std::abs(im3_fit->slope - 3.0) > 0.35 || fundamental_fit->rms_error > 1.0 ||
-        im3_fit->rms_error > 1.0)
+    if (std::abs(fundamental_fit->slope - 1.0) > 0.35 || std::abs(im3_fit->slope - 3.0) > 0.35 ||
+        fundamental_fit->rms_error > 1.0 || im3_fit->rms_error > 1.0)
         return std::nullopt;
     const double denominator = im3_fit->slope - fundamental_fit->slope;
     if (!(denominator > 0.0))
@@ -130,24 +130,22 @@ std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin
     key["point_a"] = point_a_pin;
     key["point_b"] = point_b_pin;
     key["grid"] = sweep;
-    key["config"] = {{"band_start", config.band_start_Hz},
-                      {"band_stop", config.band_stop_Hz},
-                      {"gain", config.gain ? nlohmann::json{{"min", config.gain->minimum_dB},
-                                                             {"max", config.gain->maximum_dB}}
-                                            : nlohmann::json(nullptr)},
-                      {"nf", config.nf_max_dB ? nlohmann::json(*config.nf_max_dB)
-                                              : nlohmann::json(nullptr)},
-                      {"output", config.output_power
-                                     ? nlohmann::json{{"min", config.output_power->minimum_dBm},
-                                                      {"max", config.output_power->maximum_dBm}}
-                                     : nlohmann::json(nullptr)},
-                      {"iip3_limit", config.iip3_min_dBm ? nlohmann::json(*config.iip3_min_dBm)
-                                                         : nlohmann::json(nullptr)},
-                      {"tone_selector", config.measurement_conditions
-                                                .output_reference_tone_frequency_Hz
-                                            ? nlohmann::json(*config.measurement_conditions
-                                                                  .output_reference_tone_frequency_Hz)
-                                            : nlohmann::json(nullptr)}};
+    key["config"] = {
+        {"band_start", config.band_start_Hz},
+        {"band_stop", config.band_stop_Hz},
+        {"gain", config.gain ? nlohmann::json{{"min", config.gain->minimum_dB},
+                                              {"max", config.gain->maximum_dB}}
+                             : nlohmann::json(nullptr)},
+        {"nf", config.nf_max_dB ? nlohmann::json(*config.nf_max_dB) : nlohmann::json(nullptr)},
+        {"output", config.output_power ? nlohmann::json{{"min", config.output_power->minimum_dBm},
+                                                        {"max", config.output_power->maximum_dBm}}
+                                       : nlohmann::json(nullptr)},
+        {"iip3_limit",
+         config.iip3_min_dBm ? nlohmann::json(*config.iip3_min_dBm) : nlohmann::json(nullptr)},
+        {"tone_selector",
+         config.measurement_conditions.output_reference_tone_frequency_Hz
+             ? nlohmann::json(*config.measurement_conditions.output_reference_tone_frequency_Hz)
+             : nlohmann::json(nullptr)}};
     if (config.measurement_conditions.iip3) {
         const auto &settings = *config.measurement_conditions.iip3;
         key["iip3_settings"] = {{"spacing", settings.tone_spacing_Hz},
@@ -179,9 +177,11 @@ ReceiverPerformanceMeasurementEngine::ReceiverPerformanceMeasurementEngine(
     const NodeGraphEngine &graph, IMeasurementChainHost &host)
     : m_graph(graph), m_host(host) {}
 
-void ReceiverPerformanceMeasurementEngine::update(
-    const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
-    const std::vector<double> &sweep_frequencies_Hz) {
+ReceiverPerformanceMeasurementEngine::~ReceiverPerformanceMeasurementEngine() = default;
+
+void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConfig &config,
+                                                  int point_a_pin, int point_b_pin,
+                                                  const std::vector<double> &sweep_frequencies_Hz) {
     const auto path = findMeasurementChainPath(m_graph, m_host, point_a_pin, point_b_pin);
     IComponentEngine *generator_component = nullptr;
     const int source_node = m_graph.nodeIdForPin(point_a_pin);
@@ -192,95 +192,162 @@ void ReceiverPerformanceMeasurementEngine::update(
                           : nullptr;
     const std::string key = requestKey(config, point_a_pin, point_b_pin, sweep_frequencies_Hz,
                                        m_graph, path, generator_component);
-    if (m_has_cached_request && key == m_cached_request)
+    const bool same_request = m_has_cached_request && key == m_cached_request;
+    if (same_request && !m_in_progress)
         return;
 
-    m_cached_request = key;
-    m_has_cached_request = true;
-    m_measurements.output_power_dBm.assign(sweep_frequencies_Hz.size(), kUnavailable);
-    m_measurements.iip3_dBm.assign(sweep_frequencies_Hz.size(), kUnavailable);
-    if (!path)
-        return;
+    const auto has_supported_iip3_center = [this](double center) {
+        if (!m_iip3_settings || !m_iip3_level_count || !std::isfinite(center))
+            return false;
+        const double spacing = m_iip3_settings->tone_spacing_Hz;
+        if (!std::isfinite(spacing) || !(spacing > 0.0))
+            return false;
+        const double low = center - spacing / 2.0;
+        const double high = center + spacing / 2.0;
+        return low > 0.0 && std::isfinite(high);
+    };
 
-    IsolatedChainRunner runner(m_host);
-    if (!runner.prepare(*path))
-        return;
+    if (!same_request) {
+        m_runner.reset();
+        m_cached_request = key;
+        m_has_cached_request = true;
+        m_measurements.output_power_dBm.assign(sweep_frequencies_Hz.size(), kUnavailable);
+        m_measurements.iip3_dBm.assign(sweep_frequencies_Hz.size(), kUnavailable);
+        m_sweep_frequencies_Hz = sweep_frequencies_Hz;
+        m_output_tone_power_phase.reset();
+        m_iip3_settings.reset();
+        m_iip3_level_count.reset();
+        m_current_center = 0;
+        m_current_iip3_level = 0;
+        m_center_stage = CenterStage::OutputTone;
+        m_lower_fundamental.clear();
+        m_upper_fundamental.clear();
+        m_lower_im3.clear();
+        m_upper_im3.clear();
+        m_in_progress = false;
 
-    const Spectrum::Tone *selected_tone = nullptr;
-    if (generator) {
-        const auto &tones = generator->tones();
-        const auto selector = config.measurement_conditions.output_reference_tone_frequency_Hz;
-        if (selector || tones.size() == 1) {
-            const double frequency = selector ? *selector : tones.front().freq_Hz;
-            for (const auto &tone : tones) {
-                if (tone.freq_Hz != frequency)
-                    continue;
-                if (selected_tone) {
-                    selected_tone = nullptr;
-                    break;
+        if (!path)
+            return;
+        auto runner = std::make_unique<IsolatedChainRunner>(m_host);
+        if (!runner->prepare(*path))
+            return;
+        m_runner = std::move(runner);
+
+        if (generator) {
+            const auto &tones = generator->tones();
+            const auto selector = config.measurement_conditions.output_reference_tone_frequency_Hz;
+            const Spectrum::Tone *selected_tone = nullptr;
+            if (selector || tones.size() == 1) {
+                const double frequency = selector ? *selector : tones.front().freq_Hz;
+                for (const auto &tone : tones) {
+                    if (tone.freq_Hz != frequency)
+                        continue;
+                    if (selected_tone) {
+                        selected_tone = nullptr;
+                        break;
+                    }
+                    selected_tone = &tone;
                 }
-                selected_tone = &tone;
             }
+            if (selected_tone)
+                m_output_tone_power_phase =
+                    std::pair{selected_tone->power_dBm, selected_tone->phase_deg};
         }
+
+        if (config.iip3_min_dBm && config.measurement_conditions.iip3) {
+            m_iip3_settings = config.measurement_conditions.iip3;
+            m_iip3_level_count = receiverIIP3LevelCount(*m_iip3_settings);
+        }
+        if (m_iip3_level_count) {
+            m_lower_fundamental.reserve(*m_iip3_level_count);
+            m_upper_fundamental.reserve(*m_iip3_level_count);
+            m_lower_im3.reserve(*m_iip3_level_count);
+            m_upper_im3.reserve(*m_iip3_level_count);
+        }
+
+        const bool has_output_work =
+            m_output_tone_power_phase && std::isfinite(m_output_tone_power_phase->first) &&
+            std::any_of(m_sweep_frequencies_Hz.begin(), m_sweep_frequencies_Hz.end(),
+                        [](double center) { return std::isfinite(center) && center > 0.0; });
+        const bool has_iip3_work =
+            m_iip3_level_count &&
+            std::any_of(m_sweep_frequencies_Hz.begin(), m_sweep_frequencies_Hz.end(),
+                        has_supported_iip3_center);
+        m_in_progress = has_output_work || has_iip3_work;
+        if (!m_in_progress)
+            return;
     }
 
-    const bool iip3_enabled = config.iip3_min_dBm.has_value() &&
-                              config.measurement_conditions.iip3.has_value();
-    const auto iip3_levels = iip3_enabled
-                                 ? receiverIIP3LevelCount(*config.measurement_conditions.iip3)
-                                 : std::nullopt;
-    std::uint64_t stimulus_generation = 0;
-    for (std::size_t i = 0; i < sweep_frequencies_Hz.size(); ++i) {
-        const double center = sweep_frequencies_Hz[i];
-        if (selected_tone && std::isfinite(center) && center > 0.0 &&
-            std::isfinite(selected_tone->power_dBm)) {
-            Spectrum stimulus;
-            stimulus.generation = ++stimulus_generation;
-            stimulus.tones.push_back({center, selected_tone->power_dBm, selected_tone->phase_deg});
-            if (const auto output = tonePower(runner.run(stimulus), center))
-                m_measurements.output_power_dBm[i] = *output;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(4);
+    const auto finish_center = [this]() {
+        if (m_iip3_settings && m_iip3_level_count) {
+            const auto lower = estimateIIP3(m_lower_fundamental, m_lower_im3);
+            const auto upper = estimateIIP3(m_upper_fundamental, m_upper_im3);
+            if (lower && upper)
+                m_measurements.iip3_dBm[m_current_center] = std::min(*lower, *upper);
+        }
+        m_lower_fundamental.clear();
+        m_upper_fundamental.clear();
+        m_lower_im3.clear();
+        m_upper_im3.clear();
+        m_current_iip3_level = 0;
+        m_center_stage = CenterStage::OutputTone;
+        ++m_current_center;
+        if (m_current_center == m_sweep_frequencies_Hz.size())
+            m_in_progress = false;
+    };
+
+    while (m_in_progress) {
+        if (m_current_center >= m_sweep_frequencies_Hz.size()) {
+            m_in_progress = false;
+            break;
+        }
+        const double center = m_sweep_frequencies_Hz[m_current_center];
+        if (m_center_stage == CenterStage::OutputTone) {
+            if (m_output_tone_power_phase &&
+                std::isfinite(m_output_tone_power_phase->first) && std::isfinite(center) &&
+                center > 0.0) {
+                if (std::chrono::steady_clock::now() >= deadline)
+                    break;
+                Spectrum stimulus;
+                stimulus.generation = ++m_spectrum_generation;
+                stimulus.frequencies = {center};
+                stimulus.tones.push_back(
+                    {center, m_output_tone_power_phase->first, m_output_tone_power_phase->second});
+                if (const auto output = tonePower(m_runner->run(stimulus), center))
+                    m_measurements.output_power_dBm[m_current_center] = *output;
+            }
+            m_center_stage = CenterStage::IIP3;
+            continue;
         }
 
-        if (!iip3_levels)
+        if (!has_supported_iip3_center(center) ||
+            m_current_iip3_level >= m_iip3_level_count.value_or(0)) {
+            finish_center();
             continue;
-        const auto &settings = *config.measurement_conditions.iip3;
-        const double half_spacing = settings.tone_spacing_Hz / 2.0;
-        const double low = center - half_spacing;
-        const double high = center + half_spacing;
-        if (!std::isfinite(center) || !std::isfinite(settings.tone_spacing_Hz) ||
-            !(settings.tone_spacing_Hz > 0.0) || !(low > 0.0) || !std::isfinite(high))
-            continue;
-        std::vector<std::pair<double, double>> lower_fundamental;
-        std::vector<std::pair<double, double>> upper_fundamental;
-        std::vector<std::pair<double, double>> lower_im3;
-        std::vector<std::pair<double, double>> upper_im3;
-        lower_fundamental.reserve(*iip3_levels);
-        upper_fundamental.reserve(*iip3_levels);
-        lower_im3.reserve(*iip3_levels);
-        upper_im3.reserve(*iip3_levels);
-        for (std::size_t level = 0; level < *iip3_levels; ++level) {
-            const double input_dBm = settings.input_start_dBm +
-                                     static_cast<double>(level) * settings.input_step_dB;
-            Spectrum stimulus;
-            stimulus.generation = ++stimulus_generation;
-            stimulus.tones = {{low, input_dBm, 0.0}, {high, input_dBm, 0.0}};
-            const Spectrum *output = runner.run(stimulus);
-            const auto low_fund = tonePower(output, low);
-            const auto high_fund = tonePower(output, high);
-            const auto low_im = tonePower(output, 2.0 * low - high);
-            const auto high_im = tonePower(output, 2.0 * high - low);
-            if (low_fund)
-                lower_fundamental.emplace_back(input_dBm, *low_fund);
-            if (high_fund)
-                upper_fundamental.emplace_back(input_dBm, *high_fund);
-            if (low_im)
-                lower_im3.emplace_back(input_dBm, *low_im);
-            if (high_im)
-                upper_im3.emplace_back(input_dBm, *high_im);
         }
-        const auto lower = estimateIIP3(lower_fundamental, lower_im3);
-        const auto upper = estimateIIP3(upper_fundamental, upper_im3);
-        if (lower && upper)
-            m_measurements.iip3_dBm[i] = std::min(*lower, *upper);
+        if (std::chrono::steady_clock::now() >= deadline)
+            break;
+
+        const auto &settings = *m_iip3_settings;
+        const double low = center - settings.tone_spacing_Hz / 2.0;
+        const double high = center + settings.tone_spacing_Hz / 2.0;
+        const double input_dBm =
+            settings.input_start_dBm + static_cast<double>(m_current_iip3_level) *
+                                            settings.input_step_dB;
+        Spectrum stimulus;
+        stimulus.generation = ++m_spectrum_generation;
+        stimulus.frequencies = {center};
+        stimulus.tones = {{low, input_dBm, 0.0}, {high, input_dBm, 0.0}};
+        const Spectrum *output = m_runner->run(stimulus);
+        if (const auto power = tonePower(output, low))
+            m_lower_fundamental.emplace_back(input_dBm, *power);
+        if (const auto power = tonePower(output, high))
+            m_upper_fundamental.emplace_back(input_dBm, *power);
+        if (const auto power = tonePower(output, 2.0 * low - high))
+            m_lower_im3.emplace_back(input_dBm, *power);
+        if (const auto power = tonePower(output, 2.0 * high - low))
+            m_upper_im3.emplace_back(input_dBm, *power);
+        ++m_current_iip3_level;
     }
 }
