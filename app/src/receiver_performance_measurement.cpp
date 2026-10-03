@@ -269,10 +269,9 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
             m_output_tone_power_phase && std::isfinite(m_output_tone_power_phase->first) &&
             std::any_of(m_sweep_frequencies_Hz.begin(), m_sweep_frequencies_Hz.end(),
                         [](double center) { return std::isfinite(center) && center > 0.0; });
-        const bool has_iip3_work =
-            m_iip3_level_count &&
-            std::any_of(m_sweep_frequencies_Hz.begin(), m_sweep_frequencies_Hz.end(),
-                        has_supported_iip3_center);
+        const bool has_iip3_work = m_iip3_level_count && std::any_of(m_sweep_frequencies_Hz.begin(),
+                                                                     m_sweep_frequencies_Hz.end(),
+                                                                     has_supported_iip3_center);
         m_in_progress = has_output_work || has_iip3_work;
         if (!m_in_progress)
             return;
@@ -304,9 +303,8 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
         }
         const double center = m_sweep_frequencies_Hz[m_current_center];
         if (m_center_stage == CenterStage::OutputTone) {
-            if (m_output_tone_power_phase &&
-                std::isfinite(m_output_tone_power_phase->first) && std::isfinite(center) &&
-                center > 0.0) {
+            if (m_output_tone_power_phase && std::isfinite(m_output_tone_power_phase->first) &&
+                std::isfinite(center) && center > 0.0) {
                 if (std::chrono::steady_clock::now() >= deadline)
                     break;
                 Spectrum stimulus;
@@ -332,9 +330,8 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
         const auto &settings = *m_iip3_settings;
         const double low = center - settings.tone_spacing_Hz / 2.0;
         const double high = center + settings.tone_spacing_Hz / 2.0;
-        const double input_dBm =
-            settings.input_start_dBm + static_cast<double>(m_current_iip3_level) *
-                                            settings.input_step_dB;
+        const double input_dBm = settings.input_start_dBm +
+                                 static_cast<double>(m_current_iip3_level) * settings.input_step_dB;
         Spectrum stimulus;
         stimulus.generation = ++m_spectrum_generation;
         stimulus.frequencies = {center};
