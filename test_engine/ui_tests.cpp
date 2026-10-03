@@ -1258,6 +1258,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!has_pass_green(panel));
         ctx->ItemClick("Cancel");
         ctx->Yield(2);
+        ctx->SetRef("");
         ctx->ScrollToBottom("Receiver Requirements");
         ctx->Yield(2);
         IM_CHECK(has_pass_green(panel));
