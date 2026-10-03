@@ -38,15 +38,13 @@ class TestAmplifier final : public AmplifierEngine {
         if (node().inputs.empty() || !node().inputs[0] || node().outputs.empty())
             return;
         const auto &tones = node().inputs[0]->tones;
-        if (tones.size() == 1 &&
-            (m_dropped == DroppedTone::DuplicateSamePhase ||
-             m_dropped == DroppedTone::DuplicateQuadrature)) {
+        if (tones.size() == 1 && (m_dropped == DroppedTone::DuplicateSamePhase ||
+                                  m_dropped == DroppedTone::DuplicateQuadrature)) {
             auto &output_tones = node().outputs[0].tones;
-            const auto fundamental = std::find_if(output_tones.begin(), output_tones.end(),
-                                                  [&tones](const Spectrum::Tone &tone) {
-                                                      return std::abs(tone.freq_Hz -
-                                                                      tones.front().freq_Hz) < 1.0;
-                                                  });
+            const auto fundamental = std::find_if(
+                output_tones.begin(), output_tones.end(), [&tones](const Spectrum::Tone &tone) {
+                    return std::abs(tone.freq_Hz - tones.front().freq_Hz) < 1.0;
+                });
             if (fundamental != output_tones.end()) {
                 auto duplicate = *fundamental;
                 if (m_dropped == DroppedTone::DuplicateQuadrature)
@@ -389,6 +387,55 @@ TEST_CASE("Receiver measurement cache reuses unchanged request and invalidates c
     engine.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(c.host.scratch_passes > prepared);
 }
+TEST_CASE("Receiver measurement resumes incremental in-band work and resets changed requests",
+          "[receiver_measurements]") {
+    Circuit c;
+    c.amplifier.setEnableNonlinear(true);
+    c.amplifier.setOIP3_dBm(40.0);
+    c.amplifier.setP1dB_dBm(90.0);
+    auto settings = config();
+    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -120.0, -20.0, 1.0};
+    REQUIRE(receiverIIP3LevelCount(*settings.measurement_conditions.iip3) == 101);
+
+    std::vector<double> full_band_grid;
+    constexpr std::size_t points = 1000;
+    full_band_grid.reserve(points);
+    for (std::size_t i = 0; i < points; ++i)
+        full_band_grid.push_back(1.0e9 + static_cast<double>(i) * (1.0e9 / (points - 1)));
+
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    engine.update(settings, c.generator.outputPinId(), c.pointB(), full_band_grid);
+    CHECK(engine.isInProgress());
+    const auto &partial = engine.measurements();
+    REQUIRE(partial.output_power_dBm.size() == points);
+    REQUIRE(partial.iip3_dBm.size() == points);
+    CHECK(isFinite(partial.output_power_dBm.front()));
+    CHECK(std::isnan(partial.output_power_dBm.back()));
+    CHECK(std::isnan(partial.iip3_dBm.back()));
+
+    ReceiverRequirementsState state;
+    state.config = settings;
+    std::vector<double> unavailable(points, std::numeric_limits<double>::quiet_NaN());
+    const auto evaluation = evaluateReceiverRequirements(
+        state, full_band_grid.front(), full_band_grid.back(), full_band_grid, unavailable,
+        unavailable, partial.output_power_dBm, partial.iip3_dBm);
+    CHECK(evaluation.overall == ReceiverRequirementStatus::Incomplete);
+
+    const int prepared_passes = c.host.scratch_passes;
+    engine.update(settings, c.generator.outputPinId(), c.pointB(), full_band_grid);
+    CHECK(engine.isInProgress());
+    CHECK(c.host.scratch_passes == prepared_passes);
+
+    settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.2e9;
+    engine.update(settings, c.generator.outputPinId(), c.pointB(), full_band_grid);
+    CHECK(engine.isInProgress());
+    CHECK(c.host.scratch_passes > prepared_passes);
+    const auto &reset = engine.measurements();
+    REQUIRE(reset.output_power_dBm.size() == points);
+    REQUIRE(reset.iip3_dBm.size() == points);
+    CHECK(std::isnan(reset.output_power_dBm.front()));
+    CHECK(std::isnan(reset.output_power_dBm.back()));
+}
 
 TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer grid",
           "[.bench][bench]") {
@@ -407,6 +454,9 @@ TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer gr
     BENCHMARK("full-grid 101-level receiver recompute") {
         settings.band_start_Hz += 1.0; // force a fresh request on every benchmark sample
         engine.update(settings, c.generator.outputPinId(), c.pointB(), full_grid);
+        for (int update = 0; engine.isInProgress() && update < 1000; ++update)
+            engine.update(settings, c.generator.outputPinId(), c.pointB(), full_grid);
+        REQUIRE_FALSE(engine.isInProgress());
         return engine.measurements().iip3_dBm;
     };
     BENCHMARK("unchanged cached full-grid 101-level update") {
