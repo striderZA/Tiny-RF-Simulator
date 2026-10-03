@@ -1127,11 +1127,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         auto &na = s_app->testNetworkAnalyzerEngine();
         na.setPointA(generator_out);
         na.setPointB(amplifier_out);
-        na.setStartFrequency(1.0e6);
+        na.setStartFrequency(5.0e6);
         na.setStopFrequency(10.0e6);
         na.setPoints(201);
         ReceiverRequirementsConfig config;
-        config.band_start_Hz = 1.0e6;
+        config.band_start_Hz = 5.0e6;
         config.band_stop_Hz = 10.0e6;
         config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
         config.iip3_min_dBm = 0.0;
