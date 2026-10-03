@@ -28,8 +28,9 @@ bool closeFrequency(double actual, double expected,
     return std::abs(actual - expected) <= tolerance;
 }
 
-std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz,
-                                double maximum_tolerance = std::numeric_limits<double>::infinity()) {
+std::optional<double>
+tonePower(const Spectrum *spectrum, double frequency_Hz,
+          double maximum_tolerance = std::numeric_limits<double>::infinity()) {
     if (!spectrum || !std::isfinite(frequency_Hz))
         return std::nullopt;
 
@@ -62,7 +63,6 @@ std::optional<double> tonePower(const Spectrum *spectrum, double frequency_Hz,
     const double power_dBm = reference_dBm + 20.0 * std::log10(resultant);
     return std::isfinite(power_dBm) ? std::optional<double>(power_dBm) : std::nullopt;
 }
-
 
 struct LineFit {
     double slope;

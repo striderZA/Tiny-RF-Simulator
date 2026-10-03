@@ -339,8 +339,7 @@ TEST_CASE("Receiver IIP3 measurement leaves disabled output power unavailable",
     c.amplifier.setP1dB_dBm(90.0);
     auto iip3_only = config();
     iip3_only.output_power.reset();
-    iip3_only.measurement_conditions.iip3 =
-        ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
+    iip3_only.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
 
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
     engine.update(iip3_only, c.generator.outputPinId(), c.pointB(), {1.0e9});
@@ -348,7 +347,6 @@ TEST_CASE("Receiver IIP3 measurement leaves disabled output power unavailable",
     REQUIRE(engine.measurements().output_power_dBm.size() == 1);
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
 }
-
 
 TEST_CASE("Receiver IIP3 retains fixed spacing and rejects unsupported edges and invalid fits",
           "[receiver_measurements]") {
