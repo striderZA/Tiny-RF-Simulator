@@ -247,8 +247,7 @@ TEST_CASE("ReceiverRequirements reports upper and lower limit violations over in
     const std::vector<double> good_nf = {3.0, 4.0};
     const std::vector<double> good_output = {-30.0, 0.0};
     const std::vector<double> good_iip3 = {15.0, 20.0};
-    const auto evaluateSamples = [&](const std::vector<double> &gain,
-                                     const std::vector<double> &nf,
+    const auto evaluateSamples = [&](const std::vector<double> &gain, const std::vector<double> &nf,
                                      const std::vector<double> &output) {
         return evaluateReceiverRequirements(state, 1.0e9, 1.75e9, frequencies, gain, nf, output,
                                             good_iip3);
