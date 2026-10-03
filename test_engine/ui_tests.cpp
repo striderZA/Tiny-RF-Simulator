@@ -1216,16 +1216,26 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK(std::fabs(power + 13.0) < 0.25);
         for (double iip3 : complete.iip3_dBm)
             IM_CHECK(std::fabs(iip3 - 33.0) < 3.0);
+        ctx->Yield(1);
+        const auto applied_evaluation = evaluateReceiverRequirements(
+            state, 5.0e6, 10.0e6, na.sweepFrequencies(), na.gainDb(), na.noiseFigureDb(),
+            complete.output_power_dBm, complete.iip3_dBm);
+        IM_CHECK_EQ(applied_evaluation.output_power.status, ReceiverRequirementStatus::Pass);
+        IM_CHECK_EQ(applied_evaluation.iip3.status, ReceiverRequirementStatus::Pass);
+        IM_CHECK_EQ(applied_evaluation.overall, ReceiverRequirementStatus::Pass);
 
         // A passing status is green only for the applied configuration. Draft
         // edits must replace it with the neutral unapplied state.
         const auto has_pass_green = [](ImGuiWindow *window) {
             if (!window || !window->DrawList)
                 return false;
-            const ImU32 pass_green =
-                ImGui::ColorConvertFloat4ToU32(ImVec4(0.25f, 0.85f, 0.35f, 1.0f));
+            const ImVec4 expected(0.25f, 0.85f, 0.35f, 1.0f);
             for (int i = 0; i < window->DrawList->VtxBuffer.Size; ++i) {
-                if (window->DrawList->VtxBuffer[i].col == pass_green)
+                const ImVec4 actual =
+                    ImGui::ColorConvertU32ToFloat4(window->DrawList->VtxBuffer[i].col);
+                if (std::fabs(actual.x - expected.x) < 0.01f &&
+                    std::fabs(actual.y - expected.y) < 0.01f &&
+                    std::fabs(actual.z - expected.z) < 0.01f)
                     return true;
             }
             return false;
