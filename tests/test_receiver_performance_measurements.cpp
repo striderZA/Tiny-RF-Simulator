@@ -32,7 +32,7 @@ class TestAmplifier final : public AmplifierEngine {
         const auto &tones = node().inputs[0]->tones;
         const double low = tones[0].freq_Hz;
         const double high = tones[1].freq_Hz;
-        if (m_dropped == DroppedTone::LowerIm3OnlyTwoLevels && tones[0].power_dBm <= -76.0)
+        if (m_dropped == DroppedTone::LowerIm3OnlyTwoLevels && tones[0].power_dBm <= -78.0)
             return;
         const double target =
             m_dropped == DroppedTone::LowerIm3 || m_dropped == DroppedTone::LowerIm3OnlyTwoLevels
@@ -115,6 +115,9 @@ struct Circuit {
 
 ReceiverRequirementsConfig config(double frequency = 1.0e9) {
     ReceiverRequirementsConfig c;
+    c.band_start_Hz = 1.0e9;
+    c.band_stop_Hz = 2.0e9;
+    c.output_power = ReceiverOutputPowerLimits{-100.0, 100.0};
     c.iip3_min_dBm = 0.0;
     c.measurement_conditions.output_reference_tone_frequency_Hz = frequency;
     c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -60.0, -40.0, 2.0};
@@ -135,7 +138,7 @@ TEST_CASE("Receiver measurement engine measures selected generator-reference out
     const auto &m = engine.measurements();
     REQUIRE(m.output_power_dBm.size() == 2);
     CHECK(m.output_power_dBm[0] == Catch::Approx(-5.0).margin(1e-8));
-    CHECK(std::isnan(m.output_power_dBm[1]));
+    CHECK(m.output_power_dBm[1] == Catch::Approx(-5.0).margin(1e-8));
     CHECK(c.generator.serialize() == before);
 }
 
