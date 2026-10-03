@@ -28,6 +28,23 @@ void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
                   value);
 }
+ReceiverRequirementsDraft draftFromBuffers(const std::array<std::array<char, 128>, 5> &buffers) {
+    ReceiverRequirementsDraft draft;
+    draft.band_start_Hz = buffers[0].data();
+    draft.band_stop_Hz = buffers[1].data();
+    draft.gain_min_dB = buffers[2].data();
+    draft.gain_max_dB = buffers[3].data();
+    draft.nf_max_dB = buffers[4].data();
+    draft.gain_enabled = true;
+    draft.noise_figure_enabled = true;
+    return draft;
+}
+
+bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDraft &b) {
+    return a.band_start_Hz == b.band_start_Hz && a.band_stop_Hz == b.band_stop_Hz &&
+           a.gain_min_dB == b.gain_min_dB && a.gain_max_dB == b.gain_max_dB &&
+           a.nf_max_dB == b.nf_max_dB;
+}
 } // namespace
 ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementStatus status) {
     switch (status) {
@@ -68,9 +85,11 @@ bool ReceiverRequirementsWidget::stateMatchesSnapshot(
         return true;
     const auto &a = *state.config;
     const auto &b = *m_snapshot.config;
-    return a.band_start_Hz == b.band_start_Hz && a.band_stop_Hz == b.band_stop_Hz &&
-           a.gain_min_dB == b.gain_min_dB && a.gain_max_dB == b.gain_max_dB &&
-           a.nf_max_dB == b.nf_max_dB;
+    if (a.band_start_Hz != b.band_start_Hz || a.band_stop_Hz != b.band_stop_Hz ||
+        a.gain.has_value() != b.gain.has_value() || a.nf_max_dB != b.nf_max_dB)
+        return false;
+    return !a.gain ||
+           (a.gain->minimum_dB == b.gain->minimum_dB && a.gain->maximum_dB == b.gain->maximum_dB);
 }
 
 void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsState &state) {
@@ -80,14 +99,14 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsState &sta
         const auto &config = *state.config;
         setNumber(m_buffers[0], config.band_start_Hz);
         setNumber(m_buffers[1], config.band_stop_Hz);
-        setNumber(m_buffers[2], config.gain_min_dB);
-        setNumber(m_buffers[3], config.gain_max_dB);
-        setNumber(m_buffers[4], config.nf_max_dB);
+        if (config.gain) {
+            setNumber(m_buffers[2], config.gain->minimum_dB);
+            setNumber(m_buffers[3], config.gain->maximum_dB);
+        }
+        if (config.nf_max_dB)
+            setNumber(m_buffers[4], *config.nf_max_dB);
     }
-    for (std::size_t i = 0; i < m_baseline.size(); ++i)
-        m_baseline[i] = m_buffers[i].data();
-    if (!state.config || !state.invalid_reason.empty())
-        m_baseline = {};
+    m_baseline = draftFromBuffers(m_buffers);
     m_snapshot = state;
     m_initialized = true;
     m_error.clear();
@@ -107,12 +126,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
     for (std::size_t i = 0; i < m_buffers.size(); ++i)
         ImGui::InputText(kLabels[i], m_buffers[i].data(), m_buffers[i].size());
 
-    const auto makeDraft = [this]() {
-        ReceiverRequirementsDraft draft;
-        for (std::size_t i = 0; i < draft.size(); ++i)
-            draft[i] = m_buffers[i].data();
-        return draft;
-    };
+    const auto makeDraft = [this]() { return draftFromBuffers(m_buffers); };
 
     if (ImGui::Button("Apply requirements")) {
         if (applyReceiverRequirementsDraft(state, makeDraft(), m_error)) {
@@ -124,7 +138,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
     ImGui::SameLine();
     if (ImGui::Button("Cancel"))
         resetDraft(state);
-    const bool unapplied = makeDraft() != m_baseline;
+    const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
     if (!m_error.empty())
         ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", m_error.c_str());
@@ -138,12 +152,12 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
     else if (state.invalid_reason.empty() && state.config) {
         ImGui::Separator();
         drawStatusRow("Gain", result.gain.status);
-        if (result.gain.observed_min_dB && result.gain.observed_max_dB)
-            ImGui::Text("Observed gain: %.3f to %.3f dB", *result.gain.observed_min_dB,
-                        *result.gain.observed_max_dB);
+        if (result.gain.observed_min && result.gain.observed_max)
+            ImGui::Text("Observed gain: %.3f to %.3f dB", *result.gain.observed_min,
+                        *result.gain.observed_max);
         drawStatusRow("Noise figure", result.noise_figure.status);
-        if (result.noise_figure.observed_max_dB)
-            ImGui::Text("Observed NF max: %.3f dB", *result.noise_figure.observed_max_dB);
+        if (result.noise_figure.observed_max)
+            ImGui::Text("Observed NF max: %.3f dB", *result.noise_figure.observed_max);
         drawStatusRow("Overall", result.overall);
     }
     ImGui::End();

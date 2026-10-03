@@ -75,14 +75,19 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
             any ? std::optional<double>(observed_max) : std::nullopt};
 }
 
-ReceiverMetricEvaluation assessIIP3(const std::vector<double> &values, std::size_t expected_count,
-                                    double minimum, bool band_covered) {
-    bool missing = values.size() != expected_count;
+ReceiverMetricEvaluation assessIIP3(const std::vector<double> &frequencies,
+                                    const std::vector<double> &values, double low_Hz,
+                                    double high_Hz, double minimum, bool band_covered) {
+    bool missing = frequencies.size() != values.size();
     bool any = false;
     bool failed = false;
     double observed_min = 0.0;
     double observed_max = 0.0;
-    for (std::size_t i = 0; i < std::min(values.size(), expected_count); ++i) {
+    const std::size_t aligned_size = std::min(frequencies.size(), values.size());
+    for (std::size_t i = 0; i < aligned_size; ++i) {
+        const double frequency = frequencies[i];
+        if (!std::isfinite(frequency) || frequency < low_Hz || frequency > high_Hz)
+            continue;
         if (!std::isfinite(values[i])) {
             missing = true;
             continue;
@@ -288,11 +293,9 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
                 frequencies_Hz, output_power_dBm, config.band_start_Hz, config.band_stop_Hz, true,
                 config.output_power->minimum_dBm, config.output_power->maximum_dBm, band_covered);
     }
-    if (config.iip3_min_dBm && config.measurement_conditions.iip3) {
-        const auto count = iip3LevelCount(*config.measurement_conditions.iip3);
-        if (count)
-            result.iip3 = assessIIP3(iip3_dBm, *count, *config.iip3_min_dBm, band_covered);
-    }
+    if (config.iip3_min_dBm)
+        result.iip3 = assessIIP3(frequencies_Hz, iip3_dBm, config.band_start_Hz,
+                                 config.band_stop_Hz, *config.iip3_min_dBm, band_covered);
     result.overall = aggregate(result);
     return result;
 }

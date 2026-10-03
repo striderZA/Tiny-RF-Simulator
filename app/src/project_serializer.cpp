@@ -176,7 +176,11 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
                               "' must be a number.");
         fields[i] = value[keys[i]].get<double>();
     }
-    ReceiverRequirementsConfig config{fields[0], fields[1], fields[2], fields[3], fields[4]};
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = fields[0];
+    config.band_stop_Hz = fields[1];
+    config.gain = ReceiverGainLimits{fields[2], fields[3]};
+    config.nf_max_dB = fields[4];
     if (auto reason = validateReceiverRequirementsConfig(config))
         return invalidate(*reason);
     state.config = config;
@@ -214,9 +218,9 @@ bool ProjectSerializer::save(const std::string &path) {
         const auto &config = *m_receiver_requirements.config;
         root["receiver_requirements"] = {{"band_start_hz", config.band_start_Hz},
                                          {"band_stop_hz", config.band_stop_Hz},
-                                         {"gain_min_db", config.gain_min_dB},
-                                         {"gain_max_db", config.gain_max_dB},
-                                         {"nf_max_db", config.nf_max_dB}};
+                                         {"gain_min_db", config.gain->minimum_dB},
+                                         {"gain_max_db", config.gain->maximum_dB},
+                                         {"nf_max_db", *config.nf_max_dB}};
     } else if (!m_receiver_requirements.invalid_reason.empty()) {
         root["receiver_requirements"] = {{"invalid_configuration", true},
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};

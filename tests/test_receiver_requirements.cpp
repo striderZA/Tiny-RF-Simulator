@@ -72,11 +72,12 @@ TEST_CASE("ReceiverRequirements supports independent optional metric limits",
 
 TEST_CASE("ReceiverRequirements evaluates each metric independently when others are disabled",
           "[receiver_requirements]") {
-    const auto checkOnly = [](auto disable) {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto checkOnly = [nan](auto disable) {
         auto state = configuredState();
         disable(*state.config);
-        const auto result =
-            evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0}, {10, 15, 20});
+        const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                     {0, -30, -20, 0, 0}, {nan, 10, 15, 20, nan});
         CHECK(result.overall == ReceiverRequirementStatus::Pass);
         return result;
     };
@@ -144,8 +145,9 @@ TEST_CASE("ReceiverRequirements accepts missing output tone but cannot pass its 
           "[receiver_requirements]") {
     auto state = configuredState();
     state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
-    const auto result =
-        evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0}, {-20, -10, 0});
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                                  std::numeric_limits<double>::quiet_NaN()});
     CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
 }
@@ -166,8 +168,10 @@ TEST_CASE("ReceiverRequirements returns Not configured when every metric is disa
 
 TEST_CASE("ReceiverRequirements applies inclusive bounds and reports unit-neutral ranges",
           "[receiver_requirements]") {
-    const auto result = evaluate(configuredState(), {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
-                                 {0, -30, -20, 0, 0}, {10, 15, 20});
+    const auto result =
+        evaluate(configuredState(), {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                  std::numeric_limits<double>::quiet_NaN()});
     CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
     CHECK(result.gain.observed_min == Approx(10.0));
     CHECK(result.gain.observed_max == Approx(20.0));
@@ -204,11 +208,28 @@ TEST_CASE("ReceiverRequirements preserves valid failures when other metric data 
     CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Fail);
 }
+TEST_CASE("ReceiverRequirements aligns IIP3 samples with the frequency sweep",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto failed_with_missing = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                              {0, -30, -20, 0, 0}, {nan, 15, nan, 9, nan});
+    CHECK(failed_with_missing.iip3.status == ReceiverRequirementStatus::Fail);
+    CHECK(failed_with_missing.overall == ReceiverRequirementStatus::Fail);
+
+    const auto complete = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                   {nan, 10, 15, 20, nan});
+    CHECK(complete.iip3.status == ReceiverRequirementStatus::Pass);
+
+    const auto short_vector =
+        evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0}, {nan, 10, 15});
+    CHECK(short_vector.iip3.status == ReceiverRequirementStatus::Incomplete);
+}
 
 TEST_CASE("ReceiverRequirements requires full valid coverage for every enabled metric",
           "[receiver_requirements]") {
     const auto result = evaluate(configuredState(), {0, 15, 15, 20, 0}, {0, 3, 4, 5, 0},
-                                 {0, -30, -20, 0, 0}, {-20, -10}, 1.1e9, 1.9e9);
+                                 {0, -30, -20, 0, 0}, {10, 15}, 1.1e9, 1.9e9);
     CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.iip3.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);

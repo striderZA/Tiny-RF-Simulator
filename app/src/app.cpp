@@ -1363,7 +1363,8 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_receiver_requirements) {
         const auto result = evaluateReceiverRequirements(
             m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
-            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb());
+            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(), {},
+            {});
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
                                              m_receiver_requirements, result);
     }

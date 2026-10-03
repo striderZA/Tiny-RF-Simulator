@@ -1189,8 +1189,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         if (state.config) {
             IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
             IM_CHECK_EQ(state.config->band_stop_Hz, 1.0e7);
-            IM_CHECK_EQ(state.config->gain_min_dB, -3.0);
-            IM_CHECK_EQ(state.config->gain_max_dB, 3.0);
+            IM_CHECK_EQ(state.config->gain->minimum_dB, -3.0);
+            IM_CHECK_EQ(state.config->gain->maximum_dB, 3.0);
             IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
         }
         IM_CHECK(s_app->isDirty());

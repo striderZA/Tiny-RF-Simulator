@@ -75,6 +75,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist valid project sett
     {
         RfSimulatorApp app;
         app.loadProject(path);
+        REQUIRE(app.testReceiverRequirementsState().config.has_value());
+        REQUIRE(app.testReceiverRequirementsState().config->gain.has_value());
+        CHECK(app.testReceiverRequirementsState().config->gain->minimum_dB == 10.0);
+        CHECK(app.testReceiverRequirementsState().config->gain->maximum_dB == 20.0);
+        CHECK(app.testReceiverRequirementsState().config->nf_max_dB == 5.0);
         CHECK(app.componentCount() == 2);
         app.saveProject(path);
     }
