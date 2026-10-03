@@ -32,8 +32,12 @@ struct ReceiverIIP3TestSettings {
 
 constexpr std::size_t kMaxReceiverIIP3InputLevels = 101;
 
-std::optional<std::size_t>
-receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings);
+std::optional<std::size_t> receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings);
+
+struct ReceiverMeasurementConditions {
+    std::optional<double> output_reference_tone_frequency_Hz;
+    std::optional<ReceiverIIP3TestSettings> iip3;
+};
 
 struct ReceiverRequirementsConfig {
     double band_start_Hz = 0.0;
