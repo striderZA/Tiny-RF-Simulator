@@ -221,46 +221,39 @@ TEST_CASE("ReceiverRequirements uses aligned IIP3 input levels and requires thre
     CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
-TEST_CASE("ReceiverRequirements bounds IIP3 input-level counting",
-          "[receiver_requirements]") {
+TEST_CASE("ReceiverRequirements bounds IIP3 input-level counting", "[receiver_requirements]") {
     CHECK(receiverIIP3LevelCount({1.0e6, -30.0, -20.0, 5.0}) == 3);
-    CHECK(receiverIIP3LevelCount({1.0e6, -100.0, 0.0, 1.0}) ==
-          kMaxReceiverIIP3InputLevels);
+    CHECK(receiverIIP3LevelCount({1.0e6, -100.0, 0.0, 1.0}) == kMaxReceiverIIP3InputLevels);
     CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, -21.0, 5.0}).has_value());
     CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, 71.0, 1.0}).has_value());
-    CHECK_FALSE(receiverIIP3LevelCount(
-                     {1.0e6, -std::numeric_limits<double>::max(),
-                      std::numeric_limits<double>::max(), 1.0})
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -std::numeric_limits<double>::max(),
+                                        std::numeric_limits<double>::max(), 1.0})
                     .has_value());
-    CHECK_FALSE(receiverIIP3LevelCount(
-                     {1.0e6, 1.0, 2.0, std::numeric_limits<double>::denorm_min()})
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, 1.0, 2.0, std::numeric_limits<double>::denorm_min()})
                     .has_value());
-    CHECK_FALSE(receiverIIP3LevelCount(
-                     {0.0, 0.0, std::numeric_limits<double>::max(),
-                      std::numeric_limits<double>::max()})
+    CHECK_FALSE(receiverIIP3LevelCount({0.0, 0.0, std::numeric_limits<double>::max(),
+                                        std::numeric_limits<double>::max()})
                     .has_value());
 }
 
 TEST_CASE("ReceiverRequirements applies common coverage, alignment, and precedence rules",
           "[receiver_requirements]") {
     const auto full_state = configuredState();
-    auto partial = evaluate(full_state, {0, 10, 9, 20, 0}, {0, 3, 4, 5, 0},
-                            {0, -30, -20, 0, 0},
+    auto partial = evaluate(full_state, {0, 10, 9, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
                             {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
                              std::numeric_limits<double>::quiet_NaN()},
                             1.1e9, 1.9e9);
     CHECK(partial.gain.status == ReceiverRequirementStatus::Fail);
     CHECK(partial.overall == ReceiverRequirementStatus::Fail);
 
-    const auto prefix = evaluate(full_state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
-                                 {0, -30, -20, 0, 0},
-                                 {std::numeric_limits<double>::quiet_NaN(), 9, 15},
-                                 0.9e9, 2.1e9);
+    const auto prefix =
+        evaluate(full_state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                 {std::numeric_limits<double>::quiet_NaN(), 9, 15}, 0.9e9, 2.1e9);
     CHECK(prefix.iip3.status == ReceiverRequirementStatus::Fail);
 
     const double nan = std::numeric_limits<double>::quiet_NaN();
-    const auto no_in_band = evaluateReceiverRequirements(
-        full_state, 0.9e9, 2.1e9, {0.9e9, 2.1e9}, {0, 0}, {0, 0}, {0, 0}, {nan, nan});
+    const auto no_in_band = evaluateReceiverRequirements(full_state, 0.9e9, 2.1e9, {0.9e9, 2.1e9},
+                                                         {0, 0}, {0, 0}, {0, 0}, {nan, nan});
     CHECK(no_in_band.gain.status == ReceiverRequirementStatus::Incomplete);
     CHECK(no_in_band.overall == ReceiverRequirementStatus::Incomplete);
 }
@@ -270,13 +263,14 @@ TEST_CASE("ReceiverRequirements marks each mismatched metric vector incomplete",
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const auto check = [&](int short_metric) {
         auto state = configuredState();
-        const std::vector<double> full = {0, 10, 15, 20, 0};
-        const std::vector<double> short_values = {0, 10, 15, 20};
-        return evaluate(state, short_metric == 0 ? short_values : full,
-                        short_metric == 1 ? short_values : std::vector<double>{0, 3, 4, 5, 0},
-                        short_metric == 2 ? short_values : std::vector<double>{0, -30, -20, 0, 0},
-                        short_metric == 3 ? std::vector<double>{nan, 10, 15, 20} :
-                                            std::vector<double>{nan, 10, 15, 20, nan});
+        const std::vector<double> gain = {0, 10, 15, 20, 0};
+        const std::vector<double> nf = {0, 3, 4, 5, 0};
+        const std::vector<double> output_power = {0, -30, -20, 0, 0};
+        return evaluate(state, short_metric == 0 ? std::vector<double>{0, 10, 15, 20} : gain,
+                        short_metric == 1 ? std::vector<double>{0, 3, 4, 5} : nf,
+                        short_metric == 2 ? std::vector<double>{0, -30, -20, 0} : output_power,
+                        short_metric == 3 ? std::vector<double>{nan, 10, 15, 20}
+                                          : std::vector<double>{nan, 10, 15, 20, nan});
     };
     CHECK(check(0).gain.status == ReceiverRequirementStatus::Incomplete);
     CHECK(check(1).noise_figure.status == ReceiverRequirementStatus::Incomplete);
