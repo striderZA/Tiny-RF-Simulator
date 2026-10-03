@@ -251,7 +251,7 @@ TEST_CASE("Receiver IIP3 retains fixed spacing and rejects unsupported edges and
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
     auto settings = config();
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{20.0e6, -60.0, -40.0, 2.0};
-    engine.update(settings, c.generator.outputPinId(), c.pointB(), {5.0e6, 10.0e6, 30.0e6});
+    engine.update(settings, c.generator.outputPinId(), c.pointB(), {5.0e6, 10.0e6, 1.1e9});
     CHECK(std::isnan(engine.measurements().iip3_dBm[0]));
     CHECK(std::isnan(engine.measurements().iip3_dBm[1]));
     CHECK(isFinite(engine.measurements().iip3_dBm[2]));
