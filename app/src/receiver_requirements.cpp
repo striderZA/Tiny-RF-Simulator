@@ -286,13 +286,10 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
         result.noise_figure =
             assess(frequencies_Hz, noise_figure_dB, config.band_start_Hz, config.band_stop_Hz,
                    false, 0.0, *config.nf_max_dB, band_covered);
-    if (config.output_power) {
-        const auto tone = config.measurement_conditions.output_reference_tone_frequency_Hz;
-        if (tone && *tone >= config.band_start_Hz && *tone <= config.band_stop_Hz)
-            result.output_power = assess(
-                frequencies_Hz, output_power_dBm, config.band_start_Hz, config.band_stop_Hz, true,
-                config.output_power->minimum_dBm, config.output_power->maximum_dBm, band_covered);
-    }
+    if (config.output_power)
+        result.output_power = assess(frequencies_Hz, output_power_dBm, config.band_start_Hz,
+                                     config.band_stop_Hz, true, config.output_power->minimum_dBm,
+                                     config.output_power->maximum_dBm, band_covered);
     if (config.iip3_min_dBm)
         result.iip3 = assessIIP3(frequencies_Hz, iip3_dBm, config.band_start_Hz,
                                  config.band_stop_Hz, *config.iip3_min_dBm, band_covered);

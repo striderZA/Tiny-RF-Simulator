@@ -141,15 +141,26 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     CHECK(validateReceiverRequirementsConfig(c).has_value());
 }
 
-TEST_CASE("ReceiverRequirements accepts missing output tone but cannot pass its measurement",
+TEST_CASE("ReceiverRequirements treats output samples as authoritative without a tone selector",
           "[receiver_requirements]") {
     auto state = configuredState();
     state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, nan, nan, nan, 0},
+                                 {nan, 10, 15, 20, nan});
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements does not gate output samples by selector band location",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->measurement_conditions.output_reference_tone_frequency_Hz = 2.5e9;
     const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
                                  {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
                                   std::numeric_limits<double>::quiet_NaN()});
-    CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.overall == ReceiverRequirementStatus::Pass);
 }
 
 TEST_CASE("ReceiverRequirements returns Not configured when every metric is disabled",
