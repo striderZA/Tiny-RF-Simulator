@@ -1088,8 +1088,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         if (!panel || !panel->Active)
             return;
 
-        auto *generator = dynamic_cast<SignalGeneratorEngine *>(
-            s_app->testCreateComponent("generator", 9201));
+        auto *generator =
+            dynamic_cast<SignalGeneratorEngine *>(s_app->testCreateComponent("generator", 9201));
         auto *attenuator =
             dynamic_cast<AttenuatorEngine *>(s_app->testCreateComponent("attenuator", 9202));
         auto *amplifier =
@@ -1129,15 +1129,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         na.setPointB(amplifier_out);
         na.setStartFrequency(1.0e6);
         na.setStopFrequency(10.0e6);
-        na.setPoints(21);
+        na.setPoints(201);
         ReceiverRequirementsConfig config;
         config.band_start_Hz = 1.0e6;
         config.band_stop_Hz = 10.0e6;
         config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
         config.iip3_min_dBm = 0.0;
         config.measurement_conditions.output_reference_tone_frequency_Hz = 5.0e6;
-        config.measurement_conditions.iip3 =
-            ReceiverIIP3TestSettings{1.0e6, -80.0, -40.0, 0.4};
+        config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -80.0, -40.0, 0.4};
         state.config = config;
         state.invalid_reason.clear();
         s_app->m_dirty = false;
@@ -1148,9 +1147,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             return;
 
         const auto finite = [](const std::vector<double> &values) {
-            return !values.empty() &&
-                   std::all_of(values.begin(), values.end(),
-                               [](double value) { return std::isfinite(value); });
+            return !values.empty() && std::all_of(values.begin(), values.end(), [](double value) {
+                return std::isfinite(value);
+            });
         };
         const auto finiteCount = [](const std::vector<double> &values) {
             return static_cast<std::size_t>(std::count_if(
@@ -1170,15 +1169,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         auto &receiver = s_app->testReceiverPerformanceMeasurementEngine();
         const auto &partial = receiver.measurements();
         IM_CHECK(receiver.isInProgress());
-        IM_CHECK_EQ(partial.output_power_dBm.size(), 21);
-        IM_CHECK_EQ(partial.iip3_dBm.size(), 21);
+        IM_CHECK_EQ(partial.output_power_dBm.size(), 201);
+        IM_CHECK_EQ(partial.iip3_dBm.size(), 201);
         IM_CHECK(finiteCount(partial.output_power_dBm) > 0);
 
         // Requirements-only visibility still updates the existing analyzer
         // while its own window remains hidden.
-        IM_CHECK_EQ(na.sweepFrequencies().size(), 21);
-        IM_CHECK_EQ(na.gainDb().size(), 21);
-        IM_CHECK_EQ(na.noiseFigureDb().size(), 21);
+        IM_CHECK_EQ(na.sweepFrequencies().size(), 201);
+        IM_CHECK_EQ(na.gainDb().size(), 201);
+        IM_CHECK_EQ(na.noiseFigureDb().size(), 201);
         IM_CHECK(finite(na.gainDb()));
         IM_CHECK(finite(na.noiseFigureDb()));
         for (double gain : na.gainDb())
@@ -1457,8 +1456,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK_EQ(state.config->band_stop_Hz, applied.band_stop_Hz);
             IM_CHECK(state.config->gain.has_value());
             IM_CHECK(state.config->output_power.has_value());
-            IM_CHECK_EQ(state.config->output_power->maximum_dBm,
-                        applied.output_power->maximum_dBm);
+            IM_CHECK_EQ(state.config->output_power->maximum_dBm, applied.output_power->maximum_dBm);
             IM_CHECK_EQ(state.config->iip3_min_dBm, applied.iip3_min_dBm);
         }
         IM_CHECK(!s_app->isDirty());
@@ -1470,6 +1468,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(state.config->output_power.has_value());
         IM_CHECK(state.config->iip3_min_dBm.has_value());
         setEnabled("Enable gain", true);
+        ctx->ItemInputValue("Gain min (dB)", "-3");
+        ctx->ItemInputValue("Gain max (dB)", "3");
         apply();
         IM_CHECK(state.config.has_value() && state.config->gain.has_value());
 
@@ -1480,6 +1480,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(state.config->output_power.has_value());
         IM_CHECK(state.config->iip3_min_dBm.has_value());
         setEnabled("Enable noise figure", true);
+        ctx->ItemInputValue("NF max (dB)", "5");
         apply();
         IM_CHECK(state.config.has_value() && state.config->nf_max_dB.has_value());
 
@@ -1490,6 +1491,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(state.config->nf_max_dB.has_value());
         IM_CHECK(state.config->iip3_min_dBm.has_value());
         setEnabled("Enable output power", true);
+        ctx->ItemInputValue("Output power min (dBm)", "-40");
+        ctx->ItemInputValue("Output power max (dBm)", "0");
         apply();
         IM_CHECK(state.config.has_value() && state.config->output_power.has_value());
 
@@ -1499,6 +1502,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(state.config->gain.has_value());
         IM_CHECK(state.config->nf_max_dB.has_value());
         IM_CHECK(state.config->output_power.has_value());
+        setEnabled("Enable IIP3", true);
+        ctx->ItemInputValue("IIP3 min (dBm)", "10");
+        ctx->ItemInputValue("IIP3 tone spacing (Hz)", "2000000");
+        ctx->ItemInputValue("IIP3 input start (dBm)", "-60");
+        ctx->ItemInputValue("IIP3 input stop (dBm)", "-40");
+        ctx->ItemInputValue("IIP3 input step (dB)", "2");
+        apply();
+        IM_CHECK(state.config.has_value() && state.config->iip3_min_dBm.has_value());
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
@@ -1521,8 +1532,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->Yield(2);
         }
 
-        auto *generator = dynamic_cast<SignalGeneratorEngine *>(
-            s_app->testCreateComponent("generator", 9301));
+        auto *generator =
+            dynamic_cast<SignalGeneratorEngine *>(s_app->testCreateComponent("generator", 9301));
         auto *attenuator =
             dynamic_cast<AttenuatorEngine *>(s_app->testCreateComponent("attenuator", 9302));
         auto *amplifier =
@@ -1536,10 +1547,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const int generator_out = generator->outputPinId();
         const int attenuator_out = attenuator->outputPinId();
         const int amplifier_out = amplifier->outputPinId();
-        const auto first_link =
-            s_app->testConnectLink(generator_out, attenuator->inputPinId());
-        const auto second_link =
-            s_app->testConnectLink(attenuator_out, amplifier->inputPinId());
+        const auto first_link = s_app->testConnectLink(generator_out, attenuator->inputPinId());
+        const auto second_link = s_app->testConnectLink(attenuator_out, amplifier->inputPinId());
         IM_CHECK(first_link.has_value());
         IM_CHECK(second_link.has_value());
         if (!first_link || !second_link)
@@ -1581,12 +1590,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         IM_CHECK(state.config.has_value());
         if (state.config) {
-            IM_CHECK(state.config->measurement_conditions
-                         .output_reference_tone_frequency_Hz.has_value());
+            IM_CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz
+                         .has_value());
             if (state.config->measurement_conditions.output_reference_tone_frequency_Hz)
-                IM_CHECK_EQ(*state.config->measurement_conditions
-                                 .output_reference_tone_frequency_Hz,
-                            1.0e6);
+                IM_CHECK_EQ(
+                    *state.config->measurement_conditions.output_reference_tone_frequency_Hz,
+                    1.0e6);
         }
 
         generator->addTone(2.0e6, -25.0);
@@ -1642,16 +1651,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         verifyIncompleteWithoutFallback(makeOutputConfig(std::nullopt));
 
         ctx->SetRef("Receiver Requirements");
-        ctx->ComboClick("Output reference tone");
-        ctx->Yield(1);
-        ctx->ItemClick("2 MHz");
+        ctx->ComboClick("Output reference tone/2 MHz");
         ctx->Yield(1);
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
         IM_CHECK(state.config.has_value());
         if (state.config)
-            IM_CHECK_EQ(state.config->measurement_conditions
-                            .output_reference_tone_frequency_Hz,
+            IM_CHECK_EQ(state.config->measurement_conditions.output_reference_tone_frequency_Hz,
                         2.0e6);
 
         for (int frame = 0; frame < 40 && receiver.isInProgress(); ++frame)
