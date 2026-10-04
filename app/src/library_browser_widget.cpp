@@ -67,7 +67,8 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
                             item_label += def->part_number;
                             if (!def->description.empty())
                                 item_label += "  " + def->description;
-                            if (ImGui::Selectable(item_label.c_str())) {
+                            if (ImGui::Selectable(item_label.c_str(), false,
+                                                  ImGuiSelectableFlags_AllowOverlap)) {
                                 if (onInsert)
                                     onInsert(*def);
                             }

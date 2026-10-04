@@ -140,6 +140,7 @@ class RfSimulatorApp {
     bool testSetGroupCollapsed(int group_id, bool collapsed);
     const NodeGraphEngine &testGraphEngine() const { return m_circuit_runtime.graph(); }
     const ComponentRegistry &testComponents() const { return m_circuit_runtime.components(); }
+    const ComponentLibrary &testComponentLibrary() const { return m_library; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
