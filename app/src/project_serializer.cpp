@@ -151,9 +151,9 @@ std::optional<int> checkedJsonInt(const nlohmann::json &j) {
 }
 
 // nlohmann::json rejects a valid JSON number such as 1e400 when conversion
-// to double overflows. Normalize only such number tokens before parsing so a
-// malformed optional field can be handled by its normal typed validator,
-// without losing the rest of the project. Quoted strings are copied verbatim.
+// to double overflows. Normalize such tokens only inside the isolated
+// receiver_requirements value so its typed validator can report invalid fields.
+// The scanner copies quoted strings verbatim.
 std::string normalizeNonFiniteJsonNumbers(const std::string &text) {
     std::string normalized;
     normalized.reserve(text.size());
@@ -232,6 +232,124 @@ std::string normalizeNonFiniteJsonNumbers(const std::string &text) {
 
         normalized.push_back(ch);
         ++i;
+    }
+    return normalized;
+}
+
+std::optional<std::size_t> jsonStringEnd(const std::string &text, std::size_t start) {
+    if (start >= text.size() || text[start] != '"')
+        return std::nullopt;
+    for (std::size_t i = start + 1; i < text.size(); ++i) {
+        if (text[i] == '\\') {
+            if (i + 1 >= text.size())
+                return std::nullopt;
+            ++i;
+        } else if (text[i] == '"') {
+            return i + 1;
+        }
+    }
+    return std::nullopt;
+}
+
+bool isJsonWhitespace(char ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'; }
+
+std::optional<std::size_t> jsonValueEnd(const std::string &text, std::size_t start) {
+    if (start >= text.size())
+        return std::nullopt;
+    if (text[start] == '"')
+        return jsonStringEnd(text, start);
+    if (text[start] == '{' || text[start] == '[') {
+        std::vector<char> closing;
+        closing.push_back(text[start] == '{' ? '}' : ']');
+        for (std::size_t i = start + 1; i < text.size(); ++i) {
+            if (text[i] == '"') {
+                const auto end = jsonStringEnd(text, i);
+                if (!end)
+                    return std::nullopt;
+                i = *end - 1;
+            } else if (text[i] == '{' || text[i] == '[') {
+                closing.push_back(text[i] == '{' ? '}' : ']');
+            } else if (text[i] == '}' || text[i] == ']') {
+                if (closing.empty() || closing.back() != text[i])
+                    return std::nullopt;
+                closing.pop_back();
+                if (closing.empty())
+                    return i + 1;
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::size_t end = start;
+    while (end < text.size() && !isJsonWhitespace(text[end]) && text[end] != ',' &&
+           text[end] != ']' && text[end] != '}')
+        ++end;
+    return end == start ? std::nullopt : std::optional<std::size_t>(end);
+}
+
+std::string normalizeReceiverRequirementsOverflowNumbers(const std::string &text) {
+    struct ValueRange {
+        std::size_t begin;
+        std::size_t end;
+    };
+    std::vector<ValueRange> values;
+    std::size_t cursor = 0;
+    // nlohmann accepts a leading UTF-8 BOM; keep it in the text and scan past it.
+    if (text.compare(cursor, 3, "\xEF\xBB\xBF") == 0)
+        cursor += 3;
+    while (cursor < text.size() && isJsonWhitespace(text[cursor]))
+        ++cursor;
+    if (cursor >= text.size() || text[cursor++] != '{')
+        return text;
+
+    while (cursor < text.size()) {
+        while (cursor < text.size() && isJsonWhitespace(text[cursor]))
+            ++cursor;
+        if (cursor < text.size() && text[cursor] == '}')
+            break;
+        const std::size_t key_start = cursor;
+        const auto key_end = jsonStringEnd(text, key_start);
+        if (!key_end)
+            return text;
+        std::string key;
+        try {
+            key = nlohmann::json::parse(text.substr(key_start, *key_end - key_start))
+                      .get<std::string>();
+        } catch (const nlohmann::json::exception &) {
+            return text;
+        }
+        cursor = *key_end;
+        while (cursor < text.size() && isJsonWhitespace(text[cursor]))
+            ++cursor;
+        if (cursor >= text.size() || text[cursor++] != ':')
+            return text;
+        while (cursor < text.size() && isJsonWhitespace(text[cursor]))
+            ++cursor;
+
+        const std::size_t value_start = cursor;
+        const auto value_end = jsonValueEnd(text, value_start);
+        if (!value_end)
+            return text;
+        if (key == "receiver_requirements")
+            values.push_back({value_start, *value_end});
+        cursor = *value_end;
+        while (cursor < text.size() && isJsonWhitespace(text[cursor]))
+            ++cursor;
+        if (cursor < text.size() && text[cursor] == ',') {
+            ++cursor;
+            continue;
+        }
+        if (cursor < text.size() && text[cursor] == '}')
+            break;
+        return text;
+    }
+
+    if (values.empty())
+        return text;
+    std::string normalized = text;
+    for (auto it = values.rbegin(); it != values.rend(); ++it) {
+        const std::string value = text.substr(it->begin, it->end - it->begin);
+        normalized.replace(it->begin, it->end - it->begin, normalizeNonFiniteJsonNumbers(value));
     }
     return normalized;
 }
@@ -609,9 +727,16 @@ bool ProjectSerializer::load(const std::string &path) {
 
     nlohmann::json root;
     try {
-        std::string source((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        source = normalizeNonFiniteJsonNumbers(source);
-        root = nlohmann::json::parse(source);
+        const std::string source((std::istreambuf_iterator<char>(in)),
+                                 std::istreambuf_iterator<char>());
+        try {
+            root = nlohmann::json::parse(source);
+        } catch (const nlohmann::json::exception &) {
+            const std::string normalized = normalizeReceiverRequirementsOverflowNumbers(source);
+            if (normalized == source)
+                throw;
+            root = nlohmann::json::parse(normalized);
+        }
     } catch (const nlohmann::json::exception &e) {
         LOG_ERROR("Invalid project file: %s", e.what());
         return false;

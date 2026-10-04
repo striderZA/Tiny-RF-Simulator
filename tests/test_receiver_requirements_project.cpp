@@ -456,7 +456,9 @@ TEST_CASE_METHOD(ImGuiFixture, "Finite stale receiver tone selector remains vali
 TEST_CASE_METHOD(ImGuiFixture, "Non-finite persisted receiver limits are invalid",
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_non_finite_limit");
-    const auto project = savedProjectWithRequirements(path, validRequirements);
+    auto project = savedProjectWithRequirements(path, validRequirements);
+    project["components"][0]["part_number"] = "1e400";
+    saveJson(path, project);
     auto contents = project.dump(2);
     const auto field = contents.find("\"band_start_hz\": ");
     REQUIRE(field != std::string::npos);
@@ -468,6 +470,123 @@ TEST_CASE_METHOD(ImGuiFixture, "Non-finite persisted receiver limits are invalid
         std::ofstream output(path);
         output << contents;
     }
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.m_current_project_path == path);
+    CHECK(app.componentCount() == 2);
+    CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
+    CHECK_FALSE(app.testReceiverRequirementsState().invalid_reason.empty());
+    app.saveProject(path);
+    CHECK(loadJson(path)["components"][0]["part_number"] == "1e400");
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Overflowing component position is rejected alongside receiver overflow",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_component_position_overflow");
+    json project = savedProjectWithRequirements(path, validRequirements);
+    REQUIRE(!project["components"].empty());
+    project["components"][0]["pos"]["x"] = 123.0;
+    saveJson(path, project);
+
+    std::string source;
+    {
+        std::ifstream input(path);
+        source.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    const auto receiver_key = source.find("\"receiver_requirements\"");
+    REQUIRE(receiver_key != std::string::npos);
+    const auto band_key = source.find("\"band_start_hz\"", receiver_key);
+    REQUIRE(band_key != std::string::npos);
+    auto value_start = source.find_first_not_of(" \t\r\n", source.find(':', band_key) + 1);
+    REQUIRE(value_start != std::string::npos);
+    auto value_end = source.find_first_of(",}", value_start);
+    REQUIRE(value_end != std::string::npos);
+    source.replace(value_start, value_end - value_start, "1e400");
+    const auto pos_key = source.find("\"pos\"");
+    REQUIRE(pos_key != std::string::npos);
+    const auto x_key = source.find("\"x\"", pos_key);
+    REQUIRE(x_key != std::string::npos);
+    const auto colon = source.find(':', x_key);
+    REQUIRE(colon != std::string::npos);
+    value_start = source.find_first_not_of(" \t\r\n", colon + 1);
+    REQUIRE(value_start != std::string::npos);
+    value_end = source.find_first_of(",}", value_start);
+    REQUIRE(value_end != std::string::npos);
+    source.replace(value_start, value_end - value_start, "1e400");
+    {
+        std::ofstream output(path, std::ios::trunc);
+        output << source;
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(path);
+    const bool loaded = app.m_current_project_path == path;
+    CHECK_FALSE(loaded);
+    if (loaded)
+        app.saveProject(path);
+
+    std::string after;
+    {
+        std::ifstream after_input(path);
+        after.assign(std::istreambuf_iterator<char>(after_input), std::istreambuf_iterator<char>());
+    }
+    CHECK(after == source);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Nested receiver overflow remains field-invalid without parse loss",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_nested_overflow");
+    const json requirements = {
+        {"band_start_hz", 1.0e9},
+        {"band_stop_hz", 2.0e9},
+        {"iip3_min_dbm", 10.0},
+        {"measurement_conditions", json{{"diagnostic", "}\"1e400"},
+                                        {"iip3", json{{"tone_spacing_hz", 1.0e6},
+                                                      {"input_start_dbm", -30.0},
+                                                      {"input_stop_dbm", -20.0},
+                                                      {"input_step_db", 5.0}}}}}};
+    auto project = savedProjectWithRequirements(path, requirements);
+    auto contents = project.dump(2);
+    const auto field = contents.find("\"input_step_db\": ");
+    REQUIRE(field != std::string::npos);
+    const auto value_start = contents.find(':', field) + 1;
+    const auto value_end = contents.find(',', value_start);
+    REQUIRE(value_end != std::string::npos);
+    contents.replace(value_start, value_end - value_start, " 1e400");
+    {
+        std::ofstream output(path, std::ios::trunc);
+        output << contents;
+    }
+
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.m_current_project_path == path);
+    CHECK(app.componentCount() == 2);
+    CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
+    CHECK_FALSE(app.testReceiverRequirementsState().invalid_reason.empty());
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "BOM-prefixed receiver overflow remains field-invalid",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_bom_non_finite_limit");
+    const auto project = savedProjectWithRequirements(path, validRequirements);
+    auto contents = project.dump(2);
+    const auto field = contents.find("\"band_start_hz\": ");
+    REQUIRE(field != std::string::npos);
+    const auto value_start = contents.find(':', field) + 1;
+    const auto value_end = contents.find(',', value_start);
+    REQUIRE(value_end != std::string::npos);
+    contents.replace(value_start, value_end - value_start, " 1e400");
+    contents.insert(0, "\xEF\xBB\xBF");
+    {
+        std::ofstream output(path, std::ios::trunc);
+        output << contents;
+    }
+
     RfSimulatorApp app;
     app.loadProject(path);
     CHECK(app.m_current_project_path == path);
