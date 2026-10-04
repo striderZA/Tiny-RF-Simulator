@@ -53,6 +53,10 @@ std::string toneLabel(double frequency_Hz) {
     return label;
 }
 
+bool isValidReferenceTone(double frequency_Hz) {
+    return std::isfinite(frequency_Hz) && frequency_Hz > 0.0;
+}
+
 void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
     switch (receiverRequirementStatusTone(metric.status)) {
     case ReceiverRequirementStatusTone::PassGreen:
@@ -182,7 +186,8 @@ void ReceiverRequirementsWidget::resetDraft(
         m_source_tone_frequency_Hz =
             config.measurement_conditions.output_reference_tone_frequency_Hz;
     }
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1)
+    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
+        isValidReferenceTone(source_tones.front().frequency_Hz))
         m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
     m_baseline = makeDraft();
     m_snapshot = state;
@@ -212,7 +217,8 @@ void ReceiverRequirementsWidget::draw(
     ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
     if (m_nf_enabled)
         ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1) {
+    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
+        isValidReferenceTone(source_tones.front().frequency_Hz)) {
         m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
         m_baseline.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
     }

@@ -49,6 +49,20 @@ ReceiverRequirementsDraft gainDraft() {
     return d;
 }
 } // namespace
+TEST_CASE("ReceiverRequirements applies gain-only draft with an invalid hidden output tone",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsDraft draft = gainDraft();
+    draft.output_reference_tone_frequency_Hz = -5.0e6;
+    std::string error;
+
+    CHECK(applyReceiverRequirementsDraft(state, draft, error));
+    CHECK(error.empty());
+    REQUIRE(state.config.has_value());
+    CHECK(state.config->gain.has_value());
+    CHECK_FALSE(state.config->output_power.has_value());
+    CHECK_FALSE(state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+}
 
 TEST_CASE("ReceiverRequirements supports independent optional metric limits",
           "[receiver_requirements]") {

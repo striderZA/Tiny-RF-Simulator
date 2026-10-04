@@ -186,7 +186,7 @@ parseReceiverRequirementsDraft(const ReceiverRequirementsDraft &draft, std::stri
             ReceiverIIP3TestSettings{*spacing, *start, *stop, *step};
     }
     config.measurement_conditions.output_reference_tone_frequency_Hz =
-        draft.output_reference_tone_frequency_Hz;
+        draft.output_power_enabled ? draft.output_reference_tone_frequency_Hz : std::nullopt;
     if (auto reason = validateReceiverRequirementsConfig(config)) {
         error = *reason;
         return std::nullopt;

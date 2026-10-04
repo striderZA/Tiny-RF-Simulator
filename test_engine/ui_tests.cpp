@@ -1372,8 +1372,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             !state.config->measurement_conditions.output_reference_tone_frequency_Hz;
         const bool late_tone_kept_project_clean = !s_app->isDirty();
 
-        ctx->ScrollToTop("Receiver Requirements");
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable output power");
+        ctx->ItemInputValue("Output power min (dBm)", "-30");
+        ctx->ItemInputValue("Output power max (dBm)", "0");
+        ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
+        const bool positive_tone_applied =
+            state.config.has_value() && state.config->output_power.has_value() &&
+            state.config->measurement_conditions.output_reference_tone_frequency_Hz == 5.0e6;
+
+        IM_CHECK(s_app->m_show_receiver_requirements);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
@@ -1392,6 +1403,98 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(late_tone_preserved_status);
         IM_CHECK(late_tone_kept_selector_uncommitted);
         IM_CHECK(late_tone_kept_project_clean);
+        IM_CHECK(positive_tone_applied);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_gain_apply_ignores_hidden_nonpositive_tone");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+
+        auto *generator =
+            dynamic_cast<SignalGeneratorEngine *>(s_app->testCreateComponent("generator", 9501));
+        IM_CHECK(generator != nullptr);
+        if (!generator)
+            return;
+        while (!generator->tones().empty())
+            generator->removeTone(generator->tones().size() - 1);
+        generator->addTone(-5.0e6, -20.0);
+
+        auto &na = s_app->testNetworkAnalyzerEngine();
+        na.setPointA(generator->outputPinId());
+        na.setPointB(-1);
+        auto &state = s_app->testReceiverRequirementsState();
+        state.config.reset();
+        state.invalid_reason = "force receiver draft reset";
+        s_app->m_dirty = false;
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
+        state.invalid_reason.clear();
+        ctx->Yield(2);
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemCheck("Enable gain");
+        ctx->ItemInputValue("Band start (Hz)", "1000000");
+        ctx->ItemInputValue("Band stop (Hz)", "10000000");
+        ctx->ItemInputValue("Gain min (dB)", "-3");
+        ctx->ItemInputValue("Gain max (dB)", "3");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK(state.config->gain.has_value());
+            IM_CHECK(!state.config->output_power.has_value());
+            IM_CHECK(!state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+        }
+        IM_CHECK(s_app->isDirty());
+
+        ctx->ItemCheck("Enable output power");
+        ctx->ItemInputValue("Output power min (dBm)", "-30");
+        ctx->ItemInputValue("Output power max (dBm)", "0");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        IM_CHECK(state.config.has_value());
+        if (state.config) {
+            IM_CHECK(state.config->output_power.has_value());
+            IM_CHECK(!state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+        }
+
+        generator->updateTone(0, 0.0, -20.0);
+        ctx->Yield(2);
+        ctx->ItemInputValue("Output power min (dBm)", "-25");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(2);
+        if (state.config && state.config->output_power)
+            IM_CHECK(state.config->output_power->minimum_dBm == -25.0);
+        IM_CHECK(state.config.has_value());
+        if (state.config)
+            IM_CHECK(!state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        na.setPointA(-1);
+        s_app->testRemoveComponent(generator->graphNodeId());
+        state.config.reset();
+        state.invalid_reason.clear();
+        s_app->m_dirty = false;
+        ctx->Yield(2);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator",
