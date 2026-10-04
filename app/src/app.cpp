@@ -56,71 +56,45 @@ static std::string appExeDir() {
 }
 
 RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
+    m_editor_commands.onComponentsChanged = [this]() { syncComponentViews(); };
+
+    // The widget's edit requests are forwarded verbatim: EditorCommands owns
+    // each edit's side effects (group boundaries, view sync, revision), so the
+    // editor and the test commands below cannot diverge.
     NodeGraphWidgetActions editor_actions;
-    editor_actions.connectLink = [this](int start_pin, int end_pin) -> std::optional<int> {
-        const auto link_id = m_circuit_runtime.connect(start_pin, end_pin);
-        if (!link_id)
-            return std::nullopt;
-        m_graph_editor_actions.topologyChanged();
-        markDirty();
-        return link_id;
+    editor_actions.connectLink = [this](int start_pin, int end_pin) {
+        return m_editor_commands.connect(start_pin, end_pin);
     };
     editor_actions.disconnectLink = [this](int link_id) {
-        if (!m_circuit_runtime.disconnect(link_id))
-            return false;
-        m_graph_editor_actions.topologyChanged();
-        markDirty();
-        return true;
+        return m_editor_commands.disconnect(link_id);
     };
-    const auto remove_component = [this](int id) {
-        if (!m_circuit_runtime.removeComponent(id))
-            return false;
-        // Remove the destroyed engine's Spectrum pointers before later panels draw.
-        m_pfb_views.rebuild(m_circuit_runtime.components(), m_state);
-        m_graph_editor_actions.topologyChanged();
-        markDirty();
-        return true;
+    editor_actions.removeComponent = [this](int id) {
+        return m_editor_commands.removeComponent(id);
     };
-    editor_actions.removeComponent = remove_component;
     editor_actions.duplicateComponent = [this](int id) { return duplicateComponent(id); };
     editor_actions.addProbePin = [this](int pin_id) {
-        return m_graph_editor_actions.addProbePin(pin_id);
+        return m_editor_commands.addProbePin(pin_id);
     };
     editor_actions.removeProbePin = [this](int pin_id) {
-        return m_graph_editor_actions.removeProbePin(pin_id);
+        return m_editor_commands.removeProbePin(pin_id);
     };
     editor_actions.createGroup = [this](std::string name, std::vector<int> members) {
-        const int group_id =
-            m_graph_editor_actions.createGroup(std::move(name), std::move(members));
-        if (group_id >= 0)
-            markDirty();
-        return group_id;
+        return m_editor_commands.createGroup(std::move(name), std::move(members));
     };
     editor_actions.removeGroup = [this](int group_id) {
-        const bool removed = m_graph_editor_actions.removeGroup(group_id);
-        if (removed)
-            markDirty();
-        return removed;
+        return m_editor_commands.removeGroup(group_id);
     };
     editor_actions.renameGroup = [this](int group_id, std::string name) {
-        const bool renamed = m_graph_editor_actions.renameGroup(group_id, std::move(name));
-        if (renamed)
-            markDirty();
-        return renamed;
+        return m_editor_commands.renameGroup(group_id, std::move(name));
     };
     editor_actions.setGroupCollapsed = [this](int group_id, bool collapsed) {
-        const bool updated = m_graph_editor_actions.setGroupCollapsed(group_id, collapsed);
-        if (updated)
-            markDirty();
-        return updated;
+        return m_editor_commands.setGroupCollapsed(group_id, collapsed);
     };
-    editor_actions.selectGroup = [this](int group_id) {
-        m_graph_editor_actions.selectGroup(group_id);
-    };
+    editor_actions.selectGroup = [this](int group_id) { m_editor_commands.selectGroup(group_id); };
     m_graph_widget =
         std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
     m_serializer = std::make_unique<ProjectSerializer>(
-        m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views, m_state,
+        m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
         m_receiver_requirements, m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor,
         m_na_engine);
 
@@ -160,10 +134,10 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_circuit_runtime.createComponent(descriptor->create);
 
     m_inspector_panel = std::make_unique<InspectorPanel>(
-        m_circuit_runtime.graph(), m_circuit_runtime.components(), m_graph_editor_actions);
+        m_circuit_runtime.graph(), m_circuit_runtime.components(), m_editor_commands);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
-    m_inspector_panel->onRemoveNode = [remove_component](int graph_node_id) {
-        (void)remove_component(graph_node_id);
+    m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
+        (void)m_editor_commands.removeComponent(graph_node_id);
     };
 
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
@@ -175,9 +149,10 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
-        auto *engine = m_library.instantiate(def, m_circuit_runtime, m_graph_editor_actions);
-        if (engine)
-            markDirty();
+        // instantiate() creates through the runtime and owns its own rollback;
+        // a successful insert is adopted as an ordinary component-set edit.
+        if (m_library.instantiate(def, m_circuit_runtime, m_graph_editor_actions))
+            m_editor_commands.componentsAdded();
     };
 
     m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
@@ -241,13 +216,15 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
 }
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
-    IComponentEngine *comp = m_circuit_runtime.createComponent(desc->create);
+    IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
+    if (!comp)
+        return;
     ImNodes::EditorContextSet(m_graph_widget->context());
     ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
-    if (desc->type == "pfb") {
-        m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
-    }
-    markDirty(); // unconditional — fixes the Equalizer missing-markDirty bug
+}
+
+void RfSimulatorApp::syncComponentViews() {
+    m_pfb_views.sync(m_circuit_runtime.components(), m_state);
 }
 
 void RfSimulatorApp::load_window_states() {
@@ -283,12 +260,21 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     }
 
     // Clone via the registry: create a default engine, then copy params through
-    // serialize/deserialize. Removes the 11-way dynamic_cast chain.
+    // serialize/deserialize inside the factory, so component-bound views are
+    // created for the fully configured copy.
     const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
     if (!desc)
         return false;
-    IComponentEngine *copy = m_circuit_runtime.createComponent(desc->create);
-    copy->deserialize(src->serialize());
+    const nlohmann::json params = src->serialize();
+    IComponentEngine *copy = m_editor_commands.createComponent(
+        [desc, &params](ComponentRegistry &components, NodeGraphEngine &graph, int id) {
+            IComponentEngine *engine = desc->create(components, graph, id);
+            if (engine)
+                engine->deserialize(params);
+            return engine;
+        });
+    if (!copy)
+        return false;
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
     ImNodes::EditorContextSet(m_graph_widget->context());
@@ -296,21 +282,16 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
-    // PFB also needs IQ plot widget and grid widget (same as addComponent)
-    if (desc->type == "pfb") {
-        m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(copy), m_state);
-    }
-
-    markDirty();
     return true;
 }
 void RfSimulatorApp::newProject() {
     m_power_meter_widget->clearSource();
     m_serializer->reset();
+    syncComponentViews();
     m_spectrum_widget->setProbeLabels({});
     m_current_project_path.clear();
     refreshExtensions();
-    m_dirty = false;
+    m_editor_commands.markClean();
     // The reset replaced every engine, so the panel's snapshots and result refer
     // to a circuit that no longer exists. The retained flow selection is
     // revalidated against the new circuit by the panel itself.
@@ -320,7 +301,7 @@ void RfSimulatorApp::newProject() {
 void RfSimulatorApp::requestTutorial() {
     // Same guard New/Open/Exit use — startTutorial() discards the current
     // project, so the user must get the chance to save first.
-    if (m_dirty) {
+    if (isDirty()) {
         m_pending_action = PendingAction::Tutorial;
         m_show_unsaved_dialog = true;
     } else
@@ -352,6 +333,9 @@ void RfSimulatorApp::startTutorial() {
 
 void RfSimulatorApp::testMakeDirty() { markDirty(); }
 
+// The test commands below forward to the same EditorCommands the editor uses,
+// so fixtures built through them carry the editor's side effects (group
+// boundaries, component-bound views, project revision).
 IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int engine_id) {
     const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
     return descriptor ? testCreateComponent(descriptor->create, engine_id) : nullptr;
@@ -362,13 +346,15 @@ IComponentEngine *RfSimulatorApp::testCreateComponent(
     int engine_id) {
     if (!factory)
         return nullptr;
+    // The fixture picks the engine id, so the runtime's counter is restored and
+    // a later default-id component cannot collide with the test-chosen one.
     const int next_component_id = m_circuit_runtime.nextComponentId();
     const auto test_factory = [&factory, engine_id](ComponentRegistry &components,
                                                     NodeGraphEngine &graph, int) {
         return factory(components, graph, engine_id);
     };
     try {
-        IComponentEngine *engine = m_circuit_runtime.createComponent(test_factory);
+        IComponentEngine *engine = m_editor_commands.createComponent(test_factory);
         m_circuit_runtime.setNextComponentId(next_component_id);
         return engine;
     } catch (...) {
@@ -378,62 +364,36 @@ IComponentEngine *RfSimulatorApp::testCreateComponent(
 }
 
 std::optional<int> RfSimulatorApp::testConnectLink(int start_pin_id, int end_pin_id) {
-    const auto link_id = m_circuit_runtime.connect(start_pin_id, end_pin_id);
-    if (!link_id)
-        return std::nullopt;
-    m_graph_editor_actions.topologyChanged();
-    return link_id;
+    return m_editor_commands.connect(start_pin_id, end_pin_id);
 }
 
 bool RfSimulatorApp::testDisconnectLink(int link_id) {
-    if (!m_circuit_runtime.disconnect(link_id))
-        return false;
-
-    m_graph_editor_actions.topologyChanged();
-    return true;
+    return m_editor_commands.disconnect(link_id);
 }
 
 bool RfSimulatorApp::testRemoveComponent(int graph_node_id) {
-    if (!m_circuit_runtime.removeComponent(graph_node_id))
-        return false;
-
-    m_pfb_views.rebuild(m_circuit_runtime.components(), m_state);
-    m_graph_editor_actions.topologyChanged();
-    markDirty();
-    return true;
+    return m_editor_commands.removeComponent(graph_node_id);
 }
 
-bool RfSimulatorApp::testAddProbePin(int pin_id) {
-    return m_graph_editor_actions.addProbePin(pin_id);
-}
+bool RfSimulatorApp::testAddProbePin(int pin_id) { return m_editor_commands.addProbePin(pin_id); }
 
 bool RfSimulatorApp::testRemoveProbePin(int pin_id) {
-    return m_graph_editor_actions.removeProbePin(pin_id);
+    return m_editor_commands.removeProbePin(pin_id);
 }
 
 int RfSimulatorApp::testCreateGroup(std::string name, std::vector<int> member_node_ids) {
-    const int group_id =
-        m_graph_editor_actions.createGroup(std::move(name), std::move(member_node_ids));
-    if (group_id >= 0)
-        markDirty();
-    return group_id;
+    return m_editor_commands.createGroup(std::move(name), std::move(member_node_ids));
 }
 
 bool RfSimulatorApp::testRemoveGroup(int group_id) {
-    const bool removed = m_graph_editor_actions.removeGroup(group_id);
-    if (removed)
-        markDirty();
-    return removed;
+    return m_editor_commands.removeGroup(group_id);
 }
 
 bool RfSimulatorApp::testSetGroupCollapsed(int group_id, bool collapsed) {
-    const bool updated = m_graph_editor_actions.setGroupCollapsed(group_id, collapsed);
-    if (updated)
-        markDirty();
-    return updated;
+    return m_editor_commands.setGroupCollapsed(group_id, collapsed);
 }
 
-void RfSimulatorApp::markDirty() { m_dirty = true; }
+void RfSimulatorApp::markDirty() { m_editor_commands.markModified(); }
 void RfSimulatorApp::refreshExtensions() {
     namespace fs = std::filesystem;
 
@@ -709,11 +669,15 @@ void RfSimulatorApp::saveProject(const std::string &path) {
     if (!m_serializer->save(path))
         return;
     m_current_project_path = path;
-    m_dirty = false;
+    m_editor_commands.markClean();
 }
 
 void RfSimulatorApp::loadProject(const std::string &path) {
-    if (!m_serializer->load(path)) {
+    const bool loaded = m_serializer->load(path);
+    // Every outcome re-syncs component-bound views: a successful or resetting
+    // load replaced the components, and an intact failure leaves them as-is.
+    syncComponentViews();
+    if (!loaded) {
         if (m_serializer->lastLoadReset()) {
             m_power_meter_widget->clearSource();
             // The failed load already destroyed the live project, so the
@@ -721,7 +685,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             // after a failure the empty project is unsaved, not "old.rfsim"
             // (issue #113). A failure that left state intact keeps the path.
             m_current_project_path.clear();
-            m_dirty = true;
+            m_editor_commands.markModified();
             // Extension discovery is rooted at the project directory, so it
             // must be re-derived once the path is gone: otherwise the
             // destroyed project's project-local tools and data packs stay
@@ -741,7 +705,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
     m_power_meter_widget->clearSource();
     m_current_project_path = path;
     refreshExtensions();
-    m_dirty = false;
+    m_editor_commands.markClean();
     // A load that replaced the circuit — this successful one, or a failed one
     // that reset it (handled above) — is a circuit reload for the panel, so its
     // latch and stale result are cleared; a failed load that left the live
@@ -1026,21 +990,21 @@ void RfSimulatorApp::draw_ui() {
     (void)io;
 
     // Reset the unsaved dialog flag at the start of each frame.
-    // The menu handlers below set it to true only when m_dirty is set.
+    // The menu handlers below set it to true only when the project is dirty.
     m_show_unsaved_dialog = false;
 
     // File menu bar
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New", "Ctrl+N")) {
-                if (m_dirty) {
+                if (isDirty()) {
                     m_pending_action = PendingAction::New;
                     m_show_unsaved_dialog = true;
                 } else
                     newProject();
             }
             if (ImGui::MenuItem("Open...", "Ctrl+O")) {
-                if (m_dirty) {
+                if (isDirty()) {
                     m_pending_action = PendingAction::Open;
                     m_show_unsaved_dialog = true;
                 } else
@@ -1057,7 +1021,7 @@ void RfSimulatorApp::draw_ui() {
                 saveFileDialog();
             ImGui::Separator();
             if (ImGui::MenuItem("Exit")) {
-                if (m_dirty) {
+                if (isDirty()) {
                     m_pending_action = PendingAction::Exit;
                     m_show_unsaved_dialog = true;
                 } else
@@ -1133,8 +1097,8 @@ void RfSimulatorApp::draw_ui() {
                 auto p = m_current_project_path.find_last_of("\\/");
                 std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1)
                                                              : m_current_project_path;
-                ImGui::Text("%s%s", m_dirty ? "* " : "", fname.c_str());
-            } else if (m_dirty) {
+                ImGui::Text("%s%s", isDirty() ? "* " : "", fname.c_str());
+            } else if (isDirty()) {
                 ImGui::Text("*Untitled");
             }
             ImGui::SameLine();
@@ -1154,14 +1118,14 @@ void RfSimulatorApp::draw_ui() {
         if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S))
             saveFileDialog();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_O)) {
-            if (m_dirty) {
+            if (isDirty()) {
                 m_pending_action = PendingAction::Open;
                 m_show_unsaved_dialog = true;
             } else
                 openFileDialog();
         }
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_N)) {
-            if (m_dirty) {
+            if (isDirty()) {
                 m_pending_action = PendingAction::New;
                 m_show_unsaved_dialog = true;
             } else
@@ -1217,7 +1181,7 @@ void RfSimulatorApp::draw_ui() {
                 if (!path.empty())
                     saveProject(path);
             }
-            if (!m_dirty) {
+            if (!isDirty()) {
                 // Save succeeded — execute the pending action now
                 auto action = m_pending_action;
                 m_pending_action = PendingAction::None;

@@ -1,0 +1,101 @@
+#include "editor_commands.h"
+#include "graph_editor_actions.h"
+#include <utility>
+
+EditorCommands::EditorCommands(CircuitRuntime &runtime, GraphEditorActions &editor_actions)
+    : m_runtime(runtime), m_editor_actions(editor_actions) {}
+
+IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factory) {
+    IComponentEngine *component = m_runtime.createComponent(factory);
+    if (!component)
+        return nullptr;
+    componentsChanged();
+    markModified();
+    return component;
+}
+
+bool EditorCommands::removeComponent(int graph_node_id) {
+    // The runtime rewires surviving inputs before returning; views are then
+    // re-synchronized before any caller can draw them.
+    if (!m_runtime.removeComponent(graph_node_id))
+        return false;
+    componentsChanged();
+    m_editor_actions.topologyChanged();
+    markModified();
+    return true;
+}
+
+void EditorCommands::componentsAdded() {
+    componentsChanged();
+    markModified();
+}
+
+std::optional<int> EditorCommands::connect(int start_pin_id, int end_pin_id) {
+    const auto link_id = m_runtime.connect(start_pin_id, end_pin_id);
+    if (!link_id)
+        return std::nullopt;
+    m_editor_actions.topologyChanged();
+    markModified();
+    return link_id;
+}
+
+bool EditorCommands::disconnect(int link_id) {
+    if (!m_runtime.disconnect(link_id))
+        return false;
+    m_editor_actions.topologyChanged();
+    markModified();
+    return true;
+}
+
+bool EditorCommands::addProbePin(int pin_id) {
+    if (!m_editor_actions.addProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
+
+bool EditorCommands::removeProbePin(int pin_id) {
+    if (!m_editor_actions.removeProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
+
+int EditorCommands::createGroup(std::string name, std::vector<int> member_node_ids) {
+    const int group_id = m_editor_actions.createGroup(std::move(name), std::move(member_node_ids));
+    if (group_id >= 0)
+        markModified();
+    return group_id;
+}
+
+bool EditorCommands::removeGroup(int group_id) {
+    if (!m_editor_actions.removeGroup(group_id))
+        return false;
+    markModified();
+    return true;
+}
+
+bool EditorCommands::renameGroup(int group_id, std::string name) {
+    if (!m_editor_actions.renameGroup(group_id, std::move(name)))
+        return false;
+    markModified();
+    return true;
+}
+
+bool EditorCommands::setGroupCollapsed(int group_id, bool collapsed) {
+    if (!m_editor_actions.setGroupCollapsed(group_id, collapsed))
+        return false;
+    markModified();
+    return true;
+}
+
+void EditorCommands::selectGroup(int group_id) { m_editor_actions.selectGroup(group_id); }
+
+void EditorCommands::markModified() { ++m_revision; }
+
+void EditorCommands::markClean() { m_clean_revision = m_revision; }
+
+void EditorCommands::componentsChanged() {
+    if (onComponentsChanged)
+        onComponentsChanged();
+}

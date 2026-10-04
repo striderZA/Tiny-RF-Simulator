@@ -10,6 +10,7 @@
 #include "component_library.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
+#include "editor_commands.h"
 #include "equalizer_engine.h"
 #include "extension_manager.h"
 #include "extension_trust_store.h"
@@ -118,11 +119,15 @@ class RfSimulatorApp {
     void saveProject(const std::string &path);
     void loadProject(const std::string &path);
     void newProject();
-    bool isDirty() const { return m_dirty; }
+    // Derived from the editor command service's revision: dirty while the
+    // revision differs from the one recorded by the last save/load/New.
+    bool isDirty() const { return m_editor_commands.isDirty(); }
+    // Monotonic project-edit counter; equality across an operation proves the
+    // operation recorded no project edit, even from an already-dirty baseline.
+    std::uint64_t projectRevision() const { return m_editor_commands.revision(); }
     size_t componentCount() const { return m_circuit_runtime.components().size(); }
     std::string m_current_project_path;
     void markDirty();
-    bool m_dirty = false;
     void testMakeDirty();
     // Test-only commands keep fixture mutations explicit; read accessors below are const.
     IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
@@ -148,6 +153,7 @@ class RfSimulatorApp {
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
+    std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
     TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
@@ -182,6 +188,10 @@ class RfSimulatorApp {
     void startTutorial();
     bool duplicateComponent(int graph_node_id);
     void addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos);
+    // Reconciles component-bound views (per-PFB IQ Plot / Channelizer Grid)
+    // with the live registry. EditorCommands::onComponentsChanged and every
+    // project replacement (load, New) run it.
+    void syncComponentViews();
     void openNewComponentForm(const std::string &type);
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
@@ -221,6 +231,7 @@ class RfSimulatorApp {
 
     CircuitRuntime m_circuit_runtime;
     GraphEditorActions m_graph_editor_actions;
+    EditorCommands m_editor_commands{m_circuit_runtime, m_graph_editor_actions};
     SpectrumAnalyzerEngine m_spectrum_engine;
     PowerMeterEngine m_power_meter_engine;
     std::unique_ptr<SpectrumAnalyzerWidget> m_spectrum_widget;
