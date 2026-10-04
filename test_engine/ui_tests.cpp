@@ -11,8 +11,10 @@
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <imnodes.h>
 #undef Yield
 static RfSimulatorApp *s_app = nullptr;
@@ -40,6 +42,153 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->SetRef("Amplifier 0");
         ctx->ItemExists("Measure");
+    };
+
+    // Issue #170: the Edit button shares the selectable row's hit area. A
+    // click on Edit must open the existing definition, never instantiate it.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "component_library_edit_does_not_insert");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        namespace fs = std::filesystem;
+        struct TestState {
+            RfSimulatorApp &app;
+            fs::path original_cwd;
+            std::string original_project_path;
+            fs::path root;
+            ~TestState() {
+                std::error_code ec;
+                fs::current_path(original_cwd, ec);
+                app.m_current_project_path = original_project_path;
+                app.refreshExtensions();
+                fs::remove_all(root, ec);
+            }
+        };
+
+        ctx->Yield(2);
+        ImGuiWindow *library_window = ImGui::FindWindowByName("Component Library");
+        const bool library_was_visible = library_window && library_window->Active;
+        bool library_opened_by_test = false;
+        const auto restore_library_visibility = [&]() {
+            if (!library_opened_by_test)
+                return;
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Component Library");
+            ctx->SetRef("");
+            ctx->Yield(2);
+            library_opened_by_test = false;
+        };
+
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        const fs::path root =
+            fs::temp_directory_path() / ("rf_sim_issue170_" + std::to_string(stamp));
+        TestState state{*s_app, fs::current_path(), s_app->m_current_project_path, root};
+
+        const fs::path definition_path =
+            root / "rf-sim-libraries" / "attenuator" / "Issue 170" / "issue170-att.json";
+        fs::create_directories(definition_path.parent_path());
+        {
+            std::ofstream definition_file(definition_path);
+            definition_file << R"({
+                "schema_version": 1,
+                "type": "attenuator",
+                "part_number": "ISSUE170-ATT",
+                "manufacturer": "Issue 170",
+                "parameters": { "attenuation_dB": 6.0 }
+            })";
+        }
+        fs::current_path(root);
+        s_app->m_current_project_path = (root / "issue170.rfsim").string();
+        s_app->refreshExtensions();
+        const auto loaded_components = s_app->testComponentLibrary().all();
+        const auto fixture =
+            std::find_if(loaded_components.begin(), loaded_components.end(),
+                         [](const auto *def) { return def->part_number == "ISSUE170-ATT"; });
+        IM_CHECK(fixture != loaded_components.end());
+        if (fixture == loaded_components.end())
+            return;
+        const ComponentDefinition &definition = **fixture;
+        IM_CHECK(fs::exists(definition_path));
+
+        const size_t component_count_before = s_app->componentCount();
+        std::vector<int> original_node_ids;
+        for (const auto *component : s_app->testComponents().all())
+            original_node_ids.push_back(component->graphNodeId());
+
+        if (!library_was_visible) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Component Library");
+            ctx->SetRef("");
+            library_opened_by_test = true;
+        }
+        ctx->WindowFocus("Component Library");
+        ctx->WindowResize("Component Library", ImVec2(600, 500));
+        ctx->Yield(2);
+
+        // Expand the exact type/manufacturer nodes from the actual loaded
+        // definition, independent of any prior window/tree state.
+        ImGuiWindow *window = ImGui::FindWindowByName("Component Library");
+        IM_CHECK(window != nullptr);
+        if (!window) {
+            restore_library_visibility();
+            return;
+        }
+        const auto manufacturer_count =
+            std::count_if(loaded_components.begin(), loaded_components.end(), [&](const auto *def) {
+                return def->type == definition.type && def->manufacturer == definition.manufacturer;
+            });
+        const std::string manufacturer_label =
+            definition.manufacturer + " (" + std::to_string(manufacturer_count) + ")";
+        IM_CHECK_EQ(definition.manufacturer, "Issue 170");
+        ctx->SetRef("Component Library");
+        const auto type_item = ctx->ItemInfo(definition.type.c_str(), ImGuiTestOpFlags_NoError);
+        IM_CHECK(type_item.ID != 0);
+        if (type_item.ID == 0) {
+            restore_library_visibility();
+            return;
+        }
+        if (window->StateStorage.GetInt(type_item.ID, 0) == 0) {
+            ctx->ItemClick(definition.type.c_str());
+            ctx->Yield(2);
+        }
+        IM_CHECK_EQ(window->StateStorage.GetInt(type_item.ID, -1), 1);
+        const std::string type_ref = "Component Library/" + definition.type;
+        const ImGuiID manufacturer_id = ImHashStr(manufacturer_label.c_str(), 0, type_item.ID);
+        ctx->SetRef(type_ref.c_str());
+        IM_CHECK(ctx->ItemExists(manufacturer_label.c_str()));
+        if (window->StateStorage.GetInt(manufacturer_id, 0) == 0) {
+            ctx->ItemClick(manufacturer_label.c_str());
+            ctx->Yield(2);
+        }
+        const std::string edit_label = "Edit##" + definition.source_path;
+        ctx->SetRef((type_ref + "/" + manufacturer_label).c_str());
+        IM_CHECK(ctx->ItemExists(definition.part_number.c_str()));
+        const ImGuiID edit_id = ImHashStr(edit_label.c_str(), 0, manufacturer_id);
+        const auto edit_info = ctx->ItemInfo(edit_id);
+        IM_CHECK(edit_info.ID != 0);
+        ctx->MouseMoveToPos(edit_info.RectFull.GetCenter());
+        ctx->MouseClick(ImGuiMouseButton_Left);
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK_EQ(s_app->componentCount(), component_count_before);
+        ImGuiWindow *component_form = ImGui::FindWindowByName("Component Form");
+        IM_CHECK(component_form != nullptr && component_form->Active);
+        if (component_form && component_form->Active) {
+            IM_CHECK(s_app->testComponentFormModel().partNumber() == definition.part_number);
+            ctx->SetRef("//$FOCUSED");
+            ctx->ItemClick("Cancel");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+
+        std::vector<int> added_node_ids;
+        for (const auto *component : s_app->testComponents().all())
+            if (std::find(original_node_ids.begin(), original_node_ids.end(),
+                          component->graphNodeId()) == original_node_ids.end())
+                added_node_ids.push_back(component->graphNodeId());
+        for (int node_id : added_node_ids)
+            s_app->testRemoveComponent(node_id);
+
+        restore_library_visibility();
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "canvas_context_menu");
