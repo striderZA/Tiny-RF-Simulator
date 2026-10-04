@@ -1,5 +1,6 @@
 #include "receiver_performance_measurement.h"
 
+#include "common.h"
 #include "component_interface.h"
 #include "measurement_chain_runner.h"
 #include "node_graph_engine.h"
@@ -211,10 +212,13 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
         const double high = center + spacing / 2.0;
         const double lower_im3 = 2.0 * low - high;
         const double upper_im3 = 2.0 * high - low;
-        if (!(low > 0.0) || !std::isfinite(high) || !std::isfinite(lower_im3) ||
-            !std::isfinite(upper_im3))
+        if (!(low > 0.0))
             return false;
         const double frequencies[] = {low, high, lower_im3, upper_im3};
+        for (double frequency : frequencies) {
+            if (!std::isfinite(frequency) || frequency < MIN_FREQ || frequency > MAX_FREQ)
+                return false;
+        }
         for (std::size_t i = 0; i < 4; ++i) {
             for (std::size_t j = i + 1; j < 4; ++j) {
                 if (frequencies[i] == frequencies[j])

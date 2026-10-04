@@ -212,8 +212,10 @@ void ReceiverRequirementsWidget::draw(
     ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
     if (m_nf_enabled)
         ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1)
+    if (!m_source_tone_frequency_Hz && source_tones.size() == 1) {
         m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
+        m_baseline.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
+    }
     ImGui::Checkbox("Enable output power", &m_output_power_enabled);
     if (m_output_power_enabled) {
         ImGui::InputText(kLabels[5], m_buffers[5].data(), m_buffers[5].size());

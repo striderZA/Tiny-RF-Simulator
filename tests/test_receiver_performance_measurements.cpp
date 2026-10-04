@@ -361,6 +361,19 @@ TEST_CASE("Receiver IIP3 retains fixed spacing and rejects unsupported edges and
     CHECK(std::isnan(engine.measurements().iip3_dBm[0]));
     CHECK(std::isnan(engine.measurements().iip3_dBm[1]));
     CHECK(isFinite(engine.measurements().iip3_dBm[2]));
+    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -60.0, -40.0, 2.0};
+    const std::vector<double> boundary_frequencies = {19.999e9, 19.9995e9, 19.997e9, 1.1e9};
+    engine.update(settings, c.generator.outputPinId(), c.pointB(), boundary_frequencies);
+    for (int update = 0; engine.isInProgress() && update < 64; ++update)
+        engine.update(settings, c.generator.outputPinId(), c.pointB(), boundary_frequencies);
+    REQUIRE_FALSE(engine.isInProgress());
+    // The first point puts only the upper IM3 product above MAX_FREQ; the
+    // second puts the upper fundamental above it. The third lands the upper
+    // IM3 product exactly on MAX_FREQ and remains measurable.
+    CHECK(std::isnan(engine.measurements().iip3_dBm[0]));
+    CHECK(std::isnan(engine.measurements().iip3_dBm[1]));
+    CHECK(isFinite(engine.measurements().iip3_dBm[2]));
+    CHECK(isFinite(engine.measurements().iip3_dBm[3]));
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, 20.0, 40.0, 2.0};
     engine.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().iip3_dBm[0]));
