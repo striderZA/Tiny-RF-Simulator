@@ -128,32 +128,27 @@ std::optional<double> estimateIIP3(const std::vector<std::pair<double, double>> 
     return intercept;
 }
 
+// The cache key holds only inputs that change measured samples. Pass/fail
+// limits and the band are re-evaluated against retained samples every frame,
+// links off the measured path never reach the scratch clones, and the path
+// signature already serializes every path component, including Point A's
+// generator. Conditions of a disabled metric are omitted because update()
+// never reads them.
 std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
-                       const std::vector<double> &sweep, const NodeGraphEngine &graph,
-                       const std::optional<MeasurementChainPath> &path,
-                       const IComponentEngine *generator) {
+                       const std::vector<double> &sweep,
+                       const std::optional<MeasurementChainPath> &path) {
+    const auto &conditions = config.measurement_conditions;
     nlohmann::json key;
     key["point_a"] = point_a_pin;
     key["point_b"] = point_b_pin;
     key["grid"] = sweep;
-    key["config"] = {
-        {"band_start", config.band_start_Hz},
-        {"band_stop", config.band_stop_Hz},
-        {"gain", config.gain ? nlohmann::json{{"min", config.gain->minimum_dB},
-                                              {"max", config.gain->maximum_dB}}
-                             : nlohmann::json(nullptr)},
-        {"nf", config.nf_max_dB ? nlohmann::json(*config.nf_max_dB) : nlohmann::json(nullptr)},
-        {"output", config.output_power ? nlohmann::json{{"min", config.output_power->minimum_dBm},
-                                                        {"max", config.output_power->maximum_dBm}}
-                                       : nlohmann::json(nullptr)},
-        {"iip3_limit",
-         config.iip3_min_dBm ? nlohmann::json(*config.iip3_min_dBm) : nlohmann::json(nullptr)},
-        {"tone_selector",
-         config.measurement_conditions.output_reference_tone_frequency_Hz
-             ? nlohmann::json(*config.measurement_conditions.output_reference_tone_frequency_Hz)
-             : nlohmann::json(nullptr)}};
-    if (config.measurement_conditions.iip3) {
-        const auto &settings = *config.measurement_conditions.iip3;
+    key["output_enabled"] = config.output_power.has_value();
+    key["tone_selector"] = config.output_power && conditions.output_reference_tone_frequency_Hz
+                               ? nlohmann::json(*conditions.output_reference_tone_frequency_Hz)
+                               : nlohmann::json(nullptr);
+    key["iip3_enabled"] = config.iip3_min_dBm.has_value();
+    if (config.iip3_min_dBm && conditions.iip3) {
+        const auto &settings = *conditions.iip3;
         key["iip3_settings"] = {{"spacing", settings.tone_spacing_Hz},
                                 {"start", settings.input_start_dBm},
                                 {"stop", settings.input_stop_dBm},
@@ -161,20 +156,7 @@ std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin
     } else {
         key["iip3_settings"] = nullptr;
     }
-    key["topology"] = nlohmann::json::array();
-    for (const auto &link : graph.links())
-        key["topology"].push_back({link.start_pin_id, link.end_pin_id});
-    if (path) {
-        key["path"] = path->signature();
-        key["components"] = nlohmann::json::array();
-        for (const auto *component : path->components)
-            key["components"].push_back({{"id", component->id()},
-                                         {"type", component->type_name()},
-                                         {"state", component->serialize()}});
-    } else {
-        key["path"] = nullptr;
-    }
-    key["generator"] = generator ? generator->serialize() : nlohmann::json(nullptr);
+    key["path"] = path ? nlohmann::json(path->signature()) : nlohmann::json(nullptr);
     return key.dump();
 }
 } // namespace
@@ -196,8 +178,8 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
     auto *generator = generator_component && generator_component->type_name() == "generator"
                           ? dynamic_cast<SignalGeneratorEngine *>(generator_component)
                           : nullptr;
-    const std::string key = requestKey(config, point_a_pin, point_b_pin, sweep_frequencies_Hz,
-                                       m_graph, path, generator_component);
+    const std::string key =
+        requestKey(config, point_a_pin, point_b_pin, sweep_frequencies_Hz, path);
     const bool same_request = m_has_cached_request && key == m_cached_request;
     if (same_request && !m_in_progress)
         return;

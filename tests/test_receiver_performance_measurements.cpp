@@ -462,6 +462,162 @@ TEST_CASE("Receiver measurement cache reuses unchanged request and invalidates c
     engine.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(c.host.scratch_passes > prepared);
 }
+
+namespace {
+void runToCompletion(ReceiverPerformanceMeasurementEngine &engine,
+                     const ReceiverRequirementsConfig &settings, int point_a, int point_b,
+                     const std::vector<double> &grid) {
+    engine.update(settings, point_a, point_b, grid);
+    for (int update = 0; engine.isInProgress() && update < 1000; ++update)
+        engine.update(settings, point_a, point_b, grid);
+    REQUIRE_FALSE(engine.isInProgress());
+}
+} // namespace
+
+TEST_CASE(
+    "Receiver measurement cache keeps samples across limit, band, dormant, and off-path edits",
+    "[receiver_measurements]") {
+    Circuit c;
+    c.amplifier.setEnableNonlinear(true);
+    c.amplifier.setOIP3_dBm(40.0);
+    c.amplifier.setP1dB_dBm(90.0);
+    SignalGeneratorEngine off_path_source{4, c.graph};
+    AttenuatorEngine off_path_load{5, c.graph};
+    const std::vector<double> grid{1.0e9};
+    const int point_a = c.generator.outputPinId();
+
+    SECTION("pass/fail limits, band edges, and off-path links do not change the request") {
+        ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+        auto settings = config();
+        runToCompletion(engine, settings, point_a, c.pointB(), grid);
+        const int prepared = c.host.scratch_passes;
+        const auto before = engine.measurements();
+        REQUIRE(isFinite(before.output_power_dBm[0]));
+        REQUIRE(isFinite(before.iip3_dBm[0]));
+
+        const auto expectCached = [&](const ReceiverRequirementsConfig &edited) {
+            engine.update(edited, point_a, c.pointB(), grid);
+            CHECK_FALSE(engine.isInProgress());
+            CHECK(c.host.scratch_passes == prepared);
+            CHECK(engine.measurements().output_power_dBm == before.output_power_dBm);
+            CHECK(engine.measurements().iip3_dBm == before.iip3_dBm);
+        };
+
+        settings.band_start_Hz = 0.9e9;
+        settings.band_stop_Hz = 3.0e9;
+        expectCached(settings);
+        settings.gain = ReceiverGainLimits{-5.0, 30.0};
+        settings.nf_max_dB = 6.0;
+        expectCached(settings);
+        settings.output_power = ReceiverOutputPowerLimits{-50.0, 10.0};
+        settings.iip3_min_dBm = -25.0;
+        expectCached(settings);
+        c.graph.addLink(off_path_source.outputPinId(), off_path_load.inputPinId());
+        expectCached(settings);
+    }
+
+    SECTION("conditions of a disabled metric do not change the request") {
+        ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+        auto settings = config();
+        settings.output_power.reset();
+        settings.iip3_min_dBm.reset();
+        engine.update(settings, point_a, c.pointB(), grid);
+        const int prepared = c.host.scratch_passes;
+
+        settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+        engine.update(settings, point_a, c.pointB(), grid);
+        CHECK(c.host.scratch_passes == prepared);
+        settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{4.0e6, -50.0, -30.0, 1.0};
+        engine.update(settings, point_a, c.pointB(), grid);
+        CHECK(c.host.scratch_passes == prepared);
+    }
+}
+
+TEST_CASE("Receiver measurement cache invalidates on every measured input",
+          "[receiver_measurements]") {
+    Circuit c;
+    const int point_a = c.generator.outputPinId();
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    auto settings = config();
+    std::vector<double> grid{1.0e9};
+    runToCompletion(engine, settings, point_a, c.pointB(), grid);
+
+    const auto expectReset = [&](const char *edit) {
+        INFO(edit);
+        const int prepared = c.host.scratch_passes;
+        engine.update(settings, point_a, c.pointB(), grid);
+        CHECK(c.host.scratch_passes > prepared);
+        runToCompletion(engine, settings, point_a, c.pointB(), grid);
+    };
+
+    grid.push_back(1.1e9);
+    expectReset("sweep grid");
+    c.generator.removeTone(0);
+    c.generator.addTone(1.0e9, -12.0);
+    expectReset("Point A generator state");
+    c.amplifier.setGain_dB(3.0);
+    expectReset("on-path component state");
+    settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    expectReset("enabled output reference tone");
+    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{4.0e6, -60.0, -40.0, 2.0};
+    expectReset("enabled IIP3 conditions");
+    settings.output_power.reset();
+    expectReset("output power disabled");
+    settings.iip3_min_dBm.reset();
+    expectReset("IIP3 disabled");
+    settings.iip3_min_dBm = 0.0;
+    expectReset("IIP3 re-enabled");
+}
+
+TEST_CASE("Receiver limit edits keep in-progress work and re-evaluate retained samples",
+          "[receiver_measurements]") {
+    Circuit c;
+    const int point_a = c.generator.outputPinId();
+    auto settings = config();
+    settings.iip3_min_dBm.reset();
+    std::vector<double> grid;
+    constexpr std::size_t points = 1000;
+    for (std::size_t i = 0; i < points; ++i)
+        grid.push_back(1.0e9 + static_cast<double>(i) * (1.0e9 / (points - 1)));
+    const auto finiteCount = [](const std::vector<double> &values) {
+        return std::count_if(values.begin(), values.end(), isFinite);
+    };
+
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    engine.update(settings, point_a, c.pointB(), grid);
+    for (int update = 0; engine.isInProgress() && update < 1000 &&
+                         finiteCount(engine.measurements().output_power_dBm) == 0;
+         ++update)
+        engine.update(settings, point_a, c.pointB(), grid);
+    const auto measured_before = finiteCount(engine.measurements().output_power_dBm);
+    REQUIRE(measured_before > 0);
+    const int prepared = c.host.scratch_passes;
+
+    settings.output_power = ReceiverOutputPowerLimits{-40.0, 40.0};
+    engine.update(settings, point_a, c.pointB(), grid);
+    CHECK(c.host.scratch_passes == prepared);
+    CHECK(finiteCount(engine.measurements().output_power_dBm) >= measured_before);
+    runToCompletion(engine, settings, point_a, c.pointB(), grid);
+    CHECK(c.host.scratch_passes == prepared);
+
+    const auto &output = engine.measurements().output_power_dBm;
+    REQUIRE(finiteCount(output) == static_cast<std::ptrdiff_t>(points));
+    const double observed = *std::min_element(output.begin(), output.end());
+    ReceiverRequirementsState state;
+    const std::vector<double> unavailable(points, std::numeric_limits<double>::quiet_NaN());
+    const auto evaluate = [&](double minimum_dBm) {
+        settings.output_power = ReceiverOutputPowerLimits{minimum_dBm, 40.0};
+        state.config = settings;
+        engine.update(settings, point_a, c.pointB(), grid);
+        return evaluateReceiverRequirements(state, grid.front(), grid.back(), grid, unavailable,
+                                            unavailable, engine.measurements().output_power_dBm,
+                                            engine.measurements().iip3_dBm)
+            .output_power.status;
+    };
+    CHECK(evaluate(observed - 1.0) == ReceiverRequirementStatus::Pass);
+    CHECK(evaluate(observed + 1.0) == ReceiverRequirementStatus::Fail);
+    CHECK(c.host.scratch_passes == prepared);
+}
 TEST_CASE("Receiver measurement resumes incremental in-band work and resets changed requests",
           "[receiver_measurements]") {
     Circuit c;
@@ -526,8 +682,12 @@ TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer gr
     for (std::size_t i = 0; i < points; ++i)
         full_grid.push_back(1.0e9 + static_cast<double>(i) * (5.0e9 / 2000.0));
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    int sample = 0;
     BENCHMARK("full-grid 101-level receiver recompute") {
-        settings.band_start_Hz += 1.0; // force a fresh request on every benchmark sample
+        // Force a fresh request on every sample by nudging the Point A generator
+        // tone, a real measured input, without changing the workload.
+        c.generator.removeTone(0);
+        c.generator.addTone(1.0e9, (++sample % 2 == 0) ? -10.0 : -10.001);
         engine.update(settings, c.generator.outputPinId(), c.pointB(), full_grid);
         for (int update = 0; engine.isInProgress() && update < 1000; ++update)
             engine.update(settings, c.generator.outputPinId(), c.pointB(), full_grid);
