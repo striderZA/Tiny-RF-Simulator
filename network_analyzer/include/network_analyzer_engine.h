@@ -1,53 +1,12 @@
 #pragma once
 
+#include "measurement_chain_runner.h"
 #include "spectrum.h"
-#include <memory>
 #include <nlohmann/json.hpp>
-#include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
-class IComponentEngine;
 class NodeGraphEngine;
-
-// ---------------------------------------------------------------------------
-// App-layer dependency injection (layering resolution, see Task 1 report).
-//
-// NetworkAnalyzerEngine lives in the DSP-engines layer (network_analyzer/),
-// which sits BELOW app/ in the dependency graph. The two lookups the engine
-// needs — resolving a graph node to its live engine (ComponentRegistry::find)
-// and cloning a component type (ComponentTypeRegistry::find + create) —
-// are app-layer concerns. Rather than make a lower layer depend on app/ (a
-// CMake/link cycle, since app already links network_analyzer_engine), the app
-// layer implements these interfaces and injects them; the engine only ever
-// sees IComponentEngine*/NodeGraphEngine, both lower-layer types.
-//
-// INetworkAnalyzerScratch — one private, throwaway scratch graph+registry per
-// measurement pass. Clones created from it are destroyed with it (RAII), so a
-// pass never touches the real graph/registry.
-// ---------------------------------------------------------------------------
-class INetworkAnalyzerScratch {
-  public:
-    virtual ~INetworkAnalyzerScratch() = default;
-
-    // Construct an engine of the given canonical type (e.g. "attenuator") in
-    // the scratch graph, with the given component id. Returns nullptr for an
-    // unknown type. The caller applies parameters via deserialize().
-    virtual IComponentEngine *createClone(std::string_view type, int id) = 0;
-};
-
-class INetworkAnalyzerHost {
-  public:
-    virtual ~INetworkAnalyzerHost() = default;
-
-    // The live engine owning a graph node (nullptr if none/unregistered).
-    virtual IComponentEngine *componentForNode(int graph_node_id) const = 0;
-
-    // A fresh scratch pass for one measurement. Destroyed at the end of the
-    // current computeMeasurement() call.
-    virtual std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const = 0;
-};
 
 // Idealized two-port instrument presented as a singleton floating panel (like
 // the Spectrum Analyzer). Not an IComponentEngine: no graph node, no pins, no
@@ -65,7 +24,7 @@ class INetworkAnalyzerHost {
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
 class NetworkAnalyzerEngine {
   public:
-    NetworkAnalyzerEngine(const NodeGraphEngine &graph, INetworkAnalyzerHost &host);
+    NetworkAnalyzerEngine(const NodeGraphEngine &graph, IMeasurementChainHost &host);
 
     void setStartFrequency(double hz);
     void setStopFrequency(double hz);
@@ -91,19 +50,9 @@ class NetworkAnalyzerEngine {
     const std::vector<double> &gainDb() const { return m_gain_dB; }
     const std::vector<double> &noiseFigureDb() const { return m_nf_dB; }
 
-    // Called once per frame from RfSimulatorApp's update loop while the panel
-    // is visible. findUniquePath() (a DFS over the live graph) and a cheap
-    // signature of the discovered chain (each path node's live serialize()
-    // dump + the sweep params) run every frame regardless -- both are O(graph
-    // size)/O(chain length), independent of the sweep point count. The
-    // expensive part -- cloning the chain and re-running each clone's DSP
-    // across up to 2001 points -- is SKIPPED when that signature matches the
-    // last recompute (the common case: panel open, nothing being edited);
-    // see computeMeasurement()'s dirty-check. A prior version of this
-    // comment claimed the full recompute was "microseconds" unconditionally;
-    // measurement showed ~22ms/update() at 2001 points before an O(N*M)
-    // tone-matching fix, and several ms remained afterward for a chain with
-    // a nonlinear stage -- hence the signature-gated skip below.
+    // Called each frame while visible: path discovery and the component-state
+    // signature are cheap; the clone-and-cascade is skipped when the path or
+    // sweep parameters have not changed.
     void update();
 
     // Project-level state (this class is not an IComponentEngine).
@@ -112,7 +61,8 @@ class NetworkAnalyzerEngine {
 
   private:
     const NodeGraphEngine &m_graph;
-    INetworkAnalyzerHost &m_host; // resolves live engines + builds clone passes
+
+    IMeasurementChainHost &m_host; // resolves live engines + builds clone passes
 
     double m_start_freq = 1e9;
     double m_stop_freq = 6e9;
@@ -129,27 +79,5 @@ class NetworkAnalyzerEngine {
     Spectrum m_stimulus;            // private tone-comb stimulus, not attached to any node
 
     void rebuildStimulus();
-
-    // A discovered chain: nodes[0] is Point A's own node (never cloned — its
-    // signal is replaced by the stimulus), nodes[1..] are the components to
-    // clone and measure, in order, ending at Point B's node. out_index[i] is
-    // the output PORT of nodes[i] that reaches nodes[i+1], and in_index[i] is
-    // the input PORT of nodes[i+1] reached by that link (both sized
-    // nodes.size()-1). Preserving both ports matters for multi-port components
-    // such as PFB outputs and RF switch throws.
-    struct PathResult {
-        std::vector<IComponentEngine *> nodes;
-        std::vector<int> out_index;
-        std::vector<int> in_index;
-    };
-
-    // DFS over m_graph's real links from Point A's owning node forward,
-    // enumerating simple paths to Point B's owning node. Returns nullopt for
-    // zero or more-than-one distinct path, or for any path that enters a
-    // multi-input component other than a singly-fed RF switch (whose selected
-    // input can be reproduced by wiring the discovered port). A second linked
-    // switch input or a combiner would add a path the clone cannot represent.
-    // The start node is exempt because its output is replaced by the stimulus.
-    std::optional<PathResult> findUniquePath() const;
     void computeMeasurement();
 };
