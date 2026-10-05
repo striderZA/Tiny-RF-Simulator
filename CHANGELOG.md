@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### Fixed
+
+- **Network Analyzer through switched filter banks** — a 1:2 switch feeding parallel branches that rejoin at a 2:1 switch is now measured instead of reporting no data (#169). Gain follows the selected switch throws; NF includes the unselected branch's noise leaking through isolation. Combiners and merges fed by a source outside the measured path still report no data.
+
+### Testing
+
+- Add Network Analyzer coverage for switched filter banks against the live engines (matched, flipped, and mismatched throws; low-isolation noise), outside-source rejection, and the production app clone adapter.
+
 ## [0.26.1] - 2026-10-04
 
 ### Fixed
