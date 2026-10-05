@@ -131,9 +131,10 @@ std::optional<double> estimateIIP3(const std::vector<std::pair<double, double>> 
 // The cache key holds only inputs that change measured samples. Pass/fail
 // limits and the band are re-evaluated against retained samples every frame,
 // links off the measured path never reach the scratch clones, and the path
-// signature already serializes every path component, including Point A's
-// generator. Conditions of a disabled metric are omitted because update()
-// never reads them.
+// signature already serializes every path component (including Point A's
+// generator) and every link between them, so a switched filter bank's throws
+// and wiring are covered. Conditions of a disabled metric are omitted because
+// update() never reads them.
 std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
                        const std::vector<double> &sweep,
                        const std::optional<MeasurementChainPath> &path) {

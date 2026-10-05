@@ -4,6 +4,8 @@
 #include "node_graph_engine.h"
 #include "receiver_performance_measurement.h"
 #include "receiver_requirements.h"
+#include "rf_switch_2to1_engine.h"
+#include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include <algorithm>
 #include <catch2/benchmark/catch_benchmark_all.hpp>
@@ -90,6 +92,10 @@ class Scratch final : public IMeasurementChainScratch {
             return make<AmplifierEngine>(id);
         if (type == "generator")
             return make<SignalGeneratorEngine>(id);
+        if (type == "rf_switch_spdt")
+            return make<RFSwitchEngine>(id);
+        if (type == "rf_switch_spdt_2to1")
+            return make<RFSwitch2to1Engine>(id);
         return nullptr;
     }
 
@@ -698,4 +704,68 @@ TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer gr
         engine.update(settings, c.generator.outputPinId(), c.pointB(), full_grid);
         return engine.measurements().iip3_dBm;
     };
+}
+
+namespace {
+// Issue #169's switched filter bank: a 1:2 switch fans out to two parallel
+// branches that rejoin at a 2:1 switch. Attenuators stand in for the filters
+// so expected values are exact; both switches keep their 0.5 dB insertion
+// loss and 40 dB isolation.
+struct FilterBank {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine generator{1, graph};
+    RFSwitchEngine fan_out{2, graph};
+    AttenuatorEngine branch_1{3, graph};
+    AttenuatorEngine branch_2{4, graph};
+    RFSwitch2to1Engine fan_in{5, graph};
+    Host host{{&generator, &fan_out, &branch_1, &branch_2, &fan_in}};
+    FilterBank() {
+        branch_1.setAttenuation(3.0);
+        branch_2.setAttenuation(10.0);
+        graph.addLink(generator.outputPinId(), fan_out.inputPinId(0));
+        graph.addLink(fan_out.outputPinId(0), branch_1.inputPinId());
+        graph.addLink(fan_out.outputPinId(1), branch_2.inputPinId());
+        graph.addLink(branch_1.outputPinId(), fan_in.inputPinId(0));
+        graph.addLink(branch_2.outputPinId(), fan_in.inputPinId(1));
+        generator.addTone(1.0e9, -10.0);
+    }
+};
+
+// Power of two in-phase tones combined as RMS-voltage phasors.
+double inPhaseSum_dBm(double a_dBm, double b_dBm) {
+    return 20.0 * std::log10(std::pow(10.0, a_dBm / 20.0) + std::pow(10.0, b_dBm / 20.0));
+}
+} // namespace
+
+TEST_CASE("Receiver output power measures through a switched filter bank",
+          "[receiver_measurements][issue169]") {
+    FilterBank bank;
+    auto settings = config();
+    settings.iip3_min_dBm.reset();
+    const auto measure = [&](int fan_out_throw, int fan_in_throw) {
+        bank.fan_out.setActiveThrow(fan_out_throw);
+        bank.fan_in.setActiveThrow(fan_in_throw);
+        ReceiverPerformanceMeasurementEngine engine(bank.graph, bank.host);
+        runToCompletion(engine, settings, bank.generator.outputPinId(), bank.fan_in.outputPinId(),
+                        {1.0e9});
+        REQUIRE(engine.measurements().output_power_dBm.size() == 1);
+        return engine.measurements().output_power_dBm[0];
+    };
+
+    // Matched throws: the selected branch at insertion loss plus the other
+    // branch leaking through both switches' isolation, combined in phase. The
+    // leakage is 86 dB down, so this agrees with the analyzer's selected-throw
+    // Gain.
+    CHECK(measure(0, 0) ==
+          Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 3.0 - 0.5, -10.0 - 40.0 - 10.0 - 40.0))
+              .margin(1e-9));
+    CHECK(measure(1, 1) ==
+          Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 10.0 - 0.5, -10.0 - 40.0 - 3.0 - 40.0))
+              .margin(1e-9));
+    // Mismatched throws: each branch passes one switch at isolation and the
+    // stronger T1 leakage is summed in, where the analyzer's Gain reads only
+    // the selected (T2) throw, about 10 dB lower.
+    CHECK(measure(0, 1) ==
+          Catch::Approx(inPhaseSum_dBm(-10.0 - 40.0 - 10.0 - 0.5, -10.0 - 0.5 - 3.0 - 40.0))
+              .margin(1e-9));
 }
