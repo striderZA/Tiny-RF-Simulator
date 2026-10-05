@@ -48,6 +48,7 @@
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
 #include "view_manager.h"
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>

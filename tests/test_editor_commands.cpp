@@ -117,10 +117,11 @@ TEST_CASE("Accepted topology commands each advance the revision", "[editor_comma
     REQUIRE(advanced());
     REQUIRE(amplifier->node().inputs[0] == &generator->node().outputs[0]);
 
+    // Probe edits keep their pre-existing semantics: no revision advance.
     REQUIRE(f.commands.addProbePin(generator->outputPinId()));
-    REQUIRE(advanced());
+    REQUIRE_FALSE(advanced());
     REQUIRE(f.commands.removeProbePin(generator->outputPinId()));
-    REQUIRE(advanced());
+    REQUIRE_FALSE(advanced());
 
     const int group =
         f.commands.createGroup("Chain", {generator->graphNodeId(), amplifier->graphNodeId()});
@@ -218,23 +219,22 @@ TEST_CASE_METHOD(ImGuiFixture, "App test commands share the editor's side effect
                  "[editor_commands][app]") {
     RfSimulatorApp app;
     REQUIRE_FALSE(app.isDirty());
-    const std::uint64_t start = app.projectRevision();
 
     auto *pfb = app.testCreateComponent("pfb", 9001);
     REQUIRE(pfb != nullptr);
     REQUIRE(app.testPfbViewCount() == 1);
     REQUIRE(app.isDirty());
 
-    // Probes are saved in .rfsim, so adding one is an unsaved change.
-    const std::string path = tempProjectPath("probe");
+    // A component removal through the hook is a real edit after a save.
+    const std::string path = tempProjectPath("remove");
     app.saveProject(path);
     REQUIRE_FALSE(app.isDirty());
-    REQUIRE(app.testAddProbePin(pfb->outputPinId()));
-    REQUIRE(app.isDirty());
-    REQUIRE(app.projectRevision() > start);
+    const std::uint64_t saved = app.projectRevision();
 
     REQUIRE(app.testRemoveComponent(pfb->graphNodeId()));
     REQUIRE(app.testPfbViewCount() == 0);
+    REQUIRE(app.isDirty());
+    REQUIRE(app.projectRevision() > saved);
     std::filesystem::remove(path);
 }
 

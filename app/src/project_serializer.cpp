@@ -889,6 +889,8 @@ bool ProjectSerializer::load(const std::string &path) {
 }
 
 void ProjectSerializer::reset() {
+    // Views hold engine references: drop them before the engines are destroyed.
+    m_pfb_views.clear();
     m_runtime.clearComponentsAndResetIds();
     m_editor_actions.resetForProjectReplacement();
     m_receiver_requirements = {};
@@ -898,6 +900,5 @@ void ProjectSerializer::reset() {
     m_na_engine.setPointA(-1);
     m_na_engine.setPointB(-1);
 
-    m_pfb_views.clear();
     m_graph_widget.clearPositionCache();
 }

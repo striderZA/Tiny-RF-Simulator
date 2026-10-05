@@ -27,14 +27,15 @@ class PFBViewManager {
     void draw();
     void saveVisibility(const ComponentRegistry &components, SessionState &state) const;
 
-    std::size_t size() const { return m_engines.size(); }
+    std::size_t size() const { return m_node_ids.size(); }
     std::vector<bool> &iqVisibility() { return m_show_iq_pfbs; }
     std::vector<bool> &gridVisibility() { return m_show_pfb_grids; }
 
   private:
-    // Identity of each view's engine. Compared by address only, never
-    // dereferenced, so a removed engine's stale entry is safe to match against.
-    std::vector<const PFBChannelizerEngine *> m_engines;
+    // Graph node id of each view's PFB. Node ids are monotonic and are reset
+    // only by ProjectSerializer::reset(), which clears the views first, so an
+    // id can never match a different engine than the one its widgets were built for.
+    std::vector<int> m_node_ids;
     std::vector<std::unique_ptr<IQPlotWidget>> m_iq_widgets;
     std::vector<bool> m_show_iq_pfbs;
     std::vector<std::unique_ptr<PFBChannelizerWidget>> m_pfb_grid_widgets;
