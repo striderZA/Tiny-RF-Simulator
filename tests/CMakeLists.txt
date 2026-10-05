@@ -111,7 +111,8 @@ add_standalone_test(test_network_analyzer
          simulator::signal_generator_engine simulator::attenuator_engine
          simulator::amplifier_engine simulator::mixer_engine
          simulator::splitter_engine simulator::combiner_engine
-         simulator::rf_switch_2to1_engine simulator::node_graph_engine
+         simulator::rf_switch_engine simulator::rf_switch_2to1_engine
+         simulator::node_graph_engine
          simulator::app
 )
 
