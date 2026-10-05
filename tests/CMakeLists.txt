@@ -387,6 +387,15 @@ add_standalone_test(test_graph_editor_actions
     LIBS simulator::app
 )
 
+# Editor command service (UI-free cases) plus app-level cases proving the test
+# hooks, loader, and New share its side effects. Constructs RfSimulatorApp, so
+# it shares the exe-relative app.ini and must run serially.
+add_standalone_test(test_editor_commands
+    SOURCES test_editor_commands.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_editor_commands PROPERTIES RUN_SERIAL TRUE)
+
 # Standalone UI-free validator/evaluator and draft-application coverage.
 add_standalone_test(test_receiver_requirements
     SOURCES test_receiver_requirements.cpp

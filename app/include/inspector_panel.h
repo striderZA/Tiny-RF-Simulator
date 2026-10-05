@@ -2,7 +2,7 @@
 
 #include "component_interface.h"
 #include "component_type_registry.h"
-#include "graph_editor_actions.h"
+#include "editor_commands.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
 #include <functional>
@@ -35,8 +35,10 @@ struct ViewToggles {
 
 class InspectorPanel {
   public:
+    // Group rename/ungroup/selection go through the editor command service,
+    // which records the edit itself; parameter edits report via onParamChange.
     InspectorPanel(const NodeGraphEngine &graph, const ComponentRegistry &components,
-                   GraphEditorActions &editor_actions);
+                   EditorCommands &editor_commands);
 
     void draw(const char *title, bool *p_open = nullptr);
     void setPFBs(const std::vector<PFBChannelizerEngine *> &pfbs) {
@@ -94,7 +96,7 @@ class InspectorPanel {
   private:
     const NodeGraphEngine &m_graph;
     const ComponentRegistry *m_components = nullptr;
-    GraphEditorActions &m_editor_actions;
+    EditorCommands &m_editor_commands;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     int m_selected_pfb_index = 0;
     // Graph-selected PFB id that the combo selection is anchored to; -1 means

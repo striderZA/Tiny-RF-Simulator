@@ -226,7 +226,10 @@ TEST_CASE_METHOD(ImGuiFixture,
 
     const std::vector<ComponentState> components_before = snapshotComponents(app.testComponents());
     const std::vector<std::array<int, 3>> links_before = snapshotLinks(app.testGraphEngine());
-    const bool dirty_before = app.isDirty();
+    // The fixture's own setup (testConnectLink) is a real project edit, so the
+    // baseline may already be dirty; an unchanged revision is what proves the
+    // run itself recorded no edit.
+    const std::uint64_t revision_before = app.projectRevision();
     REQUIRE(components_before.size() == 2);
 
     TestFlowWidget &widget = app.testTestFlowWidget();
@@ -250,8 +253,7 @@ TEST_CASE_METHOD(ImGuiFixture,
         REQUIRE(components_after[i].state == components_before[i].state);
     }
     REQUIRE(snapshotLinks(app.testGraphEngine()) == links_before);
-    REQUIRE(app.isDirty() == dirty_before);
-    REQUIRE_FALSE(app.isDirty());
+    REQUIRE(app.projectRevision() == revision_before);
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +279,7 @@ TEST_CASE_METHOD(ImGuiFixture,
 
     const std::vector<ComponentState> components_before = snapshotComponents(app.testComponents());
     const std::vector<std::array<int, 3>> links_before = snapshotLinks(app.testGraphEngine());
-    const bool dirty_before = app.isDirty();
+    const std::uint64_t revision_before = app.projectRevision();
 
     // Well-formed JSON whose condition targets an engine id that does not exist
     // in this circuit: the failure can only come from resolution.
@@ -301,7 +303,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     for (size_t i = 0; i < components_before.size(); ++i)
         REQUIRE(components_after[i].state == components_before[i].state);
     REQUIRE(snapshotLinks(app.testGraphEngine()) == links_before);
-    REQUIRE(app.isDirty() == dirty_before);
+    REQUIRE(app.projectRevision() == revision_before);
 
     // An ordinary failure must not poison the widget: the next valid run works.
     REQUIRE(widget.loadFlow(good_path.string()));
@@ -781,7 +783,7 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: export writes pretty JSON with a
 
     const std::vector<ComponentState> components_before = snapshotComponents(app.testComponents());
     const std::vector<std::array<int, 3>> links_before = snapshotLinks(app.testGraphEngine());
-    const bool dirty_before = app.isDirty();
+    const std::uint64_t revision_before = app.projectRevision();
 
     const fs::path export_path = uniqueTempPath("export_results");
     ScopedRemove export_cleanup{export_path};
@@ -800,7 +802,7 @@ TEST_CASE_METHOD(ImGuiFixture, "TestFlowWidget: export writes pretty JSON with a
     for (size_t i = 0; i < components_before.size(); ++i)
         REQUIRE(components_after[i].state == components_before[i].state);
     REQUIRE(snapshotLinks(app.testGraphEngine()) == links_before);
-    REQUIRE(app.isDirty() == dirty_before);
+    REQUIRE(app.projectRevision() == revision_before);
     REQUIRE(widget.result().has_value());
 }
 
@@ -1155,7 +1157,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     // is a read — the circuit is untouched by the refusal.
     const std::vector<ComponentState> components_before = snapshotComponents(app.testComponents());
     const std::vector<std::array<int, 3>> links_before = snapshotLinks(app.testGraphEngine());
-    const bool dirty_before = app.isDirty();
+    const std::uint64_t revision_before = app.projectRevision();
 
     REQUIRE_FALSE(widget.run());
     REQUIRE(widget.result().has_value());
@@ -1169,7 +1171,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     for (size_t i = 0; i < components_before.size(); ++i)
         REQUIRE(components_after[i].state == components_before[i].state);
     REQUIRE(snapshotLinks(app.testGraphEngine()) == links_before);
-    REQUIRE(app.isDirty() == dirty_before);
+    REQUIRE(app.projectRevision() == revision_before);
 }
 
 // ---------------------------------------------------------------------------

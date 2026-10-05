@@ -96,7 +96,7 @@ Releases are prepared through a pull request by default; the tag is created only
 - **Engine + Widget pattern:** each module has an `*_engine` (pure DSP, no UI deps) and an optional `*_widget` (ImGui UI). The engine owns a `SignalNode {input, output Spectrum, view_enabled}`.
 - **Only widget files** may `#include <imgui.h>` / `<implot.h>`.
 - **CMake targets** use `simulator::*` aliases (e.g. `simulator::signal_generator_engine`).
-- **Circuit runtime and wiring:** `CircuitRuntime` owns live graph/component topology, validates link commands, rewires `Spectrum` inputs, and updates components in topological order. `RfSimulatorApp` composes it with the UI, while `GraphEditorActions` owns probe/group editor state.
+- **Circuit runtime and wiring:** `CircuitRuntime` owns live graph/component topology, validates link commands, rewires `Spectrum` inputs, and updates components in topological order. `RfSimulatorApp` composes it with the UI, `GraphEditorActions` owns probe/group editor state, and `EditorCommands` is the single entry point for user-level edits — it applies each edit's side effects and owns the revision-derived dirty state.
 - For full architecture details, see the [Architecture Overview](openwiki/architecture/overview.md).
 
 ## Code Style

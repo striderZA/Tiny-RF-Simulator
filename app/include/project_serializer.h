@@ -12,14 +12,13 @@ class NetworkAnalyzerEngine;
 class NodeGraphEngine;
 class NodeGraphWidget;
 class PFBViewManager;
-class SessionState;
 
 // Owns the .rfsim JSON save/load/new logic previously inlined in
 // RfSimulatorApp (issue #51: 1320-line god-object).
 class ProjectSerializer {
   public:
     ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
-                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views, SessionState &state,
+                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
                       ReceiverRequirementsState &receiver_requirements, bool &show_log,
                       bool &show_spectrum, bool &show_properties, bool &show_node_editor,
                       NetworkAnalyzerEngine &na_engine);
@@ -28,7 +27,10 @@ class ProjectSerializer {
     bool load(const std::string &path); // false on parse/unknown-type failure (logged)
     // True when the latest load reset project state before returning.
     bool lastLoadReset() const { return m_last_load_reset; }
-    void reset(); // newProject: links, components, probes, counters, PFBs
+    // newProject: links, components, probes, counters. Clears PFB views because
+    // it destroys every engine; the app re-syncs component-bound views after
+    // reset() and load().
+    void reset();
 
   private:
     // Canonical `window_state` scalar flags as (JSON key, live member). save()
@@ -46,7 +48,6 @@ class ProjectSerializer {
     NodeGraphWidget &m_graph_widget;
     PFBViewManager &m_pfb_views;
     ReceiverRequirementsState &m_receiver_requirements;
-    SessionState &m_state;
     bool &m_show_log;
     bool &m_show_spectrum;
     bool &m_show_properties;

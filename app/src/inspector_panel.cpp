@@ -25,8 +25,8 @@
 #include "component_registry.h"
 
 InspectorPanel::InspectorPanel(const NodeGraphEngine &graph, const ComponentRegistry &components,
-                               GraphEditorActions &editor_actions)
-    : m_graph(graph), m_components(&components), m_editor_actions(editor_actions) {}
+                               EditorCommands &editor_commands)
+    : m_graph(graph), m_components(&components), m_editor_commands(editor_commands) {}
 
 namespace {
 
@@ -785,7 +785,7 @@ void InspectorPanel::drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int 
 void InspectorPanel::drawGroupPanel(int group_id) {
     const Group *g = m_graph.groupById(group_id);
     if (!g) {
-        m_editor_actions.selectGroup(-1);
+        m_editor_commands.selectGroup(-1);
         return;
     }
 
@@ -798,10 +798,8 @@ void InspectorPanel::drawGroupPanel(int group_id) {
     }
 
     ImGui::InputText("Name", name_buf, sizeof(name_buf));
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        if (m_editor_actions.renameGroup(group_id, name_buf))
-            m_param_edited = true;
-    }
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        m_editor_commands.renameGroup(group_id, name_buf);
 
     ImGui::Separator();
     ImGui::Text("Members (%zu):", g->member_node_ids.size());
@@ -829,10 +827,8 @@ void InspectorPanel::drawGroupPanel(int group_id) {
 
     ImGui::Separator();
     if (ImGui::Button("Ungroup")) {
-        if (m_editor_actions.removeGroup(group_id)) {
+        if (m_editor_commands.removeGroup(group_id))
             last_gid = -1;
-            m_param_edited = true;
-        }
     }
 }
 void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {

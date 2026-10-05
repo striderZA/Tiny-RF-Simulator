@@ -1314,7 +1314,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         auto &state = s_app->testReceiverRequirementsState();
         state.config.reset();
         state.invalid_reason.clear();
-        s_app->m_dirty = false;
+        // Revision comparisons prove whether an Apply recorded a project edit,
+        // independent of whatever unsaved state earlier cases left behind.
+        const std::uint64_t revision_before_invalid = s_app->projectRevision();
 
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band start (Hz)", "2000000");
@@ -1325,7 +1327,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
         IM_CHECK(!state.config.has_value());
-        IM_CHECK(!s_app->isDirty());
+        IM_CHECK_EQ(s_app->projectRevision(), revision_before_invalid);
 
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
@@ -1342,11 +1344,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK_EQ(state.config->gain_max_dB, 3.0);
             IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
         }
+        IM_CHECK(s_app->projectRevision() > revision_before_invalid);
         IM_CHECK(s_app->isDirty());
 
         state.config.reset();
         state.invalid_reason = "malformed project data";
-        s_app->m_dirty = false;
+        const std::uint64_t revision_before_repair = s_app->projectRevision();
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
@@ -1357,7 +1360,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         IM_CHECK(state.config.has_value());
         IM_CHECK(state.invalid_reason.empty());
-        IM_CHECK(s_app->isDirty());
+        IM_CHECK(s_app->projectRevision() > revision_before_repair);
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
