@@ -8,6 +8,16 @@
 
 - Add Network Analyzer coverage for switched filter banks against the live engines (matched, flipped, and mismatched throws; low-isolation noise), outside-source rejection, and the production app clone adapter.
 
+## [0.27.0] - 2026-10-05
+
+### Added
+
+- **Receiver output power and IIP3 requirements** — add optional output-power limits at a selected reference tone and two-tone IIP3 tests with configurable tone spacing and input-level sweeps. The Receiver Requirements panel evaluates and reports both alongside gain and noise-figure limits, with configuration persisted in project files.
+
+### Testing
+
+- Cover receiver output-power and IIP3 measurement/evaluation, partial IIP3 sweeps, project persistence, and panel integration.
+
 ## [0.26.1] - 2026-10-04
 
 ### Fixed

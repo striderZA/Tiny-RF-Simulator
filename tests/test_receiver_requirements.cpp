@@ -4,7 +4,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
 #include <limits>
 #include <string>
 #include <vector>
@@ -12,228 +11,494 @@
 using Catch::Approx;
 
 namespace {
+ReceiverRequirementsConfig allConfigured() {
+    ReceiverRequirementsConfig c;
+    c.band_start_Hz = 1.0e9;
+    c.band_stop_Hz = 2.0e9;
+    c.gain = ReceiverGainLimits{10.0, 20.0};
+    c.nf_max_dB = 5.0;
+    c.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
+    c.iip3_min_dBm = 10.0;
+    c.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
+    return c;
+}
+
 ReceiverRequirementsState configuredState() {
     ReceiverRequirementsState state;
-    state.config = ReceiverRequirementsConfig{1e9, 2e9, 10.0, 20.0, 5.0};
+    state.config = allConfigured();
     return state;
 }
 
-ReceiverRequirementsEvaluation evaluate(const ReceiverRequirementsState &state,
-                                        double sweep_start_Hz, double sweep_stop_Hz,
-                                        const std::vector<double> &frequencies_Hz,
-                                        const std::vector<double> &gain_dB,
-                                        const std::vector<double> &noise_figure_dB) {
-    return evaluateReceiverRequirements(state, sweep_start_Hz, sweep_stop_Hz, frequencies_Hz,
-                                        gain_dB, noise_figure_dB);
+ReceiverRequirementsEvaluation
+evaluate(const ReceiverRequirementsState &state, const std::vector<double> &gain,
+         const std::vector<double> &nf, const std::vector<double> &output_power,
+         const std::vector<double> &iip3, double sweep_start = 0.9e9, double sweep_stop = 2.1e9) {
+    return evaluateReceiverRequirements(state, sweep_start, sweep_stop,
+                                        {0.9e9, 1.0e9, 1.5e9, 2.0e9, 2.1e9}, gain, nf, output_power,
+                                        iip3);
 }
 
-std::vector<double> frequencies() { return {0.9e9, 1.0e9, 1.5e9, 2.0e9, 2.1e9}; }
+ReceiverRequirementsDraft gainDraft() {
+    ReceiverRequirementsDraft d;
+    d.band_start_Hz = "1e9";
+    d.band_stop_Hz = "2e9";
+    d.gain_enabled = true;
+    d.gain_min_dB = "10";
+    d.gain_max_dB = "20";
+    return d;
+}
 } // namespace
-
-TEST_CASE("ReceiverRequirements distinguishes absent and invalid configuration",
-          "[receiver_requirements]") {
-    const std::vector<double> f = frequencies();
-    const std::vector<double> gain(f.size(), 15.0);
-    const std::vector<double> nf(f.size(), 3.0);
-
-    const ReceiverRequirementsState absent;
-    const auto not_configured = evaluate(absent, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(not_configured.gain.status == ReceiverRequirementStatus::NotConfigured);
-    CHECK(not_configured.noise_figure.status == ReceiverRequirementStatus::NotConfigured);
-    CHECK(not_configured.overall == ReceiverRequirementStatus::NotConfigured);
-
-    ReceiverRequirementsState invalid;
-    invalid.invalid_reason = "malformed persisted limits";
-    const auto invalid_result = evaluate(invalid, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(invalid_result.gain.status == ReceiverRequirementStatus::InvalidConfiguration);
-    CHECK(invalid_result.noise_figure.status == ReceiverRequirementStatus::InvalidConfiguration);
-    CHECK(invalid_result.overall == ReceiverRequirementStatus::InvalidConfiguration);
-}
-
-TEST_CASE("ReceiverRequirements rejects non-finite and reversed requirement limits",
-          "[receiver_requirements]") {
-    ReceiverRequirementsConfig config{1e9, 2e9, 10.0, 20.0, 5.0};
-    CHECK_FALSE(validateReceiverRequirementsConfig(config).has_value());
-
-    config.band_start_Hz = std::numeric_limits<double>::quiet_NaN();
-    CHECK(validateReceiverRequirementsConfig(config).has_value());
-
-    config = {2e9, 1e9, 10.0, 20.0, 5.0};
-    CHECK(validateReceiverRequirementsConfig(config).has_value());
-
-    config = {1e9, 2e9, 21.0, 20.0, 5.0};
-    CHECK(validateReceiverRequirementsConfig(config).has_value());
-}
-
-TEST_CASE("ReceiverRequirements treats gain and NF boundaries as inclusive",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    const std::vector<double> gain = {std::numeric_limits<double>::quiet_NaN(), 10.0, 15.0, 20.0,
-                                      std::numeric_limits<double>::quiet_NaN()};
-    const std::vector<double> nf = {std::numeric_limits<double>::quiet_NaN(), 5.0, 3.0, 0.0,
-                                    std::numeric_limits<double>::quiet_NaN()};
-
-    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    REQUIRE(result.gain.status == ReceiverRequirementStatus::Pass);
-    REQUIRE(result.noise_figure.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Pass);
-    REQUIRE(result.gain.observed_min_dB.has_value());
-    REQUIRE(result.gain.observed_max_dB.has_value());
-    CHECK(*result.gain.observed_min_dB == Approx(10.0));
-    CHECK(*result.gain.observed_max_dB == Approx(20.0));
-    REQUIRE(result.noise_figure.observed_max_dB.has_value());
-    CHECK(*result.noise_figure.observed_max_dB == Approx(5.0));
-}
-
-TEST_CASE("ReceiverRequirements evaluates worst-case in-band samples", "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    std::vector<double> gain = {0.0, 10.0, 15.0, 20.0, 0.0};
-    const std::vector<double> nf = {0.0, 2.0, 3.0, 4.0, 0.0};
-
-    gain[2] = 20.01;
-    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Fail);
-}
-
-TEST_CASE("ReceiverRequirements requires configured sweep endpoints to enclose the band",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    const std::vector<double> gain(f.size(), 15.0);
-    const std::vector<double> nf(f.size(), 3.0);
-
-    const auto result = evaluate(state, 1.01e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-TEST_CASE("ReceiverRequirements preserves violations in a partly covered band",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = {1.0e9, 1.5e9, 2.0e9};
-    const std::vector<double> gain = {15.0, 9.0, 15.0};
-    const std::vector<double> nf = {3.0, 3.0, 3.0};
-
-    const auto result = evaluate(state, 1.0e9, 1.5e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Fail);
-}
-
-TEST_CASE("ReceiverRequirements scans aligned samples in short measurement vectors",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = {1.0e9, 1.5e9, 2.0e9};
-    const std::vector<double> gain = {15.0, 9.0};
-    const std::vector<double> nf = {3.0, 3.0, 3.0};
-
-    const auto result = evaluate(state, 1.0e9, 2.0e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Fail);
-}
-
-TEST_CASE("ReceiverRequirements identifies an invalid present config", "[receiver_requirements]") {
-    auto state = configuredState();
-    state.config->gain_min_dB = 21.0;
-
-    const auto result = evaluate(state, 0.9e9, 2.1e9, frequencies(), std::vector<double>(5, 15.0),
-                                 std::vector<double>(5, 3.0));
-    CHECK(result.gain.status == ReceiverRequirementStatus::InvalidConfiguration);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::InvalidConfiguration);
-    CHECK(result.overall == ReceiverRequirementStatus::InvalidConfiguration);
-}
-
-TEST_CASE("ReceiverRequirements keeps size mismatch incompleteness metric-specific",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    const std::vector<double> gain(f.size(), 15.0);
-    const std::vector<double> short_nf(f.size() - 1, 3.0);
-
-    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, short_nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-
-TEST_CASE("ReceiverRequirements does not pass a band with no discrete in-band samples",
-          "[receiver_requirements]") {
-    auto state = configuredState();
-    state.config->band_start_Hz = 1.25e9;
-    state.config->band_stop_Hz = 1.45e9;
-    const std::vector<double> f = {0.9e9, 1.0e9, 1.5e9, 2.0e9, 2.1e9};
-    const std::vector<double> gain(f.size(), 15.0);
-    const std::vector<double> nf(f.size(), 3.0);
-
-    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-
-TEST_CASE("ReceiverRequirements keeps metric outcomes independent and preserves known failures",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    std::vector<double> gain = {0.0, 10.0, 15.0, 20.0, 0.0};
-    std::vector<double> nf = {0.0, 3.0, std::numeric_limits<double>::quiet_NaN(), 4.0, 0.0};
-
-    auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-
-    gain[1] = 9.9;
-    result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.overall == ReceiverRequirementStatus::Fail);
-}
-
-TEST_CASE("ReceiverRequirements treats mismatched measurement vectors as incomplete",
-          "[receiver_requirements]") {
-    const auto state = configuredState();
-    const std::vector<double> f = frequencies();
-    const std::vector<double> gain(f.size() - 1, 15.0);
-    const std::vector<double> nf(f.size(), 3.0);
-
-    const auto result = evaluate(state, 0.9e9, 2.1e9, f, gain, nf);
-    CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
-    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-
-TEST_CASE("ReceiverRequirements draft Apply rejects incomplete limits and repairs invalid state",
+TEST_CASE("ReceiverRequirements applies gain-only draft with an invalid hidden output tone",
           "[receiver_requirements]") {
     ReceiverRequirementsState state;
-    state.invalid_reason = "malformed persisted requirements";
-    const ReceiverRequirementsDraft incomplete{"1e9", "", "10", "20", "5"};
+    ReceiverRequirementsDraft draft = gainDraft();
+    draft.output_reference_tone_frequency_Hz = -5.0e6;
     std::string error;
 
-    CHECK_FALSE(applyReceiverRequirementsDraft(state, incomplete, error));
-    CHECK_FALSE(error.empty());
-    CHECK_FALSE(state.config.has_value());
-    CHECK(state.invalid_reason == "malformed persisted requirements");
-
-    const ReceiverRequirementsDraft reversed{"2e9", "1e9", "20", "10", "5"};
-    CHECK_FALSE(applyReceiverRequirementsDraft(state, reversed, error));
-    CHECK_FALSE(state.config.has_value());
-    CHECK_FALSE(state.invalid_reason.empty());
-
-    const ReceiverRequirementsDraft valid{"1e9", "2e9", "10", "20", "5"};
-    REQUIRE(applyReceiverRequirementsDraft(state, valid, error));
+    CHECK(applyReceiverRequirementsDraft(state, draft, error));
+    CHECK(error.empty());
     REQUIRE(state.config.has_value());
+    CHECK(state.config->gain.has_value());
+    CHECK_FALSE(state.config->output_power.has_value());
+    CHECK_FALSE(state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+}
+
+TEST_CASE("ReceiverRequirements supports independent optional metric limits",
+          "[receiver_requirements]") {
+    ReceiverRequirementsConfig c;
+    c.band_start_Hz = 1.0e9;
+    c.band_stop_Hz = 2.0e9;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.gain = ReceiverGainLimits{10.0, 20.0};
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.gain.reset();
+    c.nf_max_dB = 5.0;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.nf_max_dB.reset();
+    c.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.output_power.reset();
+    c.iip3_min_dBm = 10.0;
+    c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+}
+
+TEST_CASE("ReceiverRequirements evaluates each metric independently when others are disabled",
+          "[receiver_requirements]") {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto checkOnly = [nan](auto disable) {
+        auto state = configuredState();
+        disable(*state.config);
+        const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                     {0, -30, -20, 0, 0}, {nan, 10, 15, 20, nan});
+        CHECK(result.overall == ReceiverRequirementStatus::Pass);
+        return result;
+    };
+    const auto gain = checkOnly([](auto &c) {
+        c.nf_max_dB.reset();
+        c.output_power.reset();
+        c.iip3_min_dBm.reset();
+    });
+    CHECK(gain.gain.status == ReceiverRequirementStatus::Pass);
+    CHECK(gain.noise_figure.status == ReceiverRequirementStatus::NotConfigured);
+
+    const auto nf = checkOnly([](auto &c) {
+        c.gain.reset();
+        c.output_power.reset();
+        c.iip3_min_dBm.reset();
+    });
+    CHECK(nf.noise_figure.status == ReceiverRequirementStatus::Pass);
+    CHECK(nf.gain.status == ReceiverRequirementStatus::NotConfigured);
+
+    const auto output = checkOnly([](auto &c) {
+        c.gain.reset();
+        c.nf_max_dB.reset();
+        c.iip3_min_dBm.reset();
+    });
+    CHECK(output.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(output.gain.status == ReceiverRequirementStatus::NotConfigured);
+
+    const auto iip3 = checkOnly([](auto &c) {
+        c.gain.reset();
+        c.nf_max_dB.reset();
+        c.output_power.reset();
+    });
+    CHECK(iip3.iip3.status == ReceiverRequirementStatus::Pass);
+    CHECK(iip3.gain.status == ReceiverRequirementStatus::NotConfigured);
+}
+
+TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 conditions",
+          "[receiver_requirements]") {
+    auto c = allConfigured();
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.output_power->maximum_dBm = std::numeric_limits<double>::infinity();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.output_power->minimum_dBm = 1.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.iip3_min_dBm = std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.measurement_conditions.iip3->tone_spacing_Hz = 0.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.measurement_conditions.iip3->input_start_dBm = -10.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.measurement_conditions.iip3->input_step_dB = 6.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.measurement_conditions.output_reference_tone_frequency_Hz =
+        std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.band_start_Hz = std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.band_start_Hz = 2.0e9;
+    c.band_stop_Hz = 1.0e9;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.gain->minimum_dB = c.gain->maximum_dB + 1.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.gain->maximum_dB = std::numeric_limits<double>::infinity();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.nf_max_dB = std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+}
+
+TEST_CASE(
+    "ReceiverRequirements validates supplied measurement conditions when metrics are disabled",
+    "[receiver_requirements]") {
+    auto config = allConfigured();
+    config.iip3_min_dBm.reset();
+    config.measurement_conditions.iip3->tone_spacing_Hz = 0.0;
+    CHECK(validateReceiverRequirementsConfig(config).has_value());
+
+    config = allConfigured();
+    config.output_power.reset();
+    config.measurement_conditions.output_reference_tone_frequency_Hz =
+        std::numeric_limits<double>::quiet_NaN();
+    CHECK(validateReceiverRequirementsConfig(config).has_value());
+}
+
+TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone selector",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                                  std::numeric_limits<double>::quiet_NaN()});
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("ReceiverRequirements reports incomplete output data without a tone selector",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, nan, nan, nan, 0},
+                                 {nan, 10, 15, 20, nan});
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements does not gate output samples by selector band location",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.config->measurement_conditions.output_reference_tone_frequency_Hz = 2.5e9;
+    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                                  std::numeric_limits<double>::quiet_NaN()});
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("ReceiverRequirements returns Not configured when every metric is disabled",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    state.config = ReceiverRequirementsConfig{};
+    state.config->band_start_Hz = 1.0e9;
+    state.config->band_stop_Hz = 2.0e9;
+    const auto result = evaluate(state, {}, {}, {}, {});
+    CHECK(result.gain.status == ReceiverRequirementStatus::NotConfigured);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::NotConfigured);
+    CHECK(result.output_power.status == ReceiverRequirementStatus::NotConfigured);
+    CHECK(result.iip3.status == ReceiverRequirementStatus::NotConfigured);
+    CHECK(result.overall == ReceiverRequirementStatus::NotConfigured);
+}
+
+TEST_CASE("ReceiverRequirements applies inclusive bounds and reports unit-neutral ranges",
+          "[receiver_requirements]") {
+    const auto result =
+        evaluate(configuredState(), {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                  std::numeric_limits<double>::quiet_NaN()});
+    CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.gain.observed_min == Approx(10.0));
+    CHECK(result.gain.observed_max == Approx(20.0));
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.noise_figure.observed_min == Approx(3.0));
+    CHECK(result.noise_figure.observed_max == Approx(5.0));
+    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.output_power.observed_min == Approx(-30.0));
+    CHECK(result.output_power.observed_max == Approx(0.0));
+    CHECK(result.iip3.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.iip3.observed_min == Approx(10.0));
+    CHECK(result.iip3.observed_max == Approx(20.0));
+    CHECK(result.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("ReceiverRequirements reports upper and lower limit violations over incomplete coverage",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const std::vector<double> frequencies = {1.25e9, 1.75e9};
+    const std::vector<double> good_nf = {3.0, 4.0};
+    const std::vector<double> good_output = {-30.0, 0.0};
+    const std::vector<double> good_iip3 = {15.0, 20.0};
+    const auto evaluateSamples = [&](const std::vector<double> &gain, const std::vector<double> &nf,
+                                     const std::vector<double> &output) {
+        return evaluateReceiverRequirements(state, 1.0e9, 1.75e9, frequencies, gain, nf, output,
+                                            good_iip3);
+    };
+
+    const auto gain_upper = evaluateSamples({15.0, 21.0}, good_nf, good_output);
+    CHECK(gain_upper.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(gain_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(gain_upper.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto nf_upper = evaluateSamples({15.0, 20.0}, {3.0, 6.0}, good_output);
+    CHECK(nf_upper.noise_figure.status == ReceiverRequirementStatus::Fail);
+    CHECK(nf_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(nf_upper.gain.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto output_lower = evaluateSamples({15.0, 20.0}, good_nf, {-31.0, -20.0});
+    CHECK(output_lower.output_power.status == ReceiverRequirementStatus::Fail);
+    CHECK(output_lower.overall == ReceiverRequirementStatus::Fail);
+    CHECK(output_lower.gain.status == ReceiverRequirementStatus::Incomplete);
+
+    const auto output_upper = evaluateSamples({15.0, 20.0}, good_nf, {-20.0, 1.0});
+    CHECK(output_upper.output_power.status == ReceiverRequirementStatus::Fail);
+    CHECK(output_upper.overall == ReceiverRequirementStatus::Fail);
+    CHECK(output_upper.gain.status == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply clears diagnostic",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.invalid_reason = "retained diagnostic";
+    std::string error;
+    auto malformed = gainDraft();
+    malformed.gain_max_dB = "nan";
+    CHECK_FALSE(applyReceiverRequirementsDraft(state, malformed, error));
+    REQUIRE(state.config.has_value());
+    CHECK(state.config->band_start_Hz == 1.0e9);
+    CHECK(state.config->band_stop_Hz == 2.0e9);
+    REQUIRE(state.config->gain.has_value());
+    CHECK(state.config->gain->minimum_dB == 10.0);
+    CHECK(state.config->gain->maximum_dB == 20.0);
+    CHECK(state.config->nf_max_dB == 5.0);
+    REQUIRE(state.config->output_power.has_value());
+    CHECK(state.config->output_power->minimum_dBm == -30.0);
+    CHECK(state.config->output_power->maximum_dBm == 0.0);
+    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    REQUIRE(state.config->measurement_conditions.iip3.has_value());
+    CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
+    CHECK(state.config->measurement_conditions.iip3->input_start_dBm == -30.0);
+    CHECK(state.config->measurement_conditions.iip3->input_stop_dBm == -20.0);
+    CHECK(state.config->measurement_conditions.iip3->input_step_dB == 5.0);
+
+    CHECK(state.config->iip3_min_dBm == 10.0);
+    CHECK(state.invalid_reason == "retained diagnostic");
+
+    REQUIRE(applyReceiverRequirementsDraft(state, gainDraft(), error));
     CHECK(state.invalid_reason.empty());
-    CHECK(state.config->band_start_Hz == Approx(1e9));
-    CHECK(state.config->band_stop_Hz == Approx(2e9));
-    CHECK(state.config->gain_min_dB == Approx(10.0));
-    CHECK(state.config->gain_max_dB == Approx(20.0));
-    CHECK(state.config->nf_max_dB == Approx(5.0));
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->gain.has_value());
+    CHECK(state.config->gain->minimum_dB == 10.0);
+    CHECK(state.config->gain->maximum_dB == 20.0);
+}
+
+TEST_CASE("ReceiverRequirements uses aligned IIP3 input levels and requires three points",
+          "[receiver_requirements]") {
+    auto c = allConfigured();
+    c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -30.0, -19.0, 4.0};
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.measurement_conditions.iip3->input_stop_dBm = -23.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+    c = allConfigured();
+    c.measurement_conditions.iip3->input_step_dB = 10.0;
+    CHECK(validateReceiverRequirementsConfig(c).has_value());
+}
+
+TEST_CASE("ReceiverRequirements bounds IIP3 input-level counting", "[receiver_requirements]") {
+    CHECK(receiverIIP3LevelCount({1.0e6, -30.0, -20.0, 5.0}) == 3);
+    CHECK(receiverIIP3LevelCount({1.0e6, -100.0, 0.0, 1.0}) == kMaxReceiverIIP3InputLevels);
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, -21.0, 5.0}).has_value());
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -30.0, 71.0, 1.0}).has_value());
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, -std::numeric_limits<double>::max(),
+                                        std::numeric_limits<double>::max(), 1.0})
+                    .has_value());
+    CHECK_FALSE(receiverIIP3LevelCount({1.0e6, 1.0, 2.0, std::numeric_limits<double>::denorm_min()})
+                    .has_value());
+    CHECK_FALSE(receiverIIP3LevelCount({0.0, 0.0, std::numeric_limits<double>::max(),
+                                        std::numeric_limits<double>::max()})
+                    .has_value());
+}
+
+TEST_CASE("ReceiverRequirements applies common coverage, alignment, and precedence rules",
+          "[receiver_requirements]") {
+    const auto full_state = configuredState();
+    auto partial = evaluate(full_state, {0, 10, 9, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                            {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
+                             std::numeric_limits<double>::quiet_NaN()},
+                            1.1e9, 1.9e9);
+    CHECK(partial.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(partial.overall == ReceiverRequirementStatus::Fail);
+
+    const auto prefix =
+        evaluate(full_state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                 {std::numeric_limits<double>::quiet_NaN(), 9, 15}, 0.9e9, 2.1e9);
+    CHECK(prefix.iip3.status == ReceiverRequirementStatus::Fail);
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto no_in_band = evaluateReceiverRequirements(full_state, 0.9e9, 2.1e9, {0.9e9, 2.1e9},
+                                                         {0, 0}, {0, 0}, {0, 0}, {nan, nan});
+    CHECK(no_in_band.gain.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(no_in_band.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements marks each mismatched metric vector incomplete",
+          "[receiver_requirements]") {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto check = [&](int short_metric) {
+        auto state = configuredState();
+        const std::vector<double> gain = {0, 10, 15, 20, 0};
+        const std::vector<double> nf = {0, 3, 4, 5, 0};
+        const std::vector<double> output_power = {0, -30, -20, 0, 0};
+        return evaluate(state, short_metric == 0 ? std::vector<double>{0, 10, 15, 20} : gain,
+                        short_metric == 1 ? std::vector<double>{0, 3, 4, 5} : nf,
+                        short_metric == 2 ? std::vector<double>{0, -30, -20, 0} : output_power,
+                        short_metric == 3 ? std::vector<double>{nan, 10, 15, 20}
+                                          : std::vector<double>{nan, 10, 15, 20, nan});
+    };
+    CHECK(check(0).gain.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(1).noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(2).output_power.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(check(3).iip3.status == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements marks invalid state and configuration invalid",
+          "[receiver_requirements]") {
+    auto state = configuredState();
+    state.invalid_reason = "invalid";
+    CHECK(evaluate(state, {}, {}, {}, {}).overall ==
+          ReceiverRequirementStatus::InvalidConfiguration);
+    state.invalid_reason.clear();
+    state.config->band_stop_Hz = state.config->band_start_Hz;
+    CHECK(evaluate(state, {}, {}, {}, {}).overall ==
+          ReceiverRequirementStatus::InvalidConfiguration);
+}
+
+TEST_CASE("ReceiverRequirements preserves valid failures when other metric data is missing",
+          "[receiver_requirements]") {
+    const auto result = evaluate(configuredState(), {0, 9, 15, 20, 0},
+                                 {0, 3, std::numeric_limits<double>::quiet_NaN(), 5, 0},
+                                 {0, -30, -20, 0, 0}, {9, 15, 10});
+    CHECK(result.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(result.noise_figure.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Fail);
+}
+TEST_CASE("ReceiverRequirements aligns IIP3 samples with the frequency sweep",
+          "[receiver_requirements]") {
+    const auto state = configuredState();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto failed_with_missing = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                              {0, -30, -20, 0, 0}, {nan, 15, nan, 9, nan});
+    CHECK(failed_with_missing.iip3.status == ReceiverRequirementStatus::Fail);
+    CHECK(failed_with_missing.overall == ReceiverRequirementStatus::Fail);
+
+    const auto complete = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
+                                   {nan, 10, 15, 20, nan});
+    CHECK(complete.iip3.status == ReceiverRequirementStatus::Pass);
+
+    const auto short_vector =
+        evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0}, {nan, 10, 15});
+    CHECK(short_vector.iip3.status == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements requires full valid coverage for every enabled metric",
+          "[receiver_requirements]") {
+    const auto result = evaluate(configuredState(), {0, 15, 15, 20, 0}, {0, 3, 4, 5, 0},
+                                 {0, -30, -20, 0, 0}, {10, 15}, 1.1e9, 1.9e9);
+    CHECK(result.gain.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.iip3.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE(
+    "ReceiverRequirements draft permits blank disabled limits and clears disabled configuration",
+    "[receiver_requirements]") {
+    auto d = gainDraft();
+    std::string error;
+    auto parsed = parseReceiverRequirementsDraft(d, error);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->gain.has_value());
+    CHECK(parsed->gain->minimum_dB == Approx(10.0));
+    CHECK(parsed->gain->maximum_dB == Approx(20.0));
+    CHECK_FALSE(parsed->nf_max_dB.has_value());
+
+    ReceiverRequirementsState state;
+    REQUIRE(applyReceiverRequirementsDraft(state, d, error));
+    d.gain_enabled = false;
+    d.gain_min_dB.clear();
+    d.gain_max_dB.clear();
+    REQUIRE(applyReceiverRequirementsDraft(state, d, error));
+    CHECK_FALSE(state.config.has_value());
+}
+
+TEST_CASE("ReceiverRequirements draft parses enabled output and IIP3 settings",
+          "[receiver_requirements]") {
+    auto d = gainDraft();
+    d.output_power_enabled = true;
+    d.output_power_min_dBm = "-30";
+    d.output_power_max_dBm = "0";
+    d.output_reference_tone_frequency_Hz = 1.5e9;
+    d.iip3_enabled = true;
+    d.iip3_min_dBm = "10";
+    d.iip3_tone_spacing_Hz = "1e6";
+    d.iip3_input_start_dBm = "-30";
+    d.iip3_input_stop_dBm = "-20";
+    d.iip3_input_step_dB = "5";
+    std::string error;
+    const auto parsed = parseReceiverRequirementsDraft(d, error);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->output_power.has_value());
+    CHECK(parsed->output_power->minimum_dBm == Approx(-30.0));
+    CHECK(parsed->output_power->maximum_dBm == Approx(0.0));
+    REQUIRE(parsed->measurement_conditions.iip3.has_value());
+    CHECK(parsed->measurement_conditions.iip3->input_stop_dBm == Approx(-20.0));
+}
+
+TEST_CASE(
+    "ReceiverRequirements draft rejects malformed enabled limits and allows no enabled metric",
+    "[receiver_requirements]") {
+    std::string error;
+    auto d = gainDraft();
+    d.gain_max_dB = "nan";
+    CHECK_FALSE(parseReceiverRequirementsDraft(d, error).has_value());
+    d.gain_enabled = false;
+    d.gain_min_dB.clear();
+    d.gain_max_dB.clear();
+    ReceiverRequirementsState state;
+    REQUIRE(applyReceiverRequirementsDraft(state, d, error));
+    const auto result = evaluate(state, {}, {}, {}, {});
+    CHECK(result.overall == ReceiverRequirementStatus::NotConfigured);
 }
 
 TEST_CASE("ReceiverRequirements maps outcomes to status tones", "[receiver_requirements]") {
@@ -241,7 +506,6 @@ TEST_CASE("ReceiverRequirements maps outcomes to status tones", "[receiver_requi
           ReceiverRequirementStatusTone::PassGreen);
     CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Fail) ==
           ReceiverRequirementStatusTone::FailRed);
-
     CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::NotConfigured) ==
           ReceiverRequirementStatusTone::Neutral);
     CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::InvalidConfiguration) ==

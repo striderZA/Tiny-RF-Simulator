@@ -36,6 +36,7 @@
 #include "power_meter_engine.h"
 #include "power_meter_widget.h"
 #include "project_serializer.h"
+#include "receiver_performance_measurement.h"
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
 #include "session_state.h"
@@ -148,6 +149,9 @@ class RfSimulatorApp {
     const ComponentRegistry &testComponents() const { return m_circuit_runtime.components(); }
     const ComponentLibrary &testComponentLibrary() const { return m_library; }
     NetworkAnalyzerEngine &testNetworkAnalyzerEngine() { return m_na_engine; }
+    ReceiverPerformanceMeasurementEngine &testReceiverPerformanceMeasurementEngine() {
+        return m_receiver_performance_engine;
+    }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
@@ -202,24 +206,22 @@ class RfSimulatorApp {
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
     bool saveComponentForm();
 
-    // --- Network Analyzer host adapter --------------------------------------
-    // The engine lives in the DSP-engines layer below app/ and never sees app
-    // types; RfSimulatorApp implements its two injected lookups (see
-    // network_analyzer_engine.h's layering comment). componentForNode wraps
-    // ComponentRegistry::find; beginScratchPass hands out one private,
-    // throwaway scratch graph+registry per measurement pass whose clones are
-    // destroyed with it (RAII), so a pass never touches the real graph/registry.
+    // --- Measurement-chain host adapter ------------------------------------
+    // The reusable network-analyzer runner depends only on common and
+    // node_graph_engine. This app adapter resolves live engines through the
+    // ComponentRegistry and provides a private graph/registry clone factory
+    // through the ComponentTypeRegistry.
     class NaScratch;
-    class NaHost final : public INetworkAnalyzerHost {
+    class NaHost final : public IMeasurementChainHost {
       public:
         explicit NaHost(const ComponentRegistry &components);
         IComponentEngine *componentForNode(int graph_node_id) const override;
-        std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override;
+        std::unique_ptr<IMeasurementChainScratch> beginScratchPass() const override;
 
       private:
         const ComponentRegistry &m_components;
     };
-    class NaScratch final : public INetworkAnalyzerScratch {
+    class NaScratch final : public IMeasurementChainScratch {
       public:
         NaScratch();
         IComponentEngine *createClone(std::string_view type, int id) override;
@@ -260,6 +262,8 @@ class RfSimulatorApp {
     PFBViewManager m_pfb_views;
     // The adapter and analyzer follow their dependencies and outlive the serializer.
     NaHost m_na_host{m_circuit_runtime.components()};
+    ReceiverPerformanceMeasurementEngine m_receiver_performance_engine{m_circuit_runtime.graph(),
+                                                                       m_na_host};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;

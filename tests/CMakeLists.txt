@@ -68,11 +68,11 @@ catch_discover_tests(tests)
 # Registers a standalone test executable with the standard per-test boilerplate
 # (Catch2 link, PROJECT_SOURCE_DIR compile definition, CTest registration).
 function(add_standalone_test NAME)
-    cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
+    cmake_parse_arguments(ARG "" "" "SOURCES;LIBS;ARGS" ${ARGN})
     add_executable(${NAME} ${ARG_SOURCES})
     target_link_libraries(${NAME} PRIVATE ${ARG_LIBS} Catch2::Catch2WithMain)
     target_compile_definitions(${NAME} PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-    add_test(NAME ${NAME} COMMAND ${NAME} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME ${NAME} COMMAND ${NAME} ${ARG_ARGS} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endfunction()
 
 add_standalone_test(test_attenuator
@@ -409,3 +409,9 @@ add_standalone_test(test_receiver_requirements_project
     LIBS simulator::app
 )
 set_tests_properties(test_receiver_requirements_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone real-engine coverage for the UI-free receiver measurement engine.
+add_standalone_test(test_receiver_performance_measurements
+    SOURCES test_receiver_performance_measurements.cpp
+    LIBS simulator::app
+    ARGS --skip-benchmarks
+)

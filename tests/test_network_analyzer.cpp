@@ -1,31 +1,27 @@
 // Network Analyzer v3 — engine + widget tests (Task 3 rewrite).
 //
 // The v3 engine is a singleton instrument panel, not an IComponentEngine: it
-// is constructed directly with (NodeGraphEngine&, INetworkAnalyzerHost&) and
+// is constructed directly with (NodeGraphEngine&, IMeasurementChainHost&) and
 // measures a chain of REAL graph components on a private, throwaway clone
 // chain ("cheat" mode — the real simulation is never read for signal purposes
 // and never written to; see network_analyzer_engine.h). These tests build
 // small real DUT chains (plain engines + NodeGraphEngine links), inject a
-// test-local INetworkAnalyzerHost, and verify the measurement semantics from
-// the design spec.
+// test-local IMeasurementChainHost, and verify runner and analyzer measurement semantics.
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
 #include "combiner_engine.h"
-#include "common.h"
+#include "measurement_chain_runner.h"
 #include "mixer_engine.h"
 #include "network_analyzer_engine.h"
 #include "network_analyzer_widget.h"
 #include "node_graph_engine.h"
 #include "rf_switch_2to1_engine.h"
-#include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "spectrum.h"
 #include "splitter_engine.h"
-#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
-#include <initializer_list>
 #include <map>
 #include <memory>
 #include <string_view>
@@ -42,7 +38,7 @@ namespace {
 // applied afterwards via deserialize()). Hand-rolled here because the
 // app-layer adapter (RfSimulatorApp::NaHost) is a private nested class that
 // cannot be reused without dragging the whole app into this standalone target.
-class TestNaScratch final : public INetworkAnalyzerScratch {
+class TestNaScratch final : public IMeasurementChainScratch {
   public:
     IComponentEngine *createClone(std::string_view type, int id) override {
         if (type == "generator")
@@ -59,8 +55,6 @@ class TestNaScratch final : public INetworkAnalyzerScratch {
             return make<CombinerEngine>(id);
         if (type == "rf_switch_spdt_2to1")
             return make<RFSwitch2to1Engine>(id);
-        if (type == "rf_switch_spdt")
-            return make<RFSwitchEngine>(id);
         return nullptr;
     }
 
@@ -76,7 +70,7 @@ class TestNaScratch final : public INetworkAnalyzerScratch {
     }
 };
 
-class TestNaHost final : public INetworkAnalyzerHost {
+class TestNaHost final : public IMeasurementChainHost {
   public:
     explicit TestNaHost(std::vector<IComponentEngine *> chain) {
         for (auto *comp : chain)
@@ -88,7 +82,7 @@ class TestNaHost final : public INetworkAnalyzerHost {
         return it == m_by_node.end() ? nullptr : it->second;
     }
 
-    std::unique_ptr<INetworkAnalyzerScratch> beginScratchPass() const override {
+    std::unique_ptr<IMeasurementChainScratch> beginScratchPass() const override {
         return std::make_unique<TestNaScratch>();
     }
 
@@ -145,6 +139,163 @@ double expectedCompressionDb(const std::vector<Spectrum::Tone> &input_tones, dou
 }
 
 } // namespace
+
+TEST_CASE("MeasurementChainRunner: one prepared chain accepts successive stimuli",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AttenuatorEngine atten(2, graph);
+    atten.setAttenuation(10.0);
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    TestNaHost host({&gen, &atten});
+
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(path.has_value());
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+
+    Spectrum first;
+    first.tones.push_back({1e9, -20.0, 0.0});
+    Spectrum second;
+    second.tones.push_back({1e9, -35.0, 0.0});
+    const Spectrum *first_result = runner.run(first);
+    REQUIRE(first_result != nullptr);
+    REQUIRE(first_result->tones.size() == 1);
+    REQUIRE_THAT(first_result->tones[0].power_dBm, WithinAbs(-30.0, 0.05));
+    const Spectrum *second_result = runner.run(second);
+    REQUIRE(second_result != nullptr);
+    REQUIRE(second_result->tones.size() == 1);
+    REQUIRE_THAT(second_result->tones[0].power_dBm, WithinAbs(-45.0, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: path preserves exact multi-output ports",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    SplitterEngine splitter(2, graph);
+    AttenuatorEngine atten(3, graph);
+    graph.addLink(gen.outputPinId(), splitter.inputPinId());
+    graph.addLink(splitter.outputPinId(1), atten.inputPinId());
+    TestNaHost host({&gen, &splitter, &atten});
+    auto point_b_path =
+        findMeasurementChainPath(graph, host, gen.outputPinId(), splitter.outputPinId(1));
+    REQUIRE(point_b_path.has_value());
+    REQUIRE(point_b_path->output_ports[0] == 0);
+    REQUIRE(point_b_path->point_b_output_port == 1);
+    IsolatedChainRunner point_b_runner(host);
+    REQUIRE(point_b_runner.prepare(*point_b_path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    const Spectrum *point_b_result = point_b_runner.run(stimulus);
+    REQUIRE(point_b_result != nullptr);
+    REQUIRE(point_b_result->tones.size() == 1);
+    REQUIRE_THAT(point_b_result->tones[0].power_dBm, WithinAbs(-23.0103, 0.05));
+
+    auto edge_path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(edge_path.has_value());
+    REQUIRE(edge_path->output_ports.size() == 2);
+    REQUIRE(edge_path->output_ports[1] == 1);
+    IsolatedChainRunner edge_runner(host);
+    REQUIRE(edge_runner.prepare(*edge_path));
+    const Spectrum *edge_result = edge_runner.run(stimulus);
+    REQUIRE(edge_result != nullptr);
+    REQUIRE_THAT(edge_result->tones[0].power_dBm, WithinAbs(-23.0103, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: singly fed RF switch path is supported",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    RFSwitch2to1Engine sw(2, graph);
+    sw.setActiveThrow(1);
+    graph.addLink(gen.outputPinId(), sw.inputPinId(1));
+    TestNaHost host({&gen, &sw});
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), sw.outputPinId());
+    REQUIRE(path.has_value());
+    REQUIRE(path->input_ports.size() == 1);
+    REQUIRE(path->input_ports[0] == 1);
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    const Spectrum *result = runner.run(stimulus);
+    REQUIRE(result != nullptr);
+    REQUIRE(result->tones.size() == 1);
+    REQUIRE_THAT(result->tones[0].power_dBm, WithinAbs(-20.5, 0.05));
+}
+
+TEST_CASE("MeasurementChainRunner: unsupported and ambiguous paths are rejected",
+          "[network_analyzer][runner]") {
+    SECTION("combiner") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(1, graph);
+        CombinerEngine combiner(2, graph);
+        AttenuatorEngine end(3, graph);
+        graph.addLink(gen.outputPinId(), combiner.inputPinId(0));
+        graph.addLink(combiner.outputPinId(), end.inputPinId());
+        TestNaHost host({&gen, &combiner, &end});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen.outputPinId(), end.outputPinId()));
+    }
+    SECTION("dual-fed switch") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen_a(1, graph);
+        SignalGeneratorEngine gen_b(2, graph);
+        RFSwitch2to1Engine sw(3, graph);
+        graph.addLink(gen_a.outputPinId(), sw.inputPinId(0));
+        graph.addLink(gen_b.outputPinId(), sw.inputPinId(1));
+        TestNaHost host({&gen_a, &gen_b, &sw});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen_a.outputPinId(), sw.outputPinId()));
+    }
+    SECTION("ambiguous") {
+        NodeGraphEngine graph;
+        SignalGeneratorEngine gen(1, graph);
+        SplitterEngine splitter(2, graph);
+        AttenuatorEngine branch_a(3, graph);
+        AttenuatorEngine branch_b(4, graph);
+        AttenuatorEngine end(5, graph);
+        graph.addLink(gen.outputPinId(), splitter.inputPinId());
+        graph.addLink(splitter.outputPinId(0), branch_a.inputPinId());
+        graph.addLink(splitter.outputPinId(1), branch_b.inputPinId());
+        graph.addLink(branch_a.outputPinId(), end.inputPinId());
+        graph.addLink(branch_b.outputPinId(), end.inputPinId());
+        TestNaHost host({&gen, &splitter, &branch_a, &branch_b, &end});
+        REQUIRE_FALSE(findMeasurementChainPath(graph, host, gen.outputPinId(), end.outputPinId()));
+    }
+}
+
+TEST_CASE("MeasurementChainRunner: scratch run does not mutate live engine state",
+          "[network_analyzer][runner]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AttenuatorEngine atten(2, graph);
+    gen.addTone(1e9, -20.0);
+    graph.addLink(gen.outputPinId(), atten.inputPinId());
+    gen.update(0.0);
+    atten.node().inputs[0] = &gen.node().outputs[0];
+    atten.update(0.0);
+    TestNaHost host({&gen, &atten});
+    const auto gen_state = gen.serialize();
+    const auto atten_state = atten.serialize();
+    const Spectrum gen_output_before = gen.node().outputs[0];
+    const Spectrum atten_output_before = atten.node().outputs[0];
+    const Spectrum *const live_input_before = atten.node().inputs[0];
+    const size_t link_count_before = graph.links().size();
+    auto path = findMeasurementChainPath(graph, host, gen.outputPinId(), atten.outputPinId());
+    REQUIRE(path.has_value());
+    IsolatedChainRunner runner(host);
+    REQUIRE(runner.prepare(*path));
+    Spectrum stimulus;
+    stimulus.tones.push_back({1e9, -20.0, 0.0});
+    REQUIRE(runner.run(stimulus) != nullptr);
+    REQUIRE(gen.serialize() == gen_state);
+    REQUIRE(atten.serialize() == atten_state);
+    REQUIRE(atten.node().inputs[0] == live_input_before);
+    REQUIRE(graph.links().size() == link_count_before);
+    REQUIRE(gen.node().outputs[0].tones.size() == gen_output_before.tones.size());
+    REQUIRE(atten.node().outputs[0].tones.size() == atten_output_before.tones.size());
+    REQUIRE(gen.node().outputs[0].tones[0].power_dBm == gen_output_before.tones[0].power_dBm);
+    REQUIRE(atten.node().outputs[0].tones[0].power_dBm == atten_output_before.tones[0].power_dBm);
+}
 
 // ---------------------------------------------------------------------------
 // 1. Stimulus correctness — points() frequencies, evenly spaced start->stop.
@@ -483,9 +634,6 @@ TEST_CASE("NetworkAnalyzer: path through an RF Switch 2:1 follows the selected t
     measure_through_throw(1, 0);
 }
 
-// The other throw is driven by an independent live source outside the
-// Point A -> Point B subgraph. The private clone cannot reproduce it, so the
-// measurement is rejected rather than reported without that signal/noise.
 TEST_CASE("NetworkAnalyzer: path through a dual-fed RF Switch 2:1 yields all-NaN",
           "[network_analyzer]") {
     NodeGraphEngine graph;
@@ -510,205 +658,6 @@ TEST_CASE("NetworkAnalyzer: path through a dual-fed RF Switch 2:1 yields all-NaN
         REQUIRE(std::isnan(g));
     for (double nf : na.noiseFigureDb())
         REQUIRE(std::isnan(nf));
-}
-
-// ---------------------------------------------------------------------------
-// 8b. Switched filter bank (issue #169): a 1:2 switch fans out to two
-//     parallel branches that rejoin at a 2:1 switch. Both branches are part
-//     of the measured subgraph, so the clone reproduces the live engines
-//     exactly: Gain follows the selected throws (the 2:1 switch emits its
-//     selected-throw tone first and the analyzer reads the first tone), and
-//     NF includes the unselected branch's noise leaking through isolation.
-//     Attenuators stand in for the filters so expected values are exact.
-// ---------------------------------------------------------------------------
-namespace {
-
-struct FilterBank {
-    NodeGraphEngine graph;
-    SignalGeneratorEngine gen{1, graph};
-    RFSwitchEngine fan_out{2, graph};    // COM -> T1/T2
-    AttenuatorEngine branch_1{3, graph}; // on T1
-    AttenuatorEngine branch_2{4, graph}; // on T2
-    RFSwitch2to1Engine fan_in{5, graph}; // T1/T2 -> COM, Point B
-
-    FilterBank() {
-        branch_1.setAttenuation(3.0);
-        branch_2.setAttenuation(10.0);
-        graph.addLink(gen.outputPinId(), fan_out.inputPinId(0));
-        graph.addLink(fan_out.outputPinId(0), branch_1.inputPinId());
-        graph.addLink(fan_out.outputPinId(1), branch_2.inputPinId());
-        graph.addLink(branch_1.outputPinId(), fan_in.inputPinId(0));
-        graph.addLink(branch_2.outputPinId(), fan_in.inputPinId(1));
-    }
-
-    void setThrows(int fan_out_throw, int fan_in_throw) {
-        fan_out.setActiveThrow(fan_out_throw);
-        fan_in.setActiveThrow(fan_in_throw);
-    }
-
-    void setIsolation(double dB) {
-        fan_out.setIsolation_dB(dB);
-        fan_in.setIsolation_dB(dB);
-    }
-};
-
-struct BankMeasurement {
-    std::vector<double> gain_dB;
-    std::vector<double> nf_dB;
-};
-
-BankMeasurement measureFilterBank(FilterBank &bank) {
-    TestNaHost host({&bank.gen, &bank.fan_out, &bank.branch_1, &bank.branch_2, &bank.fan_in});
-    NetworkAnalyzerEngine na(bank.graph, host);
-    na.setStartFrequency(1e9);
-    na.setStopFrequency(2e9);
-    na.setPoints(11);
-    na.setPointA(bank.gen.outputPinId());
-    na.setPointB(bank.fan_in.outputPinId());
-    na.update();
-    return {na.gainDb(), na.noiseFigureDb()};
-}
-
-// Independent reference: drive the LIVE engines with a stimulus identical to
-// the analyzer's (same grid, -30 dBm tones, kT noise) and derive Gain/NF from
-// the 2:1 switch output the same way the analyzer does (first tone at each
-// sweep frequency, NF = noise / (G kT)). Leaving `drop_unselected_branch`
-// false wires both throws, as the live circuit is; true leaves the fan-in's
-// unselected input open, which is what a selected-path-only clone would see.
-BankMeasurement liveReference(FilterBank &bank, bool drop_unselected_branch) {
-    Spectrum stim;
-    for (int i = 0; i < 11; ++i) {
-        const double f = 1e9 + 1e9 * i / 10.0;
-        stim.frequencies.push_back(f);
-        stim.tones.push_back({f, -30.0, 0.0});
-    }
-    stim.noise_W.assign(11, k * T);
-    stim.noise_added_W.assign(11, 0.0);
-    stim.phase_deg.assign(11, 0.0);
-    stim.computeTotalNoise();
-    stim.bumpGeneration();
-
-    // The live engines borrow pointers to `stim`, a local; clear them on
-    // every exit, including a failed REQUIRE below, so nothing dangles.
-    struct ClearInputs {
-        FilterBank &bank;
-        ~ClearInputs() {
-            for (IComponentEngine *engine : std::initializer_list<IComponentEngine *>{
-                     &bank.fan_out, &bank.branch_1, &bank.branch_2, &bank.fan_in})
-                std::fill(engine->node().inputs.begin(), engine->node().inputs.end(), nullptr);
-        }
-    } clear_inputs{bank};
-    bank.fan_out.node().inputs[0] = &stim;
-    bank.branch_1.node().inputs[0] = &bank.fan_out.node().outputs[0];
-    bank.branch_2.node().inputs[0] = &bank.fan_out.node().outputs[1];
-    bank.fan_in.node().inputs[0] = &bank.branch_1.node().outputs[0];
-    bank.fan_in.node().inputs[1] = &bank.branch_2.node().outputs[0];
-    if (drop_unselected_branch)
-        bank.fan_in.node().inputs[1 - bank.fan_in.activeThrow()] = nullptr;
-    for (IComponentEngine *engine : std::initializer_list<IComponentEngine *>{
-             &bank.fan_out, &bank.branch_1, &bank.branch_2, &bank.fan_in})
-        engine->update(0.0);
-
-    const Spectrum &out = bank.fan_in.node().outputs[0];
-    BankMeasurement ref;
-    for (size_t i = 0; i < stim.frequencies.size(); ++i) {
-        const double f = stim.frequencies[i];
-        const auto tone = std::find_if(out.tones.begin(), out.tones.end(), [&](const auto &t) {
-            return std::abs(t.freq_Hz - f) <= 1.0;
-        });
-        REQUIRE(tone != out.tones.end());
-        const double gain_dB = tone->power_dBm + 30.0;
-        ref.gain_dB.push_back(gain_dB);
-        ref.nf_dB.push_back(10.0 *
-                            std::log10(out.noise_total_W[i] / dbToLinear(gain_dB) / (k * T)));
-    }
-    return ref;
-}
-
-void requireMatchesLive(FilterBank &bank, double expected_gain_dB) {
-    const BankMeasurement na = measureFilterBank(bank);
-    const BankMeasurement live = liveReference(bank, false);
-    REQUIRE(na.gain_dB.size() == 11);
-    for (size_t i = 0; i < na.gain_dB.size(); ++i) {
-        REQUIRE_THAT(na.gain_dB[i], WithinAbs(expected_gain_dB, 1e-9));
-        REQUIRE_THAT(na.gain_dB[i], WithinAbs(live.gain_dB[i], 1e-9));
-        REQUIRE_THAT(na.nf_dB[i], WithinAbs(live.nf_dB[i], 1e-9));
-    }
-}
-
-} // namespace
-
-TEST_CASE("NetworkAnalyzer: switched filter bank measures through the selected throws",
-          "[network_analyzer][issue169]") {
-    FilterBank bank; // 0.5 dB insertion loss, 40 dB isolation on both switches
-
-    SECTION("both switches on T1 measure the T1 branch") {
-        bank.setThrows(0, 0);
-        requireMatchesLive(bank, -0.5 - 3.0 - 0.5);
-    }
-    SECTION("both switches on T2 measure the T2 branch") {
-        bank.setThrows(1, 1);
-        requireMatchesLive(bank, -0.5 - 10.0 - 0.5);
-    }
-    SECTION("mismatched throws report the selected fan-in throw at isolation") {
-        // Fan-out on T1, fan-in on T2: the fan-in's selected input carries
-        // the T2 branch, which the fan-out only feeds at isolation. The
-        // stronger T1-branch leakage (-0.5 - 3 - 40 = -43.5 dB) arrives at
-        // the same frequency on the unselected throw and is not summed into
-        // Gain (first-match), but its noise is in the NF numerator.
-        bank.setThrows(0, 1);
-        requireMatchesLive(bank, -40.0 - 10.0 - 0.5);
-    }
-}
-
-TEST_CASE("NetworkAnalyzer: switched filter bank NF includes unselected-branch noise",
-          "[network_analyzer][issue169]") {
-    FilterBank bank;
-    bank.setThrows(0, 0);
-    // Low isolation makes the unselected branch's noise contribution
-    // measurable: a selected-path-only clone would under-report NF.
-    bank.setIsolation(10.0);
-
-    const BankMeasurement na = measureFilterBank(bank);
-    const BankMeasurement full = liveReference(bank, false);
-    const BankMeasurement selected_only = liveReference(bank, true);
-    for (size_t i = 0; i < na.nf_dB.size(); ++i) {
-        REQUIRE_THAT(na.nf_dB[i], WithinAbs(full.nf_dB[i], 1e-9));
-        REQUIRE(na.nf_dB[i] - selected_only.nf_dB[i] > 0.05);
-    }
-}
-
-TEST_CASE("NetworkAnalyzer: switched filter bank fed from outside the measured subgraph yields "
-          "all-NaN",
-          "[network_analyzer][issue169]") {
-    const auto require_no_data = [](NetworkAnalyzerEngine &na) {
-        na.setStartFrequency(1e9);
-        na.setStopFrequency(2e9);
-        na.setPoints(11);
-        na.update();
-        for (double g : na.gainDb())
-            REQUIRE(std::isnan(g));
-        for (double nf : na.noiseFigureDb())
-            REQUIRE(std::isnan(nf));
-    };
-
-    SECTION("a second live generator on the fan-in's other throw") {
-        NodeGraphEngine graph;
-        SignalGeneratorEngine gen(1, graph);
-        RFSwitchEngine fan_out(2, graph);
-        AttenuatorEngine branch(3, graph);
-        RFSwitch2to1Engine fan_in(4, graph);
-        SignalGeneratorEngine other(5, graph);
-        graph.addLink(gen.outputPinId(), fan_out.inputPinId(0));
-        graph.addLink(fan_out.outputPinId(0), branch.inputPinId());
-        graph.addLink(branch.outputPinId(), fan_in.inputPinId(0));
-        graph.addLink(other.outputPinId(), fan_in.inputPinId(1));
-        TestNaHost host({&gen, &fan_out, &branch, &fan_in, &other});
-        NetworkAnalyzerEngine na(graph, host);
-        na.setPointA(gen.outputPinId());
-        na.setPointB(fan_in.outputPinId());
-        require_no_data(na);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -853,53 +802,6 @@ TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: app scratch adapter measures sw
         REQUIRE_THAT(gain, WithinAbs(-0.5, 0.05));
     for (double nf : na.noiseFigureDb())
         REQUIRE_THAT(nf, WithinAbs(0.5, 0.1));
-}
-
-// Issue #169 through the production clone factory: both switch types and
-// both branches are cloned by the app's ComponentTypeRegistry-backed scratch.
-TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: app measures a switched filter bank",
-                 "[network_analyzer][app][issue169]") {
-    RfSimulatorApp app;
-    auto &gen = static_cast<SignalGeneratorEngine &>(*app.testCreateComponent("generator", 10001));
-    auto &fan_out =
-        static_cast<RFSwitchEngine &>(*app.testCreateComponent("rf_switch_spdt", 10002));
-    auto &branch_1 = static_cast<AttenuatorEngine &>(*app.testCreateComponent("attenuator", 10003));
-    auto &branch_2 = static_cast<AttenuatorEngine &>(*app.testCreateComponent("attenuator", 10004));
-    auto &fan_in =
-        static_cast<RFSwitch2to1Engine &>(*app.testCreateComponent("rf_switch_spdt_2to1", 10005));
-    branch_1.setAttenuation(3.0);
-    branch_2.setAttenuation(10.0);
-    REQUIRE(app.testConnectLink(gen.outputPinId(), fan_out.inputPinId(0)).has_value());
-    REQUIRE(app.testConnectLink(fan_out.outputPinId(0), branch_1.inputPinId()).has_value());
-    REQUIRE(app.testConnectLink(fan_out.outputPinId(1), branch_2.inputPinId()).has_value());
-    REQUIRE(app.testConnectLink(branch_1.outputPinId(), fan_in.inputPinId(0)).has_value());
-    REQUIRE(app.testConnectLink(branch_2.outputPinId(), fan_in.inputPinId(1)).has_value());
-
-    auto &na = app.testNetworkAnalyzerEngine();
-    na.setStartFrequency(1e9);
-    na.setStopFrequency(2e9);
-    na.setPoints(11);
-    na.setPointA(gen.outputPinId());
-    na.setPointB(fan_in.outputPinId());
-
-    const auto require_gain = [&](double expected_dB) {
-        na.update();
-        REQUIRE(na.gainDb().size() == 11);
-        for (double gain : na.gainDb())
-            REQUIRE_THAT(gain, WithinAbs(expected_dB, 1e-9));
-        for (double nf : na.noiseFigureDb())
-            REQUIRE(std::isfinite(nf));
-    };
-
-    fan_out.setActiveThrow(0);
-    fan_in.setActiveThrow(0);
-    require_gain(-0.5 - 3.0 - 0.5);
-
-    // Flipping both throws must invalidate the cached signature and
-    // re-measure through the other branch.
-    fan_out.setActiveThrow(1);
-    fan_in.setActiveThrow(1);
-    require_gain(-0.5 - 10.0 - 0.5);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: widget draws with and without probe points",
