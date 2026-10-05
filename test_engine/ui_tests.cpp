@@ -1802,7 +1802,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("IIP3 input start (dBm)", "-60");
         ctx->ItemInputValue("IIP3 input stop (dBm)", "-40");
         ctx->ItemInputValue("IIP3 input step (dB)", "2");
-        const std::uint64_t revision_before_second_apply = s_app->projectRevision();
         apply();
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
@@ -1833,7 +1832,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_stop_dBm, -40.0);
             IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_step_dB, 2.0);
         }
-        IM_CHECK(s_app->projectRevision() > revision_before_second_apply);
+        IM_CHECK(s_app->projectRevision() > clean_revision);
 
         const auto applied = *state.config;
         clean_revision = s_app->projectRevision();
