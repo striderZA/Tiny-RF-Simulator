@@ -754,18 +754,69 @@ TEST_CASE("Receiver output power measures through a switched filter bank",
 
     // Matched throws: the selected branch at insertion loss plus the other
     // branch leaking through both switches' isolation, combined in phase. The
-    // leakage is 86 dB down, so this agrees with the analyzer's selected-throw
-    // Gain.
+    // leakage is 86 dB down, so output power is the generator tone plus the
+    // selected branch's loss to within 0.001 dB.
     CHECK(measure(0, 0) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 3.0 - 0.5, -10.0 - 40.0 - 10.0 - 40.0))
               .margin(1e-9));
     CHECK(measure(1, 1) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 10.0 - 0.5, -10.0 - 40.0 - 3.0 - 40.0))
               .margin(1e-9));
-    // Mismatched throws: each branch passes one switch at isolation and the
-    // stronger T1 leakage is summed in, where the analyzer's Gain reads only
-    // the selected (T2) throw, about 10 dB lower.
+    // Mismatched throws: each branch passes one switch at isolation, and the
+    // stronger T1 leakage is summed in. The analyzer's first-tone Gain keeps
+    // only the selected (T2) throw, so the generator tone plus that Gain reads
+    // about 10 dB below this output power.
     CHECK(measure(0, 1) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 40.0 - 10.0 - 0.5, -10.0 - 0.5 - 3.0 - 40.0))
               .margin(1e-9));
+}
+
+TEST_CASE("Receiver IIP3 through a switched filter bank matches the selected branch alone",
+          "[receiver_measurements][issue169]") {
+    const auto make_nonlinear = [](AmplifierEngine &amplifier) {
+        amplifier.setGain_dB(10.0);
+        amplifier.setEnableNonlinear(true);
+        amplifier.setOIP3_dBm(40.0);
+        amplifier.setP1dB_dBm(90.0);
+    };
+    auto settings = config();
+    settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
+
+    // Reference: the selected branch alone, behind the fan-out's 0.5 dB
+    // insertion loss.
+    Circuit branch_alone;
+    branch_alone.attenuator.setAttenuation(0.5);
+    make_nonlinear(branch_alone.amplifier);
+    ReceiverPerformanceMeasurementEngine reference(branch_alone.graph, branch_alone.host);
+    runToCompletion(reference, settings, branch_alone.generator.outputPinId(),
+                    branch_alone.pointB(), {1.0e9});
+    const double reference_iip3 = reference.measurements().iip3_dBm[0];
+    REQUIRE(isFinite(reference_iip3));
+
+    // The bank: the nonlinear amplifier on T1, a linear attenuator on T2, and
+    // both switches on T1.
+    NodeGraphEngine graph;
+    SignalGeneratorEngine generator(1, graph);
+    RFSwitchEngine fan_out(2, graph);
+    AmplifierEngine amplifier(3, graph);
+    AttenuatorEngine other(4, graph);
+    RFSwitch2to1Engine fan_in(5, graph);
+    make_nonlinear(amplifier);
+    other.setAttenuation(10.0);
+    generator.addTone(1.0e9, -10.0);
+    graph.addLink(generator.outputPinId(), fan_out.inputPinId(0));
+    graph.addLink(fan_out.outputPinId(0), amplifier.inputPinId());
+    graph.addLink(fan_out.outputPinId(1), other.inputPinId());
+    graph.addLink(amplifier.outputPinId(), fan_in.inputPinId(0));
+    graph.addLink(other.outputPinId(), fan_in.inputPinId(1));
+    Host host{{&generator, &fan_out, &amplifier, &other, &fan_in}};
+    ReceiverPerformanceMeasurementEngine engine(graph, host);
+    runToCompletion(engine, settings, generator.outputPinId(), fan_in.outputPinId(), {1.0e9});
+
+    // The fan-in's insertion loss lowers the fundamental and IM3 lines alike,
+    // and the T2 leakage is linear and about 100 dB below the selected
+    // fundamental, so the input-referred intercept is the branch's own.
+    const double bank_iip3 = engine.measurements().iip3_dBm[0];
+    REQUIRE(isFinite(bank_iip3));
+    CHECK(bank_iip3 == Catch::Approx(reference_iip3).margin(1e-3));
 }

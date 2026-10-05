@@ -429,6 +429,8 @@ TEST_CASE("MeasurementChainRunner: prepare refuses a path it cannot wire faithfu
     SECTION("a stimulus edge from an output Point A does not have") {
         path.edges[0].output_port = 1;
         REQUIRE_FALSE(runner.prepare(path));
+        path.edges[0].output_port = -1;
+        REQUIRE_FALSE(runner.prepare(path));
     }
     SECTION("no Point A component") {
         path.components[0] = nullptr;
