@@ -9,9 +9,7 @@
 #include "network_analyzer_engine.h"
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
-#include "pfb_channelizer_engine.h"
 #include "pfb_view_manager.h"
-#include "session_state.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -451,13 +449,12 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
 
 ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     SessionState &state,
                                      ReceiverRequirementsState &receiver_requirements,
                                      bool &show_log, bool &show_spectrum, bool &show_properties,
                                      bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
     : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_state(state),
-      m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
+      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_show_log(show_log),
+      m_show_spectrum(show_spectrum), m_show_properties(show_properties),
       m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
 const ComponentRegistry &ProjectSerializer::components() const { return m_runtime.components(); }
@@ -881,10 +878,6 @@ bool ProjectSerializer::load(const std::string &path) {
                 // cannot know the project dir).
                 resolveSparamParams(params, project_dir);
                 comp->deserialize(params);
-                if (desc->type == "pfb") {
-                    // Restore IQ plot + PFB grid widgets for this PFB
-                    m_pfb_views.addFor(*static_cast<PFBChannelizerEngine *>(comp), m_state);
-                }
 
                 // Restore position. Malformed optional metadata must not abort
                 // an otherwise valid component, so only read the numeric fields
@@ -918,14 +911,11 @@ bool ProjectSerializer::load(const std::string &path) {
                 // Exception-safe rollback: desc->create() already registered
                 // the component (and its graph node) before nested
                 // deserialization or metadata restoration threw. Remove the
-                // partially created component and any PFB view state created
-                // for it, so a malformed record is neither counted nor linked
-                // while valid sibling components still load.
-                if (comp) {
+                // partially created component so a malformed record is neither
+                // counted nor linked while valid sibling components still load.
+                // Component-bound views are synced by the app after load().
+                if (comp)
                     m_runtime.removeComponent(comp->graphNodeId());
-                    if (desc && desc->type == "pfb")
-                        m_pfb_views.rebuild(components(), m_state);
-                }
                 new_node_ids.push_back(-1);
             }
         }
@@ -1195,6 +1185,8 @@ bool ProjectSerializer::load(const std::string &path) {
 }
 
 void ProjectSerializer::reset() {
+    // Views hold engine references: drop them before the engines are destroyed.
+    m_pfb_views.clear();
     m_runtime.clearComponentsAndResetIds();
     m_editor_actions.resetForProjectReplacement();
     m_receiver_requirements = {};
@@ -1204,6 +1196,5 @@ void ProjectSerializer::reset() {
     m_na_engine.setPointA(-1);
     m_na_engine.setPointB(-1);
 
-    m_pfb_views.clear();
     m_graph_widget.clearPositionCache();
 }
