@@ -119,8 +119,8 @@ void NetworkAnalyzerEngine::computeMeasurement() {
         const double f = m_stimulus_freqs[i];
         const long long c = cell_of(f);
 
-        // Gain reads the first tone at f (see the header): at a 2:1 switch that
-        // is the selected throw, never a sum with the other throw's leakage.
+        // Gain reads the first tone at f (see the header): at a 2:1 switch the
+        // selected throw's when it carries one, and never a sum of throws.
         std::optional<size_t> tone_idx;
         for (long long cc = c - 1; cc <= c + 1; ++cc) {
             auto range = tone_cells.equal_range(cc);

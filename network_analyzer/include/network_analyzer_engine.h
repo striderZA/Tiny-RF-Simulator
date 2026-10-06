@@ -22,16 +22,17 @@ class NodeGraphEngine;
 // every real component's state are never read for signal purposes and never
 // written to).
 //
-// Gain_dB at a sweep point is the FIRST output tone at that frequency, and
-// NF_dB = 10*log10(P_noise,out / (G_linear * kT)) with G_linear =
-// 10^(Gain_dB/10), so NF inherits Gain's tone choice. Same-frequency tones are
-// not summed, because harmonics/IMD from a nonlinear stage can land on another
-// sweep point. A 2:1 switch emits its selected throw's tones first, so through
-// a filter bank Gain is the selected throw's tone where that throw carries one
-// and the other throw's leakage where it does not (a non-S-parameter
-// IdealFilter drops out-of-passband tones). Where both throws carry a tone,
-// Gain omits the unselected one, while P_noise,out still includes both
-// throws' noise.
+// Gain_dB at a sweep point is the FIRST output tone at that frequency (NaN when
+// that tone is more than 100 dB below the stimulus, even if a stronger tone
+// follows it), and NF_dB = 10*log10(P_noise,out / (G_linear * kT)) with
+// G_linear = 10^(Gain_dB/10), so NF inherits Gain's tone choice. Same-frequency
+// tones are not summed, because harmonics/IMD from a nonlinear stage can land
+// on another sweep point. A 2:1 switch emits its selected throw's tones first,
+// so through a filter bank Gain is the selected throw's tone where that throw
+// carries one, else the other throw's leakage if that throw carries one (a
+// non-S-parameter IdealFilter drops out-of-passband tones), else NaN. Where
+// both throws carry a tone, Gain omits the unselected one, while P_noise,out
+// still includes both throws' noise.
 //
 // v3 replaces the v1/v2 wired-pin engine entirely: no ComponentEngineBase, no
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
@@ -58,7 +59,8 @@ class NetworkAnalyzerEngine {
     double stimulusPower() const { return m_stimulus_power_dBm; }
 
     // Results for the widget. NaN at an index = no path, an unsupported
-    // topology, or no matching tone found at Point B on the isolated clones.
+    // topology, no matching tone found at Point B on the isolated clones, or a
+    // first matching tone more than 100 dB below the stimulus.
     const std::vector<double> &sweepFrequencies() const { return m_stimulus_freqs; }
     const std::vector<double> &gainDb() const { return m_gain_dB; }
     const std::vector<double> &noiseFigureDb() const { return m_nf_dB; }
