@@ -674,6 +674,46 @@ TEST_CASE("Receiver measurement resumes incremental in-band work and resets chan
     CHECK(std::isnan(reset.output_power_dBm.back()));
 }
 
+TEST_CASE("Receiver measurement run cap bounds the chain runs of every update",
+          "[receiver_measurements]") {
+    Circuit c;
+    auto output_only = config();
+    output_only.iip3_min_dBm.reset();
+    constexpr std::size_t points = 10;
+    std::vector<double> grid;
+    grid.reserve(points);
+    for (std::size_t i = 0; i < points; ++i)
+        grid.push_back(1.0e9 + static_cast<double>(i) * 1.0e6);
+    const auto finiteCount = [](const std::vector<double> &values) {
+        return std::count_if(values.begin(), values.end(), isFinite);
+    };
+
+    // Output power alone costs one chain run per sweep point, so a cap of 3
+    // leaves this sweep running after the first update and needs at least
+    // ceil(10 / 3) = 4 updates, however fast the build runs.
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    engine.setMaxRunsPerUpdate(3);
+    engine.update(output_only, c.generator.outputPinId(), c.pointB(), grid);
+    CHECK(engine.isInProgress());
+    CHECK(finiteCount(engine.measurements().output_power_dBm) <= 3);
+    int updates = 1;
+    for (; engine.isInProgress() && updates < 100; ++updates)
+        engine.update(output_only, c.generator.outputPinId(), c.pointB(), grid);
+    REQUIRE_FALSE(engine.isInProgress());
+    CHECK(updates >= 4);
+    CHECK(finiteCount(engine.measurements().output_power_dBm) ==
+          static_cast<std::ptrdiff_t>(points));
+
+    // Clearing the cap restores the time-only budget, within which a fresh
+    // request this small completes in one update.
+    engine.setMaxRunsPerUpdate(std::nullopt);
+    grid.pop_back();
+    engine.update(output_only, c.generator.outputPinId(), c.pointB(), grid);
+    CHECK_FALSE(engine.isInProgress());
+    CHECK(finiteCount(engine.measurements().output_power_dBm) ==
+          static_cast<std::ptrdiff_t>(points - 1));
+}
+
 TEST_CASE("Receiver IIP3 benchmark covers maximum 101 levels on full analyzer grid",
           "[.bench][bench]") {
     Circuit c;

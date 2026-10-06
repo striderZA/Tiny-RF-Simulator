@@ -282,6 +282,11 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
     }
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(4);
+    std::size_t runs = 0;
+    const auto budget_spent = [&]() {
+        return (m_max_runs_per_update && runs >= *m_max_runs_per_update) ||
+               std::chrono::steady_clock::now() >= deadline;
+    };
     const auto finish_center = [this]() {
         if (m_iip3_settings && m_iip3_level_count) {
             const auto lower = estimateIIP3(m_lower_fundamental, m_lower_im3);
@@ -309,8 +314,9 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
         if (m_center_stage == CenterStage::OutputTone) {
             if (m_output_tone_power_phase && std::isfinite(m_output_tone_power_phase->first) &&
                 std::isfinite(center) && center > 0.0) {
-                if (std::chrono::steady_clock::now() >= deadline)
+                if (budget_spent())
                     break;
+                ++runs;
                 Spectrum stimulus;
                 stimulus.generation = ++m_spectrum_generation;
                 stimulus.frequencies = {center};
@@ -328,8 +334,9 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
             finish_center();
             continue;
         }
-        if (std::chrono::steady_clock::now() >= deadline)
+        if (budget_spent())
             break;
+        ++runs;
 
         const auto &settings = *m_iip3_settings;
         const double low = center - settings.tone_spacing_Hz / 2.0;

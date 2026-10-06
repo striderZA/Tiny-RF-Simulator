@@ -30,6 +30,14 @@ class ReceiverPerformanceMeasurementEngine {
     bool isInProgress() const { return m_in_progress; }
     const ReceiverPerformanceMeasurements &measurements() const { return m_measurements; }
 
+    // Optional cap on the scratch chain runs one update() performs, on top of
+    // its 4 ms wall-clock budget; std::nullopt (the default) leaves only the
+    // time budget. A cap makes a sweep's progress per call independent of how
+    // fast the build runs, which tests rely on to observe it mid-sweep.
+    void setMaxRunsPerUpdate(std::optional<std::size_t> max_runs) {
+        m_max_runs_per_update = max_runs;
+    }
+
   private:
     const NodeGraphEngine &m_graph;
     IMeasurementChainHost &m_host;
@@ -51,4 +59,5 @@ class ReceiverPerformanceMeasurementEngine {
     std::vector<std::pair<double, double>> m_upper_im3;
     std::uint64_t m_spectrum_generation = 0;
     bool m_in_progress = false;
+    std::optional<std::size_t> m_max_runs_per_update;
 };
