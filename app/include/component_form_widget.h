@@ -11,9 +11,10 @@ class ComponentFormWidget {
 
     // Renders the fields the model shows for the current parameters (see
     // ComponentFormModel::fieldLabel()); returns true only on the frame Save is
-    // clicked (disabled while validate() reports issues). An issue renders under
-    // its field when that field is shown; every other issue (whole-definition,
-    // or on a hidden field) renders under Save.
+    // clicked (disabled while validate() reports issues). A shown field renders
+    // its first issue beneath it; whole-definition issues and those of a hidden
+    // field render under Save. A shown field's further issues appear only in the
+    // issue count beside Save.
     bool draw(const ComponentLibrary &library);
 
   private:
