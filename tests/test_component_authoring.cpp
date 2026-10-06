@@ -9,16 +9,23 @@
 // string table, but Catch2's runtime registry never invokes them). Every new
 // TEST_CASE this plan adds (Tasks 1, 2, 3, 4) lives here instead.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "circuit_runtime.h"
 #include "component_form_model.h"
 #include "component_library.h"
 #include "component_type_registry.h"
+#include "graph_editor_actions.h"
+#include "ideal_filter_engine.h"
+#include "node_graph_engine.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <random>
+#include <set>
 
 // --- Task 1: ComponentTypeRegistry ---
 
@@ -312,4 +319,171 @@ TEST_CASE("ComponentFormModel preserves original data_files on edit without new 
     REQUIRE(def.data_files.size() == 1);
     REQUIRE(def.data_files[0].type == "s_parameters");
     REQUIRE(def.data_files[0].path == "AMP-EDIT-TEST.s4p");
+}
+
+// --- Issue #181: an ideal filter definition carries the cutoffs its type uses ---
+//
+// The library schema has two generic, optional cutoff fields, but
+// IdealFilterEngine reads them per filter type: LPF/HPF use fc_low_Hz alone,
+// BPF/BSF the fc_low_Hz..fc_high_Hz band. A definition missing a cutoff its type
+// uses passed validation and silently kept the engine's constructor default.
+
+namespace {
+
+bool filterUsesBand(const std::string &filter_type) {
+    return filter_type == "BPF" || filter_type == "BSF";
+}
+
+std::set<std::string> flaggedFields(const std::vector<ValidationIssue> &issues) {
+    std::set<std::string> fields;
+    for (const auto &issue : issues)
+        fields.insert(issue.field);
+    return fields;
+}
+
+} // namespace
+
+TEST_CASE("ComponentLibrary validate requires the cutoffs an ideal filter type uses",
+          "[library][validate][issue181]") {
+    struct Case {
+        nlohmann::json cutoffs;
+        std::set<std::string> single_cutoff_issues; // LPF, HPF
+        std::set<std::string> band_issues;          // BPF, BSF
+    };
+    const std::vector<Case> cases = {
+        {nlohmann::json::object(), {"fc_low_Hz"}, {"fc_low_Hz", "fc_high_Hz"}},
+        {{{"fc_high_Hz", 3.3e9}}, {"fc_low_Hz"}, {"fc_low_Hz"}},
+        {{{"fc_low_Hz", 140e6}}, {}, {"fc_high_Hz"}},
+        {{{"fc_low_Hz", 140e6}, {"fc_high_Hz", 180e6}}, {}, {}},
+        {{{"fc_low_Hz", 140e6}, {"fc_high_Hz", 140e6}}, {}, {"fc_high_Hz"}},
+        {{{"fc_low_Hz", 180e6}, {"fc_high_Hz", 140e6}}, {}, {"fc_high_Hz"}},
+    };
+    ComponentLibrary lib;
+    for (const std::string filter_type : {"LPF", "HPF", "BPF", "BSF"}) {
+        for (const auto &c : cases) {
+            nlohmann::json params = c.cutoffs;
+            params["filter_type"] = filter_type;
+            INFO(params.dump());
+            CHECK(flaggedFields(lib.validate("filter", params)) ==
+                  (filterUsesBand(filter_type) ? c.band_issues : c.single_cutoff_issues));
+        }
+    }
+}
+
+TEST_CASE("Every ideal filter definition validate accepts is applied as written",
+          "[library][validate][issue181]") {
+    // Library-shaped partial definitions, one cutoff combination at a time: a
+    // serialize() round trip always carries both cutoffs, so it cannot see this.
+    const std::vector<std::optional<double>> cutoffs = {std::nullopt, 0.0, 140e6, 180e6};
+    ComponentLibrary lib;
+    for (const std::string filter_type : {"LPF", "HPF", "BPF", "BSF"}) {
+        int accepted = 0;
+        for (const auto &low : cutoffs) {
+            for (const auto &high : cutoffs) {
+                nlohmann::json params = {{"filter_type", filter_type}};
+                if (low)
+                    params["fc_low_Hz"] = *low;
+                if (high)
+                    params["fc_high_Hz"] = *high;
+                if (!lib.validate("filter", params).empty())
+                    continue;
+                ++accepted;
+                INFO(params.dump());
+
+                NodeGraphEngine graph;
+                IdealFilterEngine filter(0, graph);
+                filter.deserialize(params);
+                // Each cutoff the type uses was written, and is the one applied.
+                REQUIRE(low.has_value());
+                CHECK(filter.fcLow_Hz() == *low);
+                if (filterUsesBand(filter_type)) {
+                    REQUIRE(high.has_value());
+                    CHECK(*low < *high);
+                    CHECK(filter.fcHigh_Hz() == *high);
+                }
+            }
+        }
+        CHECK(accepted > 0);
+    }
+}
+
+TEST_CASE("An LPF library definition filters at the cutoff it specifies", "[library][issue181]") {
+    Spectrum input;
+    input.frequencies = {0.0, 2e9, 4e9};
+    input.tones = {{1e9, -10.0, 0.0}};
+
+    ComponentLibrary lib;
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    ComponentDefinition def;
+    def.schema_version = 2;
+    def.type = "filter";
+    def.part_number = "LPF-3G3";
+
+    // The reported definition: an LPF given only fc_high_Hz was inserted with
+    // the engine's 100 MHz default cutoff, which removed a 1 GHz tone.
+    def.parameters = {{"filter_type", "LPF"}, {"fc_high_Hz", 3.3e9}};
+    CHECK(lib.instantiate(def, runtime, actions) == nullptr);
+    CHECK(runtime.components().size() == 0);
+
+    def.parameters = {{"filter_type", "LPF"}, {"fc_low_Hz", 3.3e9}};
+    auto *filter = dynamic_cast<IdealFilterEngine *>(lib.instantiate(def, runtime, actions));
+    REQUIRE(filter != nullptr);
+    filter->node().inputs[0] = &input;
+    filter->update(0.0);
+
+    const auto &out = filter->node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    CHECK(out.tones[0].freq_Hz == Catch::Approx(1e9));
+}
+
+TEST_CASE("ComponentFormModel refuses an LPF given only a high cutoff", "[form_model][issue181]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("filter");
+    REQUIRE(descriptor != nullptr);
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("LPF-FORM");
+    model.setParameter("filter_type", "LPF");
+    model.setParameter("fc_high_Hz", 3.3e9);
+
+    ComponentLibrary lib;
+    CHECK(flaggedFields(model.validate(lib)) == std::set<std::string>{"fc_low_Hz"});
+
+    model.setParameter("fc_low_Hz", 3.3e9);
+    CHECK(model.validate(lib).empty());
+}
+
+TEST_CASE("ComponentFormModel shows the cutoffs an ideal filter type uses",
+          "[form_model][issue181]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("filter");
+    REQUIRE(descriptor != nullptr);
+    const auto field = [&](const std::string &key) -> const ParameterField & {
+        const auto it = std::find_if(descriptor->fields.begin(), descriptor->fields.end(),
+                                     [&](const ParameterField &f) { return f.key == key; });
+        REQUIRE(it != descriptor->fields.end());
+        return *it;
+    };
+    ComponentFormModel model(*descriptor);
+
+    // Until a filter type is chosen, neither cutoff has a meaning to show.
+    CHECK(model.fieldLabel(field("filter_type")) == "Filter Type");
+    CHECK_FALSE(model.fieldLabel(field("fc_low_Hz")).has_value());
+    CHECK_FALSE(model.fieldLabel(field("fc_high_Hz")).has_value());
+
+    for (const std::string filter_type : {"LPF", "HPF"}) {
+        model.setParameter("filter_type", filter_type);
+        CHECK(model.fieldLabel(field("fc_low_Hz")) == "Cutoff");
+        CHECK_FALSE(model.fieldLabel(field("fc_high_Hz")).has_value());
+    }
+    for (const std::string filter_type : {"BPF", "BSF"}) {
+        model.setParameter("filter_type", filter_type);
+        CHECK(model.fieldLabel(field("fc_low_Hz")) == "Low Cutoff");
+        CHECK(model.fieldLabel(field("fc_high_Hz")) == "High Cutoff");
+    }
+
+    // Every other type shows each field under its own label.
+    const auto *amplifier = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(amplifier != nullptr);
+    ComponentFormModel amplifier_model(*amplifier);
+    for (const auto &f : amplifier->fields)
+        CHECK(amplifier_model.fieldLabel(f) == f.label);
 }

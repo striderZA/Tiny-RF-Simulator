@@ -42,8 +42,11 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
     ImGui::Separator();
 
     for (const auto &field : m_model->descriptor().fields) {
+        const auto field_label = m_model->fieldLabel(field);
+        if (!field_label)
+            continue;
         ImGui::PushID(field.key.c_str());
-        std::string label = field.label;
+        std::string label = *field_label;
         if (!field.unit.empty())
             label += " (" + field.unit + ")";
 
@@ -123,9 +126,19 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
         ImGui::SameLine();
         ImGui::TextDisabled("(%zu issue%s)", issues.size(), issues.size() == 1 ? "" : "s");
     }
-    // Whole-definition issues (no specific field) — surface above the Save button
+    // Whole-definition issues (no specific field), and issues of a field the
+    // current parameters hide, surface under the Save button: an inline message
+    // under a hidden field would never be seen.
+    const auto shown_inline = [&](const std::string &key) {
+        if (key == "part_number")
+            return true;
+        for (const auto &field : m_model->descriptor().fields)
+            if (field.key == key)
+                return m_model->fieldLabel(field).has_value();
+        return false;
+    };
     for (const auto &issue : issues) {
-        if (issue.field.empty())
+        if (!shown_inline(issue.field))
             ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", issue.message.c_str());
     }
     return save_clicked;
