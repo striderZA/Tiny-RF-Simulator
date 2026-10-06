@@ -4,6 +4,7 @@
 #include "component_library.h"
 #include "component_type_registry.h"
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 
 class ComponentFormModel {
@@ -25,6 +26,12 @@ class ComponentFormModel {
 
     void setParameter(const std::string &key, const nlohmann::json &value);
     nlohmann::json parameter(const std::string &key) const;
+    // Label the form shows for `field` given the current parameters, or nullopt
+    // when the field does not apply to them, so the form hides it. Only the
+    // ideal filter's cutoffs vary (issue #181): one "Cutoff" (fc_low_Hz) for
+    // LPF/HPF, "Low Cutoff" and "High Cutoff" for BPF/BSF, and neither until a
+    // filter type is chosen.
+    std::optional<std::string> fieldLabel(const ParameterField &field) const;
 
     // Staged absolute path to a picked S-param file; copy-into-place happens
     // at save time (Task 6), not here.

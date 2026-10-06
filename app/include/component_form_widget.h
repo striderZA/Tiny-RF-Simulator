@@ -9,9 +9,12 @@ class ComponentFormWidget {
   public:
     explicit ComponentFormWidget(ComponentFormModel &model);
 
-    // Renders all fields; returns true only on the frame Save is clicked
-    // (disabled while validate() reports issues). Renders inline issue text
-    // under each offending field.
+    // Renders the fields the model shows for the current parameters (see
+    // ComponentFormModel::fieldLabel()); returns true only on the frame Save is
+    // clicked (disabled while validate() reports issues). A shown field renders
+    // its first issue beneath it; whole-definition issues and those of a hidden
+    // field render under Save. A shown field's further issues appear only in the
+    // issue count beside Save.
     bool draw(const ComponentLibrary &library);
 
   private:

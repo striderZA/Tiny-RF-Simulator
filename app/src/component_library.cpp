@@ -95,6 +95,36 @@ bool isSafeDataFileName(const std::string &path) {
     return !p.filename().empty();
 }
 
+// --- Ideal filter cutoffs (issue #181) ---------------------------------------
+// The filter's two cutoff fields are each optional in the schema, but
+// IdealFilterEngine reads them per filter type: LPF/HPF use fc_low_Hz as their
+// single cutoff, BPF/BSF the fc_low_Hz..fc_high_Hz band. A definition must
+// carry the cutoffs its type uses, or deserialize() silently keeps the engine's
+// constructor defaults. Labels match what the authoring form shows per type.
+void appendFilterCutoffIssues(const nlohmann::json &parameters,
+                              std::vector<ValidationIssue> &issues) {
+    if (!parameters.contains("filter_type") || !parameters["filter_type"].is_string())
+        return; // reported by the per-field checks
+    const std::string filter_type = parameters["filter_type"].get<std::string>();
+    const bool has_low = parameters.contains("fc_low_Hz");
+    const bool has_high = parameters.contains("fc_high_Hz");
+    if (filter_type == "LPF" || filter_type == "HPF") {
+        if (!has_low)
+            issues.push_back({"fc_low_Hz", "'Cutoff' is required"});
+        return;
+    }
+    if (filter_type != "BPF" && filter_type != "BSF")
+        return; // an unknown filter type is reported by the per-field checks
+    if (!has_low)
+        issues.push_back({"fc_low_Hz", "'Low Cutoff' is required"});
+    if (!has_high)
+        issues.push_back({"fc_high_Hz", "'High Cutoff' is required"});
+    if (has_low && has_high && parameters["fc_low_Hz"].is_number() &&
+        parameters["fc_high_Hz"].is_number() &&
+        parameters["fc_low_Hz"].get<double>() >= parameters["fc_high_Hz"].get<double>())
+        issues.push_back({"fc_high_Hz", "'High Cutoff' must be greater than 'Low Cutoff'"});
+}
+
 } // namespace
 
 std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
@@ -175,6 +205,8 @@ std::vector<ValidationIssue> ComponentLibrary::validate(const std::string &type,
         }
         }
     }
+    if (type == "filter")
+        appendFilterCutoffIssues(parameters, issues);
     return issues;
 }
 

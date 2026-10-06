@@ -30,6 +30,23 @@ nlohmann::json ComponentFormModel::parameter(const std::string &key) const {
     return nlohmann::json();
 }
 
+std::optional<std::string> ComponentFormModel::fieldLabel(const ParameterField &field) const {
+    if (m_descriptor.type != "filter" || (field.key != "fc_low_Hz" && field.key != "fc_high_Hz"))
+        return field.label;
+    // IdealFilterEngine reads the cutoffs per filter type, so show only those
+    // the chosen type uses, as the inspector does.
+    const auto filter_type = parameter("filter_type");
+    const std::string type = filter_type.is_string() ? filter_type.get<std::string>() : "";
+    if (type == "LPF" || type == "HPF") {
+        if (field.key == "fc_low_Hz")
+            return std::string("Cutoff");
+        return std::nullopt;
+    }
+    if (type == "BPF" || type == "BSF")
+        return field.label;
+    return std::nullopt;
+}
+
 std::vector<ValidationIssue> ComponentFormModel::validate(const ComponentLibrary &library) const {
     auto issues = library.validate(m_descriptor.type, m_parameters);
     if (m_part_number.empty())
