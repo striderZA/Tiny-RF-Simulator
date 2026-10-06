@@ -1,4 +1,4 @@
 # Files
 
-- [DSP Pipeline & Runtime Workflows](dsp-pipeline.md) - Trace application bootstrap, graph routing and topological DSP execution, dirty and generation-based caching, probes and analyzers, and project lifecycle handling. Covers multi-output ports, groups, failure-safe persistence, and the tests that protect these contracts.
-- [Test Flow Authoring & Execution](test-flow.md) - Defines the JSON test-flow contract and explains how the shared harness and app panel discover sweepable parameters, author and validate drafts, run safely, restore the circuit, and export measurements.
+- [DSP Pipeline & Runtime Workflows](dsp-pipeline.md) - Follow real-time signals through CircuitRuntime rewiring and topological updates, ADC DDC, PFB channel outputs, analyzer measurements, and revision-based project persistence.
+- [Test Flow Workflow](test-flow.md) - Defines the JSON sweep contract and traces Test Flow authoring, exhaustive preflight, synchronous execution, full component-state restoration, failure latching, and JSON results.

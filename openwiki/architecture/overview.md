@@ -1,22 +1,30 @@
 ---
 type: Architecture Overview
 title: Architecture Overview
-description: Ownership and dependency boundaries for the RF Simulator, from GLFW and ImGui bootstrap through graph-driven DSP, instruments, persistence, libraries, and trusted extension boundaries.
-tags: [architecture, dsp, lifecycle, persistence, extensions]
+description: Explains the RF Simulator's platform, UI-free circuit runtime, topology, DSP engines, editor commands, persistence, and instrument integrations.
+tags: [architecture, runtime, dsp, persistence, extensions]
 verified:
-  - by: openwiki/0.5.2
-    at: 2026-09-25T17:58:06.034Z
+  - by: openwiki/0.7.0
+    at: 2026-10-05T19:44:12.666Z
 sources:
+  - id: openwiki-source-8c3f2a1fe9422d9010bcc799
+    resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-eddd217b5fc424e198cfdd6b
     resource: repo://app/include/component_registry.h
   - id: openwiki-source-a6f41f170cb54f5b8f38bf47
     resource: repo://app/include/component_type_registry.h
+  - id: openwiki-source-e81f2756b009d1486dba9b74
+    resource: repo://app/include/editor_commands.h
   - id: openwiki-source-ef5b75f05be72b6f2e82b3f9
     resource: repo://app/include/project_serializer.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
+  - id: openwiki-source-bc033392c5f8ce0dd75226a2
+    resource: repo://app/src/circuit_runtime.cpp
   - id: openwiki-source-dd0234525c20fcc7f7d85a35
     resource: repo://app/src/component_library.cpp
+  - id: openwiki-source-7ffec1c215e8323dc7328f1d
+    resource: repo://app/src/editor_commands.cpp
   - id: openwiki-source-f8c30b6d300fb033e11282e7
     resource: repo://app/src/extension_manager.cpp
   - id: openwiki-source-ee53296641ba30982216ac57
@@ -27,8 +35,8 @@ sources:
     resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-e7932f8366579c2ce8c1865d
     resource: repo://app/src/test_flow_widget.cpp
-  - id: openwiki-source-ca6cb4b1a14fd7969dfae3ec
-    resource: repo://CHANGELOG.md
+  - id: openwiki-source-d7839e83f1db8019b777d76e
+    resource: repo://common/graph_link_policy.h
   - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
     resource: repo://common/session_state.h
   - id: openwiki-source-137cf4932d136d5c05b4e508
@@ -43,10 +51,16 @@ sources:
     resource: repo://network_analyzer/include/network_analyzer_engine.h
   - id: openwiki-source-9a250414ad94d8c41379ca9b
     resource: repo://network_analyzer/src/network_analyzer_engine.cpp
+  - id: openwiki-source-7483c8c3ea0d9c325c992db0
+    resource: repo://node_graph/src/rewire.cpp
   - id: openwiki-source-d364d949938a433276255c32
     resource: repo://src/main.cpp
   - id: openwiki-source-3d3e3b78daf6b95b69159369
     resource: repo://test_flow/include/flow_runner.h
+  - id: openwiki-source-1425d7c9bb71c8e6d4145122
+    resource: repo://test_flow/src/flow_runner.cpp
+  - id: openwiki-source-0f5985dbf469bdfd8b400c2d
+    resource: repo://tests/test_editor_commands.cpp
   - id: openwiki-source-e2cedad6ad87cba9b8bef4fb
     resource: repo://tests/test_issue45_extension_trust.cpp
   - id: openwiki-source-42ef0db762a7ffb82713cae7
@@ -55,12 +69,12 @@ sources:
     resource: repo://tests/test_path_containment.cpp
   - id: openwiki-source-176b6b1095bfaf01d84f5034
     resource: repo://tutorial/include/tutorial_state.h
-generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
+generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
 ---
 
 # Architecture Overview
 
-The simulator has a deliberately narrow dependency direction: platform code owns the window and frame lifetime; common code defines signal contracts; engines perform DSP without UI; the node graph owns topology; and `RfSimulatorApp` composes those pieces and owns application policy. Persistence, libraries, instruments, and extensions are application services rather than alternate DSP paths.
+RF Simulator separates platform lifetime, circuit topology, DSP execution, editor policy, and user-facing tools. The executable and core own the window/frame loop; `CircuitRuntime` owns the live graph and components; common headers define signal contracts; and `RfSimulatorApp` composes UI, project persistence, libraries, instruments, and extensions.
 
 ## Runtime ownership
 
@@ -69,30 +83,37 @@ sequenceDiagram
     participant Main as main.cpp
     participant Core as RfSimulatorCore
     participant App as RfSimulatorApp
+    participant Runtime as CircuitRuntime
     participant Graph as NodeGraphEngine
-    participant Engine as Component engines
+    participant Engines as Component engines
     participant UI as ImGui widgets
-    Main->>Core: construct and Run callback
-    Core->>Core: initialize GLFW OpenGL ImGui ImPlot
+    Main->>Core: Run app callback
+    Core->>Core: initialize platform and UI contexts
     loop each frame
         Core->>App: update_dsp()
-        App->>Graph: rewire and topologicalOrder
-        App->>Engine: update in graph order
+        App->>Runtime: update(dt)
+        Runtime->>Graph: rewire inputs and get topological order
+        Runtime->>Engines: update in graph order
+        App->>Graph: resolve probe output ports
         Core->>App: draw_ui()
-        App->>UI: draw windows and instruments
+        App->>UI: draw editor and instruments
         Core->>Core: render and swap buffers
     end
 ```
 
-*Bootstrap and frame ownership: `main.cpp` supplies the callback, the core owns the platform loop, and the app owns simulation and UI work.*
+*The app delegates circuit evaluation to the UI-independent runtime before drawing views.*
 
-`src/main.cpp` constructs `RfSimulatorCore`, creates the ImNodes context, constructs `RfSimulatorApp`, and passes a callback that calls `update_dsp()` before `draw_ui()`. `RfSimulatorCore::Run()` initializes GLFW, the OpenGL2 and ImGui backends, the ImPlot context, docking, multi-viewport support, and the exe-relative ImGui layout file. It polls events, starts each frame, invokes the callback, renders, restores the main context after platform-view rendering, swaps buffers, and shuts everything down. A failed platform initialization returns without entering the loop.
+`src/main.cpp` creates `RfSimulatorCore`, the ImNodes context, and `RfSimulatorApp`, then supplies a callback that runs `update_dsp()` before `draw_ui()`. The core initializes GLFW, OpenGL, ImGui, and ImPlot, owns event polling and rendering, and shuts down the platform resources after the loop.
 
-`RfSimulatorApp` is the composition root. It owns the `ComponentRegistry`, `NodeGraphEngine`, `ViewManager`, graph widget, project serializer, component library, extension manager, and application instruments. It also owns the UI widgets and the state that connects them. `update_dsp()` rewires raw signal pointers, evaluates the graph's topological order, updates each engine, and resolves probes as `(SignalNode*, output_index)` pairs. `draw_ui()` is presentation and interaction; it may update a standalone instrument while that instrument is visible, but widgets do not become component engines merely by rendering.
+`CircuitRuntime` owns `NodeGraphEngine`, `ViewManager`, `ComponentRegistry`, and the component-ID counter. It creates/removes engines, validates connections, rewires inputs after topology changes, and updates live engines in graph order. It has no ImGui dependency, so runtime lifecycle and link-policy behavior can be tested without constructing the application UI.
+
+`RfSimulatorApp` is the composition root for `CircuitRuntime`, `GraphEditorActions`, `EditorCommands`, project serialization, component libraries, view widgets, and instruments. `GraphEditorActions` adapts probe/group/selection mutations to the graph. `NodeGraphWidget` reads a const graph and sends edit requests through its action callbacks; it does not own graph mutation policy.
+
+`EditorCommands` is the single user-level edit boundary. An accepted component/topology/group edit performs its required app side effects—such as refreshing group boundaries and component-bound views—then advances the project revision. A rejected edit changes neither the project revision nor the project state. Dirty state is derived by comparing that revision with the last clean revision. Parameter edits, node moves, and instrument-state edits that do not pass through a command explicitly mark the project modified; probe changes and group selection retain their non-revision semantics.
 
 ## Engine/widget separation and signal flow
 
-A component is normally split into a pure C++ engine and an optional ImGui widget:
+A component normally has a pure C++ engine and an optional ImGui widget:
 
 ```text
 component/
@@ -102,110 +123,102 @@ component/
   src/*_widget.cpp         ImGui rendering and controls
 ```
 
-Engines implement `IComponentEngine`, own a `SignalNode`, and read `node().inputs[k]` while writing `node().outputs[k]`. `SignalNode::inputs` contains `const Spectrum*` pointers; outputs are owned `Spectrum` values. The pointers are intentionally wired by the app from graph topology, not copied signal buffers. Consequently, removing a component must immediately rewire surviving inputs before any same-frame widget can dereference them. `NodeGraphEngine` owns graph nodes, links, pins, probes, and the DAG; groups are visual-only and do not alter DSP topology.
+Engines implement `IComponentEngine`, own a `SignalNode`, and read `node().inputs[k]` while writing owned `node().outputs[k]` spectra. `SignalNode::inputs` contains `const Spectrum*` pointers, so removing an engine must synchronously rewire surviving inputs before the runtime returns to code that may update or render consumers.
 
-`Spectrum` carries frequency bins, tones, noise PSD, phase, sample rate, complex-baseband state, and a `generation` counter. Producers increment the generation when their output changes. Engines use dirty caching keyed by `(input pointer, input generation)` plus an explicit parameter dirty flag; an unchanged input skips recomputation. Multi-output components use indexed pins and outputs. The graph therefore resolves the source output port rather than assuming `outputs[0]`, which is essential for splitters, PFB channelizers, and probes.
+`NodeGraphEngine` stores nodes, links, pins, probes, groups, and graph IDs. It does not own RF link policy: `CircuitRuntime::connect()` resolves both pins, applies `graphLinkAllowed()` and the graph's duplicate-input/cycle checks, then commits and rewires. The shared `rewireComponentInputs()` pass resolves each component input to the connected source node and output port, applies the same physical policy, and stores either the matching output pointer or `nullptr`. Removal, disconnection, and every frame's runtime update use that pass.
+
+`Spectrum` carries a frequency grid, discrete tones, input and added noise-density vectors, phase, sample rate, complex-baseband state, and a generation counter. Engine dirty caches use the input pointer and generation together with an explicit parameter-dirty flag. Multi-output nodes keep output-port identity through links and probes; a selected probe is resolved as a `(SignalNode*, output_index)` pair rather than assumed to be output 0.
 
 ```mermaid
 flowchart TD
-    A["Graph links"] --> B["rewireInputs"]
+    A["NodeGraphEngine links"] --> B["CircuitRuntime and shared rewire pass"]
     B --> C["SignalNode input pointers"]
-    C --> D["topologicalOrder"]
-    D --> E["engine update"]
-    E --> F["Spectrum outputs and generation"]
-    F --> G["downstream engine or probe"]
-    G --> H["instrument widget reads selected output"]
+    C --> D["topological update"]
+    D --> E["component Spectrum outputs"]
+    E --> F["downstream engines or selected probes"]
+    F --> G["spectrum and component views"]
 ```
 
-*Per-frame ownership: topology selects raw `Spectrum` pointers, engines produce generation-tagged outputs, and widgets consume selected outputs without owning the DSP graph.*
+*Topology chooses signal pointers; engines compute generation-tagged spectra; views consume selected outputs.*
 
-The Network Analyzer is a deliberate exception to ordinary graph execution: it is a singleton instrument, not an `IComponentEngine`, has no node or registry row, and measures through an injected app host. It finds a unique path between two real output pins, clones that chain into a throwaway scratch graph, and measures a synthetic tone sweep. The scratch pass is RAII-scoped and never mutates the real registry or graph. Its signature cache uses serialized chain state, sweep parameters, and probe points because it has no wired input generation to compare.
+## Component ownership and dispatch
 
-## Registry and type dispatch
+`ComponentRegistry` owns live engine instances and registers their signal nodes with `ViewManager`. It indexes engines by graph-node ID and C++ type, exposes a stable component view for orchestration, and rolls back graph/view/index registration if construction fails. `CircuitRuntime` delegates component lifetime to this registry and rewires surviving engines after removal.
 
-`ComponentRegistry` is the ownership container for live engines. `add<T>()` constructs an engine, registers its `SignalNode` with `ViewManager`, indexes it by `std::type_index` and graph-node ID, and rolls those registrations back if any step throws. `remove()` removes the engine and associated indexes; `find()` addresses a graph node; `byType<T>()` supports services such as PFB view management; `all()` exposes the stable engine view used by orchestration and serialization.
+`ComponentTypeRegistry` is separate from the instance registry. Its descriptors provide canonical type keys, project-file names, labels, node kinds, factories, inspector drawers, parameter metadata, and S-parameter capability. Canvas insertion, duplication, persistence reconstruction, inspector dispatch, component-library validation/instantiation, and node-label mapping use this shared table. The type registry defines what a component type means; `ComponentRegistry` owns which instances currently exist.
 
-`ComponentTypeRegistry` is a different responsibility: it is the canonical dispatch/schema table. A descriptor supplies the canonical type and legacy project key, labels, `NodeKind`, factory, inspector drawer, and parameter metadata. Canvas add and duplicate, save/load reconstruction, inspector dispatch, library validation/instantiation, authoring forms, and label-to-kind mapping all use this table. Adding a component type should be a registry descriptor plus its engine and node symbol, not scattered edits to `RfSimulatorApp`. The registry owns *what type means*; `ComponentRegistry` owns *which instances exist*.
+`ComponentLibrary` stores reusable definitions rather than live engines. It scans built-in, global, and project-local roots, validates definition data, resolves referenced assets relative to each definition, and asks the runtime/type registry to instantiate a selected definition. A successful insertion is adopted by `EditorCommands` so it participates in normal view synchronization and dirty tracking.
 
-`ComponentLibrary` is file-backed authoring data, not a third registry of live engines. It scans built-in, global, and project-local roots, validates component JSON, resolves optional data files relative to the definition, and asks the type registry and component registry to instantiate a configured engine. Malformed files and inaccessible subtrees are isolated so later valid definitions remain discoverable.
+## Instruments and measurement integrations
 
-## Persistence, reset, and rollback
+The Network Analyzer is a singleton instrument, not an `IComponentEngine` or graph node. It follows the unique path between two selected output pins and preserves the exact input/output ports. A private scratch graph clones the downstream chain and runs a synthetic tone-comb sweep, leaving the live circuit untouched. The path policy permits an RF SPDT 2:1 switch when only one throw is linked; combiner paths, dual-fed switches, ambiguous paths, and cycles do not produce a measurement. A signature cache avoids rerunning an unchanged path and sweep.
 
-`ProjectSerializer` owns `.rfsim` save, load, and New behavior; the app methods are thin policy wrappers. Save records component type and serialized parameters, node positions, links by component index and port, probes, groups, window state, and instrument state. Raw pin IDs are not the portable address: load reconstructs components first, maps saved component indexes to new node IDs, then restores links and probes. Network Analyzer Point A/B are stored as component, port, and direction records.
+The Receiver Requirements panel is also an app-level tool rather than a graph component. While visible, the app updates its performance-measurement service from the Network Analyzer endpoints and sweep, evaluates gain, noise figure, output-power, and IIP3 requirements, and sends the result to the panel. Requirement state is saved in the project file; the measurements are derived from the selected live chain and sweep.
+
+## Project persistence and lifecycle
+
+`ProjectSerializer` owns `.rfsim` save, load, and reset behavior. The project stores component types and serialized parameters, editor positions, links and probes as component-index/port references, groups, a subset of window state, graph counters, Network Analyzer settings, and Receiver Requirements state. Raw pin IDs are not the persistent link address: loading rebuilds components in file order and resolves saved component indexes to their new graph nodes and pins.
+
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    A["Open project"] --> B["Read, size, and section-shape checks"]
+    B -->|invalid section shape| C["Reset to empty state and report failure"]
+    B -->|valid project| D["Reset existing circuit and views"]
+    D --> E["Create components in saved order"]
+    E --> F["Keep saved-index mapping; roll back malformed records"]
+    F --> G["Restore links through CircuitRuntime"]
+    G --> H["Restore probes, instruments, and groups"]
+    H --> I["Rebuild derived group boundaries"]
+```
+
+The loader rejects files larger than 64 MiB and validates top-level structure before restoration. A wrong-shaped top-level section resets the circuit and reports failure, while invalid guarded fields such as project window flags or `graph_state.next_component_id` are rejected before reset so they cannot destroy an already-open project. Malformed component records are skipped without compacting the saved-index map; if deserialization fails after an engine was created, that engine is removed and the corresponding index remains invalid so later links and probes cannot drift onto a different component.
+
+Saving serializes into a sibling `.tmp` file, checks write/flush/close, and renames it over the target only after success. S-parameter paths in projects are confined to the project directory and saved relatively when contained; component-library data files are confined to their definition directory. Missing or rejected RF data does not escape these roots.
+
+Editor revision state distinguishes project edits from UI interaction. A successful save, load, or New records the clean revision. `.rfsim` stores four project window flags, while `SessionState` separately stores broader window visibility preferences in `app.ini` on Windows and is a no-op elsewhere. `LayoutManager` owns the exe-relative ImGui layout and named layouts; `TutorialState` owns its exe-relative completion marker. These are distinct from circuit and project state.
+
+## Paths and extension trust boundaries
+
+Paths read from projects and library definitions are untrusted. Project S-parameter references must remain under the project directory; library `data_files` must remain under the library JSON's directory. Component-authoring copies also derive safe data-file names from sanitized metadata. These checks are enforced at the boundary that interprets each path.
+
+Extensions are external integrations, not in-process component plugins. `ExtensionManager` discovers manifests in built-in, global, and project-local roots; invalid or incompatible manifests remain visible with validation issues. Manifest IDs and declared data paths are constrained to safe segments and the owning extension root. `ExternalToolRunner` executes a tool only after an explicit user action through a JSON request/result exchange; missing, oversized, or invalid results are failures rather than partial output.
 
 ```mermaid
 flowchart TD
-    A["New or load requested"] --> B{"dirty project?"}
-    B -- yes --> C["Save Discard or Cancel"]
-    B -- no --> D["ProjectSerializer reset"]
-    C --> D
-    D --> E["clear links and components"]
-    E --> F["validate JSON shapes and records"]
-    F --> G{"component restoration throws?"}
-    G -- yes --> H["remove partial component and rebuild PFB views"]
-    G -- no --> I["map saved index to new node"]
-    H --> J["restore valid links probes groups and instruments"]
-    I --> J
-    J --> K["rewire and report success"]
-    F --> L{"top-level or outer failure?"}
-    L -- yes --> M["log failure and return false"]
-    L -- no --> J
+    Input["Project, library, or extension data"] --> Validate["Shape, type, trust, and containment checks"]
+    Validate -->|rejected| Report["Log, skip, or neutralize at owning boundary"]
+    Validate -->|accepted| Owner["Serializer, library, or extension manager"]
+    Owner --> Tool["External process only after explicit user action"]
+    Tool --> Result{"Valid result?"}
+    Result -->|no| Fail["Operation fails"]
+    Result -->|yes| Consume["Consume structured result"]
 ```
 
-*Persistence lifecycle: reset happens before restoration, per-record failures roll back locally, and malformed top-level input fails without leaving a half-restored project.*
+## Recent architectural progression
 
-New and load use the unsaved-changes guard. A successful save clears the dirty flag; edits to parameters, node positions, links, component membership, and Network Analyzer sweep or probe state mark it dirty. A failed load is reported and the serializer's reset/exception boundary determines whether the app is left empty rather than partly trusted. JSON integer fields use representability checks instead of unchecked `get<int>()`; malformed sibling records are skipped with an index mapping of `-1`, so they cannot shift later links or probes onto another component.
-
-Project data is distinct from session and layout data. `SessionState` persists window visibility (and is a no-op off Windows), while `LayoutManager` gives ImGui an exe-relative `rf_simulator_layout.ini` and manages named presets below the executable directory. Tutorial completion likewise uses an exe-relative marker. This makes running from another working directory predictable, but tests that share exe-relative state require isolation.
-
-```mermaid
-flowchart LR
-    Project[".rfsim project"] --> Serializer["ProjectSerializer"]
-    Serializer --> Circuit["engines graph links probes"]
-    Serializer --> Instrument["Network Analyzer state"]
-    Session["SessionState"] --> Windows["window visibility"]
-    Layout["LayoutManager"] --> Ini["exe-relative ImGui layout"]
-    Tutorial["TutorialState"] --> Marker["exe-relative completion marker"]
-```
-
-*Persistence boundaries: circuit state, window visibility, layout geometry, and tutorial completion have separate owners and storage.*
-
-## Paths and trust boundaries
-
-Paths read from projects and library definitions are not trusted. Project S-parameter paths are accepted only when their canonical form remains under the project directory; save rewrites in-project absolute paths relative to that directory. Library `data_files` remain under the library JSON's directory. A missing, invalid, or rejected data file falls back to the component's non-file model rather than escaping the root.
-
-Extensions are also untrusted input and are not loaded as in-process code. `ExtensionManager` discovers `plugin.json` manifests in built-in, global, and project-local roots with later priority shadowing earlier IDs. Invalid or incompatible manifests remain visible with validation issues. Manifest IDs are safe path segments; declared library/data paths must canonicalize inside the extension root; duplicate menu identifiers are rejected. `ExternalToolRunner` runs only an explicit user action through a JSON request/result exchange. Missing or invalid results are failures, not partially accepted output. Extension actions therefore cross a process and filesystem boundary, not the engine interface.
-
-```mermaid
-flowchart TD
-    Input["project library or extension JSON"] --> Validate["shape type and containment checks"]
-    Validate -- rejected --> Report["log validation issue or neutralize path"]
-    Validate -- accepted --> Boundary["serializer library or extension manager"]
-    Boundary --> Tool["external tool only after user action"]
-    Tool --> Result{"valid result file?"}
-    Result -- no --> Fail["operation fails"]
-    Result -- yes --> Consume["consume structured result"]
-```
-
-*Failure boundaries: untrusted files are validated at their owning boundary, while external tools remain explicit, result-checked process integrations.*
+The release history explains why circuit ownership and tools have separate seams. Version 0.26.0 extracted `CircuitRuntime` and `GraphEditorActions` from the application-facing workflow; version 0.27.0 extended the Receiver Requirements integration with output-power and IIP3 measurement criteria. `EditorCommands` now centralizes user-level edit side effects and revision-based dirty tracking.
 
 ## Focused change and test surfaces
 
-For DSP changes, start with the engine and its tests, then verify `SignalNode` pointer routing, generation invalidation, multi-output pin selection, and the widget only through its binding contract. For topology changes, inspect `NodeGraphEngine`, link policy, rewire behavior, cycle rejection, and graph tests. For persistence, use project round-trip and malformed-JSON tests, including partial-component rollback, stale probe clearing, checked integers, and S-parameter containment. Extension work belongs in manifest, discovery, path-containment, and external-tool tests; do not make a plugin a back door into the registry.
+For DSP changes, start with the engine and its tests, then verify signal pointer routing, generation invalidation, multi-output pin selection, and the widget's binding contract. For topology changes, inspect `NodeGraphEngine`, `graphLinkAllowed()`, the shared rewire pass, cycle/input checks, and the UI-free `CircuitRuntime` tests. Editor edit-state work belongs in `EditorCommands` tests, including rejected edits, view synchronization, and revision behavior.
 
-The current Test Flow panel follows the same boundary: `test_flow/` owns flow validation, serialization-key resolution, execution, and snapshot/restore; the panel presents that contract and marks the project state dirty only for authored changes. A flow run snapshots engine state, restores it independently, rewires inputs, and latches restoration failure until circuit reload. This is an example of the architecture's central rule: orchestration may coordinate subsystems, but each subsystem owns its invariant and failure semantics.
+For persistence changes, use save/load round trips and malformed-project tests, including component rollback and saved-index mappings, path containment, checked integer fields, and atomic-save failure. Network Analyzer changes belong with exact-path and isolated-clone tests; Receiver Requirements changes span the UI-free measurement/evaluation tests and project-persistence tests. Extension changes should use manifest, discovery, trust, containment, and external-tool tests; do not make a plugin a back door into the engine registry.
+
+The Test Flow panel is another example of app orchestration around a subsystem contract. `test_flow/` owns flow parsing, validation, parameter addressing, metrics, and execution; the panel provides authoring, preflight, row limits, export, and an outer snapshot/restore boundary around runs. It rewires after restoration and latches restoration failure until circuit reload. Its focused tests verify that successful and ordinary failed runs leave circuit state and project revision unchanged.
 
 ## Source map
 
 | Area | Primary sources |
 |---|---|
 | Bootstrap and frame lifecycle | `src/main.cpp`, `core/include/core.h`, `core/src/core.cpp` |
-| App orchestration and ownership | `app/include/app.h`, `app/src/app.cpp` |
-| Registry and dispatch | `app/include/component_registry.h`, `app/include/component_type_registry.h` |
+| Circuit topology and DSP runtime | `app/include/circuit_runtime.h`, `app/src/circuit_runtime.cpp`, `node_graph/include/node_graph_engine.h`, `node_graph/src/rewire.cpp` |
+| Editor commands and graph actions | `app/include/editor_commands.h`, `app/src/editor_commands.cpp`, `app/src/graph_editor_actions.cpp` |
+| App orchestration and UI | `app/include/app.h`, `app/src/app.cpp` |
+| Component registry and dispatch | `app/include/component_registry.h`, `app/include/component_type_registry.h` |
 | Persistence and path containment | `app/include/project_serializer.h`, `app/src/project_serializer.cpp` |
 | Common signal contracts | `common/component_interface.h`, `common/spectrum.h`, `common/signal_node.h` |
-| Topology and rendering | `node_graph/include/node_graph_engine.h`, `node_graph/src` |
 | Libraries and data | `app/include/component_library.h`, `app/src/component_library.cpp`, `component_data/` |
 | Extensions | `app/include/extension_manifest.h`, `app/src/extension_manifest.cpp`, `app/src/extension_manager.cpp`, `app/src/external_tool_runner.cpp` |
-| Instruments and UI | `network_analyzer/`, `spectrum_analyzer/`, `iq_plot/`, `power_meter/`, `test_flow/` |
-| Session and layout | `common/session_state.h`, `layout/include/layout_manager.h`, `tutorial/` |
+| Instruments and measurement tools | `network_analyzer/`, `app/src/receiver_requirements.cpp`, `app/src/receiver_performance_measurement.cpp`, `spectrum_analyzer/`, `power_meter/`, `test_flow/` |
+| Session, layout, and tutorial state | `common/session_state.h`, `layout/include/layout_manager.h`, `tutorial/` |

@@ -1,16 +1,17 @@
 ---
 type: workflow guide
-title: Test Flow Authoring & Execution
-description: Defines the JSON test-flow contract and explains how the shared harness and app panel discover sweepable parameters, author and validate drafts, run safely, restore the circuit, and export measurements.
-tags: [test flows, harness, authoring, measurements, execution]
-verified:
-  - by: openwiki/0.5.2
-    at: 2026-09-25T17:58:06.034Z
+title: Test Flow Workflow
+description: Defines the JSON sweep contract and traces Test Flow authoring, exhaustive preflight, synchronous execution, full component-state restoration, failure latching, and JSON results.
+tags: [test-flow, harness, authoring, measurements, execution, validation]
 sources:
+  - id: openwiki-source-8c3f2a1fe9422d9010bcc799
+    resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-b5f6d8bb035c1246d584d593
     resource: repo://app/include/test_flow_widget.h
-  - id: openwiki-source-5f1fbd4979e8254a53e79f25
-    resource: repo://app/src/app.cpp
+  - id: openwiki-source-bc033392c5f8ce0dd75226a2
+    resource: repo://app/src/circuit_runtime.cpp
+  - id: openwiki-source-baedf8f3f47fa931244e3545
+    resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-e7932f8366579c2ce8c1865d
     resource: repo://app/src/test_flow_widget.cpp
   - id: openwiki-source-d421666d5c747b865626a28b
@@ -27,119 +28,120 @@ sources:
     resource: repo://test_flow/include/flow_types.h
   - id: openwiki-source-1425d7c9bb71c8e6d4145122
     resource: repo://test_flow/src/flow_runner.cpp
-generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
+  - id: openwiki-source-59642b0a96e98716b082cc11
+    resource: repo://tests/test_test_flow_widget.cpp
+generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-05T19:44:12.666Z
 ---
 
-# Test Flow Authoring & Execution
+# Test Flow Workflow
 
-A test flow is a repeatable parameter sweep over the live signal circuit. The GUI panel is an authoring and orchestration client; the `test_flow` library owns the document shape, path discovery, value grammar, validation, execution, and diagnostic wording. Keeping those responsibilities in the harness prevents an ImGui-only interpretation of a flow from diverging from what the loader and runner accept.
+A Test Flow is a repeatable parameter sweep over the live RF circuit. The app-owned panel is an authoring and orchestration client; the GUI-free `test_flow` library owns the file schema, condition paths, value rules, validation, execution, metrics, and error wording. Keeping the contract in the library lets the same behavior run in Catch2 tests without ImGui.
 
-## Contract and addressing
+## File contract and addressing
 
 A flow file is a JSON object with:
 
 - required `version`, currently `1`;
-- optional string `name` (when absent, the file stem is used);
+- optional string `name` (when absent, it defaults to the file stem);
 - optional `conditions` array; each item is `{ "component": id, "path": key, "values": [numbers...] }`;
 - required non-empty `measure` array; each item is `{ "component": id, "port": integer, "metric": name }`.
 
-`component` is the `IComponentEngine::id()`, not a graph-node id. Resolution deliberately scans the live engines and compares `id()`. IDs are positional and volatile: clean save/load preserves saved order, but deleting or reordering a component can shift later IDs and silently bind an old flow to a different engine. A flow should therefore be revalidated whenever the circuit changes; it is not a stable portable identifier scheme.
+`component` is `IComponentEngine::id()`, not a graph-node ID. The runner and panel resolve it by scanning live engines. `CircuitRuntime` allocates IDs monotonically, so removing a component does not renumber surviving live engines. A project load resets the counter and recreates components in saved order: deleting or reordering components before a save/load can make old IDs shift, disappear, or bind to a different engine. Revalidate flows after circuit changes; flow IDs are not stable portable identifiers.
 
-`port` is a zero-based output-port index. Built-in metrics are `power_dBm` (total power), `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`. The loader rejects malformed shape, wrong field types, empty measurements or value lists, unknown metrics, duplicate condition targets, and duplicate measurements. A failed load resets the parsed spec, so partial conditions never escape through `FlowLoadResult`.
+`port` is a zero-based output-port index. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`. The loader rejects malformed records, wrong field types, empty value or measurement lists, unknown metrics, duplicate `(component, path)` targets, and duplicate `(component, port, metric)` readings. A failed load resets the parsed `FlowSpec`; partially parsed conditions never escape in `FlowLoadResult`.
 
-### Condition paths are serialization paths
+## Condition paths and value rules
 
-A condition path addresses keys in the target engine's `serialize()` JSON snapshot, not inspector labels. Paths are dot-separated keys with optional zero-based array indices, for example `gain_dB` or `tones[0].power_dBm`. `describeConditionPaths(snapshot)` recursively lists scalar leaves in sorted key order: containers are descended into, empty containers produce no entries, and non-numeric leaves remain visible as `numeric == false` so the author can distinguish “exists but cannot be swept” from “missing”.
+A condition path addresses a key in the target engine's `serialize()` JSON, not an inspector label. Paths use dot-separated object keys and optional zero-based array indices, such as `gain_dB` or `tones[0].power_dBm`.
 
-The harness resolves a path once and then checks every candidate value arithmetically. Signed integer slots require finite integral values within the supported signed range; unsigned slots require finite, non-negative integral values and remain unsigned; floating slots accept finite values. Boolean, string, null, object, and array slots are not sweepable. Applying a value preserves the JSON type of the existing slot. This same resolution and acceptance logic is used by authoring, pre-flight validation, and execution.
+`describeConditionPaths(snapshot)` recursively lists scalar leaves in stable sorted-key order. It descends into objects/arrays rather than offering containers; empty containers yield no path. Non-numeric leaves are included as non-sweepable hints, so the author can distinguish a missing key from a key that exists but cannot be swept.
+
+The harness resolves a path once and checks all candidate values against its existing JSON type:
+
+- signed integer slots require finite integral values in range and stay signed;
+- unsigned slots require finite, non-negative integral values and stay unsigned;
+- floating slots accept finite values;
+- boolean, string, null, object, and array slots are not sweepable.
+
+`parseConditionValues()` accepts comma, semicolon, or whitespace separators, but rejects a token that is not a complete finite number and rejects an empty list. `formatConditionValues()` uses shortest round-trip formatting. `applyConditionValue()`, `resolveConditionSlot()`, and `conditionSlotAccepts()` keep authoring, validation, and execution on the same path/type rules.
 
 ## Harness lifecycle
 
-`LoadFlowFile()` only parses and validates the file's JSON contract; it does not touch the circuit. `ValidateFlow(spec, components)` is the live-circuit pre-flight: it checks every condition component and path, every value in every sweep, then every measurement component, port, and metric. It is read-only, exhaustive, and emits issues in the order that `RunFlow()` checks them. Consequently, a panel verdict cannot say a flow is runnable when the harness will refuse it.
+`LoadFlowFile()` parses and validates JSON structure without reading or changing a circuit. `ValidateFlow(spec, components)` is the live-circuit preflight: it checks every condition component and every value for its path, then each measurement component, output port, and metric. It is read-only and returns errors in the order and wording that `RunFlow()` uses. The panel can therefore disable Run without inventing its own verdict.
 
-`RunFlow()` repeats that pass before producing a row. It rejects cyclic graphs, freezes one baseline snapshot per targeted component, and runs the Cartesian product of condition values. The last condition varies fastest. Each row records its applied condition values and all measurement samples. With no conditions there is one measurement pass, not zero rows. A fatal issue produces `ok == false` and zero rows; component deserialization failures are reported as `DeserializeFailed` with rollback details.
+`RunFlow()` repeats that same preflight before producing rows, then rejects cyclic graph topology. It freezes one serialized baseline per targeted component. Each row starts from those baselines, applies that row's condition values, rewires inputs through the shared `rewireComponentInputs()` pass, updates engines in graph topological order, and records every requested metric. It executes the Cartesian product of condition values; the last condition varies fastest. With no conditions it produces one measurement row. The GUI-free harness has no row limit.
+
+<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
+```text
+flowchart TD
+    File["Flow JSON"] --> Load["LoadFlowFile"]
+    Load -->|valid spec| Preflight["ValidateFlow against live engine ids and serialized keys"]
+    Load -->|invalid file| Error["FlowLoadResult error; spec reset"]
+    Preflight -->|issues| Refused["RunFlow fails before rows"]
+    Preflight -->|no issues| Cycle["Check graph ordering for cycles"]
+    Cycle -->|cycle| Refused
+    Cycle -->|acyclic| Baseline["Freeze targeted component baselines"]
+    Baseline --> Rows["Cartesian sweep: restore baseline, patch values"]
+    Rows --> Rewire["Shared graph input rewiring"]
+    Rewire --> Update["Update engines in topological order"]
+    Update --> Capture["Capture metrics into FlowRows"]
+```
+
+Fatal validation, cycle, or deserialization errors produce `ok == false` and zero result rows. If a component deserialization fails during execution, the harness attempts to restore the targeted baselines and includes rollback failure details in its error.
+
+## Panel authoring and preview
+
+`TestFlowWidget` holds either a loaded file or an in-tool draft. The draft is the effective spec while it exists; preview, run, and save all consume that same accessor. `New from Circuit` creates a draft with a measurement on the first component with an output port and pre-fills the authoring form with the first sweepable serialized key and its current value. The sweep remains the author's choice.
+
+The authoring form discovers component IDs from the registry and paths from each engine's own `serialize()` snapshot. It commits conditions and measurements only after asking the harness to validate candidates. It also rejects duplicate targets/readings that the loader rejects but `ValidateFlow()` does not. A refused authoring edit does not materialize or change a draft.
+
+Preview resolves component IDs and output ports against the live circuit, shows a bounded set of values and useful numeric path hints, and displays the harness's own errors. Its predicted row count is the saturating product of all condition-value counts. `saveFlow()` requires a measurement and a valid preflight, writes through `buildFlowDocument()` and `writeFlowFile()`, then loads the saved file back so the panel holds exactly the document on disk.
+
+Loading or reloading a file discards an in-tool draft and clears previous result rows; the panel reports that unsaved edits were discarded. A hand-edited flow can be reloaded without changing its selected path.
+
+## Run boundary, restoration, and reload
+
+The panel runs flows synchronously on the UI thread, so it refuses a Cartesian sweep above `TestFlowWidget::kMaxRunRows` (10,000) before taking snapshots. This is a UI safety limit; the reusable `RunFlow()` harness has no cap.
+
+Before execution, the widget snapshots `serialize()` state for every live engine. It refuses to run if the snapshot pass fails. `RunFlow()` temporarily deserializes sweep values into the live components, but the widget always attempts to restore each snapshot independently afterward and rewires graph inputs. The flow harness takes a const graph and does not change topology. Successful restoration leaves component serialization, graph links, and project revision unchanged.
+
+An ordinary flow error remains available as the result diagnostic if restoration succeeded. A snapshot/restore exception is a separate failure: it clears the result, keeps restoration details in status, and latches the panel so later runs are refused until a circuit reload. `resetAfterCircuitReload()` clears the latch, result, and status but retains the selected flow and draft; preview revalidates those references against the new circuit instead of silently discarding author work.
 
 ```mermaid
 stateDiagram-v2
     [*] --> NoFlow
     NoFlow --> LoadedFile: LoadFlowFile succeeds
-    NoFlow --> Draft: newFlowFromCircuit
-    LoadedFile --> Preview: ValidateFlow on live circuit
+    NoFlow --> Draft: New from Circuit
+    LoadedFile --> Preview: ValidateFlow against live circuit
     Draft --> Preview: edit draft
-    Preview --> Preview: fix issue or circuit changes
-    Preview --> Running: RunFlow and row budget pass
-    Running --> Restoring: execution completes or fails
-    Restoring --> Completed: all snapshots restored
-    Restoring --> RestoreLatched: any restore fails
+    Preview --> Refused: validation or row-budget issue
+    Preview --> Running: RunFlow starts
+    Running --> Restoring: success or ordinary error
+    Restoring --> Completed: every component restored
+    Restoring --> RestoreLatched: a restore fails
+    RestoreLatched --> ReloadRequired: later runs refused
+    ReloadRequired --> Preview: circuit reload clears latch
     Completed --> Exportable: result.ok
-    Completed --> Preview: run error or next preview
-    RestoreLatched --> ReloadRequired: run refused
-    ReloadRequired --> Preview: circuit reload resets latch
-    Exportable --> Preview: export keeps result in memory
 ```
 
-This state machine separates a flow's file/draft lifecycle from the circuit's state: execution temporarily mutates live engines, but the app boundary restores them and rewires inputs before classifying the result.
+## Results and export
 
-## Panel workflow: file truth versus draft truth
+Each `MetricSample` carries a value, unit, and `valid` flag. Unmeasurable metrics return `NaN`; that is an invalid sample, not a fatal run error. Well-formed silent measurements may return negative infinity and remain valid. The panel displays invalid/non-finite values as `N/A`; `FlowResult::toJson()` encodes non-finite values as JSON `null` while preserving `valid`.
 
-The panel keeps a loaded `FlowSpec` and an optional in-tool draft. `spec()` is the single effective-spec accessor: the draft wins while present; otherwise the successfully loaded file is authoritative. Preview, run, and save all consume that same accessor. A first edit copies the loaded spec (or an empty spec) into the draft. `newFlowFromCircuit()` seeds a new draft with a measurement on the first component having an output and selects the first discoverable numeric serialization path and its current value, but does not invent a sweep.
+Export requires a successful run and writes the in-memory result as pretty JSON with a trailing newline. Export failure reports the write/close problem but preserves the result for retry. Flow-file authoring uses an atomic sibling `.tmp` write and rename; result export is a direct output and should be retried to another path after failure.
 
-The authoring form obtains component IDs from the live registry and paths from `describeConditionPaths()` on each engine's own snapshot. It uses `parseConditionValues()` for text such as `-30, -20 -10` or `0;1;2`: separators may be commas, semicolons, or whitespace, but every token must be a complete finite number and the list cannot be empty. `formatConditionValues()` is the shortest round-trip representation. Add/update operations refuse unknown IDs, unresolved or non-numeric paths, invalid values, empty lists, and duplicate `(component, path)` targets, retaining the draft on refusal.
+The panel does not mark the project dirty. Runs restore the live engines, and the project file does not store the flow selection, draft, preview, result, or restoration latch.
 
-Loading or reloading discards a draft and clears the previous result; the status explicitly says that unsaved edits were discarded because the file is the truth again. Saving writes the effective draft through `buildFlowDocument()` and `writeFlowFile()`, then loads it back, making the verified file and panel state identical. The document builder writes version 1, optional non-empty name, conditions only when present, and always `measure`; it copies IDs and paths verbatim rather than guessing them.
+## Focused tests
 
-```mermaid
-sequenceDiagram
-    participant Author as Authoring UI
-    participant Widget as TestFlowWidget
-    participant Harness as test_flow harness
-    participant Circuit as Live circuit
-    participant Disk as Flow file
+Run both the GUI-free harness and app panel contracts:
 
-    Author->>Widget: discover components and paths
-    Widget->>Circuit: serialize and read engine ids
-    Circuit-->>Widget: snapshots and output ports
-    Author->>Widget: edit values and conditions
-    Widget->>Harness: parse values and validate edits
-    Harness-->>Widget: shared error wording or accepted draft
-    Author->>Widget: preview
-    Widget->>Harness: ValidateFlow effective spec
-    Harness->>Circuit: read-only resolution and port checks
-    Harness-->>Widget: exhaustive issues
-    Author->>Widget: save
-    Widget->>Harness: buildFlowDocument and atomic write
-    Harness->>Disk: write sibling .tmp, flush, close, rename
-    Widget->>Harness: LoadFlowFile saved document
+```bash
+cmake --build build
+ctest --test-dir build -R 'test_issue87_flow|test_test_flow_widget' --output-on-failure
 ```
 
-The diagram shows that the panel calls the harness rather than reimplementing JSON shape, path applicability, or value grammar.
-
-## Run boundary, restoration, and circuit reload
-
-The app panel's `run()` imposes the UI safety boundary around the shared runner:
-
-1. Refuse when no spec is loaded/authorable, when the restoration latch is set, or when the Cartesian product exceeds `TestFlowWidget::kMaxRunRows` (10,000). The harness itself has no row ceiling and runs synchronously, so callers must impose an appropriate ceiling.
-2. Snapshot every live engine's `serialize()` result before execution. If snapshotting fails, no run begins.
-3. Call `RunFlow()` on the real engines. It applies each row from frozen targeted baselines, rewires using the shared `rewireComponentInputs()` pass, updates in graph topological order, and captures metrics.
-4. Independently deserialize every saved snapshot, even if another restoration fails, then rewire inputs again. A restoration failure clears the result, reports all details, and latches the panel: later runs are refused until the circuit is reloaded.
-5. On successful restoration, preserve an ordinary flow error as the diagnostic; on successful execution and restoration, store the result and report completion.
-
-This run boundary is intentionally session-only. The panel does not mark the project dirty: its snapshots, draft, selected path, preview, status, restoration latch, and result are UI/session state. The circuit's serialized component state is transiently changed for rows and restored afterward; the project file is not rewritten. `resetAfterCircuitReload()` clears the latch, result, and status after the app reloads/replaces the circuit, while retaining the selected flow and draft so preview can revalidate them against the replacement engines. A changed ID or port therefore disables Run instead of silently discarding author work.
-
-## Results, N/A, and export
-
-A `MetricSample` has a value, unit, and `valid` flag. Metrics that cannot measure their input return `NaN`; execution treats that as a normal invalid sample, not a fatal run error. The panel renders it as `N/A`, and `FlowResult::toJson()` encodes non-finite values as JSON `null` while retaining `valid` to distinguish an unavailable measurement from a valid numeric result. A successful run can therefore contain N/A cells and still be exportable.
-
-Export is available only after a successful run and writes the in-memory result as pretty JSON plus a trailing newline. A failed export reports the path/write/close error but does not discard the result, allowing a retry. Flow-file authoring uses a stronger atomic write: `writeFlowFile()` writes pretty JSON and newline to sibling `<path>.tmp`, flushes and closes successfully, then renames over the target; failures remove the temporary file and leave the existing hand-authored flow byte-identical. Result export is a direct truncating output and should be retried to another path after an error.
-
-## Focused tests and extension points
-
-Run the harness and authoring coverage with:
-
-```text
-ctest --test-dir build -R test_issue87_flow --output-on-failure
-```
-
-The focused tests cover metric computation and invalid spectra, exhaustive validation and path/type rules, Cartesian rows and rollback, JSON null/valid result encoding, parsing/formatting, document round trips, and atomic-write behavior. Widget tests exercise file/draft truth, discovery, shared validation wording, row ceilings, snapshot restoration, dirty-flag neutrality, the restoration latch and circuit-reload recovery, N/A rendering, and export retry behavior.
-
-To add a metric, implement a function returning `NaN` when not computable and register one `MetricDefinition`. To add a condition capability, extend the path grammar and patching rules in `flow_params`. To add authoring behavior, keep the UI-free helper in `flow_author` or `flow_params` and let the widget drive it; do not add a second document or validation implementation to the panel.
+`test_issue87_flow` covers loader errors, path/type/value validation, metric math, Cartesian rows, rollback, result JSON, authoring discovery, value grammar, and atomic flow-file writes. `test_test_flow_widget` covers panel preview and run limits, no-condition and multi-condition row counts, snapshot/restore and unchanged project revision, ordinary and latched failures, reload recovery, authoring/draft behavior, and export. Both are standalone CTest targets in `tests/CMakeLists.txt`; the widget target is `RUN_SERIAL` because app-level tests share executable-relative session state on Windows.
