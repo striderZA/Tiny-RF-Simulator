@@ -30,7 +30,8 @@ add_test(NAME test_ui COMMAND test_ui)
 # test_ui is asserting on; both interferences reproduce (verified 2026-09-18).
 # RUN_SERIAL stops test_ui from overlapping any other test; measured cost is
 # ~2.4 s on a ~10 s `-j8` run (9.6 s unserialized, 12.1 s serialized). CI never
-# sees it: release.yml excludes test_ui with `-E "Benchmark|test_ui"`, so that
-# cost lands on local -jN runs only. The cheaper follow-up is to make the state
-# directory injectable and drop this.
+# pays it: release.yml runs ctest without -j (its Linux legs include test_ui
+# under Xvfb; the Windows and sanitizer legs exclude it), so that cost lands on
+# local -jN runs only. The cheaper follow-up is to make the state directory
+# injectable and drop this.
 set_tests_properties(test_ui PROPERTIES RUN_SERIAL TRUE)

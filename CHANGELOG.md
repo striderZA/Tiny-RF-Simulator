@@ -7,6 +7,7 @@
 ### Testing
 
 - Add switched-filter-bank coverage: analyzer gain and noise figure against the live engines (matched, flipped, and mismatched throws; low-isolation noise), an `IdealFilter` bank whose gain reads the other branch's leakage in the selected filter's stopband, the shared path discovery and runner (both branches wired in topological order, rejected topologies, malformed paths), receiver output power and IIP3 through a bank, and the production app clone adapter.
+- Make the Receiver Requirements pause/resume UI test deterministic in optimized builds: it caps the receiver engine's chain runs per frame, because a Release build otherwise finished the whole sweep before the test hid the view. Unit coverage pins the per-update cap.
 
 ## [0.27.0] - 2026-10-05
 

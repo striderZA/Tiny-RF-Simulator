@@ -1286,6 +1286,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         config.iip3_min_dBm = 0.0;
         config.measurement_conditions.output_reference_tone_frequency_Hz = 5.0e6;
         config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -80.0, -40.0, 0.4};
+        // The engine spends up to 4 ms of wall-clock time per visible frame,
+        // enough for an optimized build to finish this whole sweep during the
+        // multi-frame menu click below, before the view is hidden. Capping its
+        // chain runs per frame keeps the 201-point, 102-run-per-point sweep
+        // going for ~200 visible frames on any machine, so the pause/resume
+        // checks observe it mid-sweep. The guard restores the uncapped budget
+        // the app runs with, however this test exits.
+        auto &receiver = s_app->testReceiverPerformanceMeasurementEngine();
+        struct RunCapReset {
+            ReceiverPerformanceMeasurementEngine &engine;
+            ~RunCapReset() { engine.setMaxRunsPerUpdate(std::nullopt); }
+        } run_cap_reset{receiver};
+        receiver.setMaxRunsPerUpdate(100);
         state.config = config;
         state.invalid_reason.clear();
         clean_revision = s_app->projectRevision();
@@ -1315,7 +1328,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             }
             return true;
         };
-        auto &receiver = s_app->testReceiverPerformanceMeasurementEngine();
         const auto &partial = receiver.measurements();
         IM_CHECK(receiver.isInProgress());
         IM_CHECK_EQ(partial.output_power_dBm.size(), 201);
