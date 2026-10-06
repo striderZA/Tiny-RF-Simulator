@@ -416,3 +416,12 @@ add_standalone_test(test_receiver_performance_measurements
     LIBS simulator::app
     ARGS --skip-benchmarks
 )
+
+# Standalone issue #182 coverage: utils::inputDouble()/inputFrequency() show and
+# keep a value outside their limits, log it once, and clamp only user edits
+# (never against the edit's direction); includes the inspector amplifier-gain
+# reproduction. Kept outside tests.exe for the MinGW-w64 registration ceiling.
+add_standalone_test(test_issue182_bounded_inputs
+    SOURCES test_issue182_bounded_inputs.cpp
+    LIBS simulator::app simulator::core
+)

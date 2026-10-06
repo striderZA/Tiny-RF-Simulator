@@ -104,7 +104,7 @@ Releases are prepared through a pull request by default; the tag is created only
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
   Run `bash scripts/format.sh` to reformat changed files, or `bash scripts/format.sh --check` to dry-run (CI-equivalent). The checked directory set lives once in `scripts/format-dirs.sh` (shared with the pre-commit hook and the release workflow). CI will reject PRs with formatting violations.
   Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
-- **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`.
+- **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`. Their limits bound user edits only: a value already outside them is shown as is (flagged, logged once) and kept until the user edits the field, so pass a local copy of the engine value and write it back only when the helper returns `true`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
 - **Portability:** `uint64_t` requires explicit `#include <cstdint>` (g++ does not provide it transitively).
