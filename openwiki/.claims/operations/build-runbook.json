@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:0a108bfb2def09c290c6b514f6d4e0b809bee5eeb5b11b34fbd3f4dad834bc20",
+  "pageVersion": "sha256:605af61e6029e9d56407d565479d13cb643f67ff89ac35852ed116c5ff1824cb",
   "claims": [
     {
       "id": "claim_0393e26b46664562aedb80f2199cf51f",
-      "statement": "The root CMake project requires CMake 3.20, enables C++20, emits runtime artifacts under build/bin and libraries under build/lib, exports compile_commands.json, and declares application version 0.25.0.",
+      "statement": "The root CMake project requires CMake 3.20, enables C++20, emits runtime artifacts under build/bin and libraries under build/lib, exports compile_commands.json, and declares application version 0.27.0.",
       "evidence": [
         {
           "resource": "repo://CMakeLists.txt#L4-L27",
-          "version": "repo-lines-v1:sha256:f848efe2b26d5b27cbe74212677480344285e239ed56d4cca3f5bea37d03a6c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxMmYxZjE5N2YxOGMwOTUwNmE2NmQ5ZWNkODAyNDBjNWVjODhhZmFlZDFjOTAxNjI0YWQyNWRmM2IwZjI4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNmVkZTg5YmE0NWFmMTA0ZWIxNjhmYzM1ZjllOTA3YjVlOGVhYTYzMzIzZGQ1YmJmZjU4N2M5OThlYmQ1NTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljYjFkNGE5ODkxMDU4YWFjYTQ2MmM0ZDdmNjAyMTg1YmRhZmI3OThjZGE5NTAxNTZiMjI1MzE0MTJhZTFiMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1N2Q2ZDg1YTgxZGI4YzcxNGJlNzE2ZTljYTNhZDM4ZTA1MGU1NzM0MzI0ZmM5YzdkNWQ3ZTYwYTgzM2NjYzcifQ"
+          "version": "repo-lines-v1:sha256:349578d05c98110a6326821d24aa229c3c3b1db59d0da47df544ff5779ab40f4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxMmYxZjE5N2YxOGMwOTUwNmE2NmQ5ZWNkODAyNDBjNWVjODhhZmFlZDFjOTAxNjI0YWQyNWRmM2IwZjI4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNmVkZTg5YmE0NWFmMTA0ZWIxNjhmYzM1ZjllOTA3YjVlOGVhYTYzMzIzZGQ1YmJmZjU4N2M5OThlYmQ1NTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjljYjFkNGE5ODkxMDU4YWFjYTQ2MmM0ZDdmNjAyMTg1YmRhZmI3OThjZGE5NTAxNTZiMjI1MzE0MTJhZTFiMmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1N2Q2ZDg1YTgxZGI4YzcxNGJlNzE2ZTljYTNhZDM4ZTA1MGU1NzM0MzI0ZmM5YzdkNWQ3ZTYwYTgzM2NjYzcifQ"
         }
       ]
     },
@@ -55,11 +55,11 @@
       "statement": "The application resolves built-in component data and extensions relative to the executable, with source-tree fallback for build-tree runs; extension discovery also considers user and project-local roots with source built-ins taking precedence, and project-local tools are trust-gated.",
       "evidence": [
         {
-          "resource": "repo://app/src/app.cpp#L333-L350",
+          "resource": "repo://app/src/app.cpp#L417-L434",
           "version": "repo-lines-v1:sha256:8c6b4adc86c4c04dc434ef1887c4c8bfb0d7cec74a12c8fb2999738aa23cec5c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3NGE2OTRmYzQwZThiOTJjNGFjOTFjNTAyMDE2ZTc4ZjczYmZhYjdiOGU1NTk5MjM5ZWQ5M2NkNzFmMjYxZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3MzRhNmFkNzFhYTlmMGMyODRjNzAzNzkwMDFmNTU0ZDg2OGE1OWRmOWU3MGFlNmRiMmFlMDMyNzEyZDFlOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkZmNmYWM4NmMyNDFiYjRlZDIxMDcyNjc2NjQzOGEzMGRlMmJiOGI1MGI5ZWJmZGQ1OTUwZWQwNzM3OWY0NWQifQ"
         },
         {
-          "resource": "repo://app/src/app.cpp#L359-L369",
+          "resource": "repo://app/src/app.cpp#L443-L453",
           "version": "repo-lines-v1:sha256:83586f2d7e20954336b42bc2a8ff8a9b1cc784fcd2db437a7b45d6131b107486:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjFjY2NkMTAxNzVmZTg3ODQ1NTQxZTk4YmI2MWIyOGFmMTA2YzJkZTkzMzRiYzQ2YTgwM2VhMzg2ODc3MjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyYjQwNWJhMWE0ZGQyMmNiZDc3OTBjMDczNzJlNDI3YThhMzk0OTJiZmU3NDIyMGQ4MWFiYTIxOWQ3MTZmNGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1NWIwN2ZiYWE2MmVhNWI1MDg3NGYzNWI3MjAzYjlmNzNlNjc0YzAwMzk0OTBlNDliYzdiOGM4MjdmYjI4YWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiZDJkZGM0ODllMzJhMGY5NjE2NTE4NWE4MTA5YzAxMjg3OTc1MzM4M2Q1YjBkMDMzMWFiODcwMTcwOGE4OGIifQ"
         },
         {
@@ -70,73 +70,89 @@
     },
     {
       "id": "claim_14787853227943998186efeb81b61008",
-      "statement": "Layout files, tutorial completion, and application session state are executable-relative shared state: layouts use <exe_dir>/rf_simulator_layout.ini and <exe_dir>/layouts, tutorial completion uses <exe_dir>/.tutorial_completed, and app-level state uses the executable-relative app.ini.",
+      "statement": "LayoutManager stores the default layout at <exe_dir>/rf_simulator_layout.ini and named layouts under <exe_dir>/layouts; TutorialState stores completion at <exe_dir>/.tutorial_completed. SessionState persists app.ini next to the executable only on Windows and is a no-op elsewhere; .rfsim project files separately store a subset of window flags.",
       "evidence": [
         {
-          "resource": "repo://layout/src/layout_manager.cpp#L53-L74",
-          "version": "repo-lines-v1:sha256:8dc607a3c6ba84e8a732bd7e768da84be853964b618f818c88b3dcbe73fb8f01:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2MWMzNzg5MjNlYjlmMjVlOTkxNjRiMzNjZGEwMzgwOWFmOTBjNmNjYjAyNmMxOGVkMWUxMTdmYzQ5YjA0Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmYWM0ZTQzNjMwYWJmNjhjM2E0YTc1NzNmZDRjNDMwMDhiYTc5OGRkNzZjMzc1OWVlZWY1M2U2Y2ZmOGQyZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3ZDM0NTBkNDc3ZjBiZTg1NDk0NzdjY2JkODE2OTkzYWNlMGM0MDFjMDViMmZmNjBkY2JjNTIwOWI0NDY1NjcifQ"
+          "resource": "repo://app/src/app.cpp#L227-L238",
+          "version": "repo-lines-v1:sha256:64a2be01b20b9b2f51e4419cb25ef3c5df6a4928330b7c0e9873f3f65e85ffa5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0ODM5NTIxZGIyOWYxYTcxOGU5ZGNkZWQ4MzFiMjBiMWY0OWUxNjVjZWFlNDY5MGIzMzBiZDI5ZTUwN2M1NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5YzE3MjgzYTNkZmZlZGNjNGIyMDNkMTc5YjcxZDQ5ZmMwY2I4MDc3MjRmMTZkNGI0MjBmM2NiZjEwZDA5MDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyNzk2YzVkYTgxNjkzZTg1N2IyNTliZTQ3NDNjOTA3NmQyNzg3NzgwOTcyMWIzMjUzZGRiOGVlYTVkYjA4OGMifQ"
         },
         {
-          "resource": "repo://tests/AGENTS.md#L41-L43",
-          "version": "repo-lines-v1:sha256:3eb04ba9b870a940bfd25336f277a18420115771db38dc47e6423a041590daa3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU5NTBhODFiMDQyMmU1OGJiMzhhODU1ZTE5Nzg3NjgyMDZmNWNkOGZiN2RkNTMyNjU4ZjZiZDc0MGRkZTc0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ0M2ZiZmRlZGJiNzgxODRlMWRkMWE5NWI3NzBjM2RlZTM3MzE2ZGE2YzRiMGUwMWE3ZTk3YzIyYmMzZTg0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUxOTE4OWZkZmIzYTViNmIwY2U2M2FlYzE3MThiMDYxOWM5YTQxMjRmMmFiOWIyZTk0YTU5ODk0NDY5Nzg3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2NjZGUzZDQwNmUzMzE5NGViZmI2YWIwNTkwZjZlY2RlMjk4MGVlNDk2M2I5MDgxMzY2ZTcwNjk3ODJjMjI4NSJ9"
+          "resource": "repo://app/src/project_serializer.cpp#L643-L646",
+          "version": "repo-lines-v1:sha256:ac13c9a4b819d1a2ef174d6de2fdd957e57fd0852e34bc1ec644692aadb6e596:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTM2NDM4YWRhODY2YTAxNzU5NDNjOTZmZGU4YmJiNzE2NWQ2ZmU1OWQ3MDVkZGJjNzQxYjk1YjQzZjEyMjI5OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTIzZjIxOGIyYjNiYjYxNmVkYjRjNDc1ODA1YWEyNWVkY2JhYzlhODRhZjM0MTFhNDNlZGNhMDFlNWU4YzNmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjhiYjg1N2RiMTYzYmU5ZmQ5ZmY5ZmI3ZjkxMjIyNGQ5MGY1MjY0MGVjZTUxZGZjY2UzZjUwMjA2NzA3ZTI5ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWQ1MTdmODYyN2I5NTg5ZWQ3NzFhNDNmNDcxNjM1NmNhODBjNDNlMTIyMzFjYjZlNzEzMGY4ODIyZmY0MmRjOCJ9"
         },
         {
-          "resource": "repo://tutorial/src/tutorial_state.cpp#L53-L67",
-          "version": "repo-lines-v1:sha256:336bb7cff0c1eb1900124a23e544588163572fb4b15e39471af3e7cff1fa1459:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjNzM5OWU5MzNlNGVlNjAyNjZjN2ZmYjQ3MjFmNjQxNjA3ZWZlNGQ1YzM4OTAxYjIxYmE2YWQ1Yjc4MDMwM2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVhZTFiZDMzODBjZDg0ZDhiMzAyNmZlZTFjMjRjOGQzZDVlNGIzMTRmMzFjMjMyYmJhMTc2OTM3YThlZTI1YzYifQ"
+          "resource": "repo://common/session_state.h#L10-L70",
+          "version": "repo-lines-v1:sha256:fc10519f287d284c53db76ea69f7913c1e97a20134bd404e3b6d85b43ef0d222:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmYTNjODBhMzM3M2YyY2JjZDI1OGVkMTFlYmIyYWE0NDBmNzFkZDUwMDJhZTIzODhhZjJhMWM0ZGFhNTE2OTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhMzQ5YmJkMWEyMTEwNGYwNTFlMzRiMmM4YTllNzBjYzdmYmI1MGJjMTlhNjc3ODFmMmExNDBjMzg2ZDk0MzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4ZDhmODE1NzJiMjZjMTE2MDVjMTBlZWM2MWJiOWU3ZTNiNjEyN2ZmMGM4Y2RiYjhmN2E2OGJhMjY4NzdiM2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3YTJlNGJjNzExMjA4NzNiM2RmMGE2MGJkNGZkOWQyODI0N2EzYWI1MTg1ZGNlMTk5NTRjNmM2NDcwOWViYWIifQ"
+        },
+        {
+          "resource": "repo://layout/src/layout_manager.cpp#L53-L59",
+          "version": "repo-lines-v1:sha256:0df80e3a938e8e1008222e34fa5f4aa678a534c70ace96dd4394c71aab4fd973:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODYxYzM3ODkyM2ViOWYyNWU5OTE2NGIzM2NkYTAzODA5YWY5MGM2Y2NiMDI2YzE4ZWQxZTExN2ZjNDliMDRjZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI3NWM3NTlkYTNiMWYwZGZjZWM5YmFmZDc4NWVkZmM2MmYyZjJlNTI4ZjA2ZWFhMzQ4N2IxNjRkMDU5YmI0NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjhkYjQ0ZTliZjVlM2MyMjQ2NzFiZGIxOWM4OGU1YTg2NTVhZWI2N2QxYjdjZjYxNmJkZDAyM2I2OWM3ZDZkMSJ9"
+        },
+        {
+          "resource": "repo://tutorial/src/tutorial_state.cpp#L53-L57",
+          "version": "repo-lines-v1:sha256:80283c683da5820b0c369c23a74d341855eedb9b5339d4787c5fd632673773de:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWM3Mzk5ZTkzM2U0ZWU2MDI2NmM3ZmZiNDcyMWY2NDE2MDdlZmU0ZDVjMzg5MDFiMjFiYTZhZDViNzgwMzAzYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzY4YWFmZTBjNjFjY2QxODFkOGVhODg2NGU4YTk2ZjUwZTc5N2Q2NjY2MjVlYWRmNjJmMzYxODFiZmE0YzM4MSJ9"
         }
       ]
     },
     {
       "id": "claim_d33b7579e51940b1a65867c21a4ddea5",
-      "statement": "CTest discovers the main Catch2 tests and numerous standalone executables, while MinGW-w64 can silently drop registrations in the main tests executable; release CI enforces a floor of 223 registered cases and new coverage should use standalone targets when appropriate.",
+      "statement": "CTest discovers the main Catch2 test cases and registers standalone executables through add_standalone_test; because MinGW-w64 can silently drop cases from the main tests executable, release CI requires at least 223 registered cases on Windows and separate targets keep added coverage runnable.",
       "evidence": [
         {
           "resource": "repo://.github/workflows/release.yml#L156-L172",
           "version": "repo-lines-v1:sha256:b56023cd5ff7efa7b956ad164df6ad9458f4c21d9c48929b7e70bfdcf0c581c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3OTFkZGI0NGEzNGQ2ZmMyMGQ4ZTNmNDE5NjdkMTUyNzUzNmUzNjMwNGE5MTFmZmI2MmNhOTJmNjlhZjUzNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmNTU5NzljZTczMDIwMzNlNmIyZmQ3ZDg4ZjUzN2EzYjhlMDkxZWEzMDVjODExZmZhMTI3NGJmNTc2NGVhNWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVjZjU0NDFkZGJlZWM5YjEwOWUxZWU2NDM0MjhjYjkzMTMxNTM2ZTViZTgxMTRjMmU4MmUyNGQ5ZDM5ZWZiOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiOGRmMWJmYWMyNjBhZWMwMTg4ZDRiNjdhMzdjNzhkMDZjMzIwYmE1N2QwYjgzOGVlMzE5MTJhODMzNDE2ZjEifQ"
         },
         {
-          "resource": "repo://tests/CMakeLists.txt#L126-L149",
-          "version": "repo-lines-v1:sha256:72e0930d6caa6b41f8f08b5b33d4f479107a49fe794cca4ea4faddab844defc0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5NmJjNmUxNDg2NmE0ODY0ZDM1N2ViMDBmZjMxZTNiMzljYmQ1MjFjMThlMWU2NjAzYWI4YWEyZTczMzM2MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwNTUzMjFkZTEwYzAxYTQ1NTQzMWMzMTRkYjJhNjk1YzVjN2Q1YmY4NmU0Mjk1YzUzOGViZmYxMzUzZTcxM2EifQ"
+          "resource": "repo://tests/CMakeLists.txt#L277-L416",
+          "version": "repo-lines-v1:sha256:33c84c0e4ff2005e8ac2e0745a5ccea61429b10575254b09269c92db9eec967b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlZjAxYWI0YzlmZjg1ZTdjMTg0ZDE3YTc1ZDExNGViOGQ5OWQxNzE5NTU0NzRkYWE2NDU4ODRlNDU2MTAyYjM4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJmYWZiYTA1MjdjMzk1M2M0YjZlMGU1YjU3MzliYTgzNjEyZjgwNTNiY2RjOTQ2NjczMDE5M2NkMWQ1OTBiNDA4IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyOWMxM2YwZGJmMzhhNWMzNWI2YjBlMDZlY2ZiMDljOGVlZDM4MjJmY2U0YzIxMzJhOTlkMzg2NDhjN2E0NWJlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
         },
         {
           "resource": "repo://tests/CMakeLists.txt#L53-L76",
-          "version": "repo-lines-v1:sha256:d02d1786fdd1a063ab82ea04f9479bf556408063df3497b8249ef303ecccaa96:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNGMzMTE4MGRlM2VmZGUxOTBmNzZjNWZkYmUyM2FmYzMwNWMwMWFiNmU0MDFiMjFkODQyMzA2ODk5M2YxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmZDAxNzIwYjMxYjFkZTQ2MjA5MDBlNjZhOGY1NTY3MjM5NDBhYzE3MGM4MzFmMDQ0YmViZDBkOWEyZDg3MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiODE5ZjlmNTAwNmMzNzcyMDQ3OGMzOTQ5OGY5NjAzMmRjZjc4M2RmNmRiNzhjNjhjNDk1YzkwYzczZmVlZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNWM2NjY0M2NlZTA5MWIwMDNmODhmOTFkNzFhZmIzMWQwNTUwZWI3MDE1NTg3MjYyNTdhMDdmMmQyOTFmOGYifQ"
+          "version": "repo-lines-v1:sha256:7a38f53e9a98e37ba8f72d85f604717affdbc26ed562b492448836bc97261774:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNGMzMTE4MGRlM2VmZGUxOTBmNzZjNWZkYmUyM2FmYzMwNWMwMWFiNmU0MDFiMjFkODQyMzA2ODk5M2YxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmZDAxNzIwYjMxYjFkZTQ2MjA5MDBlNjZhOGY1NTY3MjM5NDBhYzE3MGM4MzFmMDQ0YmViZDBkOWEyZDg3MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiODE5ZjlmNTAwNmMzNzcyMDQ3OGMzOTQ5OGY5NjAzMmRjZjc4M2RmNmRiNzhjNjhjNDk1YzkwYzczZmVlZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNWM2NjY0M2NlZTA5MWIwMDNmODhmOTFkNzFhZmIzMWQwNTUwZWI3MDE1NTg3MjYyNTdhMDdmMmQyOTFmOGYifQ"
         }
       ]
     },
     {
       "id": "claim_e8305d4526cd49b5a0226fd95428fcc8",
-      "statement": "Parallel CTest runs against one build tree are constrained by shared executable-relative state and mutable extension fixtures; relevant tests are marked RUN_SERIAL, but separate concurrent CTest invocations remain unsafe.",
+      "statement": "Some CTest targets use RUN_SERIAL to protect shared executable-relative app state or mutable source-tree extension fixtures, but RUN_SERIAL applies only within one CTest invocation; separate concurrent invocations against the same build tree can still race.",
       "evidence": [
         {
-          "resource": "repo://tests/AGENTS.md#L41-L45",
-          "version": "repo-lines-v1:sha256:61d2c4267bfdfc93c5ee5cb11e4354c9895bcf4aabb8ff32e350d45e832edf4f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU5NTBhODFiMDQyMmU1OGJiMzhhODU1ZTE5Nzg3NjgyMDZmNWNkOGZiN2RkNTMyNjU4ZjZiZDc0MGRkZTc0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIzZTBkZDA4YjJmNDFiNmJjZWZiZDhhYTk5MWYyMDgwYmJhMmNjOGM0M2RjNWVhMTQ2YmZjOGY4NzMyMWQ2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUxOTE4OWZkZmIzYTViNmIwY2U2M2FlYzE3MThiMDYxOWM5YTQxMjRmMmFiOWIyZTk0YTU5ODk0NDY5Nzg3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSJ9"
+          "resource": "repo://common/session_state.h#L30-L53",
+          "version": "repo-lines-v1:sha256:dfd8540f48c6bd00813402e0df2b71102b632c3310b6f174cc42bb7f020c72f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyOTY1ODAxMzYzMTAwODQ1MzBlOWMwY2M5ZmZkYzIwMWJlODA4MGVlNDQxZjBiODc5ODViM2ZmODY1MzBlZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhMzQ5YmJkMWEyMTEwNGYwNTFlMzRiMmM4YTllNzBjYzdmYmI1MGJjMTlhNjc3ODFmMmExNDBjMzg2ZDk0MzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhMzU3MjNmNDhlOGEyZGE4NzM1NWJjZDA1YjkzNDE2M2ExMmE2MGU4ZDc4ZThhYzA0YzkxZDVhMzZjNWUzMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwZWY3MjU1ZDk5MjJlYmVjYmIxYjEyMTJiMTNmYjJlNjE0ZjMzMzRmNjkyZTgwMTI2OWE3ZGE1ZTI3ZDMyOTMifQ"
         },
         {
-          "resource": "repo://tests/CMakeLists.txt#L258-L271",
+          "resource": "repo://tests/AGENTS.md#L51-L56",
+          "version": "repo-lines-v1:sha256:b88aa9c321d8b84ffe43781fcdb26839c76e7e58a8c1516e67a922e0a59b6ea0:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU5NTBhODFiMDQyMmU1OGJiMzhhODU1ZTE5Nzg3NjgyMDZmNWNkOGZiN2RkNTMyNjU4ZjZiZDc0MGRkZTc0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGIzZTBkZDA4YjJmNDFiNmJjZWZiZDhhYTk5MWYyMDgwYmJhMmNjOGM0M2RjNWVhMTQ2YmZjOGY4NzMyMWQ2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjc4YTVlYTNhYzRlNjc2NDcwOWE3NGViZWJmMjM1NDE4Y2U3NWFlOTQ0ZDQ2M2E5NTRlOGE2YWM4NTRlZTYyNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSJ9"
+        },
+        {
+          "resource": "repo://tests/CMakeLists.txt#L260-L273",
           "version": "repo-lines-v1:sha256:49a3f9749bf214e4df21563e0063235af00ab8be9522e29704f33e6d0a0f209f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMGRjY2ViNzRmZjBjOGEyOThhNzI3MDA3MmJhZDg3N2NlZWMzYWUwMjkxMTJkYWU1ZGMzNzhlMzIyM2I2OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjZmUxYTZiMmI5OGM1NmMwNWI3YzVhYmM0NWIzYzNkZDkzMmY3NDZmZjBjODkwOWRkNzA1YjAzMTk3YmE3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMDlmNjIwZTA0MTdhOTlkODlhNzQyZDU0YzI0MDY3ZTVlMzE1YzZjNjlmNGYzYTM5ZWEwODE3ZDgzMDI5MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YzEzZjBkYmYzOGE1YzM1YjZiMGUwNmVjZmIwOWM4ZWVkMzgyMmZjZTRjMjEzMmE5OWQzODY0OGM3YTQ1YmUifQ"
         },
         {
-          "resource": "repo://tests/CMakeLists.txt#L370-L373",
-          "version": "repo-lines-v1:sha256:12931f5c2b134fd025e00a7517985b61a056c29020032e9f2ebacfe7f87df888:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTVlZGMwNmNjM2Q0NDI3NjE5N2U2ODBkMTFjYWNlNmZmMDliZDQwMGRjNDUxYTE3ZmY0ODQ3OTFlZmQ1YTExMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTNlYThlM2Y1MGE5OGJiMjkxZTE2ODY0ZTUyZjlkMzA3ZDk2ZGZjYmQxYjA5YmE1NWIxY2Y5YWM0MWJkNzZkNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzZiNDM4N2VlMzIzZTMzNGNkNzk3MThlNTJlM2RmMWZiNjUzMDU2NzUxM2MwMmRlMTUxMDQwMGJmZjg4NWVhYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+          "resource": "repo://tests/CMakeLists.txt#L367-L410",
+          "version": "repo-lines-v1:sha256:462911b1019379cde5a57f696beca247a210bceac9e160f084f5b7e3e3a41513:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlMGFlZTIwZjdlZTNiNzllZGVlNGU1NTFjNDM0ZTE2OWY3ODBlYjkyNDkzNzQ5NjVjZmIyMzE4MTU2YWI4ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiYjYwODQ0N2NhZTc0MzhlZDk4OGU1MzY0NDk3MGRmMDhhNmU0NTdkMTM1YjM1Nzc5ZjY5MmIwZjIzODcyZmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVkNDM0MWE1YzVkYTkzZjljNDQ0YTdhYWU4YjJlODdiNzkxNWI3N2MyMDgxNzg4M2I0ODcwMjM0ZGIwYTE3MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4MTk4NzRhZWI0MDUwYTE3MzdiNWQ3YWU2MGJkNjdkYTc0MWYwN2I0NmU2OTk4OWRmY2U5NzQxNmJmOTM0NzAifQ"
         }
       ]
     },
     {
       "id": "claim_2932e183b8d241c8823677a3a79fe6fa",
-      "statement": "Release CI runs on v* tags, validates semantic version and changelog entries, selects a reduced Linux GCC 14 Debug strict matrix for patch tags and a Linux GCC, Linux Clang, and Windows MinGW matrix for minor or major tags, and always runs formatting, ASan, and optimized package builds before creating a draft release.",
+      "statement": "The release workflow is tag-only: pull requests run no automated CI, while each v* tag is version/changelog-validated, runs formatting and AddressSanitizer, selects a strict-build matrix by tag class, tests optimized Release packages for both platforms, and creates a draft only after required jobs succeed.",
       "evidence": [
+        {
+          "resource": "repo://.github/workflows/release.yml#L1-L8",
+          "version": "repo-lines-v1:sha256:cb08f9316b683c12b5dd69b975ce6178a810053add900b4cb2dfd628bf1b0178:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTJlZWY5MDMwZDBjNzAyOTAxMGM0NjM1Njg5ZjU4MzI4ZDEwOWU2YTg1ZWQxYTkyNDViMjBmMzk1NWI3ZGIzOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTBhNTk0ZjM0YjdmMGVhNTczZGE3ODcwM2UyNzQ5MzBkYjcxOGM5NDJjYWYzYzA0MjUxNzU1ZjYyM2M2MGQ1YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2FmZTlkYzc0NDkxMmJhNDcyMWFkNDg1ZmNhYmNkYTU0MjIyMzA5YjJhNmFmZGU2ZDc3Y2Q3MWQ5ZGFhYmMzMCJ9"
+        },
+        {
+          "resource": "repo://.github/workflows/release.yml#L15-L46",
+          "version": "repo-lines-v1:sha256:75d56e4817f51dbe49948feacd0d5632307fa14f9b44429306eaa8e2faaf8ba8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1NmVjNDQ1YmNhMGRiMTQzYzQyY2EyNGVjZDJhNmFkNThmMDI3YWU5ZWI1ZmNkZDExZmE4M2U4NWEyYTI3ZDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MDBiZjJmMTA1MDFlNDc0NDg2NzNlZGNlZWNlMTFmNmY4OTU4NjQ4ZjE5ZTBjMmViODEyNmFlMzI2YTFhZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3YzQ0ZjQ5NjQ4NGE4Yzg4MzY2Yzg4YzcxNmJlNzBiZjk2MTZiZTUxODAwMzdhZjExYWIzN2E1ZjA1YzkwMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwMWNiYTFjODczMzgxOGRhYTNmMmVmYjQzMDU0ZDU4OWI3MzZmMzZiOTJhNDQ0MDY1Mjk1MmZlOWQ0Y2YyOGMifQ"
+        },
         {
           "resource": "repo://.github/workflows/release.yml#L174-L200",
           "version": "repo-lines-v1:sha256:90c7fd28116d8214b740f7d35715144ee5fab08e7db65a6b17a33dab7b382153:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1YzJhYTVmMDA3MmZlYTYzMTA3NjQ0ZmVkMWZhNDZhYWJiZDZjM2IwNDg0M2FmNjUyMTQ0MWM2OGVkYWUzZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3ZGQ2MDMwOTYxYzY2ZWRhNmQ0NjE5MzJiOGFmNjEyNTZhZTI4M2ViNDNlZjZiOTkyZDQ1YWY4NDc5MmEwZWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjNWYzNjJmNzIxYjM2OWVjYmRhYmE3MWZiM2JkZGMxMGM0YTJmMzIyYzM0N2Q0YmJhZTNhYWIyMTI5YTgyM2IifQ"
         },
         {
-          "resource": "repo://.github/workflows/release.yml#L201-L318",
-          "version": "repo-lines-v1:sha256:44d2310fdfcf6687d5951eac45930dd3d1b5611b372a0979184faea3cc428b91:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMTQ0NTc4NDVmODkzOGU0MjgzMzhjZTA1ODljNmY3YTU2ZmVjMmIxMjA3NWZlYWVmZTNiY2ZlNmI5ODhlZjg1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJmYjRhMTdkMmU5ODcwOWM1MjEyYTJjZjY5NzAyNmRiYTg5MjVlZThkYjUxMWM1N2I4ZjE3Y2YwMmQ5YTlkZDJjIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjQ1NGY3MWI4NzUyOWE5YThlZDMyNjIwOGVlODFkMGUxZGRiYTVkZDdlYWNiN2NhODAxNjc1NmZlZDUxY2RhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiYTAxOTQxNjQxYzNmNGY4ZGNjMDgwNjVmZDJmODc1Zjc0NTkxYjQ5MDcwZWE1NmZlZDFiYzI2NGU0NTdhZGNhIn0"
-        },
-        {
-          "resource": "repo://.github/workflows/release.yml#L3-L46",
-          "version": "repo-lines-v1:sha256:5e7489f6dc3d88b011d992a1c143f85e24d28b6e198a209b5edcd8e1d8f27fd3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5NmRjNDgxNDlmNWE4M2QxZWQ2ZGJiMzliYmM3ZTJiOTAyYWEzZDM0ZDZiZDVhZTRiMjkxYjY4ZGYwY2E3OWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MDBiZjJmMTA1MDFlNDc0NDg2NzNlZGNlZWNlMTFmNmY4OTU4NjQ4ZjE5ZTBjMmViODEyNmFlMzI2YTFhZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmOWNhZTQxNDE4YTVmOGY0YTFhODI5ZmRkZDAyYmY3NzQ4MmUwYjkwMmQzYzBiNGZmYzExYTg3NGZlNGQxZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwMWNiYTFjODczMzgxOGRhYTNmMmVmYjQzMDU0ZDU4OWI3MzZmMzZiOTJhNDQ0MDY1Mjk1MmZlOWQ0Y2YyOGMifQ"
+          "resource": "repo://.github/workflows/release.yml#L201-L319",
+          "version": "repo-lines-v1:sha256:ecc7dada67e7f29e3fba978a787a7446104f89cd80321d6b7dcc605b1f224199:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMTQ0NTc4NDVmODkzOGU0MjgzMzhjZTA1ODljNmY3YTU2ZmVjMmIxMjA3NWZlYWVmZTNiY2ZlNmI5ODhlZjg1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwNzZmM2UxODhlNGZkZmM5OGQxODhmMGZiMGNiNjI1NGFiYmYzNzYyOTc3NGFjZGFiZTJkMmJjNGYwOTBkOWNhIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjQ1NGY3MWI4NzUyOWE5YThlZDMyNjIwOGVlODFkMGUxZGRiYTVkZDdlYWNiN2NhODAxNjc1NmZlZDUxY2RhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmNDMxNjI5ZmM2ZmViYWYxYmI0ODVhYjM3YjhmYTUwY2VmY2I4MDU4YzY4NjA4ODUzNzM0Y2QxYjM1OGQ3Y2E4In0"
         },
         {
           "resource": "repo://.github/workflows/release.yml#L328-L356",
@@ -145,6 +161,10 @@
         {
           "resource": "repo://.github/workflows/release.yml#L49-L84",
           "version": "repo-lines-v1:sha256:a1d50e3c5be9a4c1beb485900a94b11b1d2b3dbcdad4d8ab1291d778dce0a017:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5YWNjZGY0MDI4NTZjNTJkZjAzNGYyMjVkODY2NWJlYzRlMDUxNjFjY2RhYmFhYmRkNzFjNWQ4NTE4Y2VmZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiOGMwNzdmMTI4NzIyMjE2ZTllNjRhYWQyODhkNTBhY2E4MTc1NDJkMGFjZDI5NjUwZWU4ZDI2OWRkOWQ3NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1MDA2MWJjZDRjY2YyMzE1MmE5YjFhZDcxMzcwNzZlNGUyNmRkMzY3ZmU1OTI3Mzc2NTQyYWZmYzQyZjY2ZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NWYxM2VlYTQyNDBlMThhNDEwNmZmYWJkNmQ4NTgyOTBlYmYwNTlkMjU2YTViNWNhYWY2YWU5YTQ5M2ExMTYifQ"
+        },
+        {
+          "resource": "repo://CONTRIBUTING.md#L60-L79",
+          "version": "repo-lines-v1:sha256:fb9e06ddd558b7ea66acc5c519044120d2e273213ae5bc6dbf1cea26d84d44db:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzNWNkNmM3ODdlMzQ0ZGUyNjkwZGM1ZDBjYmY0NDFiNDMyOWJlYzcyMzMwMzI3ODY3Nzg0MjIzNDI1NDI3YWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2ZWY2NjZhMGE0NGYyMjk1NGU1OWRlNDVjMmVhYjMwMWQ1YzdmZDZkYzI2NDVjMDY0NTVkMDg3MWM3NTY2MzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2ZTkzOWI4Mjg0NGY1YjFiMWViMjMwZmFiNDBkZTBkNWM4OGJiMWM0OGRlMjcxYjRmZjM1NTVkYWJhNjRmNDEifQ"
         }
       ]
     },
@@ -183,10 +203,50 @@
           "version": "repo-lines-v1:sha256:6d4bca45263d77f0c899177ecafa819315a3be9de5650c19b8cd4434bdc16f74:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2OTYxZjQ0YmUwMzU0OTc2ZTZiOGM0MTQ4ZWM4NzZhMzM1YTIyMzhiYzNhNTU1YjYwMWE4MzNjNjlmZGU5ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4OGVhZWMzODYyZjE5YjVlMjhjNDA5MTAxMGQxYTRjMjc3NmUxZDNmNmE5MDY2YTEyMzQwYWY1YWUwMmMwMzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhNTU0MjkyYWIxMGJkYzNiNGYwMDc5ZjY3YjU2MDJkNDllZWM3MmFjMjdiZjgxZmFiZGExNGVjYTUyNTFkZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYifQ"
         }
       ]
+    },
+    {
+      "id": "claim_1cf448f91a074dbeaa422f2e1d33f9ea",
+      "statement": "Enabling core.hooksPath activates local-only pre-commit clang-format, commit-subject, and non-fast-forward push checks; intentional history rewrites require the per-invocation RFSIM_ALLOW_FORCE_PUSH override, and scripts/test-githooks.sh exercises the gates.",
+      "evidence": [
+        {
+          "resource": "repo://.githooks/commit-msg#L31-L55",
+          "version": "repo-lines-v1:sha256:723a7d39b0e3e30a8811240fb59fa0e0b2ddc4b79e9916665e1086e11cfc5344:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5YzZhYzNmODVhOGE1NTY2ODRiNjljZGVkZmZlMTRkMTVjNWVlN2Y4ZGY1MDVlNDhhY2YyZTI4MTc2ZjQ3ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkMmQxYjIwZDNjYjJiODMxMjViOWJjN2MyM2NkM2QzZWVjODk0ZWRiMGI2MWY2NjkyNDMxMGY4MDY0YjU0NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4OTFkYmRmYzA0MDJjZDRiYTYwZmFiMWJlMzI0NWRmZWM1NTljNWQ3YWZjN2UyMWI4N2U3OTVhNzNkMDVlNWYifQ"
+        },
+        {
+          "resource": "repo://.githooks/pre-commit#L1-L18",
+          "version": "repo-lines-v1:sha256:ea8dc328fb7bd779bd975ffda5bb50c12e71bff51bd0d7437663b9baa97e3faa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNzQ1MjFjZDEyZmZkYjdiYTliNzlkNjJkZDkyNDJjNTYxODM3OTBkOWI0MDUzODU0N2I0YTYwYWY2YmZiNzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1YzliMzJiMDQ4NWQ0M2FjYmVkNWZhY2JiZTQzZTc3N2JiNjljYzgxMTM1NTZmMTRkMjBhMDAxMGZhZTYxYzAifQ"
+        },
+        {
+          "resource": "repo://.githooks/pre-push#L11-L14",
+          "version": "repo-lines-v1:sha256:d214fc257483c12b8d2213894ec8bd05af969c9c7323777907223c341f595f20:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmI1YzlmZDg5OTVmN2Q3ZGJmYWEwMTM4NjhhMzhmNjYyNDRkOGJhY2FlYWI0NzQ1ZDgxNGVjZDY2M2M0NTVhMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTUyMjY5YTIzY2QwZmViNzliNjk4YTYyOGFhNjY2MmVhMDJjNjlmYzkxZTJlNzY3YzdiZTFiYTdiYWMzOGY5OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjdlNzE3ZmM5YmRhMTgzNDAyY2YzMzI0NDIwNjhhY2QwZjcxZWJiZGFlNzlhOGE4YjE0MGZiMjM2NGNiNzEwMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzJjOTQwYWYyMjE5YzIwODBjMWNlMjdkNjdjMDZmNjgwZDVmM2Q5YTY1MzBlMTA4MGYxOTQ3YzRkY2Q3MzY3MSJ9"
+        },
+        {
+          "resource": "repo://.githooks/pre-push#L46-L67",
+          "version": "repo-lines-v1:sha256:80aa7b8e602d54eb99350485798d2fd2bc507604586d47e6cbcae0ef959049b9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyYjJhZDhhOTMzODUwNTBiYjY5YTI5NjIyOGY0NGQxMmM1MzUxNTFlMzc3MGVmMTdkMTZiNmQ0Zjc5Mjc2ODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkODU3OTllMDE4OWRhMDI5MDk1M2ZkM2Q4YzhhMzE3MWI1MzE1ZTBjZTlhMGY4YWE5ZmFjNGJkMDliMmMxODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkOGEyMjYxMmMwMTY3MzU1MzYxOGIwMjBmMjY3ZGUwMzc0ODhhOTQzOWQ4NjBjNGFmMWI0NTMyMjFkNzM1MDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjNjg2OGMyYzQ0ZjA1MzYxOWNlZjFjYzM4M2UxZDUzMDc0M2I1NzRjYTE5MmFjZTkxNjhhOWNjZjQ2YTg2ZTMifQ"
+        },
+        {
+          "resource": "repo://scripts/test-githooks.sh#L159-L269",
+          "version": "repo-lines-v1:sha256:97bc441608f35b09a0d1d43a66e0cba79a0e29b66693edc48f6e3b9f93cf854d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTExLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmZjk4YmJhYmQ4M2VkZmY0NGMzYTEzNjUxNjI3ZDlhYTNlMmIxYTU0MGI3YWY2Yjg1YjJiZGU1MTdjMGJiZDRiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZjNhMTFkZmM1ZDFiNjg3YTU4OThmNTEyOWU1NTkzMjQ0MGZlYmJlN2JmMmIxZGRhMThjZGUzZGMxNTA1ZGQ3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjMmRiNTZjZTQ0YzRkMGM5MWJjOTQ0NjUzNjhlOGExZWZiMjk2Y2ZlZjgyODc5NjA2ZWRiOThhYmI0ZTlmYTZmIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyZmNkNjlhYWUwYWU0OTIyMTExODBjOGIyZGJlNmM1OTIzOWU1MTYyM2MyYzRjOTc5YWI1NWJhYzdlMmQzYTE4In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_470b1b5c3f7b4b88a8897e2a5ab2dda1",
+      "statement": "For release preparation on this Windows workstation, invoke scripts/release.sh with Git for Windows MSYS sh; after its sed version edit, verify the CMakeLists.txt diff is only the expected two-line change because line-ending normalization can otherwise rewrite the file.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L106-L108",
+          "version": "repo-lines-v1:sha256:9ddd53a8429b0ce74bdbab016de9bdb589dfc90beff734868dc63370c86c299b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTIxZDdmMTMwMjRjNjU1ZjU0NDUxNjYyMDlhNzAxZGY1MTI0NjNlMzcxMWUyMjc0NTYxYmFlYWYzZGRmMGFiZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzA0NTlmOGE1ZjQ4YjZjMTRmYTgzNWU0M2U2NDA1ZTM0N2QwN2E0MWQwYWE1MjA5N2QwMzZkNWZmZDFhZWVhNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWJkMWYyNzlkYzdkNjU5ZjdiYWRmNDY1YzQ3MjJhYzBhMWYwY2QxNWY2N2JmY2FmZmM5ODM4YmY4MzI3MTYyYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjMwZTgyMzkwMGJlM2Q5MGIwMjlhY2I1YzQyOWNiNmJmMWMxNmM3ZGNmN2ZlYWM3MzFkYWNiNGNhNTU3ZjFlMiJ9"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L143-L149",
+          "version": "repo-lines-v1:sha256:e4682419fc732960eb910a988c78ac6d103599c49c5698e33b037a2df4a3dcd7:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjUzZDkyZWVkNWQ0YjRiN2EwYWJkMmNhMTliOWQ3NDZjYWI1YjYzMmY5ZDRkNzE5NTZiMDVlNzkyOWFkNTI4ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjY1NDg3N2ZkMWE4MzVhMTNlMDZmOGU5NjVkNTk2ZDU1Zjc2NDU4Y2JkMGFkMTM5YzMyZWI3NDYxNmE1YTNhOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUwOTRlYWZlZWZkNzA0ZjA4N2Y5NzRlYjk0Y2E2N2M0ZjNjMWE5ZDZiYmQ0Yzc0Y2RiYzEyYTJjZTMyMjk2MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGQyNGI2ZTEzMTdkOTc1YTBmNDgzZDAxNjA2ZjhkYmZkZjEwZDczN2FmNTE3MzNhNTUwMTdiYjUzZmEwMWVlZCJ9"
+        }
+      ]
     }
   ],
   "verification": {
-    "by": "openwiki/0.5.2",
-    "at": "2026-09-25T17:58:06.034Z"
+    "by": "openwiki/0.7.0",
+    "at": "2026-10-06T04:13:15.031Z"
   }
 }

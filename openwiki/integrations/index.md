@@ -1,3 +1,3 @@
 # Files
 
-- [S-Parameter System](s-param-system.md) - Explains how Touchstone files become frequency-dependent component behavior, how project and library paths are resolved safely, and how S-parameter state survives save and reload.
+- [S-Parameter System](s-param-system.md) - Traces Touchstone parsing and complex S-parameter application through component engines, with separate project and library path-containment, persistence, fallback, and failure contracts.

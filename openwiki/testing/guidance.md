@@ -1,27 +1,41 @@
 ---
 type: Engineering testing guide
 title: Testing Guide
-description: Explains the Catch2, standalone, UI, integration, regression, and GUI-free Test Flow strategy. Use it to select the right target, isolate state safely, and pair code changes with focused coverage.
+description: Explains the Catch2, standalone, UI, integration, and GUI-free Test Flow harnesses. Use it to choose focused regression coverage, isolate shared state, and validate tag-triggered releases.
 tags: [testing, catch2, ui-testing, integration-testing, regression-testing, test-flow]
-verified:
-  - by: openwiki/0.5.2
-    at: 2026-09-25T17:58:06.034Z
 sources:
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
   - id: openwiki-source-e7932f8366579c2ce8c1865d
     resource: repo://app/src/test_flow_widget.cpp
+  - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
+    resource: repo://common/session_state.h
+  - id: openwiki-source-f317ee207e1653d2033c81a4
+    resource: repo://CONTRIBUTING.md
+  - id: openwiki-source-6236844d67c4b6a4f4573508
+    resource: repo://layout/src/layout_manager.cpp
   - id: openwiki-source-8c357fec0d6783d0809a624a
     resource: repo://test_engine/CMakeLists.txt
-  - id: openwiki-source-d421666d5c747b865626a28b
-    resource: repo://test_flow/AGENTS.md
+  - id: openwiki-source-f23e5c266721037d2ad036be
+    resource: repo://test_flow/CMakeLists.txt
+  - id: openwiki-source-3d3e3b78daf6b95b69159369
+    resource: repo://test_flow/include/flow_runner.h
+  - id: openwiki-source-1425d7c9bb71c8e6d4145122
+    resource: repo://test_flow/src/flow_runner.cpp
   - id: openwiki-source-5063b6aa8934c32dd8a94ee1
     resource: repo://tests/AGENTS.md
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-fb26cd54f157859706d14c13
     resource: repo://tests/test_issue87_flow.cpp
-generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
+  - id: openwiki-source-86241b4bc592c332461c936b
+    resource: repo://tests/test_temp_paths.h
+  - id: openwiki-source-08f846c8582718824d718b09
+    resource: repo://tutorial/src/tutorial_state.cpp
+generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-05T19:44:12.666Z
 ---
 
 # Testing Guide
@@ -35,7 +49,7 @@ CTest discovers the main Catch2 cases and standalone targets from `tests/CMakeLi
 
 ## Test-flow ownership
 
-A Test Flow is a JSON specification, not a second circuit. `test_flow` is a GUI-free static library: it loads and validates a flow, resolves condition paths against component `serialize()` snapshots, executes the cartesian product of condition values, and captures registered metrics from output ports. The app-owned `TestFlowWidget` supplies the live components and graph, protects the UI from oversized sweeps, snapshots and restores the whole circuit, and renders or exports the result.
+`test_flow` is an independent GUI-free library for flow schema, condition-path/value validation, metrics, results, and sweep execution; it does not link the application or ImGui. Flow conditions use `IComponentEngine::id()` and engine `serialize()` keys. The app's `TestFlowWidget` authors and previews flow specs using the harness's `ValidateFlow()`, applies the UI row budget before a synchronous run, snapshots every live component, then restores each snapshot and rewires inputs. The graph topology is not mutated. A restoration failure clears results and latches the panel until circuit reload.
 
 ```mermaid
 flowchart TD
@@ -52,9 +66,9 @@ flowchart TD
 
 *The harness owns flow semantics and measurements; the panel owns live-circuit lifecycle, UI limits, presentation, and restoration.*
 
-Flow conditions address the target engine's `serialize()` keys, using dot-separated keys and optional zero-based array indices such as `tones[0].power_dBm`; inspector labels are not valid substitutes. Component ids are positional engine ids and can silently refer to another component after deletion or reorder, so flows must be revalidated after circuit edits. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`; unavailable measurements become invalid/`NaN` in the model and JSON `null` in results.
+Flow conditions use dot-separated paths and optional zero-based array indices such as `tones[0].power_dBm`; they address serialized engine state, not inspector labels. `component` values are positional `IComponentEngine::id()` values, not graph node IDs. Deleting or reordering components can silently redirect a later flow reference, so revalidate flows after circuit edits. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`; unavailable readings are invalid/NaN in the model and JSON `null` in results.
 
-`ValidateFlow()` exhaustively checks every candidate value and measurement reference in the same order and wording used by `RunFlow()`. It resolves each condition slot once, then checks numeric type, finiteness, integral-ness, and range without mutating the circuit. The widget refuses a sweep above its `kMaxRunRows` budget before execution. On execution it snapshots every component, runs against the live engines, restores every snapshot independently, and rewires graph inputs. A restore failure is more serious than an ordinary run failure: it clears the result, latches the panel, and requires a circuit reload; successful restoration leaves component serialization, links, and the dirty flag unchanged.
+`ValidateFlow()` exhaustively checks every candidate value and measurement reference in the same order and wording used by `RunFlow()`. It resolves each condition slot once, then checks type, finiteness, integral-ness, and range without mutating the circuit. `RunFlow()` refuses invalid specs before producing rows and starts each sweep row from the targeted components' baseline snapshots. The widget refuses a cartesian sweep above `kMaxRunRows` before execution. After running, it restores every component independently and rewires graph inputs; successful restoration leaves serialized component state, graph links, and project revision unchanged. A restore failure is distinct from an ordinary run failure and requires circuit reload.
 
 ## Running the suite
 
@@ -110,17 +124,21 @@ Each name below is an independently registered CTest target. The source is the s
 - `test_spectrum_jitter`, `test_spectrum_analyzer_snr`, and `test_node_hover_snr`: stable tone peaks despite display noise, analyzer SNR guards/read-only behavior, and node-hover first-output SNR/data fallback.
 - `test_test_flow_widget`: the app panel's snapshot/restore boundary, ordinary and latched failures, reload recovery, validation and row limits, authoring controls, preview, export, and bounded rendering.
 
+- `test_circuit_runtime`, `test_graph_editor_actions`, and `test_editor_commands`: UI-free circuit lifecycle and link policy, probe/group mutation, revision-based dirty semantics, rejected-command behavior, and component-view synchronization.
+- `test_receiver_requirements`, `test_receiver_performance_measurements`, and `test_receiver_requirements_project`: requirement validation/status, real-engine gain/NF/output-power/IIP3 measurement, partial/cache behavior, persistence, and New/reset behavior.
+
 This inventory is intentionally derived from current CMake registration rather than a historical executable count. New targets must be registered with `add_standalone_test`; otherwise CTest will not run them.
 
 ## Isolation and temporary state
 
-Parallel CTest is useful but not universally safe. Scratch files must be under `temp_directory_path()` and include `test_temp_paths::processTag()` plus a per-process counter. A static counter alone collides because `catch_discover_tests` launches separate processes; random names are not a sufficient correctness guarantee.
+Parallel CTest is useful but not universally safe; use the isolation rules below.
 
 The following shared resources require care:
 
-- `test_extensions` and `test_issue45_extension_trust` both mutate the source-tree `extensions/` root, so CMake marks them `RUN_SERIAL`. Start with a clean root; an interrupted test can leave a manifest behind. `RUN_SERIAL` only coordinates one CTest invocation, not two concurrent invocations against the same build tree.
-- App-level executables share exe-relative `app.ini`; `LayoutManager` shares `layouts`, and `TutorialState` shares `.tutorial_completed`. `test_ui` and `test_test_flow_widget` are `RUN_SERIAL`; avoid a second CTest run against the same build tree. Tests that construct `RfSimulatorApp` must create ImGui, ImPlot, and ImNodes contexts first.
-- The UI target needs a real display. Linux CI supplies Xvfb; Windows release CI excludes `test_ui`. The Linux release job runs CTest under `xvfb-run`, while the ASan job excludes benchmarks and UI. Windows also checks that `build/bin/tests.exe --list-tests` stays above the verified registration floor; new Windows-required cases belong in standalone targets rather than after the main binary's MinGW-w64 registration ceiling.
+- Scratch paths must be process-unique because `catch_discover_tests` can launch separate cases as separate processes; `tests/test_temp_paths.h` provides a process-id tag for filenames.
+- `SessionState` writes the exe-relative `app.ini` on Windows and is a no-op elsewhere. `LayoutManager` and `TutorialState` use exe-relative files on all supported platforms. Extension tests also mutate the shared source-tree `extensions/` root.
+- CMake marks `test_ui`, `test_network_analyzer`, `test_extensions`, `test_issue45_extension_trust`, `test_test_flow_widget`, `test_editor_commands`, and `test_receiver_requirements_project` `RUN_SERIAL` for shared state or fixtures. This serializes only one CTest invocation; do not run two CTest processes against the same build tree. Start extension tests with a clean `extensions/` directory.
+- UI tests need a display. Linux CI supplies Xvfb; Windows release CI excludes `test_ui`. The ASan job excludes benchmarks and UI; Windows also checks the main-binary case count against the workflow's MinGW registration floor.
 
 ## Choosing coverage for a change
 
@@ -130,7 +148,8 @@ Pair the smallest test that exercises the changed ownership boundary with an int
 |---|---|
 | DSP engine math, noise, phase, filtering, dirty flags | engine test or `test_issue117_numeric_correctness`; cover nominal, zero/negative/non-finite input, clamping, and clean-vs-dirty updates |
 | Serialization, project load/save, component registry or library | `test_project_file`, `test_component_dispatch`, `test_issue48_json_loader`, `test_issue79_component_validation`, or issue #77/#113; assert round trips, malformed input, rollback, and dirty/path invariants |
-| Graph topology, links, probes, groups, multi-output ports | node/group tests plus issue #37/#42/#70/#78/#116; assert both pointer cleanup and persisted/reported port indices, not only rendered lines |
+| Runtime topology and editor commands | `test_circuit_runtime`, `test_graph_editor_actions`, `test_editor_commands`, and node/group regression tests; assert link policy, pointer cleanup, accepted/rejected revisions, and view synchronization |
+| Receiver requirement measurement or persistence | `test_receiver_requirements`, `test_receiver_performance_measurements`, `test_receiver_requirements_project`; cover validation/status, real-engine measurement, partial results, caching, and project round trips |
 | Extensions, external tools, paths, or trust | `test_extensions` plus the focused #45/#80/#130/path-containment targets; use unique temp roots and test refusal as well as success |
 | Test Flow grammar, metrics, authoring, or execution | `test_issue87_flow`; include invalid references, every sweep value, metric-unavailable results, atomic writes, and restore/rollback behavior |
 | Test Flow panel, preview, export, or state lifecycle | `test_test_flow_widget`; add a UI case only for visible interaction, and run `test_ui` for menu/window wiring |
@@ -140,7 +159,7 @@ Do not put ImGui/GLFW dependencies into pure engine tests. Do not duplicate harn
 
 ## CI and local verification
 
-Release CI builds with CMake/Ninja, runs Linux tests under Xvfb excluding benchmarks, runs Windows tests excluding `test_ui`, and runs an ASan CTest pass excluding benchmarks and UI. The Windows job explicitly counts registered cases with `tests.exe --list-tests`; this catches silent registration loss rather than trusting source counts.
+Pull requests run no automated CI. Release-tag validation uses CMake/Ninja; Linux tests run under Xvfb excluding benchmarks, Windows tests exclude `test_ui`, and the ASan pass excludes both benchmarks and UI. The `strict-build` matrix runs one Linux GCC 14 Debug leg for patch tags and the four-leg Linux GCC Debug/Release, Clang 18, and MinGW matrix for minor/major tags. Every tag also tests the optimized Release package builds; these are the shipped configurations. The workflow checks the `MINGW_TEST_CASE_FLOOR` (currently 223) and creates a draft only after required jobs pass.
 
 Before submitting a change:
 

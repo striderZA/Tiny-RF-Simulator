@@ -3,18 +3,27 @@ type: Runbook
 title: Build & Operations
 description: Reliable contributor and release-operator procedures for configuring, building, testing, formatting, installing, packaging, and troubleshooting Tiny RF Simulator. Covers pinned dependency fetching, platform constraints, executable-relative runtime data, CI gates, and release publication.
 tags: [build, testing, packaging, ci, operations, release]
-verified:
-  - by: openwiki/0.5.2
-    at: 2026-09-25T17:58:06.034Z
 sources:
+  - id: openwiki-source-6983d4a49fc6ae63a12ff946
+    resource: repo://.githooks/commit-msg
+  - id: openwiki-source-bf5be0c9253ed1d07b502e10
+    resource: repo://.githooks/pre-commit
+  - id: openwiki-source-baf30c604828cfde90a8ab63
+    resource: repo://.githooks/pre-push
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
+  - id: openwiki-source-8037e2358a2c4f9b2c722a11
+    resource: repo://AGENTS.md
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-f8c30b6d300fb033e11282e7
     resource: repo://app/src/extension_manager.cpp
+  - id: openwiki-source-baedf8f3f47fa931244e3545
+    resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-d44494ef3e497fea81240ef8
     resource: repo://CMakeLists.txt
+  - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
+    resource: repo://common/session_state.h
   - id: openwiki-source-f317ee207e1653d2033c81a4
     resource: repo://CONTRIBUTING.md
   - id: openwiki-source-6236844d67c4b6a4f4573508
@@ -23,18 +32,23 @@ sources:
     resource: repo://scripts/format.sh
   - id: openwiki-source-76478c25db28b99104e23105
     resource: repo://scripts/release.sh
+  - id: openwiki-source-84d4847b3b591b7a766682c8
+    resource: repo://scripts/test-githooks.sh
   - id: openwiki-source-5063b6aa8934c32dd8a94ee1
     resource: repo://tests/AGENTS.md
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "openwiki/0.5.2", at: "2026-09-25T17:58:06.034Z" }
+generated: { by: "omp", at: "2026-10-06T04:13:15.031Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-06T04:13:15.031Z
 ---
 
 # Build & Operations
 
-The project is a C++20 CMake build. The authoritative application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.25.0`), not an older changelog entry. Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
+The project is a C++20 CMake build. The authoritative application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.27.0`), not an older changelog entry. Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
 
 ## Build lifecycle
 
@@ -127,15 +141,15 @@ build/bin/tiny-rf-simulator
 build/bin/tiny-rf-simulator.exe   # Windows
 ```
 
-Runtime assets are deliberately executable-relative for installed operation:
+Runtime assets use executable-relative paths for installed operation:
 
-- `component_data/` and built-in `extensions/` are installed beside the executable and are preferred there; a build-tree run falls back to source-tree `component_data/library` and source `extensions`.
+- `component_data/` and `extensions/` are installed beside the executable. Build-tree runs use source-tree fallbacks; component-data lookup prefers the installed executable-relative root when present.
 - `layout/` stores the default `rf_simulator_layout.ini` and named layouts under `<exe_dir>/layouts/`.
-- tutorial completion is the existence of `<exe_dir>/.tutorial_completed`.
-- application session state uses the shared `<exe_dir>/app.ini` (including app-level UI settings).
-- extension discovery also considers `$HOME/.rf-sim/extensions` (or `%USERPROFILE%\\.rf-sim\\extensions`) and project-local `rf-sim-extensions`; source-tree built-ins win before executable-relative, global, and project-local duplicates. Project-shipped external tools remain trust-gated.
+- tutorial completion uses `<exe_dir>/.tutorial_completed`.
+- `SessionState` persists window preferences to `<exe_dir>/app.ini` on Windows only; it is a no-op on non-Windows platforms. Project files separately store a subset of window flags.
+- extension discovery also considers user and project-local roots. Source-tree built-ins take precedence over executable-relative, global, and project-local duplicates; project-local external tools remain trust-gated.
 
-This means moving an installed executable without its adjacent `component_data` and `extensions` directories breaks the shipped-data lookup. It also means parallel app-level tests can contend for the same state files.
+Moving an installed executable without its adjacent `bin/component_data` and `bin/extensions` directories breaks shipped-data lookup. On Windows, app-level tests share `app.ini`; layout and tutorial tests also share executable-relative files.
 
 ## Tests and isolation
 
@@ -155,7 +169,7 @@ build/bin/tests [edge]
 ctest --test-dir build -R 'test_test_flow_widget|test_issue87_flow' --output-on-failure
 ```
 
-The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. On MinGW-w64, the main binary has a verified registration ceiling: CI requires `build/bin/tests.exe --list-tests` to report at least 223 registered cases. Put new coverage in a standalone target when it could exceed that ceiling, rather than assuming a silently dropped `TEST_CASE` ran.
+The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. MinGW-w64 can silently drop `TEST_CASE`s beyond a compiler-specific registration ceiling. CI separately requires `build/bin/tests.exe --list-tests` to report at least the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223). Put new coverage in a standalone target when the main binary approaches its ceiling, rather than assuming a silently dropped `TEST_CASE` ran.
 
 UI tests are optional locally and require a display:
 
@@ -164,7 +178,7 @@ build/bin/test_ui
 xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E Benchmark
 ```
 
-CTest can run discovered cases in parallel, but do not run two CTest invocations against the same build tree concurrently. App-level tests share executable-relative `app.ini`; layout and tutorial tests share `<exe_dir>/layouts` and `.tutorial_completed`; extension tests mutate the source `extensions/` root. Those tests are marked `RUN_SERIAL` where possible, but serialization applies only within one CTest invocation. Start with a clean `extensions/` directory. Scratch fixtures must be process-unique when adding tests because `ctest -jN` launches separate processes. `test_ui` is excluded from CI's headless Windows path; Linux CI uses Xvfb. Benchmarks are excluded from release CI with `-E "Benchmark"`.
+CTest can run discovered cases in parallel, but do not run two CTest invocations against the same build tree concurrently. Some app-level tests share Windows `app.ini`; layout and tutorial tests share `<exe_dir>/layouts` and `.tutorial_completed`; extension tests mutate the source `extensions/` root. Relevant targets use `RUN_SERIAL` within one CTest invocation, but that does not serialize separate CTest invocations. Start with a clean `extensions/` directory. Scratch fixtures must be process-unique when adding tests because `ctest -jN` launches separate processes. `test_ui` is excluded from CI's headless Windows path; Linux CI uses Xvfb. Benchmarks are excluded from release CI with `-E "Benchmark"`.
 
 ## Format and local gates
 
@@ -184,6 +198,17 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+### Git hook gates
+
+Enable the repository's local hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook checks staged C++ with clang-format 18 using the shared directory list in `scripts/format-dirs.sh`. The commit-msg hook enforces the documented `<type>[(scope)][!]: <summary>` subject format under 70 characters; GitHub-side squash merges bypass the local hook, so PR titles should follow the same format. The pre-push hook blocks non-fast-forward updates to existing remote refs. For an intentional one-off rewrite, use `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`; `git push --no-verify` skips all hooks. Run `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+
+
 ## Install and package
 
 The install tree places the executable and runtime payloads together:
@@ -198,28 +223,37 @@ It installs `tiny-rf-simulator`, `component_data/`, and `extensions/` under `bin
 cpack --config build/CPackConfig.cmake
 ```
 
-A package must retain the adjacent `bin/component_data` and `bin/extensions` payloads. The simple release-workflow archives are separate binary distributions: Linux packages the optimized executable as `rf-simulator-linux-x86_64.tar.gz`; Windows packages the executable plus MinGW runtime DLLs as `rf-simulator-windows-x86_64.zip`.
+A package must retain `component_data/` and `extensions/` beside the executable (under `<prefix>/bin/` in the install tree). The simple release-workflow archives are separate binary distributions: Linux packages the optimized executable as `rf-simulator-linux-x86_64.tar.gz`; Windows packages the executable plus MinGW runtime DLLs as `rf-simulator-windows-x86_64.zip`.
 
 ## CI and release operations
 
-There is no pull-request workflow currently. `.github/workflows/release.yml` runs on every `v*` tag:
+Pull requests run **no automated CI pipeline**. Run the local format, build, and test gates before requesting review. Automated CI starts only when a release tag is pushed:
 
-1. `classify-release` accepts semantic `X.Y.Z` tags. Patch tags (`Z > 0`) get Linux GCC 14 Debug strict validation; `vX.Y.0` and `vX.0.0` get Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64.
-2. `validate-version` compares the tag to `CMakeLists.txt` and runs `scripts/release-notes.sh`, which requires a usable changelog section.
-3. The format job runs `bash scripts/format.sh --check --all`; strict builds compile and test; Linux uses Xvfb and Windows excludes `test_ui`; Windows checks the 223-test registration floor.
-4. Every tag also runs Linux AddressSanitizer and optimized Linux/Windows package builds. Package builds test the exact Release configuration that is shipped.
-5. Only if all required jobs pass does the workflow create a **draft** GitHub release from the matching changelog section.
+1. `classify-release` accepts semantic `X.Y.Z` tags. Patch tags (`Z > 0`) get Linux GCC 14 Debug strict validation; `vX.Y.0` and `vX.0.0` get the four-leg Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 matrix.
+2. `validate-version` matches the tag to `CMakeLists.txt` and uses `scripts/release-notes.sh` to require a non-empty matching changelog section.
+3. Every tag runs clang-format 18 over the full checked set, Linux AddressSanitizer, and the tag-class strict-build matrix. Linux UI tests run under Xvfb; headless Windows validation excludes `test_ui`. Windows checks the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223).
+4. Every tag builds and tests the optimized Release Linux and Windows package configurations. Those are the shipped builds; Debug is validation-only.
+5. After all required jobs pass, the workflow creates a **draft** GitHub release using the matching changelog section.
 
-Prepare releases with the repository script. The changelog section must exist first:
+Prepare releases only after adding a `## [X.Y.Z] - YYYY-MM-DD` section with at least one bullet to `CHANGELOG.md`. The usual path prepares a `release/vX.Y.Z` branch for review, then tags the merged version on `master`:
 
 ```bash
+# POSIX shells
 bash scripts/release.sh X.Y.Z
 bash scripts/release.sh X.Y.Z --dry-run
 bash scripts/release.sh X.Y.Z --on-master
-bash scripts/release.sh X.Y.Z --tag   # only after the version commit is on master
+bash scripts/release.sh X.Y.Z --tag
+
+# Windows (Git for Windows MSYS)
+sh scripts/release.sh X.Y.Z
+sh scripts/release.sh X.Y.Z --dry-run
+sh scripts/release.sh X.Y.Z --on-master
+sh scripts/release.sh X.Y.Z --tag
 ```
 
-The default prepare mode requires clean `master` (apart from an uncommitted changelog edit), creates `release/vX.Y.Z`, bumps CMake, runs format/build/test gates, and commits. `--on-master` skips the release branch. Tag mode requires a clean master at the matching version, creates an annotated `vX.Y.Z` tag, and pushes it. `--skip-gates` is available for exceptional preparation but should be followed by the gates manually.
+Prepare mode requires `master` and a clean tree apart from the changelog edit; by default it creates a release branch, bumps `CMakeLists.txt`, runs format/build/test gates, and commits. `--on-master` is the sanctioned direct-to-master alternative; `--skip-gates` skips preparation gates and requires a manual run afterward. Tag mode requires a clean `master` at the matching version, creates and pushes an annotated tag, and must run only after the version bump has landed.
+
+On Windows, run the release script as `sh scripts/release.sh …` from Git for Windows MSYS. Because its `sed -i` can normalize mixed line endings in `CMakeLists.txt`, verify `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the expected two-line version change before pushing. If it does not, restore `CMakeLists.txt` from `HEAD~1`, reapply the version bump byte-preservingly, and amend the preparation commit.
 
 ## Troubleshooting
 
@@ -230,7 +264,7 @@ The default prepare mode requires clean `master` (apart from an uncommitted chan
 | Link errors after adding files | Add the source to its module `CMakeLists.txt`, then reconfigure. |
 | Linux GLFW/Wayland configuration trouble | Reconfigure with `-DGLFW_BUILD_WAYLAND=OFF` and install the X11/OpenGL development packages. |
 | UI test hangs or fails headlessly | Use `xvfb-run` on Linux; do not expect `test_ui` to run on Windows CI. |
-| Tests disappear on MinGW | Check `build/bin/tests.exe --list-tests`; move new cases to a standalone target if the count is below the 223 floor. |
-| Parallel tests fail around `app.ini`, layouts, tutorial, or extensions | Clean leftovers, run one CTest invocation, honor `RUN_SERIAL`, and never overlap separate CTest runs on one build tree. |
+| Tests disappear on MinGW | Check `build/bin/tests.exe --list-tests`; move new cases to a standalone target if the count is below the workflow's `MINGW_TEST_CASE_FLOOR` (currently 223). |
+| Parallel tests fail around shared app state or extensions | On Windows, app-level tests share `app.ini`; layouts and tutorial tests share executable-relative state and extension tests mutate the source `extensions/` root. Clean leftovers, run one CTest invocation, honor `RUN_SERIAL`, and never overlap separate CTest runs on one build tree. |
 | DSP output becomes NaN | Trace zero or invalid frequency through logarithmic gain calculations; guard inputs before `log10`/square-root paths and add a zero-frequency regression test. |
-| Installed app cannot find examples or extensions | Verify `bin/component_data` and `bin/extensions` are beside the executable, rather than relying on the source-tree fallback. |
+| Installed app cannot find examples or extensions | Verify the executable directory contains `component_data/` and `extensions/` (`<prefix>/bin/component_data/` and `<prefix>/bin/extensions/` for an install tree), rather than relying on the source-tree fallback. |
