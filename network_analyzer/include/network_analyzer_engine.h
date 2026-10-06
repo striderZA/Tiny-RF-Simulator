@@ -29,10 +29,9 @@ class NodeGraphEngine;
 // sweep point. A 2:1 switch emits its selected throw's tones first, so through
 // a filter bank Gain is the selected throw's tone where that throw carries one
 // and the other throw's leakage where it does not (a non-S-parameter
-// IdealFilter drops out-of-passband tones), while P_noise,out includes both
-// throws' noise. Where both throws carry a tone, Gain omits the unselected
-// one: it reads 10*log10(1 + P_unselected / P_selected) dB below the two
-// tones' power sum, and NF that much above the NF against that sum.
+// IdealFilter drops out-of-passband tones). Where both throws carry a tone,
+// Gain omits the unselected one, while P_noise,out still includes both
+// throws' noise.
 //
 // v3 replaces the v1/v2 wired-pin engine entirely: no ComponentEngineBase, no
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
