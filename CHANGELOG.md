@@ -2,7 +2,7 @@
 
 ### Fixed
 
-- **Network Analyzer and Receiver Requirements through switched filter banks** — a 1:2 switch feeding parallel branches that rejoin at a 2:1 switch is now measured instead of reporting no data (#169). Analyzer gain follows the selected switch throws and its noise figure includes the unselected branch's noise leaking through isolation; receiver output power and IIP3 measure the same circuit. Combiners, merges fed by a source outside the measured path, and a Point A component that feeds the bank through more than one output still report no data.
+- **Network Analyzer and Receiver Requirements through switched filter banks** — a 1:2 switch feeding parallel branches that rejoin at a 2:1 switch is now measured instead of reporting no data (#169). Analyzer gain follows the selected switch throws, or the other branch's leakage where the selected filter passes no tone, and its noise figure includes the unselected branch's noise leaking through isolation; receiver output power and IIP3 measure the same circuit. Combiners, merges fed by a source outside the measured path, and a Point A component that feeds the bank through more than one output port still report no data.
 
 ### Testing
 

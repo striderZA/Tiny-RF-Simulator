@@ -753,10 +753,11 @@ TEST_CASE("Receiver output power measures through a switched filter bank",
     };
 
     // Matched throws: the selected branch at insertion loss plus the other
-    // branch leaking through both switches' isolation, combined in phase. The
-    // leakage sits 86 dB below the selected tone on T1 but 72 dB on T2 (the
-    // branches differ by 7 dB), so output power exceeds the generator tone
-    // plus the selected branch's loss by 0.0004 dB and 0.0022 dB.
+    // branch leaking through both switches' isolation. Neither path shifts
+    // phase, so the two add in phase; the leakage sits 86 dB below the
+    // selected tone on T1 and 72 dB on T2 (the branches differ by 7 dB),
+    // raising output power above the selected path alone by 0.0004 dB and
+    // 0.0022 dB.
     CHECK(measure(0, 0) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 3.0 - 0.5, -10.0 - 40.0 - 10.0 - 40.0))
               .margin(1e-9));
@@ -765,8 +766,8 @@ TEST_CASE("Receiver output power measures through a switched filter bank",
               .margin(1e-9));
     // Mismatched throws: each branch passes one switch at isolation, and the
     // stronger T1 leakage is summed in. The analyzer's first-tone Gain keeps
-    // only the selected (T2) throw, so the generator tone plus that Gain reads
-    // about 10 dB below this output power.
+    // only the selected (T2) throw, so the generator tone plus that Gain
+    // (-60.5 dBm) reads 10.2 dB below this output power (-50.29 dBm).
     CHECK(measure(0, 1) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 40.0 - 10.0 - 0.5, -10.0 - 0.5 - 3.0 - 40.0))
               .margin(1e-9));
@@ -816,7 +817,7 @@ TEST_CASE("Receiver IIP3 through a switched filter bank matches the selected bra
 
     // The fan-in's insertion loss lowers the fundamental and IM3 lines alike,
     // and the T2 leakage is linear and 99 dB below the selected fundamental
-    // (adding at most 1e-4 dB to it), so the input-referred intercept is the
+    // (shifting it by at most 1e-4 dB), so the input-referred intercept is the
     // branch's own.
     const double bank_iip3 = engine.measurements().iip3_dBm[0];
     REQUIRE(isFinite(bank_iip3));

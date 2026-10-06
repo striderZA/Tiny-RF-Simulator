@@ -25,15 +25,14 @@ class NodeGraphEngine;
 // Gain_dB at a sweep point is the FIRST output tone at that frequency, and
 // NF_dB = 10*log10(P_noise,out / (G_linear * kT)) with G_linear =
 // 10^(Gain_dB/10), so NF inherits Gain's tone choice. Same-frequency tones are
-// not power-summed, because harmonics/IMD from a nonlinear stage can land on
-// another sweep point. A 2:1 switch emits its selected throw's tones first, so
-// Gain through a filter bank is the selected-throw path wherever that throw
-// carries a tone at the frequency (a non-S-parameter IdealFilter drops
-// out-of-passband tones, leaving the other throw's leakage first), while the
-// unselected throw's noise is in the NF numerator; when both throws carry
-// comparable power at a frequency (switches selecting different branches, low
-// isolation, or the selected branch's stopband), Gain reads low and NF high
-// by up to the omitted tone's share.
+// not summed, because harmonics/IMD from a nonlinear stage can land on another
+// sweep point. A 2:1 switch emits its selected throw's tones first, so through
+// a filter bank Gain is the selected throw's tone where that throw carries one
+// and the other throw's leakage where it does not (a non-S-parameter
+// IdealFilter drops out-of-passband tones), while P_noise,out includes both
+// throws' noise. Where both throws carry a tone, Gain omits the unselected
+// one: it reads 10*log10(1 + P_unselected / P_selected) dB below the two
+// tones' power sum, and NF that much above the NF against that sum.
 //
 // v3 replaces the v1/v2 wired-pin engine entirely: no ComponentEngineBase, no
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.
