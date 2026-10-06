@@ -27,10 +27,13 @@ class NodeGraphEngine;
 // 10^(Gain_dB/10), so NF inherits Gain's tone choice. Same-frequency tones are
 // not power-summed, because harmonics/IMD from a nonlinear stage can land on
 // another sweep point. A 2:1 switch emits its selected throw's tones first, so
-// Gain through a filter bank is the selected-throw path while the unselected
-// throw's noise is in the NF numerator; when both throws carry comparable
-// power at a frequency (switches selecting different branches), Gain reads low
-// and NF high by up to the omitted tone's share.
+// Gain through a filter bank is the selected-throw path wherever that throw
+// carries a tone at the frequency (a non-S-parameter IdealFilter drops
+// out-of-passband tones, leaving the other throw's leakage first), while the
+// unselected throw's noise is in the NF numerator; when both throws carry
+// comparable power at a frequency (switches selecting different branches, low
+// isolation, or the selected branch's stopband), Gain reads low and NF high
+// by up to the omitted tone's share.
 //
 // v3 replaces the v1/v2 wired-pin engine entirely: no ComponentEngineBase, no
 // outputPinId()/inputPinId(), no writing to outputs[0] of a real graph node.

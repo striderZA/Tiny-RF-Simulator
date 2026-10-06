@@ -11,6 +11,7 @@
 #include "attenuator_engine.h"
 #include "combiner_engine.h"
 #include "common.h"
+#include "ideal_filter_engine.h"
 #include "measurement_chain_runner.h"
 #include "mixer_engine.h"
 #include "network_analyzer_engine.h"
@@ -58,6 +59,8 @@ class TestNaScratch final : public IMeasurementChainScratch {
             return make<SplitterEngine>(id);
         if (type == "combiner")
             return make<CombinerEngine>(id);
+        if (type == "filter")
+            return make<IdealFilterEngine>(id);
         if (type == "rf_switch_spdt_2to1")
             return make<RFSwitch2to1Engine>(id);
         if (type == "rf_switch_spdt")
@@ -972,6 +975,64 @@ TEST_CASE("NetworkAnalyzer: switched filter bank NF includes unselected-branch n
     for (size_t i = 0; i < na.nf_dB.size(); ++i) {
         REQUIRE_THAT(na.nf_dB[i], WithinAbs(full.nf_dB[i], 1e-9));
         REQUIRE(na.nf_dB[i] - selected_only.nf_dB[i] > 0.05);
+    }
+}
+
+TEST_CASE("NetworkAnalyzer: ideal-filter bank reads the leakage in the selected stopband",
+          "[network_analyzer][issue169]") {
+    // The issue's circuit with real filters: a low-pass branch on T1 and a
+    // high-pass branch on T2, split at 1.45 GHz between two sweep points. A
+    // non-S-parameter IdealFilter drops out-of-passband tones, so in the
+    // selected filter's stopband the selected throw carries no tone and the
+    // first tone is the other branch's leakage through both isolations.
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    RFSwitchEngine fan_out(2, graph);
+    IdealFilterEngine low_pass(3, graph);
+    IdealFilterEngine high_pass(4, graph);
+    RFSwitch2to1Engine fan_in(5, graph);
+    constexpr double kCutoff_Hz = 1.45e9;
+    low_pass.setFilterType(FilterType::LPF);
+    low_pass.setCutoff_Hz(kCutoff_Hz);
+    high_pass.setFilterType(FilterType::HPF);
+    high_pass.setCutoff_Hz(kCutoff_Hz);
+    graph.addLink(gen.outputPinId(), fan_out.inputPinId(0));
+    graph.addLink(fan_out.outputPinId(0), low_pass.inputPinId());
+    graph.addLink(fan_out.outputPinId(1), high_pass.inputPinId());
+    graph.addLink(low_pass.outputPinId(), fan_in.inputPinId(0));
+    graph.addLink(high_pass.outputPinId(), fan_in.inputPinId(1));
+    TestNaHost host({&gen, &fan_out, &low_pass, &high_pass, &fan_in});
+
+    NetworkAnalyzerEngine na(graph, host);
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(11);
+    na.setPointA(gen.outputPinId());
+    na.setPointB(fan_in.outputPinId());
+
+    // Selected passband: both switches' insertion loss. Selected stopband:
+    // the other branch through both switches' isolation.
+    const auto require_gain = [&](bool low_pass_selected) {
+        na.update();
+        REQUIRE(na.gainDb().size() == 11);
+        for (size_t i = 0; i < na.gainDb().size(); ++i) {
+            const bool below_cutoff = na.sweepFrequencies()[i] < kCutoff_Hz;
+            const double expected_dB =
+                below_cutoff == low_pass_selected ? -0.5 - 0.5 : -40.0 - 40.0;
+            REQUIRE_THAT(na.gainDb()[i], WithinAbs(expected_dB, 1e-9));
+            REQUIRE(std::isfinite(na.noiseFigureDb()[i]));
+        }
+    };
+
+    SECTION("both switches on the low-pass branch") {
+        fan_out.setActiveThrow(0);
+        fan_in.setActiveThrow(0);
+        require_gain(true);
+    }
+    SECTION("both switches on the high-pass branch") {
+        fan_out.setActiveThrow(1);
+        fan_in.setActiveThrow(1);
+        require_gain(false);
     }
 }
 

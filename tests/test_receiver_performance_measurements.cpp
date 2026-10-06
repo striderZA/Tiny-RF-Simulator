@@ -754,8 +754,9 @@ TEST_CASE("Receiver output power measures through a switched filter bank",
 
     // Matched throws: the selected branch at insertion loss plus the other
     // branch leaking through both switches' isolation, combined in phase. The
-    // leakage is 86 dB down, so output power is the generator tone plus the
-    // selected branch's loss to within 0.001 dB.
+    // leakage sits 86 dB below the selected tone on T1 but 72 dB on T2 (the
+    // branches differ by 7 dB), so output power exceeds the generator tone
+    // plus the selected branch's loss by 0.0004 dB and 0.0022 dB.
     CHECK(measure(0, 0) ==
           Catch::Approx(inPhaseSum_dBm(-10.0 - 0.5 - 3.0 - 0.5, -10.0 - 40.0 - 10.0 - 40.0))
               .margin(1e-9));
@@ -814,8 +815,9 @@ TEST_CASE("Receiver IIP3 through a switched filter bank matches the selected bra
     runToCompletion(engine, settings, generator.outputPinId(), fan_in.outputPinId(), {1.0e9});
 
     // The fan-in's insertion loss lowers the fundamental and IM3 lines alike,
-    // and the T2 leakage is linear and about 100 dB below the selected
-    // fundamental, so the input-referred intercept is the branch's own.
+    // and the T2 leakage is linear and 99 dB below the selected fundamental
+    // (adding at most 1e-4 dB to it), so the input-referred intercept is the
+    // branch's own.
     const double bank_iip3 = engine.measurements().iip3_dBm[0];
     REQUIRE(isFinite(bank_iip3));
     CHECK(bank_iip3 == Catch::Approx(reference_iip3).margin(1e-3));
