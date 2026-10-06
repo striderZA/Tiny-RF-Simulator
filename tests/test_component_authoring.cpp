@@ -368,6 +368,15 @@ TEST_CASE("ComponentLibrary validate requires the cutoffs an ideal filter type u
                   (filterUsesBand(filter_type) ? c.band_issues : c.single_cutoff_issues));
         }
     }
+
+    // The cutoff rule reads only well-typed values and leaves malformed ones to
+    // the per-field checks, so validate(), which the authoring form runs every
+    // frame, never throws on them.
+    CHECK(flaggedFields(lib.validate(
+              "filter", {{"filter_type", "BPF"}, {"fc_low_Hz", "140e6"}, {"fc_high_Hz", 180e6}})) ==
+          std::set<std::string>{"fc_low_Hz"});
+    CHECK(flaggedFields(lib.validate("filter", {{"filter_type", 0}, {"fc_high_Hz", 3.3e9}})) ==
+          std::set<std::string>{"filter_type"});
 }
 
 TEST_CASE("Every ideal filter definition validate accepts is applied as written",
@@ -486,4 +495,37 @@ TEST_CASE("ComponentFormModel shows the cutoffs an ideal filter type uses",
     ComponentFormModel amplifier_model(*amplifier);
     for (const auto &f : amplifier->fields)
         CHECK(amplifier_model.fieldLabel(f) == f.label);
+}
+
+TEST_CASE("A cutoff the filter type hides is still saved and validated", "[form_model][issue181]") {
+    const auto *descriptor = ComponentTypeRegistry::instance().find("filter");
+    REQUIRE(descriptor != nullptr);
+    const auto high = std::find_if(descriptor->fields.begin(), descriptor->fields.end(),
+                                   [](const ParameterField &f) { return f.key == "fc_high_Hz"; });
+    REQUIRE(high != descriptor->fields.end());
+    ComponentLibrary lib;
+    ComponentFormModel model(*descriptor);
+    model.setPartNumber("BAND-TO-LPF");
+    model.setParameter("filter_type", "BPF");
+    model.setParameter("fc_low_Hz", 140e6);
+    model.setParameter("fc_high_Hz", 180e6);
+    REQUIRE(model.validate(lib).empty());
+
+    // Switching to LPF hides the high cutoff from view only: the saved
+    // definition keeps it, and the engine ignores it for an LPF.
+    model.setParameter("filter_type", "LPF");
+    REQUIRE_FALSE(model.fieldLabel(*high).has_value());
+    CHECK(model.validate(lib).empty());
+    CHECK(model.buildDefinition().parameters.value("fc_high_Hz", 0.0) == 180e6);
+
+    // It is still validated. A bad value typed while BPF showed it keeps Save
+    // disabled after a switch hides it, so the form lists that issue under Save
+    // instead of under the hidden field.
+    model.setParameter("filter_type", "BPF");
+    model.setParameter("fc_high_Hz", -1.0);
+    REQUIRE(model.fieldLabel(*high).has_value());
+    CHECK(flaggedFields(model.validate(lib)) == std::set<std::string>{"fc_high_Hz"});
+    model.setParameter("filter_type", "LPF");
+    REQUIRE_FALSE(model.fieldLabel(*high).has_value());
+    CHECK(flaggedFields(model.validate(lib)) == std::set<std::string>{"fc_high_Hz"});
 }
