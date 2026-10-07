@@ -2143,4 +2143,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         s_app->testRemoveComponent(generator->graphNodeId());
         ctx->Yield(2);
     };
+
+    // Issue #184: the amplifier form exposes the S-parameter file picker.
+    // This runs last because the modal form is opened directly by the test.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "component_form_displays_sparam_picker");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->testOpenNewComponentForm("amplifier", "");
+        ctx->Yield(2);
+        ctx->SetRef("Component Form");
+        const auto browse = ctx->ItemInfo("Browse...", ImGuiTestOpFlags_NoError);
+        IM_CHECK(browse.ID != 0);
+    };
 }
