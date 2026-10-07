@@ -19,6 +19,7 @@
 #include "graph_editor_actions.h"
 #include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
+#include "test_temp_paths.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -319,6 +320,74 @@ TEST_CASE("ComponentFormModel preserves original data_files on edit without new 
     REQUIRE(def.data_files.size() == 1);
     REQUIRE(def.data_files[0].type == "s_parameters");
     REQUIRE(def.data_files[0].path == "AMP-EDIT-TEST.s4p");
+}
+
+TEST_CASE("ComponentLibrary applies S-param data files to every supported engine",
+          "[library][issue184]") {
+    namespace fs = std::filesystem;
+    const fs::path temp_dir =
+        fs::temp_directory_path() / ("issue184_sparam_" + test_temp_paths::processTag());
+    std::error_code ec;
+    fs::remove_all(temp_dir, ec);
+    fs::create_directories(temp_dir);
+    struct TempDirCleanup {
+        fs::path path;
+        ~TempDirCleanup() {
+            std::error_code cleanup_error;
+            fs::remove_all(path, cleanup_error);
+        }
+    } cleanup{temp_dir};
+
+    const fs::path s2p_path = temp_dir / "test.s2p";
+    {
+        std::ofstream file(s2p_path);
+        file << "! Issue 184 test S-parameter file\n"
+                "# GHz S MA R 50\n"
+                "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+    const fs::path s3p_path = temp_dir / "test.s3p";
+    {
+        std::ofstream file(s3p_path);
+        file << "! Issue 184 test 3-port S-parameter file\n# GHz S MA R 50\n1.0";
+        for (int i = 0; i < 9; ++i)
+            file << " 0.5 0.0";
+        file << '\n';
+    }
+
+    struct SparamCase {
+        const char *type;
+        nlohmann::json parameters;
+        const char *filename;
+    };
+    const std::vector<SparamCase> cases = {
+        {"amplifier", {{"gain_dB", 20.0}}, "test.s2p"},
+        {"attenuator", {{"attenuation_dB", 6.0}}, "test.s2p"},
+        {"combiner", {{"manual_mode", false}}, "test.s3p"},
+        {"equalizer", nlohmann::json::object(), "test.s2p"},
+        {"filter", {{"filter_type", "LPF"}, {"fc_low_Hz", 1.0e9}}, "test.s2p"},
+    };
+
+    ComponentLibrary library;
+    for (const auto &test_case : cases) {
+        CAPTURE(test_case.type);
+        ComponentDefinition definition;
+        definition.schema_version = 2;
+        definition.type = test_case.type;
+        definition.part_number = std::string("ISSUE184-") + test_case.type;
+        definition.source_path = (temp_dir / (definition.part_number + ".json")).string();
+        definition.parameters = test_case.parameters;
+        definition.data_files = {{"s_parameters", test_case.filename}};
+
+        CircuitRuntime runtime;
+        GraphEditorActions actions(runtime);
+        IComponentEngine *engine = library.instantiate(definition, runtime, actions);
+        REQUIRE(engine != nullptr);
+
+        const auto serialized = engine->serialize();
+        CHECK(serialized.value("sparam_mode", false));
+        CHECK(serialized.value("sparam_filepath", std::string{}) ==
+              fs::weakly_canonical(temp_dir / test_case.filename).string());
+    }
 }
 
 // --- Issue #181: an ideal filter definition carries the cutoffs its type uses ---

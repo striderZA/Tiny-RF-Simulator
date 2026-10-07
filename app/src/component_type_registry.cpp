@@ -16,6 +16,19 @@
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
 
+namespace {
+
+template <typename Engine>
+bool loadSparamFile(IComponentEngine &component, const std::string &path) {
+    auto *engine = dynamic_cast<Engine *>(&component);
+    if (!engine)
+        return false;
+    engine->setSParamFilepath(path);
+    return engine->sparamMode();
+}
+
+} // namespace
+
 ComponentTypeRegistry &ComponentTypeRegistry::instance() {
     static ComponentTypeRegistry reg;
     return reg;
@@ -54,6 +67,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     amp.kind = NodeKind::Amplifier;
     amp.authorable = true;
     amp.supports_sparam_file = true;
+    amp.load_sparam_file = &loadSparamFile<AmplifierEngine>;
     amp.fields = {
         {"gain_dB", "Gain", "dB", FieldKind::Number, true, -50.0, 100.0, {}, {}, ""},
         {"nf_dB", "Noise Figure", "dB", FieldKind::Number, false, 0.0, 30.0, {}, {}, ""},
@@ -75,6 +89,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     att.kind = NodeKind::Attenuator;
     att.authorable = true;
     att.supports_sparam_file = true;
+    att.load_sparam_file = &loadSparamFile<AttenuatorEngine>;
     att.fields = {
         {"attenuation_dB", "Attenuation", "dB", FieldKind::Number, true, 0.0, 100.0, {}, {}, ""},
     };
@@ -105,6 +120,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     flt.kind = NodeKind::IdealFilter;
     flt.authorable = true;
     flt.supports_sparam_file = true;
+    flt.load_sparam_file = &loadSparamFile<IdealFilterEngine>;
     flt.fields = {
         {"filter_type",
          "Filter Type",
@@ -160,6 +176,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     eq.kind = NodeKind::Equalizer;
     eq.authorable = true;
     eq.supports_sparam_file = true;
+    eq.load_sparam_file = &loadSparamFile<EqualizerEngine>;
     eq.fields = {
         {"ref_gain_dB", "Reference Gain", "dB", FieldKind::Number, false, -50.0, 50.0, {}, {}, ""},
         {"ref_freq_Hz",
@@ -197,6 +214,7 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     comb.kind = NodeKind::Combiner;
     comb.authorable = true;
     comb.supports_sparam_file = true;
+    comb.load_sparam_file = &loadSparamFile<CombinerEngine>;
     comb.fields = {
         {"manual_mode", "Manual Mode", "", FieldKind::Bool, false, 0, 0, {}, false, ""},
     };
