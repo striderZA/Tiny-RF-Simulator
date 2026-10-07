@@ -176,20 +176,22 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setVideoBw(vbw);
         LOG_INFO("Update VBW: %.0f kHz", m_engine.vbw() / 1e3);
     }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Video bandwidth: moving-average window applied across\n"
-                          "the displayed trace. Wider = smoother noise floor.");
+    if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
+        ImGui::TextUnformatted("Video bandwidth: moving-average window applied across\n"
+                               "the displayed trace. Wider = smoother noise floor.");
+        ImGui::EndTooltip();
     }
 
     if (utils::inputFrequency("RBW (kHz)", rbw, 1.0, 10.0, "%.0f", 1e3, 100e6, 1e3)) {
         m_engine.setResBw(rbw);
         LOG_INFO("Update RBW: %.0f kHz", m_engine.rbw() / 1e3);
     }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Resolution bandwidth: Gaussian filter width applied to\n"
-                          "the spectrum. A narrower RBW lowers the displayed noise\n"
-                          "floor, down to the spectrum's bin spacing - below that it\n"
-                          "can no longer resolve.");
+    if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
+        ImGui::TextUnformatted("Resolution bandwidth: Gaussian filter width applied to\n"
+                               "the spectrum. A narrower RBW lowers the displayed noise\n"
+                               "floor, down to the spectrum's bin spacing - below that it\n"
+                               "can no longer resolve.");
+        ImGui::EndTooltip();
     }
 
     // Trace mode controls
