@@ -39,7 +39,7 @@ const std::vector<FieldSerializationCase> &fieldSerializationCases() {
         {"equalizer", "ref_gain_dB", "ref_gain_dB", 4.5, 4.5},
         {"equalizer", "ref_freq_Hz", "ref_freq_Hz", 2.3e9, 2.3e9},
         {"equalizer", "slope_dB_per_decade", "slope_dB_per_decade", -6.25, -6.25},
-        {"combiner", "manual_mode", "manual_mode", true, true},
+        {"combiner", "manual_mode", "manual_mode", false, false},
         {"rf_switch_spdt", "active_throw", "active_throw", "T2", 1},
         {"rf_switch_spdt", "insertion_loss_dB", "insertion_loss_dB", 1.25, 1.25},
         {"rf_switch_spdt", "isolation_dB", "isolation_dB", 57.0, 57.0},
