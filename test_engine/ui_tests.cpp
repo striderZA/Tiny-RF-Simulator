@@ -1170,6 +1170,61 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Out-of-range RBW/VBW fields need both the editable-range note from
+    // inputFrequency() and the control-specific explanation below it. Their
+    // tooltips must share one window rather than replacing each other.
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "spectrum_analyzer_out_of_range_bandwidth_tooltip_is_preserved");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const double rbw_before = sa.rbw();
+        const double vbw_before = sa.vbw();
+        const bool spectrum_was_open = s_app->m_show_spectrum;
+        const ImGuiHoveredFlags hover_flags_before = ImGui::GetStyle().HoverFlagsForTooltipMouse;
+        ImGui::GetStyle().HoverFlagsForTooltipMouse = ImGuiHoveredFlags_None;
+
+        sa.setResBw(100.0);
+        sa.setVideoBw(100.0);
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->MouseMoveToPos(ImVec2(5.0f, 5.0f));
+        ctx->Yield(3);
+
+        const auto tooltip_window_count = [] {
+            int count = 0;
+            for (ImGuiWindow *window : ImGui::GetCurrentContext()->Windows)
+                if (window->WasActive && (window->Flags & ImGuiWindowFlags_Tooltip))
+                    ++count;
+            return count;
+        };
+        const auto check_field_tooltip = [&](const ImGuiTestItemInfo &item) {
+            IM_CHECK(item.ID != 0);
+            if (item.ID == 0)
+                return;
+
+            ctx->MouseMoveToPos(item.RectFull.GetCenter());
+            ctx->Yield(20); // keep the pointer over the control while its tooltip is drawn
+            IM_CHECK_EQ(tooltip_window_count(), 1);
+        };
+
+        ctx->SetRef("Spectrum Analyzer");
+        const ImGuiTestItemInfo vbw = ctx->ItemInfo("VBW (kHz)", ImGuiTestOpFlags_NoError);
+        const ImGuiTestItemInfo rbw = ctx->ItemInfo("RBW (kHz)", ImGuiTestOpFlags_NoError);
+        ctx->SetRef("");
+        check_field_tooltip(vbw);
+        ctx->MouseMoveToPos(ImVec2(5.0f, 5.0f));
+        ctx->Yield(3);
+        check_field_tooltip(rbw);
+
+        ctx->MouseMoveToPos(ImVec2(5.0f, 5.0f));
+        ctx->Yield(3);
+        sa.setResBw(rbw_before);
+        sa.setVideoBw(vbw_before);
+        s_app->m_show_spectrum = spectrum_was_open;
+        ImGui::GetStyle().HoverFlagsForTooltipMouse = hover_flags_before;
+        ctx->Yield(2);
+    };
+
     // Test Flow panel: View > Test Flow flips the in-memory visibility flag and
     // the "Test Flow" window follows it. This is only the menu/window
     // integration — the panel's own model (preview, validation, result table,
