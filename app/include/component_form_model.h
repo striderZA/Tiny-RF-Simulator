@@ -41,6 +41,8 @@ class ComponentFormModel {
     // Original source_path when editing an existing entry; empty for a new entry.
     void setSourcePath(const std::string &path) { m_source_path = path; }
     const std::string &sourcePath() const { return m_source_path; }
+    // Assets attached to the definition before this edit.
+    const std::vector<DataFileRef> &originalDataFiles() const { return m_original_data_files; }
 
     std::vector<ValidationIssue> validate(const ComponentLibrary &library) const;
     ComponentDefinition buildDefinition() const;

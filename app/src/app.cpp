@@ -835,6 +835,112 @@ bool RfSimulatorApp::saveComponentForm() {
             return false;
         }
         std::error_code ec;
+        const auto destination_status = fs::symlink_status(*dest_sparam, ec);
+        if (ec == std::errc::no_such_file_or_directory) {
+            ec.clear();
+        } else if (ec) {
+            m_component_form_error = "Could not inspect S-parameter destination: " + ec.message();
+            return false;
+        }
+        if (!ec && fs::is_symlink(destination_status)) {
+            m_component_form_error = "Refusing to overwrite symbolic link '" + data_name + "'.";
+            return false;
+        }
+
+        const bool destination_exists = !ec && fs::exists(destination_status);
+        if (destination_exists) {
+            const auto path_references_destination = [&](const std::string &path,
+                                                         const std::string &source_path) {
+                if (source_path.empty())
+                    return false;
+                fs::path referenced_path(path);
+                for (const auto &part : referenced_path)
+                    if (part == "..")
+                        return false;
+                const fs::path definition_directory = fs::path(source_path).parent_path();
+                if (definition_directory.empty())
+                    return false;
+                if (!referenced_path.is_absolute())
+                    referenced_path = definition_directory / referenced_path;
+
+                std::error_code containment_error;
+                const fs::path canonical_root =
+                    fs::weakly_canonical(definition_directory, containment_error);
+                if (containment_error)
+                    return false;
+                containment_error.clear();
+                const fs::path canonical_reference =
+                    fs::weakly_canonical(referenced_path, containment_error);
+                if (containment_error)
+                    return false;
+                auto root_part = canonical_root.begin();
+                auto reference_part = canonical_reference.begin();
+                for (; root_part != canonical_root.end(); ++root_part, ++reference_part)
+                    if (reference_part == canonical_reference.end() ||
+                        *root_part != *reference_part)
+                        return false;
+
+                std::error_code compare_error;
+                return fs::equivalent(canonical_reference, *dest_sparam, compare_error) &&
+                       !compare_error;
+            };
+            bool belongs_to_edited_component = false;
+            if (m_component_form_is_edit) {
+                for (const auto &file : model.originalDataFiles()) {
+                    if (file.type == "s_parameters" &&
+                        path_references_destination(file.path, model.sourcePath())) {
+                        belongs_to_edited_component = true;
+                        break;
+                    }
+                }
+                for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                    const auto path = model.parameter(key);
+                    if (path.is_string() &&
+                        path_references_destination(path.get<std::string>(), model.sourcePath())) {
+                        belongs_to_edited_component = true;
+                        break;
+                    }
+                }
+            }
+
+            bool referenced_by_another_component = false;
+            if (belongs_to_edited_component) {
+                for (const auto *other : m_library.all()) {
+                    if (!other || other->source_path == model.sourcePath())
+                        continue;
+                    for (const auto &file : other->data_files) {
+                        if (file.type == "s_parameters" &&
+                            path_references_destination(file.path, other->source_path)) {
+                            referenced_by_another_component = true;
+                            break;
+                        }
+                    }
+                    if (referenced_by_another_component || !other->parameters.is_object())
+                        continue;
+                    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                        if (!other->parameters.contains(key))
+                            continue;
+                        const auto &path = other->parameters[key];
+                        if (path.is_string() && path_references_destination(path.get<std::string>(),
+                                                                            other->source_path)) {
+                            referenced_by_another_component = true;
+                            break;
+                        }
+                    }
+                    if (referenced_by_another_component)
+                        break;
+                }
+            }
+
+            if (!belongs_to_edited_component || referenced_by_another_component) {
+                m_component_form_error = "Refusing to overwrite existing S-parameter file '" +
+                                         data_name +
+                                         "'; it may be referenced by another component.";
+                return false;
+            }
+        }
+
+        ec.clear();
         fs::copy_file(model.sparamSourcePath(), *dest_sparam, fs::copy_options::overwrite_existing,
                       ec);
         if (ec) {
