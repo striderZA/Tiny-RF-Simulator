@@ -425,3 +425,10 @@ add_standalone_test(test_issue182_bounded_inputs
     SOURCES test_issue182_bounded_inputs.cpp
     LIBS simulator::app simulator::core
 )
+# Standalone issue #174 compatibility contract for library field keys versus
+# engine serialization keys, plus a serialize/deserialize fixed point for every
+# registered engine. Kept out of tests.exe for the MinGW registration ceiling.
+add_standalone_test(test_issue174_parameter_keys
+    SOURCES test_issue174_parameter_keys.cpp
+    LIBS simulator::app
+)
