@@ -187,12 +187,10 @@ TEST_CASE("Issue 117: combiner validates ports and clamps added noise", "[issue1
     combiner.setSParamFilepath(amplifierSParamPath());
     REQUIRE_FALSE(combiner.sparamMode());
 
-    // The mode flag is UI state and stays settable without a file (issue #137),
-    // but a 2-port file must not reach the S-param branch at runtime: its S21/S31
-    // would resolve identity (|S|^2 = 1), giving the raw k*T*(1-1-1) added-noise
-    // term. It falls through to the manual branch's -3.01 dB combining loss.
+    // The no-file UI case (issue #137) remains enableable, but a loaded 2-port
+    // file rejects an enable attempt and leaves the combiner on its manual path.
     combiner.setSParamMode(true);
-    REQUIRE(combiner.sparamMode());
+    REQUIRE_FALSE(combiner.sparamMode());
     auto input0 = makeSpectrum({1e9, 2e9}, {{1e9, -10.0, 0.0}});
     auto input1 = makeSpectrum({1e9, 2e9}, {{1e9, -10.0, 0.0}});
     combiner.node().inputs[0] = &input0;
