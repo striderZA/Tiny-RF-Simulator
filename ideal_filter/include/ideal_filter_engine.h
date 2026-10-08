@@ -40,7 +40,7 @@ class IdealFilterEngine : public ComponentEngineBase {
     void setSParamFilepath(const std::string &path);
     bool sparamMode() const { return m_sparam_mode; }
     void setSParamMode(bool en) {
-        m_sparam_mode = en;
+        m_sparam_mode = en && (!m_sparam_data.loaded() || m_sparam_data.numPorts() >= 2);
         m_dirty = true;
     }
     bool sparamLoaded() const { return m_sparam_data.loaded(); }

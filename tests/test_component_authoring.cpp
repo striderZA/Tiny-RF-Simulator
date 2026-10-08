@@ -12,10 +12,14 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "amplifier_engine.h"
+#include "attenuator_engine.h"
 #include "circuit_runtime.h"
+#include "combiner_engine.h"
 #include "component_form_model.h"
 #include "component_library.h"
 #include "component_type_registry.h"
+#include "equalizer_engine.h"
 #include "graph_editor_actions.h"
 #include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
@@ -452,6 +456,30 @@ TEST_CASE("ComponentLibrary rejects Touchstone files incompatible with transfer 
         IComponentEngine *engine = library.instantiate(definition, runtime, actions);
         REQUIRE(engine != nullptr);
         CHECK_FALSE(engine->serialize().value("sparam_mode", false));
+        if (std::string(test_case.filename) != "y_parameters.s2p") {
+            if (std::string(test_case.type) == "amplifier") {
+                auto *typed_engine = dynamic_cast<AmplifierEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            } else if (std::string(test_case.type) == "attenuator") {
+                auto *typed_engine = dynamic_cast<AttenuatorEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            } else if (std::string(test_case.type) == "equalizer") {
+                auto *typed_engine = dynamic_cast<EqualizerEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            } else if (std::string(test_case.type) == "filter") {
+                auto *typed_engine = dynamic_cast<IdealFilterEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            } else if (std::string(test_case.type) == "combiner") {
+                auto *typed_engine = dynamic_cast<CombinerEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            }
+            CHECK_FALSE(engine->serialize().value("sparam_mode", false));
+        }
     }
 }
 

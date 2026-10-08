@@ -40,10 +40,9 @@ void CombinerEngine::setManualMode(bool enabled) {
 }
 
 void CombinerEngine::setSParamMode(bool enabled) {
-    // Mode is UI state, not validity state: it must stay settable before a file
-    // is chosen so the inspector can reveal its S-param picker on a fresh node
-    // (issue #137). update() enforces the 3-port requirement at runtime.
-    m_sparam_mode = enabled;
+    // Allow enabling before a file is chosen so the inspector can reveal its
+    // picker. A loaded file must be exactly 3-port; update() also enforces this.
+    m_sparam_mode = enabled && (!m_sparam_data.loaded() || m_sparam_data.numPorts() == 3);
     m_dirty = true;
 }
 

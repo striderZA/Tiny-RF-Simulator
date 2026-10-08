@@ -27,7 +27,7 @@ void AttenuatorEngine::setAttenuation(double dB) {
 }
 
 void AttenuatorEngine::setSParamMode(bool enabled) {
-    m_sparam_mode = enabled;
+    m_sparam_mode = enabled && (!m_sparam_data.loaded() || m_sparam_data.numPorts() >= 2);
     m_dirty = true;
 }
 
