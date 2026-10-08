@@ -27,13 +27,13 @@ void AttenuatorEngine::setAttenuation(double dB) {
 }
 
 void AttenuatorEngine::setSParamMode(bool enabled) {
-    m_sparam_mode = enabled;
+    m_sparam_mode = enabled && (!m_sparam_data.loaded() || m_sparam_data.numPorts() >= 2);
     m_dirty = true;
 }
 
 void AttenuatorEngine::setSParamFilepath(const std::string &path) {
     m_sparam_filepath = path;
-    m_sparam_mode = m_sparam_data.load(path);
+    m_sparam_mode = m_sparam_data.load(path) && m_sparam_data.numPorts() >= 2;
     m_dirty = true;
 }
 
@@ -175,7 +175,8 @@ void AttenuatorEngine::deserialize(const nlohmann::json &j) {
     m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
         m_sparam_data.load(m_sparam_filepath);
-    m_sparam_mode = j.value("sparam_mode", false) && m_sparam_data.loaded();
+    m_sparam_mode =
+        j.value("sparam_mode", false) && m_sparam_data.loaded() && m_sparam_data.numPorts() >= 2;
     m_dirty = true;
 }
 

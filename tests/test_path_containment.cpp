@@ -1,16 +1,16 @@
 // Standalone Catch2 executable for the S1/S2 security fixes from the
-// 2026-08-09 codebase review, plus the issue #120 component-authoring save
-// path:
+// 2026-08-09 codebase review, plus the issue #120 and #184 component-authoring
+// save paths:
 //   S1 — S-param file path containment (project-file boundary in
 //        ProjectSerializer::load()/save(), library boundary in
 //        ComponentLibrary::instantiate())
 //   S2 — touchstone parser file-size guard + in-loop frequency-point cap
-//   #120 — the S-param file the authoring form copies next to the library JSON
-//        is named from a sanitized part number, and the save path refuses any
-//        data-file name that is not a bare file name (no separators, no '..').
-//        The copy cases drive the real RfSimulatorApp::saveComponentForm()
-//        through its test accessors, so the app's own dest_dir composition is
-//        what is exercised (new entry and edit).
+//   #120 — the copied S-param file is named from a sanitized part number and
+//          save refuses a data-file name that is not a bare file name.
+//   #184 — save refuses to overwrite another component's asset; an edit may
+//          replace its own file only when no other loaded definition references it.
+// The copy cases drive the real RfSimulatorApp::saveComponentForm() through test
+// accessors, so the app's own destination composition is what is exercised.
 //
 // Built as its own executable rather than appended to the main `tests` binary
 // because this MinGW-w64 toolchain silently drops any TEST_CASE registered
@@ -372,7 +372,7 @@ TEST_CASE("Component authoring derives the copied S-param name from a sanitized 
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Component authoring save keeps the copied S-param inside the root",
-                 "[containment][issue120]") {
+                 "[containment][issue120][issue184]") {
     namespace fs = std::filesystem;
     const auto base =
         fs::temp_directory_path() / ("containment_issue120_" + test_temp_paths::processTag());
@@ -434,7 +434,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Component authoring save keeps the copied S-para
 
 TEST_CASE_METHOD(ImGuiFixture,
                  "Component authoring edit overwrites in place, never under a destination root",
-                 "[containment][issue120]") {
+                 "[containment][issue120][issue184]") {
     namespace fs = std::filesystem;
     const auto base =
         fs::temp_directory_path() / ("containment_issue120_edit_" + test_temp_paths::processTag());
@@ -454,7 +454,7 @@ TEST_CASE_METHOD(ImGuiFixture,
         entry["manufacturer"] = "Acme";
         entry["parameters"] = {{"gain_dB", 20.0}, {"nf_dB", 2.0}};
         entry["data_files"] = nlohmann::json::array();
-        entry["data_files"].push_back({{"type", "s_parameters"}, {"path", "escape.s2p"}});
+        entry["data_files"].push_back({{"type", "s_parameters"}, {"path", data_path.string()}});
         std::ofstream ofs(json_path);
         ofs << entry.dump(2);
     }
@@ -490,5 +490,92 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(reloaded.all().front()->data_files.size() == 1);
     CHECK(reloaded.all().front()->data_files.front().path == "escape.s2p");
 
+    fs::remove_all(base);
+}
+
+TEST_CASE_METHOD(
+    ImGuiFixture,
+    "Component authoring refuses to overwrite another component's S-param asset (issue #184)",
+    "[containment][issue184]") {
+    namespace fs = std::filesystem;
+    const fs::path base =
+        fs::temp_directory_path() / ("issue184_asset_collision_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    const fs::path dir = base / "library" / "amplifier" / "Acme";
+    fs::create_directories(dir);
+    const fs::path sibling_json = dir / "SIBLING.json";
+    const fs::path sibling_asset = dir / "SIBLING.s2p";
+    const std::string sibling_asset_contents = "sibling component's original asset";
+    {
+        nlohmann::json sibling;
+        sibling["schema_version"] = 2;
+        sibling["type"] = "amplifier";
+        sibling["part_number"] = "SIBLING";
+        sibling["manufacturer"] = "Acme";
+        sibling["parameters"] = {{"gain_dB", 20.0}};
+        sibling["data_files"] = {{{"type", "s_parameters"}, {"path", "SIBLING.s2p"}}};
+        std::ofstream json_file(sibling_json);
+        json_file << sibling.dump(2);
+        std::ofstream asset_file(sibling_asset);
+        asset_file << sibling_asset_contents;
+    }
+    const fs::path picked = base / "picked.s2p";
+    writeS2p(picked);
+
+    ComponentDefinition edit;
+    edit.schema_version = 2;
+    edit.type = "amplifier";
+    edit.part_number = "EDIT-ME";
+    edit.manufacturer = "Acme";
+    edit.parameters = {{"gain_dB", 20.0}};
+    edit.source_path = (dir / "EDIT-ME.json").string();
+
+    RfSimulatorApp app;
+    app.testOpenEditComponentForm(edit);
+    app.testComponentFormModel().setPartNumber("SIBLING");
+    app.testComponentFormModel().setSparamSourcePath(picked.string());
+
+    CHECK_FALSE(app.testSaveComponentForm());
+    CHECK(readFile(sibling_asset) == sibling_asset_contents);
+    CHECK_FALSE(fs::exists(edit.source_path));
+    fs::remove_all(base);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Component authoring preserves an edited S-param asset when definition save fails",
+                 "[containment][issue184]") {
+    namespace fs = std::filesystem;
+    const fs::path base =
+        fs::temp_directory_path() / ("issue184_failed_save_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    const fs::path dir = base / "library" / "amplifier" / "Acme";
+    fs::create_directories(dir);
+
+    const fs::path definition_path = dir / "EDIT-ME.json";
+    fs::create_directories(definition_path); // make opening the JSON target fail deterministically
+    const fs::path asset_path = dir / "EDIT-ME.s2p";
+    const std::string original_asset = "original S-parameter asset";
+    {
+        std::ofstream asset(asset_path);
+        asset << original_asset;
+    }
+    const fs::path picked = base / "picked.s2p";
+    writeS2p(picked);
+
+    ComponentDefinition edit;
+    edit.schema_version = 2;
+    edit.type = "amplifier";
+    edit.part_number = "EDIT-ME";
+    edit.manufacturer = "Acme";
+    edit.parameters = {{"gain_dB", 20.0}};
+    edit.source_path = definition_path.string();
+    edit.data_files = {{"s_parameters", "EDIT-ME.s2p"}};
+
+    RfSimulatorApp app;
+    app.testOpenEditComponentForm(edit);
+    app.testComponentFormModel().setSparamSourcePath(picked.string());
+
+    CHECK_FALSE(app.testSaveComponentForm());
+    CHECK(readFile(asset_path) == original_asset);
     fs::remove_all(base);
 }

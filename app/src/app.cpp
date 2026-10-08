@@ -8,6 +8,7 @@
 #include "logging_widget.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -815,8 +816,11 @@ bool RfSimulatorApp::saveComponentForm() {
         }
     }
 
-    // Copy S-param file into place next to the destination JSON, if one was picked.
-    if (!model.sparamSourcePath().empty()) {
+    // Preflight the S-parameter destination before staging it beside the component JSON.
+    const bool has_sparam_pick = !model.sparamSourcePath().empty();
+    fs::path dest_sparam;
+    bool destination_exists = false;
+    if (has_sparam_pick) {
         // Issue #120: never join an unchecked data-file name onto dest_dir.
         // ComponentFormModel::buildDefinition() already derives the name from a
         // sanitized part number, so through the authoring form this gate cannot
@@ -828,18 +832,117 @@ bool RfSimulatorApp::saveComponentForm() {
         const std::string data_name =
             def.data_files.empty() ? std::string() : def.data_files.front().path;
         fs::path dest_dir = fs::path(def.source_path).parent_path();
-        const auto dest_sparam = dataFileCopyDestination(dest_dir.string(), data_name);
-        if (!dest_sparam) {
+        const auto copy_destination = dataFileCopyDestination(dest_dir.string(), data_name);
+        if (!copy_destination) {
             m_component_form_error = "Refusing unsafe S-parameter file name '" + data_name +
                                      "': expected a plain file name inside the library root.";
             return false;
         }
+        dest_sparam = *copy_destination;
         std::error_code ec;
-        fs::copy_file(model.sparamSourcePath(), *dest_sparam, fs::copy_options::overwrite_existing,
-                      ec);
-        if (ec) {
-            m_component_form_error = "Failed to copy S-parameter file: " + ec.message();
+        const auto destination_status = fs::symlink_status(dest_sparam, ec);
+        if (ec == std::errc::no_such_file_or_directory) {
+            ec.clear();
+        } else if (ec) {
+            m_component_form_error = "Could not inspect S-parameter destination: " + ec.message();
             return false;
+        }
+        if (!ec && fs::is_symlink(destination_status)) {
+            m_component_form_error = "Refusing to overwrite symbolic link '" + data_name + "'.";
+            return false;
+        }
+
+        destination_exists = !ec && fs::exists(destination_status);
+        if (destination_exists) {
+            const auto path_references_destination = [&](const std::string &path,
+                                                         const std::string &source_path) {
+                if (source_path.empty())
+                    return false;
+                fs::path referenced_path(path);
+                for (const auto &part : referenced_path)
+                    if (part == "..")
+                        return false;
+                const fs::path definition_directory = fs::path(source_path).parent_path();
+                if (definition_directory.empty())
+                    return false;
+                if (!referenced_path.is_absolute())
+                    referenced_path = definition_directory / referenced_path;
+
+                std::error_code containment_error;
+                const fs::path canonical_root =
+                    fs::weakly_canonical(definition_directory, containment_error);
+                if (containment_error)
+                    return false;
+                containment_error.clear();
+                const fs::path canonical_reference =
+                    fs::weakly_canonical(referenced_path, containment_error);
+                if (containment_error)
+                    return false;
+                auto root_part = canonical_root.begin();
+                auto reference_part = canonical_reference.begin();
+                for (; root_part != canonical_root.end(); ++root_part, ++reference_part)
+                    if (reference_part == canonical_reference.end() ||
+                        *root_part != *reference_part)
+                        return false;
+
+                std::error_code compare_error;
+                return fs::equivalent(canonical_reference, dest_sparam, compare_error) &&
+                       !compare_error;
+            };
+            bool belongs_to_edited_component = false;
+            if (m_component_form_is_edit) {
+                for (const auto &file : model.originalDataFiles()) {
+                    if (file.type == "s_parameters" &&
+                        path_references_destination(file.path, model.sourcePath())) {
+                        belongs_to_edited_component = true;
+                        break;
+                    }
+                }
+                for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                    const auto path = model.parameter(key);
+                    if (path.is_string() &&
+                        path_references_destination(path.get<std::string>(), model.sourcePath())) {
+                        belongs_to_edited_component = true;
+                        break;
+                    }
+                }
+            }
+
+            bool referenced_by_another_component = false;
+            if (belongs_to_edited_component) {
+                for (const auto *other : m_library.all()) {
+                    if (!other || other->source_path == model.sourcePath())
+                        continue;
+                    for (const auto &file : other->data_files) {
+                        if (file.type == "s_parameters" &&
+                            path_references_destination(file.path, other->source_path)) {
+                            referenced_by_another_component = true;
+                            break;
+                        }
+                    }
+                    if (referenced_by_another_component || !other->parameters.is_object())
+                        continue;
+                    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                        if (!other->parameters.contains(key))
+                            continue;
+                        const auto &path = other->parameters[key];
+                        if (path.is_string() && path_references_destination(path.get<std::string>(),
+                                                                            other->source_path)) {
+                            referenced_by_another_component = true;
+                            break;
+                        }
+                    }
+                    if (referenced_by_another_component)
+                        break;
+                }
+            }
+
+            if (!belongs_to_edited_component || referenced_by_another_component) {
+                m_component_form_error = "Refusing to overwrite existing S-parameter file '" +
+                                         data_name +
+                                         "'; it may be referenced by another component.";
+                return false;
+            }
         }
     }
 
@@ -859,13 +962,148 @@ bool RfSimulatorApp::saveComponentForm() {
             j["data_files"].push_back({{"type", df.type}, {"path", df.path}});
     }
 
-    std::ofstream out(def.source_path);
-    if (!out.is_open()) {
-        m_component_form_error = "Could not write " + def.source_path;
+    static unsigned long long save_sequence = 0;
+    const std::string save_id =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
+        std::to_string(++save_sequence);
+    fs::path definition_temp = def.source_path;
+    definition_temp += ".component-tmp-" + save_id;
+    fs::path sparam_temp;
+    fs::path sparam_backup;
+    if (has_sparam_pick) {
+        sparam_temp = dest_sparam;
+        sparam_temp += ".sparam-tmp-" + save_id;
+        sparam_backup = dest_sparam;
+        sparam_backup += ".sparam-bak-" + save_id;
+    }
+
+    const auto temp_path_available = [](const fs::path &path) {
+        std::error_code check_ec;
+        const auto status = fs::symlink_status(path, check_ec);
+        if (check_ec == std::errc::no_such_file_or_directory)
+            return true;
+        return !check_ec && !fs::exists(status) && !fs::is_symlink(status);
+    };
+    if (!temp_path_available(definition_temp) ||
+        (has_sparam_pick &&
+         (!temp_path_available(sparam_temp) || !temp_path_available(sparam_backup)))) {
+        m_component_form_error = "Could not reserve temporary component-save paths.";
+        return false;
+    }
+
+    const auto remove_temp = [](const fs::path &path) {
+        if (path.empty())
+            return;
+        std::error_code ignored;
+        fs::remove(path, ignored);
+    };
+    std::ofstream out(definition_temp, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        m_component_form_error = "Could not open temporary component file for writing.";
         return false;
     }
     out << j.dump(2);
+    out.flush();
+    if (!out) {
+        out.close();
+        remove_temp(definition_temp);
+        m_component_form_error = "Could not write temporary component file.";
+        return false;
+    }
     out.close();
+    if (!out) {
+        remove_temp(definition_temp);
+        m_component_form_error = "Could not close temporary component file.";
+        return false;
+    }
+
+    std::error_code ec;
+    if (has_sparam_pick) {
+        fs::copy_file(model.sparamSourcePath(), sparam_temp, fs::copy_options::none, ec);
+        if (ec) {
+            remove_temp(definition_temp);
+            remove_temp(sparam_temp);
+            m_component_form_error = "Failed to stage S-parameter file: " + ec.message();
+            return false;
+        }
+
+        ec.clear();
+        const auto current_status = fs::symlink_status(dest_sparam, ec);
+        if (ec == std::errc::no_such_file_or_directory) {
+            ec.clear();
+        } else if (ec) {
+            remove_temp(definition_temp);
+            remove_temp(sparam_temp);
+            m_component_form_error = "Could not recheck S-parameter destination: " + ec.message();
+            return false;
+        }
+        if (!ec && fs::is_symlink(current_status)) {
+            remove_temp(definition_temp);
+            remove_temp(sparam_temp);
+            m_component_form_error =
+                "Refusing to overwrite symbolic link '" + dest_sparam.filename().string() + "'.";
+            return false;
+        }
+        const bool destination_still_exists = !ec && fs::exists(current_status);
+        if (destination_still_exists != destination_exists) {
+            remove_temp(definition_temp);
+            remove_temp(sparam_temp);
+            m_component_form_error = "S-parameter destination changed while saving.";
+            return false;
+        }
+
+        if (destination_exists) {
+            ec.clear();
+            fs::rename(dest_sparam, sparam_backup, ec);
+            if (ec) {
+                remove_temp(definition_temp);
+                remove_temp(sparam_temp);
+                m_component_form_error =
+                    "Could not preserve existing S-parameter file: " + ec.message();
+                return false;
+            }
+        }
+        ec.clear();
+        fs::rename(sparam_temp, dest_sparam, ec);
+        if (ec) {
+            std::error_code rollback_ec;
+            if (destination_exists)
+                fs::rename(sparam_backup, dest_sparam, rollback_ec);
+            remove_temp(definition_temp);
+            remove_temp(sparam_temp);
+            m_component_form_error = "Could not install S-parameter file: " + ec.message();
+            if (rollback_ec)
+                m_component_form_error +=
+                    "; restoring the original also failed: " + rollback_ec.message();
+            return false;
+        }
+    }
+
+    ec.clear();
+    fs::rename(definition_temp, def.source_path, ec);
+    if (ec) {
+        std::error_code rollback_ec;
+        if (has_sparam_pick) {
+            if (destination_exists)
+                fs::rename(sparam_backup, dest_sparam, rollback_ec);
+            else
+                fs::remove(dest_sparam, rollback_ec);
+        }
+        remove_temp(definition_temp);
+        m_component_form_error = "Could not replace component file: " + ec.message();
+        if (rollback_ec)
+            m_component_form_error +=
+                "; restoring the previous S-parameter asset also failed: " + rollback_ec.message();
+        return false;
+    }
+
+    if (has_sparam_pick && destination_exists) {
+        ec.clear();
+        fs::remove(sparam_backup, ec);
+        if (ec)
+            LOG_WARN("Could not remove S-parameter backup %s: %s", sparam_backup.string().c_str(),
+                     ec.message().c_str());
+    }
 
     def.issues = m_library.validate(def.type, def.parameters);
     m_library.upsert(def);

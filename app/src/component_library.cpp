@@ -461,30 +461,45 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
         }
         result->deserialize(params);
 
-        if (def.type == "amplifier") {
-            auto *amp = dynamic_cast<AmplifierEngine *>(result);
-            for (const auto &df : def.data_files) {
-                if (df.type == "s_parameters" && amp) {
-                    // S1: the data-file path must stay within the library JSON
-                    // file's directory; absolute paths and '..' escapes are
-                    // rejected (skipped) rather than reading arbitrary files.
-                    if (auto sparam_path = resolveDataFilePath(json_dir, df.path)) {
-                        amp->setSParamFilepath(sparam_path->string());
+        bool sparam_data_file_consumed = false;
+        for (const auto &df : def.data_files) {
+            if (df.type != "s_parameters")
+                continue;
+            if (!descriptor->supports_sparam_file) {
+                LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
+                         "component type '%s' (%s)",
+                         df.path.c_str(), def.type.c_str(), def.part_number.c_str());
+                continue;
+            }
+            if (!descriptor->load_sparam_file) {
+                LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
+                         def.type.c_str(), def.part_number.c_str());
+                continue;
+            }
+            if (sparam_data_file_consumed) {
+                LOG_WARN("ComponentLibrary: ignoring additional S-param data file '%s' for %s "
+                         "(only one S-param file can be loaded)",
+                         df.path.c_str(), def.part_number.c_str());
+                continue;
+            }
 
-                        if (amp->sparamLoaded()) {
-                            LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
-                                     sparam_path->string().c_str());
-                        } else {
-                            LOG_WARN("Failed to load S-param file for %s: %s (falling back to "
-                                     "single-point params)",
-                                     def.part_number.c_str(), sparam_path->string().c_str());
-                        }
-                        break; // Only load first S-param file
-                    }
-                    LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
-                             "(must stay within the library directory)",
-                             df.path.c_str(), def.part_number.c_str());
-                }
+            // Keep data-file reads confined to the library JSON's directory;
+            // absolute paths and '..' escapes are rejected rather than used.
+            const auto sparam_path = resolveDataFilePath(json_dir, df.path);
+            if (!sparam_path) {
+                LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
+                         "(must stay within the library directory)",
+                         df.path.c_str(), def.part_number.c_str());
+                continue;
+            }
+
+            sparam_data_file_consumed = true;
+            if (descriptor->load_sparam_file(*result, sparam_path->string())) {
+                LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
+                         sparam_path->string().c_str());
+            } else {
+                LOG_WARN("Failed to load S-param file for %s: %s (S-param mode remains disabled)",
+                         def.part_number.c_str(), sparam_path->string().c_str());
             }
         }
 

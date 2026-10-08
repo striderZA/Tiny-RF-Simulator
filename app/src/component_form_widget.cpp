@@ -39,6 +39,23 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
     if (ImGui::InputTextMultiline("Notes", m_notes_buf, sizeof(m_notes_buf)))
         m_model->setNotes(m_notes_buf);
 
+    if (m_model->descriptor().supports_sparam_file) {
+        ImGui::TextUnformatted("S-parameter File");
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", m_model->sparamSourcePath().empty()
+                                      ? "(none)"
+                                      : m_model->sparamSourcePath().c_str());
+        ImGui::SameLine();
+        if (ImGui::Button("Browse...")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
+                              .result();
+            if (!result.empty())
+                m_model->setSparamSourcePath(result[0]);
+        }
+    }
+
     ImGui::Separator();
 
     for (const auto &field : m_model->descriptor().fields) {
@@ -98,7 +115,8 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
             ImGui::SameLine();
             if (ImGui::Button("Browse...")) {
                 auto result = pfd::open_file("Select S-parameter file", "",
-                                             {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                             {"S-parameter Files",
+                                              "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                                   .result();
                 if (!result.empty())
                     m_model->setSparamSourcePath(result[0]);

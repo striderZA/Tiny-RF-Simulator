@@ -240,7 +240,8 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##amp_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
@@ -524,7 +525,8 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##eq_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
@@ -588,7 +590,8 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##filter_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);
@@ -687,7 +690,8 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
         ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
         if (ImGui::Button("Browse##comb_sparam")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                               .result();
             if (!result.empty()) {
                 engine.setSParamFilepath(result[0]);

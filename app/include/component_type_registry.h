@@ -37,6 +37,9 @@ struct ComponentTypeDescriptor {
     NodeKind kind = NodeKind::Unknown;
     bool authorable = false; // appears in New Component form combo
     bool supports_sparam_file = false;
+    // Apply a containment-checked library S-param file; true means the engine
+    // accepted it for S-parameter operation.
+    std::function<bool(IComponentEngine &, const std::string &)> load_sparam_file;
     std::vector<ParameterField> fields;
 
     // Create a default engine of this type (no params). Callers apply params
