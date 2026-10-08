@@ -1,6 +1,37 @@
 #include "editor_commands.h"
+#include "component_library.h"
 #include "graph_editor_actions.h"
 #include <utility>
+
+namespace {
+
+ParamWriteResult applyParamsToNewComponent(IComponentEngine &component,
+                                           const nlohmann::ordered_json &params) {
+    static const std::vector<ParameterField> no_state_fields;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(component.type_name());
+    const auto &state_fields = descriptor ? descriptor->state_fields : no_state_fields;
+    return applyComponentParams(component, state_fields, params);
+}
+
+ComponentAddResult finishComponentAdd(CircuitRuntime &runtime, EditorCommands &commands,
+                                      IComponentEngine *component,
+                                      const nlohmann::ordered_json &params) {
+    ComponentAddResult result;
+    if (!component)
+        return result;
+
+    result.params = applyParamsToNewComponent(*component, params);
+    if (!result.params.ok()) {
+        (void)runtime.removeComponent(component->graphNodeId());
+        return result;
+    }
+
+    result.component = component;
+    commands.componentsAdded();
+    return result;
+}
+
+} // namespace
 
 EditorCommands::EditorCommands(CircuitRuntime &runtime, GraphEditorActions &editor_actions)
     : m_runtime(runtime), m_editor_actions(editor_actions) {}
@@ -12,6 +43,18 @@ IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factor
     componentsChanged();
     markModified();
     return component;
+}
+
+ComponentAddResult EditorCommands::createComponentWithParams(const ComponentFactory &factory,
+                                                             const nlohmann::ordered_json &params) {
+    return finishComponentAdd(m_runtime, *this, m_runtime.createComponent(factory), params);
+}
+
+ComponentAddResult EditorCommands::addLibraryPart(ComponentLibrary &library,
+                                                  const ComponentDefinition &definition,
+                                                  const nlohmann::ordered_json &params) {
+    return finishComponentAdd(m_runtime, *this,
+                              library.instantiate(definition, m_runtime, m_editor_actions), params);
 }
 
 ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,

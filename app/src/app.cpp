@@ -150,10 +150,7 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
-        // instantiate() creates through the runtime and owns its own rollback;
-        // a successful insert is adopted as an ordinary component-set edit.
-        if (m_library.instantiate(def, m_circuit_runtime, m_graph_editor_actions))
-            m_editor_commands.componentsAdded();
+        (void)m_editor_commands.addLibraryPart(m_library, def);
     };
 
     m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
