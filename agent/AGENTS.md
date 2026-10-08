@@ -6,7 +6,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 
 ## Ownership
 
-- `protocol/` owns `simulator::agent_protocol`: newline framing and shared error/result encoding.
+- `protocol/` owns `simulator::agent_protocol`: newline framing, shared error/result encoding, and private endpoint-file storage.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
 - Agent v1 does not initiate file operations. It may read data files already referenced by a component or library part.
 
@@ -17,6 +17,8 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 - Error names are `UPPER_SNAKE`. Tool errors use `{epoch, error: {code, message, hint?, op_index?, details?}}`; absent optional fields are omitted and absent epochs are JSON `null`. JSON-RPC agent errors use `-32000` and put the agent error name in `data.code`.
 - Non-finite numbers encode as JSON `null`. Within a `catalog_version`, changes are additive; removing or retyping a field or tool requires a version increment.
 - Session tokens use 32 OS-CSPRNG bytes encoded as 64 lowercase hexadecimal characters; generation fails closed without fallback entropy. Equal-length tokens are compared across every byte with an XOR accumulator; unequal lengths are rejected.
+- Endpoint files are named `agent-endpoint-<install>.json`, where `<install>` is the 16-lowercase-hex FNV-1a of the weakly canonical executable directory (lowercased before UTF-8 encoding on Windows). The POSIX directory and file are current-user-owned with modes 0700 and 0600; Windows uses protected current-user-only DACLs (`D:P(A;OICI;FA;;;<SID>)` for directories, `D:P(A;;FA;;;<SID>)` for files).
+- Endpoint JSON has exactly the `rfsim-agent/1` keys and schema; deletion requires the matching GUI token.
 - Never expose extension trust grants/revocations, external-tool execution, component-library authoring, or `.rflib` import/export to agents.
 - Any listener thread under this subsystem may share only the mutex-protected inbox, outbox, and connection status with the UI thread. It must not touch simulator engines, graph state, or UI objects.
 
