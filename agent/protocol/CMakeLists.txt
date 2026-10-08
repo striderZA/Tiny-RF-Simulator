@@ -1,5 +1,6 @@
 add_library(agent_protocol STATIC
     src/agent_wire.cpp
+    src/agent_socket.cpp
     src/agent_errors.cpp
     src/agent_token.cpp
     src/agent_endpoint.cpp
@@ -17,7 +18,7 @@ target_link_libraries(agent_protocol
 
 if(WIN32)
     target_compile_definitions(agent_protocol PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_link_libraries(agent_protocol PRIVATE bcrypt advapi32 user32)
+    target_link_libraries(agent_protocol PRIVATE bcrypt advapi32 user32 ws2_32)
 endif()
 
 set_target_properties(agent_protocol PROPERTIES FOLDER "Library")

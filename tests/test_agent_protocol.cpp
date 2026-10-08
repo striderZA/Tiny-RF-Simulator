@@ -13,17 +13,21 @@
 
 #include "agent_endpoint.h"
 #include "agent_errors.h"
+#include "agent_socket.h"
 #include "agent_token.h"
 #include "agent_wire.h"
 #include "test_temp_paths.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <set>
 #include <system_error>
+#include <thread>
+#include <type_traits>
 #include <vector>
 #ifdef _WIN32
 #include <windows.h>
@@ -491,4 +495,106 @@ TEST_CASE("Agent endpoint removal requires the matching GUI token", "[agent_prot
     CHECK(std::filesystem::exists(file));
     CHECK(removeAgentEndpointIfOwned(file, endpoint.gui_token));
     CHECK_FALSE(std::filesystem::exists(file));
+}
+
+static_assert(!std::is_copy_constructible_v<AgentChannel>);
+static_assert(std::is_move_constructible_v<AgentChannel>);
+static_assert(!std::is_copy_constructible_v<AgentListener>);
+static_assert(std::is_move_constructible_v<AgentListener>);
+
+TEST_CASE("A loopback listener exchanges lines both ways", "[agent_protocol]") {
+    std::string error;
+    auto bound_listener = AgentListener::bindLoopback(&error);
+    REQUIRE(bound_listener.has_value());
+    AgentListener listener = std::move(*bound_listener);
+    CHECK(listener.port() > 0);
+    CHECK(bound_listener->port() == 0);
+
+    auto connected = connectAgentLoopback(listener.port(), std::chrono::seconds{1}, &error);
+    REQUIRE(connected.has_value());
+    AgentChannel client = std::move(*connected);
+    CHECK(client.isOpen());
+    CHECK_FALSE(connected->isOpen());
+    auto server = listener.accept(std::chrono::seconds{1});
+    REQUIRE(server.has_value());
+    CHECK(server->isOpen());
+
+    CHECK(client.writeLine("hello server"));
+    std::string line;
+    REQUIRE(server->readLine(line, std::chrono::seconds{1}) == AgentReadStatus::Line);
+    CHECK(line == "hello server");
+
+    CHECK(server->writeLine("hello client"));
+    REQUIRE(client.readLine(line, std::chrono::seconds{1}) == AgentReadStatus::Line);
+    CHECK(line == "hello client");
+    CHECK_FALSE(client.writeLine("two\nlines"));
+}
+
+TEST_CASE("Reads time out, report peer close, and flag oversized lines", "[agent_protocol]") {
+    std::string error;
+    auto listener = AgentListener::bindLoopback(&error);
+    REQUIRE(listener.has_value());
+    const auto accept_start = std::chrono::steady_clock::now();
+    CHECK_FALSE(listener->accept(std::chrono::milliseconds{40}).has_value());
+    const auto accept_elapsed = std::chrono::steady_clock::now() - accept_start;
+    CHECK(accept_elapsed >= std::chrono::milliseconds{20});
+    CHECK(accept_elapsed < std::chrono::seconds{2});
+
+    auto client = connectAgentLoopback(listener->port(), std::chrono::seconds{1}, &error);
+    REQUIRE(client.has_value());
+    auto server = listener->accept(std::chrono::seconds{1});
+    REQUIRE(server.has_value());
+
+    std::string line;
+    const auto read_start = std::chrono::steady_clock::now();
+    CHECK(server->readLine(line, std::chrono::milliseconds{40}) == AgentReadStatus::Timeout);
+    const auto read_elapsed = std::chrono::steady_clock::now() - read_start;
+    CHECK(read_elapsed >= std::chrono::milliseconds{20});
+    CHECK(read_elapsed < std::chrono::seconds{2});
+
+    const std::string oversized(kAgentMaxLineBytes + 1, 'x');
+    bool oversized_sent = false;
+    bool recovery_sent = false;
+    std::thread writer([&] {
+        oversized_sent = client->writeLine(oversized);
+        recovery_sent = client->writeLine("recovered");
+    });
+
+    const auto oversized_status = server->readLine(line, std::chrono::seconds{5});
+    AgentReadStatus recovery_status = AgentReadStatus::Error;
+    std::string recovered_line;
+    if (oversized_status == AgentReadStatus::Oversized) {
+        recovery_status = server->readLine(recovered_line, std::chrono::seconds{5});
+    }
+    if (oversized_status != AgentReadStatus::Oversized ||
+        recovery_status != AgentReadStatus::Line) {
+        server->close();
+    }
+    writer.join();
+
+    CHECK(oversized_sent);
+    CHECK(recovery_sent);
+    CHECK(oversized_status == AgentReadStatus::Oversized);
+    CHECK(recovery_status == AgentReadStatus::Line);
+    CHECK(recovered_line == "recovered");
+
+    client->close();
+    CHECK(server->readLine(line, std::chrono::seconds{1}) == AgentReadStatus::Closed);
+    CHECK_FALSE(server->isOpen());
+}
+
+TEST_CASE("Connecting to a closed port fails within the timeout", "[agent_protocol]") {
+    std::string error;
+    auto listener = AgentListener::bindLoopback(&error);
+    REQUIRE(listener.has_value());
+    const int closed_port = listener->port();
+    listener->close();
+
+    const auto start = std::chrono::steady_clock::now();
+    auto client = connectAgentLoopback(closed_port, std::chrono::milliseconds{250}, &error);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    CHECK_FALSE(client.has_value());
+    CHECK_FALSE(error.empty());
+    CHECK(elapsed < std::chrono::seconds{2});
 }
