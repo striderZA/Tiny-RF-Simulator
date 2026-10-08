@@ -475,7 +475,8 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                              {"component", integerSchema("Component id.", 0)}}),
                  {"epoch", "component"}, Json{{"epoch", 3}, {"component", 103}}),
              objectSchema(
-                 properties({{"id", integerSchema("Component id.", 0)},
+                 properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                             {"id", integerSchema("Component id.", 0)},
                              {"type", stringSchema()},
                              {"label", stringSchema()},
                              {"part_number", stringSchema()},
@@ -484,7 +485,8 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                              {"inputs", arraySchema(componentInputSchema())},
                              {"outputs", arraySchema(componentOutputSchema())},
                              {"summary", stringSchema("ComponentRegistry hover-summary text.")}}),
-                 {"id", "type", "label", "params", "param_info", "inputs", "outputs", "summary"}),
+                 {"epoch", "id", "type", "label", "params", "param_info", "inputs", "outputs",
+                  "summary"}),
              readOnlyAnnotations()),
         tool("circuit_edit", "Edit Circuit",
              "Apply an ordered list of circuit operations using the epoch from the latest circuit "

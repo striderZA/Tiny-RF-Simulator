@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -76,9 +77,14 @@ class FakeAgentHost final : public IAgentHost {
     }
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
-    void recordActivity(const AgentActivity &entry) override { activities.push_back(entry); }
+    void recordActivity(const AgentActivity &entry) override {
+        if (throw_on_activity)
+            throw std::runtime_error("activity sink failed");
+        activities.push_back(entry);
+    }
 
     bool modal_open = false;
+    bool throw_on_activity = false;
     std::optional<std::string> name;
     int checkpoint_begins = 0;
     int checkpoint_commits = 0;
@@ -201,6 +207,7 @@ TEST_CASE("circuit_get reports components, ports, links, probes and analyzer poi
     const AgentToolResult component = fixture.call(
         "component_get", {{"epoch", fixture.api.epoch()}, {"component", generator->id()}});
     REQUIRE_FALSE(component.is_error);
+    CHECK(component.structured.at("epoch") == fixture.runtime.epoch());
     CHECK(component.structured.at("id") == generator->id());
     CHECK(component.structured.at("type") == "generator");
     CHECK(component.structured.at("params") == generator->serialize());
@@ -225,6 +232,7 @@ TEST_CASE("Calls that take ids require the current epoch", "[agent_api]") {
     auto stale = fixture.call("component_get", {{"epoch", 99}, {"component", generator->id()}});
     const auto &stale_error = errorFor(stale);
     CHECK(stale_error.at("code") == "STALE_EPOCH");
+    CHECK(stale_error.at("details").at("epoch") == fixture.runtime.epoch());
     CHECK(stale_error.at("message") == "epoch 99 is stale; call circuit_get");
 
     fixture.runtime.clearComponentsAndResetIds();
@@ -290,6 +298,27 @@ TEST_CASE("Unexpected exceptions become INTERNAL and are logged", "[agent_api]")
 
     const auto next = fixture.call("circuit_get");
     CHECK_FALSE(next.is_error);
+}
+
+TEST_CASE("Activity callback exceptions become INTERNAL and are logged", "[agent_api]") {
+    ApiFixture fixture;
+    LoggerCore::instance().clear();
+    fixture.host.throw_on_activity = true;
+
+    std::optional<AgentToolResult> result;
+    bool threw = false;
+    try {
+        result = fixture.call("circuit_get");
+    } catch (...) {
+        threw = true;
+    }
+    CHECK_FALSE(threw);
+    if (result) {
+        CHECK(errorFor(*result).at("code") == "INTERNAL");
+        CHECK(errorFor(*result).at("message") ==
+              "internal error in circuit_get; see the RF Simulator log");
+        CHECK(fixture.errorWasLogged("circuit_get"));
+    }
 }
 
 TEST_CASE("Every result carries the epoch and records activity", "[agent_api]") {

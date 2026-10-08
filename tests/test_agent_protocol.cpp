@@ -797,6 +797,13 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
         CHECK(schema.at("anyOf").at(1) == error_schema);
         CHECK(schema.at("anyOf").at(0).value("type", "") == "object");
     }
+    const auto *component_get = findAgentTool("component_get");
+    REQUIRE(component_get != nullptr);
+    const auto &component_success = component_get->output_schema.at("anyOf").at(0);
+    CHECK(component_success.at("properties").contains("epoch"));
+    CHECK(std::find(component_success.at("required").begin(),
+                    component_success.at("required").end(),
+                    "epoch") != component_success.at("required").end());
 }
 
 TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {
