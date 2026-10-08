@@ -6,6 +6,7 @@
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
+#include "output_snr.h"
 #include "pfb_channelizer_engine.h"
 #include <algorithm>
 #include <chrono>
@@ -110,20 +111,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_circuit_runtime.components().hoverSummary(id);
-        // The first output is the SNR target. A PFB's first output is its active
-        // channel, whose noise is already integrated across the channel
-        // response; other components use the analyzer's current RBW measurement.
-        if (IComponentEngine *component = m_circuit_runtime.components().find(id)) {
-            const auto &outputs = component->node().outputs;
-            if (!outputs.empty()) {
-                if (component->type_name() == "pfb") {
-                    info.snr_dB =
-                        static_cast<PFBChannelizerEngine *>(component)->computeActiveChannelSNRdB();
-                } else {
-                    info.snr_dB = m_spectrum_engine.computeStrongestToneSNRdB(outputs[0]);
-                }
-            }
-        }
+        if (IComponentEngine *component = m_circuit_runtime.components().find(id))
+            info.snr_dB = computeOutputSnr(*component, 0, m_spectrum_engine).snr_dB;
         return info;
     };
 

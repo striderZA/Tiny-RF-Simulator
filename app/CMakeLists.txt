@@ -31,6 +31,7 @@ add_library(editor_services STATIC
     src/component_library.cpp
     src/receiver_requirements.cpp
     src/receiver_performance_measurement.cpp
+    src/output_snr.cpp
 )
 add_library(simulator::editor_services ALIAS editor_services)
 target_include_directories(editor_services PUBLIC
@@ -43,6 +44,7 @@ target_link_libraries(editor_services
         simulator::amplifier_engine
         simulator::mixer_engine
         simulator::pfb_channelizer_engine
+        simulator::spectrum_analyzer_engine
         simulator::splitter_engine
         simulator::adc_engine
         simulator::coax_cable_engine
