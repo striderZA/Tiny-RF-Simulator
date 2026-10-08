@@ -4,10 +4,12 @@
 #endif
 
 #include "agent_errors.h"
+#include "agent_token.h"
 #include "agent_wire.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -119,4 +121,35 @@ TEST_CASE("Non-finite numbers encode as null and finite numbers stay numeric", "
     CHECK(agentNumber(std::numeric_limits<double>::quiet_NaN()).is_null());
     CHECK(agentNumber(std::numeric_limits<double>::infinity()).is_null());
     CHECK(agentNumber(-std::numeric_limits<double>::infinity()).is_null());
+}
+
+TEST_CASE("Generated agent tokens are 64 lowercase hex characters and differ", "[agent_protocol]") {
+    const auto first = generateAgentToken();
+    const auto second = generateAgentToken();
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+
+    CHECK(first->size() == 64);
+    CHECK(second->size() == 64);
+
+    const auto is_lowercase_hex = [](std::string_view token) {
+        return std::all_of(token.begin(), token.end(), [](char character) {
+            return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
+        });
+    };
+    CHECK(is_lowercase_hex(*first));
+    CHECK(is_lowercase_hex(*second));
+    CHECK(*first != *second);
+}
+
+TEST_CASE("Agent token comparison checks exact values", "[agent_protocol]") {
+    const std::string token = "0123456789abcdef";
+    CHECK(agentTokensEqual(token, token));
+
+    std::string changed = token;
+    changed[7] = 'f';
+    CHECK_FALSE(agentTokensEqual(token, changed));
+
+    CHECK_FALSE(agentTokensEqual(token, std::string_view{token}.substr(0, token.size() - 1)));
+    CHECK_FALSE(agentTokensEqual(token, token + "0"));
 }

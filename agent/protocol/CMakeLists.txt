@@ -1,6 +1,7 @@
 add_library(agent_protocol STATIC
     src/agent_wire.cpp
     src/agent_errors.cpp
+    src/agent_token.cpp
 )
 add_library(simulator::agent_protocol ALIAS agent_protocol)
 
@@ -15,6 +16,7 @@ target_link_libraries(agent_protocol
 
 if(WIN32)
     target_compile_definitions(agent_protocol PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(agent_protocol PRIVATE bcrypt)
 endif()
 
 set_target_properties(agent_protocol PROPERTIES FOLDER "Library")
