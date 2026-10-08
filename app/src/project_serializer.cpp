@@ -10,6 +10,7 @@
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_view_manager.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -1165,11 +1166,14 @@ bool ProjectSerializer::load(const std::string &path) {
                 *member = ws.contains(key) ? ws[key].get<bool>() : true;
         }
 
-        // Restore graph state counters. Pre-validation guarantees a present
-        // next_component_id is a non-negative int, so no wrap/truncation.
+        // Restore the saved counter without losing IDs consumed during project
+        // reconstruction. Pre-validation guarantees a present next_component_id
+        // is a non-negative int, so no wrap or truncation is possible.
         auto &gs = root["graph_state"];
-        if (!gs.is_null() && gs.contains("next_component_id"))
-            m_runtime.setNextComponentId(gs["next_component_id"].get<int>());
+        if (!gs.is_null() && gs.contains("next_component_id")) {
+            m_runtime.setNextComponentId(
+                std::max(gs["next_component_id"].get<int>(), m_runtime.nextComponentId()));
+        }
     } catch (const std::exception &e) {
         // Broadened from nlohmann::json::exception: any exception escaping
         // restoration (including non-JSON engine/container errors on
