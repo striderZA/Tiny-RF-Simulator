@@ -767,6 +767,18 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
     CHECK(error_properties.at("properties").at("message").at("type") == "string");
     CHECK(error_properties.at("properties").at("details").at("type") == "object");
     CHECK(error_properties.at("properties").at("details").value("additionalProperties", true) == false);
+    const auto &detail_properties = error_properties.at("properties").at("details").at("properties");
+    CHECK(detail_properties.contains("undone"));
+    CHECK_FALSE(detail_properties.contains("undone_calls"));
+    CHECK(detail_properties.at("suggestions").at("type") == "array");
+    CHECK(detail_properties.at("suggestions").at("maxItems") == 5);
+    CHECK(detail_properties.at("suggestions").at("items").at("type") == "string");
+    CHECK(detail_properties.at("expected").at("type") == "string");
+    CHECK(detail_properties.at("existing_source").at("type") == "object");
+    CHECK(detail_properties.at("existing_source").at("properties").contains("component"));
+    CHECK(detail_properties.at("existing_source").at("properties").contains("port"));
+    CHECK(detail_properties.at("existing_source").at("required") ==
+          nlohmann::json::array({"component", "port"}));
     CHECK(error_schema.at("required") == nlohmann::json::array({"epoch", "error"}));
     CHECK(error_schema.at("properties").at("error").at("required") ==
           nlohmann::json::array({"code", "message"}));
