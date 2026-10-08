@@ -540,3 +540,42 @@ TEST_CASE_METHOD(
     CHECK_FALSE(fs::exists(edit.source_path));
     fs::remove_all(base);
 }
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Component authoring preserves an edited S-param asset when definition save fails",
+                 "[containment][issue184]") {
+    namespace fs = std::filesystem;
+    const fs::path base =
+        fs::temp_directory_path() / ("issue184_failed_save_" + test_temp_paths::processTag());
+    fs::remove_all(base);
+    const fs::path dir = base / "library" / "amplifier" / "Acme";
+    fs::create_directories(dir);
+
+    const fs::path definition_path = dir / "EDIT-ME.json";
+    fs::create_directories(definition_path); // make opening the JSON target fail deterministically
+    const fs::path asset_path = dir / "EDIT-ME.s2p";
+    const std::string original_asset = "original S-parameter asset";
+    {
+        std::ofstream asset(asset_path);
+        asset << original_asset;
+    }
+    const fs::path picked = base / "picked.s2p";
+    writeS2p(picked);
+
+    ComponentDefinition edit;
+    edit.schema_version = 2;
+    edit.type = "amplifier";
+    edit.part_number = "EDIT-ME";
+    edit.manufacturer = "Acme";
+    edit.parameters = {{"gain_dB", 20.0}};
+    edit.source_path = definition_path.string();
+    edit.data_files = {{"s_parameters", "EDIT-ME.s2p"}};
+
+    RfSimulatorApp app;
+    app.testOpenEditComponentForm(edit);
+    app.testComponentFormModel().setSparamSourcePath(picked.string());
+
+    CHECK_FALSE(app.testSaveComponentForm());
+    CHECK(readFile(asset_path) == original_asset);
+    fs::remove_all(base);
+}

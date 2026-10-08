@@ -48,7 +48,8 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
         ImGui::SameLine();
         if (ImGui::Button("Browse...")) {
             auto result = pfd::open_file("Select S-parameter file", "",
-                                         {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                               .result();
             if (!result.empty())
                 m_model->setSparamSourcePath(result[0]);
@@ -114,7 +115,8 @@ bool ComponentFormWidget::draw(const ComponentLibrary &library) {
             ImGui::SameLine();
             if (ImGui::Button("Browse...")) {
                 auto result = pfd::open_file("Select S-parameter file", "",
-                                             {"S-parameter Files", "*.s2p *.s3p *.s4p *.sNp"})
+                                             {"S-parameter Files",
+                                              "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
                                   .result();
                 if (!result.empty())
                     m_model->setSparamSourcePath(result[0]);

@@ -390,6 +390,71 @@ TEST_CASE("ComponentLibrary applies S-param data files to every supported engine
     }
 }
 
+TEST_CASE("ComponentLibrary rejects Touchstone files incompatible with transfer mode",
+          "[library][issue184]") {
+    namespace fs = std::filesystem;
+    const fs::path temp_dir =
+        fs::temp_directory_path() / ("issue184_invalid_sparam_" + test_temp_paths::processTag());
+    std::error_code ec;
+    fs::remove_all(temp_dir, ec);
+    fs::create_directories(temp_dir);
+    struct TempDirCleanup {
+        fs::path path;
+        ~TempDirCleanup() {
+            std::error_code cleanup_error;
+            fs::remove_all(path, cleanup_error);
+        }
+    } cleanup{temp_dir};
+
+    {
+        std::ofstream file(temp_dir / "one_port.s1p");
+        file << "# GHz S MA R 50\n1.0 0.5 0.0\n";
+    }
+    {
+        std::ofstream file(temp_dir / "y_parameters.s2p");
+        file << "# GHz Y MA R 50\n"
+                "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+    {
+        std::ofstream file(temp_dir / "two_port.s2p");
+        file << "# GHz S MA R 50\n"
+                "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+
+    struct InvalidSparamCase {
+        const char *type;
+        nlohmann::json parameters;
+        const char *filename;
+    };
+    const std::vector<InvalidSparamCase> cases = {
+        {"amplifier", {{"gain_dB", 20.0}}, "one_port.s1p"},
+        {"attenuator", {{"attenuation_dB", 6.0}}, "one_port.s1p"},
+        {"equalizer", nlohmann::json::object(), "one_port.s1p"},
+        {"filter", {{"filter_type", "LPF"}, {"fc_low_Hz", 1.0e9}}, "one_port.s1p"},
+        {"combiner", {{"manual_mode", false}}, "two_port.s2p"},
+        {"amplifier", {{"gain_dB", 20.0}}, "y_parameters.s2p"},
+    };
+
+    ComponentLibrary library;
+    for (const auto &test_case : cases) {
+        CAPTURE(test_case.type);
+        CAPTURE(test_case.filename);
+        ComponentDefinition definition;
+        definition.schema_version = 2;
+        definition.type = test_case.type;
+        definition.part_number = std::string("ISSUE184-INVALID-") + test_case.type;
+        definition.source_path = (temp_dir / (definition.part_number + ".json")).string();
+        definition.parameters = test_case.parameters;
+        definition.data_files = {{"s_parameters", test_case.filename}};
+
+        CircuitRuntime runtime;
+        GraphEditorActions actions(runtime);
+        IComponentEngine *engine = library.instantiate(definition, runtime, actions);
+        REQUIRE(engine != nullptr);
+        CHECK_FALSE(engine->serialize().value("sparam_mode", false));
+    }
+}
+
 // --- Issue #181: an ideal filter definition carries the cutoffs its type uses ---
 //
 // The library schema has two generic, optional cutoff fields, but

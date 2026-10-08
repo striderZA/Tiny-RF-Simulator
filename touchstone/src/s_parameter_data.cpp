@@ -16,6 +16,10 @@ bool SParameterData::load(const std::string &filepath) {
         LOG_WARN("Failed to load S-parameter file: %s", filepath.c_str());
         return false;
     }
+    if (data->parameter != TouchstoneData::Parameter::S) {
+        LOG_WARN("Touchstone file does not contain S-parameters: %s", filepath.c_str());
+        return false;
+    }
     m_num_ports = data->num_ports;
     m_freqs = std::move(data->frequencies);
     m_params = std::move(data->parameters);
