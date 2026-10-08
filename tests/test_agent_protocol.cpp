@@ -605,10 +605,11 @@ namespace {
 
 bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
     static const std::set<std::string, std::less<>> allowed{
-        "type",          "properties", "required", "additionalProperties", "items",
-        "minItems",      "maxItems",   "minimum",  "maximum",              "enum",
-        "const",         "pattern",    "anyOf",    "oneOf",                "description",
-        "default",       "examples",   "title"};
+        "type",     "properties", "required",    "additionalProperties",
+        "items",    "minItems",   "maxItems",    "minimum",
+        "maximum",  "enum",       "const",       "pattern",
+        "anyOf",    "oneOf",      "description", "default",
+        "examples", "title"};
 
     if (!schema.is_object()) {
         return true;
@@ -644,8 +645,8 @@ bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
 
 TEST_CASE("The catalog lists the seven v1 tools in a fixed order", "[catalog]") {
     constexpr std::array<std::string_view, 7> expected{
-        "component_types", "library_search", "circuit_get", "component_get",
-        "circuit_edit",   "measure_port",   "network_analyzer_sweep"};
+        "component_types", "library_search", "circuit_get",           "component_get",
+        "circuit_edit",    "measure_port",   "network_analyzer_sweep"};
     const auto &catalog = agentToolCatalog();
 
     REQUIRE(kAgentCatalogVersion == 1);
@@ -721,7 +722,7 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
         operation_names.insert(variant.at("properties").at("op").at("const").get<std::string>());
     }
     CHECK((operation_names == std::set<std::string>{"add", "remove", "set_params", "connect",
-                                                     "disconnect", "probe_add", "probe_remove"}));
+                                                    "disconnect", "probe_add", "probe_remove"}));
 
     const auto *measure_port = findAgentTool("measure_port");
     REQUIRE(measure_port != nullptr);
@@ -766,8 +767,10 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
     CHECK(error_properties.at("properties").at("code").at("type") == "string");
     CHECK(error_properties.at("properties").at("message").at("type") == "string");
     CHECK(error_properties.at("properties").at("details").at("type") == "object");
-    CHECK(error_properties.at("properties").at("details").value("additionalProperties", true) == false);
-    const auto &detail_properties = error_properties.at("properties").at("details").at("properties");
+    CHECK(error_properties.at("properties").at("details").value("additionalProperties", true) ==
+          false);
+    const auto &detail_properties =
+        error_properties.at("properties").at("details").at("properties");
     CHECK(detail_properties.contains("undone"));
     CHECK_FALSE(detail_properties.contains("undone_calls"));
     CHECK(detail_properties.at("suggestions").at("type") == "array");
