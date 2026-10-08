@@ -397,6 +397,12 @@ add_standalone_test(test_editor_commands
     LIBS simulator::app
 )
 set_tests_properties(test_editor_commands PROPERTIES RUN_SERIAL TRUE)
+# Standalone, UI-free coverage for the editor-services public build boundary.
+add_standalone_test(test_editor_services_boundary
+    SOURCES test_editor_services_boundary.cpp
+    LIBS simulator::editor_services
+)
+set_target_properties(test_editor_services_boundary PROPERTIES FOLDER "Library")
 
 # Standalone UI-free validator/evaluator and draft-application coverage.
 add_standalone_test(test_receiver_requirements

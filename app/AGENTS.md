@@ -1,11 +1,12 @@
 # app/AGENTS.md
 
 ## Purpose
-Application composition and UI orchestration: the UI-free `simulator::circuit_runtime` target and `CircuitRuntime`, `GraphEditorActions`, `RfSimulatorApp`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, instrument widgets, project serializer, and component-library UI.
+Application composition and UI orchestration: the UI-free `simulator::circuit_runtime` and `simulator::editor_services` targets, plus `CircuitRuntime`, `GraphEditorActions`, `RfSimulatorApp`, `ComponentTypeRegistry`, `InspectorPanel`, `PFBViewManager`, instrument widgets, project serializer, and component-library UI.
 
 ## Ownership
 - `RfSimulatorApp` — application boot, frame loop, DSP update, and UI orchestration; declares `CircuitRuntime` before every dependent widget/controller so its live model outlasts them (project save/load logic lives in `ProjectSerializer`)
 - `CircuitRuntime` — UI-independent owner of the live graph, view manager, component registry, component IDs, validated topology commands, synchronous rewiring, and topological DSP update; `simulator::circuit_runtime` has no UI dependency
+- `simulator::editor_services` — static UI-free boundary for `EditorCommands`, `GraphEditorActions`, `ComponentTypeRegistry`, `ComponentLibrary`, receiver-requirements validation/evaluation, and `ReceiverPerformanceMeasurementEngine`; publishes `app/include` and runtime/engine dependencies without UI include paths
 - `GraphEditorActions` — low-level app adapter for probe/group/selection/part-number mutations and group-boundary rebuilding; user-level edits reach it through `EditorCommands`, while `ProjectSerializer` uses it directly for bulk restoration
 - `EditorCommands` — UI-free single entry point for user-level project edits (component create/remove/adopt, link connect/disconnect, probe add/remove, group create/rename/collapse/remove, group selection); each command applies its side effects in one place (group-boundary rebuild, `onComponentsChanged` view sync, revision advance; probe edits deliberately do not advance the revision) and owns the derived dirty state (`revision()`, `markModified()`, `markClean()`, `isDirty()`)
 - `ComponentRegistry` — runtime-owned component collection and type-indexed lookup; its implementation is part of `simulator::circuit_runtime`
