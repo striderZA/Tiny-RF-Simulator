@@ -443,7 +443,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
              readOnlyAnnotations()),
         tool("circuit_get", "Get Circuit",
              "Read the current project circuit, component ids, topology, probes, and network-analyzer settings.",
-             inputSchema(properties({{"include_params", Json{{"type", "boolean"}, {"default", false}}}),
+             inputSchema(properties({{"include_params", Json{{"type", "boolean"}, {"default", false}}}}),
                          {}, Json{{"include_params", true}}),
              objectSchema(properties({{"epoch", integerSchema("Circuit epoch.", 0)},
                                      {"revision", integerSchema("Project revision.", 0)},
