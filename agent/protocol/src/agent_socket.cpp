@@ -17,6 +17,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
+#if !defined(_WIN32) && !defined(MSG_NOSIGNAL) && !defined(SO_NOSIGPIPE)
+#error "agent_protocol requires MSG_NOSIGNAL or SO_NOSIGPIPE for safe POSIX writes"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -225,6 +228,21 @@ bool setNonBlocking(NativeSocket socket, bool nonblocking, int &error_code) {
     return true;
 }
 
+bool configureNoSigPipe(NativeSocket socket, int &error_code) {
+#if defined(_WIN32) || defined(MSG_NOSIGNAL)
+    static_cast<void>(socket);
+    static_cast<void>(error_code);
+    return true;
+#elif defined(SO_NOSIGPIPE)
+    const int enabled = 1;
+    if (setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
+        error_code = errno;
+        return false;
+    }
+    return true;
+#endif
+}
+
 bool isConnectPending(int error_code) {
 #ifdef _WIN32
     return error_code == WSAEWOULDBLOCK || error_code == WSAEINPROGRESS ||
@@ -248,6 +266,17 @@ bool isWouldBlock(int error_code) {
     return error_code == WSAEWOULDBLOCK;
 #else
     return error_code == EAGAIN || error_code == EWOULDBLOCK;
+#endif
+}
+
+bool isAcceptTransientFailure(int error_code) {
+    if (isInterrupted(error_code) || isWouldBlock(error_code)) {
+        return true;
+    }
+#ifdef _WIN32
+    return error_code == WSAECONNABORTED || error_code == WSAECONNRESET;
+#else
+    return error_code == ECONNABORTED || error_code == ECONNRESET;
 #endif
 }
 
@@ -343,6 +372,7 @@ bool AgentChannel::writeLine(std::string_view line) {
 #ifdef MSG_NOSIGNAL
         constexpr int send_flags = MSG_NOSIGNAL;
 #else
+        // SO_NOSIGPIPE is configured on every socket where MSG_NOSIGNAL is unavailable.
         constexpr int send_flags = 0;
 #endif
         const ssize_t sent = send(socket, message.data() + sent_total,
@@ -402,6 +432,18 @@ std::optional<AgentListener> AgentListener::bindLoopback(std::string *error) {
     const NativeSocket socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (isInvalidSocket(socket)) {
         setError(error, socketErrorMessage("socket", lastSocketError()));
+        return std::nullopt;
+    }
+
+    int setup_error = 0;
+    if (!configureNoSigPipe(socket, setup_error)) {
+        closeNativeSocket(socket);
+        setError(error, socketErrorMessage("setsockopt(SO_NOSIGPIPE)", setup_error));
+        return std::nullopt;
+    }
+    if (!setNonBlocking(socket, true, setup_error)) {
+        closeNativeSocket(socket);
+        setError(error, socketErrorMessage("set nonblocking listener", setup_error));
         return std::nullopt;
     }
 
@@ -475,7 +517,7 @@ std::optional<AgentChannel> AgentListener::accept(std::chrono::milliseconds time
             ::accept(listener, reinterpret_cast<sockaddr *>(&peer_address), &peer_length);
         if (isInvalidSocket(accepted)) {
             failure = lastSocketError();
-            if (isInterrupted(failure) || isWouldBlock(failure)) {
+            if (isAcceptTransientFailure(failure)) {
                 continue;
             }
             return std::nullopt;
@@ -483,6 +525,12 @@ std::optional<AgentChannel> AgentListener::accept(std::chrono::milliseconds time
 
         if (peer_address.sin_family == AF_INET &&
             peer_address.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+            int setup_error = 0;
+            if (!setNonBlocking(accepted, false, setup_error) ||
+                !configureNoSigPipe(accepted, setup_error)) {
+                closeNativeSocket(accepted);
+                return std::nullopt;
+            }
             return AgentChannel{storedSocket(accepted)};
         }
         closeNativeSocket(accepted);
@@ -522,6 +570,11 @@ std::optional<AgentChannel> connectAgentLoopback(int port, std::chrono::millisec
     }
 
     int failure = 0;
+    if (!configureNoSigPipe(socket, failure)) {
+        closeNativeSocket(socket);
+        setError(error, socketErrorMessage("setsockopt(SO_NOSIGPIPE)", failure));
+        return std::nullopt;
+    }
     if (!setNonBlocking(socket, true, failure)) {
         closeNativeSocket(socket);
         setError(error, socketErrorMessage("set nonblocking socket", failure));
