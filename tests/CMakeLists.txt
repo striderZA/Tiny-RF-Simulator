@@ -449,3 +449,10 @@ add_standalone_test(test_agent_protocol
     SOURCES test_agent_protocol.cpp
     LIBS simulator::agent_protocol
 )
+
+# Standalone, UI-free behavioral contract tests for the AgentApi read surface.
+add_standalone_test(test_agent_api
+    SOURCES test_agent_api.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
