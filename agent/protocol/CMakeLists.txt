@@ -3,6 +3,7 @@ add_library(agent_protocol STATIC
     src/agent_socket.cpp
     src/agent_errors.cpp
     src/agent_token.cpp
+    src/agent_catalog.cpp
     src/agent_endpoint.cpp
 )
 add_library(simulator::agent_protocol ALIAS agent_protocol)

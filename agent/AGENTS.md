@@ -6,7 +6,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 
 ## Ownership
 
-- `protocol/` owns `simulator::agent_protocol`: newline framing, loopback line sockets, shared error/result encoding, and private endpoint-file storage.
+- `protocol/` owns `simulator::agent_protocol`: newline framing, loopback line sockets, shared error/result encoding, the static v1 tool catalog and schemas, and private endpoint-file storage.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
 - Agent v1 does not initiate file operations. It may read data files already referenced by a component or library part.
 
@@ -17,7 +17,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 - `AgentListener` binds an ephemeral IPv4 port on `127.0.0.1` only; `connectAgentLoopback()` also targets only that address. Windows initializes Winsock once through a function-local static and sets `SO_EXCLUSIVEADDRUSE` before bind. `accept(timeout)` remains deadline-bounded across transient readiness changes and returns blocking channels.
 - `AgentChannel` is move-only and owns its socket plus `AgentLineReader`. Reads return `Line`, `Timeout`, `Closed`, `Oversized`, or `Error`, with timeout bounded across the whole wait; writes reject embedded LF, append one LF, and send all bytes. POSIX writes suppress SIGPIPE using `MSG_NOSIGNAL` or `SO_NOSIGPIPE`; unsupported POSIX targets fail clearly.
 - Error names are `UPPER_SNAKE`. Tool errors use `{epoch, error: {code, message, hint?, op_index?, details?}}`; absent optional fields are omitted and absent epochs are JSON `null`. JSON-RPC agent errors use `-32000` and put the agent error name in `data.code`.
-- Non-finite numbers encode as JSON `null`. Within a `catalog_version`, changes are additive; removing or retyping a field or tool requires a version increment.
+- Non-finite numbers encode as JSON `null`. The static catalog has deterministic v1 order and shared input/output schemas; tool behavior is added through the API layer. Within a `catalog_version`, changes are additive; removing or retyping a field or tool requires a version increment.
 - Session tokens use 32 OS-CSPRNG bytes encoded as 64 lowercase hexadecimal characters; generation fails closed without fallback entropy. Equal-length tokens are compared across every byte with an XOR accumulator; unequal lengths are rejected.
 - Endpoint files are named `agent-endpoint-<install>.json`, where `<install>` is the 16-lowercase-hex FNV-1a of the weakly canonical executable directory (lowercased before UTF-8 encoding on Windows). The POSIX directory and file are current-user-owned with modes 0700 and 0600; Windows uses protected current-user-only DACLs (`D:P(A;OICI;FA;;;<SID>)` for directories, `D:P(A;;FA;;;<SID>)` for files).
 - Endpoint JSON has exactly the `rfsim-agent/1` keys and schema; deletion requires the matching GUI token.

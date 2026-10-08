@@ -11,6 +11,8 @@
 #error "agent_protocol must stay independent of the simulator and the UI"
 #endif
 
+#include "agent_catalog.h"
+
 #include "agent_endpoint.h"
 #include "agent_errors.h"
 #include "agent_socket.h"
@@ -597,4 +599,206 @@ TEST_CASE("Connecting to a closed port fails within the timeout", "[agent_protoc
     CHECK_FALSE(client.has_value());
     CHECK_FALSE(error.empty());
     CHECK(elapsed < std::chrono::seconds{2});
+}
+
+namespace {
+
+bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
+    static const std::set<std::string, std::less<>> allowed{
+        "type",          "properties", "required", "additionalProperties", "items",
+        "minItems",      "maxItems",   "minimum",  "maximum",              "enum",
+        "const",         "pattern",    "anyOf",    "oneOf",                "description",
+        "default",       "examples",   "title"};
+
+    if (!schema.is_object()) {
+        return true;
+    }
+
+    for (auto it = schema.begin(); it != schema.end(); ++it) {
+        if (!allowed.contains(it.key())) {
+            return false;
+        }
+        if (it.key() == "properties" && it.value().is_object()) {
+            for (auto property = it.value().begin(); property != it.value().end(); ++property) {
+                if (!schemaUsesOnlyAllowedKeywords(property.value())) {
+                    return false;
+                }
+            }
+        } else if (it.key() == "items" ||
+                   (it.key() == "additionalProperties" && it.value().is_object())) {
+            if (!schemaUsesOnlyAllowedKeywords(it.value())) {
+                return false;
+            }
+        } else if ((it.key() == "anyOf" || it.key() == "oneOf") && it.value().is_array()) {
+            for (const auto &branch : it.value()) {
+                if (!schemaUsesOnlyAllowedKeywords(branch)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+TEST_CASE("The catalog lists the seven v1 tools in a fixed order", "[catalog]") {
+    constexpr std::array<std::string_view, 7> expected{
+        "component_types", "library_search", "circuit_get", "component_get",
+        "circuit_edit",   "measure_port",   "network_analyzer_sweep"};
+    const auto &catalog = agentToolCatalog();
+
+    REQUIRE(kAgentCatalogVersion == 1);
+    REQUIRE(catalog.size() == expected.size());
+    CHECK(&catalog == &agentToolCatalog());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        CHECK(catalog[i].name == expected[i]);
+        CHECK(findAgentTool(expected[i]) == &catalog[i]);
+    }
+    CHECK(findAgentTool("Component_types") == nullptr);
+    CHECK(findAgentTool("unknown_tool") == nullptr);
+}
+
+TEST_CASE("Tool annotations follow the spec", "[catalog]") {
+    const auto &catalog = agentToolCatalog();
+    const nlohmann::json read_only{{"readOnlyHint", true}, {"openWorldHint", false}};
+    const nlohmann::json destructive{{"destructiveHint", true}, {"openWorldHint", false}};
+    const nlohmann::json idempotent{{"idempotentHint", true}, {"openWorldHint", false}};
+
+    REQUIRE(catalog.size() == 7);
+    CHECK(catalog[0].annotations == read_only);
+    CHECK(catalog[1].annotations == read_only);
+    CHECK(catalog[2].annotations == read_only);
+    CHECK(catalog[3].annotations == read_only);
+    CHECK(catalog[4].annotations == destructive);
+    CHECK(catalog[5].annotations == read_only);
+    CHECK(catalog[6].annotations == idempotent);
+    CHECK(catalog[5].description.find("3.01 dB") != std::string::npos);
+    CHECK(catalog[5].description.find("spectrum analyzer's displayed peak") != std::string::npos);
+}
+
+TEST_CASE("Input schemas are closed objects with consistent required fields", "[catalog]") {
+    for (const auto &tool : agentToolCatalog()) {
+        CAPTURE(tool.name);
+        const auto &schema = tool.input_schema;
+        REQUIRE(schema.is_object());
+        REQUIRE(schema.value("type", "") == "object");
+        REQUIRE(schema.value("additionalProperties", true) == false);
+        REQUIRE(schema.contains("properties"));
+        REQUIRE(schema.at("properties").is_object());
+        REQUIRE(schema.contains("required"));
+        REQUIRE(schema.at("required").is_array());
+        REQUIRE(schema.contains("examples"));
+        REQUIRE(schema.at("examples").is_array());
+        CHECK_FALSE(schema.at("examples").empty());
+        for (const auto &required : schema.at("required")) {
+            REQUIRE(required.is_string());
+            CHECK(schema.at("properties").contains(required.get<std::string>()));
+        }
+    }
+    const auto *library_search = findAgentTool("library_search");
+    REQUIRE(library_search != nullptr);
+    const auto &limit = library_search->input_schema.at("properties").at("limit");
+    CHECK(limit.at("default") == 20);
+    CHECK(limit.at("minimum") == 1);
+    CHECK(limit.at("maximum") == 50);
+
+    const auto *circuit_get = findAgentTool("circuit_get");
+    REQUIRE(circuit_get != nullptr);
+    CHECK(circuit_get->input_schema.at("properties").at("include_params").at("default") == false);
+
+    const auto *circuit_edit = findAgentTool("circuit_edit");
+    REQUIRE(circuit_edit != nullptr);
+    const auto &operations = circuit_edit->input_schema.at("properties").at("ops");
+    CHECK(operations.at("minItems") == 1);
+    CHECK(operations.at("maxItems") == 64);
+    const auto &variants = operations.at("items").at("oneOf");
+    REQUIRE(variants.size() == 9);
+    std::set<std::string> operation_names;
+    for (const auto &variant : variants) {
+        REQUIRE(variant.at("properties").contains("op"));
+        CHECK(variant.at("properties").at("op").contains("const"));
+        operation_names.insert(variant.at("properties").at("op").at("const").get<std::string>());
+    }
+    CHECK((operation_names == std::set<std::string>{"add", "remove", "set_params", "connect",
+                                                     "disconnect", "probe_add", "probe_remove"}));
+
+    const auto *measure_port = findAgentTool("measure_port");
+    REQUIRE(measure_port != nullptr);
+    const auto &measure_properties = measure_port->input_schema.at("properties");
+    CHECK(measure_properties.at("max_tones").at("default") == 8);
+    CHECK(measure_properties.at("max_tones").at("minimum") == 1);
+    CHECK(measure_properties.at("max_tones").at("maximum") == 32);
+    const auto &trace_points = measure_properties.at("trace").at("properties").at("points");
+    CHECK(trace_points.at("default") == 201);
+    CHECK(trace_points.at("minimum") == 2);
+    CHECK(trace_points.at("maximum") == 401);
+
+    const auto *network_sweep = findAgentTool("network_analyzer_sweep");
+    REQUIRE(network_sweep != nullptr);
+    const auto &max_points =
+        network_sweep->input_schema.at("properties").at("arrays").at("properties").at("max_points");
+    CHECK(max_points.at("minimum") == 2);
+    CHECK(max_points.at("maximum") == 401);
+}
+
+TEST_CASE("Output schemas accept the success or the common error shape", "[catalog]") {
+    const auto error_schema = agentErrorSchema();
+    REQUIRE(error_schema.is_object());
+    CHECK(error_schema.value("type", "") == "object");
+    CHECK(error_schema.value("additionalProperties", true) == false);
+    CHECK(error_schema.contains("properties"));
+    CHECK(error_schema.at("properties").contains("epoch"));
+    CHECK(error_schema.at("properties").contains("error"));
+    CHECK(error_schema.at("properties").contains("applied"));
+    CHECK(error_schema.at("properties").contains("refs"));
+    const auto &result_properties = error_schema.at("properties");
+    CHECK(result_properties.at("epoch").at("anyOf").size() == 2);
+    CHECK(result_properties.at("epoch").at("anyOf").at(0).at("type") == "integer");
+    CHECK(result_properties.at("epoch").at("anyOf").at(1).at("type") == "null");
+    CHECK(result_properties.at("applied").at("type") == "array");
+    CHECK(result_properties.at("refs").at("type") == "object");
+    const auto &error_properties = result_properties.at("error");
+    CHECK(error_properties.value("additionalProperties", true) == false);
+    CHECK(error_properties.at("properties").contains("hint"));
+    CHECK(error_properties.at("properties").contains("op_index"));
+    CHECK(error_properties.at("properties").contains("details"));
+    CHECK(error_properties.at("properties").at("code").at("type") == "string");
+    CHECK(error_properties.at("properties").at("message").at("type") == "string");
+    CHECK(error_properties.at("properties").at("details").at("type") == "object");
+    CHECK(error_properties.at("properties").at("details").value("additionalProperties", true) == false);
+    CHECK(error_schema.at("required") == nlohmann::json::array({"epoch", "error"}));
+    CHECK(error_schema.at("properties").at("error").at("required") ==
+          nlohmann::json::array({"code", "message"}));
+
+    for (const auto &tool : agentToolCatalog()) {
+        CAPTURE(tool.name);
+        const auto &schema = tool.output_schema;
+        REQUIRE(schema.is_object());
+        REQUIRE(schema.value("type", "") == "object");
+        REQUIRE(schema.contains("anyOf"));
+        REQUIRE(schema.at("anyOf").is_array());
+        REQUIRE(schema.at("anyOf").size() == 2);
+        CHECK(schema.at("anyOf").at(1) == error_schema);
+        CHECK(schema.at("anyOf").at(0).value("type", "") == "object");
+    }
+}
+
+TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {
+    CHECK(schemaUsesOnlyAllowedKeywords(agentErrorSchema()));
+    for (const auto &tool : agentToolCatalog()) {
+        CAPTURE(tool.name);
+        CHECK(schemaUsesOnlyAllowedKeywords(tool.input_schema));
+        CHECK(schemaUsesOnlyAllowedKeywords(tool.output_schema));
+    }
+}
+
+TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
+    CHECK(agentServerInstructions() ==
+          "RF Simulator tools act on the project open in the user's RF Simulator window. "
+          "Start with circuit_get. Component ids are the numbers in node labels "
+          "(\"Amplifier 103\" is 103). Send the epoch from your latest read with every call "
+          "that takes component ids; on STALE_EPOCH, call circuit_get again. Parameter units "
+          "are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot "
+          "open, save, or name files.");
 }
