@@ -138,7 +138,7 @@ Json componentPortSchema() {
 
 Json refPortSchema() {
     return objectSchema(properties({{"ref", Json{{"type", "string"},
-                                            {"pattern", "^[A-Za-z][A-Za-z0-9_]{0,31}$"}},
+                                            {"pattern", "^[A-Za-z][A-Za-z0-9_]{0,31}$"}}},
                                     {"port", integerSchema("Zero-based port index.", 0)}}),
                         {"ref", "port"});
 }
