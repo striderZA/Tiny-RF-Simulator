@@ -137,6 +137,11 @@ add_standalone_test(test_component_authoring
     SOURCES test_component_authoring.cpp
     LIBS simulator::app
 )
+# Standalone contract test for serialized component state metadata and array-path normalization.
+add_standalone_test(test_component_params
+    SOURCES test_component_params.cpp
+    LIBS simulator::editor_services simulator::test_flow
+)
 
 # Standalone for the same reason as test_component_authoring: TEST_CASEs appended
 # to the main `tests` binary are silently dropped by the MinGW-w64 toolchain, and

@@ -26,6 +26,7 @@ struct ParameterField {
     std::vector<std::string> enum_values;                  // Enum only
     nlohmann::json default_value;                          // optional
     std::string help;                                      // optional tooltip
+    bool read_only = false; // State metadata only; ignored by authoring.
 };
 
 struct ComponentTypeDescriptor {
@@ -41,6 +42,9 @@ struct ComponentTypeDescriptor {
     // accepted it for S-parameter operation.
     std::function<bool(IComponentEngine &, const std::string &)> load_sparam_file;
     std::vector<ParameterField> fields;
+    // Every scalar leaf in an engine's serialize() snapshot, using its persisted
+    // key and values (array indices are normalized to []).
+    std::vector<ParameterField> state_fields;
 
     // Create a default engine of this type (no params). Callers apply params
     // via engine->deserialize().
@@ -49,6 +53,12 @@ struct ComponentTypeDescriptor {
     // selector and dirty-flag state stay reachable.
     std::function<void(InspectorPanel &, IComponentEngine &)> draw_inspector;
 };
+
+// Normalize concrete array indices in serialize() paths (e.g. tones[12].freq_Hz).
+std::string normalizeStatePath(std::string_view path);
+// Find state metadata by a serialized key or a path containing concrete array indices.
+const ParameterField *findStateField(const ComponentTypeDescriptor &descriptor,
+                                     std::string_view path);
 
 class ComponentTypeRegistry {
   public:
