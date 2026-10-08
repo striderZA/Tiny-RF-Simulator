@@ -443,3 +443,9 @@ add_standalone_test(test_issue174_parameter_keys
     SOURCES test_issue174_parameter_keys.cpp
     LIBS simulator::app
 )
+
+# Standalone, UI-free agent protocol framing and error-shape contract tests.
+add_standalone_test(test_agent_protocol
+    SOURCES test_agent_protocol.cpp
+    LIBS simulator::agent_protocol
+)
