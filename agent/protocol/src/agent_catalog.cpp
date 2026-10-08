@@ -162,7 +162,7 @@ Json libraryPartInputSchema() {
 Json addOperationSchema(bool use_library_part) {
     Json fields = properties({{"op", constString("add")},
                               {"ref", Json{{"type", "string"},
-                                           {"pattern", "^[A-Za-z][A-Za-z0-9_]{0,31}$"}},
+                                           {"pattern", "^[A-Za-z][A-Za-z0-9_]{0,31}$"}}},
                               {"params", paramsSchema()},
                               {"position", positionSchema()}});
     if (use_library_part) {
@@ -408,7 +408,7 @@ nlohmann::json agentErrorSchema() {
                                                 "NO_VALID_POINTS"})},
                         {"requested", errorDetailValueSchema()},
                         {"stored", errorDetailValueSchema()},
-                        {"limit", integerSchema("Maximum allowed value.", 0)}}))}),
+                        {"limit", integerSchema("Maximum allowed value.", 0)}}))}}),
         {"code", "message"});
     Json refs{{"type", "object"}, {"additionalProperties", integerSchema("Component id.", 0)}};
     return objectSchema(properties({{"epoch", nullableSchema(integerSchema("Circuit epoch.", 0))},
