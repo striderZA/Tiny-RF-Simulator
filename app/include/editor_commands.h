@@ -1,6 +1,7 @@
 #pragma once
 
 #include "circuit_runtime.h"
+#include "component_params.h"
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -33,6 +34,7 @@ class EditorCommands {
     std::function<void()> onComponentsChanged;
 
     IComponentEngine *createComponent(const ComponentFactory &factory);
+    ParamWriteResult setComponentParams(int graph_node_id, const nlohmann::ordered_json &params);
     bool removeComponent(int graph_node_id);
     // Adopts components that were created directly through the runtime (e.g.
     // ComponentLibrary::instantiate()): syncs views and records the edit.

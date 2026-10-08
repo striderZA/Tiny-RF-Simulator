@@ -1,16 +1,23 @@
 #include "coax_presets.h"
+#include "component_engine_base.h"
+#include "component_params.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
+#include "editor_commands.h"
 #include "flow_params.h"
+#include "graph_editor_actions.h"
 #include "node_graph_engine.h"
 #include "view_manager.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -105,6 +112,80 @@ void checkEnumIndex(const ParameterField *field, const nlohmann::json &snapshot,
     REQUIRE(static_cast<size_t>(stored_index) < field->enum_values.size());
     CHECK(field->enum_values[static_cast<size_t>(stored_index)] == expected_label);
 }
+
+class FakeParamsEngine final : public ComponentEngineBase {
+  public:
+    FakeParamsEngine(int id, NodeGraphEngine &graph, nlohmann::json state)
+        : ComponentEngineBase(id, graph, "Fake", 1, 1), m_state(std::move(state)) {}
+
+    std::string_view type_name() const override { return "fake_params"; }
+    std::string hoverSummary() const override { return "Fake"; }
+    void update(double) override {}
+    nlohmann::json serialize() const override { return m_state; }
+    void deserialize(const nlohmann::json &state) override {
+        ++deserialize_calls;
+        m_state = state;
+        if (deserialize_calls == 1 && relative_adjustment != 0.0 && m_state.contains("gain_dB") &&
+            m_state["gain_dB"].is_number()) {
+            m_state["gain_dB"] = m_state["gain_dB"].get<double>() * (1.0 + relative_adjustment);
+        }
+        if (throw_on_calls.contains(deserialize_calls))
+            throw std::runtime_error("fake deserialize failure");
+    }
+
+    int deserialize_calls = 0;
+    double relative_adjustment = 0.0;
+    std::set<int> throw_on_calls;
+
+  private:
+    nlohmann::json m_state;
+};
+
+ParameterField testField(std::string key, FieldKind kind = FieldKind::Number,
+                         bool read_only = false) {
+    ParameterField field;
+    field.key = std::move(key);
+    field.kind = kind;
+    field.read_only = read_only;
+    return field;
+}
+
+const ComponentTypeDescriptor &paramsDescriptor(std::string_view type) {
+    const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+    REQUIRE(descriptor != nullptr);
+    return *descriptor;
+}
+
+struct ParamsEngineFixture {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components{graph, view};
+    int next_id = 1;
+
+    IComponentEngine *create(std::string_view type) {
+        const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+        if (!descriptor || !descriptor->create)
+            return nullptr;
+        return descriptor->create(components, graph, next_id++);
+    }
+};
+
+struct FakeParamsFixture {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components{graph, view};
+
+    FakeParamsEngine &create(int id, nlohmann::json state) {
+        return components.add<FakeParamsEngine>(id, graph, std::move(state));
+    }
+};
+
+struct ParamsCommandFixture {
+    CircuitRuntime runtime;
+    GraphEditorActions actions{runtime};
+    EditorCommands commands{runtime, actions};
+};
+
 } // namespace
 
 TEST_CASE("State metadata describes every scalar engine serialization leaf", "[component_params]") {
@@ -227,4 +308,315 @@ TEST_CASE("State metadata enum labels index the engine's stored integers", "[com
     REQUIRE(stored_preset >= 0);
     REQUIRE(static_cast<size_t>(stored_preset) < kCoaxCablePresets.size());
     checkEnumIndex(preset_index, coax_snapshot, kCoaxCablePresets[stored_preset].name);
+}
+
+TEST_CASE("Scalar writes preserve JSON types and coerce integral numbers", "[component_params]") {
+    FakeParamsFixture fixture;
+    auto &engine = fixture.create(1001, {{"gain_dB", 1.0},
+                                         {"channel_count", 32},
+                                         {"enable_nonlinear", false},
+                                         {"unsigned_slot", std::uint64_t{5}}});
+    const std::vector<ParameterField> fields = {testField("gain_dB"), testField("channel_count"),
+                                                testField("enable_nonlinear", FieldKind::Bool),
+                                                testField("unsigned_slot")};
+
+    const auto gain = applyComponentParams(engine, fields, {{"gain_dB", 12.0}});
+    CHECK(gain.status == ParamWriteStatus::Applied);
+    CHECK(engine.serialize().at("gain_dB").get<double>() == 12.0);
+
+    const auto integer = applyComponentParams(engine, fields, {{"channel_count", 64.0}});
+    CHECK(integer.status == ParamWriteStatus::Applied);
+    CHECK(engine.serialize().at("channel_count").is_number_integer());
+    CHECK(engine.serialize().at("channel_count").get<int>() == 64);
+
+    const auto fractional = applyComponentParams(engine, fields, {{"channel_count", 64.5}});
+    CHECK(fractional.status == ParamWriteStatus::TypeMismatch);
+    CHECK(fractional.path == "channel_count");
+    CHECK(fractional.expected == "integer");
+
+    const auto wrong_boolean = applyComponentParams(engine, fields, {{"enable_nonlinear", 1}});
+    CHECK(wrong_boolean.status == ParamWriteStatus::TypeMismatch);
+    CHECK(wrong_boolean.expected == "boolean");
+
+    const auto negative_unsigned = applyComponentParams(engine, fields, {{"unsigned_slot", -1}});
+    CHECK(negative_unsigned.status == ParamWriteStatus::TypeMismatch);
+    CHECK(negative_unsigned.expected == "integer");
+}
+
+TEST_CASE("Arrays replace whole and validate object element fields", "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("generator");
+    REQUIRE(engine != nullptr);
+    engine->deserialize({{"tones",
+                          {{{"freq_Hz", 1e8}, {"power_dBm", -20.0}, {"phase_deg", 0.0}},
+                           {{"freq_Hz", 2e8}, {"power_dBm", -30.0}, {"phase_deg", 10.0}}}}});
+
+    const auto replaced = applyComponentParams(
+        *engine, paramsDescriptor("generator").state_fields,
+        {{"tones", {{{"freq_Hz", 3e8}, {"power_dBm", -10.0}, {"phase_deg", 5.0}}}}});
+    CHECK(replaced.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("tones").size() == 1);
+    CHECK(engine->serialize().at("tones").at(0).at("freq_Hz") == 3e8);
+
+    const auto bad_field = applyComponentParams(*engine, paramsDescriptor("generator").state_fields,
+                                                {{"tones", {{{"freq_Hz", "not a frequency"}}}}});
+    CHECK(bad_field.status == ParamWriteStatus::TypeMismatch);
+    CHECK(bad_field.path == "tones[0].freq_Hz");
+    CHECK(bad_field.expected == "number");
+
+    const auto non_object =
+        applyComponentParams(*engine, paramsDescriptor("generator").state_fields, {{"tones", {7}}});
+    CHECK(non_object.status == ParamWriteStatus::TypeMismatch);
+    CHECK(non_object.path == "tones[0]");
+    CHECK(non_object.expected == "object");
+}
+
+TEST_CASE("Parameter validation reports the first error in request order", "[component_params]") {
+    FakeParamsFixture fixture;
+    auto &scalar_engine = fixture.create(1008, {{"gain_dB", 1.0}});
+    const std::vector<ParameterField> scalar_fields = {testField("gain_dB")};
+
+    nlohmann::ordered_json scalar_params = nlohmann::ordered_json::object();
+    scalar_params["z_unknown"] = 1;
+    scalar_params["a_unknown"] = 2;
+    const auto scalar_result = applyComponentParams(scalar_engine, scalar_fields, scalar_params);
+    CHECK(scalar_result.status == ParamWriteStatus::UnknownKey);
+    CHECK(scalar_result.path == "z_unknown");
+
+    auto &array_engine = fixture.create(1009, {{"tones", {{{"freq_Hz", 1e8}}}}});
+    const std::vector<ParameterField> array_fields = {testField("tones[].freq_Hz")};
+    nlohmann::ordered_json element = nlohmann::ordered_json::object();
+    element["z_unknown"] = 1;
+    element["freq_Hz"] = "not a frequency";
+    nlohmann::ordered_json array_params = nlohmann::ordered_json::object();
+    array_params["tones"] = nlohmann::ordered_json::array({element});
+
+    const auto array_result = applyComponentParams(array_engine, array_fields, array_params);
+    CHECK(array_result.status == ParamWriteStatus::UnknownKey);
+    CHECK(array_result.path == "tones[0].z_unknown");
+}
+
+TEST_CASE("EditorCommands preserves parameter request order", "[component_params]") {
+    ParamsCommandFixture fixture;
+    const ComponentFactory factory = [](ComponentRegistry &components, NodeGraphEngine &graph,
+                                        int id) -> IComponentEngine * {
+        return &components.add<FakeParamsEngine>(id, graph, nlohmann::json{{"gain_dB", 1.0}});
+    };
+    auto *engine = fixture.commands.createComponent(factory);
+    REQUIRE(engine != nullptr);
+    const std::uint64_t revision = fixture.commands.revision();
+
+    nlohmann::ordered_json params = nlohmann::ordered_json::object();
+    params["z_unknown"] = 1;
+    params["a_unknown"] = 2;
+    const auto result = fixture.commands.setComponentParams(engine->graphNodeId(), params);
+
+    CHECK(result.status == ParamWriteStatus::UnknownKey);
+    CHECK(result.path == "z_unknown");
+    CHECK(fixture.commands.revision() == revision);
+}
+
+TEST_CASE("Enum labels and integer values store their integer indices", "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("filter");
+    REQUIRE(engine != nullptr);
+
+    const auto accepted = applyComponentParams(*engine, paramsDescriptor("filter").state_fields,
+                                               {{"filter_type", "BPF"}});
+    CHECK(accepted.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("filter_type").get<int>() == 2);
+
+    const auto integer_index = applyComponentParams(
+        *engine, paramsDescriptor("filter").state_fields, {{"filter_type", 1}});
+    CHECK(integer_index.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("filter_type").get<int>() == 1);
+
+    const auto integral_float_index = applyComponentParams(
+        *engine, paramsDescriptor("filter").state_fields, {{"filter_type", 2.0}});
+    CHECK(integral_float_index.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("filter_type").get<int>() == 2);
+
+    const auto out_of_range = applyComponentParams(*engine, paramsDescriptor("filter").state_fields,
+                                                   {{"filter_type", 4}});
+    CHECK(out_of_range.status == ParamWriteStatus::TypeMismatch);
+    CHECK(out_of_range.expected == "one of LPF, HPF, BPF, BSF");
+
+    const auto fractional = applyComponentParams(*engine, paramsDescriptor("filter").state_fields,
+                                                 {{"filter_type", 1.5}});
+    CHECK(fractional.status == ParamWriteStatus::TypeMismatch);
+    CHECK(fractional.expected == "one of LPF, HPF, BPF, BSF");
+
+    const auto rejected = applyComponentParams(*engine, paramsDescriptor("filter").state_fields,
+                                               {{"filter_type", "XYZ"}});
+    CHECK(rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(rejected.expected == "one of LPF, HPF, BPF, BSF");
+}
+
+TEST_CASE("Unknown parameter keys provide the nearest same-level suggestion",
+          "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("attenuator");
+    REQUIRE(engine != nullptr);
+
+    const auto result = applyComponentParams(*engine, paramsDescriptor("attenuator").state_fields,
+                                             {{"attenuation_dB", 12.0}});
+    CHECK(result.status == ParamWriteStatus::UnknownKey);
+    CHECK(result.path == "attenuation_dB");
+    REQUIRE_FALSE(result.suggestions.empty());
+    CHECK(result.suggestions.front() == "atten_dB");
+    CHECK(result.suggestions.size() <= 5);
+}
+
+TEST_CASE("S-parameter paths are rejected before other key validation", "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("amplifier");
+    REQUIRE(engine != nullptr);
+
+    for (const std::string key : {"sparam_filepath", "sparam_path"}) {
+        const auto result =
+            applyComponentParams(*engine, paramsDescriptor("amplifier").state_fields, {{key, 123}});
+        CHECK(result.status == ParamWriteStatus::PathParamUnsupported);
+        CHECK(result.path == key);
+    }
+}
+
+TEST_CASE("Read-only metadata is rejected before checking the JSON value type",
+          "[component_params]") {
+    FakeParamsFixture fixture;
+    auto &engine = fixture.create(1002, {{"gain_dB", 1.0}});
+    const std::vector<ParameterField> fields = {testField("gain_dB", FieldKind::Number, true)};
+
+    const auto result = applyComponentParams(engine, fields, {{"gain_dB", "wrong type"}});
+    CHECK(result.status == ParamWriteStatus::ReadOnly);
+    CHECK(result.path == "gain_dB");
+}
+
+TEST_CASE("A no-op parameter write skips deserialize", "[component_params]") {
+    FakeParamsFixture fixture;
+    auto &engine = fixture.create(1003, {{"gain_dB", 5.0}});
+    const std::vector<ParameterField> fields = {testField("gain_dB")};
+
+    const auto result = applyComponentParams(engine, fields, {{"gain_dB", 5.0}});
+    CHECK(result.status == ParamWriteStatus::Unchanged);
+    CHECK(result.ok());
+    CHECK(engine.deserialize_calls == 0);
+}
+
+TEST_CASE("Engine-adjusted PFB values roll back without advancing revision", "[component_params]") {
+    ParamsCommandFixture fixture;
+    auto *engine = fixture.commands.createComponent(paramsDescriptor("pfb").create);
+    REQUIRE(engine != nullptr);
+    const auto before = engine->serialize();
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const auto result =
+        fixture.commands.setComponentParams(engine->graphNodeId(), {{"channel_count", 4096}});
+    CHECK(result.status == ParamWriteStatus::EngineAdjusted);
+    CHECK(result.path == "channel_count");
+    CHECK(result.requested == 4096);
+    CHECK(result.stored == 2048);
+    CHECK(engine->serialize() == before);
+    CHECK(fixture.commands.revision() == revision);
+}
+
+TEST_CASE("Engine-induced changes outside a request are returned in path order",
+          "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("pfb");
+    REQUIRE(engine != nullptr);
+    const auto &fields = paramsDescriptor("pfb").state_fields;
+
+    CHECK(applyComponentParams(*engine, fields, {{"active_channel", 20}}).status ==
+          ParamWriteStatus::Applied);
+    const auto result = applyComponentParams(*engine, fields, {{"channel_count", 16}});
+    CHECK(result.status == ParamWriteStatus::Applied);
+    REQUIRE(result.also_changed.size() == 1);
+    CHECK(result.also_changed[0].path == "active_channel");
+    CHECK(result.also_changed[0].old_value == 20);
+    CHECK(result.also_changed[0].new_value == 15);
+}
+
+TEST_CASE("Small float normalization is tolerated but larger adjustment is rolled back",
+          "[component_params]") {
+    const std::vector<ParameterField> fields = {testField("gain_dB")};
+
+    FakeParamsFixture close_fixture;
+    auto &close_engine = close_fixture.create(1004, {{"gain_dB", 500.0}});
+    close_engine.relative_adjustment = 1e-9;
+    const auto close = applyComponentParams(close_engine, fields, {{"gain_dB", 1000.0}});
+    CHECK(close.status == ParamWriteStatus::Applied);
+    CHECK(close_engine.serialize().at("gain_dB").get<double>() > 1000.0);
+
+    FakeParamsFixture adjusted_fixture;
+    auto &adjusted_engine = adjusted_fixture.create(1005, {{"gain_dB", 500.0}});
+    adjusted_engine.relative_adjustment = 1e-3;
+    const auto adjusted = applyComponentParams(adjusted_engine, fields, {{"gain_dB", 1000.0}});
+    CHECK(adjusted.status == ParamWriteStatus::EngineAdjusted);
+    CHECK(adjusted.requested == 1000.0);
+    CHECK(std::abs(adjusted.stored.get<double>() - 1001.0) < 1e-9);
+    CHECK(adjusted_engine.serialize().at("gain_dB") == 500.0);
+}
+
+TEST_CASE("Deserialize failures restore the snapshot and report restore failures",
+          "[component_params]") {
+    const std::vector<ParameterField> fields = {testField("gain_dB")};
+
+    FakeParamsFixture fixture;
+    auto &engine = fixture.create(1006, {{"gain_dB", 5.0}});
+    engine.throw_on_calls = {1};
+    const auto failed = applyComponentParams(engine, fields, {{"gain_dB", 7.0}});
+    CHECK(failed.status == ParamWriteStatus::DeserializeFailed);
+    CHECK(engine.serialize().at("gain_dB") == 5.0);
+    CHECK(engine.deserialize_calls == 2);
+
+    auto &restore_engine = fixture.create(1007, {{"gain_dB", 5.0}});
+    restore_engine.throw_on_calls = {1, 2};
+    const auto restore_failed = applyComponentParams(restore_engine, fields, {{"gain_dB", 7.0}});
+    CHECK(restore_failed.status == ParamWriteStatus::RestoreFailed);
+    CHECK(restore_engine.deserialize_calls == 2);
+}
+
+TEST_CASE("Editor parameter writes advance revision only for applied changes",
+          "[component_params]") {
+    ParamsCommandFixture fixture;
+    auto *engine = fixture.commands.createComponent(paramsDescriptor("amplifier").create);
+    REQUIRE(engine != nullptr);
+    fixture.commands.markClean();
+    const std::uint64_t before = fixture.commands.revision();
+
+    const auto applied =
+        fixture.commands.setComponentParams(engine->graphNodeId(), {{"gain_dB", 12.0}});
+    CHECK(applied.status == ParamWriteStatus::Applied);
+    CHECK(fixture.commands.revision() == before + 1);
+
+    const std::uint64_t after_applied = fixture.commands.revision();
+    const auto unchanged =
+        fixture.commands.setComponentParams(engine->graphNodeId(), {{"gain_dB", 12.0}});
+    CHECK(unchanged.status == ParamWriteStatus::Unchanged);
+    CHECK(fixture.commands.revision() == after_applied);
+
+    const auto rejected =
+        fixture.commands.setComponentParams(engine->graphNodeId(), {{"sparam_path", "x"}});
+    CHECK(rejected.status == ParamWriteStatus::PathParamUnsupported);
+    CHECK(fixture.commands.revision() == after_applied);
+
+    const auto missing = fixture.commands.setComponentParams(987654, {{"gain_dB", 1.0}});
+    CHECK(missing.status == ParamWriteStatus::UnknownComponent);
+    CHECK(fixture.commands.revision() == after_applied);
+}
+
+TEST_CASE("Components without state metadata reject all parameter keys", "[component_params]") {
+    ParamsCommandFixture fixture;
+    const ComponentFactory factory = [](ComponentRegistry &registry, NodeGraphEngine &graph,
+                                        int id) -> IComponentEngine * {
+        return &registry.add<FakeParamsEngine>(id, graph, nlohmann::json{{"gain_dB", 1.0}});
+    };
+    auto *engine = fixture.commands.createComponent(factory);
+    REQUIRE(engine != nullptr);
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const auto result =
+        fixture.commands.setComponentParams(engine->graphNodeId(), {{"gain_dB", 2.0}});
+    CHECK(result.status == ParamWriteStatus::UnknownKey);
+    CHECK(fixture.commands.revision() == revision);
 }

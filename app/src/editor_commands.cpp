@@ -14,6 +14,24 @@ IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factor
     return component;
 }
 
+ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,
+                                                    const nlohmann::ordered_json &params) {
+    IComponentEngine *engine = m_runtime.components().find(graph_node_id);
+    if (!engine) {
+        ParamWriteResult result;
+        result.status = ParamWriteStatus::UnknownComponent;
+        return result;
+    }
+
+    static const std::vector<ParameterField> no_state_fields;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(engine->type_name());
+    const auto &state_fields = descriptor ? descriptor->state_fields : no_state_fields;
+    ParamWriteResult result = applyComponentParams(*engine, state_fields, params);
+    if (result.status == ParamWriteStatus::Applied)
+        markModified();
+    return result;
+}
+
 bool EditorCommands::removeComponent(int graph_node_id) {
     // The runtime rewires surviving inputs before returning; views are then
     // re-synchronized before any caller can draw them.
