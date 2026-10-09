@@ -69,7 +69,7 @@ The 1 MiB oversized-line case improved from `18.875 s` to `0.070 s` in the same 
 ### Changes
 
 - Both unexpected caller exception branches now call `LOG_ERROR` with the tool name and diagnostic while retaining the escaped `err` stream diagnostic. Both still return the private generic `INTERNAL` result; exception text is not included in the MCP result.
-- `simulator::logging_core` is a private `mcp_adapter` dependency. `agent/mcp/AGENTS.md` and the approved spec dependency row now record this utility dependency and the exception contract. The approved spec remains an uncommitted working artifact as required.
+- `agent/mcp/AGENTS.md` and the active approved spec now agree: `mcp_adapter` depends on `agent_protocol` and `Threads::Threads`, with private `logging_core`; `rf-sim-mcp` has no simulator engine/app dependency, and `logging_core` is diagnostics-only. The approved spec remains ignored and uncommitted.
 - No realistic deterministic caller-exception test exists without an injection seam: `GuiLink` handles transport and JSON failure paths internally. The existing private-result helper test covers generic client-facing shape; source review verified both catch branches call `LOG_ERROR`, preserve stderr diagnostics, and return that helper.
 
 ### Verification
