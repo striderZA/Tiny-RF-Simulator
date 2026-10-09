@@ -63,3 +63,19 @@ The 1 MiB oversized-line case improved from `18.875 s` to `0.070 s` in the same 
 - `tests/AGENTS.md` now inventories the oversized-line runtime/discard-recovery, control-safe stderr identity, and generic `INTERNAL` result cases.
 - `agent/mcp/AGENTS.md` now records incremental stdio framing guarantees and the caller-exception/logging contract. `agent/AGENTS.md` also retains the bridge-level framing and stderr contract.
 - Docs-only; no build or tests were rerun for this correction.
+
+## Fix round 2 — logger boundary
+
+### Changes
+
+- Both unexpected caller exception branches now call `LOG_ERROR` with the tool name and diagnostic while retaining the escaped `err` stream diagnostic. Both still return the private generic `INTERNAL` result; exception text is not included in the MCP result.
+- `simulator::logging_core` is a private `mcp_adapter` dependency. `agent/mcp/AGENTS.md` and the approved spec dependency row now record this utility dependency and the exception contract. The approved spec remains an uncommitted working artifact as required.
+- No realistic deterministic caller-exception test exists without an injection seam: `GuiLink` handles transport and JSON failure paths internally. The existing private-result helper test covers generic client-facing shape; source review verified both catch branches call `LOG_ERROR`, preserve stderr diagnostics, and return that helper.
+
+### Verification
+
+- `cmake --build build --target test_mcp_bridge rf-sim-mcp` — passed.
+- `ctest --test-dir build -R '^test_mcp_bridge$' --output-on-failure` — passed: 1/1 tests, 0 failures (`1.77 s`).
+- `sh scripts/format.sh --check agent/mcp/src/mcp_bridge.cpp` — passed: file clean under clang-format 18.
+- `git diff --check` — passed with no output.
+- Full suite not run.

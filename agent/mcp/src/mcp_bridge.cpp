@@ -2,6 +2,7 @@
 
 #include "agent_endpoint.h"
 #include "agent_wire.h"
+#include "logging_core.h"
 #include "mcp_bridge_detail.h"
 #include "mcp_session.h"
 
@@ -290,10 +291,14 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 }
                 result = link->call(task.call.tool, task.call.arguments);
             } catch (const std::exception &error) {
+                LOG_ERROR("MCP bridge call for tool %s failed: %s", task.call.tool.c_str(),
+                          error.what());
                 write_log_line("rf-sim-mcp: bridge call exception: " +
                                escapeLogField(error.what()));
                 result = mcp_bridge_detail::internalFailureResult();
             } catch (...) {
+                LOG_ERROR("MCP bridge call for tool %s failed with unknown exception",
+                          task.call.tool.c_str());
                 write_log_line("rf-sim-mcp: bridge call failed with an unknown exception");
                 result = mcp_bridge_detail::internalFailureResult();
             }

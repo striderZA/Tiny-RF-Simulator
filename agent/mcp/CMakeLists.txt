@@ -15,6 +15,8 @@ target_link_libraries(mcp_adapter
     PUBLIC
         simulator::agent_protocol
         Threads::Threads
+    PRIVATE
+        simulator::logging_core
 )
 
 set_target_properties(mcp_adapter PROPERTIES FOLDER "Library")

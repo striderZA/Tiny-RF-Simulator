@@ -12,7 +12,7 @@ Provide the UI- and simulator-independent MCP session layer over the agent tool 
 
 ## Local Contracts
 
-- Link only `simulator::agent_protocol` and `Threads::Threads`; do not include simulator, app, or UI headers.
+- Link `simulator::agent_protocol`, `simulator::logging_core`, and `Threads::Threads`; do not include or link simulator, app, UI, or engine modules. `logging_core` supplies `LOG_ERROR` for unexpected bridge call exceptions.
 - Select protocol era independently for each request: legacy `initialize` establishes initialization-era support, while modern requests require their own protocol version and client capabilities metadata.
 - Modern client information is optional and stateless; an omitted identity is empty for that request. Preserve the initialized legacy identity separately and restore it for later legacy requests after interleaved modern requests.
 - If `_meta` is present, it must be an object; reject malformed metadata with `-32602` before dispatching any tool.
