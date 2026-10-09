@@ -305,6 +305,7 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: |
             build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
+            build/bin/rf-sim-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
             mingw-dlls/
 
   release:
@@ -333,17 +334,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package Linux binary
+      - name: Package Linux binaries
         run: |
-          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux
-          chmod +x rf-simulator-linux
-          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux
+          mkdir -p rf-simulator-linux
+          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux/
+          cp artifacts/build-linux/build/bin/rf-sim-mcp rf-simulator-linux/
+          chmod +x rf-simulator-linux/tiny-rf-simulator rf-simulator-linux/rf-sim-mcp
+          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux/
+          tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-simulator-linux/rf-sim-mcp'
 
-      - name: Package Windows binary + DLLs
+      - name: Package Windows binaries + DLLs
         run: |
           mkdir -p rf-simulator-windows
           cp artifacts/build-windows/build/bin/tiny-rf-simulator.exe rf-simulator-windows/
-          cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/ 2>/dev/null || true
+          cp artifacts/build-windows/build/bin/rf-sim-mcp.exe rf-simulator-windows/
+          cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/
           zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
 
       - name: Create Release (draft)

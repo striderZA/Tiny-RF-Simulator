@@ -8,7 +8,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 
 - `mcp/` owns `simulator::mcp_adapter`: the transport-neutral MCP session, legacy initialization-era and stateless modern protocol handling, tools discovery/calls, ordered argument transfer, and cancellation handoff.
 - `mcp/` also owns `GuiLink`, the lazy `rfsim-agent/1` client transport: it reads and authenticates the private endpoint, relays tool calls with ordered arguments, and drops/retries failed connections. It depends only on `agent_protocol` and threads and never edits simulator state.
-- `mcp_bridge.{h,cpp}` owns `runBridge`, and `mcp/src/main.cpp` owns the `rf-sim-mcp` CLI and process entry point. The bridge transports MCP JSON-RPC over standard input/output and relays calls through `GuiLink`; it does not own simulator behavior.
+- `mcp_bridge.{h,cpp}` owns `runBridge`, and `mcp/src/main.cpp` owns the `rf-sim-mcp` CLI and process entry point. The bridge transports MCP JSON-RPC over standard input/output and relays calls through `GuiLink`; it does not own simulator behavior. Release archives package it beside the GUI executable as `rf-sim-mcp` or `rf-sim-mcp.exe`.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
 - `api/` owns the UI-free `simulator::agent_api` core and circuit/component/type/library query tools, `circuit_edit`, and measurement tools `measure_port` and `network_analyzer_sweep`; it validates ordered-JSON arguments, reports epoch-aware results, and attempts one activity recording per call. Port measurements recompute the live runtime before reading; analyzer project settings are checkpointed only when changed. Unavailable/non-finite numeric measurements are JSON `null`, and sweep settings echo the engine-clamped point count. Sink failures are logged without replacing computed results.
 - `api/` also owns `AgentServer`: it binds only an ephemeral loopback listener, owns endpoint/token cleanup, and allows one authenticated client. The listener thread handles socket framing and validated envelopes only, sharing inbox/outbox/status through a mutex; `pump()` on the caller thread alone checks modal state and invokes the executor. The pump preserves FIFO order, observes its configured budget between calls, and progresses at least one eligible call when work is queued. Server writes use a five-second whole-frame deadline.
@@ -46,6 +46,7 @@ Keep protocol code transport-neutral and small. Put simulator integration behind
 ## Verification
 
 - `ctest --test-dir build -R 'test_agent_|test_mcp_bridge' --output-on-failure`
+- Automated `test_agent_*` and `test_mcp_bridge` coverage exercises protocol, loopback, and app fixtures; real-client interoperability, minimized-window behavior, and server-restart persistence remain separate manual acceptance.
 
 ## Child DOX Index
 
