@@ -4,6 +4,8 @@
 
 #include "agent_api.h"
 #include "agent_errors.h"
+#include "agent_links.h"
+#include "agent_tools.h"
 #include "amplifier_engine.h"
 #include "component_engine_base.h"
 #include "component_library.h"
@@ -993,4 +995,31 @@ TEST_CASE("circuit_edit rejects empty and oversized operation lists before check
     CHECK(oversized_fixture.host.checkpoint_begins == 0);
     CHECK(oversized_fixture.host.checkpoint_commits == 0);
     CHECK(oversized_fixture.host.checkpoint_discards == 0);
+}
+
+TEST_CASE("link rejection classifier maps otherwise-allowed links to POLICY",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator);
+    REQUIRE(amplifier);
+    CHECK(classifyLinkRejection(fixture.runtime.graph(), *generator, *amplifier,
+                                generator->outputPinId(), amplifier->inputPinId()) == "POLICY");
+}
+
+TEST_CASE("agent parameter errors map deserialize and restore failures",
+          "[agent_api][circuit_edit]") {
+    ParamWriteResult deserialize_failed;
+    deserialize_failed.status = ParamWriteStatus::DeserializeFailed;
+    const auto deserialize_error = agentParamError(deserialize_failed, 7);
+    CHECK(agentErrorCodeName(deserialize_error.code) == "PARAM_REJECTED");
+    CHECK(deserialize_error.op_index == 7);
+    CHECK(deserialize_error.details.at("reason") == "DESERIALIZE_FAILED");
+
+    ParamWriteResult restore_failed;
+    restore_failed.status = ParamWriteStatus::RestoreFailed;
+    const auto restore_error = agentParamError(restore_failed, 8);
+    CHECK(agentErrorCodeName(restore_error.code) == "INTERNAL");
+    CHECK(restore_error.op_index == 8);
 }
