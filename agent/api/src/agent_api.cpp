@@ -23,6 +23,20 @@ std::string errorCode(const AgentToolResult &result) {
 AgentApi::AgentApi(AgentApiContext context) : m_context(context) {}
 
 std::uint64_t AgentApi::epoch() const { return m_context.runtime.epoch(); }
+IComponentEngine *AgentApi::scratchTypeEngine(std::string_view type) const {
+    const std::string key{type};
+    if (const auto found = m_type_engines.find(key); found != m_type_engines.end())
+        return found->second;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor)
+        return nullptr;
+    IComponentEngine *engine =
+        descriptor->create(m_type_components, m_type_graph, m_next_type_engine_id++);
+    if (!engine)
+        return nullptr;
+    m_type_engines.emplace(key, engine);
+    return engine;
+}
 
 void AgentApi::noteProjectReplaced(AgentReplacementCause cause,
                                    std::vector<std::string> undone_summaries) {
@@ -50,7 +64,13 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
     std::string summary;
 
     try {
-        if (call.tool == "circuit_get") {
+        if (call.tool == "component_types") {
+            result = executeComponentTypesTool(*this, call);
+            summary = "List component types";
+        } else if (call.tool == "library_search") {
+            result = executeLibrarySearchTool(*this, call);
+            summary = "Search component library";
+        } else if (call.tool == "circuit_get") {
             result = executeCircuitReadTool(*this, call);
             summary = "Read circuit";
         } else if (call.tool == "component_get") {

@@ -61,6 +61,28 @@ AgentArgs::AgentArgs(const nlohmann::ordered_json &arguments,
     }
 }
 
+std::string AgentArgs::optionalString(std::string_view key, std::string default_value) const {
+    const auto it = m_arguments.find(std::string(key));
+    if (it == m_arguments.end())
+        return default_value;
+    if (!it->is_string())
+        invalidArgument(argumentPath(key), "expected a string");
+    return it->get<std::string>();
+}
+
+int AgentArgs::optionalInt(std::string_view key, int default_value, int minimum,
+                           int maximum) const {
+    const auto it = m_arguments.find(std::string(key));
+    if (it == m_arguments.end())
+        return default_value;
+    const std::string path = argumentPath(key);
+    const std::uint64_t number = unsignedInteger(*it, path);
+    if (number > static_cast<std::uint64_t>(maximum) ||
+        number < static_cast<std::uint64_t>(minimum))
+        invalidArgument(path, "integer is out of range");
+    return static_cast<int>(number);
+}
+
 std::uint64_t AgentArgs::requiredUInt64(std::string_view key) const {
     const auto it = m_arguments.find(std::string(key));
     const std::string path = argumentPath(key);

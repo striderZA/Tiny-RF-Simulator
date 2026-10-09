@@ -25,6 +25,8 @@ class AgentArgs final {
     AgentArgs(const nlohmann::ordered_json &arguments,
               std::initializer_list<std::string_view> allowed_keys);
 
+    std::string optionalString(std::string_view key, std::string default_value) const;
+    int optionalInt(std::string_view key, int default_value, int minimum, int maximum) const;
     std::uint64_t requiredUInt64(std::string_view key) const;
     int requiredInt(std::string_view key) const;
     bool optionalBool(std::string_view key, bool default_value) const;

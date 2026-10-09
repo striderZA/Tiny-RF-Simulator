@@ -424,7 +424,9 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
             "default parameters and parameter metadata.",
             inputSchema(properties({{"type", stringSchema("Optional component type to inspect.")}}),
                         {}, Json::object()),
-            objectSchema(properties({{"types", arraySchema(typeDescriptorSchema())}}), {"types"}),
+            objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                                     {"types", arraySchema(typeDescriptorSchema())}}),
+                         {"epoch", "types"}),
             readOnlyAnnotations()),
         tool(
             "library_search", "Library Search",
@@ -437,7 +439,8 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                              withDefault(integerSchema("Maximum number of matches.", 1, 50), 20)}}),
                 {}, Json{{"query", "LNA"}, {"type", "amplifier"}, {"limit", 10}}),
             objectSchema(
-                properties({{"parts", arraySchema(objectSchema(
+                properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                            {"parts", arraySchema(objectSchema(
                                           properties({{"part_number", stringSchema()},
                                                       {"type", stringSchema()},
                                                       {"manufacturer", stringSchema()},
@@ -447,7 +450,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                                           {"part_number", "type", "manufacturer", "description",
                                            "parameters", "has_data_files"}))},
                             {"total", integerSchema("Total matching loaded definitions.", 0)}}),
-                {"parts", "total"}),
+                {"epoch", "parts", "total"}),
             readOnlyAnnotations()),
         tool("circuit_get", "Get Circuit",
              "Read the current project circuit, component ids, topology, probes, and "

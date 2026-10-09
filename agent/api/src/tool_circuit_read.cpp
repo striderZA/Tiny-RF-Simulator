@@ -3,6 +3,7 @@
 #include "agent_args.h"
 #include "component_type_registry.h"
 #include "node_graph_engine.h"
+#include "tool_metadata.h"
 
 #include <algorithm>
 #include <string>
@@ -131,37 +132,10 @@ Json probeEndpoints(const AgentApiContext &context) {
 }
 
 Json parameterInfo(const IComponentEngine &component) {
-    Json result = Json::array();
     const auto *descriptor = ComponentTypeRegistry::instance().find(component.type_name());
     if (!descriptor)
-        return result;
-    for (const auto &field : descriptor->state_fields) {
-        std::string kind;
-        switch (field.kind) {
-        case FieldKind::Number:
-            kind = "number";
-            break;
-        case FieldKind::String:
-            kind = "string";
-            break;
-        case FieldKind::Enum:
-            kind = "enum";
-            break;
-        case FieldKind::FilePath:
-            kind = "file_path";
-            break;
-        case FieldKind::Bool:
-            kind = "bool";
-            break;
-        }
-        result.push_back({{"path", field.key},
-                          {"kind", std::move(kind)},
-                          {"unit", field.unit},
-                          {"enum_labels", field.enum_values},
-                          {"help", field.help},
-                          {"read_only", field.read_only}});
-    }
-    return result;
+        return Json::array();
+    return agent_api_detail::parameterInfo(*descriptor);
 }
 
 AgentToolResult staleEpoch(std::uint64_t current_epoch, const std::string &cause,

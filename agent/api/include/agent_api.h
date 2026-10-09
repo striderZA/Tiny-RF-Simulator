@@ -4,13 +4,18 @@
 #include "agent_host.h"
 #include "circuit_runtime.h"
 #include "component_library.h"
+#include "component_registry.h"
 #include "editor_commands.h"
 #include "measurement_chain_runner.h"
 #include "network_analyzer_engine.h"
+#include "node_graph_engine.h"
 #include "spectrum_analyzer_engine.h"
+#include "view_manager.h"
 
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 class IAgentCallExecutor {
@@ -43,7 +48,17 @@ class AgentApi final : public IAgentCallExecutor {
   private:
     friend AgentToolResult executeCircuitReadTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeComponentReadTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeComponentTypesTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeLibrarySearchTool(const AgentApi &, const AgentCall &);
 
+    IComponentEngine *scratchTypeEngine(std::string_view type) const;
+
+    mutable NodeGraphEngine m_type_graph;
+    mutable ViewManager m_type_view;
+    mutable ComponentRegistry m_type_components{m_type_graph, m_type_view};
+    mutable std::unordered_map<std::string, IComponentEngine *> m_type_engines;
+
+    mutable int m_next_type_engine_id = 1;
     AgentApiContext m_context;
     std::string m_last_replacement_cause;
     std::vector<std::string> m_undone_summaries;
