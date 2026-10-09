@@ -462,3 +462,9 @@ add_standalone_test(test_agent_server
     SOURCES test_agent_server.cpp
     LIBS simulator::agent_api
 )
+
+# Standalone, UI- and simulator-free coverage for both MCP protocol eras.
+add_standalone_test(test_mcp_bridge
+    SOURCES test_mcp_bridge.cpp
+    LIBS simulator::mcp_adapter
+)

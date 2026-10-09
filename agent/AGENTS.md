@@ -7,6 +7,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 ## Ownership
 
 - `protocol/` owns `simulator::agent_protocol`: newline framing, loopback line sockets, shared error/result encoding, the static v1 tool catalog and schemas, and private endpoint-file storage.
+- `mcp/` owns `simulator::mcp_adapter`: the transport-neutral MCP session, legacy initialization-era and stateless modern protocol handling, tools discovery/calls, ordered argument transfer, and cancellation handoff. It depends only on `agent_protocol` and threads and never edits simulator state.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
 - `api/` owns the UI-free `simulator::agent_api` core and circuit/component/type/library query tools, `circuit_edit`, and measurement tools `measure_port` and `network_analyzer_sweep`; it validates ordered-JSON arguments, reports epoch-aware results, and attempts one activity recording per call. Port measurements recompute the live runtime before reading; analyzer project settings are checkpointed only when changed. Unavailable/non-finite numeric measurements are JSON `null`, and sweep settings echo the engine-clamped point count. Sink failures are logged without replacing computed results.
 - `api/` also owns `AgentServer`: it binds only an ephemeral loopback listener, owns endpoint/token cleanup, and allows one authenticated client. The listener thread handles socket framing and validated envelopes only, sharing inbox/outbox/status through a mutex; `pump()` on the caller thread alone checks modal state and invokes the executor. The pump preserves FIFO order, observes its configured budget between calls, and progresses at least one eligible call when work is queued. Server writes use a five-second whole-frame deadline.
@@ -45,4 +46,6 @@ Keep protocol code transport-neutral and small. Put simulator integration behind
 
 ## Child DOX Index
 
-No child docs. `protocol/` is owned by this subsystem contract.
+- [protocol/](protocol/) — `simulator::agent_protocol`: framing, loopback sockets, shared errors/catalog, endpoint storage.
+- [mcp/AGENTS.md](mcp/AGENTS.md) — MCP protocol session boundary and per-request protocol-era handling.
+- [api/](api/) — `simulator::agent_api`, its tools and `AgentServer`.
