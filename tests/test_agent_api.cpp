@@ -700,12 +700,12 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     const auto epoch = fixture.api.epoch();
     const auto ids = added.structured.at("refs");
     const auto revision = fixture.commands.revision();
-    const auto fill =
-        editCall(fixture, nlohmann::ordered_json::array(
-                              {{{"op", "probe_add"}, {"at", {{"ref", "a"}, {"port", 0}}}},
-                               {{"op", "probe_add"}, {"at", {{"ref", "b"}, {"port", 0}}}},
-                               {{"op", "probe_add"}, {"at", {{"ref", "c"}, {"port", 0}}}},
-                               {{"op", "probe_add"}, {"at", {{"ref", "d"}, {"port", 0}}}}}));
+    const auto fill = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "probe_add"}, {"at", {{"component", ids.at("a")}, {"port", 0}}}},
+                      {{"op", "probe_add"}, {"at", {{"component", ids.at("b")}, {"port", 0}}}},
+                      {{"op", "probe_add"}, {"at", {{"component", ids.at("c")}, {"port", 0}}}},
+                      {{"op", "probe_add"}, {"at", {{"component", ids.at("d")}, {"port", 0}}}}}));
     REQUIRE_FALSE(fill.is_error);
     CHECK(fill.structured.at("epoch") == epoch);
     CHECK(fixture.commands.revision() == revision);
@@ -856,6 +856,13 @@ TEST_CASE("circuit_edit resolves library parts case-insensitively and reports am
     REQUIRE_FALSE(lower.is_error);
     CHECK(lower.structured.at("epoch") == fixture.api.epoch());
     CHECK(lower.structured.at("applied")[0].at("component") > 0);
+    const auto empty_type = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33LN+"}, {"type", ""}}}}}));
+    REQUIRE(empty_type.is_error);
+    CHECK(empty_type.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(empty_type).at("code") == "UNKNOWN_PART");
     const auto ambiguous = editCall(
         fixture, nlohmann::ordered_json::array(
                      {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33LN+"}}}}}));
@@ -868,6 +875,19 @@ TEST_CASE("circuit_edit resolves library parts case-insensitively and reports am
     CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("part_number"));
     CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("type"));
     CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("manufacturer"));
+    const auto longer_query = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33LN+EXTRA"}}}}}));
+    REQUIRE(longer_query.is_error);
+    CHECK(longer_query.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(longer_query).at("code") == "UNKNOWN_PART");
+    REQUIRE(errorFor(longer_query).contains("details"));
+    REQUIRE(errorFor(longer_query).at("details").contains("candidates"));
+    const auto &longer_candidates = errorFor(longer_query).at("details").at("candidates");
+    CHECK(
+        std::none_of(longer_candidates.begin(), longer_candidates.end(), [](const auto &candidate) {
+            return candidate.at("part_number") == "ZX60-33LN+";
+        }));
     const auto unknown =
         editCall(fixture, nlohmann::ordered_json::array(
                               {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33L"}}}}}));
@@ -967,6 +987,18 @@ TEST_CASE("circuit_edit validates duplicate and undefined refs in operation orde
     CHECK(errorFor(undefined).at("op_index") == 1);
     REQUIRE(undefined.structured.at("applied").size() == 1);
     CHECK(undefined_fixture.host.checkpoint_commits == 1);
+    ApiFixture malformed_fixture;
+    const auto malformed =
+        editCall(malformed_fixture,
+                 nlohmann::ordered_json::array(
+                     {{{"op", "set_params"}, {"ref", "bad-ref"}, {"params", {{"gain_dB", 1.0}}}}}));
+    REQUIRE(malformed.is_error);
+    CHECK(malformed.structured.at("epoch") == malformed_fixture.api.epoch());
+    REQUIRE(errorFor(malformed).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(malformed).contains("details"));
+    CHECK(errorFor(malformed).at("details").at("path") == "/ops/0/ref");
+    REQUIRE(errorFor(malformed).contains("op_index"));
+    CHECK(errorFor(malformed).at("op_index") == 0);
 }
 
 TEST_CASE("circuit_edit rejects empty and oversized operation lists before checkpointing",
@@ -1019,7 +1051,40 @@ TEST_CASE("agent parameter errors map deserialize and restore failures",
 
     ParamWriteResult restore_failed;
     restore_failed.status = ParamWriteStatus::RestoreFailed;
+    const std::string diagnostic = "private rollback diagnostic sentinel";
+    restore_failed.error = diagnostic;
+    LoggerCore::instance().clear();
     const auto restore_error = agentParamError(restore_failed, 8);
     CHECK(agentErrorCodeName(restore_error.code) == "INTERNAL");
     CHECK(restore_error.op_index == 8);
+    CHECK(restore_error.message.find(diagnostic) == std::string::npos);
+    CHECK(restore_error.details.dump().find(diagnostic) == std::string::npos);
+    const auto entries = LoggerCore::instance().entries();
+    CHECK(std::any_of(entries.begin(), entries.end(), [&](const LogEntry &entry) {
+        return entry.level == Level::Error && entry.message.find(diagnostic) != std::string::npos;
+    }));
+}
+
+TEST_CASE("placement depth ignores an existing component between added nodes",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *existing = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(existing);
+    const auto result = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "left"}, {"type", "amplifier"}},
+                                       {{"op", "add"}, {"ref", "right"}, {"type", "amplifier"}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "left"}, {"port", 0}}},
+                                        {"to", {{"component", existing->id()}, {"port", 0}}}},
+                                       {{"op", "connect"},
+                                        {"from", {{"component", existing->id()}, {"port", 0}}},
+                                        {"to", {{"ref", "right"}, {"port", 0}}}}}));
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(fixture.host.last_placements.size() == 2);
+    CHECK(fixture.host.last_placements[0].column == 0);
+    CHECK(fixture.host.last_placements[0].row == 0);
+    CHECK(fixture.host.last_placements[1].column == 0);
+    CHECK(fixture.host.last_placements[1].row == 1);
 }
