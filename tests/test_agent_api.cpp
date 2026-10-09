@@ -432,11 +432,19 @@ TEST_CASE("component_types rejects an unknown type", "[agent_api]") {
     const auto result = fixture.call("component_types", {{"type", "missing_type"}});
     CHECK(errorFor(result).at("code") == "UNKNOWN_TYPE");
     CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    const auto empty_type = fixture.call("component_types", {{"type", ""}});
+    CHECK(errorFor(empty_type).at("code") == "UNKNOWN_TYPE");
+    CHECK(empty_type.structured.at("epoch") == fixture.api.epoch());
 }
 
 TEST_CASE("library_search matches case-insensitively and limits results", "[agent_api]") {
     ApiFixture fixture;
 
+    const auto empty_query = fixture.call("library_search");
+    REQUIRE_FALSE(empty_query.is_error);
+    CHECK(empty_query.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(empty_query.structured.at("parts").size() > 0);
+    CHECK(empty_query.structured.at("total") >= empty_query.structured.at("parts").size());
     const auto part_number = fixture.call("library_search", {{"query", "zx60"}});
     REQUIRE_FALSE(part_number.is_error);
     CHECK(part_number.structured.at("epoch") == fixture.api.epoch());
