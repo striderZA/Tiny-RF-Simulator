@@ -50,6 +50,7 @@ class AgentApi final : public IAgentCallExecutor {
     friend AgentToolResult executeComponentReadTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeComponentTypesTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeLibrarySearchTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeCircuitEditTool(const AgentApi &, const AgentCall &);
 
     IComponentEngine *scratchTypeEngine(std::string_view type) const;
 

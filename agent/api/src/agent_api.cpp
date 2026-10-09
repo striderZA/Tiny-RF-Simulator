@@ -76,6 +76,9 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "component_get") {
             result = executeComponentReadTool(*this, call);
             summary = "Read component";
+        } else if (call.tool == "circuit_edit") {
+            result = executeCircuitEditTool(*this, call);
+            summary = "Edit circuit";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

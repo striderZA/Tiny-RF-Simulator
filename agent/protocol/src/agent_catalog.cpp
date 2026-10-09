@@ -276,6 +276,15 @@ Json networkAnalyzerPointsSchema() {
                         {"point_a", "point_b", "start_Hz", "stop_Hz", "points", "stimulus_dBm"});
 }
 
+Json parameterChangeSchema() {
+    const Json value_schema{{"type", Json::array({"object", "array", "string", "number", "integer",
+                                                  "boolean", "null"})}};
+    return objectSchema(
+        properties(
+            {{"path", stringSchema()}, {"old_value", value_schema}, {"new_value", value_schema}}),
+        {"path", "old_value", "new_value"});
+}
+
 Json appliedOperationSchema() {
     return objectSchema(properties({{"op_index", integerSchema("Zero-based operation index.", 0)},
                                     {"op", enumSchema({"add", "remove", "set_params", "connect",
@@ -284,7 +293,7 @@ Json appliedOperationSchema() {
                                     {"ref", stringSchema()},
                                     {"label", stringSchema()},
                                     {"params", paramsSchema()},
-                                    {"also_changed", arraySchema(stringSchema())},
+                                    {"also_changed", arraySchema(parameterChangeSchema())},
                                     {"unchanged", booleanSchema()}}),
                         {"op_index", "op"});
 }

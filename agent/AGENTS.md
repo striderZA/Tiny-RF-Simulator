@@ -8,7 +8,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 
 - `protocol/` owns `simulator::agent_protocol`: newline framing, loopback line sockets, shared error/result encoding, the static v1 tool catalog and schemas, and private endpoint-file storage.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
-- `api/` owns the UI-free `simulator::agent_api` core and read-only circuit/component/type/library tools; it validates ordered-JSON arguments, reports epoch-aware results, and records one activity per call.
+- `api/` owns the UI-free `simulator::agent_api` core and circuit/component/type/library query tools plus `circuit_edit`; it validates ordered-JSON arguments, reports epoch-aware results, and records one activity per call.
 - Agent v1 does not initiate file operations. It may read data files already referenced by a component or library part.
 
 ## Local Contracts
@@ -23,6 +23,9 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 - `component_types` reads the registered type order and defaults/ports through per-`AgentApi` scratch graph, view, and component-registry state; each type engine is created once and reused only for discovery metadata.
 - `library_search` matches query substrings case-insensitively across part number, manufacturer, and description, filters by type, sorts by `(type, part_number)`, and counts all matches before applying its bounded result limit. Type parameter metadata uses `boolean` for Boolean state fields.
 - `simulator::agent_api` links the protocol, UI-free editor services, analyzer/measurement engines, and threads only. It must not link `simulator::app`, ImGui, ImPlot, ImNodes, or GLFW. Circuit edits remain routed through `EditorCommands`; the API reaches application behavior only through `IAgentHost`.
+- `circuit_edit` accepts 1–64 ordered operations at the current epoch. References are call-local and become available after their add; processing stops at the first error, preserving and committing an applied prefix, while a failure before any applied op discards the checkpoint.
+- Keep `circuit_edit`'s API result and protocol schema aligned, including `applied[].also_changed` records shaped as `{path, old_value, new_value}`. Log rollback-failure diagnostics locally without exposing them in client-facing errors.
+- Placement is app-host work: report only newly added nodes, preserve explicit positions, and derive automatic columns from dependencies among added nodes (existing nodes do not add depth).
 - Session tokens use 32 OS-CSPRNG bytes encoded as 64 lowercase hexadecimal characters; generation fails closed without fallback entropy. Equal-length tokens are compared across every byte with an XOR accumulator; unequal lengths are rejected.
 - Endpoint files are named `agent-endpoint-<install>.json`, where `<install>` is the 16-lowercase-hex FNV-1a of the weakly canonical executable directory (lowercased before UTF-8 encoding on Windows). The POSIX directory and file are current-user-owned with modes 0700 and 0600; Windows uses protected current-user-only DACLs (`D:P(A;OICI;FA;;;<SID>)` for directories, `D:P(A;;FA;;;<SID>)` for files).
 - Endpoint JSON has exactly the `rfsim-agent/1` keys and schema; deletion requires the matching GUI token.
