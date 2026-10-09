@@ -865,6 +865,21 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
     REQUIRE(channel_noise.contains("anyOf"));
     CHECK(std::any_of(channel_noise.at("anyOf").begin(), channel_noise.at("anyOf").end(),
                       [](const auto &branch) { return branch.value("type", "") == "null"; }));
+    const auto &trace_schema = measure_success.at("properties").at("trace");
+    REQUIRE(trace_schema.at("type") == "object");
+    CHECK(trace_schema.at("required") ==
+          nlohmann::json::array({"frequencies_Hz", "noise_dBm_per_Hz"}));
+    CHECK(trace_schema.at("properties").at("frequencies_Hz").at("type") == "array");
+    CHECK(trace_schema.at("properties").at("noise_dBm_per_Hz").at("type") == "array");
+    const auto &tone_properties =
+        measure_success.at("properties").at("tones").at("items").at("properties");
+    for (const std::string_view field : {"freq_Hz", "power_dBm", "phase_deg"}) {
+        CAPTURE(field);
+        const auto &schema = tone_properties.at(field);
+        REQUIRE(schema.contains("anyOf"));
+        CHECK(std::any_of(schema.at("anyOf").begin(), schema.at("anyOf").end(),
+                          [](const auto &branch) { return branch.value("type", "") == "null"; }));
+    }
 }
 
 TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {

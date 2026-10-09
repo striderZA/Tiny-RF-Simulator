@@ -9,5 +9,7 @@ AgentToolResult executeComponentReadTool(const AgentApi &api, const AgentCall &c
 AgentToolResult executeComponentTypesTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeLibrarySearchTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);

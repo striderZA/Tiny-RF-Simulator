@@ -27,6 +27,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <initializer_list>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string_view>
@@ -1380,4 +1381,24 @@ TEST_CASE_METHOD(ImGuiFixture, "NetworkAnalyzer: gain/NF plot scales to the meas
     REQUIRE(flat.Min <= 0.0);
     REQUIRE(flat.Max >= 0.0);
     REQUIRE(flat.Max - flat.Min >= 10.0); // never a degenerate dB axis
+}
+
+TEST_CASE("NetworkAnalyzerEngine: finite extreme sweep bounds generate a finite grid",
+          "[network_analyzer][engine]") {
+    NodeGraphEngine graph;
+    TestNaHost host(std::vector<IComponentEngine *>{});
+    NetworkAnalyzerEngine analyzer(graph, host);
+    const double largest = std::numeric_limits<double>::max();
+    analyzer.setStartFrequency(-largest);
+    analyzer.setStopFrequency(largest);
+    analyzer.setPoints(3);
+    analyzer.update();
+
+    const auto &frequencies = analyzer.sweepFrequencies();
+    REQUIRE(frequencies.size() == 3);
+    CHECK(std::all_of(frequencies.begin(), frequencies.end(),
+                      [](double frequency) { return std::isfinite(frequency); }));
+    CHECK(frequencies[0] == -largest);
+    CHECK(frequencies[1] == 0.0);
+    CHECK(frequencies[2] == largest);
 }

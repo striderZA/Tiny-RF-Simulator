@@ -1225,15 +1225,31 @@ TEST_CASE("measure_port traces use interval centers and linear noise means",
                          {"trace", {{"start_Hz", 0.0}, {"stop_Hz", 40.0}, {"points", 4}}}});
     REQUIRE_FALSE(result.is_error);
     const auto &trace = result.structured.at("trace");
-    REQUIRE(trace.size() == 4);
-    CHECK(trace[0].at("freq_Hz") == 5.0);
-    CHECK(trace[1].at("freq_Hz") == 15.0);
-    CHECK(trace[2].at("freq_Hz") == 25.0);
-    CHECK(trace[3].at("freq_Hz") == 35.0);
-    CHECK(trace[0].at("noise_dBm_per_Hz") == Catch::Approx(10.0 * std::log10(2.0) + 30.0));
-    CHECK(trace[1].at("noise_dBm_per_Hz") == Catch::Approx(10.0 * std::log10(5.0) + 30.0));
-    CHECK(trace[2].at("noise_dBm_per_Hz") == Catch::Approx(10.0 * std::log10(5.0) + 30.0));
-    CHECK(trace[3].at("noise_dBm_per_Hz") == Catch::Approx(10.0 * std::log10(7.0) + 30.0));
+    REQUIRE(trace.is_object());
+    const auto &frequencies = trace.at("frequencies_Hz");
+    const auto &noise = trace.at("noise_dBm_per_Hz");
+    REQUIRE(frequencies.size() == 4);
+    REQUIRE(noise.size() == 4);
+    CHECK(frequencies[0] == 5.0);
+    CHECK(frequencies[1] == 15.0);
+    CHECK(frequencies[2] == 25.0);
+    CHECK(frequencies[3] == 35.0);
+    CHECK(noise[0] == Catch::Approx(10.0 * std::log10(2.0) + 30.0));
+    CHECK(noise[1] == Catch::Approx(10.0 * std::log10(5.0) + 30.0));
+    CHECK(noise[2] == Catch::Approx(10.0 * std::log10(5.0) + 30.0));
+    CHECK(noise[3] == Catch::Approx(10.0 * std::log10(7.0) + 30.0));
+    const double largest = std::numeric_limits<double>::max();
+    const auto wide = fixture.call(
+        "measure_port", {{"epoch", fixture.api.epoch()},
+                         {"at", {{"component", amplifier->id()}, {"port", 0}}},
+                         {"trace", {{"start_Hz", -largest}, {"stop_Hz", largest}, {"points", 2}}}});
+    REQUIRE_FALSE(wide.is_error);
+    const auto &wide_frequencies = wide.structured.at("trace").at("frequencies_Hz");
+    REQUIRE(wide_frequencies.size() == 2);
+    REQUIRE(wide_frequencies[0].is_number());
+    REQUIRE(wide_frequencies[1].is_number());
+    CHECK(wide_frequencies[0].get<double>() == Catch::Approx(-largest / 2.0));
+    CHECK(wide_frequencies[1].get<double>() == Catch::Approx(largest / 2.0));
     const auto invalid =
         fixture.call("measure_port", {{"epoch", fixture.api.epoch()},
                                       {"at", {{"component", amplifier->id()}, {"port", 0}}},
@@ -1273,6 +1289,30 @@ TEST_CASE("measure_port encodes unavailable numeric values and peak fields as nu
     CHECK(result.structured.at("snr_dB").is_null());
     CHECK(result.structured.at("peak").at("freq_Hz").is_null());
     CHECK(result.structured.at("peak").at("power_dBm").is_null());
+}
+TEST_CASE("measure_port sorts non-finite tone powers safely and stably",
+          "[agent_api][measure_port]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator);
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double infinity = std::numeric_limits<double>::infinity();
+    generator->addTone(100e6, nan);
+    generator->addTone(200e6, -infinity);
+    generator->addTone(300e6, infinity);
+    generator->addTone(400e6, -20.0);
+    const auto result =
+        fixture.call("measure_port", {{"epoch", fixture.api.epoch()},
+                                      {"at", {{"component", generator->id()}, {"port", 0}}}});
+    REQUIRE_FALSE(result.is_error);
+    const auto &tones = result.structured.at("tones");
+    REQUIRE(tones.size() == 4);
+    CHECK(tones[0].at("freq_Hz") == 400e6);
+    CHECK(tones[1].at("freq_Hz") == 100e6);
+    CHECK(tones[2].at("freq_Hz") == 200e6);
+    CHECK(tones[3].at("freq_Hz") == 300e6);
+    for (std::size_t index = 1; index < tones.size(); ++index)
+        CHECK(tones[index].at("power_dBm").is_null());
 }
 
 TEST_CASE("network_analyzer_sweep matches direct engine summary and sampled arrays",
@@ -1318,6 +1358,30 @@ TEST_CASE("network_analyzer_sweep matches direct engine summary and sampled arra
           Catch::Approx(direct.gainDb()[4]).margin(1e-9));
     CHECK(result.structured.at("summary").at("nf_dB").at("at_center") ==
           Catch::Approx(direct.noiseFigureDb()[4]).margin(1e-9));
+}
+TEST_CASE("network analyzer sweep safely handles finite frequencies beyond bucket cells",
+          "[agent_api][network_analyzer_sweep]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator);
+    REQUIRE(amplifier);
+    REQUIRE(fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()));
+    const auto result = fixture.call("network_analyzer_sweep",
+                                     {{"epoch", fixture.api.epoch()},
+                                      {"point_a", {{"component", generator->id()}, {"port", 0}}},
+                                      {"point_b", {{"component", amplifier->id()}, {"port", 0}}},
+                                      {"start_Hz", 1e20},
+                                      {"stop_Hz", 1.1e20},
+                                      {"points", 5}});
+    REQUIRE(errorFor(result).at("code") == "NO_MEASUREMENT");
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).contains("details"));
+    CHECK(errorFor(result).at("details").at("reason") == "NO_VALID_POINTS");
+    const auto &frequencies = fixture.network_analyzer.sweepFrequencies();
+    REQUIRE(frequencies.size() == 5);
+    CHECK(std::all_of(frequencies.begin(), frequencies.end(),
+                      [](double frequency) { return std::isfinite(frequency); }));
 }
 
 TEST_CASE("network analyzer settings checkpoint only changes and return engine-clamped points",
@@ -1409,7 +1473,8 @@ TEST_CASE("Every catalog tool input example passes API argument validation", "[a
     }
 }
 
-TEST_CASE("Measurement success and error results carry the current epoch", "[agent_api][measure]") {
+TEST_CASE("Measurement results carry epochs and missing endpoints return NOT_FOUND",
+          "[agent_api][measure]") {
     ApiFixture fixture;
     auto *generator = fixture.add<SignalGeneratorEngine>("generator");
     REQUIRE(generator);
@@ -1418,8 +1483,16 @@ TEST_CASE("Measurement success and error results carry the current epoch", "[age
                                       {"at", {{"component", generator->id()}, {"port", 0}}}});
     CHECK_FALSE(success.is_error);
     CHECK(success.structured.at("epoch") == fixture.api.epoch());
-    const auto error = fixture.call("measure_port", {{"epoch", fixture.api.epoch()},
-                                                     {"at", {{"component", 99999}, {"port", 0}}}});
-    CHECK(error.is_error);
-    CHECK(error.structured.at("epoch") == fixture.api.epoch());
+    const auto missing_component =
+        fixture.call("measure_port",
+                     {{"epoch", fixture.api.epoch()}, {"at", {{"component", 99999}, {"port", 0}}}});
+    CHECK(missing_component.is_error);
+    CHECK(errorFor(missing_component).at("code") == "NOT_FOUND");
+    CHECK(missing_component.structured.at("epoch") == fixture.api.epoch());
+    const auto missing_port =
+        fixture.call("measure_port", {{"epoch", fixture.api.epoch()},
+                                      {"at", {{"component", generator->id()}, {"port", 1}}}});
+    CHECK(missing_port.is_error);
+    CHECK(errorFor(missing_port).at("code") == "NOT_FOUND");
+    CHECK(missing_port.structured.at("epoch") == fixture.api.epoch());
 }

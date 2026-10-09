@@ -271,7 +271,7 @@ Json networkAnalyzerPointsSchema() {
                                     {"point_b", nullableSchema(outputEndpointSchema())},
                                     {"start_Hz", numberSchema()},
                                     {"stop_Hz", numberSchema()},
-                                    {"points", integerSchema("Sweep point count.", 2, 2001)},
+                                    {"points", integerSchema("Sweep point count.")},
                                     {"stimulus_dBm", numberSchema()}}),
                         {"point_a", "point_b", "start_Hz", "stop_Hz", "points", "stimulus_dBm"});
 }
@@ -327,14 +327,14 @@ Json measurementSnrBasisSchema() {
                             {"kind", "rbw_Hz"});
     Json pfb = objectSchema(properties({{"kind", constString("pfb_channel")},
                                         {"enbw_Hz", numberSchema()},
-                                        {"channel_noise_dBm", numberSchema()}}),
+                                        {"channel_noise_dBm", nullableSchema(numberSchema())}}),
                             {"kind", "enbw_Hz", "channel_noise_dBm"});
     return Json{{"oneOf", Json::array({std::move(rbw), std::move(pfb)})}};
 }
 
 Json measurementTraceSchema() {
     return objectSchema(
-        properties({{"frequencies_Hz", arraySchema(numberSchema())},
+        properties({{"frequencies_Hz", arraySchema(nullableSchema(numberSchema()))},
                     {"noise_dBm_per_Hz", arraySchema(nullableSchema(numberSchema()))}}),
         {"frequencies_Hz", "noise_dBm_per_Hz"});
 }
@@ -359,10 +359,11 @@ Json networkAnalyzerSuccessSchema() {
                                  {"gain_dB", networkMetricSummarySchema()},
                                  {"nf_dB", networkMetricSummarySchema()}}),
                      {"valid_points", "gain_dB", "nf_dB"});
-    return objectSchema(properties({{"settings", networkAnalyzerPointsSchema()},
+    return objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                                    {"settings", networkAnalyzerPointsSchema()},
                                     {"summary", std::move(summary)},
                                     {"arrays", std::move(arrays)}}),
-                        {"settings", "summary"});
+                        {"epoch", "settings", "summary"});
 }
 
 Json outputSchema(Json success) {
@@ -527,23 +528,26 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                     {"epoch", 3}, {"at", Json{{"component", 103}, {"port", 0}}}, {"max_tones", 8}}),
             objectSchema(
                 properties(
-                    {{"total_power_dBm", nullableSchema(numberSchema())},
-                     {"peak", objectSchema(properties({{"freq_Hz", numberSchema()},
-                                                       {"power_dBm", numberSchema()}}),
-                                           {"freq_Hz", "power_dBm"})},
+                    {{"epoch", integerSchema("Current circuit epoch.", 0)},
+                     {"total_power_dBm", nullableSchema(numberSchema())},
+                     {"peak",
+                      objectSchema(properties({{"freq_Hz", nullableSchema(numberSchema())},
+                                               {"power_dBm", nullableSchema(numberSchema())}}),
+                                   {"freq_Hz", "power_dBm"})},
                      {"noise_floor_dBm_per_Hz", nullableSchema(numberSchema())},
-                     {"tones", arraySchema(objectSchema(properties({{"freq_Hz", numberSchema()},
-                                                                    {"power_dBm", numberSchema()},
-                                                                    {"phase_deg", numberSchema()}}),
-                                                        {"freq_Hz", "power_dBm", "phase_deg"}))},
+                     {"tones", arraySchema(objectSchema(
+                                   properties({{"freq_Hz", nullableSchema(numberSchema())},
+                                               {"power_dBm", nullableSchema(numberSchema())},
+                                               {"phase_deg", nullableSchema(numberSchema())}}),
+                                   {"freq_Hz", "power_dBm", "phase_deg"}))},
                      {"tone_count", integerSchema("Number of stored tones.", 0)},
                      {"snr_dB", nullableSchema(numberSchema())},
                      {"snr_basis", measurementSnrBasisSchema()},
                      {"fs_Hz", nullableSchema(numberSchema())},
                      {"is_complex_baseband", booleanSchema()},
                      {"trace", measurementTraceSchema()}}),
-                {"total_power_dBm", "peak", "noise_floor_dBm_per_Hz", "tones", "tone_count",
-                 "snr_dB", "snr_basis", "fs_Hz", "is_complex_baseband"}),
+                {"epoch", "total_power_dBm", "peak", "noise_floor_dBm_per_Hz", "tones",
+                 "tone_count", "snr_dB", "snr_basis", "fs_Hz", "is_complex_baseband"}),
             readOnlyAnnotations()),
         tool("network_analyzer_sweep", "Network Analyzer Sweep",
              "Set network-analyzer sweep settings at two output ports and return gain/noise-figure "
@@ -555,7 +559,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                       {"point_b", outputEndpointSchema()},
                       {"start_Hz", numberSchema("Sweep start frequency.")},
                       {"stop_Hz", numberSchema("Sweep stop frequency.")},
-                      {"points", integerSchema("Sweep point count.", 2, 2001)},
+                      {"points", integerSchema("Sweep point count.")},
                       {"stimulus_dBm", numberSchema("Analyzer stimulus power.")},
                       {"arrays",
                        objectSchema(
