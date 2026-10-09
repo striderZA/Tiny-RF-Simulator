@@ -86,12 +86,14 @@ class FakeAgentHost final : public IAgentHost {
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
     void recordActivity(const AgentActivity &entry) override {
+        ++activity_attempts;
         if (throw_on_activity)
             throw std::runtime_error("activity sink failed");
         activities.push_back(entry);
     }
 
     bool modal_open = false;
+    int activity_attempts = 0;
     bool throw_on_activity = false;
     std::optional<std::string> name;
     int checkpoint_begins = 0;
@@ -313,25 +315,26 @@ TEST_CASE("Unexpected exceptions become INTERNAL and are logged", "[agent_api]")
     CHECK_FALSE(next.is_error);
 }
 
-TEST_CASE("Activity callback exceptions become INTERNAL and are logged", "[agent_api]") {
+TEST_CASE("activity sink failures do not hide committed circuit edits", "[agent_api]") {
     ApiFixture fixture;
     LoggerCore::instance().clear();
     fixture.host.throw_on_activity = true;
 
-    std::optional<AgentToolResult> result;
-    bool threw = false;
-    try {
-        result = fixture.call("circuit_get");
-    } catch (...) {
-        threw = true;
-    }
-    CHECK_FALSE(threw);
-    if (result) {
-        CHECK(errorFor(*result).at("code") == "INTERNAL");
-        CHECK(errorFor(*result).at("message") ==
-              "internal error in circuit_get; see the RF Simulator log");
-        CHECK(fixture.errorWasLogged("circuit_get"));
-    }
+    const auto result =
+        editCall(fixture, nlohmann::ordered_json::array({{{"op", "add"}, {"type", "generator"}}}));
+
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(result.structured.contains("applied"));
+    REQUIRE(result.structured.at("applied").size() == 1);
+    CHECK(result.structured.at("revision") == 1);
+    CHECK(fixture.commands.revision() == 1);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+    CHECK(fixture.host.checkpoint_discards == 0);
+    CHECK(fixture.host.activity_attempts == 1);
+    CHECK(fixture.host.activities.empty());
+    CHECK(fixture.errorWasLogged("circuit_edit"));
 }
 
 TEST_CASE("Every result carries the epoch and records activity", "[agent_api]") {

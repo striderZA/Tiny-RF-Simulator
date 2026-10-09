@@ -771,6 +771,10 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
           false);
     const auto &detail_properties =
         error_properties.at("properties").at("details").at("properties");
+    REQUIRE(detail_properties.contains("reason"));
+    REQUIRE(detail_properties.at("reason").contains("enum"));
+    const auto &reasons = detail_properties.at("reason").at("enum");
+    CHECK(std::find(reasons.begin(), reasons.end(), "RESTORE_FAILED") != reasons.end());
     CHECK(detail_properties.contains("undone"));
     CHECK_FALSE(detail_properties.contains("undone_calls"));
     CHECK(detail_properties.at("suggestions").at("type") == "array");
