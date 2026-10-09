@@ -12,11 +12,13 @@
 #include "graph_editor_actions.h"
 #include "logging_core.h"
 #include "network_analyzer_engine.h"
+#include "pfb_channelizer_engine.h"
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "spectrum_analyzer_engine.h"
 #include "splitter_engine.h"
 
+#include "component_params.h"
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -71,7 +73,10 @@ class ThrowingHoverEngine final : public ComponentEngineBase {
 class FakeAgentHost final : public IAgentHost {
   public:
     void beginCheckpoint(const AgentCall &) override { ++checkpoint_begins; }
-    void commitCheckpoint(const std::string &) override { ++checkpoint_commits; }
+    void commitCheckpoint(const std::string &summary) override {
+        ++checkpoint_commits;
+        last_checkpoint_summary = summary;
+    }
     void discardCheckpoint() override { ++checkpoint_discards; }
     void placeComponents(const std::vector<AgentPlacement> &placements) override {
         last_placements = placements;
@@ -92,6 +97,7 @@ class FakeAgentHost final : public IAgentHost {
     int checkpoint_discards = 0;
     std::vector<AgentPlacement> last_placements;
     std::vector<AgentActivity> activities;
+    std::string last_checkpoint_summary;
 };
 
 struct ApiFixture {
@@ -141,6 +147,10 @@ const nlohmann::json &errorFor(const AgentToolResult &result) {
     REQUIRE(result.is_error);
     REQUIRE(result.structured.contains("error"));
     return result.structured.at("error");
+}
+
+AgentToolResult editCall(ApiFixture &fixture, nlohmann::ordered_json ops) {
+    return fixture.call("circuit_edit", {{"epoch", fixture.api.epoch()}, {"ops", std::move(ops)}});
 }
 
 } // namespace
@@ -505,4 +515,479 @@ TEST_CASE("library_search matches case-insensitively and limits results", "[agen
     CHECK(data_files.structured.at("epoch") == fixture.api.epoch());
     REQUIRE(data_files.structured.at("parts").size() == 1);
     CHECK(data_files.structured.at("parts")[0].at("has_data_files") == true);
+}
+
+TEST_CASE("circuit_edit applies a generator-library-filter chain as one checkpoint",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto epoch = fixture.api.epoch();
+    const auto result = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "add"}, {"ref", "source"}, {"type", "generator"}},
+                      {{"op", "add"},
+                       {"ref", "gain"},
+                       {"library_part", {{"part_number", "ZX60-33LN+"}}},
+                       {"position", {{"x", 400.0}, {"y", 25.0}}}},
+                      {{"op", "add"},
+                       {"ref", "channelizer"},
+                       {"type", "filter"},
+                       {"params", {{"filter_type", "BPF"}}}},
+                      {{"op", "connect"},
+                       {"from", {{"ref", "source"}, {"port", 0}}},
+                       {"to", {{"ref", "gain"}, {"port", 0}}}},
+                      {{"op", "connect"},
+                       {"from", {{"ref", "gain"}, {"port", 0}}},
+                       {"to", {{"ref", "channelizer"}, {"port", 0}}}},
+                      {{"op", "probe_add"}, {"at", {{"ref", "channelizer"}, {"port", 0}}}}}));
+
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == epoch);
+    CHECK(result.structured.at("revision") == fixture.commands.revision());
+    REQUIRE(result.structured.at("applied").size() == 6);
+    CHECK(result.structured.at("refs").size() == 3);
+    CHECK(result.structured.at("refs").contains("source"));
+    CHECK(result.structured.at("refs").contains("gain"));
+    CHECK(result.structured.at("refs").contains("channelizer"));
+    CHECK(result.structured.at("applied")[2].at("params").at("filter_type") == 2);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+    CHECK(fixture.host.checkpoint_discards == 0);
+    CHECK(fixture.host.last_checkpoint_summary == "+3 components, +2 links, +1 probe");
+    REQUIRE(fixture.host.last_placements.size() == 3);
+    CHECK(fixture.host.last_placements[0].column == 0);
+    CHECK(fixture.host.last_placements[1].column == 1);
+    CHECK(fixture.host.last_placements[2].column == 2);
+    REQUIRE(fixture.host.last_placements[1].position.has_value());
+    CHECK((*fixture.host.last_placements[1].position)[0] == 400.0F);
+    CHECK((*fixture.host.last_placements[1].position)[1] == 25.0F);
+    REQUIRE(fixture.host.activities.size() == 1);
+    CHECK(fixture.host.activities[0].tool == "circuit_edit");
+    CHECK(fixture.host.activities[0].ok);
+}
+
+TEST_CASE("circuit_edit stops at the first missing component and keeps its prefix",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto result = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "source"}, {"type", "generator"}},
+                                       {{"op", "remove"}, {"component", 987654}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+    REQUIRE(errorFor(result).contains("op_index"));
+    REQUIRE(result.structured.contains("applied"));
+    CHECK(errorFor(result).at("op_index") == 1);
+    REQUIRE(result.structured.at("applied").size() == 1);
+    CHECK(result.structured.at("applied")[0].at("op") == "add");
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+    CHECK(fixture.host.checkpoint_discards == 0);
+}
+
+TEST_CASE("circuit_edit rejects malformed operations at their ordered index",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto result =
+        editCall(fixture, nlohmann::ordered_json::array(
+                              {{{"op", "add"}, {"type", "generator"}},
+                               {{"op", "connect"}, {"from", {{"component", 1}, {"port", 0}}}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(result).contains("op_index"));
+    REQUIRE(result.structured.contains("applied"));
+    CHECK(result.structured.at("applied").size() == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+}
+
+TEST_CASE("circuit_edit discards a checkpoint when its first operation fails",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto revision = fixture.commands.revision();
+    const auto result = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "remove"}, {"component", 987654}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+    REQUIRE(errorFor(result).contains("op_index"));
+    REQUIRE(result.structured.contains("applied"));
+    CHECK(errorFor(result).at("op_index") == 0);
+    CHECK(result.structured.at("applied").empty());
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 0);
+    CHECK(fixture.host.checkpoint_discards == 1);
+}
+
+TEST_CASE("circuit_edit classifies occupied inputs, cycles, and ADC-to-PFB policy errors",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto occupied = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "g1"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "g2"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "g1"}, {"port", 0}}},
+                                        {"to", {{"ref", "amp"}, {"port", 0}}}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "g2"}, {"port", 0}}},
+                                        {"to", {{"ref", "amp"}, {"port", 0}}}}}));
+    REQUIRE(occupied.is_error);
+    CHECK(occupied.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(occupied).at("code") == "LINK_REJECTED");
+    REQUIRE(errorFor(occupied).contains("details"));
+    REQUIRE(errorFor(occupied).contains("op_index"));
+    REQUIRE(occupied.structured.contains("applied"));
+    CHECK(errorFor(occupied).at("details").at("reason") == "INPUT_OCCUPIED");
+    CHECK(errorFor(occupied).at("op_index") == 4);
+    CHECK(errorFor(occupied).at("details").at("existing_source") ==
+          nlohmann::json{{"component", occupied.structured.at("applied")[0].at("component")},
+                         {"port", 0}});
+    CHECK(occupied.structured.at("applied").size() == 4);
+
+    ApiFixture cycle_fixture;
+    const auto cycle = editCall(
+        cycle_fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "left"}, {"type", "amplifier"}},
+                                       {{"op", "add"}, {"ref", "right"}, {"type", "amplifier"}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "left"}, {"port", 0}}},
+                                        {"to", {{"ref", "right"}, {"port", 0}}}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "right"}, {"port", 0}}},
+                                        {"to", {{"ref", "left"}, {"port", 0}}}}}));
+    REQUIRE(cycle.is_error);
+    CHECK(cycle.structured.at("epoch") == cycle_fixture.api.epoch());
+    REQUIRE(errorFor(cycle).at("code") == "LINK_REJECTED");
+    REQUIRE(errorFor(cycle).contains("details"));
+    REQUIRE(errorFor(cycle).contains("op_index"));
+    CHECK(errorFor(cycle).at("details").at("reason") == "CYCLE");
+    CHECK(errorFor(cycle).at("op_index") == 3);
+
+    ApiFixture policy_fixture;
+    const auto policy = editCall(
+        policy_fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "rf"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "channelizer"}, {"type", "pfb"}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "rf"}, {"port", 0}}},
+                                        {"to", {{"ref", "channelizer"}, {"port", 0}}}}}));
+    REQUIRE(policy.is_error);
+    CHECK(policy.structured.at("epoch") == policy_fixture.api.epoch());
+    REQUIRE(errorFor(policy).at("code") == "LINK_REJECTED");
+    REQUIRE(errorFor(policy).contains("details"));
+    REQUIRE(errorFor(policy).contains("op_index"));
+    CHECK(errorFor(policy).at("details").at("reason") == "ADC_TO_PFB_ONLY");
+    CHECK(errorFor(policy).at("op_index") == 2);
+}
+
+TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision semantics",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto added = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "a"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "b"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "c"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "d"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "e"}, {"type", "generator"}}}));
+    REQUIRE_FALSE(added.is_error);
+    CHECK(added.structured.at("epoch") == fixture.api.epoch());
+    const auto epoch = fixture.api.epoch();
+    const auto ids = added.structured.at("refs");
+    const auto revision = fixture.commands.revision();
+    const auto fill =
+        editCall(fixture, nlohmann::ordered_json::array(
+                              {{{"op", "probe_add"}, {"at", {{"ref", "a"}, {"port", 0}}}},
+                               {{"op", "probe_add"}, {"at", {{"ref", "b"}, {"port", 0}}}},
+                               {{"op", "probe_add"}, {"at", {{"ref", "c"}, {"port", 0}}}},
+                               {{"op", "probe_add"}, {"at", {{"ref", "d"}, {"port", 0}}}}}));
+    REQUIRE_FALSE(fill.is_error);
+    CHECK(fill.structured.at("epoch") == epoch);
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.host.checkpoint_commits == 2);
+    const auto duplicate = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "probe_add"}, {"at", {{"component", ids.at("a")}, {"port", 0}}}}}));
+    REQUIRE_FALSE(duplicate.is_error);
+    CHECK(duplicate.structured.at("epoch") == epoch);
+    CHECK(duplicate.structured.at("applied")[0].at("unchanged") == true);
+    CHECK(fixture.commands.revision() == revision);
+    const auto fifth = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "probe_add"}, {"at", {{"component", ids.at("e")}, {"port", 0}}}}}));
+    REQUIRE(fifth.is_error);
+    CHECK(fifth.structured.at("epoch") == epoch);
+    REQUIRE(errorFor(fifth).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(fifth).contains("details"));
+    CHECK(errorFor(fifth).at("details").at("limit") == 4);
+    const auto missing = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "probe_remove"}, {"at", {{"component", ids.at("e")}, {"port", 0}}}}}));
+    REQUIRE(missing.is_error);
+    CHECK(missing.structured.at("epoch") == epoch);
+    REQUIRE(errorFor(missing).at("code") == "NOT_FOUND");
+}
+
+TEST_CASE("circuit_edit reports component port counts for a missing port",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto result =
+        editCall(fixture, nlohmann::ordered_json::array(
+                              {{{"op", "add"}, {"ref", "source"}, {"type", "generator"}},
+                               {{"op", "probe_add"}, {"at", {{"ref", "source"}, {"port", 1}}}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+    REQUIRE(errorFor(result).contains("op_index"));
+    REQUIRE(errorFor(result).contains("message"));
+    REQUIRE(result.structured.contains("applied"));
+    CHECK(errorFor(result).at("op_index") == 1);
+    CHECK(errorFor(result).at("message").get<std::string>().find("0 inputs and 1 output") !=
+          std::string::npos);
+    CHECK(result.structured.at("applied").size() == 1);
+}
+
+TEST_CASE("circuit_edit maps parameter failures", "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto added = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "pfb"}, {"type", "pfb"}}}));
+    REQUIRE_FALSE(added.is_error);
+    CHECK(added.structured.at("epoch") == fixture.api.epoch());
+    const int pfb = added.structured.at("refs").at("pfb");
+    const auto unknown = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "set_params"}, {"component", pfb}, {"params", {{"channel_cout", 12}}}}}));
+    REQUIRE(unknown.is_error);
+    CHECK(unknown.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(unknown).at("code") == "PARAM_REJECTED");
+    REQUIRE(errorFor(unknown).contains("details"));
+    CHECK(errorFor(unknown).at("details").at("reason") == "UNKNOWN_KEY");
+    CHECK(errorFor(unknown).at("details").at("suggestions").size() > 0);
+    const auto adjusted = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "set_params"}, {"component", pfb}, {"params", {{"channel_count", 4096}}}}}));
+    REQUIRE(adjusted.is_error);
+    CHECK(adjusted.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(adjusted).at("code") == "PARAM_REJECTED");
+    REQUIRE(errorFor(adjusted).contains("details"));
+    CHECK(errorFor(adjusted).at("details").at("reason") == "ENGINE_ADJUSTED");
+    CHECK(errorFor(adjusted).at("details").at("requested") == 4096);
+    CHECK(errorFor(adjusted).at("details").at("stored") == 2048);
+    const auto path = editCall(fixture, nlohmann::ordered_json::array(
+                                            {{{"op", "set_params"},
+                                              {"component", pfb},
+                                              {"params", {{"sparam_filepath", "blocked.s2p"}}}}}));
+    REQUIRE(path.is_error);
+    CHECK(path.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(path).at("code") == "PATH_PARAMS_UNSUPPORTED");
+}
+
+TEST_CASE("circuit_edit reports the first invalid parameter in insertion order",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier);
+    const nlohmann::ordered_json params{{"z_unknown_first", 1}, {"a_unknown_second", 2}};
+    const auto result = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "set_params"}, {"component", amplifier->id()}, {"params", params}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).at("code") == "PARAM_REJECTED");
+    REQUIRE(errorFor(result).contains("details"));
+    REQUIRE(errorFor(result).contains("op_index"));
+    CHECK(errorFor(result).at("details").at("path") == "z_unknown_first");
+    CHECK(errorFor(result).at("op_index") == 0);
+}
+
+TEST_CASE("circuit_edit revisions advance only for accepted component changes",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto before = fixture.commands.revision();
+    const auto add =
+        editCall(fixture, nlohmann::ordered_json::array({{{"op", "add"}, {"type", "amplifier"}}}));
+    REQUIRE_FALSE(add.is_error);
+    CHECK(add.structured.at("epoch") == fixture.api.epoch());
+    CHECK(add.structured.at("revision") == before + 1);
+    const int id = add.structured.at("applied")[0].at("component");
+    const auto accepted_revision = fixture.commands.revision();
+    const auto rejected = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "set_params"}, {"component", id}, {"params", {{"missing", 1}}}}}));
+    REQUIRE(rejected.is_error);
+    CHECK(rejected.structured.at("epoch") == fixture.api.epoch());
+    CHECK(fixture.commands.revision() == accepted_revision);
+    const auto change = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "set_params"}, {"component", id}, {"params", {{"gain_dB", 2.5}}}}}));
+    REQUIRE_FALSE(change.is_error);
+    CHECK(change.structured.at("epoch") == fixture.api.epoch());
+    CHECK(change.structured.at("revision") == accepted_revision + 1);
+    CHECK(change.structured.at("applied")[0].at("params").at("gain_dB") == 2.5);
+}
+
+TEST_CASE("circuit_edit resolves library parts case-insensitively and reports ambiguity",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto all = fixture.library.all();
+    const auto original = std::find_if(
+        all.begin(), all.end(), [](const auto *part) { return part->part_number == "ZX60-33LN+"; });
+    REQUIRE(original != all.end());
+    ComponentDefinition duplicate = **original;
+    duplicate.type = "attenuator";
+    duplicate.source_path += ".duplicate";
+    duplicate.manufacturer = "Duplicate vendor";
+    fixture.library.upsert(duplicate);
+    const auto lower = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "add"},
+                       {"library_part", {{"part_number", "zx60-33ln+"}, {"type", "amplifier"}}}}}));
+    REQUIRE_FALSE(lower.is_error);
+    CHECK(lower.structured.at("epoch") == fixture.api.epoch());
+    CHECK(lower.structured.at("applied")[0].at("component") > 0);
+    const auto ambiguous = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33LN+"}}}}}));
+    REQUIRE(ambiguous.is_error);
+    CHECK(ambiguous.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(ambiguous).at("code") == "AMBIGUOUS_PART");
+    REQUIRE(errorFor(ambiguous).contains("details"));
+    REQUIRE(errorFor(ambiguous).at("details").contains("candidates"));
+    REQUIRE(errorFor(ambiguous).at("details").at("candidates").size() == 2);
+    CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("part_number"));
+    CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("type"));
+    CHECK(errorFor(ambiguous).at("details").at("candidates")[0].contains("manufacturer"));
+    const auto unknown =
+        editCall(fixture, nlohmann::ordered_json::array(
+                              {{{"op", "add"}, {"library_part", {{"part_number", "ZX60-33L"}}}}}));
+    REQUIRE(unknown.is_error);
+    CHECK(unknown.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(unknown).at("code") == "UNKNOWN_PART");
+    REQUIRE(errorFor(unknown).contains("details"));
+    CHECK(errorFor(unknown).at("details").contains("candidates"));
+}
+
+TEST_CASE("circuit_edit reports consequential PFB changes with path and stored values",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *pfb = fixture.add<PFBChannelizerEngine>("pfb");
+    REQUIRE(pfb);
+    const auto defaults = pfb->serialize();
+    REQUIRE(
+        fixture.commands
+            .setComponentParams(pfb->graphNodeId(),
+                                {{"active_channel", defaults.at("channel_count").get<int>() - 1}})
+            .ok());
+    const auto before = pfb->serialize();
+    REQUIRE(before.at("active_channel") == before.at("channel_count").get<int>() - 1);
+    const auto result =
+        editCall(fixture, nlohmann::ordered_json::array({{{"op", "set_params"},
+                                                          {"component", pfb->id()},
+                                                          {"params", {{"channel_count", 4}}}}}));
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    const auto &applied = result.structured.at("applied")[0];
+    CHECK(applied.at("params").at("channel_count") == 4);
+    CHECK(applied.at("params").at("active_channel") == 3);
+    REQUIRE(applied.at("also_changed").size() == 1);
+    CHECK(applied.at("also_changed")[0].at("path") == "active_channel");
+    CHECK(applied.at("also_changed")[0].at("old_value") == before.at("active_channel"));
+    CHECK(applied.at("also_changed")[0].at("new_value") == 3);
+}
+
+TEST_CASE("placement follows added-node topology and preserves explicit coordinates",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto result = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"},
+                                        {"ref", "root"},
+                                        {"type", "splitter"},
+                                        {"position", {{"x", 11.0}, {"y", 12.0}}}},
+                                       {{"op", "add"}, {"ref", "branch_a"}, {"type", "amplifier"}},
+                                       {{"op", "add"}, {"ref", "branch_b"}, {"type", "amplifier"}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "root"}, {"port", 0}}},
+                                        {"to", {{"ref", "branch_a"}, {"port", 0}}}},
+                                       {{"op", "connect"},
+                                        {"from", {{"ref", "root"}, {"port", 1}}},
+                                        {"to", {{"ref", "branch_b"}, {"port", 0}}}}}));
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(fixture.host.last_placements.size() == 3);
+    CHECK(fixture.host.last_placements[0].column == 0);
+    CHECK(fixture.host.last_placements[0].position.has_value());
+    CHECK((*fixture.host.last_placements[0].position)[0] == 11.0F);
+    CHECK((*fixture.host.last_placements[0].position)[1] == 12.0F);
+    CHECK(fixture.host.last_placements[1].column == 1);
+    CHECK(fixture.host.last_placements[1].row == 0);
+    CHECK(fixture.host.last_placements[2].column == 1);
+    CHECK(fixture.host.last_placements[2].row == 1);
+}
+
+TEST_CASE("circuit_edit validates duplicate and undefined refs in operation order",
+          "[agent_api][circuit_edit]") {
+    ApiFixture duplicate_fixture;
+    const auto duplicate = editCall(
+        duplicate_fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "source"}, {"type", "generator"}},
+                                       {{"op", "add"}, {"ref", "source"}, {"type", "amplifier"}}}));
+    REQUIRE(duplicate.is_error);
+    CHECK(duplicate.structured.at("epoch") == duplicate_fixture.api.epoch());
+    REQUIRE(errorFor(duplicate).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(duplicate).contains("details"));
+    REQUIRE(errorFor(duplicate).contains("op_index"));
+    REQUIRE(duplicate.structured.contains("applied"));
+    CHECK(errorFor(duplicate).at("op_index") == 1);
+    REQUIRE(duplicate.structured.at("applied").size() == 1);
+    CHECK(duplicate_fixture.host.checkpoint_commits == 1);
+
+    ApiFixture undefined_fixture;
+    const auto undefined =
+        editCall(undefined_fixture,
+                 nlohmann::ordered_json::array(
+                     {{{"op", "add"}, {"ref", "source"}, {"type", "generator"}},
+                      {{"op", "set_params"}, {"ref", "later"}, {"params", {{"gain_dB", 1.0}}}}}));
+    REQUIRE(undefined.is_error);
+    CHECK(undefined.structured.at("epoch") == undefined_fixture.api.epoch());
+    REQUIRE(errorFor(undefined).at("code") == "NOT_FOUND");
+    REQUIRE(errorFor(undefined).contains("op_index"));
+    REQUIRE(undefined.structured.contains("applied"));
+    CHECK(errorFor(undefined).at("op_index") == 1);
+    REQUIRE(undefined.structured.at("applied").size() == 1);
+    CHECK(undefined_fixture.host.checkpoint_commits == 1);
+}
+
+TEST_CASE("circuit_edit rejects empty and oversized operation lists before checkpointing",
+          "[agent_api][circuit_edit]") {
+    ApiFixture empty_fixture;
+    const auto empty = editCall(empty_fixture, nlohmann::ordered_json::array());
+    REQUIRE(empty.is_error);
+    CHECK(empty.structured.at("epoch") == empty_fixture.api.epoch());
+    REQUIRE(errorFor(empty).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(empty).contains("details"));
+    CHECK(errorFor(empty).at("details").at("path") == "/ops");
+    CHECK(empty_fixture.host.checkpoint_begins == 0);
+    CHECK(empty_fixture.host.checkpoint_commits == 0);
+    CHECK(empty_fixture.host.checkpoint_discards == 0);
+
+    ApiFixture oversized_fixture;
+    nlohmann::ordered_json ops = nlohmann::ordered_json::array();
+    for (int i = 0; i < 65; ++i)
+        ops.push_back({{"op", "add"}, {"type", "generator"}});
+    const auto oversized = editCall(oversized_fixture, std::move(ops));
+    REQUIRE(oversized.is_error);
+    CHECK(oversized.structured.at("epoch") == oversized_fixture.api.epoch());
+    REQUIRE(errorFor(oversized).at("code") == "INVALID_ARGUMENT");
+    REQUIRE(errorFor(oversized).contains("details"));
+    CHECK(errorFor(oversized).at("details").at("path") == "/ops");
+    CHECK(oversized_fixture.host.checkpoint_begins == 0);
+    CHECK(oversized_fixture.host.checkpoint_commits == 0);
+    CHECK(oversized_fixture.host.checkpoint_discards == 0);
 }

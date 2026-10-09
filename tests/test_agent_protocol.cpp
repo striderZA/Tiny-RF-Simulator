@@ -797,6 +797,19 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
         CHECK(schema.at("anyOf").at(1) == error_schema);
         CHECK(schema.at("anyOf").at(0).value("type", "") == "object");
     }
+    const auto *circuit_edit = findAgentTool("circuit_edit");
+    REQUIRE(circuit_edit != nullptr);
+    const auto &edit_success = circuit_edit->output_schema.at("anyOf").at(0);
+    const auto &also_changed =
+        edit_success.at("properties").at("applied").at("items").at("properties").at("also_changed");
+    REQUIRE(also_changed.at("type") == "array");
+    const auto &change = also_changed.at("items");
+    REQUIRE(change.at("type") == "object");
+    CHECK(change.at("additionalProperties") == false);
+    CHECK(change.at("properties").at("path").at("type") == "string");
+    CHECK(change.at("properties").contains("old_value"));
+    CHECK(change.at("properties").contains("new_value"));
+    CHECK(change.at("required") == nlohmann::json::array({"path", "old_value", "new_value"}));
     const auto *component_get = findAgentTool("component_get");
     REQUIRE(component_get != nullptr);
     const auto &component_success = component_get->output_schema.at("anyOf").at(0);
