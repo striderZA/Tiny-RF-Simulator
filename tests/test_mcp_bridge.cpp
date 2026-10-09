@@ -6,16 +6,24 @@
 #include "agent_catalog.h"
 #include "agent_errors.h"
 #include "gui_link.h"
-
 #include "mcp_session.h"
+
+#include "mcp_bridge.h"
 
 #include "agent_endpoint.h"
 #include "agent_socket.h"
 #include "agent_wire.h"
 #include "fake_gui.h"
 
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <streambuf>
 #include <thread>
 
 #include <catch2/catch_test_macros.hpp>
@@ -108,6 +116,504 @@ void checkModernServerInfo(const Json &result) {
     CHECK(server_info.at("version") == "3.2.1");
 }
 
+struct BridgeRun {
+    int status;
+    std::string stdout_text;
+    std::string stderr_text;
+    std::vector<Json> messages;
+};
+
+class BlockingInputBuffer final : public std::streambuf {
+  public:
+    void append(std::string_view bytes) {
+        {
+            std::lock_guard lock(m_mutex);
+            m_bytes.insert(m_bytes.end(), bytes.begin(), bytes.end());
+        }
+        m_ready.notify_all();
+    }
+
+    void closeInput() {
+        {
+            std::lock_guard lock(m_mutex);
+            m_closed = true;
+        }
+        m_ready.notify_all();
+    }
+
+  protected:
+    int_type underflow() override {
+        std::unique_lock lock(m_mutex);
+        m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
+        if (m_bytes.empty())
+            return traits_type::eof();
+        return traits_type::to_int_type(m_bytes.front());
+    }
+
+    int_type uflow() override {
+        std::unique_lock lock(m_mutex);
+        m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
+        if (m_bytes.empty())
+            return traits_type::eof();
+        const char byte = m_bytes.front();
+        m_bytes.pop_front();
+        return traits_type::to_int_type(byte);
+    }
+
+  private:
+    std::mutex m_mutex;
+    std::condition_variable m_ready;
+    std::deque<char> m_bytes;
+    bool m_closed = false;
+};
+
+class FlushObservingBuffer final : public std::streambuf {
+  public:
+    bool waitForResponse(const Json &id, std::chrono::milliseconds timeout) {
+        std::unique_lock lock(m_mutex);
+        return m_changed.wait_for(lock, timeout, [this, &id] { return hasResponseLocked(id); });
+    }
+
+    std::string snapshot() const {
+        std::lock_guard lock(m_mutex);
+        return m_text;
+    }
+
+    std::size_t flushCount() const {
+        std::lock_guard lock(m_mutex);
+        return m_flush_count;
+    }
+
+  protected:
+    std::streamsize xsputn(const char *bytes, std::streamsize count) override {
+        std::lock_guard lock(m_mutex);
+        m_text.append(bytes, static_cast<std::size_t>(count));
+        return count;
+    }
+
+    int_type overflow(int_type ch) override {
+        if (traits_type::eq_int_type(ch, traits_type::eof()))
+            return traits_type::not_eof(ch);
+        {
+            std::lock_guard lock(m_mutex);
+            m_text.push_back(traits_type::to_char_type(ch));
+        }
+        return ch;
+    }
+
+    int sync() override {
+        {
+            std::lock_guard lock(m_mutex);
+            m_flushed_text = m_text;
+            ++m_flush_count;
+        }
+        m_changed.notify_all();
+        return 0;
+    }
+
+  private:
+    bool hasResponseLocked(const Json &id) const {
+        std::size_t start = 0;
+        while (true) {
+            const auto end = m_flushed_text.find('\n', start);
+            if (end == std::string::npos)
+                return false;
+            if (end != start) {
+                try {
+                    const auto message = Json::parse(m_flushed_text.substr(start, end - start));
+                    if (message.value("id", Json()) == id)
+                        return true;
+                } catch (...) {
+                }
+            }
+            start = end + 1;
+        }
+    }
+
+    mutable std::mutex m_mutex;
+    std::condition_variable m_changed;
+    std::string m_text;
+    std::string m_flushed_text;
+    std::size_t m_flush_count = 0;
+};
+
+std::vector<Json> parseBridgeOutput(std::string_view text) {
+    std::istringstream lines{std::string(text)};
+    std::vector<Json> messages;
+    std::string line;
+    while (std::getline(lines, line))
+        messages.push_back(Json::parse(line));
+    return messages;
+}
+
+BridgeRun invokeBridge(std::string input, BridgeOptions options) {
+    std::istringstream in(std::move(input));
+    std::ostringstream out, err;
+    const int status = runBridge(in, out, err, options);
+    const auto stdout_text = out.str();
+    return {status, stdout_text, err.str(), parseBridgeOutput(stdout_text)};
+}
+
+BridgeOptions bridgeOptions(std::optional<std::filesystem::path> endpoint_file = std::nullopt) {
+    BridgeOptions options;
+    options.endpoint_file = std::move(endpoint_file);
+    options.exe_dir = std::filesystem::current_path();
+    options.server_version = "3.2.1";
+    options.timeouts.connect = 200ms;
+    options.timeouts.hello = 500ms;
+    options.timeouts.call = 1s;
+    return options;
+}
+
+void appendBridgeLine(std::string &input, const OrderedJson &message,
+                      std::string_view newline = "\n") {
+    input += message.dump();
+    input += newline;
+}
+
+OrderedJson modernBridgeRequest(OrderedJson id, std::string method,
+                                OrderedJson params = OrderedJson::object(),
+                                std::optional<OrderedJson> client_info = std::nullopt) {
+    return rpcRequest(
+        std::move(id), std::move(method),
+        modernParams(std::move(params), std::string(kModernVersion), true, std::move(client_info)));
+}
+
+const Json *bridgeResponse(const BridgeRun &run, const Json &id) {
+    for (const auto &message : run.messages) {
+        if (message.value("id", Json()) == id)
+            return &message;
+    }
+    return nullptr;
+}
+
+OrderedJson bridgeCallParams(std::string query) {
+    return OrderedJson{{"name", "library_search"},
+                       {"arguments", OrderedJson{{"query", std::move(query)}}}};
+}
+
+TEST_CASE("A transcript per protocol version runs against a fake GUI", "[bridge]") {
+    const auto run_transcript = [](std::string protocol_version, bool modern) {
+        FakeGui gui;
+        auto gui_call_count = std::make_shared<std::atomic<unsigned>>(0);
+        gui.setScript([gui_call_count](const Json &request) -> std::optional<FakeGui::Reply> {
+            const auto call_index = gui_call_count->fetch_add(1);
+            if (call_index == 0) {
+                return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                           {"id", request.at("id")},
+                                           {"result",
+                                            {{"is_error", false},
+                                             {"structured", {{"ok", true}}},
+                                             {"text", "{\"ok\":true}"}}}}};
+            }
+            return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                       {"id", request.at("id")},
+                                       {"error",
+                                        {{"code", kAgentRpcErrorCode},
+                                         {"message", "bad arguments"},
+                                         {"data", {{"code", "INVALID_ARGUMENT"}}}}}}};
+        });
+
+        std::string input;
+        if (modern) {
+            appendBridgeLine(input, modernBridgeRequest(1, "server/discover"));
+        } else {
+            appendBridgeLine(
+                input,
+                rpcRequest(1, "initialize",
+                           OrderedJson{{"protocolVersion", protocol_version},
+                                       {"capabilities", OrderedJson::object()},
+                                       {"clientInfo",
+                                        {{"name", "transcript-client"}, {"version", "5.0"}}}}));
+            appendBridgeLine(
+                input, OrderedJson{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
+        }
+
+        const OrderedJson client_info{{"name", "transcript-client"}, {"version", "5.0"}};
+        const auto append_request = [&](OrderedJson id, std::string method,
+                                        OrderedJson params = OrderedJson::object()) {
+            if (modern) {
+                appendBridgeLine(input, modernBridgeRequest(std::move(id), std::move(method),
+                                                            std::move(params), client_info));
+            } else {
+                appendBridgeLine(input,
+                                 rpcRequest(std::move(id), std::move(method), std::move(params)));
+            }
+        };
+        append_request(2, "tools/list");
+        append_request(3, "tools/call", bridgeCallParams("success"));
+        append_request(4, "tools/call", bridgeCallParams("failure"));
+
+        const auto run = invokeBridge(std::move(input), bridgeOptions(gui.endpointFile()));
+        CHECK(run.status == 0);
+        CHECK(gui.authenticated());
+        CHECK(gui_call_count->load() == 2);
+
+        const auto *handshake = bridgeResponse(run, 1);
+        REQUIRE(handshake != nullptr);
+        REQUIRE(handshake->contains("result"));
+        if (modern) {
+            CHECK(handshake->at("result").at("supportedVersions") ==
+                  Json::array({std::string(kModernVersion)}));
+        } else {
+            CHECK(handshake->at("result").at("protocolVersion") == protocol_version);
+        }
+
+        const auto *list = bridgeResponse(run, 2);
+        REQUIRE(list != nullptr);
+        REQUIRE(list->contains("result"));
+        CHECK(list->at("result").at("tools").size() == 7);
+
+        const auto *success = bridgeResponse(run, 3);
+        REQUIRE(success != nullptr);
+        REQUIRE(success->contains("result"));
+        REQUIRE(success->at("result").at("content").size() == 1);
+        CHECK(success->at("result").at("content")[0].at("text") == "{\"ok\":true}");
+
+        const auto *tool_error = bridgeResponse(run, 4);
+        REQUIRE(tool_error != nullptr);
+        REQUIRE(tool_error->contains("result"));
+        CHECK(tool_error->at("result").at("isError") == true);
+    };
+
+    SECTION("2025-06-18") { run_transcript("2025-06-18", false); }
+    SECTION("2025-11-25") { run_transcript("2025-11-25", false); }
+    SECTION("2026-07-28") { run_transcript(std::string(kModernVersion), true); }
+}
+
+TEST_CASE("A cancelled call gets no response and later calls still work", "[bridge]") {
+    FakeGui gui;
+    std::mutex gui_mutex;
+    std::condition_variable gui_changed;
+    bool first_call_entered = false;
+    bool release_first_call = false;
+    std::vector<std::string> gui_call_order;
+    gui.setScript([&](const Json &request) -> std::optional<FakeGui::Reply> {
+        {
+            std::unique_lock lock(gui_mutex);
+            gui_call_order.push_back(
+                request.at("params").at("arguments").at("query").get<std::string>());
+            if (gui_call_order.size() == 1) {
+                first_call_entered = true;
+                gui_changed.notify_all();
+                gui_changed.wait(lock, [&] { return release_first_call; });
+            }
+        }
+        return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                   {"id", request.at("id")},
+                                   {"result",
+                                    {{"is_error", false},
+                                     {"structured", {{"completed", true}}},
+                                     {"text", "{\"completed\":true}"}}}}};
+    });
+
+    std::string input;
+    appendBridgeLine(input, modernBridgeRequest(1, "server/discover"));
+    appendBridgeLine(input, modernBridgeRequest(2, "tools/call", bridgeCallParams("cancel")));
+    appendBridgeLine(
+        input, OrderedJson{{"jsonrpc", "2.0"},
+                           {"method", "notifications/cancelled"},
+                           {"params", modernParams(OrderedJson{{"requestId", 2},
+                                                               {"reason", "no longer needed"}})}});
+    appendBridgeLine(input, modernBridgeRequest(4, "tools/list"));
+    appendBridgeLine(input, modernBridgeRequest(3, "tools/call", bridgeCallParams("continue")));
+
+    BlockingInputBuffer input_buffer;
+    input_buffer.append(input);
+    input_buffer.closeInput();
+    std::istream in(&input_buffer);
+    FlushObservingBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::thread bridge_thread(
+        [&] { bridge_status = runBridge(in, out, err, bridgeOptions(gui.endpointFile())); });
+
+    bool first_call_waiting = false;
+    {
+        std::unique_lock lock(gui_mutex);
+        first_call_waiting = gui_changed.wait_for(lock, 2s, [&] { return first_call_entered; });
+    }
+    const bool cancellation_processed_while_call_waited = output_buffer.waitForResponse(4, 2s);
+    {
+        std::lock_guard lock(gui_mutex);
+        release_first_call = true;
+    }
+    gui_changed.notify_all();
+    bridge_thread.join();
+
+    std::vector<std::string> observed_gui_call_order;
+    {
+        std::lock_guard lock(gui_mutex);
+        observed_gui_call_order = gui_call_order;
+    }
+    const auto stdout_text = output_buffer.snapshot();
+    const BridgeRun run{bridge_status.load(), stdout_text, err.str(),
+                        parseBridgeOutput(stdout_text)};
+    CHECK(first_call_waiting);
+    CHECK(cancellation_processed_while_call_waited);
+    CHECK(run.status == 0);
+    CHECK((observed_gui_call_order == std::vector<std::string>{"cancel", "continue"}));
+    CHECK(bridgeResponse(run, 2) == nullptr);
+    const auto *later_call = bridgeResponse(run, 3);
+    REQUIRE(later_call != nullptr);
+    REQUIRE(later_call->contains("result"));
+    REQUIRE(later_call->at("result").at("content").size() == 1);
+    CHECK(later_call->at("result").at("content")[0].at("text") == "{\"completed\":true}");
+}
+
+TEST_CASE("CRLF-terminated input lines parse", "[bridge]") {
+    const auto request = modernBridgeRequest(23, "server/discover");
+    std::string input;
+    appendBridgeLine(input, request, "\r\n");
+
+    const auto run = invokeBridge(std::move(input), bridgeOptions());
+    CHECK(run.status == 0);
+    const auto *response = bridgeResponse(run, 23);
+    REQUIRE(response != nullptr);
+    REQUIRE(response->contains("result"));
+    CHECK(response->at("result").at("supportedVersions") ==
+          Json::array({std::string(kModernVersion)}));
+}
+
+TEST_CASE("An oversized stdin line gets an error with a null id", "[bridge]") {
+    std::string input(kAgentMaxLineBytes + 1, 'x');
+    input += '\n';
+
+    const auto run = invokeBridge(std::move(input), bridgeOptions());
+    CHECK(run.status == 0);
+    REQUIRE(run.messages.size() == 1);
+    CHECK(run.messages[0].at("id").is_null());
+    REQUIRE(run.messages[0].contains("error"));
+    CHECK(run.messages[0].at("error").at("code") == -32600);
+}
+
+TEST_CASE("Stdout carries only JSON-RPC messages", "[bridge]") {
+    std::string first_input;
+    appendBridgeLine(
+        first_input,
+        rpcRequest(1, "initialize",
+                   OrderedJson{{"protocolVersion", "2025-11-25"},
+                               {"capabilities", OrderedJson::object()},
+                               {"clientInfo", {{"name", "test-client"}, {"version", "1.0"}}}}));
+
+    BlockingInputBuffer input_buffer;
+    input_buffer.append(first_input);
+    std::istream in(&input_buffer);
+    FlushObservingBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::atomic<bool> bridge_finished{false};
+    std::thread bridge_thread([&] {
+        bridge_status = runBridge(in, out, err, bridgeOptions());
+        bridge_finished = true;
+    });
+
+    const bool initialize_flushed_while_input_open = output_buffer.waitForResponse(1, 2s);
+    const bool bridge_waited_for_more_input = !bridge_finished.load();
+    std::string later_input;
+    appendBridgeLine(later_input,
+                     OrderedJson{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
+    appendBridgeLine(later_input, rpcRequest(2, "tools/list"));
+    input_buffer.append(later_input);
+    const bool list_flushed_while_input_open = output_buffer.waitForResponse(2, 2s);
+    const auto flushes_before_eof = output_buffer.flushCount();
+    input_buffer.closeInput();
+    bridge_thread.join();
+
+    const auto stdout_text = output_buffer.snapshot();
+    const auto messages = parseBridgeOutput(stdout_text);
+    CHECK(initialize_flushed_while_input_open);
+    CHECK(bridge_waited_for_more_input);
+    CHECK(list_flushed_while_input_open);
+    CHECK(flushes_before_eof >= 2);
+    CHECK(bridge_status.load() == 0);
+    REQUIRE(messages.size() == 2);
+    for (const auto &message : messages) {
+        CHECK(message.at("jsonrpc") == "2.0");
+        CHECK(message.contains("id"));
+        CHECK((message.contains("result") || message.contains("error")));
+    }
+    const std::string expected_log = "rf-sim-mcp: test-client 1.0, protocol 2025-11-25";
+    const auto first_log = err.str().find(expected_log);
+    REQUIRE(first_log != std::string::npos);
+    CHECK(err.str().rfind(expected_log) == first_log);
+}
+
+TEST_CASE("tools/list works with the GUI closed", "[bridge]") {
+    const auto missing_directory = std::filesystem::temp_directory_path() /
+                                   ("rfsim-bridge-closed-" + test_temp_paths::processTag());
+    std::error_code ignored;
+    std::filesystem::remove_all(missing_directory, ignored);
+
+    std::string input;
+    appendBridgeLine(
+        input,
+        rpcRequest(1, "initialize",
+                   OrderedJson{{"protocolVersion", "2025-11-25"},
+                               {"capabilities", OrderedJson::object()},
+                               {"clientInfo", {{"name", "test-client"}, {"version", "1.0"}}}}));
+    appendBridgeLine(input,
+                     OrderedJson{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
+    appendBridgeLine(input, rpcRequest(2, "tools/list"));
+
+    const auto run =
+        invokeBridge(std::move(input), bridgeOptions(missing_directory / "agent-endpoint.json"));
+    CHECK(run.status == 0);
+    const auto *list = bridgeResponse(run, 2);
+    REQUIRE(list != nullptr);
+    REQUIRE(list->contains("result"));
+    CHECK(list->at("result").at("tools").size() == 7);
+}
+
+TEST_CASE("A modern tools/call without clientInfo does not reuse the previous GUI identity",
+          "[bridge]") {
+    FakeGui gui;
+    const auto endpoint = gui.endpoint();
+    std::mutex hello_mutex;
+    std::vector<Json> hello_requests;
+    gui.setHelloScript([&](const Json &request) -> std::optional<FakeGui::Reply> {
+        {
+            std::lock_guard lock(hello_mutex);
+            hello_requests.push_back(request);
+        }
+        return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                   {"id", request.at("id")},
+                                   {"result",
+                                    {{"gui_token", endpoint.gui_token},
+                                     {"app_version", "test-gui"},
+                                     {"catalog_version", kAgentCatalogVersion},
+                                     {"epoch", 1}}}}};
+    });
+
+    const OrderedJson named_client{{"name", "identified-client"}, {"version", "4.5.6"}};
+    std::string input;
+    appendBridgeLine(input, modernBridgeRequest(1, "server/discover"));
+    appendBridgeLine(
+        input, modernBridgeRequest(2, "tools/call", bridgeCallParams("identified"), named_client));
+    appendBridgeLine(input, modernBridgeRequest(3, "tools/call", bridgeCallParams("anonymous")));
+
+    const auto run = invokeBridge(std::move(input), bridgeOptions(gui.endpointFile()));
+    CHECK(run.status == 0);
+    REQUIRE(gui.helloCount() == 2);
+    {
+        std::lock_guard lock(hello_mutex);
+        REQUIRE(hello_requests.size() == 2);
+        const auto &first_client = hello_requests[0].at("params").at("client");
+        CHECK(first_client.at("name") == "identified-client");
+        CHECK(first_client.at("version") == "4.5.6");
+        const auto &later_client = hello_requests[1].at("params").at("client");
+        CHECK(later_client.at("name") == "");
+        CHECK(later_client.at("version") == "");
+    }
+    for (const Json id : {Json(2), Json(3)}) {
+        const auto *response = bridgeResponse(run, id);
+        REQUIRE(response != nullptr);
+        REQUIRE(response->contains("result"));
+        CHECK(response->at("result").at("isError") == false);
+    }
+}
 } // namespace
 
 TEST_CASE("initialize negotiates the legacy versions", "[mcp]") {
