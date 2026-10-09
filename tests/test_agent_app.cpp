@@ -1,4 +1,8 @@
+#include "agent_endpoint.h"
 #include "agent_host.h"
+#include "agent_server.h"
+#include "amplifier_engine.h"
+#include "app.h"
 #include "app_agent_host.h"
 #include "circuit_runtime.h"
 #include "component_type_registry.h"
@@ -7,12 +11,24 @@
 #include "implot.h"
 #include "logging_core.h"
 #include "node_graph_widget.h"
+#include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 using nlohmann::json;
+using nlohmann::ordered_json;
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -91,6 +107,70 @@ struct AgentFixture : ImGuiFixture {
 
 // Column spacing the auto-layout uses (from the brief).
 constexpr float kColumnWidth = 260.0f;
+
+// -----------------------------------------------------------------------
+// AppFixture — shared fixture for app-level RfSimulatorApp agent tests.
+//
+// Provides a temp directory per process for scratch files, a canned
+// short-timeout AgentServerConfig, and a shared-fake-clock helper.
+// -----------------------------------------------------------------------
+struct AppFixture : ImGuiFixture {
+    RfSimulatorApp app;
+    fs::path temp_dir;
+
+    // Fake clock for deterministic timing.
+    struct FakeClock {
+        std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+        void advance(std::chrono::milliseconds ms) { t += ms; }
+    };
+    std::shared_ptr<FakeClock> clock;
+
+    AppFixture()
+        : temp_dir(fs::temp_directory_path() / ("agent_app_" + test_temp_paths::processTag())) {
+        fs::create_directories(temp_dir);
+        std::string error;
+        if (!ensurePrivateDirectory(temp_dir / "private", &error))
+            throw std::runtime_error("Failed to ensure private agent endpoint directory: " + error);
+        clock = std::make_shared<FakeClock>();
+        LoggerCore::instance().clear();
+    }
+
+    ~AppFixture() {
+        if (auto *server = app.testAgentServer())
+            server->stop();
+        std::error_code ec;
+        fs::remove_all(temp_dir, ec);
+    }
+
+    fs::path makePath(const std::string &name) const { return temp_dir / name; }
+
+    // Endpoint path for a test agent server.
+    fs::path endpointPath() const { return makePath("private") / "agent_endpoint.json"; }
+
+    // Server config with the fake clock and conservative timeouts.
+    AgentServerConfig serverConfig() const {
+        AgentServerConfig cfg;
+        cfg.endpoint_file = endpointPath();
+        cfg.app_version = "test";
+        cfg.pump_budget = std::chrono::milliseconds(8);
+        cfg.park_timeout = std::chrono::milliseconds(50);
+        cfg.hello_timeout = std::chrono::milliseconds(100);
+        return cfg;
+    }
+
+    // Server config with fake clock injected for deterministic timing.
+    AgentServerConfig timedConfig() {
+        auto c = serverConfig();
+        auto shared = clock;
+        c.now = [shared]() { return shared->t; };
+        return c;
+    }
+
+    void writeText(const fs::path &path, const std::string &text) {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << text;
+    }
+};
 
 } // namespace
 
@@ -260,4 +340,388 @@ TEST_CASE("Activity keeps the newest 50 calls and logs one line per call", "[age
         }
     }
     CHECK(found_format);
+}
+
+// ======================================================================
+// Test: The agent pump runs before the DSP update
+//
+// Submit a circuit_edit that adds a 1 GHz generator tone through the
+// server queue, then call update_dsp once.  The pump() inside update_dsp
+// must process the call before the DSP simulation runs, so the generator
+// appears in the circuit and its tone is non-empty.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "The agent pump runs before the DSP update", "[agent_app]") {
+    app.newProject();
+    std::string error;
+    const bool started = app.testStartAgentServer(serverConfig(), &error);
+    CAPTURE(error);
+    CAPTURE(app.testAgentServer()->status().error);
+    REQUIRE(started);
+
+    // Enqueue a circuit_edit that adds a generator with a 1 GHz tone.
+    AgentCall call;
+    call.tool = "circuit_edit";
+    call.arguments = ordered_json{
+        {"epoch", app.testProjectEpoch()},
+        {"ops",
+         ordered_json::array(
+             {{{"op", "add"},
+               {"ref", "gen"},
+               {"type", "generator"},
+               {"params",
+                {{"tones", {{{"freq_Hz", 1.0e9}, {"power_dBm", -10.0}, {"phase_deg", 0.0}}}}}}}})}};
+    call.client = "test";
+
+    bool completed = false;
+    AgentToolResult result;
+    app.testAgentServer()->submit(call, [&](const AgentToolResult &r) {
+        completed = true;
+        result = r;
+    });
+
+    // No pump yet — generator does not exist.
+    CHECK(app.testComponents().byType<SignalGeneratorEngine>().empty());
+
+    // update_dsp starts with pump() → processes the queued call → DSP runs.
+    app.update_dsp();
+
+    REQUIRE(completed);
+    CHECK_FALSE(result.is_error);
+
+    const auto gens = app.testComponents().byType<SignalGeneratorEngine>();
+    REQUIRE(gens.size() == 1);
+    CHECK(gens[0]->toneCount() == 1);
+    CHECK(gens[0]->tones()[0].freq_Hz == Catch::Approx(1.0e9));
+}
+
+// ======================================================================
+// Test: Agent calls park while an app modal is open
+//
+// A server-submitted call must not execute while ImGui reports a modal is
+// open.  The pump parks, and only after the park_timeout elapses does the
+// server complete the call with BUSY.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Agent calls park while an app modal is open", "[agent_app]") {
+    auto cfg = timedConfig();
+    cfg.park_timeout = std::chrono::milliseconds(50);
+    std::string error;
+    const bool started = app.testStartAgentServer(cfg, &error);
+    CAPTURE(error);
+    CAPTURE(app.testAgentServer()->status().error);
+    REQUIRE(started);
+
+    // Enqueue a circuit_edit call.
+    AgentCall edit;
+    edit.tool = "circuit_edit";
+    edit.arguments = ordered_json{
+        {"epoch", app.testProjectEpoch()},
+        {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}};
+    edit.client = "test";
+
+    bool completed = false;
+    AgentToolResult result;
+    app.testAgentServer()->submit(edit, [&](const AgentToolResult &r) {
+        completed = true;
+        result = r;
+    });
+
+    // First pump with a modal open → call is parked.
+    runFrame([&]() {
+        ImGui::OpenPopup("test_modal");
+        REQUIRE(ImGui::BeginPopupModal("test_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize));
+        ImGui::EndPopup();
+        app.testAgentServer()->pump();
+    });
+    CHECK_FALSE(completed);
+
+    // Advance fake clock past park timeout.
+    clock->advance(std::chrono::milliseconds(60));
+
+    // Second pump → parked call times out → BUSY.
+    runFrame([&]() {
+        ImGui::OpenPopup("test_modal");
+        if (ImGui::BeginPopupModal("test_modal", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            ImGui::EndPopup();
+        app.testAgentServer()->pump();
+    });
+    REQUIRE(completed);
+    CHECK(result.is_error);
+
+    // The error code is BUSY.  (The structured field is "error"/"code".)
+    REQUIRE(result.structured.contains("error"));
+    REQUIRE(result.structured["error"].contains("code"));
+    CHECK(result.structured["error"]["code"] == "BUSY");
+}
+
+// ======================================================================
+// Test: Revert restores the checkpoint and tells the agent why
+//
+// Two circuit_edit calls produce checkpoints.  Reverting the second one
+// restores the snapshot from before it was applied, advances the epoch
+// by one, trims the reverting checkpoint, marks dirty, and arranges for
+// the next stale-epoch result to report cause "reverted" with the undone
+// summary.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Revert restores the checkpoint and tells the agent why",
+                 "[agent_app]") {
+    app.newProject();
+    REQUIRE(app.testProjectEpoch() > 0);
+
+    // First edit: add a generator.
+    const auto r1 = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    CHECK_FALSE(r1.is_error);
+    const auto epoch_after_first = app.testProjectEpoch();
+
+    // Second edit: add an amplifier.
+    const auto r2 = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}}})}});
+    CHECK_FALSE(r2.is_error);
+    const auto epoch_after_second = app.testProjectEpoch();
+    // Circuit edits advance projectRevision(), never the runtime epoch.
+    CHECK(epoch_after_second == epoch_after_first);
+
+    // The agent host has two checkpoints.  The frontier one (id 2) was
+    // taken before the second edit was applied, so its snapshot reflects
+    // the state *after* the first edit.
+    auto &checkpoints = app.testAgentHost().checkpoints();
+    REQUIRE(checkpoints.size() == 2);
+
+    // The frontier checkpoint (id 2) was taken before the second edit was
+    // applied, so its snapshot reflects the state *after* the first edit.
+    const std::uint64_t revert_id = checkpoints[1].id;
+    const json checkpoint_snapshot = checkpoints[1].snapshot;
+
+    // Revert the second checkpoint.
+    app.revertAgentCheckpoint(revert_id);
+
+    // Epoch advanced by exactly one.
+    CHECK(app.testProjectEpoch() == epoch_after_second + 1);
+
+    // Only one checkpoint remains (the first edit's).
+    CHECK(app.testAgentHost().checkpoints().size() == 1);
+
+    // toJson now matches the pre-edit-2 snapshot (the restored state).
+    const json state_now = app.testProjectSerializer().toJson({std::nullopt, false});
+    CHECK(state_now == checkpoint_snapshot);
+
+    // Next call with a stale epoch returns STALE_EPOCH with cause
+    // "reverted" and the undone summary.
+    const auto stale = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch() - 1},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "stale"}, {"type", "generator"}}})}});
+    REQUIRE(stale.is_error);
+    CHECK(stale.structured.at("error").at("code") == "STALE_EPOCH");
+    const auto &details = stale.structured.at("error").at("details");
+    CHECK(details.at("cause") == "reverted");
+    REQUIRE(details.contains("undone"));
+    REQUIRE(details["undone"].is_array());
+    CHECK(details["undone"].size() == 1);
+
+    // Project is dirty after revert.
+    CHECK(app.isDirty());
+}
+
+// ======================================================================
+// Test: Revert keeps S-parameter data from outside the project folder
+//
+// Add the AM1143 library amplifier via an agent circuit_edit, which loads
+// its S-parameter data from the component_data library (outside any
+// project folder).  The checkpoint captures the verbatim external path.
+// After reverting the second of two edits, the amplifier must still
+// report sparamMode() as true.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture,
+                 "Revert keeps S-parameter data from outside the project "
+                 "folder",
+                 "[agent_app]") {
+    // Untitled project (no current path) — all S-param paths are external.
+    app.newProject();
+
+    // First edit: add the AM1143 library amplifier.
+    const auto r1 = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"},
+                                          {"ref", "amp"},
+                                          {"library_part", {{"part_number", "AM1143"}}}}})}});
+    CHECK_FALSE(r1.is_error);
+
+    auto amps = app.testComponents().byType<AmplifierEngine>();
+    REQUIRE(amps.size() == 1);
+    auto *amp = amps[0];
+
+    // The library part auto-loads S-param data from its data_files path
+    // (which lives under component_data/library/ — outside any project).
+    CHECK(amp->sparamMode());
+
+    // Make a second edit to create a checkpoint we can revert.
+    const auto r2 = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    CHECK_FALSE(r2.is_error);
+
+    // Revert the second checkpoint (the generator add).
+    auto &checkpoints = app.testAgentHost().checkpoints();
+    REQUIRE(checkpoints.size() == 2);
+    app.revertAgentCheckpoint(checkpoints[1].id);
+
+    // The amplifier's S-param mode is still on after revert.
+    const auto restored = app.testComponents().byType<AmplifierEngine>();
+    REQUIRE(restored.size() == 1);
+    CHECK(restored[0]->sparamMode());
+
+    // No generator remains (the revert removed it).
+    CHECK(app.testComponents().byType<SignalGeneratorEngine>().empty());
+}
+
+// ======================================================================
+// Test: Project replacements advance the epoch and clear checkpoints
+//
+// Every full replacement (New, resetting load, tutorial start, revert)
+// advances the project epoch by exactly one and clears runtime
+// checkpoints.  A failed intact load (malformed optional scalar inside
+// otherwise-valid top-level structure) leaves the epoch unchanged.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture,
+                 "Project replacements advance the epoch and clear "
+                 "checkpoints",
+                 "[agent_app]") {
+    app.newProject();
+    const auto initial_epoch = app.testProjectEpoch();
+
+    // Create some agent checkpoints via a circuit edit.
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    REQUIRE(app.testAgentHost().checkpoints().size() == 1);
+
+    // --- New ---
+    app.newProject();
+    CHECK(app.testProjectEpoch() == initial_epoch + 1);
+    CHECK(app.testAgentHost().checkpoints().empty());
+
+    // Re-establish checkpoints for subsequent tests.
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    REQUIRE(app.testAgentHost().checkpoints().size() == 1);
+
+    // --- Resetting load (section-shape failure clears the previous path) ---
+    const auto load_reset_path = makePath("load_reset.rfsim");
+    writeText(load_reset_path, R"({"components": 5, "window_state": {}, "graph_state": {}})");
+    const auto epoch_before_load = app.testProjectEpoch();
+    app.loadProject(load_reset_path.string());
+
+    // A section-shape failure resets the project → epoch advances.
+    CHECK(app.testProjectEpoch() == epoch_before_load + 1);
+    CHECK(app.testAgentHost().checkpoints().empty());
+
+    // Re-establish checkpoints and a valid baseline.
+    const auto valid_path = makePath("valid.rfsim");
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    REQUIRE(app.testAgentHost().checkpoints().size() == 1);
+    app.saveProject(valid_path.string());
+
+    // Reload the valid project (a full replacement).
+    const auto epoch_before_reload = app.testProjectEpoch();
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}}})}});
+    app.loadProject(valid_path.string());
+
+    // A valid load advances epoch by exactly one (fromJson → one reset)
+    // and clears runtime checkpoints.  The intervening testAgentCall
+    // advances the revision, never the epoch.
+    CHECK(app.testProjectEpoch() == epoch_before_reload + 1);
+    CHECK(app.testAgentHost().checkpoints().empty());
+
+    // --- Tutorial (via planned testStartTutorial accessor) ---
+    // startTutorial() runs newProject() (+1 epoch), seeds the tutorial
+    // sandbox, then notes Tutorial as the cause.  The total epoch advance
+    // is +1 (the reset from newProject).
+    //
+    // NOTE: RfSimulatorApp::startTutorial() is private; the production
+    // task must expose a testStartTutorial() accessor (mirroring the
+    // testStartAgentServer pattern) for this sub-case.
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    REQUIRE(app.testAgentHost().checkpoints().size() == 1);
+    const auto epoch_before_tutorial = app.testProjectEpoch();
+    app.testStartTutorial();
+    CHECK(app.testProjectEpoch() == epoch_before_tutorial + 1);
+    CHECK(app.testAgentHost().checkpoints().empty());
+
+    // --- Failed intact load (optional scalar wrong type) ---
+    // Top-level shapes are valid (components array, window_state object),
+    // but an optional scalar inside window_state is a string instead of
+    // bool, which the serializer rejects without resetting the project.
+    const auto malformed_path = makePath("malformed.rfsim");
+    writeText(
+        malformed_path,
+        R"({"components": [], "window_state": {"spectrum_analyzer": "yes"}, "graph_state": {}})");
+
+    // Establish a baseline with checkpoints in the live project.
+    app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    const auto epoch_before_malformed = app.testProjectEpoch();
+    const auto n_checkpoints = app.testAgentHost().checkpoints().size();
+
+    app.loadProject(malformed_path.string());
+
+    // Epoch unchanged, checkpoints untouched.
+    CHECK(app.testProjectEpoch() == epoch_before_malformed);
+    CHECK(app.testAgentHost().checkpoints().size() == n_checkpoints);
+}
+
+// ======================================================================
+// Test: Stopping the server removes the endpoint file
+//
+// Starting the agent server creates the endpoint file on disk.  Stopping
+// the server (via setAgentServerEnabled(false)) removes it.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Stopping the server removes the endpoint file", "[agent_app]") {
+    std::string error;
+    const bool started = app.testStartAgentServer(serverConfig(), &error);
+    CAPTURE(error);
+    CAPTURE(app.testAgentServer()->status().error);
+    REQUIRE(started);
+
+    // The endpoint file exists after start.
+    CHECK(app.agentServerRunning());
+    CHECK(fs::exists(endpointPath()));
+
+    // Stop the server via the public enable toggle.
+    app.setAgentServerEnabled(false);
+
+    // The endpoint file is removed and the server is no longer running.
+    CHECK_FALSE(fs::exists(endpointPath()));
+    CHECK_FALSE(app.agentServerRunning());
 }

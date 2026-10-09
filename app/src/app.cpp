@@ -1,4 +1,6 @@
 #include "app.h"
+#include "agent_api.h"
+#include "agent_endpoint.h"
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
@@ -11,6 +13,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -174,7 +178,105 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     // Tutorial visibility itself is transient session state, so it is not
     // persisted through SessionState — only the completion marker is durable.
     m_show_tutorial_first_run_prompt = !m_tutorial_state.completed();
+
+    // --- Agent host & API -------------------------------------------------
+    AppAgentHost::Hooks agent_hooks;
+    agent_hooks.capture = [this]() { return m_serializer->toJson({std::nullopt, false}); };
+    agent_hooks.project_name = [this]() -> std::optional<std::string> {
+        if (m_current_project_path.empty())
+            return std::nullopt;
+        return std::filesystem::path(m_current_project_path).stem().string();
+    };
+    m_agent_host = std::make_unique<AppAgentHost>(*m_graph_widget, std::move(agent_hooks));
+
+    m_agent_api = std::make_unique<AgentApi>(AgentApiContext{m_editor_commands, m_circuit_runtime,
+                                                             m_library, m_na_engine, m_na_host,
+                                                             m_spectrum_engine, *m_agent_host});
+
+    m_agent_server =
+        std::make_unique<AgentServer>(*m_agent_api, *m_agent_host, AgentServerConfig{});
 }
+
+bool RfSimulatorApp::setAgentServerEnabled(bool enabled, std::string *error) {
+    if (error)
+        error->clear();
+
+    if (!enabled) {
+        if (m_agent_server)
+            m_agent_server->stop();
+        m_state.saveBool("Agent", "ServerEnabled", false);
+        return true;
+    }
+
+    // Persist the user's opt-in even if startup fails so the next launch can
+    // retry on the next process start.
+    m_state.saveBool("Agent", "ServerEnabled", true);
+    if (m_agent_server && m_agent_server->running())
+        return true;
+
+    std::string start_error;
+    try {
+        const auto endpoint_directory = defaultAgentEndpointDirectory(&start_error);
+        if (!endpoint_directory) {
+            if (error)
+                *error = start_error.empty() ? "could not determine agent endpoint directory"
+                                             : start_error;
+            return false;
+        }
+        if (!ensurePrivateDirectory(*endpoint_directory, &start_error)) {
+            if (error)
+                *error = start_error;
+            return false;
+        }
+
+        AgentServerConfig config;
+        config.endpoint_file = *endpoint_directory /
+                               agentEndpointFileName(agentInstallKey(currentExecutableDirectory()));
+        config.app_version = APP_VERSION;
+        m_agent_server =
+            std::make_unique<AgentServer>(*m_agent_api, *m_agent_host, std::move(config));
+        if (!m_agent_server->start(&start_error)) {
+            if (error)
+                *error = start_error;
+            return false;
+        }
+        return true;
+    } catch (const std::exception &exception) {
+        if (error)
+            *error = exception.what();
+        return false;
+    }
+}
+
+void RfSimulatorApp::startAgentServerIfEnabled() {
+    if (!m_state.loadBool("Agent", "ServerEnabled", false))
+        return;
+
+    std::string error;
+    if (!setAgentServerEnabled(true, &error))
+        LOG_ERROR("Could not start agent server: %s", error.c_str());
+}
+
+bool RfSimulatorApp::agentServerRunning() const {
+    return m_agent_server && m_agent_server->running();
+}
+
+bool RfSimulatorApp::testStartAgentServer(AgentServerConfig config, std::string *error) {
+    if (m_agent_server)
+        m_agent_server->stop();
+    m_agent_server = std::make_unique<AgentServer>(*m_agent_api, *m_agent_host, std::move(config));
+    return m_agent_server->start(error);
+}
+
+AgentServer *RfSimulatorApp::testAgentServer() { return m_agent_server.get(); }
+
+AgentToolResult RfSimulatorApp::testAgentCall(const std::string &tool,
+                                              nlohmann::ordered_json arguments) {
+    AgentCall call{tool, std::move(arguments), "test"};
+    return m_agent_api->execute(call);
+}
+
+AppAgentHost &RfSimulatorApp::testAgentHost() { return *m_agent_host; }
 
 // --- Measurement-chain host adapter ----------------------------------------
 // The app resolves live engines through ComponentRegistry and creates each
@@ -280,6 +382,9 @@ void RfSimulatorApp::newProject() {
     // to a circuit that no longer exists. The retained flow selection is
     // revalidated against the new circuit by the panel itself.
     m_test_flow_widget->resetAfterCircuitReload();
+
+    m_agent_host->clearCheckpoints();
+    m_agent_api->noteProjectReplaced(AgentReplacementCause::NewProject);
 }
 
 void RfSimulatorApp::requestTutorial() {
@@ -313,7 +418,11 @@ void RfSimulatorApp::startTutorial() {
 
     m_tutorial_state.start();
     m_show_tutorial = true;
+
+    m_agent_api->noteProjectReplaced(AgentReplacementCause::Tutorial);
 }
+
+void RfSimulatorApp::testStartTutorial() { startTutorial(); }
 
 void RfSimulatorApp::testMakeDirty() { markDirty(); }
 
@@ -683,6 +792,9 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             // reload and must not touch them. The retained flow selection is
             // revalidated against the emptied circuit by the panel itself.
             m_test_flow_widget->resetAfterCircuitReload();
+
+            m_agent_host->clearCheckpoints();
+            m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
         }
         return;
     }
@@ -696,6 +808,32 @@ void RfSimulatorApp::loadProject(const std::string &path) {
     // circuit intact must not discard them. The retained flow selection is
     // validated against the new circuit by the panel itself.
     m_test_flow_widget->resetAfterCircuitReload();
+
+    m_agent_host->clearCheckpoints();
+    m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
+}
+
+void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {
+    const AgentCheckpoint *checkpoint = m_agent_host->findCheckpoint(checkpoint_id);
+    if (!checkpoint) {
+        LOG_WARN("Cannot revert missing or stale agent checkpoint %llu",
+                 static_cast<unsigned long long>(checkpoint_id));
+        return;
+    }
+
+    const nlohmann::json snapshot = checkpoint->snapshot;
+    if (!m_serializer->fromJson(snapshot, {std::nullopt, false}, "agent checkpoint")) {
+        LOG_ERROR("Could not restore agent checkpoint %llu",
+                  static_cast<unsigned long long>(checkpoint_id));
+        return;
+    }
+
+    syncComponentViews();
+    m_power_meter_widget->clearSource();
+    m_test_flow_widget->resetAfterCircuitReload();
+    markDirty();
+    m_agent_api->noteProjectReplaced(AgentReplacementCause::Reverted,
+                                     m_agent_host->removeCheckpointsFrom(checkpoint_id));
 }
 
 void RfSimulatorApp::openTestFlowDialog() {
@@ -1159,6 +1297,9 @@ void RfSimulatorApp::drawComponentFormModal() {
 }
 
 void RfSimulatorApp::update_dsp() {
+    if (m_agent_server)
+        m_agent_server->pump();
+
     m_circuit_runtime.update(0.0);
 
     const auto &graph = m_circuit_runtime.graph();
@@ -1246,7 +1387,7 @@ void RfSimulatorApp::draw_ui() {
                     m_pending_action = PendingAction::Exit;
                     m_show_unsaved_dialog = true;
                 } else
-                    std::exit(0);
+                    exitApplication();
             }
             ImGui::EndMenu();
         }
@@ -1416,7 +1557,7 @@ void RfSimulatorApp::draw_ui() {
                     openFileDialog();
                     break;
                 case PendingAction::Exit:
-                    std::exit(0);
+                    exitApplication();
                     break;
                 case PendingAction::Tutorial:
                     startTutorial();
@@ -1441,7 +1582,7 @@ void RfSimulatorApp::draw_ui() {
                 openFileDialog();
                 break;
             case PendingAction::Exit:
-                std::exit(0);
+                exitApplication();
                 break;
             case PendingAction::Tutorial:
                 startTutorial();
@@ -1624,6 +1765,8 @@ void RfSimulatorApp::draw_ui() {
 }
 
 RfSimulatorApp::~RfSimulatorApp() {
+    if (m_agent_server)
+        m_agent_server->stop();
     m_state.saveBool("WindowState", "Log", m_show_log);
     m_state.saveBool("WindowState", "SpectrumAnalyzer", m_show_spectrum);
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
@@ -1635,4 +1778,10 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Help", m_show_help);
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
     m_state.saveBool("WindowState", "TestFlow", m_show_test_flow);
+}
+
+[[noreturn]] void RfSimulatorApp::exitApplication() {
+    if (m_agent_server)
+        m_agent_server->stop();
+    std::exit(0);
 }
