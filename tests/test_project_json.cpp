@@ -100,6 +100,19 @@ TEST_CASE_METHOD(ImGuiFixture, "fromJson can leave window state alone", "[projec
     CHECK(app.m_show_node_editor);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "fromJson ignores window-state shape when disabled",
+                 "[project_json]") {
+    RfSimulatorApp app;
+    app.newProject();
+    app.m_show_log = false;
+
+    json snapshot = app.testProjectSerializer().toJson({std::nullopt, false});
+    snapshot["window_state"] = 7;
+
+    REQUIRE(app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+    CHECK_FALSE(app.m_show_log);
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "fromJson replaces the project like a load", "[project_json]") {
     RfSimulatorApp app;
     app.newProject(); // The app constructor seeds a default demo circuit.

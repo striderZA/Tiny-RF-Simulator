@@ -779,7 +779,8 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
         };
         if (!require_array("components") || !require_array("links") ||
             !require_array("probe_pins") || !require_array("groups") ||
-            !require_object("network_analyzer") || !require_object("window_state") ||
+            !require_object("network_analyzer") ||
+            (options.window_state && !require_object("window_state")) ||
             !require_object("graph_state")) {
             // A wrong-shaped top-level section makes the file unusable. Reset
             // to the empty state a normal load would produce (regression tests
