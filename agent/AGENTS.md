@@ -8,7 +8,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 
 - `protocol/` owns `simulator::agent_protocol`: newline framing, loopback line sockets, shared error/result encoding, the static v1 tool catalog and schemas, and private endpoint-file storage.
 - Agent-facing circuit edits belong in the API layer and must go through `EditorCommands`; protocol code does not edit simulator state.
-- `api/` owns the UI-free `simulator::agent_api` core and circuit/component/type/library query tools plus `circuit_edit`; it validates ordered-JSON arguments, reports epoch-aware results, and records one activity per call.
+- `api/` owns the UI-free `simulator::agent_api` core and circuit/component/type/library query tools plus `circuit_edit`; it validates ordered-JSON arguments, reports epoch-aware results, and attempts one activity recording per call. Sink failures are logged without overwriting the tool result.
 - Agent v1 does not initiate file operations. It may read data files already referenced by a component or library part.
 
 ## Local Contracts

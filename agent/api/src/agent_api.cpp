@@ -115,14 +115,8 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         m_context.host.recordActivity(activity);
     } catch (const std::exception &error) {
         LOG_ERROR("Agent tool %s failed: %s", call.tool.c_str(), error.what());
-        AgentError internal{AgentErrorCode::Internal,
-                            "internal error in " + call.tool + "; see the RF Simulator log"};
-        return agentErrorResult(internal, epoch());
     } catch (...) {
         LOG_ERROR("Agent tool %s failed: %s", call.tool.c_str(), "unknown exception");
-        AgentError internal{AgentErrorCode::Internal,
-                            "internal error in " + call.tool + "; see the RF Simulator log"};
-        return agentErrorResult(internal, epoch());
     }
     return result;
 }
