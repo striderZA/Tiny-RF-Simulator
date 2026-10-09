@@ -20,6 +20,7 @@ class AgentChannel {
 
     AgentReadStatus readLine(std::string &line, std::chrono::milliseconds timeout);
     bool writeLine(std::string_view line);
+    bool writeLine(std::string_view line, std::chrono::milliseconds timeout);
     void close();
     bool isOpen() const;
 

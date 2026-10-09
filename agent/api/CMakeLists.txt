@@ -2,6 +2,7 @@ find_package(Threads REQUIRED)
 
 add_library(agent_api STATIC
     src/agent_api.cpp
+    src/agent_server.cpp
     src/agent_args.cpp
     src/tool_circuit_read.cpp
     src/tool_library.cpp

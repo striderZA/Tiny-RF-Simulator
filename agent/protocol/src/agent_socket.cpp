@@ -391,6 +391,63 @@ bool AgentChannel::writeLine(std::string_view line) {
     return true;
 }
 
+bool AgentChannel::writeLine(std::string_view line, std::chrono::milliseconds timeout) {
+    if (!isOpen() || line.find('\n') != std::string_view::npos) {
+        return false;
+    }
+
+    std::string message(line);
+    message.push_back('\n');
+    const NativeSocket socket = nativeSocket(m_socket);
+    int failure = 0;
+    if (!setNonBlocking(socket, true, failure)) {
+        close();
+        return false;
+    }
+
+    const auto deadline = deadlineAfter(timeout);
+    std::size_t sent_total = 0;
+    bool success = true;
+    while (sent_total < message.size()) {
+        if (waitForSocket(socket, true, deadline, &failure) != WaitStatus::Ready) {
+            success = false;
+            break;
+        }
+
+        const auto remaining = message.size() - sent_total;
+        const int chunk_size =
+            static_cast<int>(std::min<std::size_t>(remaining, kSocketBufferBytes));
+#ifdef _WIN32
+        const int sent = send(socket, message.data() + sent_total, chunk_size, 0);
+#else
+#ifdef MSG_NOSIGNAL
+        constexpr int send_flags = MSG_NOSIGNAL;
+#else
+        constexpr int send_flags = 0;
+#endif
+        const ssize_t sent = send(socket, message.data() + sent_total,
+                                  static_cast<std::size_t>(chunk_size), send_flags);
+#endif
+        if (sent > 0) {
+            sent_total += static_cast<std::size_t>(sent);
+            continue;
+        }
+
+        failure = lastSocketError();
+        if (sent < 0 && (isInterrupted(failure) || isWouldBlock(failure))) {
+            continue;
+        }
+        success = false;
+        break;
+    }
+
+    if (!setNonBlocking(socket, false, failure))
+        success = false;
+    if (!success)
+        close();
+    return success;
+}
+
 void AgentChannel::close() {
     if (m_socket == -1) {
         return;

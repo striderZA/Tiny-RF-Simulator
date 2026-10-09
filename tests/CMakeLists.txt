@@ -456,3 +456,9 @@ add_standalone_test(test_agent_api
     LIBS simulator::agent_api
 )
 target_include_directories(test_agent_api PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+# Standalone real-loopback coverage for AgentServer transport, authentication,
+# UI-thread pumping, modal parking, endpoint ownership, and shutdown.
+add_standalone_test(test_agent_server
+    SOURCES test_agent_server.cpp
+    LIBS simulator::agent_api
+)

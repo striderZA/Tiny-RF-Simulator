@@ -585,6 +585,26 @@ TEST_CASE("Reads time out, report peer close, and flag oversized lines", "[agent
     CHECK_FALSE(server->isOpen());
 }
 
+TEST_CASE("A timed loopback write closes when its peer does not read", "[agent_protocol]") {
+    std::string error;
+    auto listener = AgentListener::bindLoopback(&error);
+    REQUIRE(listener.has_value());
+    auto peer = connectAgentLoopback(listener->port(), std::chrono::seconds{1}, &error);
+    REQUIRE(peer.has_value());
+    auto server = listener->accept(std::chrono::seconds{1});
+    REQUIRE(server.has_value());
+
+    const std::string payload(16u * 1024u * 1024u, 'x');
+    const auto timeout = std::chrono::milliseconds{100};
+    const auto start = std::chrono::steady_clock::now();
+    CHECK_FALSE(server->writeLine(payload, timeout));
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+
+    CHECK(elapsed >= timeout / 2);
+    CHECK(elapsed < timeout + std::chrono::milliseconds{400});
+    CHECK_FALSE(server->isOpen());
+}
+
 TEST_CASE("Connecting to a closed port fails within the timeout", "[agent_protocol]") {
     std::string error;
     auto listener = AgentListener::bindLoopback(&error);
