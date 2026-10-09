@@ -839,8 +839,11 @@ TEST_CASE("circuit_edit resolves library parts case-insensitively and reports am
     const auto original = std::find_if(
         all.begin(), all.end(), [](const auto *part) { return part->part_number == "ZX60-33LN+"; });
     REQUIRE(original != all.end());
-    ComponentDefinition duplicate = **original;
-    duplicate.type = "attenuator";
+    const auto attenuator = std::find_if(
+        all.begin(), all.end(), [](const auto *part) { return part->type == "attenuator"; });
+    REQUIRE(attenuator != all.end());
+    ComponentDefinition duplicate = **attenuator;
+    duplicate.part_number = "ZX60-33LN+";
     duplicate.source_path += ".duplicate";
     duplicate.manufacturer = "Duplicate vendor";
     fixture.library.upsert(duplicate);
