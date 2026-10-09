@@ -5,7 +5,18 @@
 
 #include "agent_catalog.h"
 #include "agent_errors.h"
+#include "gui_link.h"
+
 #include "mcp_session.h"
+
+#include "agent_endpoint.h"
+#include "agent_socket.h"
+#include "agent_wire.h"
+#include "fake_gui.h"
+
+#include <chrono>
+#include <filesystem>
+#include <thread>
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -16,6 +27,8 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+using namespace std::chrono_literals;
 
 namespace {
 
@@ -600,4 +613,254 @@ TEST_CASE("Requests before initialize without modern _meta are rejected", "[mcp]
     CHECK(error.at("code") == -32600);
     CHECK(error.at("message") ==
           "send initialize first, or use protocol version 2026-07-28 with per-request _meta");
+}
+
+TEST_CASE("Calls relay to the GUI and back", "[gui_link]") {
+    FakeGui gui;
+    GuiLink link(gui.endpointFile(), {});
+    link.setClientInfo("test-client", "4.2");
+    const auto result = link.call("library_search", OrderedJson{{"query", "LNA"}});
+    CHECK_FALSE(result.is_error);
+    const Json expected_success{{"ok", true}};
+    CHECK(result.structured == expected_success);
+    CHECK(gui.authenticated());
+    CHECK(gui.helloRequest().at("params").at("bridge_token") == gui.endpoint().bridge_token);
+    CHECK(gui.helloRequest().at("params").at("catalog_version") == kAgentCatalogVersion);
+    CHECK(gui.helloRequest().at("params").at("client").at("name") == "test-client");
+    CHECK(gui.helloRequest().at("params").at("client").at("version") == "4.2");
+    CHECK(gui.lastCall().at("params").at("tool") == "library_search");
+    const Json expected_arguments{{"query", "LNA"}};
+    CHECK(gui.lastCall().at("params").at("arguments") == expected_arguments);
+}
+
+TEST_CASE("A missing endpoint is SIMULATOR_UNAVAILABLE and the next call retries", "[gui_link]") {
+    const auto missing_directory = std::filesystem::temp_directory_path() /
+                                   ("rfsim-missing-gui-" + test_temp_paths::processTag());
+    struct Cleanup {
+        std::filesystem::path directory;
+        ~Cleanup() {
+            std::error_code error;
+            std::filesystem::remove_all(directory, error);
+        }
+    } cleanup{missing_directory};
+    std::error_code ignored;
+    std::filesystem::remove_all(missing_directory, ignored);
+    const auto missing = missing_directory / "agent-endpoint.json";
+    GuiLink link(missing, {});
+    const auto unavailable = link.call("library_search", OrderedJson::object());
+
+    CHECK(unavailable.is_error);
+    CHECK(unavailable.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    CHECK(unavailable.structured.at("error").at("message") ==
+          "RF Simulator is not reachable. Open RF Simulator, turn on the Agent Server in View > "
+          "Agent, then retry this call.");
+
+    FakeGui gui;
+    std::string error;
+    REQUIRE(ensurePrivateDirectory(missing_directory, &error));
+    REQUIRE(writeAgentEndpoint(missing, gui.endpoint(), &error));
+    const auto retried = link.call("library_search", OrderedJson::object());
+    CHECK_FALSE(retried.is_error);
+}
+
+TEST_CASE("A hello reply with the wrong gui_token is dropped", "[gui_link]") {
+    FakeGui gui(std::string(64, 'd'));
+    const auto endpoint = readAgentEndpoint(gui.endpointFile(), nullptr);
+    REQUIRE(endpoint.has_value());
+    // A hostile endpoint claims a different token than the real server returns.
+    auto altered = *endpoint;
+    altered.gui_token = std::string(64, 'e');
+    REQUIRE(writeAgentEndpoint(gui.endpointFile(), altered, nullptr));
+    GuiLink link(gui.endpointFile(), {});
+    const auto result = link.call("library_search", OrderedJson::object());
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    CHECK(gui.lastCall().empty());
+}
+
+TEST_CASE("A catalog mismatch is VERSION_MISMATCH", "[gui_link]") {
+    const int local_catalog = kAgentCatalogVersion;
+    const int remote_catalog = local_catalog + 1;
+    FakeGui gui(std::string(64, 'c'), remote_catalog);
+    auto endpoint = readAgentEndpoint(gui.endpointFile(), nullptr);
+    REQUIRE(endpoint.has_value());
+    endpoint->catalog_version = local_catalog;
+    std::string error;
+    REQUIRE(writeAgentEndpoint(gui.endpointFile(), *endpoint, &error));
+    CHECK(endpoint->catalog_version == local_catalog);
+    GuiLink link(gui.endpointFile(), {});
+    const auto result = link.call("library_search", OrderedJson::object());
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "VERSION_MISMATCH");
+    CHECK(result.structured.at("error").at("message") ==
+          "rf-sim-mcp catalog " + std::to_string(local_catalog) + ", RF Simulator catalog " +
+              std::to_string(remote_catalog) + "; install the same release of both");
+    CHECK(gui.helloCount() == 1);
+}
+
+TEST_CASE("Silent or dying GUIs fail fast", "[gui_link]") {
+    SECTION("accept-only listener exceeds the bounded hello wait") {
+        FakeGui gui;
+        gui.holdHelloReply();
+        GuiLink link(gui.endpointFile(), {.connect = 100ms, .hello = 100ms, .call = 10s});
+        const auto start = std::chrono::steady_clock::now();
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+        REQUIRE(gui.helloCount() == 1);
+        CHECK(std::chrono::steady_clock::now() - start < 1100ms);
+    }
+    SECTION("GUI closes after receiving the call without replying") {
+        FakeGui gui;
+        gui.closeAfterCall();
+        GuiLink link(gui.endpointFile(), {.connect = 100ms, .hello = 500ms, .call = 10s});
+        const auto start = std::chrono::steady_clock::now();
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+        CHECK(result.structured.at("error").at("message") ==
+              "RF Simulator is not reachable. Open RF Simulator, turn on the Agent Server in View "
+              "> Agent, then retry this call.");
+        CHECK(std::chrono::steady_clock::now() - start < 1s);
+        REQUIRE(gui.lastCall().at("method") == "call");
+    }
+}
+
+TEST_CASE("A call with no reply times out and drops the connection", "[gui_link]") {
+    FakeGui gui;
+    gui.holdReplies();
+    GuiLink link(gui.endpointFile(), {.connect = 100ms, .hello = 500ms, .call = 200ms});
+    const auto start = std::chrono::steady_clock::now();
+    const auto result = link.call("library_search", OrderedJson::object());
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    CHECK(elapsed >= 180ms);
+    CHECK(elapsed < 1s);
+    REQUIRE(gui.lastCall().at("method") == "call");
+    REQUIRE(gui.helloCount() == 1);
+    gui.holdReplies(false);
+    const auto retried = link.call("library_search", OrderedJson::object());
+    CHECK_FALSE(retried.is_error);
+    CHECK(gui.helloCount() == 2);
+}
+
+TEST_CASE("GUI JSON-RPC errors map data.code to tool errors", "[gui_link]") {
+    FakeGui gui;
+    gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+        return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                   {"id", request.at("id")},
+                                   {"error",
+                                    {{"code", kAgentRpcErrorCode},
+                                     {"message", "bad arguments"},
+                                     {"data", {{"code", "INVALID_ARGUMENT"}}}}}}};
+    });
+    GuiLink link(gui.endpointFile(), {});
+    const auto result = link.call("library_search", OrderedJson::object());
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    CHECK(result.structured.contains("epoch"));
+    CHECK(result.structured.value("epoch", Json::object()).is_null());
+    CHECK(result.structured.at("error").at("message") == "bad arguments");
+}
+TEST_CASE("Malformed GUI JSON-RPC replies are unavailable", "[gui_link]") {
+    SECTION("non-object error during hello") {
+        FakeGui gui;
+        gui.setHelloScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{
+                Json{{"jsonrpc", "2.0"}, {"id", request.at("id")}, {"error", true}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+
+    SECTION("non-string jsonrpc version during tools/call") {
+        FakeGui gui;
+        gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{
+                Json{{"jsonrpc", 2},
+                     {"id", request.at("id")},
+                     {"result", {{"is_error", false}, {"structured", Json::object()}}}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+
+    SECTION("non-object error during tools/call") {
+        FakeGui gui;
+        gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{
+                Json{{"jsonrpc", "2.0"}, {"id", request.at("id")}, {"error", true}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+    SECTION("non-string error code during hello") {
+        FakeGui gui;
+        gui.setHelloScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                       {"id", request.at("id")},
+                                       {"error",
+                                        {{"code", kAgentRpcErrorCode},
+                                         {"message", "malformed mismatch"},
+                                         {"data", {{"code", 7}}}}}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+    SECTION("non-integer JSON-RPC error code during tools/call") {
+        FakeGui gui;
+        gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                       {"id", request.at("id")},
+                                       {"error",
+                                        {{"code", true},
+                                         {"message", "bad arguments"},
+                                         {"data", {{"code", "INVALID_ARGUMENT"}}}}}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+
+    SECTION("non-string JSON-RPC error message during tools/call") {
+        FakeGui gui;
+        gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                       {"id", request.at("id")},
+                                       {"error",
+                                        {{"code", kAgentRpcErrorCode},
+                                         {"message", 7},
+                                         {"data", {{"code", "INVALID_ARGUMENT"}}}}}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
+
+    SECTION("non-string data code during tools/call") {
+        FakeGui gui;
+        gui.setScript([](const Json &request) -> std::optional<FakeGui::Reply> {
+            return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                       {"id", request.at("id")},
+                                       {"error",
+                                        {{"code", kAgentRpcErrorCode},
+                                         {"message", "bad arguments"},
+                                         {"data", {{"code", 7}}}}}}};
+        });
+        GuiLink link(gui.endpointFile(), {});
+        const auto result = link.call("library_search", OrderedJson::object());
+        CHECK(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    }
 }

@@ -2,6 +2,7 @@ find_package(Threads REQUIRED)
 
 add_library(mcp_adapter STATIC
     src/mcp_session.cpp
+    src/gui_link.cpp
 )
 add_library(simulator::mcp_adapter ALIAS mcp_adapter)
 
