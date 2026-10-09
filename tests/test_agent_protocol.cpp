@@ -804,6 +804,15 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
     CHECK(std::find(component_success.at("required").begin(),
                     component_success.at("required").end(),
                     "epoch") != component_success.at("required").end());
+    for (const std::string_view name : {"component_types", "library_search"}) {
+        CAPTURE(name);
+        const auto *tool = findAgentTool(name);
+        REQUIRE(tool != nullptr);
+        const auto &success = tool->output_schema.at("anyOf").at(0);
+        CHECK(success.at("properties").contains("epoch"));
+        CHECK(std::find(success.at("required").begin(), success.at("required").end(), "epoch") !=
+              success.at("required").end());
+    }
 }
 
 TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {

@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -351,4 +352,146 @@ TEST_CASE("Unknown tools are rejected", "[agent_api]") {
     REQUIRE(fixture.host.activities.size() == 1);
     CHECK_FALSE(fixture.host.activities[0].ok);
     CHECK(fixture.host.activities[0].error_code == "INVALID_ARGUMENT");
+}
+TEST_CASE("component_types lists every registered type with its ports", "[agent_api]") {
+    ApiFixture fixture;
+
+    const auto result = fixture.call("component_types");
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    const auto &types = result.structured.at("types");
+    REQUIRE(types.size() == 13);
+    const std::vector<std::string> expected{"amplifier", "attenuator",     "splitter",
+                                            "filter",    "mixer",          "equalizer",
+                                            "combiner",  "rf_switch_spdt", "rf_switch_spdt_2to1",
+                                            "adc",       "generator",      "coax",
+                                            "pfb"};
+    for (std::size_t i = 0; i < expected.size(); ++i)
+        CHECK(types[i].at("type") == expected[i]);
+
+    const auto pfb = std::find_if(types.begin(), types.end(),
+                                  [](const auto &type) { return type.at("type") == "pfb"; });
+    REQUIRE(pfb != types.end());
+    REQUIRE(pfb->at("outputs").size() == 2);
+    CHECK(pfb->at("outputs")[0].at("label") == "OUT");
+    CHECK(pfb->at("outputs")[1].at("label") == "OUT2");
+
+    const auto sw = std::find_if(types.begin(), types.end(), [](const auto &type) {
+        return type.at("type") == "rf_switch_spdt";
+    });
+    REQUIRE(sw != types.end());
+    REQUIRE(sw->at("inputs").size() == 1);
+    REQUIRE(sw->at("outputs").size() == 2);
+    CHECK(sw->at("inputs")[0].at("label") == "COM");
+    CHECK(sw->at("outputs")[0].at("label") == "T1");
+    CHECK(sw->at("outputs")[1].at("label") == "T2");
+}
+
+TEST_CASE("component_types with a type returns defaults and parameter info", "[agent_api]") {
+    ApiFixture fixture;
+
+    const auto amp = fixture.call("component_types", {{"type", "amplifier"}});
+    REQUIRE_FALSE(amp.is_error);
+    CHECK(amp.structured.at("epoch") == fixture.api.epoch());
+    const auto &amplifier = amp.structured.at("types")[0];
+    CHECK(amplifier.at("type") == "amplifier");
+    CHECK(amplifier.at("default_params").at("gain_dB") == 0.0);
+    const auto &amplifier_info = amplifier.at("param_info");
+    const auto sparam =
+        std::find_if(amplifier_info.begin(), amplifier_info.end(),
+                     [](const auto &info) { return info.at("path") == "sparam_filepath"; });
+    REQUIRE(sparam != amplifier_info.end());
+    CHECK(sparam->at("kind") == "file_path");
+    CHECK(sparam->at("read_only") == true);
+
+    const auto filter = fixture.call("component_types", {{"type", "filter"}});
+    REQUIRE_FALSE(filter.is_error);
+    CHECK(filter.structured.at("epoch") == fixture.api.epoch());
+    const auto &filter_info = filter.structured.at("types")[0].at("param_info");
+    const auto filter_type =
+        std::find_if(filter_info.begin(), filter_info.end(),
+                     [](const auto &info) { return info.at("path") == "filter_type"; });
+    REQUIRE(filter_type != filter_info.end());
+    CHECK(filter_type->at("kind") == "enum");
+    CHECK(filter_type->at("enum_labels") == nlohmann::json::array({"LPF", "HPF", "BPF", "BSF"}));
+
+    const auto bool_type = fixture.call("component_types", {{"type", "amplifier"}});
+    REQUIRE_FALSE(bool_type.is_error);
+    CHECK(bool_type.structured.at("epoch") == fixture.api.epoch());
+    const auto &bool_info = bool_type.structured.at("types")[0].at("param_info");
+    const auto nonlinear = std::find_if(bool_info.begin(), bool_info.end(), [](const auto &info) {
+        return info.at("path") == "enable_nonlinear";
+    });
+    REQUIRE(nonlinear != bool_info.end());
+    CHECK(nonlinear->at("kind") == "boolean");
+}
+
+TEST_CASE("component_types rejects an unknown type", "[agent_api]") {
+    ApiFixture fixture;
+
+    const auto result = fixture.call("component_types", {{"type", "missing_type"}});
+    CHECK(errorFor(result).at("code") == "UNKNOWN_TYPE");
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+}
+
+TEST_CASE("library_search matches case-insensitively and limits results", "[agent_api]") {
+    ApiFixture fixture;
+
+    const auto part_number = fixture.call("library_search", {{"query", "zx60"}});
+    REQUIRE_FALSE(part_number.is_error);
+    CHECK(part_number.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(part_number.structured.at("parts").size() == 1);
+    CHECK(part_number.structured.at("parts")[0].at("part_number") == "ZX60-33LN+");
+
+    const auto manufacturer = fixture.call("library_search", {{"query", "mini-circuits"}});
+    REQUIRE_FALSE(manufacturer.is_error);
+    CHECK(manufacturer.structured.at("epoch") == fixture.api.epoch());
+    const auto mini_circuits = std::find_if(
+        manufacturer.structured.at("parts").begin(), manufacturer.structured.at("parts").end(),
+        [](const auto &part) { return part.at("manufacturer") == "Mini-Circuits"; });
+    CHECK(mini_circuits != manufacturer.structured.at("parts").end());
+
+    const auto description = fixture.call("library_search", {{"query", "low noise"}});
+    REQUIRE_FALSE(description.is_error);
+    CHECK(description.structured.at("epoch") == fixture.api.epoch());
+    const auto low_noise = std::find_if(
+        description.structured.at("parts").begin(), description.structured.at("parts").end(),
+        [](const auto &part) { return part.at("part_number") == "ZX60-33LN+"; });
+    CHECK(low_noise != description.structured.at("parts").end());
+
+    const auto limited = fixture.call("library_search", {{"query", "mini-circuits"}, {"limit", 1}});
+    REQUIRE_FALSE(limited.is_error);
+    CHECK(limited.structured.at("epoch") == fixture.api.epoch());
+    CHECK(limited.structured.at("parts").size() == 1);
+    CHECK(limited.structured.at("total") >= 2);
+    const auto amplifier_filter =
+        fixture.call("library_search", {{"query", "mini-circuits"}, {"type", "amplifier"}});
+    REQUIRE_FALSE(amplifier_filter.is_error);
+    CHECK(amplifier_filter.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(amplifier_filter.structured.at("parts").size() >= 2);
+    for (const auto &part : amplifier_filter.structured.at("parts"))
+        CHECK(part.at("type") == "amplifier");
+
+    const auto ordered = fixture.call("library_search", {{"query", "mini-circuits"}});
+    CHECK(ordered.structured.at("epoch") == fixture.api.epoch());
+    const auto &ordered_parts = ordered.structured.at("parts");
+    REQUIRE(ordered_parts.size() >= 2);
+    for (std::size_t i = 1; i < ordered_parts.size(); ++i) {
+        const auto previous = std::pair{ordered_parts[i - 1].at("type").get<std::string>(),
+                                        ordered_parts[i - 1].at("part_number").get<std::string>()};
+        const auto current = std::pair{ordered_parts[i].at("type").get<std::string>(),
+                                       ordered_parts[i].at("part_number").get<std::string>()};
+        CHECK(previous <= current);
+    }
+
+    const auto invalid_limit = fixture.call("library_search", {{"query", "zx60"}, {"limit", 0}});
+    CHECK(errorFor(invalid_limit).at("code") == "INVALID_ARGUMENT");
+    CHECK(invalid_limit.structured.at("epoch") == fixture.api.epoch());
+    CHECK(errorFor(invalid_limit).at("details").at("path") == "/limit");
+
+    const auto data_files = fixture.call("library_search", {{"query", "AM1143"}});
+    REQUIRE_FALSE(data_files.is_error);
+    CHECK(data_files.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(data_files.structured.at("parts").size() == 1);
+    CHECK(data_files.structured.at("parts")[0].at("has_data_files") == true);
 }
