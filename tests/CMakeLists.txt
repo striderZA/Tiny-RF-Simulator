@@ -312,6 +312,12 @@ add_standalone_test(test_issue113_project_load
     SOURCES test_issue113_project_load.cpp
     LIBS simulator::app
 )
+# Standalone serializer JSON transformation coverage, separate from file I/O.
+add_standalone_test(test_project_json
+    SOURCES test_project_json.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_project_json PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #116 coverage: collapsed subcircuit blocks render from a
 # cached grid position, links between two different collapsed groups are drawn

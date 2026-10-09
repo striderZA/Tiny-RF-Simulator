@@ -131,6 +131,9 @@ class RfSimulatorApp {
     std::string m_current_project_path;
     void markDirty();
     void testMakeDirty();
+    // Test-only access to checkpoint serialization and the replacement epoch.
+    ProjectSerializer &testProjectSerializer() { return *m_serializer; }
+    std::uint64_t testProjectEpoch() const { return m_circuit_runtime.epoch(); }
     // Test-only commands keep fixture mutations explicit; read accessors below are const.
     IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
     IComponentEngine *testCreateComponent(
