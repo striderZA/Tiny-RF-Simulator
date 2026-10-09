@@ -433,7 +433,9 @@ TEST_CASE("component_types rejects an unknown type", "[agent_api]") {
     CHECK(errorFor(result).at("code") == "UNKNOWN_TYPE");
     CHECK(result.structured.at("epoch") == fixture.api.epoch());
     const auto empty_type = fixture.call("component_types", {{"type", ""}});
-    CHECK(errorFor(empty_type).at("code") == "UNKNOWN_TYPE");
+    CHECK(empty_type.is_error);
+    if (empty_type.is_error)
+        CHECK(errorFor(empty_type).at("code") == "UNKNOWN_TYPE");
     CHECK(empty_type.structured.at("epoch") == fixture.api.epoch());
 }
 
@@ -476,7 +478,8 @@ TEST_CASE("library_search matches case-insensitively and limits results", "[agen
         fixture.call("library_search", {{"query", "mini-circuits"}, {"type", "amplifier"}});
     REQUIRE_FALSE(amplifier_filter.is_error);
     CHECK(amplifier_filter.structured.at("epoch") == fixture.api.epoch());
-    REQUIRE(amplifier_filter.structured.at("parts").size() >= 2);
+    REQUIRE(amplifier_filter.structured.at("parts").size() == 1);
+    CHECK(amplifier_filter.structured.at("parts")[0].at("part_number") == "ZX60-33LN+");
     for (const auto &part : amplifier_filter.structured.at("parts"))
         CHECK(part.at("type") == "amplifier");
 
