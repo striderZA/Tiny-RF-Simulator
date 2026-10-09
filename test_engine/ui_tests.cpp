@@ -1,5 +1,6 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "adc_engine.h"
+#include "agent_endpoint.h"
+#include "agent_panel_widget.h"
 #include "amplifier_engine.h"
 #include "app.h"
 #include "attenuator_engine.h"
@@ -13,10 +14,68 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <imnodes.h>
+#include <string>
+#include <system_error>
+#include <vector>
 #undef Yield
+namespace {
+bool agentPanelVisible() {
+    ImGuiWindow *window = ImGui::FindWindowByName("Agent");
+    return window && window->Active;
+}
+
+void setAgentPanelVisible(ImGuiTestContext *ctx, bool visible) {
+    ctx->SetRef("");
+    ctx->Yield(2);
+    if (agentPanelVisible() == visible)
+        return;
+
+    ctx->SetRef("##MainMenuBar");
+    ctx->MenuClick("View/Agent");
+    ctx->SetRef("");
+    ctx->Yield(3);
+}
+
+struct AgentPanelUiCleanup {
+    RfSimulatorApp &app;
+    ImGuiTestContext *ctx;
+    AgentPanelWidget &widget;
+    bool original_visibility;
+    std::function<void(bool)> original_server_callback;
+    std::function<void(std::uint64_t)> original_revert_callback;
+    AppAgentHost *host = nullptr;
+    std::uint64_t first_added_checkpoint_id = 0;
+    bool owns_test_server = false;
+    std::filesystem::path temp_root;
+
+    AgentPanelUiCleanup(RfSimulatorApp &app, ImGuiTestContext *ctx, AgentPanelWidget &widget)
+        : app(app), ctx(ctx), widget(widget), original_visibility(agentPanelVisible()),
+          original_server_callback(widget.onServerToggled),
+          original_revert_callback(widget.onRevert) {}
+
+    ~AgentPanelUiCleanup() {
+        widget.onServerToggled = original_server_callback;
+        widget.onRevert = original_revert_callback;
+        if (host && first_added_checkpoint_id != 0)
+            host->removeCheckpointsFrom(first_added_checkpoint_id);
+        if (owns_test_server) {
+            if (AgentServer *server = app.testAgentServer())
+                server->stop();
+        }
+        setAgentPanelVisible(ctx, original_visibility);
+        if (!temp_root.empty()) {
+            std::error_code ec;
+            std::filesystem::remove_all(temp_root, ec);
+        }
+    }
+};
+} // namespace
+
 static RfSimulatorApp *s_app = nullptr;
 
 void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
@@ -2142,6 +2201,181 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         s_app->testRemoveComponent(attenuator->graphNodeId());
         s_app->testRemoveComponent(generator->graphNodeId());
         ctx->Yield(2);
+    };
+
+    // Agent panel control callbacks are replaced here, so the tests exercise
+    // the UI without enabling the production listener or persisting a setting.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_server_toggle_callback");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        AgentPanelWidget &widget = s_app->testAgentPanelWidget();
+        AgentPanelUiCleanup cleanup(*s_app, ctx, widget);
+        setAgentPanelVisible(ctx, false);
+
+        const bool server_was_running = s_app->agentServerRunning();
+        std::vector<bool> requested_states;
+        widget.onServerToggled = [&](bool enabled) { requested_states.push_back(enabled); };
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Agent");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(agentPanelVisible());
+        ctx->WindowFocus("Agent");
+        ctx->WindowResize("Agent", ImVec2(520, 560));
+        ctx->Yield(2);
+
+        ctx->SetRef("Agent");
+        IM_CHECK(ctx->ItemExists("Agent Server"));
+        ctx->ItemClick("Agent Server");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK_EQ(requested_states.size(), 1);
+        if (requested_states.size() == 1)
+            IM_CHECK_EQ(requested_states.front(), !server_was_running);
+        IM_CHECK_EQ(s_app->agentServerRunning(), server_was_running);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_revert_requires_confirmation");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        AgentPanelWidget &widget = s_app->testAgentPanelWidget();
+        AgentPanelUiCleanup cleanup(*s_app, ctx, widget);
+        setAgentPanelVisible(ctx, false);
+
+        AppAgentHost &host = s_app->testAgentHost();
+        IM_CHECK(host.checkpoints().empty());
+        if (!host.checkpoints().empty())
+            return;
+        cleanup.host = &host;
+        AgentCall call;
+        call.tool = "circuit_edit";
+        call.client = "ui-test-client";
+        host.beginCheckpoint(call);
+        host.commitCheckpoint("first UI test checkpoint");
+        const std::uint64_t first_added_id = host.checkpoints().back().id;
+        host.beginCheckpoint(call);
+        host.commitCheckpoint("selected UI test checkpoint");
+        const std::uint64_t second_added_id = host.checkpoints().back().id;
+        const std::string revert_ref =
+            "$$" + std::to_string(second_added_id) + "/Revert to before this call";
+        IM_CHECK_EQ(host.checkpoints().size(), 2);
+        cleanup.first_added_checkpoint_id = first_added_id;
+
+        std::vector<std::uint64_t> reverted_ids;
+        widget.onRevert = [&](std::uint64_t id) { reverted_ids.push_back(id); };
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Agent");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(agentPanelVisible());
+        ctx->WindowFocus("Agent");
+        ctx->WindowResize("Agent", ImVec2(620, 640));
+        ctx->Yield(2);
+        // Checkpoints render newest first, so the first matching button is the
+        // second checkpoint added above.
+
+        ImGuiWindow *checkpoint_window = nullptr;
+        for (ImGuiWindow *window : ImGui::GetCurrentContext()->Windows) {
+            if (window && window->Active && window->Name &&
+                std::string(window->Name).find("agent_checkpoints") != std::string::npos) {
+                checkpoint_window = window;
+                break;
+            }
+        }
+        IM_CHECK(checkpoint_window != nullptr);
+        if (!checkpoint_window)
+            return;
+        ctx->SetRef(checkpoint_window);
+        IM_CHECK(ctx->ItemExists(revert_ref.c_str()));
+        ctx->ItemClick(revert_ref.c_str());
+        ctx->SetRef("");
+        ctx->Yield(2);
+        ctx->SetRef("Revert Agent Changes");
+        IM_CHECK(ctx->ItemExists("Cancel"));
+        ctx->ItemClick("Cancel");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(reverted_ids.empty());
+
+        ctx->SetRef(checkpoint_window);
+        ctx->ItemClick(revert_ref.c_str());
+        ctx->SetRef("");
+        ctx->Yield(2);
+        ctx->SetRef("Revert Agent Changes");
+        IM_CHECK(ctx->ItemExists("Revert"));
+        ctx->ItemClick("Revert");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK_EQ(reverted_ids.size(), 1);
+        if (reverted_ids.size() == 1)
+            IM_CHECK(reverted_ids.front() == second_added_id);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_view_menu_and_indicator_open_panel");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        namespace fs = std::filesystem;
+        ctx->Yield(2);
+        AgentPanelWidget &widget = s_app->testAgentPanelWidget();
+        AgentPanelUiCleanup cleanup(*s_app, ctx, widget);
+        setAgentPanelVisible(ctx, false);
+
+        if (!s_app->agentServerRunning()) {
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            cleanup.temp_root =
+                fs::temp_directory_path() / ("rf_sim_agent_ui_" + std::to_string(stamp));
+            fs::create_directories(cleanup.temp_root);
+            const fs::path private_dir = cleanup.temp_root / "private";
+            std::string error;
+            const bool private_directory_ready = ensurePrivateDirectory(private_dir, &error);
+            IM_CHECK(private_directory_ready);
+            if (!private_directory_ready)
+                return;
+
+            AgentServerConfig config;
+            config.endpoint_file = private_dir / "agent_endpoint.json";
+            config.app_version = "ui-test";
+            const bool started = s_app->testStartAgentServer(config, &error);
+            IM_CHECK(started);
+            if (!started)
+                return;
+            cleanup.owns_test_server = true;
+        }
+        IM_CHECK(s_app->agentServerRunning());
+        if (!s_app->agentServerRunning())
+            return;
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Agent");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(agentPanelVisible());
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Agent");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!agentPanelVisible());
+
+        AgentServer *server = s_app->testAgentServer();
+        IM_CHECK(server != nullptr);
+        if (!server)
+            return;
+        const AgentServerStatus status = server->status();
+        IM_CHECK_EQ(status.state, AgentServerState::Waiting);
+        const std::string indicator = "Agent: listening";
+
+        ImGuiWindow *menu_bar = ImGui::FindWindowByName("##MainMenuBar");
+        IM_CHECK(menu_bar != nullptr);
+        if (!menu_bar)
+            return;
+        ctx->SetRef(menu_bar);
+        ctx->MenuClick(indicator.c_str());
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(agentPanelVisible());
     };
 
     // Issue #184: the amplifier form exposes the S-parameter file picker.

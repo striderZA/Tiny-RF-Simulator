@@ -66,6 +66,7 @@ set_target_properties(editor_services PROPERTIES FOLDER "Library")
 add_library(app STATIC
     src/app.cpp
     src/app_agent_host.cpp
+    src/agent_panel_widget.cpp
     src/inspector_panel.cpp
     src/library_browser_widget.cpp
     src/component_form_model.cpp

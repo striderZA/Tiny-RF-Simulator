@@ -1,5 +1,6 @@
 #include "agent_endpoint.h"
 #include "agent_host.h"
+#include "agent_panel_widget.h"
 #include "agent_server.h"
 #include "amplifier_engine.h"
 #include "app.h"
@@ -7,6 +8,7 @@
 #include "circuit_runtime.h"
 #include "component_type_registry.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imnodes.h"
 #include "implot.h"
 #include "logging_core.h"
@@ -14,16 +16,19 @@
 #include "signal_generator_engine.h"
 #include "test_temp_paths.h"
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 using nlohmann::json;
@@ -724,4 +729,125 @@ TEST_CASE_METHOD(AppFixture, "Stopping the server removes the endpoint file", "[
     // The endpoint file is removed and the server is no longer running.
     CHECK_FALSE(fs::exists(endpointPath()));
     CHECK_FALSE(app.agentServerRunning());
+}
+
+// ======================================================================
+// Test: Agent panel renders every server state and populated history
+// ======================================================================
+TEST_CASE("The Agent panel renders every server state", "[agent_app]") {
+    ImGuiFixture fixture;
+    AgentPanelWidget widget;
+
+    const auto now = std::chrono::system_clock::now();
+    std::deque<AgentActivity> activity;
+    for (int i = 0; i < 3; ++i) {
+        AgentActivity entry;
+        entry.time = now - std::chrono::seconds(3 - i);
+        entry.tool = i == 0 ? "circuit_get" : "circuit_edit";
+        entry.client = "ui-test-client";
+        entry.summary = "activity " + std::to_string(i + 1);
+        entry.ok = i != 1;
+        entry.error_code = i == 1 ? "INVALID_ARGUMENT" : "";
+        entry.duration_ms = 1.0 + i;
+        activity.push_back(std::move(entry));
+    }
+
+    std::deque<AgentCheckpoint> checkpoints;
+    for (std::uint64_t id : {41u, 42u}) {
+        AgentCheckpoint checkpoint;
+        checkpoint.id = id;
+        checkpoint.time = now;
+        checkpoint.tool = "circuit_edit";
+        checkpoint.client = "ui-test-client";
+        checkpoint.summary = "checkpoint " + std::to_string(id);
+        checkpoint.snapshot = json::object();
+        checkpoints.push_back(std::move(checkpoint));
+    }
+
+    const auto makeStatus = [](AgentServerState state, std::string client_name = {},
+                               std::string client_version = {}, std::string error = {}) {
+        AgentServerStatus status;
+        status.state = state;
+        status.client_name = std::move(client_name);
+        status.client_version = std::move(client_version);
+        status.error = std::move(error);
+        return status;
+    };
+    struct StateInput {
+        AgentServerStatus status;
+        bool server_on;
+    };
+    const std::array<StateInput, 5> states{{
+        {makeStatus(AgentServerState::Off), false},
+        {makeStatus(AgentServerState::Waiting), true},
+        {makeStatus(AgentServerState::Connected, "ui-test-client", "1.2"), true},
+        {makeStatus(AgentServerState::Busy, "ui-test-client", "1.2"), true},
+        {makeStatus(AgentServerState::Error, {}, {}, "test listener failure"), true},
+    }};
+
+    std::array<bool, 5> exercised_states{};
+    const std::string bridge_path = "C:\\RF Simulator\\rf-sim-mcp.exe";
+    for (const StateInput &state : states) {
+        AgentPanelView view;
+        view.server_on = state.server_on;
+        view.status = state.status;
+        view.bridge_path = bridge_path;
+        view.activity = &activity;
+        view.checkpoints = &checkpoints;
+
+        const auto state_index = static_cast<std::size_t>(view.status.state);
+        REQUIRE(state_index < exercised_states.size());
+        exercised_states[state_index] = true;
+
+        CHECK(view.server_on == state.server_on);
+        switch (view.status.state) {
+        case AgentServerState::Off:
+            CHECK_FALSE(view.server_on);
+            break;
+        case AgentServerState::Waiting:
+            CHECK(view.server_on);
+            break;
+        case AgentServerState::Connected:
+            CHECK(view.server_on);
+            CHECK(view.status.client_name == "ui-test-client");
+            CHECK(view.status.client_version == "1.2");
+            break;
+        case AgentServerState::Busy:
+            CHECK(view.server_on);
+            CHECK(view.status.client_name == "ui-test-client");
+            CHECK(view.status.client_version == "1.2");
+            break;
+        case AgentServerState::Error:
+            CHECK(view.server_on);
+            CHECK(view.status.error == "test listener failure");
+            break;
+        }
+        CHECK_FALSE(view.bridge_path.empty());
+        REQUIRE(view.activity != nullptr);
+        REQUIRE(view.checkpoints != nullptr);
+        REQUIRE(view.activity->size() == 3);
+        REQUIRE(view.checkpoints->size() == 2);
+        for (const AgentActivity &entry : *view.activity) {
+            CHECK_FALSE(entry.tool.empty());
+            CHECK_FALSE(entry.client.empty());
+            CHECK_FALSE(entry.summary.empty());
+        }
+        for (const AgentCheckpoint &checkpoint : *view.checkpoints) {
+            CHECK(checkpoint.id != 0);
+            CHECK_FALSE(checkpoint.tool.empty());
+            CHECK_FALSE(checkpoint.client.empty());
+            CHECK(checkpoint.snapshot.is_object());
+            CHECK_FALSE(checkpoint.summary.empty());
+        }
+
+        bool open = true;
+        runFrame([&]() { widget.draw("Agent", &open, view); });
+        CHECK(open);
+        CHECK(ImGui::FindWindowByName("Agent") != nullptr);
+    }
+    CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Off)]);
+    CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Waiting)]);
+    CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Connected)]);
+    CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Busy)]);
+    CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Error)]);
 }

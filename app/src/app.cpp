@@ -195,6 +195,14 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
 
     m_agent_server =
         std::make_unique<AgentServer>(*m_agent_api, *m_agent_host, AgentServerConfig{});
+    m_agent_panel_widget.onServerToggled = [this](bool enabled) {
+        std::string error;
+        if (!setAgentServerEnabled(enabled, &error))
+            LOG_ERROR("Could not start agent server: %s", error.c_str());
+    };
+    m_agent_panel_widget.onRevert = [this](std::uint64_t checkpoint_id) {
+        revertAgentCheckpoint(checkpoint_id);
+    };
 }
 
 bool RfSimulatorApp::setAgentServerEnabled(bool enabled, std::string *error) {
@@ -204,30 +212,36 @@ bool RfSimulatorApp::setAgentServerEnabled(bool enabled, std::string *error) {
     if (!enabled) {
         if (m_agent_server)
             m_agent_server->stop();
+        m_agent_server_enabled = false;
+        m_agent_startup_error.clear();
         m_state.saveBool("Agent", "ServerEnabled", false);
         return true;
     }
 
     // Persist the user's opt-in even if startup fails so the next launch can
     // retry on the next process start.
+    m_agent_server_enabled = true;
     m_state.saveBool("Agent", "ServerEnabled", true);
-    if (m_agent_server && m_agent_server->running())
+    if (m_agent_server && m_agent_server->running()) {
+        m_agent_startup_error.clear();
         return true;
+    }
 
+    const auto fail = [this, error](const std::string &message) {
+        m_agent_startup_error = message;
+        if (error)
+            *error = message;
+        return false;
+    };
     std::string start_error;
     try {
         const auto endpoint_directory = defaultAgentEndpointDirectory(&start_error);
-        if (!endpoint_directory) {
-            if (error)
-                *error = start_error.empty() ? "could not determine agent endpoint directory"
-                                             : start_error;
-            return false;
-        }
-        if (!ensurePrivateDirectory(*endpoint_directory, &start_error)) {
-            if (error)
-                *error = start_error;
-            return false;
-        }
+        if (!endpoint_directory)
+            return fail(start_error.empty() ? "could not determine agent endpoint directory"
+                                            : start_error);
+        if (!ensurePrivateDirectory(*endpoint_directory, &start_error))
+            return fail(start_error.empty() ? "could not prepare agent endpoint directory"
+                                            : start_error);
 
         AgentServerConfig config;
         config.endpoint_file = *endpoint_directory /
@@ -235,21 +249,17 @@ bool RfSimulatorApp::setAgentServerEnabled(bool enabled, std::string *error) {
         config.app_version = APP_VERSION;
         m_agent_server =
             std::make_unique<AgentServer>(*m_agent_api, *m_agent_host, std::move(config));
-        if (!m_agent_server->start(&start_error)) {
-            if (error)
-                *error = start_error;
-            return false;
-        }
+        if (!m_agent_server->start(&start_error))
+            return fail(start_error.empty() ? "could not start agent server" : start_error);
+        m_agent_startup_error.clear();
         return true;
     } catch (const std::exception &exception) {
-        if (error)
-            *error = exception.what();
-        return false;
+        return fail(exception.what());
     }
 }
 
 void RfSimulatorApp::startAgentServerIfEnabled() {
-    if (!m_state.loadBool("Agent", "ServerEnabled", false))
+    if (!m_agent_server_enabled)
         return;
 
     std::string error;
@@ -324,6 +334,8 @@ void RfSimulatorApp::load_window_states() {
     m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
     m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
+    m_show_agent = m_state.loadBool("WindowState", "Agent", false);
+    m_agent_server_enabled = m_state.loadBool("Agent", "ServerEnabled", false);
 }
 
 bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -1402,6 +1414,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
             ImGui::MenuItem("Test Flow", nullptr, &m_show_test_flow);
+            ImGui::MenuItem("Agent", nullptr, &m_show_agent);
             ImGui::Separator();
             if (ImGui::BeginMenu("Layouts")) {
                 if (ImGui::MenuItem("Save As...")) {
@@ -1451,6 +1464,19 @@ void RfSimulatorApp::draw_ui() {
                 requestTutorial();
             ImGui::EndMenu();
         }
+        std::string agent_indicator;
+        if (m_agent_server) {
+            const AgentServerStatus status = m_agent_server->status();
+            if (status.state == AgentServerState::Waiting) {
+                agent_indicator = "Agent: listening";
+            } else if (status.state == AgentServerState::Connected ||
+                       status.state == AgentServerState::Busy) {
+                agent_indicator = status.client_name.empty() ? "Agent: listening"
+                                                             : "Agent: " + status.client_name;
+            }
+        }
+        if (!agent_indicator.empty() && ImGui::MenuItem(agent_indicator.c_str()))
+            m_show_agent = true;
         // Title / project name on the right
         {
             float tw = ImGui::GetContentRegionAvail().x;
@@ -1744,6 +1770,26 @@ void RfSimulatorApp::draw_ui() {
             "Test Flow", &m_show_test_flow, [this]() { openTestFlowDialog(); },
             [this]() { exportTestFlowDialog(); }, [this]() { saveTestFlowDialog(); });
     }
+
+    if (m_show_agent) {
+        AgentPanelView view;
+        view.server_on = m_agent_server_enabled;
+        view.status = m_agent_server ? m_agent_server->status() : AgentServerStatus{};
+        if (m_agent_server_enabled && !m_agent_startup_error.empty() &&
+            (view.status.state == AgentServerState::Off ||
+             view.status.state == AgentServerState::Error)) {
+            view.status.state = AgentServerState::Error;
+            view.status.error = m_agent_startup_error;
+        }
+        std::filesystem::path bridge_path = std::filesystem::path(appExeDir()) / "rf-sim-mcp";
+#ifdef _WIN32
+        bridge_path += ".exe";
+#endif
+        view.bridge_path = bridge_path.string();
+        view.activity = &m_agent_host->activity();
+        view.checkpoints = &m_agent_host->checkpoints();
+        m_agent_panel_widget.draw("Agent", &m_show_agent, view);
+    }
     drawExtensionsPanel();
 
     if (m_show_log)
@@ -1778,6 +1824,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "Help", m_show_help);
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
     m_state.saveBool("WindowState", "TestFlow", m_show_test_flow);
+    m_state.saveBool("WindowState", "Agent", m_show_agent);
 }
 
 [[noreturn]] void RfSimulatorApp::exitApplication() {

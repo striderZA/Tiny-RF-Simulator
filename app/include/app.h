@@ -51,6 +51,7 @@
 #include "view_manager.h"
 
 #include "agent_host.h"
+#include "agent_panel_widget.h"
 #include "agent_server.h"
 #include "app_agent_host.h"
 
@@ -58,6 +59,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 enum class PendingAction { None, New, Open, Exit, Tutorial };
@@ -149,6 +151,7 @@ class RfSimulatorApp {
     AgentServer *testAgentServer();
     AgentToolResult testAgentCall(const std::string &tool, nlohmann::ordered_json arguments);
     AppAgentHost &testAgentHost();
+    AgentPanelWidget &testAgentPanelWidget() { return m_agent_panel_widget; }
     void testStartTutorial();
     // Test-only commands keep fixture mutations explicit; read accessors below are const.
     IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
@@ -294,5 +297,8 @@ class RfSimulatorApp {
     std::unique_ptr<AppAgentHost> m_agent_host;
     std::unique_ptr<AgentApi> m_agent_api;
     std::unique_ptr<AgentServer> m_agent_server;
+    bool m_agent_server_enabled = false;
+    std::string m_agent_startup_error;
     bool m_show_agent = false;
+    AgentPanelWidget m_agent_panel_widget;
 };
