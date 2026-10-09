@@ -741,6 +741,12 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
         network_sweep->input_schema.at("properties").at("arrays").at("properties").at("max_points");
     CHECK(max_points.at("minimum") == 2);
     CHECK(max_points.at("maximum") == 401);
+    const auto *sweep = findAgentTool("network_analyzer_sweep");
+    REQUIRE(sweep != nullptr);
+    const auto &points = sweep->input_schema.at("properties").at("points");
+    CHECK(points.at("type") == "integer");
+    CHECK_FALSE(points.contains("minimum"));
+    CHECK_FALSE(points.contains("maximum"));
 }
 
 TEST_CASE("Output schemas accept the success or the common error shape", "[catalog]") {
@@ -830,6 +836,35 @@ TEST_CASE("Output schemas accept the success or the common error shape", "[catal
         CHECK(std::find(success.at("required").begin(), success.at("required").end(), "epoch") !=
               success.at("required").end());
     }
+    for (const std::string_view name : {"measure_port", "network_analyzer_sweep"}) {
+        CAPTURE(name);
+        const auto *tool = findAgentTool(name);
+        REQUIRE(tool != nullptr);
+        const auto &success = tool->output_schema.at("anyOf").at(0);
+        CHECK(success.at("properties").contains("epoch"));
+        CHECK(std::find(success.at("required").begin(), success.at("required").end(), "epoch") !=
+              success.at("required").end());
+    }
+    const auto *measure_port = findAgentTool("measure_port");
+    REQUIRE(measure_port != nullptr);
+    const auto &measure_success = measure_port->output_schema.at("anyOf").at(0);
+    const auto &peak_properties = measure_success.at("properties").at("peak").at("properties");
+    for (const std::string_view field : {"freq_Hz", "power_dBm"}) {
+        CAPTURE(field);
+        const auto &schema = peak_properties.at(field);
+        REQUIRE(schema.contains("anyOf"));
+        CHECK(std::any_of(schema.at("anyOf").begin(), schema.at("anyOf").end(),
+                          [](const auto &branch) { return branch.value("type", "") == "null"; }));
+    }
+    const auto &channel_noise = measure_success.at("properties")
+                                    .at("snr_basis")
+                                    .at("oneOf")
+                                    .at(1)
+                                    .at("properties")
+                                    .at("channel_noise_dBm");
+    REQUIRE(channel_noise.contains("anyOf"));
+    CHECK(std::any_of(channel_noise.at("anyOf").begin(), channel_noise.at("anyOf").end(),
+                      [](const auto &branch) { return branch.value("type", "") == "null"; }));
 }
 
 TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {
