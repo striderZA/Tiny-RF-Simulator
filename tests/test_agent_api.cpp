@@ -320,13 +320,17 @@ TEST_CASE("activity sink failures do not hide committed circuit edits", "[agent_
     LoggerCore::instance().clear();
     fixture.host.throw_on_activity = true;
 
-    const auto result =
-        editCall(fixture, nlohmann::ordered_json::array({{{"op", "add"}, {"type", "generator"}}}));
+    const auto result = editCall(
+        fixture,
+        nlohmann::ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}}));
 
     REQUIRE_FALSE(result.is_error);
     CHECK(result.structured.at("epoch") == fixture.api.epoch());
     REQUIRE(result.structured.contains("applied"));
     REQUIRE(result.structured.at("applied").size() == 1);
+    REQUIRE(result.structured.contains("refs"));
+    CHECK(result.structured.at("refs").at("gen") ==
+          result.structured.at("applied")[0].at("component"));
     CHECK(result.structured.at("revision") == 1);
     CHECK(fixture.commands.revision() == 1);
     CHECK(fixture.host.checkpoint_begins == 1);
