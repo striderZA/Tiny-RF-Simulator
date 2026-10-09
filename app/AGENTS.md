@@ -26,6 +26,7 @@ Application composition and UI orchestration: the UI-free `simulator::circuit_ru
 - `ExtensionTrustStore` — exe-relative (`<exe_dir>/extension_trust.json`) record of the extension directories the user allowed to execute, keyed by canonical extension root
 - `ExternalToolRunner` — structured request/result execution for approved external tools
 - `library_package` — `.rflib` ZIP export/import: exports loader-valid component definitions and only their referenced assets; imports validate the whole package before writes, skip/report conflicts by component identity, and stage accepted entries before installing under the global user library root
+- `AppAgentHost` — app-side `IAgentHost` implementation owned by `RfSimulatorApp`; owns checkpoints (newest 20), activity log (newest 50), node placement through `NodeGraphWidget`, modal detection through ImGui, and project-name query through hooks; `simulator::app` links `simulator::agent_api` publicly so consumers share the agent API include path
 
 ## Local Contracts
 - `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`

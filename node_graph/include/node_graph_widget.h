@@ -69,6 +69,7 @@ class NodeGraphWidget {
     void syncNodesFromEngine();
     void clearPositionCache() {
         m_last_node_grid_positions.clear();
+        m_prev_node_grid_positions.clear();
         m_cached_grid_positions.clear();
         m_node_screen_positions.clear();
         m_registered_in_pool.clear();
@@ -148,8 +149,11 @@ class NodeGraphWidget {
     // Links drawn last frame between two different collapsed groups.
     int m_cross_group_links_drawn = 0;
 
-    // Last known grid-space positions for detecting node moves
+    // Externally readable cache of each node's grid-space position,
+    // updated unconditionally every frame for every drawn node.
     std::unordered_map<int, ImVec2> m_last_node_grid_positions;
+    // Previous-frame snapshot for detecting node moves (requires mouse release).
+    std::unordered_map<int, ImVec2> m_prev_node_grid_positions;
     // Set of node IDs registered in the ImNodes pool, so syncNodesFromEngine
     // can register new nodes without resetting existing positions.
     std::unordered_set<int> m_registered_in_pool;

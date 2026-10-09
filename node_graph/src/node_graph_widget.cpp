@@ -484,6 +484,7 @@ void NodeGraphWidget::handleNodeDeletion() {
                 m_node_screen_positions.erase(node_id);
                 m_cached_grid_positions.erase(node_id);
                 m_last_node_grid_positions.erase(node_id);
+                m_prev_node_grid_positions.erase(node_id);
             }
             ImNodes::ClearNodeSelection();
         }

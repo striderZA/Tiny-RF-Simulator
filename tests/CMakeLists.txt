@@ -474,3 +474,14 @@ add_standalone_test(test_mcp_bridge
     SOURCES test_mcp_bridge.cpp
     LIBS simulator::mcp_adapter
 )
+
+# Standalone app-level agent host coverage: checkpoint lifecycle and trimming
+# (newest 20 kept), component auto-layout placement, explicit positions, and
+# activity logging (newest 50 kept, "Agent:" prefix). Constructs RfSimulatorApp
+# through AgentFixture (ImGuiFixture), so it shares the exe-relative app.ini
+# and must run serially.
+add_standalone_test(test_agent_app
+    SOURCES test_agent_app.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)

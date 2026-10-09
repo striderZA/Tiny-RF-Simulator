@@ -199,21 +199,28 @@ void NodeGraphWidget::drawGroupTitleBar(const Group &g, const ImVec2 &top_left_s
     }
 }
 void NodeGraphWidget::detectNodeMoves() {
-    // Require BOTH a mouse release AND an actual position change.
-    // This prevents false positives: clicking menu items won't trigger,
-    // and stale position caches from a previous project load won't trigger
-    // because there was no mouse release during the load process.
-    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-        return;
-    bool moved = false;
+    // Always cache current positions for every drawn node, so
+    // nodeGridPosition() returns valid values even in headless frames.
     for (const auto &node : m_engine.nodes()) {
         // Skip nodes not drawn this frame (newly added nodes haven't been
         // through BeginNode yet, so GetNodeEditorSpacePos would assert).
         if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
             continue;
+        m_last_node_grid_positions[node.node_id] = ImNodes::GetNodeEditorSpacePos(node.node_id);
+    }
+
+    // Move detection requires a mouse release to avoid false positives
+    // from menu clicks or stale caches from a previous project load.
+    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        return;
+
+    bool moved = false;
+    for (const auto &node : m_engine.nodes()) {
+        if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
+            continue;
         ImVec2 current = ImNodes::GetNodeEditorSpacePos(node.node_id);
-        auto it = m_last_node_grid_positions.find(node.node_id);
-        if (it != m_last_node_grid_positions.end()) {
+        auto it = m_prev_node_grid_positions.find(node.node_id);
+        if (it != m_prev_node_grid_positions.end()) {
             float dx = current.x - it->second.x;
             float dy = current.y - it->second.y;
             if (dx * dx + dy * dy > 1.0f) {
@@ -222,7 +229,7 @@ void NodeGraphWidget::detectNodeMoves() {
                 moved = true;
             }
         }
-        m_last_node_grid_positions[node.node_id] = current;
+        m_prev_node_grid_positions[node.node_id] = current;
     }
     if (moved && onNodeMoved)
         onNodeMoved();
