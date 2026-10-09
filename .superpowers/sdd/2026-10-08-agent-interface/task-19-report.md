@@ -57,3 +57,9 @@ The full test suite was not run, as requested.
 - `git diff --check` — passed with no output.
 
 The 1 MiB oversized-line case improved from `18.875 s` to `0.070 s` in the same test executable. The full suite was not run.
+
+### DOX correction
+
+- `tests/AGENTS.md` now inventories the oversized-line runtime/discard-recovery, control-safe stderr identity, and generic `INTERNAL` result cases.
+- `agent/mcp/AGENTS.md` now records incremental stdio framing guarantees and the caller-exception/logging contract. `agent/AGENTS.md` also retains the bridge-level framing and stderr contract.
+- Docs-only; no build or tests were rerun for this correction.
