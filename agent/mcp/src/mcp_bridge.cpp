@@ -2,6 +2,7 @@
 
 #include "agent_endpoint.h"
 #include "agent_wire.h"
+#include "mcp_bridge_detail.h"
 #include "mcp_session.h"
 
 #include <nlohmann/json.hpp>
@@ -22,6 +23,37 @@
 
 namespace {
 using Json = nlohmann::json;
+std::string escapeLogField(std::string_view value) {
+    constexpr char hex[] = "0123456789ABCDEF";
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const unsigned char character : value) {
+        switch (character) {
+        case '\\':
+            escaped += "\\\\";
+            break;
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        default:
+            if (character < 0x20 || character == 0x7f) {
+                escaped += "\\x";
+                escaped += hex[character >> 4];
+                escaped += hex[character & 0x0f];
+            } else {
+                escaped.push_back(static_cast<char>(character));
+            }
+            break;
+        }
+    }
+    return escaped;
+}
 
 struct BridgeEvent {
     enum class Kind { Line, Oversized, ReaderDone, ToolCallDone, CallerDone } kind;
@@ -100,14 +132,6 @@ std::optional<std::string> successfulProtocol(const std::string &line, const Mcp
     return std::nullopt;
 }
 
-AgentToolResult bridgeFailure(const std::exception &error) {
-    return {true,
-            {{"epoch", nullptr},
-             {"error",
-              {{"code", "SIMULATOR_UNAVAILABLE"},
-               {"message", std::string("RF Simulator bridge failed: ") + error.what()}}}}};
-}
-
 } // namespace
 
 int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
@@ -145,6 +169,12 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
             output_failed = true;
         }
     };
+    std::mutex log_mutex;
+    const auto write_log_line = [&](std::string_view line) {
+        std::lock_guard lock(log_mutex);
+        err << line << '\n';
+        err.flush();
+    };
     std::atomic<int> bridge_status{0};
 
     std::thread session_thread([&] {
@@ -171,9 +201,10 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 if (!client_logged) {
                     if (const auto protocol = successfulProtocol(event.line, step)) {
                         const auto client = session.clientInfo();
-                        err << "rf-sim-mcp: " << client.first << ' ' << client.second
-                            << ", protocol " << *protocol << '\n';
-                        err.flush();
+                        const std::string record = "rf-sim-mcp: " + escapeLogField(client.first) +
+                                                   " " + escapeLogField(client.second) +
+                                                   ", protocol " + *protocol;
+                        write_log_line(record);
                         client_logged = true;
                     }
                 }
@@ -259,13 +290,12 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 }
                 result = link->call(task.call.tool, task.call.arguments);
             } catch (const std::exception &error) {
-                result = bridgeFailure(error);
+                write_log_line("rf-sim-mcp: bridge call exception: " +
+                               escapeLogField(error.what()));
+                result = mcp_bridge_detail::internalFailureResult();
             } catch (...) {
-                result = {true,
-                          {{"epoch", nullptr},
-                           {"error",
-                            {{"code", "SIMULATOR_UNAVAILABLE"},
-                             {"message", "RF Simulator bridge failed unexpectedly."}}}}};
+                write_log_line("rf-sim-mcp: bridge call failed with an unknown exception");
+                result = mcp_bridge_detail::internalFailureResult();
             }
 
             BridgeEvent completed{BridgeEvent::Kind::ToolCallDone};
@@ -281,21 +311,51 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
         AgentLineReader line_reader;
         bool input_failed = false;
         std::string line;
+        bool discarding_oversized = false;
+        std::size_t line_bytes = 0;
+        const auto queue_frame = [&](AgentLineReader::Next next) {
+            if (next == AgentLineReader::Next::Line) {
+                BridgeEvent event{BridgeEvent::Kind::Line};
+                event.line = std::move(line);
+                post_event(std::move(event));
+            } else if (next == AgentLineReader::Next::Oversized) {
+                post_event(BridgeEvent{BridgeEvent::Kind::Oversized});
+            }
+        };
         try {
             char byte = '\0';
             while (in.get(byte)) {
-                line_reader.append(std::string_view(&byte, 1));
-                for (;;) {
-                    const auto next = line_reader.next(line);
-                    if (next == AgentLineReader::Next::NeedMore)
-                        break;
-                    if (next == AgentLineReader::Next::Line) {
-                        BridgeEvent event{BridgeEvent::Kind::Line};
-                        event.line = std::move(line);
-                        post_event(std::move(event));
-                    } else {
-                        post_event(BridgeEvent{BridgeEvent::Kind::Oversized});
+                if (discarding_oversized) {
+                    if (byte == '\n') {
+                        line_reader.append(std::string_view(&byte, 1));
+                        (void)line_reader.next(line);
+                        discarding_oversized = false;
+                        line_bytes = 0;
                     }
+                    continue;
+                }
+
+                line_reader.append(std::string_view(&byte, 1));
+                if (byte == '\n') {
+                    for (;;) {
+                        const auto next = line_reader.next(line);
+                        if (next == AgentLineReader::Next::NeedMore)
+                            break;
+                        queue_frame(next);
+                    }
+                    line_bytes = 0;
+                    continue;
+                }
+
+                ++line_bytes;
+                const bool definitely_oversized =
+                    line_bytes > kAgentMaxLineBytes &&
+                    (byte != '\r' || line_bytes > kAgentMaxLineBytes + 1);
+                if (definitely_oversized) {
+                    const auto next = line_reader.next(line);
+                    queue_frame(next);
+                    discarding_oversized = next == AgentLineReader::Next::Oversized;
+                    line_bytes = 0;
                 }
             }
             input_failed = in.bad() || (!in.eof() && in.fail());

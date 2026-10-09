@@ -8,6 +8,7 @@
 #include "gui_link.h"
 #include "mcp_session.h"
 
+#include "../agent/mcp/src/mcp_bridge_detail.h"
 #include "mcp_bridge.h"
 
 #include "agent_endpoint.h"
@@ -479,13 +480,52 @@ TEST_CASE("CRLF-terminated input lines parse", "[bridge]") {
 TEST_CASE("An oversized stdin line gets an error with a null id", "[bridge]") {
     std::string input(kAgentMaxLineBytes + 1, 'x');
     input += '\n';
+    appendBridgeLine(input, modernBridgeRequest(24, "server/discover"));
 
+    const auto start = std::chrono::steady_clock::now();
     const auto run = invokeBridge(std::move(input), bridgeOptions());
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    CHECK(elapsed < 10s);
     CHECK(run.status == 0);
-    REQUIRE(run.messages.size() == 1);
+    REQUIRE(run.messages.size() == 2);
     CHECK(run.messages[0].at("id").is_null());
     REQUIRE(run.messages[0].contains("error"));
     CHECK(run.messages[0].at("error").at("code") == -32600);
+    const auto *after_oversized_line = bridgeResponse(run, 24);
+    REQUIRE(after_oversized_line != nullptr);
+    CHECK(after_oversized_line->at("result").at("supportedVersions") ==
+          Json::array({std::string(kModernVersion)}));
+}
+
+TEST_CASE("Client identity control characters are escaped in stderr", "[bridge]") {
+    const std::string client_name = "client\nInjected\t\x01";
+    const std::string client_version = "1.0\r";
+    std::string input;
+    appendBridgeLine(
+        input, rpcRequest(1, "initialize",
+                          OrderedJson{{"protocolVersion", "2025-11-25"},
+                                      {"capabilities", OrderedJson::object()},
+                                      {"clientInfo",
+                                       {{"name", client_name}, {"version", client_version}}}}));
+
+    const auto run = invokeBridge(std::move(input), bridgeOptions());
+    CHECK(run.status == 0);
+    CHECK(
+        run.stderr_text.find("rf-sim-mcp: client\\nInjected\\t\\x01 1.0\\r, protocol 2025-11-25") !=
+        std::string::npos);
+    const auto newline = run.stderr_text.find('\n');
+    REQUIRE(newline != std::string::npos);
+    CHECK(run.stderr_text.find('\n', newline + 1) == std::string::npos);
+}
+
+TEST_CASE("Unexpected bridge failures use a generic INTERNAL result", "[bridge]") {
+    const auto result = mcp_bridge_detail::internalFailureResult();
+
+    CHECK(result.is_error);
+    CHECK(result.structured.at("epoch").is_null());
+    CHECK(result.structured.at("error").at("code") == "INTERNAL");
+    CHECK(result.structured.at("error").at("message") == "Internal bridge error.");
+    CHECK(result.structured.dump().find("exception") == std::string::npos);
 }
 
 TEST_CASE("Stdout carries only JSON-RPC messages", "[bridge]") {
