@@ -1030,6 +1030,25 @@ TEST_CASE("Numeric outputs the API can emit as null accept null", "[catalog]") {
         CAPTURE(field);
         CHECK(acceptsNull(network.at(field)));
     }
+
+    CHECK(acceptsNull(measure.at("total_power_dBm")));
+    CHECK(acceptsNull(measure.at("noise_floor_dBm_per_Hz")));
+    CHECK(acceptsNull(measure.at("snr_dB")));
+    CHECK(acceptsNull(measure.at("fs_Hz")));
+    const auto &trace = measure.at("trace").at("properties");
+    CHECK(acceptsNull(trace.at("frequencies_Hz").at("items")));
+    CHECK(acceptsNull(trace.at("noise_dBm_per_Hz").at("items")));
+    for (const std::string_view metric : {"gain_dB", "nf_dB"}) {
+        CAPTURE(metric);
+        CHECK(acceptsNull(sweep_success.at("arrays").at("properties").at(metric).at("items")));
+        const auto &summary =
+            sweep_success.at("summary").at("properties").at(metric).at("properties");
+        for (const std::string_view field :
+             {"min", "max", "mean", "at_start", "at_center", "at_stop"}) {
+            CAPTURE(metric, field);
+            CHECK(acceptsNull(summary.at(field)));
+        }
+    }
 }
 
 TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
