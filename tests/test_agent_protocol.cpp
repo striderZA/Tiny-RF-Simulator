@@ -744,11 +744,12 @@ bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
 
 } // namespace
 
-TEST_CASE("The catalog lists the nine v1 tools in a fixed order", "[catalog]") {
-    constexpr std::array<std::string_view, 9> expected{
+TEST_CASE("The catalog lists the ten v1 tools in a fixed order", "[catalog]") {
+    constexpr std::array<std::string_view, 10> expected{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
-        "network_analyzer_sweep", "data_file_read", "test_flow_run"};
+        "network_analyzer_sweep", "data_file_read", "test_flow_run",
+        "receiver_measure"};
     const auto &catalog = agentToolCatalog();
 
     REQUIRE(kAgentCatalogVersion == 1);
@@ -768,7 +769,7 @@ TEST_CASE("Tool annotations follow the spec", "[catalog]") {
     const nlohmann::json destructive{{"destructiveHint", true}, {"openWorldHint", false}};
     const nlohmann::json idempotent{{"idempotentHint", true}, {"openWorldHint", false}};
 
-    REQUIRE(catalog.size() == 9);
+    REQUIRE(catalog.size() == 10);
     CHECK(catalog[0].annotations == read_only);
     CHECK(catalog[1].annotations == read_only);
     CHECK(catalog[2].annotations == read_only);
@@ -778,6 +779,7 @@ TEST_CASE("Tool annotations follow the spec", "[catalog]") {
     CHECK(catalog[6].annotations == idempotent);
     CHECK(catalog[7].annotations == read_only);
     CHECK(catalog[8].annotations == idempotent);
+    CHECK(catalog[9].annotations == read_only);
     CHECK(catalog[5].description.find("3.01 dB") != std::string::npos);
     CHECK(catalog[5].description.find("spectrum analyzer's displayed peak") != std::string::npos);
 }

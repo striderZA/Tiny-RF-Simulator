@@ -363,7 +363,7 @@ TEST_CASE("A transcript per protocol version runs against a fake GUI", "[bridge]
         const auto *list = bridgeResponse(run, 2);
         REQUIRE(list != nullptr);
         REQUIRE(list->contains("result"));
-        CHECK(list->at("result").at("tools").size() == 9);
+        CHECK(list->at("result").at("tools").size() == 10);
 
         const auto *success = bridgeResponse(run, 3);
         REQUIRE(success != nullptr);
@@ -632,7 +632,7 @@ TEST_CASE("tools/list works with the GUI closed", "[bridge]") {
     const auto *list = bridgeResponse(run, 2);
     REQUIRE(list != nullptr);
     REQUIRE(list->contains("result"));
-    CHECK(list->at("result").at("tools").size() == 9);
+    CHECK(list->at("result").at("tools").size() == 10);
 }
 
 TEST_CASE("A modern tools/call without clientInfo does not reuse the previous GUI identity",
@@ -737,10 +737,11 @@ TEST_CASE("Legacy sessions serve ping, tools/list and tools/call", "[mcp]") {
     const auto &list_result = list.replies[0].at("result");
     CHECK_FALSE(list_result.contains("resultType"));
     const auto &tools = list_result.at("tools");
-    constexpr std::array<std::string_view, 9> expected_tools{
+    constexpr std::array<std::string_view, 10> expected_tools{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
-        "network_analyzer_sweep", "data_file_read", "test_flow_run"};
+        "network_analyzer_sweep", "data_file_read", "test_flow_run",
+        "receiver_measure"};
     REQUIRE(tools.size() == expected_tools.size());
     const auto *catalog_tool = findAgentTool("component_types");
     REQUIRE(catalog_tool != nullptr);
@@ -785,7 +786,7 @@ TEST_CASE("A legacy initialize does not lock modern per-request protocol selecti
     REQUIRE(modern.replies.size() == 1);
     REQUIRE(modern.replies[0].contains("result"));
     checkModernServerInfo(modern.replies[0].at("result"));
-    CHECK(modern.replies[0].at("result").at("tools").size() == 9);
+    CHECK(modern.replies[0].at("result").at("tools").size() == 10);
 }
 
 TEST_CASE("A modern request does not replace the identity for later legacy calls", "[mcp]") {
@@ -838,11 +839,12 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     checkModernServerInfo(list_result);
     CHECK(list_result.at("ttlMs") == 3600000);
     CHECK(list_result.at("cacheScope") == "private");
-    REQUIRE(list_result.at("tools").size() == 9);
-    constexpr std::array<std::string_view, 9> expected_tools{
+    REQUIRE(list_result.at("tools").size() == 10);
+    constexpr std::array<std::string_view, 10> expected_tools{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
-        "network_analyzer_sweep", "data_file_read", "test_flow_run"};
+        "network_analyzer_sweep", "data_file_read", "test_flow_run",
+        "receiver_measure"};
     const auto &tools = list_result.at("tools");
     for (std::size_t i = 0; i < expected_tools.size(); ++i) {
         CHECK(tools[i].at("name") == expected_tools[i]);
