@@ -37,6 +37,7 @@ Application composition and UI orchestration: the UI-free `simulator::circuit_ru
 - `revertAgentCheckpoint(id)` accepts only a live checkpoint; a missing or stale id is logged, not silently ignored. It restores with `fromJson(snapshot, {std::nullopt, false}, "agent checkpoint")` so trusted snapshots retain external S-parameter paths, then syncs component views, clears the Power Meter source, resets Test Flow, and marks the project dirty. Finally it notes `Reverted` with the summaries returned by `removeCheckpointsFrom(id)`, which removes that checkpoint and every newer one while retaining older checkpoints.
 
 ## Local Contracts
+- `componentDataFilePath(definition, data_type)` (declared in `component_library.h`) returns the containment-checked absolute path of a definition's first `data_files` entry of that type, resolved against the directory of `definition.source_path` with the same rule `loadFile()` applies. It returns nullopt for an empty source path, no matching entry, or an escaping path. `loadFile()` behavior is unchanged; `data_file_read` is its agent consumer.
 - `RfSimulatorApp::saveProject()` / `loadProject()` / `newProject()` are thin wrappers that delegate to `ProjectSerializer::save()` / `load()` / `reset()`
 - `AppAgentHost` retains the newest 50 activity entries.
 - Every `recordActivity()` call logs exactly one `Agent:` INFO line, including when the new entry evicts the oldest.
