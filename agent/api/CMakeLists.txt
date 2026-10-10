@@ -13,6 +13,7 @@ add_library(agent_api STATIC
     src/agent_library.cpp
     src/tool_data_file.cpp
     src/tool_test_flow.cpp
+    src/tool_receiver.cpp
 )
 add_library(simulator::agent_api ALIAS agent_api)
 

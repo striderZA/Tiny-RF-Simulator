@@ -13,6 +13,7 @@ AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &cal
 AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeDataFileReadTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeTestFlowRunTool(AgentApi &api, const AgentCall &call);
+AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 

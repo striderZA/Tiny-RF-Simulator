@@ -99,6 +99,9 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "test_flow_run") {
             result = executeTestFlowRunTool(*this, call);
             summary = "Run test flow";
+        } else if (call.tool == "receiver_measure") {
+            result = executeReceiverMeasureTool(*this, call);
+            summary = "Receiver measure";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

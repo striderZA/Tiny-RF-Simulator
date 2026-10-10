@@ -419,6 +419,29 @@ Json testFlowRunSuccessSchema() {
                         {"epoch", "row_count", "rows"});
 }
 
+Json iip3InputSchema() {
+    return objectSchema(
+        properties(
+            {{"tone_spacing_Hz", numberSchema("Two-tone spacing in Hz; must be positive.")},
+             {"input_start_dBm", numberSchema("First input level in dBm.")},
+             {"input_stop_dBm", numberSchema("Last input level in dBm; not below the start.")},
+             {"input_step_dB", numberSchema("Input level step in dB; must be positive.")}}),
+        {"tone_spacing_Hz", "input_start_dBm", "input_stop_dBm", "input_step_dB"});
+}
+
+Json receiverMeasureSuccessSchema() {
+    return objectSchema(
+        properties(
+            {{"epoch", integerSchema("Current circuit epoch.", 0)},
+             {"in_progress", booleanSchema("True while the sweep continues; repeat the call.")},
+             {"frequencies_Hz", arraySchema(numberSchema("Sweep frequency in Hz."))},
+             {"output_power_dBm", arraySchema(nullableSchema(
+                                      numberSchema("Output power in dBm; null if unavailable.")))},
+             {"iip3_dBm",
+              arraySchema(nullableSchema(numberSchema("IIP3 in dBm; null if unavailable.")))}}),
+        {"epoch", "in_progress", "frequencies_Hz", "output_power_dBm", "iip3_dBm"});
+}
+
 Json outputSchema(Json success) {
     return Json{{"type", "object"},
                 {"anyOf", Json::array({std::move(success), agentErrorSchema()})}};
@@ -678,7 +701,31 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                  Json{{"epoch", 0},
                       {"measure", Json::array({Json{
                                       {"component", 1}, {"port", 0}, {"metric", "power_dBm"}}})}}),
-             testFlowRunSuccessSchema(), idempotentAnnotations())};
+             testFlowRunSuccessSchema(), idempotentAnnotations()),
+        tool("receiver_measure", "Receiver Measure",
+             "Measure a receiver chain's output power and IIP3 over a frequency sweep between two "
+             "output ports. Each call advances the sweep by up to 4 ms, so repeat the call while "
+             "in_progress is true. Unavailable points are null.",
+             inputSchema(
+                 properties(
+                     {{"epoch", integerSchema("Epoch from the latest circuit read.", 0)},
+                      {"point_a", outputEndpointSchema()},
+                      {"point_b", outputEndpointSchema()},
+                      {"start_Hz", numberSchema("Sweep start frequency in Hz; below stop_Hz.")},
+                      {"stop_Hz", numberSchema("Sweep stop frequency in Hz.")},
+                      {"points", withDefault(integerSchema("Sweep point count.", 2, 401), 201)},
+                      {"output_power", withDefault(booleanSchema("Measure output power."), true)},
+                      {"reference_tone_Hz",
+                       numberSchema("Engaged reference tone in Hz; omit to use the sole generator "
+                                    "tone.")},
+                      {"iip3", iip3InputSchema()}}),
+                 {"epoch", "point_a", "point_b", "start_Hz", "stop_Hz"},
+                 Json{{"epoch", 0},
+                      {"point_a", {{"component", 1}, {"port", 0}}},
+                      {"point_b", {{"component", 2}, {"port", 0}}},
+                      {"start_Hz", 1e9},
+                      {"stop_Hz", 2e9}}),
+             receiverMeasureSuccessSchema(), readOnlyAnnotations())};
     return catalog;
 }
 

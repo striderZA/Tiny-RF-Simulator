@@ -28,6 +28,7 @@
 #include "flow_metrics.h"
 #include "output_snr.h"
 #include "power_meter_engine.h"
+#include "receiver_performance_measurement.h"
 #include "test_temp_paths.h"
 #include "touchstone_parser.h"
 #include <array>
@@ -2196,4 +2197,252 @@ TEST_CASE("test_flow_run requires at least one measurement", "[agent_api][test_f
                                        {"measure", nlohmann::ordered_json::array()}});
     REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(result).at("details").at("path") == "/measure");
+}
+
+namespace {
+
+// Arguments for a three-point output-only sweep from port 0 of Point A to port 0 of Point B.
+nlohmann::ordered_json receiverArgs(const ApiFixture &fixture, int point_a, int point_b) {
+    return nlohmann::ordered_json{{"epoch", fixture.api.epoch()},
+                                  {"point_a", {{"component", point_a}, {"port", 0}}},
+                                  {"point_b", {{"component", point_b}, {"port", 0}}},
+                                  {"start_Hz", 1e9},
+                                  {"stop_Hz", 2e9},
+                                  {"points", 3}};
+}
+
+// A generator with one 1.1 GHz tone at -14 dBm, feeding an amplifier.
+std::pair<SignalGeneratorEngine *, AmplifierEngine *> buildReceiverChain(ApiFixture &fixture) {
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()));
+    REQUIRE_FALSE(
+        setGeneratorTones(fixture, *generator,
+                          nlohmann::ordered_json::array(
+                              {{{"freq_Hz", 1.1e9}, {"power_dBm", -14.0}, {"phase_deg", 0.0}}}))
+            .is_error);
+    return {generator, amplifier};
+}
+
+// Repeats receiver_measure until in_progress is false, as an agent client does.
+AgentToolResult runReceiverToCompletion(ApiFixture &fixture, const nlohmann::ordered_json &args) {
+    for (int call = 0; call < 1000; ++call) {
+        const auto result = fixture.call("receiver_measure", args);
+        REQUIRE_FALSE(result.is_error);
+        if (!result.structured.at("in_progress").get<bool>())
+            return result;
+    }
+    FAIL("receiver_measure did not finish within 1000 calls");
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("receiver_measure matches the direct engine for identical requests",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    const auto result =
+        runReceiverToCompletion(fixture, receiverArgs(fixture, generator->id(), amplifier->id()));
+
+    ReceiverPerformanceMeasurementEngine direct(fixture.runtime.graph(), fixture.chain_host);
+    ReceiverMeasurementRequest request;
+    request.output_power = true;
+    const std::vector<double> grid{1e9, 1.5e9, 2e9};
+    for (int call = 0; call < 1000; ++call) {
+        direct.update(request, generator->outputPinId(), amplifier->outputPinId(), grid);
+        if (!direct.isInProgress())
+            break;
+    }
+    REQUIRE_FALSE(direct.isInProgress());
+
+    const auto &expected = direct.measurements().output_power_dBm;
+    const auto &actual = result.structured.at("output_power_dBm");
+    REQUIRE(actual.size() == expected.size());
+    bool any_available = false;
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        if (std::isnan(expected[index])) {
+            CHECK(actual[index].is_null());
+            continue;
+        }
+        any_available = true;
+        CHECK(actual[index].get<double>() == Catch::Approx(expected[index]));
+    }
+    CHECK(any_available);
+}
+
+TEST_CASE("receiver_measure keeps every output array at the sweep length",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    const auto result =
+        runReceiverToCompletion(fixture, receiverArgs(fixture, generator->id(), amplifier->id()));
+    CHECK_FALSE(result.structured.at("in_progress").get<bool>());
+    CHECK(result.structured.at("frequencies_Hz").size() == 3);
+    CHECK(result.structured.at("output_power_dBm").size() == 3);
+    CHECK(result.structured.at("iip3_dBm").size() == 3);
+}
+
+TEST_CASE("receiver_measure restarts the sweep when points change",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    const auto three = fixture.call("receiver_measure", args);
+    REQUIRE_FALSE(three.is_error);
+    CHECK(three.structured.at("output_power_dBm").size() == 3);
+    args["points"] = 5;
+    const auto five = fixture.call("receiver_measure", args);
+    REQUIRE_FALSE(five.is_error);
+    CHECK(five.structured.at("frequencies_Hz").size() == 5);
+    CHECK(five.structured.at("output_power_dBm").size() == 5);
+    CHECK(five.structured.at("iip3_dBm").size() == 5);
+}
+
+TEST_CASE("receiver_measure reports unavailable output power as null when output is off",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["output_power"] = false;
+    const auto result = runReceiverToCompletion(fixture, args);
+    const auto &power = result.structured.at("output_power_dBm");
+    REQUIRE(power.size() == 3);
+    CHECK(
+        std::all_of(power.begin(), power.end(), [](const auto &value) { return value.is_null(); }));
+}
+
+TEST_CASE("receiver_measure rejects an IIP3 sweep with a zero input step",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["iip3"] = nlohmann::ordered_json{{"tone_spacing_Hz", 1e6},
+                                          {"input_start_dBm", -30.0},
+                                          {"input_stop_dBm", -10.0},
+                                          {"input_step_dB", 0.0}};
+    const auto result = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/iip3");
+}
+
+TEST_CASE("receiver_measure reports unconnected endpoints as NO_PATH",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    auto *first = fixture.add<SignalGeneratorEngine>("generator");
+    auto *second = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+    const auto result =
+        fixture.call("receiver_measure", receiverArgs(fixture, first->id(), second->id()));
+    REQUIRE(errorFor(result).at("code") == "NO_MEASUREMENT");
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    REQUIRE(errorFor(result).contains("details"));
+    CHECK(errorFor(result).at("details").at("reason") == "NO_PATH");
+}
+
+TEST_CASE("receiver_measure refuses a stale epoch", "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["epoch"] = fixture.api.epoch() + 99;
+    const auto result = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(result).at("code") == "STALE_EPOCH");
+    CHECK(errorFor(result).at("details").at("epoch") == fixture.api.epoch());
+}
+
+TEST_CASE("receiver_measure leaves the circuit, revision, and dirty flag unchanged",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    const auto generator_before = generator->serialize();
+    const auto amplifier_before = amplifier->serialize();
+    const auto revision = fixture.commands.revision();
+    const auto dirty = fixture.commands.isDirty();
+    const auto begins = fixture.host.checkpoint_begins;
+    const auto commits = fixture.host.checkpoint_commits;
+    const auto result =
+        runReceiverToCompletion(fixture, receiverArgs(fixture, generator->id(), amplifier->id()));
+    REQUIRE_FALSE(result.is_error);
+    CHECK(generator->serialize() == generator_before);
+    CHECK(amplifier->serialize() == amplifier_before);
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.commands.isDirty() == dirty);
+    CHECK(fixture.host.checkpoint_begins == begins);
+    CHECK(fixture.host.checkpoint_commits == commits);
+}
+
+TEST_CASE("receiver_measure requires start_Hz below stop_Hz", "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["start_Hz"] = 2e9;
+    const auto equal = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(equal).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(equal).at("details").at("path") == "/start_Hz");
+    args["start_Hz"] = 3e9;
+    const auto reversed = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(reversed).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(reversed).at("details").at("path") == "/start_Hz");
+}
+
+TEST_CASE("receiver_measure reports an unknown endpoint as NOT_FOUND",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    const auto result =
+        fixture.call("receiver_measure", receiverArgs(fixture, generator->id(), 987654));
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+}
+
+TEST_CASE("receiver_measure passes an engaged reference tone through to the engine",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["reference_tone_Hz"] = -1.0;
+    const auto result = runReceiverToCompletion(fixture, args);
+    const auto &power = result.structured.at("output_power_dBm");
+    REQUIRE(power.size() == 3);
+    CHECK(
+        std::all_of(power.begin(), power.end(), [](const auto &value) { return value.is_null(); }));
+}
+
+TEST_CASE("receiver_measure returns IIP3 arrays shaped like the sweep",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args["points"] = 2;
+    args["iip3"] = nlohmann::ordered_json{{"tone_spacing_Hz", 1e6},
+                                          {"input_start_dBm", -30.0},
+                                          {"input_stop_dBm", -20.0},
+                                          {"input_step_dB", 5.0}};
+    const auto result = runReceiverToCompletion(fixture, args);
+    const auto &iip3 = result.structured.at("iip3_dBm");
+    REQUIRE(iip3.size() == 2);
+    REQUIRE(result.structured.at("output_power_dBm").size() == 2);
+    for (const auto &value : iip3)
+        CHECK((value.is_null() || (value.is_number() && std::isfinite(value.get<double>()))));
+}
+
+TEST_CASE("receiver_measure validates sweep points and finite start frequency",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    for (const int points : {1, 402}) {
+        args["points"] = points;
+        const auto result = fixture.call("receiver_measure", args);
+        REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+        CHECK(errorFor(result).at("details").at("path") == "/points");
+    }
+    args["points"] = 3;
+    args["start_Hz"] = std::numeric_limits<double>::quiet_NaN();
+    const auto nan_start = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(nan_start).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(nan_start).at("details").at("path") == "/start_Hz");
 }

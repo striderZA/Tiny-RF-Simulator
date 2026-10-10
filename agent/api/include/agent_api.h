@@ -66,6 +66,7 @@ class AgentApi final : public IAgentCallExecutor {
     friend AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeDataFileReadTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeTestFlowRunTool(AgentApi &, const AgentCall &);
+    friend AgentToolResult executeReceiverMeasureTool(const AgentApi &, const AgentCall &);
 
     IComponentEngine *scratchTypeEngine(std::string_view type) const;
 
