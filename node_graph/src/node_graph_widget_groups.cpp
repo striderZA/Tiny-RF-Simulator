@@ -68,6 +68,7 @@ void NodeGraphWidget::drawGroupBackgrounds() {
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
     m_rendered_collapsed_groups.clear();
+    m_cached_collapsed_group_bounds.clear();
     for (const auto &g : m_engine.groups()) {
         if (!g.collapsed)
             continue;
@@ -92,7 +93,6 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             continue;
         ImVec2 centroid_grid(sum.x / count, sum.y / count);
         ImNodes::SetNodeGridSpacePos(g.id, centroid_grid - ImVec2(60, 40));
-        m_rendered_collapsed_groups.insert(g.id);
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
@@ -166,6 +166,10 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
+        const ImVec2 group_position = ImNodes::GetNodeEditorSpacePos(g.id);
+        const ImVec2 group_dimensions = ImNodes::GetNodeDimensions(g.id);
+        m_cached_collapsed_group_bounds[g.id] = {group_position, group_position + group_dimensions};
+        m_rendered_collapsed_groups.insert(g.id);
     }
 }
 

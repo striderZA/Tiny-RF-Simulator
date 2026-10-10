@@ -24,6 +24,11 @@ struct NodeHoverInfo {
     std::optional<double> snr_dB;
 };
 
+struct NodeGraphBounds {
+    ImVec2 min;
+    ImVec2 max;
+};
+
 struct NodeGraphWidgetActions {
     std::function<std::optional<int>(int, int)> connectLink;
     std::function<bool(int)> disconnectLink;
@@ -65,14 +70,24 @@ class NodeGraphWidget {
     }
     NodeKind kindForLabel(const std::string &label) const;
 
+    // Place a node in editor-space coordinates and keep the widget's position
+    // caches current.
+    void setNodeEditorSpacePosition(int node_id, ImVec2 position);
+    // Bounds of existing component nodes and currently rendered collapsed groups in editor space,
+    // excluding IDs added by the current batch. Nodes without a cached position are at the origin.
+    std::optional<NodeGraphBounds>
+    nodeBoundsExcluding(const std::unordered_set<int> &excluded_node_ids) const;
     ImNodesEditorContext *context() { return m_context; }
     void syncNodesFromEngine();
     void clearPositionCache() {
         m_last_node_grid_positions.clear();
+        m_cached_node_dimensions.clear();
+        m_cached_collapsed_group_bounds.clear();
         m_prev_node_grid_positions.clear();
         m_cached_grid_positions.clear();
         m_node_screen_positions.clear();
         m_registered_in_pool.clear();
+        m_rendered_collapsed_groups.clear();
     }
     // Snapshots the current grid-space position of every engine node into the
     // cache. Call only while all engine nodes are registered in the imnodes pool
@@ -89,6 +104,7 @@ class NodeGraphWidget {
     int crossGroupLinksDrawn() const { return m_cross_group_links_drawn; }
     void markNodesRegistered();
     ImVec2 gridToScreenOffset() const { return m_grid_to_screen_offset; }
+    // Historical name: returns the cached editor-space position.
     ImVec2 nodeGridPosition(int node_id) const {
         auto it = m_last_node_grid_positions.find(node_id);
         return it != m_last_node_grid_positions.end() ? it->second : ImVec2(-1, -1);
@@ -144,13 +160,17 @@ class NodeGraphWidget {
     // this cache is what lets drawGroupCollapsedBlocks() still place the block
     // (issue #116).
     std::unordered_map<int, ImVec2> m_cached_grid_positions;
+    // Last measured ImNodes dimensions; hidden or not-yet-rendered nodes use a safe fallback.
+    std::unordered_map<int, ImVec2> m_cached_node_dimensions;
+    // Actual editor-space bounds of collapsed synthetic group nodes rendered by the widget.
+    std::unordered_map<int, NodeGraphBounds> m_cached_collapsed_group_bounds;
     // Collapsed groups whose block was actually rendered this frame.
     std::unordered_set<int> m_rendered_collapsed_groups;
     // Links drawn last frame between two different collapsed groups.
     int m_cross_group_links_drawn = 0;
 
-    // Externally readable cache of each node's grid-space position,
-    // updated unconditionally every frame for every drawn node.
+    // Externally readable cache of each node's editor-space position, updated
+    // unconditionally every frame for every drawn node.
     std::unordered_map<int, ImVec2> m_last_node_grid_positions;
     // Previous-frame snapshot for detecting node moves (requires mouse release).
     std::unordered_map<int, ImVec2> m_prev_node_grid_positions;

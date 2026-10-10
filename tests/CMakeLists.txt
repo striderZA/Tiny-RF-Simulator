@@ -75,6 +75,13 @@ function(add_standalone_test NAME)
     add_test(NAME ${NAME} COMMAND ${NAME} ${ARG_ARGS} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endfunction()
 
+if(WIN32)
+    add_standalone_test(test_session_state_unicode
+        SOURCES test_session_state_unicode.cpp
+        LIBS common
+    )
+endif()
+
 add_standalone_test(test_attenuator
     SOURCES test_attenuator.cpp
     LIBS simulator::attenuator_engine simulator::node_graph_engine

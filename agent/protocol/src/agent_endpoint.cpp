@@ -31,6 +31,8 @@
 #include <sddl.h>
 #else
 #include <fcntl.h>
+#include <stdio.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -340,6 +342,55 @@ bool isPrivateDirectoryStatus(const struct stat &status) {
            (status.st_mode & 0700) == 0700 && (status.st_mode & 07000) == 0;
 }
 
+class PosixEndpointDirectoryLock {
+  public:
+    explicit PosixEndpointDirectoryLock(const std::filesystem::path &parent, std::string *error) {
+        m_fd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+        if (m_fd < 0) {
+            setError(error, posixError("open endpoint directory", errno));
+            return;
+        }
+
+        struct stat status {};
+        if (fstat(m_fd, &status) != 0) {
+            const int code = errno;
+            close(m_fd);
+            m_fd = -1;
+            setError(error, posixError("inspect endpoint directory", code));
+            return;
+        }
+        if (!isPrivateDirectoryStatus(status)) {
+            close(m_fd);
+            m_fd = -1;
+            setError(error, "endpoint directory is not owned by the current user with mode 0700");
+            return;
+        }
+
+        while (flock(m_fd, LOCK_EX) != 0) {
+            if (errno == EINTR)
+                continue;
+            const int code = errno;
+            close(m_fd);
+            m_fd = -1;
+            setError(error, posixError("lock endpoint directory", code));
+            return;
+        }
+    }
+
+    ~PosixEndpointDirectoryLock() {
+        if (m_fd >= 0) {
+            (void)flock(m_fd, LOCK_UN);
+            (void)close(m_fd);
+        }
+    }
+
+    explicit operator bool() const { return m_fd >= 0; }
+    int fd() const { return m_fd; }
+
+  private:
+    int m_fd = -1;
+};
+
 bool isSafeEndpointStatus(const struct stat &status) {
     return S_ISREG(status.st_mode) && status.st_uid == geteuid() && (status.st_mode & 077) == 0 &&
            (status.st_mode & 07000) == 0 && (status.st_mode & S_IRUSR) != 0;
@@ -386,16 +437,18 @@ int openPosixEndpoint(const std::filesystem::path &file) {
 
 class PosixTempFile {
   public:
-    explicit PosixTempFile(std::filesystem::path path) : m_path(std::move(path)) {}
+    PosixTempFile(int directory_fd, std::filesystem::path name)
+        : m_directory_fd(directory_fd), m_name(std::move(name)) {}
     ~PosixTempFile() {
         if (m_active) {
-            unlink(m_path.c_str());
+            unlinkat(m_directory_fd, m_name.c_str(), 0);
         }
     }
     void release() { m_active = false; }
 
   private:
-    std::filesystem::path m_path;
+    int m_directory_fd;
+    std::filesystem::path m_name;
     bool m_active = true;
 };
 
@@ -764,13 +817,19 @@ bool writeAgentEndpoint(const std::filesystem::path &file, const AgentEndpoint &
     }
     temp_guard.release();
 #else
+    PosixEndpointDirectoryLock directory(parent, error);
+    if (!directory) {
+        return false;
+    }
+
     static std::atomic<unsigned long long> next_temp{0};
-    std::filesystem::path temp_path;
+    std::filesystem::path temp_name;
     int fd = -1;
     int create_error = 0;
     for (unsigned int attempt = 0; attempt < 128; ++attempt) {
-        temp_path = makePosixTempPath(file, next_temp.fetch_add(1));
-        fd = open(temp_path.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW | O_CLOEXEC, 0600);
+        temp_name = makePosixTempPath(file, next_temp.fetch_add(1)).filename();
+        fd = openat(directory.fd(), temp_name.c_str(),
+                    O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW | O_CLOEXEC, 0600);
         if (fd >= 0) {
             break;
         }
@@ -783,7 +842,7 @@ bool writeAgentEndpoint(const std::filesystem::path &file, const AgentEndpoint &
         setError(error, posixError("create endpoint temp file", create_error));
         return false;
     }
-    PosixTempFile temp_guard(temp_path);
+    PosixTempFile temp_guard(directory.fd(), temp_name);
     if (fchmod(fd, 0600) != 0) {
         setError(error, posixError("set endpoint temp file permissions", errno));
         close(fd);
@@ -803,7 +862,7 @@ bool writeAgentEndpoint(const std::filesystem::path &file, const AgentEndpoint &
     if (!write_ok) {
         return false;
     }
-    if (rename(temp_path.c_str(), file.c_str()) != 0) {
+    if (renameat(directory.fd(), temp_name.c_str(), directory.fd(), file.filename().c_str()) != 0) {
         setError(error, posixError("replace endpoint file", errno));
         return false;
     }
@@ -901,27 +960,20 @@ bool removeAgentEndpointIfOwned(const std::filesystem::path &file, std::string_v
     const auto parent =
         file.parent_path().empty() ? std::filesystem::path(".") : file.parent_path();
     const auto name = file.filename();
-    const int directory_fd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    if (directory_fd < 0) {
+    PosixEndpointDirectoryLock directory(parent, nullptr);
+    if (!directory) {
         return false;
     }
-    struct stat directory_status {};
-    if (fstat(directory_fd, &directory_status) != 0 ||
-        !isPrivateDirectoryStatus(directory_status)) {
-        close(directory_fd);
-        return false;
-    }
+    const int directory_fd = directory.fd();
 
     std::string contents;
     struct stat file_status {};
     std::string ignored_error;
     if (!readPosixEndpointAt(directory_fd, name.c_str(), contents, file_status, &ignored_error)) {
-        close(directory_fd);
         return false;
     }
     const auto endpoint = parseEndpoint(contents, &ignored_error);
     if (!endpoint || !agentTokensEqual(endpoint->gui_token, gui_token)) {
-        close(directory_fd);
         return false;
     }
 
@@ -930,8 +982,6 @@ bool removeAgentEndpointIfOwned(const std::filesystem::path &file, std::string_v
         fstatat(directory_fd, name.c_str(), &current_status, AT_SYMLINK_NOFOLLOW) == 0 &&
         current_status.st_dev == file_status.st_dev &&
         current_status.st_ino == file_status.st_ino && isSafeEndpointStatus(current_status);
-    const bool removed = same_file && unlinkat(directory_fd, name.c_str(), 0) == 0;
-    close(directory_fd);
-    return removed;
+    return same_file && unlinkat(directory_fd, name.c_str(), 0) == 0;
 #endif
 }

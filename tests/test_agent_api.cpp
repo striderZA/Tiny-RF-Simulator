@@ -275,6 +275,100 @@ TEST_CASE("Calls that take ids require the current epoch", "[agent_api]") {
           nlohmann::json::array({"add generator", "wire"}));
 }
 
+TEST_CASE("measure_port includes replacement details in stale-epoch errors",
+          "[agent_api][measure_port]") {
+    ApiFixture fixture;
+    const auto stale_epoch = fixture.api.epoch();
+
+    fixture.runtime.clearComponentsAndResetIds();
+    fixture.api.noteProjectReplaced(AgentReplacementCause::Reverted, {"add generator"});
+    const auto current_epoch = fixture.api.epoch();
+    const auto result = fixture.call("measure_port", {{"epoch", stale_epoch}});
+
+    REQUIRE(result.is_error);
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "STALE_EPOCH");
+    CHECK(error.at("details").at("epoch") == current_epoch);
+    CHECK(error.at("details").at("cause") == "reverted");
+    CHECK(error.at("details").at("undone") == nlohmann::json::array({"add generator"}));
+}
+
+TEST_CASE("network_analyzer_sweep includes replacement details in stale-epoch errors",
+          "[agent_api][network_analyzer_sweep]") {
+    ApiFixture fixture;
+    const auto stale_epoch = fixture.api.epoch();
+
+    fixture.runtime.clearComponentsAndResetIds();
+    fixture.api.noteProjectReplaced(AgentReplacementCause::Reverted, {"add generator"});
+    const auto current_epoch = fixture.api.epoch();
+    const auto result = fixture.call("network_analyzer_sweep", {{"epoch", stale_epoch}});
+
+    REQUIRE(result.is_error);
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "STALE_EPOCH");
+    CHECK(error.at("details").at("epoch") == current_epoch);
+    CHECK(error.at("details").at("cause") == "reverted");
+    CHECK(error.at("details").at("undone") == nlohmann::json::array({"add generator"}));
+}
+
+TEST_CASE("AMBIGUOUS_PART candidates are capped at the first five sorted definitions",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const auto library_definitions = fixture.library.all();
+    const std::array<std::string_view, 6> types{"filter",     "equalizer", "combiner",
+                                                "attenuator", "amplifier", "adc"};
+    std::vector<ComponentDefinition> ambiguous_definitions;
+    for (const std::string_view type : types) {
+        const std::string type_name{type};
+        const auto source = std::find_if(library_definitions.begin(), library_definitions.end(),
+                                         [&type_name](const ComponentDefinition *definition) {
+                                             return definition->type == type_name;
+                                         });
+        REQUIRE(source != library_definitions.end());
+        ComponentDefinition candidate = **source;
+        candidate.part_number = "AMBIGUOUS-CAP";
+        candidate.manufacturer = "Vendor " + type_name;
+        candidate.source_path = "test:ambiguous-cap:" + type_name;
+        ambiguous_definitions.push_back(std::move(candidate));
+    }
+    for (const auto &definition : ambiguous_definitions)
+        fixture.library.upsert(definition);
+
+    const auto inserted_definitions = fixture.library.all();
+    const auto matching_definition_count =
+        std::count_if(inserted_definitions.begin(), inserted_definitions.end(),
+                      [](const ComponentDefinition *definition) {
+                          return definition->part_number == "AMBIGUOUS-CAP";
+                      });
+    REQUIRE(matching_definition_count == 6);
+
+    const auto result = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "add"}, {"library_part", {{"part_number", "AMBIGUOUS-CAP"}}}}}));
+    REQUIRE(result.is_error);
+    const auto &error = errorFor(result);
+    REQUIRE(error.at("code") == "AMBIGUOUS_PART");
+    REQUIRE(error.contains("details"));
+    REQUIRE(error.at("details").contains("candidates"));
+    const auto &candidates = error.at("details").at("candidates");
+    REQUIRE(candidates.size() == 5);
+    const nlohmann::ordered_json expected_candidates = nlohmann::ordered_json::array(
+        {{{"part_number", "AMBIGUOUS-CAP"}, {"type", "adc"}, {"manufacturer", "Vendor adc"}},
+         {{"part_number", "AMBIGUOUS-CAP"},
+          {"type", "amplifier"},
+          {"manufacturer", "Vendor amplifier"}},
+         {{"part_number", "AMBIGUOUS-CAP"},
+          {"type", "attenuator"},
+          {"manufacturer", "Vendor attenuator"}},
+         {{"part_number", "AMBIGUOUS-CAP"},
+          {"type", "combiner"},
+          {"manufacturer", "Vendor combiner"}},
+         {{"part_number", "AMBIGUOUS-CAP"},
+          {"type", "equalizer"},
+          {"manufacturer", "Vendor equalizer"}}});
+    CHECK(candidates == expected_candidates);
+}
+
 TEST_CASE("A removed component is NOT_FOUND, never another part", "[agent_api]") {
     ApiFixture fixture;
     auto *first = fixture.add<SignalGeneratorEngine>("generator");

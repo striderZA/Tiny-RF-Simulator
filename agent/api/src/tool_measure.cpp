@@ -156,6 +156,18 @@ AgentToolResult errorResult(Json value) {
     return result;
 }
 
+AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
+                                           const std::vector<std::string> &undone) {
+    AgentError error{AgentErrorCode::StaleEpoch, "epoch is stale; call circuit_get"};
+    error.details = {{"epoch", epoch}};
+    if (!cause.empty()) {
+        error.details["cause"] = cause;
+        if (cause == "reverted")
+            error.details["undone"] = undone;
+    }
+    return agentErrorResult(error, epoch);
+}
+
 std::vector<double> finiteValues(const std::vector<double> &values) {
     std::vector<double> valid;
     for (double value : values) {
@@ -203,9 +215,8 @@ AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &cal
     const auto sent_epoch = args.requiredUInt64("epoch");
     const auto epoch = api.epoch();
     if (sent_epoch != epoch) {
-        AgentError error{AgentErrorCode::StaleEpoch, "epoch is stale; call circuit_get"};
-        error.details = {{"epoch", epoch}};
-        return agentErrorResult(error, epoch);
+        return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
+                                          api.m_undone_summaries);
     }
     const auto &at_json = requiredObject(call.arguments, "at", "/at");
     const Endpoint at = endpoint(context, at_json, "/at");
@@ -326,9 +337,8 @@ AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const Agent
     const auto sent_epoch = args.requiredUInt64("epoch");
     const auto epoch = api.epoch();
     if (sent_epoch != epoch) {
-        AgentError error{AgentErrorCode::StaleEpoch, "epoch is stale; call circuit_get"};
-        error.details = {{"epoch", epoch}};
-        return agentErrorResult(error, epoch);
+        return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
+                                          api.m_undone_summaries);
     }
     const Endpoint point_a =
         endpoint(context, requiredObject(call.arguments, "point_a", "/point_a"), "/point_a");

@@ -4,7 +4,11 @@
 
 #include <imgui.h>
 #include <imgui_internal.h> // GetTopMostPopupModal
-#include <imnodes.h>
+#include <unordered_set>
+
+namespace {
+constexpr float kAgentGridHorizontalGap = 32.0f;
+}
 
 // ======================================================================
 // Construction
@@ -80,17 +84,24 @@ void AppAgentHost::clearCheckpoints() { m_checkpoints.clear(); }
 // Placement
 // ======================================================================
 void AppAgentHost::placeComponents(const std::vector<AgentPlacement> &placements) {
-    ImNodes::EditorContextSet(m_graph_widget.context());
+    std::unordered_set<int> new_node_ids;
+    for (const auto &placement : placements)
+        new_node_ids.insert(placement.graph_node_id);
+
+    const auto existing_bounds = m_graph_widget.nodeBoundsExcluding(new_node_ids);
+    const ImVec2 origin = existing_bounds ? ImVec2(existing_bounds->max.x + kAgentGridHorizontalGap,
+                                                   existing_bounds->min.y)
+                                          : ImVec2(0.0f, 0.0f);
 
     for (const auto &p : placements) {
         ImVec2 pos;
         if (p.position.has_value()) {
             pos = ImVec2((*p.position)[0], (*p.position)[1]);
         } else {
-            pos = ImVec2(static_cast<float>(p.column) * kAgentGridColumnWidth,
-                         static_cast<float>(p.row) * kAgentGridRowHeight);
+            pos = ImVec2(origin.x + static_cast<float>(p.column) * kAgentGridColumnWidth,
+                         origin.y + static_cast<float>(p.row) * kAgentGridRowHeight);
         }
-        ImNodes::SetNodeEditorSpacePos(p.graph_node_id, pos);
+        m_graph_widget.setNodeEditorSpacePosition(p.graph_node_id, pos);
     }
 }
 
@@ -115,19 +126,14 @@ std::optional<std::string> AppAgentHost::projectName() const {
 // ======================================================================
 void AppAgentHost::recordActivity(const AgentActivity &activity) {
     // Trim before pushing: if full, pop the oldest entry first.
-    bool slot_was_free = m_activity.size() < 50;
     while (m_activity.size() >= 50)
         m_activity.pop_front();
 
     m_activity.push_back(activity);
 
-    // Log only when the new entry did not force an eviction, so exactly
-    // the last 50 calls produce a log line.
-    if (slot_was_free) {
-        if (activity.ok) {
-            LOG_INFO("Agent: %s %s", activity.tool.c_str(), activity.summary.c_str());
-        } else {
-            LOG_INFO("Agent: %s failed: %s", activity.tool.c_str(), activity.error_code.c_str());
-        }
+    if (activity.ok) {
+        LOG_INFO("Agent: %s %s", activity.tool.c_str(), activity.summary.c_str());
+    } else {
+        LOG_INFO("Agent: %s failed: %s", activity.tool.c_str(), activity.error_code.c_str());
     }
 }

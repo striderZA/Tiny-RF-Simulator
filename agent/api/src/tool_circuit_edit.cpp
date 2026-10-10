@@ -579,7 +579,10 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
                 }
                 if (candidates.size() > 1) {
                     Json ambiguity_candidates = Json::array();
-                    for (const auto &candidate : candidates) {
+                    const std::size_t candidate_count = std::min<std::size_t>(candidates.size(), 5);
+                    for (std::size_t candidate_index = 0; candidate_index < candidate_count;
+                         ++candidate_index) {
+                        const auto &candidate = candidates[candidate_index];
                         ambiguity_candidates.push_back({{"part_number", candidate.part_number},
                                                         {"type", candidate.type},
                                                         {"manufacturer", candidate.manufacturer}});

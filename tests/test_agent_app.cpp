@@ -7,6 +7,7 @@
 #include "app_agent_host.h"
 #include "circuit_runtime.h"
 #include "component_type_registry.h"
+#include "graph_editor_actions.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imnodes.h"
@@ -16,6 +17,7 @@
 #include "signal_generator_engine.h"
 #include "test_temp_paths.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -109,9 +111,6 @@ struct AgentFixture : ImGuiFixture {
         return comp->graphNodeId();
     }
 };
-
-// Column spacing the auto-layout uses (from the brief).
-constexpr float kColumnWidth = 260.0f;
 
 // -----------------------------------------------------------------------
 // AppFixture — shared fixture for app-level RfSimulatorApp agent tests.
@@ -229,43 +228,121 @@ TEST_CASE("Checkpoints keep the newest 20 and removal returns the undone summari
 // Test: Auto-layout placement
 // ======================================================================
 //
-// With no existing nodes the origin is (0,0).  The first node lands at
-// (0,0) and each subsequent node at column × 260, row × 160.  Existing
-// nodes never move.
+// The first automatic node on an empty canvas starts at the origin.  Later
+// automatic placement must be based on existing canvas bounds, not on the
+// new node's logical column alone, and must not move existing nodes.
 // ======================================================================
 TEST_CASE("New components land right of existing nodes, which never move", "[agent_app]") {
     AgentFixture f;
 
-    // Create a component and place it at column 0, row 0 → position (0, 0).
     const int node1 = f.addComponent("generator");
-
     std::vector<AgentPlacement> first;
     first.push_back({.graph_node_id = node1, .position = std::nullopt, .column = 0, .row = 0});
     f.host.placeComponents(first);
 
     runFrame([&]() { f.widget.draw("test"); });
 
-    const ImVec2 p1 = f.widget.nodeGridPosition(node1);
-    CHECK(p1.x == 0.0f);
-    CHECK(p1.y == 0.0f);
+    const ImVec2 origin = f.widget.nodeGridPosition(node1);
+    CHECK(origin.x == 0.0f);
+    CHECK(origin.y == 0.0f);
 
-    // Place second component at column 1, row 0 → position (260, 0).
-    const int node2 = f.addComponent("amplifier");
-
-    std::vector<AgentPlacement> second;
-    second.push_back({.graph_node_id = node2, .position = std::nullopt, .column = 1, .row = 0});
-    f.host.placeComponents(second);
+    const int existing_node = f.addComponent("amplifier");
+    std::vector<AgentPlacement> existing_placement;
+    existing_placement.push_back(
+        {.graph_node_id = existing_node, .position = {{1000.0f, 0.0f}}, .column = 0, .row = 0});
+    f.host.placeComponents(existing_placement);
 
     runFrame([&]() { f.widget.draw("test"); });
 
-    const ImVec2 p2 = f.widget.nodeGridPosition(node2);
-    CHECK(p2.x == kColumnWidth);
-    CHECK(p2.y == 0.0f);
+    const ImVec2 existing_before = f.widget.nodeGridPosition(existing_node);
+    CHECK(existing_before.x == 1000.0f);
+    CHECK(existing_before.y == 0.0f);
+    const ImVec2 existing_dimensions = ImNodes::GetNodeDimensions(existing_node);
 
-    // First node never moved from its original position.
-    const ImVec2 p1_after = f.widget.nodeGridPosition(node1);
-    CHECK(p1_after.x == 0.0f);
-    CHECK(p1_after.y == 0.0f);
+    const int new_node = f.addComponent("amplifier");
+    std::vector<AgentPlacement> automatic_placement;
+    automatic_placement.push_back(
+        {.graph_node_id = new_node, .position = std::nullopt, .column = 0, .row = 0});
+    f.host.placeComponents(automatic_placement);
+
+    runFrame([&]() { f.widget.draw("test"); });
+
+    const ImVec2 new_position = f.widget.nodeGridPosition(new_node);
+    CHECK(new_position.x >= existing_before.x + existing_dimensions.x);
+    const ImVec2 existing_after = f.widget.nodeGridPosition(existing_node);
+    CHECK(existing_after.x == existing_before.x);
+    CHECK(existing_after.y == existing_before.y);
+    const ImVec2 origin_after = f.widget.nodeGridPosition(node1);
+    CHECK(origin_after.x == origin.x);
+    CHECK(origin_after.y == origin.y);
+}
+
+TEST_CASE("Automatic placement respects collapsed-group bounds and preserves members",
+          "[agent_app][placement]") {
+    AgentFixture f;
+    GraphEditorActions graph_actions(f.runtime);
+
+    const int member_a = f.addComponent("generator");
+    const int member_b = f.addComponent("amplifier");
+    std::vector<AgentPlacement> member_placements;
+    member_placements.push_back(
+        {.graph_node_id = member_a, .position = {{0.0f, 0.0f}}, .column = 0, .row = 0});
+    member_placements.push_back(
+        {.graph_node_id = member_b, .position = {{220.0f, 0.0f}}, .column = 0, .row = 0});
+    f.host.placeComponents(member_placements);
+
+    runFrame([&]() { f.widget.draw("test"); });
+
+    const ImVec2 member_a_before = f.widget.nodeGridPosition(member_a);
+    const ImVec2 member_b_before = f.widget.nodeGridPosition(member_b);
+    REQUIRE(member_a_before.x == 0.0f);
+    REQUIRE(member_a_before.y == 0.0f);
+    REQUIRE(member_b_before.x == 220.0f);
+    REQUIRE(member_b_before.y == 0.0f);
+    ImNodes::EditorContextSet(f.widget.context());
+    const ImVec2 member_a_dimensions = ImNodes::GetNodeDimensions(member_a);
+    const ImVec2 member_b_dimensions = ImNodes::GetNodeDimensions(member_b);
+    REQUIRE(member_a_dimensions.x > 0.0f);
+    REQUIRE(member_b_dimensions.x > 0.0f);
+    const float members_right = std::max(member_a_before.x + member_a_dimensions.x,
+                                         member_b_before.x + member_b_dimensions.x);
+
+    const std::string group_title =
+        "Collapsed group title deliberately wider than its component members for placement";
+    const int group_id = graph_actions.createGroup(group_title, {member_a, member_b});
+    REQUIRE(graph_actions.setGroupCollapsed(group_id, true));
+
+    runFrame([&]() { f.widget.draw("test"); });
+
+    REQUIRE(f.widget.collapsedGroupBlockRendered(group_id));
+    ImNodes::EditorContextSet(f.widget.context());
+    const ImVec2 collapsed_position = ImNodes::GetNodeEditorSpacePos(group_id);
+    const ImVec2 collapsed_dimensions = ImNodes::GetNodeDimensions(group_id);
+    REQUIRE(collapsed_dimensions.x > 0.0f);
+    REQUIRE(collapsed_position.x + collapsed_dimensions.x > members_right);
+
+    const int new_node = f.addComponent("amplifier");
+    std::vector<AgentPlacement> automatic_placement;
+    automatic_placement.push_back(
+        {.graph_node_id = new_node, .position = std::nullopt, .column = 0, .row = 0});
+    f.host.placeComponents(automatic_placement);
+
+    runFrame([&]() { f.widget.draw("test"); });
+
+    REQUIRE(f.widget.collapsedGroupBlockRendered(group_id));
+    ImNodes::EditorContextSet(f.widget.context());
+    const ImVec2 block_position_after_placement = ImNodes::GetNodeEditorSpacePos(group_id);
+    const ImVec2 block_dimensions_after_placement = ImNodes::GetNodeDimensions(group_id);
+    const float block_right_after_placement =
+        block_position_after_placement.x + block_dimensions_after_placement.x;
+    const ImVec2 new_node_position = f.widget.nodeGridPosition(new_node);
+    const ImVec2 member_a_after = f.widget.nodeGridPosition(member_a);
+    const ImVec2 member_b_after = f.widget.nodeGridPosition(member_b);
+    CHECK(member_a_after.x == member_a_before.x);
+    CHECK(member_a_after.y == member_a_before.y);
+    CHECK(member_b_after.x == member_b_before.x);
+    CHECK(member_b_after.y == member_b_before.y);
+    CHECK(new_node_position.x >= block_right_after_placement);
 }
 
 // ======================================================================
@@ -309,8 +386,8 @@ TEST_CASE("Explicit positions win over the layout", "[agent_app]") {
 // Test: Activity log and capacity
 // ======================================================================
 //
-// 51 activities → only 50 survive the trim.  Each recorded activity
-// produces exactly one log line starting with "Agent:".
+// 51 activities → only the newest 50 survive the trim.  Each call,
+// including the evicting 51st, produces exactly one "Agent:" log line.
 // ======================================================================
 TEST_CASE("Activity keeps the newest 50 calls and logs one line per call", "[agent_app]") {
     AgentFixture f;
@@ -327,24 +404,26 @@ TEST_CASE("Activity keeps the newest 50 calls and logs one line per call", "[age
         f.host.recordActivity(act);
     }
 
-    // Only the newest 50 are kept.
+    // The oldest call is evicted and the newest, evicting call is retained.
     REQUIRE(f.host.activity().size() == 50);
+    CHECK(f.host.activity().front().tool == "tool_2");
+    CHECK(f.host.activity().back().tool == "tool_51");
 
-    // Every call produces a log line prefixed with "Agent:".
+    // Logging records every call even when its panel record survives only by
+    // displacing the oldest retained entry.
     const std::size_t agent_lines = logCount(Level::Info, "Agent:");
-    CHECK(agent_lines == 50);
-
-    // Spot-check one line for the expected format.
-    bool found_format = false;
-    for (const auto &e : LoggerCore::instance().entries()) {
-        if (e.level == Level::Info && e.message.find("Agent:") == 0) {
-            found_format = true;
-            // A successful activity logs: "Agent: <tool> <summary>"
-            CHECK(e.message.find("Agent: tool_") != std::string::npos);
-            break;
-        }
+    CHECK(agent_lines == 51);
+    const auto activity_log_entries = LoggerCore::instance().entries();
+    for (int i = 1; i <= 51; ++i) {
+        const std::string expected_prefix =
+            "Agent: tool_" + std::to_string(i) + " ran step " + std::to_string(i);
+        const auto matching_lines = std::count_if(
+            activity_log_entries.begin(), activity_log_entries.end(),
+            [&expected_prefix](const LogEntry &entry) {
+                return entry.level == Level::Info && entry.message.find(expected_prefix) == 0;
+            });
+        CHECK(matching_lines == 1);
     }
-    CHECK(found_format);
 }
 
 // ======================================================================

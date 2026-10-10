@@ -336,12 +336,12 @@ jobs:
 
       - name: Package Linux binaries
         run: |
-          mkdir -p rf-simulator-linux
-          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux/
-          cp artifacts/build-linux/build/bin/rf-sim-mcp rf-simulator-linux/
-          chmod +x rf-simulator-linux/tiny-rf-simulator rf-simulator-linux/rf-sim-mcp
-          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux/
-          tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-simulator-linux/rf-sim-mcp'
+          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux
+          cp artifacts/build-linux/build/bin/rf-sim-mcp rf-sim-mcp
+          chmod +x rf-simulator-linux rf-sim-mcp
+          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux rf-sim-mcp
+          tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-simulator-linux'
+          tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-sim-mcp'
 
       - name: Package Windows binaries + DLLs
         run: |

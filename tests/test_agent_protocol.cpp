@@ -26,6 +26,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <future>
+#include <latch>
 #include <set>
 #include <system_error>
 #include <thread>
@@ -37,6 +39,8 @@
 #include <aclapi.h>
 #include <sddl.h>
 #else
+#include <fcntl.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -498,6 +502,64 @@ TEST_CASE("Agent endpoint removal requires the matching GUI token", "[agent_prot
     CHECK(removeAgentEndpointIfOwned(file, endpoint.gui_token));
     CHECK_FALSE(std::filesystem::exists(file));
 }
+
+#ifndef _WIN32
+TEST_CASE("Endpoint replacement and stale-owner removal serialize on their parent directory",
+          "[agent_protocol]") {
+    ScopedScratchDirectory scratch;
+    const auto directory = scratch.path() / "private";
+    const auto file = directory / "agent-endpoint-race.json";
+    std::string error;
+    REQUIRE(ensurePrivateDirectory(directory, &error));
+
+    const AgentEndpoint stale_endpoint = sampleEndpoint();
+    AgentEndpoint replacement = stale_endpoint;
+    replacement.gui_token = std::string(64, 'c');
+    REQUIRE(writeAgentEndpoint(file, stale_endpoint, &error));
+
+    const int directory_fd = open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    REQUIRE(directory_fd >= 0);
+    if (flock(directory_fd, LOCK_EX) != 0) {
+        close(directory_fd);
+        FAIL("could not acquire the parent-directory advisory lock");
+    }
+
+    std::latch calls_started{2};
+    std::promise<bool> removal_promise;
+    std::promise<bool> replacement_promise;
+    auto removal_finished = removal_promise.get_future();
+    auto replacement_finished = replacement_promise.get_future();
+    std::thread remover([&] {
+        calls_started.count_down();
+        removal_promise.set_value(removeAgentEndpointIfOwned(file, stale_endpoint.gui_token));
+    });
+    std::thread writer([&] {
+        calls_started.count_down();
+        replacement_promise.set_value(writeAgentEndpoint(file, replacement, nullptr));
+    });
+
+    calls_started.wait();
+    const auto removal_while_locked = removal_finished.wait_for(std::chrono::milliseconds{100});
+    const auto replacement_while_locked =
+        replacement_finished.wait_for(std::chrono::milliseconds{100});
+
+    const int unlock_result = flock(directory_fd, LOCK_UN);
+    close(directory_fd);
+    static_cast<void>(removal_finished.get());
+    const bool replacement_result = replacement_finished.get();
+    remover.join();
+    writer.join();
+
+    CHECK(removal_while_locked == std::future_status::timeout);
+    CHECK(replacement_while_locked == std::future_status::timeout);
+    CHECK(unlock_result == 0);
+    REQUIRE(replacement_result);
+
+    const auto loaded = readAgentEndpoint(file, &error);
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->gui_token == replacement.gui_token);
+}
+#endif
 
 static_assert(!std::is_copy_constructible_v<AgentChannel>);
 static_assert(std::is_move_constructible_v<AgentChannel>);
