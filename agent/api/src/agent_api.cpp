@@ -55,6 +55,11 @@ void AgentApi::noteProjectReplaced(AgentReplacementCause cause,
         break;
     }
     m_undone_summaries = std::move(undone_summaries);
+    m_flow_latch_message.clear();
+}
+
+void AgentApi::setFlowRunBoundary(FlowRunBoundary boundary) {
+    m_run_boundary = std::move(boundary);
 }
 
 AgentToolResult AgentApi::execute(const AgentCall &call) {
@@ -88,6 +93,9 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "data_file_read") {
             result = executeDataFileReadTool(*this, call);
             summary = "Read data file";
+        } else if (call.tool == "test_flow_run") {
+            result = executeTestFlowRunTool(*this, call);
+            summary = "Run test flow";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

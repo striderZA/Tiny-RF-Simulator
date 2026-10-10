@@ -396,6 +396,29 @@ Json dataFileReadSuccessSchema() {
          "reference_impedance_ohm", "format", "frequency_range_Hz", "s_parameter", "samples"});
 }
 
+Json testFlowRunSuccessSchema() {
+    Json condition =
+        objectSchema(properties({{"component", integerSchema("Swept component id.", 0)},
+                                 {"path", stringSchema("Swept parameter path.")},
+                                 {"value", numberSchema("Swept value for this row.")}}),
+                     {"component", "path", "value"});
+    Json metric = objectSchema(
+        properties({{"component", integerSchema("Measured component id.", 0)},
+                    {"port", integerSchema("Output port index.", 0)},
+                    {"name", stringSchema("Metric name.")},
+                    {"value", nullableSchema(numberSchema("Metric value; null when not finite."))},
+                    {"unit", stringSchema("Unit of the value.")},
+                    {"valid", booleanSchema("False when the metric has no reading.")}}),
+        {"component", "port", "name", "value", "unit", "valid"});
+    Json row = objectSchema(properties({{"conditions", arraySchema(std::move(condition), 0, 4)},
+                                        {"metrics", arraySchema(std::move(metric), 1, 8)}}),
+                            {"conditions", "metrics"});
+    return objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                                    {"row_count", integerSchema("Rows in the sweep.", 1, 1000)},
+                                    {"rows", arraySchema(std::move(row), 1, 1000)}}),
+                        {"epoch", "row_count", "rows"});
+}
+
 Json outputSchema(Json success) {
     return Json{{"type", "object"},
                 {"anyOf", Json::array({std::move(success), agentErrorSchema()})}};
@@ -624,7 +647,38 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                        withDefault(integerSchema("Maximum number of samples, 2 to 401.", 2, 401),
                                    201)}}),
                  {}, Json{{"part_number", "AM1143"}}),
-             dataFileReadSuccessSchema(), readOnlyAnnotations())};
+             dataFileReadSuccessSchema(), readOnlyAnnotations()),
+        tool("test_flow_run", "Run Test Flow",
+             "Run a parametric sweep of component parameters in one call. Each row sets the "
+             "swept values, measures the output ports, and restores the circuit, so the project "
+             "is left unchanged. Returns at most 1000 rows.",
+             inputSchema(
+                 properties(
+                     {{"epoch", integerSchema("Epoch from the latest circuit read.", 0)},
+                      {"conditions",
+                       arraySchema(
+                           objectSchema(
+                               properties(
+                                   {{"component", integerSchema("Swept component id.", 0)},
+                                    {"path",
+                                     stringSchema("Parameter path, e.g. tones[0].power_dBm.")},
+                                    {"values", arraySchema(numberSchema("Swept value."), 1)}}),
+                               {"component", "path", "values"}),
+                           0, 4)},
+                      {"measure",
+                       arraySchema(
+                           objectSchema(
+                               properties(
+                                   {{"component", integerSchema("Measured component id.", 0)},
+                                    {"port", integerSchema("Output port index.", 0)},
+                                    {"metric", stringSchema("Metric name, e.g. power_dBm.")}}),
+                               {"component", "port", "metric"}),
+                           1, 8)}}),
+                 {"epoch", "measure"},
+                 Json{{"epoch", 0},
+                      {"measure", Json::array({Json{
+                                      {"component", 1}, {"port", 0}, {"metric", "power_dBm"}}})}}),
+             testFlowRunSuccessSchema(), idempotentAnnotations())};
     return catalog;
 }
 

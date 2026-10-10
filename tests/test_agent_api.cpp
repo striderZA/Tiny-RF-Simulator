@@ -24,6 +24,7 @@
 
 #include "adc_engine.h"
 #include "component_params.h"
+#include "flow_boundary.h"
 #include "flow_metrics.h"
 #include "output_snr.h"
 #include "power_meter_engine.h"
@@ -38,6 +39,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <span>
 
 #include <algorithm>
 #include <memory>
@@ -1917,4 +1919,281 @@ TEST_CASE("data_file_read rejects a negative component id", "[agent_api][data_fi
         fixture.call("data_file_read", {{"epoch", fixture.api.epoch()}, {"component", -1}});
     REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(result).at("details").at("path") == "/component");
+}
+
+namespace {
+
+// Sets a generator's tones through circuit_edit set_params, as an agent client does.
+AgentToolResult setGeneratorTones(ApiFixture &fixture, const SignalGeneratorEngine &generator,
+                                  nlohmann::ordered_json tones) {
+    return editCall(fixture,
+                    nlohmann::ordered_json::array({{{"op", "set_params"},
+                                                    {"component", generator.id()},
+                                                    {"params", {{"tones", std::move(tones)}}}}}));
+}
+
+// A test_flow_run condition that sweeps `path` on `component` through `values`.
+nlohmann::ordered_json sweepCondition(int component, const std::string &path,
+                                      nlohmann::ordered_json values) {
+    return {{"component", component}, {"path", path}, {"values", std::move(values)}};
+}
+
+// A test_flow_run measurement of `metric` on output `port` of `component`.
+nlohmann::ordered_json measureMetric(int component, int port, const std::string &metric) {
+    return {{"component", component}, {"port", port}, {"metric", metric}};
+}
+
+// `count` values starting at `start`, `step` apart.
+nlohmann::ordered_json sweepValues(int count, double start, double step) {
+    nlohmann::ordered_json values = nlohmann::ordered_json::array();
+    for (int index = 0; index < count; ++index)
+        values.push_back(start + step * index);
+    return values;
+}
+
+// A flow-run seam that counts its calls and otherwise runs the real run boundary.
+FlowRunBoundary countingBoundary(int &calls) {
+    return [&calls](const FlowSpec &spec, std::span<IComponentEngine *const> components,
+                    const NodeGraphEngine &graph) {
+        ++calls;
+        return RunFlowWithinBoundary(spec, components, graph);
+    };
+}
+
+} // namespace
+
+TEST_CASE("test_flow_run sweeps a condition and leaves the project unchanged",
+          "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE_FALSE(
+        setGeneratorTones(fixture, *generator,
+                          nlohmann::ordered_json::array(
+                              {{{"freq_Hz", 1.0e9}, {"power_dBm", -20.0}, {"phase_deg", 0.0}}}))
+            .is_error);
+    REQUIRE(
+        fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    fixture.commands.markClean();
+    const auto generator_before = generator->serialize();
+    const auto amplifier_before = amplifier->serialize();
+    const auto revision = fixture.commands.revision();
+
+    const auto result = fixture.call(
+        "test_flow_run",
+        {{"epoch", fixture.api.epoch()},
+         {"conditions", nlohmann::ordered_json::array({sweepCondition(
+                            generator->id(), "tones[0].power_dBm",
+                            nlohmann::ordered_json::array({-30.0, -20.0, -10.0}))})},
+         {"measure",
+          nlohmann::ordered_json::array({measureMetric(amplifier->id(), 0, "power_dBm")})}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    CHECK(result.structured.at("row_count") == 3);
+    const auto &rows = result.structured.at("rows");
+    REQUIRE(rows.size() == 3);
+    CHECK(rows[0].at("conditions")[0].at("value") == -30.0);
+    CHECK(rows[2].at("conditions")[0].at("value") == -10.0);
+    CHECK(rows[0].at("metrics")[0].at("valid") == true);
+    CHECK(rows[2].at("metrics")[0].at("value").get<double>() >
+          rows[0].at("metrics")[0].at("value").get<double>());
+    CHECK(generator->serialize() == generator_before);
+    CHECK(amplifier->serialize() == amplifier_before);
+    CHECK(fixture.commands.revision() == revision);
+    CHECK_FALSE(fixture.commands.isDirty());
+}
+
+TEST_CASE("test_flow_run rejects a duplicate condition target", "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    const auto result = fixture.call(
+        "test_flow_run",
+        {{"epoch", fixture.api.epoch()},
+         {"conditions",
+          nlohmann::ordered_json::array({sweepCondition(generator->id(), "tones[0].power_dBm",
+                                                        nlohmann::ordered_json::array({-30.0})),
+                                         sweepCondition(generator->id(), "tones[0].power_dBm",
+                                                        nlohmann::ordered_json::array({-20.0}))})},
+         {"measure",
+          nlohmann::ordered_json::array({measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/conditions/1");
+}
+
+TEST_CASE("test_flow_run rejects a duplicate measurement", "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    const auto result = fixture.call(
+        "test_flow_run", {{"epoch", fixture.api.epoch()},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 0, "power_dBm"),
+                                           measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/measure/1");
+}
+
+TEST_CASE("test_flow_run refuses a sweep above 1000 rows before running it",
+          "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    int seam_calls = 0;
+    fixture.api.setFlowRunBoundary(countingBoundary(seam_calls));
+    const auto result = fixture.call(
+        "test_flow_run",
+        {{"epoch", fixture.api.epoch()},
+         {"conditions",
+          nlohmann::ordered_json::array(
+              {sweepCondition(generator->id(), "tones[0].power_dBm", sweepValues(11, -30.0, 1.0)),
+               sweepCondition(generator->id(), "tones[0].freq_Hz", sweepValues(11, 1.0e9, 1.0e6)),
+               sweepCondition(generator->id(), "tones[1].power_dBm",
+                              sweepValues(11, -30.0, 1.0))})},
+         {"measure",
+          nlohmann::ordered_json::array({measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("requested") == 1331);
+    CHECK(errorFor(result).at("details").at("limit") == 1000);
+    CHECK(seam_calls == 0);
+}
+
+TEST_CASE("test_flow_run returns STALE_EPOCH without running", "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    int seam_calls = 0;
+    fixture.api.setFlowRunBoundary(countingBoundary(seam_calls));
+    const auto result = fixture.call(
+        "test_flow_run", {{"epoch", fixture.api.epoch() + 1},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE(errorFor(result).at("code") == "STALE_EPOCH");
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    CHECK(seam_calls == 0);
+}
+
+TEST_CASE("test_flow_run maps unknown components, ports, and metrics to their codes",
+          "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    const auto epoch = fixture.api.epoch();
+    const auto unknown_component = fixture.call(
+        "test_flow_run",
+        {{"epoch", epoch},
+         {"measure", nlohmann::ordered_json::array({measureMetric(999, 0, "power_dBm")})}});
+    REQUIRE(errorFor(unknown_component).at("code") == "NOT_FOUND");
+    const auto unknown_port = fixture.call(
+        "test_flow_run", {{"epoch", epoch},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 5, "power_dBm")})}});
+    REQUIRE(errorFor(unknown_port).at("code") == "NOT_FOUND");
+    const auto unknown_metric = fixture.call(
+        "test_flow_run", {{"epoch", epoch},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 0, "no_such_metric")})}});
+    REQUIRE(errorFor(unknown_metric).at("code") == "INVALID_ARGUMENT");
+}
+
+TEST_CASE("test_flow_run latches after a restore failure until the project is replaced",
+          "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.commands.markClean();
+    int seam_calls = 0;
+    fixture.api.setFlowRunBoundary([&seam_calls](const FlowSpec &,
+                                                 std::span<IComponentEngine *const>,
+                                                 const NodeGraphEngine &) {
+        ++seam_calls;
+        BoundaryOutcome outcome;
+        outcome.status = BoundaryStatus::RestoreFailed;
+        outcome.message = "component 3: intentional";
+        return outcome;
+    });
+    const nlohmann::ordered_json request{
+        {"epoch", fixture.api.epoch()},
+        {"measure",
+         nlohmann::ordered_json::array({measureMetric(generator->id(), 0, "power_dBm")})}};
+
+    const auto first = fixture.call("test_flow_run", request);
+    REQUIRE(errorFor(first).at("code") == "INTERNAL");
+    CHECK(errorFor(first).at("message") ==
+          "circuit could not be fully restored after a flow run: component 3: intentional");
+    CHECK(errorFor(first).at("hint") == "reload the project before running flows again");
+    CHECK(fixture.commands.isDirty());
+    CHECK(seam_calls == 1);
+
+    const auto second = fixture.call("test_flow_run", request);
+    REQUIRE(errorFor(second).at("code") == "INTERNAL");
+    CHECK(errorFor(second).at("hint") == "reload the project before running flows again");
+    CHECK(seam_calls == 1);
+
+    fixture.api.noteProjectReplaced(AgentReplacementCause::NewProject);
+    static_cast<void>(fixture.call("test_flow_run", request));
+    CHECK(seam_calls == 2);
+}
+
+TEST_CASE("test_flow_run returns 1000 rows within the 1 MiB reply cap",
+          "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE_FALSE(
+        setGeneratorTones(fixture, *generator,
+                          nlohmann::ordered_json::array(
+                              {{{"freq_Hz", 1.0e9}, {"power_dBm", -20.0}, {"phase_deg", 0.0}}}))
+            .is_error);
+    REQUIRE(
+        fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    const auto names = MetricRegistry::instance().names();
+    REQUIRE(names.size() >= 4);
+    nlohmann::ordered_json measure = nlohmann::ordered_json::array();
+    for (std::size_t index = 0; index < 4; ++index) {
+        measure.push_back(measureMetric(generator->id(), 0, names[index]));
+        measure.push_back(measureMetric(amplifier->id(), 0, names[index]));
+    }
+    const auto result = fixture.call(
+        "test_flow_run", {{"epoch", fixture.api.epoch()},
+                          {"conditions", nlohmann::ordered_json::array(
+                                             {sweepCondition(generator->id(), "tones[0].power_dBm",
+                                                             sweepValues(1000, -60.0, 0.01))})},
+                          {"measure", measure}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("row_count") == 1000);
+    CHECK(result.structured.at("rows").size() == 1000);
+    CHECK(result.structured.dump().size() < 1024 * 1024);
+}
+
+TEST_CASE("test_flow_run with no conditions returns one row", "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    REQUIRE_FALSE(
+        setGeneratorTones(fixture, *generator,
+                          nlohmann::ordered_json::array(
+                              {{{"freq_Hz", 1.0e9}, {"power_dBm", -20.0}, {"phase_deg", 0.0}}}))
+            .is_error);
+    const auto result = fixture.call(
+        "test_flow_run", {{"epoch", fixture.api.epoch()},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("row_count") == 1);
+    REQUIRE(result.structured.at("rows").size() == 1);
+    CHECK(result.structured.at("rows")[0].at("conditions").empty());
+}
+
+TEST_CASE("test_flow_run requires at least one measurement", "[agent_api][test_flow_run]") {
+    ApiFixture fixture;
+    const auto result =
+        fixture.call("test_flow_run", {{"epoch", fixture.api.epoch()},
+                                       {"measure", nlohmann::ordered_json::array()}});
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/measure");
 }
