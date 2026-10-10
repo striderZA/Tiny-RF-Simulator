@@ -1,0 +1,318 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:339f59921d486afce9b3b6623d8445125d94d311df61f282ee5fa2f0cc9f7fa6",
+  "claims": [
+    {
+      "id": "claim_37a844b57ae3467ab60170a9a3ce2403",
+      "statement": "The Agent Server is off by default; the Agent window opens from the View menu and its Agent Server checkbox enables or disables the server. On Windows the opt-in is saved as the ServerEnabled key in the Agent section, so a failed startup keeps it for the next launch; elsewhere session-state persistence is a no-op and the opt-in is not persisted.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/agent_panel_widget.cpp#L35-L36",
+          "version": "repo-lines-v1:sha256:6bfbba15b23d2ffebcb068899b4fcc962cf5e2a984267166bcb55f799aea5768:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmIxYmMzZjAzZGFmZWE5MWFmMjVlYjU1MGFkMzFkZThmYzcyZGIzZWUyYmI2Y2I3Y2JkZDMxNDhkOGJlZmMxZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWMxZWJhYzdmY2EwM2MwZTZjMTZhZTI5YWZiN2U3MzRmMjE4ZmFlMzUwNWIzYjhlMmQ1YmIzNjM5NTFhODRhYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmE0ODYxMzVmOTJhMTkwODIwMGRmN2JmNmM0NWJkZDU0OTAzZjFkZDQ3NmZiNGY0Y2ZiNDM1NTkyMWQ3MjlmMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTA2YTBkZjgwZjM1OGZiODYwYzA2OThmNDc3M2E0YjIwMWIzOWNmYjE0ODdkNDliMDVhZGNmODIxYmJhOTc0MSJ9"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L1406-L1417",
+          "version": "repo-lines-v1:sha256:0ef0cc520ce50c8cc4805caab86821830b1b8225874061fbecaca6e074616a33:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI0OTVmOGE4MTZlZTdiNzhkOTA5OTQ0OTNkNjE3NGU3NTdmM2EzZDRlNTY5MzJjN2UwOWU1ZjA2MzBkNjNjYmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzMWRhMGRlM2UwMDY1YTRjYjNmNGU1Y2Q0NjI4NTdhNTJiYmU2ZjViYWFlNmI0NTZhNDJjYjQ5MmVlNGJmZDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0N2FmYzQyZDM3YWI0MjdjMGUyMDg3NmJiZTc0NjkzODcyNzYyYTkwM2VlMDRjNWEzNTBjMzJjMGQxYjFlNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlYzc1OWI0ZTIwMWZiMTYzNDY1NTVjYzk4ZTIzODllYTQzMjM5NDY3M2I1NjU0YjMzZTM5MmI1OTgzNDkxNjAifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L208-L224",
+          "version": "repo-lines-v1:sha256:c3740e0420c320ded1a7e7eb4836e3dc81b28b40cc23c6d25785cb4d388c6ed0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZTgzNjkxMzEyNWM2NWU5OWU1OTEyM2E2MjNkNWY4ZjMwMGIyMWM0OTU3MWRiNjVlNGQzMzcwYjQwNjU2MjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5YjNiNjQyMTljZjU0Mzg4NjBmMjliYzVjNThmMmQ5Y2U1OGU4ZThiMjVlNGM4NDI3MzMwODNjY2NjZjY2YTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0Njc2ODc1NTBiYzA5MjhjYWFlYjI1NDk5YzYzZjgzYTYwNzQyYzZjMTYwMGRmZTBiYmI4YmIxMjc0MjU1OTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRhNTIwMjY5ZDU0MjIyMTg3ODk5MDI2ZmEyYTFmYzZkODRjZjkyN2JhZDY1YzA1OTlkYjY1ODA2NTFkY2RhMDAifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L338-L338",
+          "version": "repo-lines-v1:sha256:bea1acec851f8508d321f2af2076da9fa6191526007cc59b819a8102e5222564:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmVhMWFjZWM4NTFmODUwOGQzMjFmMmFmMjA3NmRhOWZhNjE5MTUyNjAwN2NjNTliODE5YTgxMDJlNTIyMjU2NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmVhMWFjZWM4NTFmODUwOGQzMjFmMmFmMjA3NmRhOWZhNjE5MTUyNjAwN2NjNTliODE5YTgxMDJlNTIyMjU2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWNkMDgzNTUwZDNiODJlNjk3ODU2NDc1ZWMzYjRkMjlhN2VlZGJkN2ZjODNmMzFjMmRhZGYxNjk4YjY4Y2M0MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTgwODUwNTkzNzM2NzQ5MzRhMmFiZGNmN2VmODgxMmQzNGVlODc0YjJhMTI5OGM3NjI1YjE3NGIyMWJjODYxOSJ9"
+        },
+        {
+          "resource": "repo://common/session_state.h#L22-L31",
+          "version": "repo-lines-v1:sha256:51476393848153aa6447489d32581406c026227fbb55743f2b2c0cead478ab20:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyOTY1ODAxMzYzMTAwODQ1MzBlOWMwY2M5ZmZkYzIwMWJlODA4MGVlNDQxZjBiODc5ODViM2ZmODY1MzBlZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhYjZmMmM4MGE3MDJiN2U1ZjY5ZGRlOTEyODc2ZGRkMzU5YTM3YjliN2UyY2FkODY1ZmIxMWVhNjFlYjY3MjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljM2E0OTljNDg5Y2ExZTQ3YzhjZGM2MjIwMjY5YzI2NWRhZGM0NzU1YThiNTFjYWRlYjVlODMyNzdjNWVmZGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6a022ee2ee6e4a5fb07957f6390e3b7b",
+      "statement": "On Windows the Agent opt-in persists in app.ini beside the executable through SessionState, and off Windows session-state persistence is a no-op, so the opt-in does not survive a restart there.",
+      "evidence": [
+        {
+          "resource": "repo://common/AGENTS.md#L26-L26",
+          "version": "repo-lines-v1:sha256:1f503d52192f167d3ea477e6294a32a6463ecaee95e631acd05bde832ae928b5:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWY1MDNkNTIxOTJmMTY3ZDNlYTQ3N2U2Mjk0YTMyYTY0NjNlY2FlZTk1ZTYzMWFjZDA1YmRlODMyYWU5MjhiNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWY1MDNkNTIxOTJmMTY3ZDNlYTQ3N2U2Mjk0YTMyYTY0NjNlY2FlZTk1ZTYzMWFjZDA1YmRlODMyYWU5MjhiNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjNkYmRmNTE5MmU1M2YxZmQ5YTQyZThjNzFhNjJiYjIxOTUwNzI3NjU3NmIyMTk2MjZlNTcyMzliNThjYmZiNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlM2M4NDJmMTFiNGZkNDQ5MzdjNmMyZjUzZDlhNGFmZDkxMThlM2M3ZWM1ZmRiMGEyOWZmMTdlNWUxNjJjNSJ9"
+        },
+        {
+          "resource": "repo://common/session_state.h#L134-L146",
+          "version": "repo-lines-v1:sha256:4674109fdc7c461e1f997cc55a7c229e8296998b3adf4b39b51db81b3c6d56f9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0MmQyYmU3NmRlMDc0YWY5MTg1N2Y4NDk2MjEzYjA5Mjc5ZmY0MmFkMzAzOWExNzY3ZjhhZjg3Yzg3NGE2NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkZDdkMTlmZmZlM2ViYjA2MGFlMzQ2ZGQxMGYwYzk1NzIzYmU4ZTU3OTIyMjhlZTQ5Y2EyNjYwMThlZGI4OWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA1YjlmM2M4NDhmZDMwNDlmZTllM2U2ZjUwZTRhYjA1OWVjZmNiYzU4MzVkZjEwM2U2NWZhN2ZlZmViZTM2NmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiMjY3NDk0Nzg0YmY0YzJiMjc0MzU3N2FhMTI3OWRjNzFlMmNiODE3MzA2MDIxNTc1YTM4YjEwYTU1Yjc2ZDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_08bc10f2c0a84caf9a579632aa82e835",
+      "statement": "An MCP client launches the rf-sim-mcp bridge over standard input and output at the install directory path, rf-sim-mcp.exe on Windows, and agents cannot open, save, or name files.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L61-L61",
+          "version": "repo-lines-v1:sha256:5d205939acc46a05030d30d07cfd8f39d0ff9a55f1676f65d7eca261aa2ebc06:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQyMDU5MzlhY2M0NmEwNTAzMGQzMGQwN2NmZDhmMzlkMGZmOWE1NWYxNjc2ZjY1ZDdlY2EyNjFhYTJlYmMwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQyMDU5MzlhY2M0NmEwNTAzMGQzMGQwN2NmZDhmMzlkMGZmOWE1NWYxNjc2ZjY1ZDdlY2EyNjFhYTJlYmMwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDZhNDlmNDgyMGY1ZGUxOWE4N2IyZDBmYjRlZmI1MjgxZjBiYzFhMWQzNjgxMTNmY2NmZjUwOGI0MzU0NGUzYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzBjYzNhYTFiMTFkMTNmNGEzMzE3NmM4MzEwMjdlYjdjNDIxNTczMjE3MWY1MWMyZjYxNjliZmQwNzg3MGUyYSJ9"
+        },
+        {
+          "resource": "repo://README.md#L63-L73",
+          "version": "repo-lines-v1:sha256:2914d58bac9a60b2a7141ee182125a66caf4cc7da751e0c0caabfc163c1f2785:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiMDEzZGFjYjJmNzY3YTU4NDgyZDliYzJjYmJmYTI3NGU2MjU5NWZhY2ViMDU4YzZjY2NmODBjZTk5ZWIyOGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkNDM4OTFlMGIwMDc3ZWE2YTZiMWIxYjBjMjVkNzg5ZjYwNWNiYWY2NjQ0N2QzZTNiNzc2MTc1Yjk4YzE0NDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhZDI1NDVjZjYzZWMyMzcwMDI5ODQyN2Q0YjY0ZDJiYjVhMWFkN2VlMWY5ZjgwOTk2OGRhY2I2OTU2MDUxNWEifQ"
+        },
+        {
+          "resource": "repo://README.md#L75-L81",
+          "version": "repo-lines-v1:sha256:52758d26e0b6a7fa47708666714d79b4056764b4b46b3a5c6c08056c12fd0e83:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjZmYWJiMDVkOGM4YjBhNTRiYjY1ZTg0ZWQyYTQ1M2U5Y2Q2ZTVkZDFmMjQzMTRhMTZjZTQ3NWYxNzM4OThhNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWUwZTBhYThiYTk0NjY1YzVjOWUyNGY5YjllMDlhNjhlNzJmNDllNDI1NDUzMTc4YzY4OWI4NGQwM2ZjMjgxZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODgwOTE4YWM2NDMwNzA0MDMwMDQzMjc4YWJiMTY3MDAxYzY4MzQzZmM1YTNhZGY3ZjgyYjYxNjk1MjliODRhZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjExNzJkZGI4MmFiYmYyNjMwY2M3MDFkNjUzMjVjNzMyNTAxYzgxNGM3NTMzYzE2NzBjODE2NjAxNWUzMWI0NSJ9"
+        },
+        {
+          "resource": "repo://README.md#L83-L83",
+          "version": "repo-lines-v1:sha256:88e1287bb70f39c3fa7deae5665e21ddfd89d430bf3303b8418e6241eb4bb3bf:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODhlMTI4N2JiNzBmMzljM2ZhN2RlYWU1NjY1ZTIxZGRmZDg5ZDQzMGJmMzMwM2I4NDE4ZTYyNDFlYjRiYjNiZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODhlMTI4N2JiNzBmMzljM2ZhN2RlYWU1NjY1ZTIxZGRmZDg5ZDQzMGJmMzMwM2I4NDE4ZTYyNDFlYjRiYjNiZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTU5OWJjODI3MmM0ODE3ZGZjZWUwMDZmMmFhY2Q3MDFlZWQ5ZDg3NTc2ZGI2NzA3N2JjZTc2MGYzNjU4MmU4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTIxZDFiNTBlNTY0ZTliZTAyMTMxZGNkY2QwY2I1ODI1MDRhOWIxZGM1MWMxNThmMzAyMjQ1OGJmNDZmNmFmYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bccd8c5be1d34b8ab2c303fcccb488d4",
+      "statement": "When --endpoint is absent, rf-sim-mcp reads agent-endpoint-KEY.json from the platform endpoint directory, where KEY is the FNV-1a 64-bit hex digest of the canonical executable directory lower-cased on Windows, and the directory is %LOCALAPPDATA%\\rf-sim\\agent on Windows, or $XDG_RUNTIME_DIR/rf-sim when that variable is set and ~/.rf-sim/run otherwise.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/mcp_bridge.cpp#L79-L91",
+          "version": "repo-lines-v1:sha256:d2364c2aefc2ad2c1c8b649c57be65dee48520d3bad301618586c660089ce57e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2YjhjNmZiMmM0ZGEyYjI3YTk3MWJkOTM2N2RkZjU1Y2Q5YjFmNTcxZmMyNmYxNjViODAzMmI1YzAyNTY3NmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkMGFhMGM0MTk5ZTc4ZjU1NmEzYTg5MTQxYTI1NzBjZTAwOWQwZDRkYTgyMmU5ODQzMjJjNTU5YzRlZmFjMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiYTZjMjAwZWRjNjc1MjRkZjg1ODk3YjRjZWY0MTdmY2U2ZTgxM2YzYTE5NDc3NTdjYzZkMThiMDI5NGM3ZjMifQ"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L512-L515",
+          "version": "repo-lines-v1:sha256:a2fa0b269198559c54be4f2dad9d9a7c60a67f8fd49d39b3b44fad92d13fbf47:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDIzYjkxMTdjMWJkMjM2NGJiOGJmZmY3ZGZiNTZlNGI3ZDQ5MGZiZDZiNzExZWQ2Y2Y2NDIyNTljYzU5MWU1ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmM1MTg1M2RmOTlmM2I5Njc3YTU4YTdiMTM3MWQ2MDdhZjhmMTRmM2Q2MDllNmZiMGNjOGFiOGJkY2NkY2QxOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmZiYTUxMTI1NTdlZTFjYTI3OTYyNTRjYzk1NTNiODUxNDI3YWZlY2U2NjFiNmFjZTA4ZTc1ODZhY2YyOGVkNiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L566-L594",
+          "version": "repo-lines-v1:sha256:56d9ba0ad837d0c22514e16948b8a8700399a3c1f4c3c8a2662ebe26fb33269f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyYjE3MjY1NjMyODU2ZDBkNDdmYmIyOWRkMjQxZWI3ZjRmMDNhNzMwYmY5OWY1OTkyZGMxYTdmNTAyZTRlODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1MTU3ZDJhMTVmM2YzOTA0MGU4ZGI3NWVmNjFjNThmOWYzZWNlOWU2Y2QzNDM4MjAxYTVjNmRmMDcxYTA2NGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwYTQ2MTZmOGVjZTFmN2MzNzg5ZmYwYjFlMTUyYTFhZjkzM2ZlZTdiMmQ0ZDI1ZmQ5YmY2MGZhNGY1ZWIwOGYifQ"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L596-L626",
+          "version": "repo-lines-v1:sha256:50978b74b9e4193f90836d65e5da5de29dd95381acfe3d9b6d508a2b4ed324c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhZDA5NzJiMjI3MzNlYzc5OTVkODc4YzI3MzllNmU5ODM2OThlNzgzNWMzZmY5ZjYyMjU3NjNjMmUxOTJlMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1MTU3ZDJhMTVmM2YzOTA0MGU4ZGI3NWVmNjFjNThmOWYzZWNlOWU2Y2QzNDM4MjAxYTVjNmRmMDcxYTA2NGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhMjg0MTJjNmMxYTFlYTU3YWU3Y2E2MTYwOTZmZTY1ZjU5Mzg3MWJjZTFiMTk3NDlmYzIxZDUwNjVlYjRiZWMifQ"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L628-L630",
+          "version": "repo-lines-v1:sha256:34bd4dda49e564bb39c264ea7263667d65b6cdfb96714a6ffd3f6493acb6770e:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmQwNGM2OWY1NTRjOTJlNDJkODRmNDAzZTE2MzA1NzRmOWYxMTBmMmIzZTc0YWY5YWRjMjZlNWZiNTcxZmM4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjUxNTdkMmExNWYzZjM5MDQwZThkYjc1ZWY2MWM1OGY5ZjNlY2U5ZTZjZDM0MzgyMDFhNWM2ZGYwNzFhMDY0ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmEyOWVlODM2ZTM2NjdjZmU0OGUzZThmYzQ3OTlkYzExMDdkZjg3MGJhMjc0ZDk0YjhhYjI0MjVlM2VhZWVmMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bc8166965900434783974090f43d5890",
+      "statement": "The GUI endpoint file must be a private regular file owned by the current user inside a directory private to that user, the server writes the endpoint for its session with its owned GUI token, and stopping the server removes the endpoint only while the file still holds that token.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L248-L257",
+          "version": "repo-lines-v1:sha256:2a608e5eea05f67082ab58dd75662feee5fe2ba642b82cf95f4f69132a4bbbb4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyMmM4MDllYjExMzQxZjg2NDgwYmI5OTNjYzc4MDQxNTgxMDllZTNlMzRhZTYzZTUzOWFkZDNiZDBlY2YzMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4ZDBmNzQzYzQxZjYyZTMwMmY1OWVjZWNmMmUzYmVmZjlkMDU1ZDk0MDAwZTA5Yjg4OWJiN2VmMTNhYWM2MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwOGE0M2FjYWU2NzgwMGEwNWRhYzE2NzBmOTkwYTQwMmVkZGUyMGYzYWYxODZmYzMyZWUzNTcwMjg2NWQ5ZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjNTgxMTNlZGNlZTg5MzM0OTBmMjJmZDU3ODFhODUzNzgyZjliMTNhYzRkZGM2NGEzM2NhNTQwYjNhNTYwNDgifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L304-L311",
+          "version": "repo-lines-v1:sha256:85224a2e34659f545d606859c461cc117df75a9d81278844fe47a9009a0ed52f:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjVmN2FkNjMxOTJlNzNiM2Y0OWQzYTVhMDYyY2QwYmI0MDA3M2E2ZTBmMmY1YTdjMTA3Mzg2OGYzYzdjNTAyZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNThhNTllNDRkZjZlMzY2NzYwOTM3MDJjZGU1OWM2MjM0OWZjOTNjMTdhMWM0ZDUwZGRiOWUzYWNkM2RlMDllNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGQzZmNhMDk0ZmI5MTQ0YzhhYzgxNDc2MTczMmExNzJkYWFkNTdmNDkyYjE2ZTllMmI4YjM1ZmNkZjIwM2QwZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDA3MzU5YzA2M2Y2OTgyOTIxNDcxMDdmMGU2MjAzOTMzMzFiZjJlMjVkMzg1YjkyNWQ1Y2M4NzllOTk5MzZhMyJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L401-L404",
+          "version": "repo-lines-v1:sha256:2ca1ed11ecdede6b7a9afb4d65f760f667976aad9b479e8b1bf3ead80478eb31:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmU5MDM1OGYxYzg5YjcwNTVhYjYwNTg5MWI5MmEzNmQ0YTcwNWFiZjQ2MWE4N2RmOGM4Mzc3MDlmOGJiNjRlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzI3ZmFiMDFmY2JkM2MzYmM2OTZhN2M4NDc5YWMwYTg4ZDY3MDUwODA0OGJmZTllNWFjZWUwNDkyYTJiMmNmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmIwMTA5MDBmNzM5MGEyZmI0OGIyMjI0YmE2MWIxNDk3MTA1YzhkMTJlZDAwYTkyMjY1ZmIyYTkyNWE4YjgwNyJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L707-L710",
+          "version": "repo-lines-v1:sha256:03c882a991967899bf8295e2026cf12f3d51a7e32435635f29917b1508fcd325:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTVlZDA2ZDA3ZTlkZTBhZTFhYWUxMzQ4MTRlYmVkNDgzNGI5MDdlMmU2MTFhNGVjNDgyY2ViMWVjYzgxN2FkYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmZhM2UxNjBkOTk4MjJiODg1M2ZhMzc4NzZkOTFhZGU5NTU2MTdjYTI5OTIzYTllMjI0MGUwYjc3ZmIzOWRmZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDNjM2M3ZGMwN2Q0MzAxMzgzZWIzM2ZlNWFiZTIyNjg2YmZlZTk2YTczNjFkNzU2ODU5NTU4MmFmNGU1ZmQ0MyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3de85f1482c54253a15de3618751100e",
+      "statement": "GuiLink returns SIMULATOR_UNAVAILABLE when the endpoint file cannot be read, the connect fails, or a GUI reply is malformed, and returns VERSION_MISMATCH when the endpoint catalog version differs from the bridge's catalog version.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L176-L180",
+          "version": "repo-lines-v1:sha256:047ff532c1a14b0714193751b4b77e379744bdab29b8b325c95eb751e9a3caac:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjFhZjAxZTE0YWRhMjQ4ZDkyYThiNGFmZWFjMmY0ODg3OWE2Nzg3OTFiMGM1Y2Q0YTcxNzJjNWEwMTg2OTJhMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjhjMjc0YzU0ZmU2ZjIyNDRhZWQyZWI3NGUwZGFiY2FlMTNkMjM3ZmJhNTQ1MDMwYjVlN2M0Nzc0MWQwYTkzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmUxZmNhM2UxZjE1ZDdmODY4MzcwYzZhMGRmNmMyNWIyZDYwZWRjOWNiNTlhMjQ1YzJhOTg4NTIxM2Q0YWVlOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmZjYWE2NTJiMDU1MjE4NTY5NDdmYzEzMjk4MDdiOTQ1MTM2MzI1N2RjNmI0YjU3MjljZGQzNDg5NTE1ZjkzOSJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L190-L206",
+          "version": "repo-lines-v1:sha256:00e3c97de31c0e3a1e1c9ba68a2309e1a14c944e1db0273d785e4cb758f528eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1MGMxOThjYmI3ZjAzMjNlNmZhNGE3YTZhMDhjMWYxMTVhMjMzNmU5Y2RjYWEwOTk4MmMzNjYwOWQ0MzI4NjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1MGMxOThjYmI3ZjAzMjNlNmZhNGE3YTZhMDhjMWYxMTVhMjMzNmU5Y2RjYWEwOTk4MmMzNjYwOWQ0MzI4NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2Yzk3NmFiOWU3M2U3MWExN2Y0MzMwOTU2OWVlOWFlMzE2NjM4ZTQwZjNlMmFiNjI5N2E4MDJlOWM4YzUxNTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjYTQzYTdlYmM3NGViYTE1MDZmOWMxMGU5ZTIwNWE5ZDY5YzY2MDhjZWFjNTQxNGNmNzYyMjM2NWI5NGNkYjgifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L33-L36",
+          "version": "repo-lines-v1:sha256:4107f0cc426dd4edc9ececfcfddc01140acb1ac0d5f309f4d42c94efc88fadf0:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWNkODdkMWVmNzgyNzRjOTVhN2JkODQ5YzNjYmNiMzczNGY4NmMzODc0YTNkNjlmYjZmYzczZDM3YzQ1YzU0ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjU3Mzk0NjQ2YjIwYTc3OTEzMDM0MWE2ODAyZmIxYmRlNDQyY2I3NjUyMjc2MzNhM2Q3YmM5MWYwZTRjNTBlNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzU1MTY5MThjMzY5ODA3YTc1MTBjNGUwOGIyNDZiMTFjZWFmM2EzNjYyZGUyMWEyOGYyNjYzMGY3MmJlNDQ4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzI5ZDU5N2JhODY5NmU0YzJiNTAxN2FhZjc4MDJlY2YwZGQzODcyMmVlYzViZTFjYzBkOGFlYjNiNjRhOWM5OSJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L88-L99",
+          "version": "repo-lines-v1:sha256:7d6b78dbf3b2ed3a9a59136c5b37c4364e3f86b011b5f86e3a7aab396ceeaea8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmNmY1MTc1Y2NkZGVlMzRlZWM3ZmNkODk3OTNjZjA3MGZiMmFlNWE5MDNmNDk1NmNjNTMxNTg4YjljMjM4NTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3ZmUzNTFlMTBiN2EyZjQ0YTVhY2JiNjU0N2ZiZjBmZjQwMzExYjczMjU1ZmQ4MGFlZWQzMTg3ODgzMjc3MTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExNDM5MDM2MjBkNzgyZjY4OGRhODYzMjJmMTA0NmI1MmJjODcxYzQ5MjE5ODUzMGMzNWE4ZTA3Y2U5YzY4NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1YTcxY2I4NDFiZTE0MDM2ZDY2ZjE1NTM3YmFlOTE1YzA0MTk3NmY5ZWU0MmVmMTA5YjY0ODQ0Mzk2Y2U5ZTYifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L91-L93",
+          "version": "repo-lines-v1:sha256:a4b65041fe95151782116a96b935b594ac024e10abb163fdba164054949ad01e:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2Y1YmNkODk3N2YwYjU1OGY0ZDZmMDUzY2MwOWY0MGVjODRlNDEzZDEzZmI0MTYyMGVlNzUwYmEzZTg5ZDdkZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDI1ZDYzYzYxYjJkOTY4YThmOTZjOGQ5YzQ2YzcyY2FjYzkxZGM5YmU3ZDQyNzg3ZjQwMzJkYzdjZTczNDZkNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjBjNmM3ZTA1ZTI0OWYwMTIxZWE4YzZkOGQ0NDQ2YzU0YmE2ODhkZjEwMGQzMjhlN2VkMWYyZTlmMWE5MzMyYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2U5MTQwM2MzNzI0ODYwYjFiNTBhODE3ZDM0MWI3OGZkYzVjZDRkMDA1NWNkMTZjZjM2NmNiN2JjY2VlZmNjNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e5d10e950cae4ee4b5f2e99eef450e5a",
+      "statement": "The GuiLink connect timeout defaults to 3000 ms, above the roughly 2.05 s Windows loopback refusal latency, so a refused loopback connect reports its OS cause such as Winsock error 10061 instead of a timeout, and the bridge writes that cause to stderr after a tools/call returns SIMULATOR_UNAVAILABLE.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/include/gui_link.h#L12-L15",
+          "version": "repo-lines-v1:sha256:453b54c317fe867833f8175b515cd3b4bc8a75082cdaa01cae79be85451233ff:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjNkMTllOTlhNDkxZGIxZDdjZDY5ZTM2NzI2ZmFmZjFjNDM5MGY3YjE3ZWIzZjUwZWU0ODNlZjQyYzkxZWU0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjIxYTI1MDlhNjY1N2Y1NzYyZTVjZWE5YmU3ZjcyNDk2YTRjMzRhNGU2Y2ZjYzgwNTY0Nzc2NDY3NGE0MDk0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDE2YmViNjA5ZmMzYTRlMmQwNDQyOTVhNTU4MWY2MWU1MjdmOTM3ODA3NmE3ZDE5ZGEzZGQ3YzUxZjRiN2I5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGZlYjYzNDQ4ODE5NjQ0YTg0YWZlZGM3Mjc2MmM0MGU1OTgxODRlNTU1YjM5YzllNWE4Njg2NzA2YTgxYjUzOCJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/mcp_bridge.cpp#L295-L299",
+          "version": "repo-lines-v1:sha256:9a899b1cdcb41d7a338f972fe66e865b0f43b02183b202ae254a4747fd623076:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDNhYTM1NjRhMzk5NGU2ODQ5YWYwMGZjNTU5ZGU0YTFjOTJlNjE3ZTQ2OGI2NmEwM2UyNGZkYmEwOTZmOGYyZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjRlY2ZkMWM4OWU5ODQ5MjhjMDk1NTUzYTExN2U0NzZjM2Y1ZGM1ZGVmMGY4ZDZmNDU4NzBjMmJkYjMxNDZjOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDIzNjQyM2Q0MGU0ZWJjMWUwMDE1YjNkNGE2YTY2ZDFiNjBjYTE4NzIyOTk2ZmNkNTU4ZDRkNDMxNWRkYjljNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWE2NjE1ZGQ0NmFkNDZjMjRkZTViMTA2NmUwMTQ5NDg2ZmU0NzhiNDJiZDg2ZDEyYTY5NWNkNjM3ZGZkODI3ZiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L701-L701",
+          "version": "repo-lines-v1:sha256:c3f12891ece70a6477e89659c5198a11aba1cde47a36038fab400e109ccb46df:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNmMTI4OTFlY2U3MGE2NDc3ZTg5NjU5YzUxOThhMTFhYmExY2RlNDdhMzYwMzhmYWI0MDBlMTA5Y2NiNDZkZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNmMTI4OTFlY2U3MGE2NDc3ZTg5NjU5YzUxOThhMTFhYmExY2RlNDdhMzYwMzhmYWI0MDBlMTA5Y2NiNDZkZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDM3OTgwMjlmMDc0ZDhkY2RmMDFjNzdhNTRlODk1M2IyZjBjMjNhZjM4YzFiYzEzOGRhNGNjMmJkN2Q2NDMyMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODBmZTY3NzQ1YjdiZGZkNTQxNDc3MWE1ZDE0YjJhM2MyNDdjNDVhNGFmOWY2MjQ1NDA1MmRkMmQyOGQ0ZTRjNiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L709-L709",
+          "version": "repo-lines-v1:sha256:0ae9999a461a7b58f05e04eea209f3610664b8b8fd24f4bcf78c8ac5f4f0a435:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGFlOTk5OWE0NjFhN2I1OGYwNWUwNGVlYTIwOWYzNjEwNjY0YjhiOGZkMjRmNGJjZjc4YzhhYzVmNGYwYTQzNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGFlOTk5OWE0NjFhN2I1OGYwNWUwNGVlYTIwOWYzNjEwNjY0YjhiOGZkMjRmNGJjZjc4YzhhYzVmNGYwYTQzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWE3NzU4NGNlZjNhMjVhNGZlNzcyYWVlY2VjNjRiYjljZDVjNTc3ZmQxMDU0ODU2OTM1MDFlMzUzNmVkZjZhZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjJiOTA3YWQyNjg1MGQyZTgyMTUzNDZmY2IzODIzMDQ5YWZiM2ViZjgwZTc1ZWFiOWU5YWFhMzliYjgyN2ZjYiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L733-L733",
+          "version": "repo-lines-v1:sha256:bd46c98a0723c58103998896d184c11529d3d17f43a01d6300e0fc38e7cf5a82:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmQ0NmM5OGEwNzIzYzU4MTAzOTk4ODk2ZDE4NGMxMTUyOWQzZDE3ZjQzYTAxZDYzMDBlMGZjMzhlN2NmNWE4MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmQ0NmM5OGEwNzIzYzU4MTAzOTk4ODk2ZDE4NGMxMTUyOWQzZDE3ZjQzYTAxZDYzMDBlMGZjMzhlN2NmNWE4MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2ExYjljMTk4MGVkMDUyZTgwY2RjMjYyMmZkZWFmMTI4NjZkZjJiNjgyYTk5MjE3ZWQxOTdkMjkyZDMzZmI4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzRhMDhhN2E2NWYwYjVkZWY2ODgwYzdmZWM0OGI1NDRmMWRhYzZkMjgxZjg3YTRkNjliYmEwMDI2MTdlYmIzZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b950ada2abf843fb84ce270afecc260b",
+      "statement": "A tools/call parks while a modal dialog is open and returns BUSY with a message asking the user to close the dialog once the dialog has stayed open for park_timeout (30 s); the park clock starts when the dialog is first seen open and resets whenever the dialog is seen closed.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/include/agent_server.h#L15-L15",
+          "version": "repo-lines-v1:sha256:0eed849c254eac642dded285129fa76dbc678cf7e9485c42610d815539dd7c43:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGVlZDg0OWMyNTRlYWM2NDJkZGVkMjg1MTI5ZmE3NmRiYzY3OGNmN2U5NDg1YzQyNjEwZDgxNTUzOWRkN2M0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGVlZDg0OWMyNTRlYWM2NDJkZGVkMjg1MTI5ZmE3NmRiYzY3OGNmN2U5NDg1YzQyNjEwZDgxNTUzOWRkN2M0MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTkxMjkzOTc4ZDU2MmNhYjEyZjNmNDkxNmVjZWZkMmQxMzE4NDlmOWZjNDRkMjQ1Y2I5MzA4NmNkZTYyNmNjNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTk5N2UwYmMxYzkzMWRiMGEzOGIzMjVmODQ2NjllNThlODViMjdhNTc2MDZhNmE5YjhkMTJlYjg1MjRiNjhhOSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L456-L472",
+          "version": "repo-lines-v1:sha256:bc6da5c699e41d7798aa20f3c89099ce064b13886c16b1f73cb5f0ab4ea23184:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmNDQ2ODk1MjI3M2U2OTJlZTM3ZDdiY2EwNzY3YjZlMGRhNmRjY2ZiODFmNGExOTc0MGFmZGQxOTc3Nzc4ZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3NDQwODczZTQyYmUwYzNmYmQzNzQwZGVmOTM4N2I0NjNkMWRiZjI0YTQwN2IwZTljNmYyZDFlZTE2MDY2OWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU0ZjIwNmU2OTM1NzYxZmFiZTI2Njc5YTE4ZGRmZWFjMmNmNDY1ODQ0YjhlNzQzNjBlZDYwN2ZkYjBhNzVmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0NTBlMjYyYWZmYzQzZWUzMjQzN2Q5NzJjY2NkOWQyZWE5N2Q0Yjg2N2NkYWNhZGE0MjMyMzY0MGQwMWMwNGYifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L481-L490",
+          "version": "repo-lines-v1:sha256:610216dab7a96a7088db6ab85cf7738dfcb7944d9a652f87eb5f1b994829d745:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyNDg4MWJkM2E4Mjg0NDQ2Yjc0MTQzMjU4NzE1ZGJjNTdmYzIzNmM5YWM5M2JhYmZjMThlMTc3OGIzN2M1OWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVmM2YwNjljMzU3YjAwMzhjOWNhZTUyNTIyYzY0ZjE0ZjdmN2E0M2FmZTY1ZGMzNTM4NmNmMmE4ODI5NDJkNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhZWI1YjM0OTIwYzhkZWVkMzIxMDZlNjkwMzY0YWRhYjE0MDBhMmQzMjY2NGU5MzA2OTFjMGU4NmM3NWRjNjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c2f8605bf8cb470d82723ebc3985c0b0",
+      "statement": "A second client that connects while an agent is already connected receives a BUSY reply reading another agent is connected and is then disconnected.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L544-L547",
+          "version": "repo-lines-v1:sha256:ad0bd37be7e53facc9bf631aa9f6573c4cf11fc61afca27fb085fa91ae59d58c:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzJkZTczNjhhNzdjZDFlZmJhMmY2NzJhMWVhOTA0MWM5YzFmMzY0YWQ2NTcwNTU3MGUyNWU0NWE4OTE4ODEyNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTdjNDFmOGE5Y2Q5MThiZDBmOGZjNTNkNTYxNjVlZmZjMGMxNmQwNjU0ZWViZjhhNzE5MWNiNTE4ZDI2MjEzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTA2OGE1N2UxZmIzNDFkM2E5N2ExZmExYWVjMGUwMGNiNmUyNDMwNGQ4MTAwMDMzZDJhZjc1YjFkNjIzNmViNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZkYjhiOGZiMzhhMWEyNTdkYjlhNjc4MTBhNjZmM2I4NDE4MDFlOTIwZTBkZTkwYWQwMGE2OTJkMTNjYzNmNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3af3c72cc1e140e1a0e3d068a22c2817",
+      "statement": "The Agent window shows one of five states: Off, Waiting for a client, Connected with the client name and version, Busy when calls are waiting, or Error with the reason, and a startup failure is shown as Error with the startup message.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/agent_panel_widget.cpp#L38-L39",
+          "version": "repo-lines-v1:sha256:4a66bec7c39632fa19df47b23561390dfc55755eac6274565b707e9cc3759e36:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2VmNGU3NGExYWU2MzcwMzUyZWQ1MTcyNzhmZDBjNDIzMDAyMjcwM2IzNDI5Yjc1NzgyYzI0OGFmMmNiMWI1NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzU1ZWQ2OWFjMWEwNTI1NDJkMmM1NTNhZDdlNTBiYWJhNjEwMDM1YTg2ZmEwYjljZDAxODFkNGU2MjZjNmE5NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzlhYWZhZjk5ZThlNmViNDZiZDYzZjFkYjdjZDQ5YTg4NGU4NzQ2ZjBhNmVmZjEwMjY1MmE1MDVlMDM4MmM0YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzBhNzc3ZDE0OWFiM2JkOTIzZjc5ZTI2ZGIwNmEwNmY0ZTFmZWJlZWMxMWE3MDI4MTEyNDZhNWI4YjVhNTBkYSJ9"
+        },
+        {
+          "resource": "repo://app/src/agent_panel_widget.cpp#L8-L22",
+          "version": "repo-lines-v1:sha256:a7376fbd8c05160e72a08d0b18b427c31ccea8873e716da1eeb01019a8b6e122:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhOGJiZGE5ZjMzMDdmYTZmMmNiNTc1NTA4NmYzZjliNWIyZDRlMjFhZTc3Nzc1MDM0Y2NiOGEzMjAyNjkxZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyYTYwNTljODQ0NjJjMDQ4MWRiZWZmZDExYWI2ZWYwM2IzMWExZWQ5YzQzZDM1ODI3NDQ1NzNmZmQ3NzI0MmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIzYmNkZGQzMWIzZWRjN2MyYzZhNDM5ZWU3YTYxYzQxMWFlNzkwM2QyNDVmYmMxYjZiOGY2MWJlOTgwMTdkZDcifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L1776-L1783",
+          "version": "repo-lines-v1:sha256:e8cb57a0ef449b24185e9f487a60d3323c08b8e3f533d87337279e1e35084a16:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTQ0YmU3ZTgwNjE2ZDNhNjkwNjMxYTkwZDkzNDY5MTdkYWFjZWFiN2U3OTY1NDE3MDVlNDRhMzhhOGFjYjhmNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWM1YjQ1MWFmOTk2YTczOGFkZjM4N2E3ZWQzZDkwMzgwYjE1NDQwMTcyNGQxOTQ3NTM5ZjljMDczMjY5NzAxNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjNkMjM3MTFkYmU3NGQ3Y2MzMTg4YjdiYTYyYTEyMWNiYzFkMjlmNTdjY2Y1MTcxZmZkMTFlOTc0MmQ5MzhjMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_52acc98de84645e5bad1fb4a81bad97c",
+      "statement": "Server start generates the session tokens, keeps the GUI token distinct from the bridge token, and writes a new endpoint file for the session; the bridge hello must present the bridge token, which the server checks with agentTokensEqual.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L232-L236",
+          "version": "repo-lines-v1:sha256:24965371e34523c5f8bc023a01b4c347936be2729fea05885f6375d4a743e0a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWMyNmQ4MGI5YTk0OGUyNWQyZWM0ZGVlZDI5OWQxMzc0YmI1ZWJlZDE4MGQ5N2Q5NmE2MGM0NTczZTk5YWUzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGE5YWNlMmI4OTY0ZjkzYjRkYTYxZDQzYTliMzllYTc1NzU3MjY5M2JiNTQxOWU0MTgzYjUyMDhmZjY4ZGY4OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjEzNzAwYTM0NjQ3OTRmOWExYzNmOGFiODI0ZmVkMWM1OGQwY2EyYmNmNjYyZjZmMzU4MDNmZGQzZjM5OWRkMiJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L249-L249",
+          "version": "repo-lines-v1:sha256:af7bcc2b0993d7587cebf3632fa42f0d3a254b027fb5376c041e7d98ffafda65:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWY3YmNjMmIwOTkzZDc1ODdjZWJmMzYzMmZhNDJmMGQzYTI1NGIwMjdmYjUzNzZjMDQxZTdkOThmZmFmZGE2NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWY3YmNjMmIwOTkzZDc1ODdjZWJmMzYzMmZhNDJmMGQzYTI1NGIwMjdmYjUzNzZjMDQxZTdkOThmZmFmZGE2NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWYyYjk1ODYzM2QzM2Q3YWYyMzZlOTM3OGU0YzcxMWI3NWFmN2Y0MDhhMTBiYTc3YTMyODMwMmM0YjBmNWMxZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTQwYTEyOTI2MDY1ZmIyMTNkY2U5NjAxOTczNjM3MjkyYmE3M2I1YTk5Mzc1NmU2N2FmZWJkNjQxM2Y0MjkwOCJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L670-L671",
+          "version": "repo-lines-v1:sha256:94ecceeca97961fa135d42e41b0faec5dc1a0ce1ac170b22b65b52869aa255d4:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGI1MGVlMmZhMmYxMmRiZDBlZWEyZmE0NjQ2NTIyODgxNWRlY2YyMDM4YmM0MzM4ZjYyY2FlMGFkYzdiZjAyZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjM0MTkwNGY0NjVkNmE1ZjgwNjk4NDE4MmMxZWFlZjU4NzQ2NjM0ZTAyN2M5MWJkZTcxMDVlOTgzMTI0ZmVlZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2UyZTQ5ZTg1M2RhZjk3MDAwZGE0MjljZWVlZjBjZGRhYjM2YjRkNjRlNmFhZTkxNDA2Y2EwZTc0YzQzNTBhZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjdhNGI0Y2M2OWFlMDA1YWVmNDM2NTYzOWMxNzllMzUxZmY4MmI4YzE1NTQ3YTMyZWZiOGI4MzY4ZWZlOGI0ZiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_token.cpp#L59-L62",
+          "version": "repo-lines-v1:sha256:62c674a024b3f37b1d8a809d033320263d7f9a5d7feea265a5110d65cc71b0a0:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzE5ZGU2NzM5MTg5YzVlYTIxMTZjYmRjODk5ODU3MWE5Yjk5YjJiNWFjOTQ5OGNiMWRmZWRlYjhiNGI0ZWYwMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmZmNTUzYTVjOTdjMWFjY2Y4NmJiZDcwY2U3MWFjMmU5YjI4MWY1YmY2OWJlZTRiOWY1MTdhM2UzZmFmODc1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWVhOTZiMDNjZGJlMjA3ZGQ1MDk1OGZiNzEwNWQ2MDk5OGZjMmEyZmE1OGUyZWFjNjA3YzBlNGM3NmQ5OTA4YyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1a907008a365420f89795b9add93ac42",
+      "statement": "Each GuiLink connect reads the endpoint file, so a bridge that reconnects after the server restarts uses the endpoint the restarted server wrote.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L249-L249",
+          "version": "repo-lines-v1:sha256:af7bcc2b0993d7587cebf3632fa42f0d3a254b027fb5376c041e7d98ffafda65:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWY3YmNjMmIwOTkzZDc1ODdjZWJmMzYzMmZhNDJmMGQzYTI1NGIwMjdmYjUzNzZjMDQxZTdkOThmZmFmZGE2NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWY3YmNjMmIwOTkzZDc1ODdjZWJmMzYzMmZhNDJmMGQzYTI1NGIwMjdmYjUzNzZjMDQxZTdkOThmZmFmZGE2NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWYyYjk1ODYzM2QzM2Q3YWYyMzZlOTM3OGU0YzcxMWI3NWFmN2Y0MDhhMTBiYTc3YTMyODMwMmM0YjBmNWMxZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTQwYTEyOTI2MDY1ZmIyMTNkY2U5NjAxOTczNjM3MjkyYmE3M2I1YTk5Mzc1NmU2N2FmZWJkNjQxM2Y0MjkwOCJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L176-L178",
+          "version": "repo-lines-v1:sha256:46ddb7b9d661841d4befe9a70726e40052f9de5c6f7876698317e92bdba70dee:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjFhZjAxZTE0YWRhMjQ4ZDkyYThiNGFmZWFjMmY0ODg3OWE2Nzg3OTFiMGM1Y2Q0YTcxNzJjNWEwMTg2OTJhMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTUwYzE5OGNiYjdmMDMyM2U2ZmE0YTdhNmEwOGMxZjExNWEyMzM2ZTljZGNhYTA5OTgyYzM2NjA5ZDQzMjg2MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmUxZmNhM2UxZjE1ZDdmODY4MzcwYzZhMGRmNmMyNWIyZDYwZWRjOWNiNTlhMjQ1YzJhOTg4NTIxM2Q0YWVlOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2Y1ZDZlN2Q1NjNjOTBlNGEwYzQyMDBiYmY1MjZkMjQzNmUwNWY4YzI5MzRlYTU3Y2MzYzA2MzgxYzk1NzhmYyJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L87-L90",
+          "version": "repo-lines-v1:sha256:7c32390a238fd008dfd8aed4166fbfc96a03a2081747108c0f083a949fe7427a:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGFiNGJjNzdlZTJmOGMzZWZiYTJlNTU1ZjRjNTExOGIwY2JmOGVkMzk0MDJmYTU0MjhiMzFlNWU5YWIwYTI1MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjdmZTM1MWUxMGI3YTJmNDRhNWFjYmI2NTQ3ZmJmMGZmNDAzMTFiNzMyNTVmZDgwYWVlZDMxODc4ODMyNzcxNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWI2NzlkY2U1ZDQ2YjRlZGZjYWUwYjc0ODVlZTliNmIyNzZhNjJjNTBkZjhiYmJjNjQ1MGIyMzNkN2IyMTgxOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTRiNjUwNDFmZTk1MTUxNzgyMTE2YTk2YjkzNWI1OTRhYzAyNGUxMGFiYjE2M2ZkYmExNjQwNTQ5NDlhZDAxZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_15d880f175b444c784cb78481d859294",
+      "statement": "rf-sim-mcp accepts --endpoint with a file path, --version, and --help; --version prints the bridge version and --help prints usage to stdout, while any other argument, or --endpoint without a path, prints usage to stderr and exits with status 2.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/main.cpp#L22-L24",
+          "version": "repo-lines-v1:sha256:64bfd176c71c29fa93f6b4e43a201f24538eee4d0e00915670b666ddd57305ac:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTFiYWM3NmQwNGQ4ZDM4NmRmYTk3YTk0MWYwZmVkNDUwOWZjZjU1N2UzZWJiZTNhODg5ODIyYmQ4ZGEyYmE1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGIyZTM0YjQ0NmY4NDljZTAzNjc0YWFhMTdhMzM2YTI2NjVmNDJjYmI0ZGE3YmQwMTViNGFmMDk3MGNmYmFmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/main.cpp#L43-L61",
+          "version": "repo-lines-v1:sha256:a2e2859165e0fa38914a9ddd455e126e7eb174b4f739810b233f278c0aa816f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxMWYyYmIyNDE4ODZlNTUyNmRmOWFhNzEzNzk0ZTY4ZDE2YjNjYjRkNzhlOGU2NGVlNjUxYWJiOTk3Y2FlYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmYWIyMmVkMzYwM2JiMjc0MjBmYzYzZmE2NjJjZTcwNGE3YzYyNjI5YWJkYjNlMDcwZWIyMmM1OWVkMDU1NmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1OGZhZDhkNTZlMGRlNjViYjMyMzgyYmIwNjk0YTU4NmY4ZWJjY2M1ZGM2MjFmZDM3Y2QwODAyZWM5ZTY2ZGEifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/main.cpp#L63-L70",
+          "version": "repo-lines-v1:sha256:40f0a7e4855a6f569c45348b924b4ba4adcbe2dc9350bfbc6f53ac86a616caba:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjJiODA0NzU2NGUyNjc3ZWE3MDA5ZDZhZTM4MjUxNGExNDAxZTYzZTIzNjk3NTJmNWE4ZTFkNGVmYmJkYTcwYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDRjNjQ1OGRiMGNlNmRhMmUzNTY0YmI3ODg2OTQ1OTJkMzc0OWVkMmMxOWM0NzBlYzA4MDJmNjUyNzFkN2RlMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8357bc1b183b49788183f0ab83f956a2",
+      "statement": "Automated test_agent_* and test_mcp_bridge coverage exercises protocol, loopback, and app fixtures, while real-client interoperability, minimized-window behavior, and server-restart persistence remain manual acceptance items.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L58-L59",
+          "version": "repo-lines-v1:sha256:a06fbd9329699b30345a0ea6aa0df5ba67f5af792bdeccfa2eefcd88bb4b79d8:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmMxN2RiY2ExNjc0YzlmMzY5MWI0ZjI5N2FmN2RlZWE3YTBhMGU1MTM2ZmU3NzRjMjE0YTQyZGZiODI3ZjU1ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjNkNTA5NGRiMTY1NDk5OTc1M2ZiYzc3MDgwYmM2Njc1MjM2NGM0YTBhNWQ1ZWRmYWQ0MDBkYTBkNzJhYTQyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjAxODA3Y2Y5NmQ3MmFjNzJjMmM1YzUwZGM4YmIxOTU4ZDAyZWVmMWUwNjFiNDM4MjJlNWUxMjIxNWI4Njc4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTJjMzYyYThmODM4NjNlZWYyZTA3YTU3OTVkNTFiYjc1NGZiZDUwNGM2YWZlYzc3ZjBkZjY3NTgxZWU4YzIxMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_bb51860658c34c87956123ac1061ebf1",
+      "statement": "The README states that the local bridge protects the GUI endpoint against other local accounts and web pages but not against software running as the same user or administrators.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L85-L85",
+          "version": "repo-lines-v1:sha256:f115db66aaf62c32b223aec926005310717b477fd6c6145741e3c58b68d516d5:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjExNWRiNjZhYWY2MmMzMmIyMjNhZWM5MjYwMDUzMTA3MTdiNDc3ZmQ2YzYxNDU3NDFlM2M1OGI2OGQ1MTZkNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjExNWRiNjZhYWY2MmMzMmIyMjNhZWM5MjYwMDUzMTA3MTdiNDc3ZmQ2YzYxNDU3NDFlM2M1OGI2OGQ1MTZkNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjExNzJkZGI4MmFiYmYyNjMwY2M3MDFkNjUzMjVjNzMyNTAxYzgxNGM3NTMzYzE2NzBjODE2NjAxNWUzMWI0NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAxZjJlYzE3NTkzYzEwNTRlYjQ2MzY3ZDg0NTNlZjI0YTE3M2NlOTZiNzExN2Q5MWY5YTY4ZDQ0ZmVmOGIwMSJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_endpoint.cpp#L401-L404",
+          "version": "repo-lines-v1:sha256:2ca1ed11ecdede6b7a9afb4d65f760f667976aad9b479e8b1bf3ead80478eb31:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmU5MDM1OGYxYzg5YjcwNTVhYjYwNTg5MWI5MmEzNmQ0YTcwNWFiZjQ2MWE4N2RmOGM4Mzc3MDlmOGJiNjRlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzI3ZmFiMDFmY2JkM2MzYmM2OTZhN2M4NDc5YWMwYTg4ZDY3MDUwODA0OGJmZTllNWFjZWUwNDkyYTJiMmNmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmIwMTA5MDBmNzM5MGEyZmI0OGIyMjI0YmE2MWIxNDk3MTA1YzhkMTJlZDAwYTkyMjY1ZmIyYTkyNWE4YjgwNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_a1fd107dfadd42279057f840e67bb3a0",
+      "statement": "The GUI listener binds only the IPv4 loopback address on an ephemeral port, accepted peers that are not loopback are dropped, and connectAgentLoopback targets only the loopback address.",
+      "evidence": [
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L558-L560",
+          "version": "repo-lines-v1:sha256:168ee917796ebe612ed7917a21a7af2e3e234c2aea894b9095cc3bd8f934b5cf:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWU2ZDBiN2U5N2UxNThjNWZjYWYxN2U3ZWU1NmU4YTA3YjY4MzFlMDY3MTM0MDM5NDE0OGI2ZTIxNTdlMTg1NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY2MmE0ZDYxOWY4Yjc3Mzc0NTg4ZDljNTk3MjZiMjUyOTNhMTcwMTM0MjQ2MDcxZTYyYzk5NmY1Y2UxZTdmOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2VhY2QzNDQ2MDY2MTc2ODRkZTFlODE1YjE5NDVjOGM1ZDU1YWY0NTBmNzQzYmU3ZWY0YjZlMmVmYjNjZWU1OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjFmOGVlNzZmOGRhZjg0OWY5ODBhMWFhZWRjMTFkZTY3OGRlZDM5NzY1NzQ1M2FmYmQ5NWIyMTFiM2RhNDVmZiJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L628-L642",
+          "version": "repo-lines-v1:sha256:5ba79321c6202bef857445f1d2f4d05b63f7f466a4691644d17079f8bb2dbd8d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4N2E3YTgwY2UzNDE5Y2M0ZTk5MjAxOTcyYTNkZGEzNDMwNTFlOWQ3ZWUwY2JmMzQ3ODQyYWMxNzFlYzIwYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzZmRjOTQ5NzAzYzU2ZTg1NmJkZjcyYzgyODE0MTYxNDJhN2Q3ZDg1MzVjOTA1N2VkNzg0NjdhOThhNjkxN2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgwZmU2Nzc0NWI3YmRmZDU0MTQ3NzFhNWQxNGIyYTNjMjQ3YzQ1YTRhZjlmNjI0NTQwNTJkZDJkMjhkNGU0YzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUifQ"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L691-L693",
+          "version": "repo-lines-v1:sha256:7549c3885043bd71599c5328d73386af72f0e77744a1f218e16e09b47a0e2c6b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWU2ZDBiN2U5N2UxNThjNWZjYWYxN2U3ZWU1NmU4YTA3YjY4MzFlMDY3MTM0MDM5NDE0OGI2ZTIxNTdlMTg1NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzk1Y2VjNzI1ZjIzYzc3MDEwMWFkZTc4MTg1M2NiNGJhOTQ1YWEyZDZjODAyOTE4Nzc2OWUxM2M1MTRkZjc2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTMyY2RkYWQzZTc0YTJmZGVjNWJjOWRiZDFiMDYyZGZmMGYwNDI2MDBkNTdjNmI0YjI5ZDA4NWQxODhmZTU2MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzczNmFhMWQzNGE4NDBjYWU1NWRiNTgwMmQxNjk2MGU2NDBiNTJiMjBiNWUwNzdhY2I5OGY2YWRlNGI3NjE5NCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.0",
+    "at": "2026-10-10T18:57:17.727Z"
+  }
+}
