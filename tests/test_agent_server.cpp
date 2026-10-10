@@ -478,3 +478,92 @@ TEST_CASE("Calls nested beyond the depth limit are refused and the server keeps 
     CHECK(reply->at("result").at("is_error") == false);
     server.stop();
 }
+
+namespace {
+// The listener answers a line that is not a call at once, and replies on one connection stay in
+// order. Receiving that answer therefore proves every call sent before it is already queued.
+void awaitQueuedCalls(TestBridgeClient &client) {
+    REQUIRE(client.sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
+    const auto answer = client.receive();
+    REQUIRE(answer.has_value());
+    REQUIRE(answer->contains("error"));
+}
+} // namespace
+
+TEST_CASE("A parked call runs once the dialog closes, however long it waited", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto now = std::chrono::steady_clock::time_point{};
+    auto config = configFor(scratch);
+    config.park_timeout = 30s;
+    config.now = [&] { return now; };
+    host.modal = true;
+    AgentServer server(executor, host, config);
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+    REQUIRE(client->call("parked"));
+    awaitQueuedCalls(*client);
+    server.pump(); // the dialog is open at fake time 0, so the call parks
+    CHECK(executor.calls.empty());
+
+    now += 31s;
+    host.modal = false;
+    server.pump();
+    CHECK(executor.calls == std::vector<std::string>{"parked"});
+    const auto response = receiveUntil(*client);
+    REQUIRE(response.has_value());
+    REQUIRE(response->contains("result"));
+    CHECK(response->at("result").at("is_error") == false);
+    server.stop();
+}
+
+TEST_CASE("A reopened dialog restarts the park clock for calls still queued", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto now = std::chrono::steady_clock::time_point{};
+    auto config = configFor(scratch);
+    config.park_timeout = 30s;
+    config.now = [&] { return now; };
+    host.modal = true;
+    AgentServer server(executor, host, config);
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+    REQUIRE(client->call("first"));
+    REQUIRE(client->call("second"));
+    awaitQueuedCalls(*client);
+    server.pump(); // both calls park at fake time 0 while the dialog is open
+    CHECK(executor.calls.empty());
+
+    // "first" runs for 40 s with the dialog closed, so "second" stays queued through that period.
+    int runs = 0;
+    executor.on_execute = [&] {
+        if (++runs == 1)
+            now += 40s;
+    };
+    host.modal = false;
+    server.pump();
+    const auto first = receiveUntil(*client);
+    REQUIRE(first.has_value());
+    REQUIRE(first->contains("result"));
+    CHECK(executor.calls == std::vector<std::string>{"first"});
+
+    host.modal = true; // a new dialog opens at fake time 40 s
+    server.pump();     // its park clock starts now, so "second" is not yet timed out
+    CHECK_FALSE(client->receive(50ms).has_value());
+    now += 31s;
+    server.pump();
+    const auto busy = receiveUntil(*client);
+    REQUIRE(busy.has_value());
+    REQUIRE(busy->contains("result"));
+    CHECK(busy->at("result").at("structured").at("error").at("code") == "BUSY");
+    CHECK(executor.calls == std::vector<std::string>{"first"});
+    server.stop();
+}

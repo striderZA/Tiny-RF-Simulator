@@ -460,10 +460,14 @@ struct AgentServer::Impl {
                         if (!queued.parked_since)
                             queued.parked_since = observed_at;
                     }
+                } else {
+                    // The park clock runs only while a dialog is open.
+                    for (PendingCall &queued : inbox)
+                        queued.parked_since.reset();
                 }
                 PendingCall &front = inbox.front();
-                timed_out =
-                    front.parked_since && observed_at - *front.parked_since > config.park_timeout;
+                timed_out = modal_open && front.parked_since &&
+                            observed_at - *front.parked_since > config.park_timeout;
                 if (modal_open && !timed_out) {
                     parked = true;
                 } else {
