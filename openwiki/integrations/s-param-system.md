@@ -1,15 +1,29 @@
 ---
 type: Integration Guide
 title: S-Parameter System
-description: Traces Touchstone parsing and complex S-parameter application through component engines, with separate project and library path-containment, persistence, fallback, and failure contracts.
-tags: [s-parameter, touchstone, rf-components, persistence, path-containment]
+description: Traces Touchstone parsing and complex S-parameter application through the five S-parameter-capable component engines, the component-form picker, library and project data-file resolution, path containment, and the read-only data_file_read agent tool.
+tags: [s-parameter, touchstone, rf-components, persistence, path-containment, data-file-read]
 sources:
+  - id: openwiki-source-5463a01543f8384d18b05f52
+    resource: repo://agent/api/src/tool_data_file.cpp
+  - id: openwiki-source-ea4d2883fe61311539ee1809
+    resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-3b7269741963097c808f1c17
     resource: repo://amplifier/src/amplifier_engine.cpp
+  - id: openwiki-source-c26268b659d2e081b2bf2494
+    resource: repo://app/include/component_form_model.h
+  - id: openwiki-source-78878acfa0447c3372e0ed0d
+    resource: repo://app/include/component_library.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
+  - id: openwiki-source-7521912f4cd608ba12b28d9b
+    resource: repo://app/src/component_form_model.cpp
+  - id: openwiki-source-b4bcfb66a97653e4a88182fb
+    resource: repo://app/src/component_form_widget.cpp
   - id: openwiki-source-dd0234525c20fcc7f7d85a35
     resource: repo://app/src/component_library.cpp
+  - id: openwiki-source-12d90ca6eb6eefd9b169f36a
+    resource: repo://app/src/component_type_registry.cpp
   - id: openwiki-source-baedf8f3f47fa931244e3545
     resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-223db2b4571547f4d13aacdc
@@ -28,103 +42,75 @@ sources:
     resource: repo://tests/test_issue79_component_validation.cpp
   - id: openwiki-source-8568eb9d2755f18e4ab13407
     resource: repo://tests/test_path_containment.cpp
+  - id: openwiki-source-f87d3ee6c75c1ccc4ec8d422
+    resource: repo://touchstone/include/s_parameter_data.h
   - id: openwiki-source-1e03788e225c3b8fd338e958
     resource: repo://touchstone/src/s_parameter_data.cpp
   - id: openwiki-source-13f3b5d657436db7924cde15
     resource: repo://touchstone/src/touchstone_parser.cpp
-generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
+generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-05T19:44:12.666Z
+    at: 2026-10-10T18:57:17.727Z
 ---
 
 # S-Parameter System
 
-Touchstone files provide frequency-dependent complex network data for compatible RF components. The shared `touchstone/` target parses and interpolates the data; each consuming engine owns its port mapping, tone/noise model, serialized mode, and fallback. Project files, library definitions, and direct file selection enter through different path boundaries.
+Five component types can replace their ideal model with measured complex data from a Touchstone file: amplifier, attenuator, ideal filter, equalizer, and combiner. A file reaches an engine through three routes: the component form, which copies it beside the library JSON on save; library JSON `data_files` and path-bearing parameters; and project files, which store `sparam_filepath`. The `data_file_read` agent tool summarizes these files without changing them.
 
-## End-to-end path
+## Parsing
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
-```text
-flowchart TD
-    A["Touchstone file"] --> B{"Load boundary"}
-    B -->|Project .rfsim| C["Resolve under project directory"]
-    B -->|Component library| D["Resolve under library JSON directory"]
-    B -->|Direct component selection| E["Load selected path immediately"]
-    C --> F["SParameterData::load"]
-    D --> F
-    E --> F
-    F --> G{"Parser succeeds?"}
-    G -->|no| H["Data stays unloaded; engine falls back"]
-    G -->|yes| I["Hz grid + row-major complex matrix"]
-    I --> J["Interpolate at tone/bin frequencies"]
-    J --> K["Engine applies port mapping, phase, gain, and noise"]
-    K --> L["Component Spectrum output"]
-    M["Project save"] --> N["Relativize contained absolute paths"]
-    N --> O["Reload repeats project-root containment"]
-```
+TouchstoneParser supports DB, MA, and RI encodings, converts supported frequency units to Hz, infers port count from .sNp filenames, reorders Touchstone column-major parameters into row-major storage, validates strictly increasing finite nonnegative frequencies, and enforces 256 MiB and 10,000,000-point limits while reading.
 
-*A parsed file is not itself a component model: its consumer selects the network ports and applies its physical noise/fallback rules.*
+## SParameterData and engine application
 
-## Parsing and shared data
+SParameterData clears prior state before parsing, reports load failure without becoming loaded, linearly interpolates complex parameters with endpoint clamping, and applies magnitude/phase and |S|² noise scaling to spectrum data.
 
-`TouchstoneParser::parse(filepath)` returns `std::nullopt` when the file cannot be opened, has no option line, has invalid point cardinality, exceeds its safety bounds, or has invalid frequency values. The option line recognizes frequency units `Hz`, `kHz`, `MHz`, and `GHz`; parameter kinds `S`, `Y`, `Z`, `H`, and `G`; encodings `DB`, `MA`, and `RI`; and reference impedance. Frequencies are converted to Hz. The parser represents the declared parameter kind but does not convert Y/Z/H/G matrices into S-parameters for the component engines.
+Each S-parameter-capable engine applies its data inside its own update() by calling SParameterData::interpolate() and scaling tones and noise itself rather than through applyToSpectrum(); the amplifier, equalizer, and ideal filter apply their selected forward entry, the amplifier also keeps its noise figure and nonlinear processing, the attenuator adds a passive thermal noise term k*T*(1-|S21|^2), the combiner applies S21 to input 0 and S31 to input 1, and each engine falls back to its manual model whenever its S-parameter branch is inactive.
 
-Port count is inferred from a `.sNp` suffix when possible, with a two-port fallback. Data rows are read in Touchstone column-major order and stored row-major; for a two-port device the stored order is `S11, S12, S21, S22`. The parser rejects negative, non-finite, repeated, or decreasing frequencies. It rejects files above 256 MiB before buffering and stops accumulating after 10,000,000 frequency points.
+## Activation and persisted keys
 
-`SParameterData::load()` clears its previous matrix before parsing. A failed parse leaves it unloaded; a successful parse moves the Hz frequency vector and complex matrix into the owner. `interpolate(freq_Hz, param_idx)` linearly interpolates the complex value between adjacent frequencies and clamps out-of-range queries to the nearest endpoint. An unloaded object or invalid parameter index returns the neutral complex value `{1.0, 0.0}`.
+S-parameter-capable engine deserializers reload the persisted file path before enabling a requested S-parameter mode, and activation requires a successful parse plus enough ports: at least two for the amplifier, attenuator, equalizer, and ideal filter and exactly three for the combiner, so missing, malformed, or too-small data leaves the branch disabled.
 
-`SParameterData::applyToSpectrum()` is the generic one-path helper: it copies the spectrum shape, changes tone power by `20*log10(|S|)`, adds `arg(S)` to phase, and scales noise PSD by `|S|²`. Components with a different passive thermal model can apply the same interpolation themselves and add their own noise term.
+The amplifier, equalizer, and ideal filter persist their forward entry as sparam_fwd_idx, labelled Forward S-Parameter Index in the component type registry; loading a file through setSParamFilepath selects the S21 entry, while deserialize reads a missing sparam_fwd_idx as index 0 (S11).
 
-## Component engine ownership
+Only the attenuator and combiner deserializers fall back to the legacy sparam_path key; the amplifier, equalizer, and ideal filter read sparam_filepath alone. Project load and library instantiate resolve both keys in place under their original names, so a legacy-only sparam_path value is never copied into sparam_filepath, and those three engines fall back to their manual model.
 
-The component type registry marks amplifier, ideal filter, equalizer, attenuator, and combiner as S-parameter-capable. Each engine stores a file path and mode in its own parameter JSON and chooses how matrix entries affect signal and noise:
+## Project files
 
-- **Amplifier:** forward `S21` is indexed as `1 * numPorts + 0`. It applies magnitude and phase to tones and `|S21|²` to input noise. Its noise figure and nonlinear model remain amplifier behavior.
-- **Ideal filter:** forward `S21` replaces the ideal passband decision. It does not interpret reverse isolation as a second graph path.
-- **Equalizer:** forward `S21` replaces the ideal reference-gain/slope profile; input noise uses magnitude-squared gain and the equalizer adds no separate noise.
-- **Attenuator:** applies S21 magnitude and phase to tones, then uses the passive model `noise_in * |S21|² + kT*(1 - |S21|²)` at 290 K. Manual mode remains available.
-- **Combiner:** requires a three-port file. It maps input 0 through S21 and input 1 through S31; its passive thermal residual is clamped at zero. A two-port file does not enter this branch and manual combining remains available.
+Project load resolves persisted sparam_filepath and legacy sparam_path values relative to the project directory, rejects parent traversal or weakly-canonical escapes by blanking them before engine deserialization, and save rewrites only contained absolute paths to relative; an external absolute path is therefore neutralized on a later reload.
 
-`AmplifierEngine`, `IdealFilterEngine`, `EqualizerEngine`, and `AttenuatorEngine` set S-parameter mode when a selected file loads successfully. The combiner has a separate inspector mode toggle that can be selected before a file is chosen; `update()` uses its S-parameter path only when the loaded file has three ports. This keeps the file picker reachable while preventing missing or wrong-port-count data from becoming an active model.
+## Library data
 
-On project deserialization, compatible engines reload their saved file path. They enable the persisted mode only when parsing succeeds; the combiner also requires three ports. A missing, malformed, or containment-rejected file therefore leaves the component in its ordinary model. A successful direct file selection dirties the engine so the next update recomputes its output.
+ComponentLibrary validates definitions at loadFile, upsert, and instantiate boundaries and drops or refuses any definition that carries validation issues; instantiate resolves path-bearing S-parameter parameters and s_parameters data files under the library JSON's directory, skips escaping or unresolvable entries, and rolls back a newly created engine when deserialization or part-number assignment throws.
 
-## Project-file path boundary
+componentDataFilePath decides by the first s_parameters entry alone and returns nullopt when that entry escapes the JSON directory, whereas library instantiate skips an escaping s_parameters entry and loads the next contained one, so the two disagree for a library whose first entry escapes and a later entry is contained.
 
-For `.rfsim` load, `ProjectSerializer` resolves both `sparam_filepath` and the legacy `sparam_path` against the project file's directory. It rejects any path with a `..` path component, canonicalizes with `weakly_canonical`, and verifies path components remain under that directory. Escaping or unresolvable values are replaced with an empty string before engine deserialization. Relative in-project files are resolved against the project directory, not the process working directory.
+## Component form and authoring
 
-On save, an absolute S-parameter path that remains inside the project directory is rewritten relative to the project. Already-relative paths remain relative. An external file selected directly in the current session can load immediately, but save leaves its outside-root absolute path unchanged; a later project reload neutralizes it. Copy the file into the project directory and use a relative reference when the project must reopen portably.
+The component form shows an S-parameter File row with a Browse... control for each descriptor that sets supports_sparam_file, which covers the amplifier, attenuator, ideal filter, equalizer, and combiner, and saving copies the selected file beside the authored JSON as an s_parameters data_files entry named from the sanitized part number and the source extension.
 
-`tests/test_path_containment.cpp` proves that external absolute paths and `..` paths are not loaded from a project, a contained relative path is resolved from the project directory, and a contained absolute path is saved as a relative path that reloads successfully.
+Component authoring builds the manufacturer directory, the JSON name, and the copied S-parameter file name from sanitizePathSegment(), which keeps only letters, digits, hyphen, underscore, and space; the copy destination comes from dataFileCopyDestination(), which refuses any name that is not a bare file name, and a failed staging copy removes the staged temporaries and aborts the save.
 
-## Component-library path and authoring boundaries
+## data_file_read
 
-A library JSON is the root for both S-parameter path-bearing parameters and `data_files`. Relative paths resolve from the JSON's directory; absolute contained paths are accepted; parent traversal, outside-root, and unresolvable paths are skipped or removed. The canonical path is passed to the engine only after containment checks. If an S-parameter cannot be loaded, the instance remains available in its manual/ideal fallback model. `ComponentLibrary` validates definitions at load/upsert/instantiate boundaries and removes a just-created engine if deserialization or metadata application fails.
+data_file_read summarizes one S-parameter file without accepting any file path or writing anything: the component route reads the component's stored absolute sparam_filepath after an epoch check, the library route reads the part's first s_parameters entry with no epoch check and refuses with NOT_FOUND when that entry escapes or is missing, exactly one of component or part_number is accepted, and the result reports the file's base name and up to max_points evenly spaced samples of one S(row,col) entry.
 
-The component-authoring form copies a selected S-parameter beside the library JSON. Its destination must be a bare filename: separators, roots, drive prefixes, `.` and `..` are refused. Manufacturer and part-number path segments are sanitized before composition, and an unsafe name or failed copy aborts the save. Editing an existing library component writes beside that entry rather than redirecting it to a newly selected root.
+## Built-in libraries
 
-Built-in component data discovery is separate from project/library containment. The app searches user and project library roots, then prefers `<exe_dir>/component_data/library` for installed builds and falls back to the source-tree-relative library location only when the executable-relative location is absent.
+Built-in component libraries prefer the executable-relative component_data/library location for installed binaries and fall back to the source-tree-relative component_data/library path, separately from user and project library roots.
 
-## Limits and failure behavior
+## Tests
 
-The parser's 256 MiB file cap runs before it reads file contents; its 10,000,000-point cap is checked during numeric accumulation as well as after parsing. Invalid option/data shape, unreadable files, absent option lines, invalid frequency sequences, and cap violations return no data instead of a partially loaded matrix. `SParameterData::load()` has already cleared any prior matrix on failure, and engine setters/deserializers gate S-parameter mode on successful loading.
+- `tests/test_path_containment.cpp`: project load and save of S-parameter paths, library containment, `componentDataFilePath()`, and authoring names.
+- `tests/test_issue79_component_validation.cpp`: library validation, instantiate rollback, and path-bearing parameter containment.
+- `tests/test_amplifier_sparam.cpp` and `tests/test_issue117_numeric_correctness.cpp`: engine S-parameter activation and combiner port checks.
+- `tests/test_agent_api.cpp`: `[data_file_read]` cases.
 
-Project and library containment use component-wise canonical path comparisons, not string-prefix tests. The project load path neutralizes rejected references but continues restoring the component with its non-file model. The library path skips an escaping asset; it does not open a decoy file outside the JSON's directory. A schema-valid library entry can still fail during engine deserialization, in which case instantiation rolls back the engine and graph node.
+## Related pages
 
-## Focused verification
-
-- `tests/test_touchstone.cpp` covers real and synthetic one-/two-port data, DB/MA decoding, frequency units, row-major parameter values, missing files, and missing option lines.
-- `tests/test_amplifier_sparam.cpp` covers ideal fallback, S21 gain/phase, interpolation, out-of-band endpoint behavior, amplifier NF, nonlinearity, and failed file selection.
-- `tests/test_path_containment.cpp` exercises project path neutralization/relativization, library `data_files`, the 256 MiB parser guard, and sanitized authoring-copy names and destinations.
-- `tests/test_issue79_component_validation.cpp` covers library type/range validation, revalidation at upsert/instantiate, deserialization rollback, and contained versus escaping S-parameter path parameters.
-- `tests/test_combiner.cpp` and `tests/test_issue117_numeric_correctness.cpp` cover three-port mapping, the two-port fallback, mode selection before file choice, and passive-noise clamping.
-
-## Source map
-
-- `touchstone/include/touchstone_parser.h` and `touchstone/src/touchstone_parser.cpp`: format parsing, validation, file/point limits, and matrix ordering.
-- `touchstone/include/s_parameter_data.h` and `touchstone/src/s_parameter_data.cpp`: loaded state, interpolation, endpoint behavior, and generic spectrum application.
-- `amplifier/src/amplifier_engine.cpp`, `ideal_filter/src/ideal_filter_engine.cpp`, `equalizer/src/equalizer_engine.cpp`, `attenuator/src/attenuator_engine.cpp`, and `combiner/src/combiner_engine.cpp`: component mode branches, port mappings, noise, and fallback behavior.
-- `app/src/project_serializer.cpp`: project-root containment and relative save paths.
-- `app/src/component_library.cpp`, `app/src/component_form_model.cpp`, and `app/src/app.cpp`: library-root resolution, validation/rollback, and authoring file copies.
-- `tests/test_touchstone.cpp`, `tests/test_amplifier_sparam.cpp`, `tests/test_issue79_component_validation.cpp`, and `tests/test_path_containment.cpp`: focused parser, engine, library, and containment regressions.
+- [Architecture overview](../architecture/overview.md)
+- [RF components](../domains/rf-components.md)
+- [Agent tool calls](../workflows/agent-tool-calls.md)
+- [DSP pipeline](../workflows/dsp-pipeline.md)
+- [Testing guidance](../testing/guidance.md)
