@@ -24,7 +24,8 @@
 #endif
 
 #ifndef _WIN32
-// The process environment, copied into each POSIX exec plan before fork().
+// Read by buildExecPlan(): the environment pointer array as it stands at fork time.
+// Its strings stay shared with the parent's environment, not copied.
 extern char **environ;
 #endif
 
@@ -234,9 +235,10 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     return {.launched = true, .exit_code = static_cast<int>(exit_code), .error = {}};
 }
 #else
-// Everything the forked child needs, prepared in the parent before fork(). A
-// child of a multithreaded process may call only async-signal-safe functions,
-// so it must not allocate, lock, or search PATH; it only walks these arrays.
+// Everything the forked child needs, prepared in the parent before fork(). In a
+// multithreaded process the child may use only async-signal-safe calls, so it must
+// not allocate, lock, or search PATH. Its one program-level write is the
+// preallocated shell_argv[1] slot, set before the /bin/sh fallback.
 struct PosixExecPlan {
     std::vector<std::string> args;  // argv text; owns the bytes argv points into
     std::vector<std::string> paths; // execve() candidates in PATH search order
@@ -246,10 +248,10 @@ struct PosixExecPlan {
     std::vector<char *> envp;       // nullptr-terminated snapshot of the environment
 };
 
-// Mirrors execvp()'s search. A name containing '/' is used as given; otherwise
-// each PATH entry is tried in order, an empty entry meaning the working
-// directory, and an unset PATH meaning the conventional default. Relative
-// candidates resolve in the child, after its chdir(), as they did under execvp().
+// Lists the execve() candidates for a bare command name, in the order execvp()
+// searches PATH. A name containing '/' is used as given. An empty PATH entry means
+// the working directory, and an unset PATH means the conventional default. Relative
+// candidates resolve in the child, after its chdir().
 std::vector<std::string> executableCandidates(const std::string &file) {
     if (file.find('/') != std::string::npos)
         return {file};
@@ -296,8 +298,10 @@ PosixExecPlan buildExecPlan(const std::vector<fs::path> &argv) {
     return plan;
 }
 
-// Runs in the forked child, where only async-signal-safe calls are allowed.
-// Returns only when no candidate could be executed.
+// Runs in the forked child, where only async-signal-safe calls are allowed. Continues
+// past EACCES, ENOENT, and ENOTDIR, as execvp() does. Other errno values stop the
+// search, so this is not an exact execvp() replica. Returns only when no candidate
+// could be executed.
 void execPlanInChild(PosixExecPlan &plan) {
     for (char *candidate : plan.candidates) {
         execve(candidate, plan.argv.data(), plan.envp.data());
@@ -323,7 +327,7 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         return {.launched = false, .exit_code = -1, .error = "fork failed"};
 
     if (pid == 0) {
-        // Own process group so the parent can signal the whole tree on timeout.
+        // Own process group, so a timeout signals the tool and descendants still in its group.
         setpgid(0, 0);
 
         if (!working_dir.empty() && chdir(working_dir.c_str()) != 0)
