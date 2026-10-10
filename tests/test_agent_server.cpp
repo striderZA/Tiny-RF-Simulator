@@ -558,3 +558,48 @@ TEST_CASE("A reopened dialog restarts the park clock for calls still queued", "[
     CHECK(executor.calls == std::vector<std::string>{"first"});
     server.stop();
 }
+
+TEST_CASE("A call queued behind a long call still runs while the dialog stays closed",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto now = std::chrono::steady_clock::time_point{};
+    auto config = configFor(scratch);
+    config.park_timeout = 30s;
+    config.now = [&] { return now; };
+    host.modal = true;
+    AgentServer server(executor, host, config);
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+    REQUIRE(client->call("first"));
+    REQUIRE(client->call("second"));
+    awaitQueuedCalls(*client);
+    server.pump(); // both calls park at fake time 0 while the dialog is open
+    CHECK(executor.calls.empty());
+
+    // "first" runs for 40 s after the dialog closes, longer than park_timeout. "second" was parked
+    // at fake time 0, so the closed dialog must reset its park clock rather than time it out.
+    int runs = 0;
+    executor.on_execute = [&] {
+        if (++runs == 1)
+            now += 40s;
+    };
+    host.modal = false;
+    server.pump();
+    CHECK(executor.calls == std::vector<std::string>{"first"});
+    server.pump();
+    CHECK(executor.calls == std::vector<std::string>{"first", "second"});
+    const auto first_reply = receiveUntil(*client);
+    REQUIRE(first_reply.has_value());
+    REQUIRE(first_reply->contains("result"));
+    CHECK(first_reply->at("result").at("is_error") == false);
+    const auto second_reply = receiveUntil(*client);
+    REQUIRE(second_reply.has_value());
+    REQUIRE(second_reply->contains("result"));
+    CHECK(second_reply->at("result").at("is_error") == false);
+    server.stop();
+}
