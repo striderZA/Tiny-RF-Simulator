@@ -319,6 +319,8 @@ add_standalone_test(test_issue113_project_load
     SOURCES test_issue113_project_load.cpp
     LIBS simulator::app
 )
+# Constructs RfSimulatorApp, which writes the shared exe-relative app.ini, so run it serially.
+set_tests_properties(test_issue113_project_load PROPERTIES RUN_SERIAL TRUE)
 # Standalone serializer JSON transformation coverage, separate from file I/O.
 add_standalone_test(test_project_json
     SOURCES test_project_json.cpp
@@ -378,6 +380,8 @@ add_standalone_test(test_node_hover_snr
     SOURCES test_node_hover_snr.cpp
     LIBS simulator::app
 )
+# Constructs RfSimulatorApp, which writes the shared exe-relative app.ini, so run it serially.
+set_tests_properties(test_node_hover_snr PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone coverage for the app-owned Test Flow runner panel: the
 # all-component snapshot/restore boundary around RunFlow() (a sweep must leave
