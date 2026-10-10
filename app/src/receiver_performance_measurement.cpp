@@ -163,7 +163,7 @@ std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin
 } // namespace
 
 ReceiverPerformanceMeasurementEngine::ReceiverPerformanceMeasurementEngine(
-    const NodeGraphEngine &graph, IMeasurementChainHost &host)
+    const NodeGraphEngine &graph, const IMeasurementChainHost &host)
     : m_graph(graph), m_host(host) {}
 
 ReceiverPerformanceMeasurementEngine::~ReceiverPerformanceMeasurementEngine() = default;

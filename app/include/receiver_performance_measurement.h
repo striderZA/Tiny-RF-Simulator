@@ -22,7 +22,8 @@ struct ReceiverPerformanceMeasurements {
 
 class ReceiverPerformanceMeasurementEngine {
   public:
-    ReceiverPerformanceMeasurementEngine(const NodeGraphEngine &graph, IMeasurementChainHost &host);
+    ReceiverPerformanceMeasurementEngine(const NodeGraphEngine &graph,
+                                         const IMeasurementChainHost &host);
     ~ReceiverPerformanceMeasurementEngine();
 
     void update(const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
@@ -40,7 +41,7 @@ class ReceiverPerformanceMeasurementEngine {
 
   private:
     const NodeGraphEngine &m_graph;
-    IMeasurementChainHost &m_host;
+    const IMeasurementChainHost &m_host;
     ReceiverPerformanceMeasurements m_measurements;
     std::string m_cached_request;
     bool m_has_cached_request = false;
