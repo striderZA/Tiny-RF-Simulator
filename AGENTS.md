@@ -91,6 +91,7 @@ Default section order:
 - The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
 
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
+- S-parameter engines (attenuator, combiner, amplifier, equalizer, ideal filter) read the legacy `sparam_path` key when `sparam_filepath` is absent, so legacy-only project and library entries load their file; `sparam_filepath` wins when both are present. A missing `sparam_fwd_idx` selects S21 for a loaded file, as `setSParamFilepath()` does (index 0 when no file is loaded); an explicit index is kept.
 - PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
 - The active PFB channel's integrated noise readout is based on the channel response integrated over the current input frequency grid; show its channel noise in dBm with effective ENBW. The PFB node-hover SNR compares its strongest active-channel tone against this integrated noise and is independent of analyzer RBW; ordinary analyzer traces/SNR remain RBW-based.
 - Spectrum-display noise jitter is a cosmetic effect on the noise floor only; it must never perturb deterministic signal tones, so tone peaks stay fixed frame to frame.
