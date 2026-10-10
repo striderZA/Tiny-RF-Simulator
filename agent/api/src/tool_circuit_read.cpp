@@ -161,6 +161,8 @@ AgentToolResult componentNotFound(std::uint64_t current_epoch, int component_id)
     return agentErrorResult(error, current_epoch);
 }
 
+} // namespace
+
 IComponentEngine *findById(const CircuitRuntime &runtime, int component_id) {
     for (auto *component : runtime.components().all()) {
         if (component->id() == component_id)
@@ -168,6 +170,8 @@ IComponentEngine *findById(const CircuitRuntime &runtime, int component_id) {
     }
     return nullptr;
 }
+
+namespace {
 
 Json circuitComponent(const AgentApiContext &context, const IComponentEngine &component,
                       bool include_params) {

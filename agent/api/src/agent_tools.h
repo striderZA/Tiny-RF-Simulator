@@ -13,3 +13,7 @@ AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &cal
 AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
+
+IComponentEngine *findById(const CircuitRuntime &runtime, int component_id);
+AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
+                                           const std::vector<std::string> &undone);

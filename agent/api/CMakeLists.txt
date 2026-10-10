@@ -10,6 +10,7 @@ add_library(agent_api STATIC
     src/agent_placement.cpp
     src/tool_circuit_edit.cpp
     src/tool_measure.cpp
+    src/agent_library.cpp
 )
 add_library(simulator::agent_api ALIAS agent_api)
 

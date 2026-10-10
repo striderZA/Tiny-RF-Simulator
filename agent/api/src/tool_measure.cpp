@@ -156,6 +156,8 @@ AgentToolResult errorResult(Json value) {
     return result;
 }
 
+} // namespace
+
 AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
                                            const std::vector<std::string> &undone) {
     AgentError error{AgentErrorCode::StaleEpoch, "epoch is stale; call circuit_get"};
@@ -167,6 +169,8 @@ AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::strin
     }
     return agentErrorResult(error, epoch);
 }
+
+namespace {
 
 std::vector<double> finiteValues(const std::vector<double> &values) {
     std::vector<double> valid;
