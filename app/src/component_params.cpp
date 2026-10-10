@@ -164,6 +164,27 @@ const ParameterField *findArrayElementField(const std::vector<ParameterField> &f
     return findDirectField(fields, full_key);
 }
 
+std::vector<std::string> arrayElementMembers(const std::vector<ParameterField> &fields,
+                                             std::string_view root) {
+    const std::string prefix = std::string(root) + "[].";
+    std::vector<std::string> members;
+    for (const auto &field : fields) {
+        if (!field.key.starts_with(prefix))
+            continue;
+        const std::string member = field.key.substr(prefix.size());
+        if (member.find_first_of(".[") == std::string::npos)
+            members.push_back(member);
+    }
+    return members;
+}
+
+std::string arrayElementExpectation(const std::vector<std::string> &members) {
+    std::string expected = "object with members";
+    for (std::size_t index = 0; index < members.size(); ++index)
+        expected += (index == 0 ? " " : ", ") + members[index];
+    return expected;
+}
+
 std::vector<std::string> suggestions(const std::vector<ParameterField> &fields,
                                      std::string_view query, std::string_view array_root = {}) {
     std::set<std::string> unique;
@@ -421,6 +442,12 @@ ParamWriteResult applyComponentParams(IComponentEngine &engine,
                     normalized_element[element_key] = converted;
                     requested_scalars.push_back(
                         {path, element_input, converted, converted.is_number_float()});
+                }
+                const auto members = arrayElementMembers(state_fields, key);
+                for (const auto &member : members) {
+                    if (!element.contains(member))
+                        return failure(ParamWriteStatus::TypeMismatch, element_path,
+                                       arrayElementExpectation(members));
                 }
                 normalized.push_back(std::move(normalized_element));
             }

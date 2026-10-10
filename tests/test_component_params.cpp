@@ -369,6 +369,15 @@ TEST_CASE("Arrays replace whole and validate object element fields", "[component
     CHECK(non_object.status == ParamWriteStatus::TypeMismatch);
     CHECK(non_object.path == "tones[0]");
     CHECK(non_object.expected == "object");
+
+    const auto partial = applyComponentParams(*engine, paramsDescriptor("generator").state_fields,
+                                              {{"tones", {{{"freq_Hz", 3e9}}}}});
+    CHECK(partial.status == ParamWriteStatus::TypeMismatch);
+    CHECK(partial.path == "tones[0]");
+    CHECK(partial.expected.find("power_dBm") != std::string::npos);
+    CHECK(partial.expected.find("phase_deg") != std::string::npos);
+    CHECK(engine->serialize().at("tones").at(0).at("freq_Hz") == 3e8);
+    CHECK(engine->serialize().at("tones").at(0).at("power_dBm") == -10.0);
 }
 
 TEST_CASE("Parameter validation reports the first error in request order", "[component_params]") {
