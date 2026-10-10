@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <system_error>
@@ -15,10 +16,16 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <cerrno>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
+
+#ifndef _WIN32
+// The process environment, copied into each POSIX exec plan before fork().
+extern char **environ;
 #endif
 
 namespace fs = std::filesystem;
@@ -227,9 +234,89 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
     return {.launched = true, .exit_code = static_cast<int>(exit_code), .error = {}};
 }
 #else
+// Everything the forked child needs, prepared in the parent before fork(). A
+// child of a multithreaded process may call only async-signal-safe functions,
+// so it must not allocate, lock, or search PATH; it only walks these arrays.
+struct PosixExecPlan {
+    std::vector<std::string> args;  // argv text; owns the bytes argv points into
+    std::vector<std::string> paths; // execve() candidates in PATH search order
+    std::vector<char *> argv;       // nullptr-terminated
+    std::vector<char *> candidates; // one pointer per entry of paths
+    std::vector<char *> shell_argv; // {"/bin/sh", <script slot>, args[1..], nullptr}
+    std::vector<char *> envp;       // nullptr-terminated snapshot of the environment
+};
+
+// Mirrors execvp()'s search. A name containing '/' is used as given; otherwise
+// each PATH entry is tried in order, an empty entry meaning the working
+// directory, and an unset PATH meaning the conventional default. Relative
+// candidates resolve in the child, after its chdir(), as they did under execvp().
+std::vector<std::string> executableCandidates(const std::string &file) {
+    if (file.find('/') != std::string::npos)
+        return {file};
+
+    const char *path_env = std::getenv("PATH");
+    const std::string search_path = path_env != nullptr ? path_env : "/bin:/usr/bin";
+    std::vector<std::string> candidates;
+    std::size_t begin = 0;
+    while (true) {
+        const std::size_t end = search_path.find(':', begin);
+        const std::size_t length = end == std::string::npos ? std::string::npos : end - begin;
+        const std::string dir = search_path.substr(begin, length);
+        candidates.push_back(dir.empty() ? file : dir + "/" + file);
+        if (end == std::string::npos)
+            break;
+        begin = end + 1;
+    }
+    return candidates;
+}
+
+PosixExecPlan buildExecPlan(const std::vector<fs::path> &argv) {
+    PosixExecPlan plan;
+    plan.args.reserve(argv.size());
+    for (const auto &arg : argv)
+        plan.args.push_back(arg.string());
+    plan.paths = executableCandidates(plan.args.front());
+
+    // Pointers are taken only after every string they reference exists.
+    for (auto &arg : plan.args)
+        plan.argv.push_back(arg.data());
+    plan.argv.push_back(nullptr);
+    for (auto &path : plan.paths)
+        plan.candidates.push_back(path.data());
+
+    plan.shell_argv.push_back(const_cast<char *>("/bin/sh"));
+    plan.shell_argv.push_back(nullptr); // script slot, filled per candidate in the child
+    for (std::size_t i = 1; i < plan.args.size(); ++i)
+        plan.shell_argv.push_back(plan.args[i].data());
+    plan.shell_argv.push_back(nullptr);
+
+    for (char **entry = environ; *entry != nullptr; ++entry)
+        plan.envp.push_back(*entry);
+    plan.envp.push_back(nullptr);
+    return plan;
+}
+
+// Runs in the forked child, where only async-signal-safe calls are allowed.
+// Returns only when no candidate could be executed.
+void execPlanInChild(PosixExecPlan &plan) {
+    for (char *candidate : plan.candidates) {
+        execve(candidate, plan.argv.data(), plan.envp.data());
+        if (errno == ENOEXEC) {
+            // A file the kernel will not run is handed to the shell, as execvp() does.
+            plan.shell_argv[1] = candidate;
+            execve("/bin/sh", plan.shell_argv.data(), plan.envp.data());
+        }
+        if (errno != EACCES && errno != ENOENT && errno != ENOTDIR)
+            return;
+    }
+}
+
 ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &working_dir) {
     if (argv.empty())
         return {.launched = false, .exit_code = -1, .error = "empty argv"};
+
+    // Built before fork(), so the child below allocates nothing and searches no PATH.
+    PosixExecPlan plan = buildExecPlan(argv);
 
     const pid_t pid = fork();
     if (pid < 0)
@@ -242,18 +329,7 @@ ProcessResult launchProcess(const std::vector<fs::path> &argv, const fs::path &w
         if (!working_dir.empty() && chdir(working_dir.c_str()) != 0)
             _exit(127);
 
-        std::vector<std::string> storage;
-        storage.reserve(argv.size());
-        for (const auto &arg : argv)
-            storage.push_back(arg.string());
-
-        std::vector<char *> cargv;
-        cargv.reserve(storage.size() + 1);
-        for (auto &arg : storage)
-            cargv.push_back(arg.data());
-        cargv.push_back(nullptr);
-
-        execvp(cargv.front(), cargv.data());
+        execPlanInChild(plan);
         _exit(127);
     }
 

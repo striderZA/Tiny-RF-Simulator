@@ -6,10 +6,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -129,5 +132,121 @@ printf '{"message":"ok"}' > "$result"
     CHECK(inherited.empty());
 }
 #endif
+
+// Scoped environment variable for launch probes; the variable is removed on exit.
+struct ScopedEnv {
+    std::string name;
+
+    ScopedEnv(std::string variable, const char *value) : name(std::move(variable)) {
+        setenv(name.c_str(), value, 1);
+    }
+    ~ScopedEnv() { unsetenv(name.c_str()); }
+    ScopedEnv(const ScopedEnv &) = delete;
+    ScopedEnv &operator=(const ScopedEnv &) = delete;
+};
+
+ExternalToolRequest makeRequest(const fs::path &work_root) {
+    ExternalToolRequest request;
+    request.contract_version = "1";
+    request.action_label = "Probe";
+    request.project_root = work_root;
+    request.selected_path = work_root / "selection.s2p";
+    request.work_dir = work_root / "runs";
+    return request;
+}
+
+std::vector<std::string> readLines(const fs::path &path) {
+    std::vector<std::string> lines;
+    std::ifstream in(path);
+    for (std::string line; std::getline(in, line);)
+        lines.push_back(line);
+    return lines;
+}
+
+// Records how the runner invoked the tool (working directory, an environment
+// marker, every argument), then writes a successful result.
+constexpr const char *kProbeToolScript = R"SH(#!/bin/sh
+result=
+prev=
+for arg in "$@"; do
+  if [ "$prev" = "--result" ]; then result=$arg; fi
+  prev=$arg
+done
+dir=$(dirname "$result")
+{
+  printf 'cwd=%s\n' "$(pwd -P)"
+  printf 'marker=%s\n' "$RFSIM_LAUNCH_PROBE"
+  for arg in "$@"; do printf 'arg=%s\n' "$arg"; done
+} > "$dir/probe.txt"
+printf '{"message":"ok"}' > "$result"
+)SH";
+
+TEST_CASE("external tool launch runs in its workspace with arguments and environment",
+          "[extensions][runner][launch]") {
+    // Characterizes the exec path: working directory, argv, and environment
+    // reach the tool exactly as the runner documents them.
+    const fs::path work_root =
+        fs::temp_directory_path() / ("rfsim_launch_probe_" + test_temp_paths::processTag());
+    ScopedRemove cleanup{work_root};
+    const fs::path script = work_root / "tool" / "probe.sh";
+    writeExecutableScript(script, kProbeToolScript);
+
+    const ScopedEnv marker{"RFSIM_LAUNCH_PROBE", "marker-value"};
+    const ExternalToolRunResult result = ExternalToolRunner{}.run(
+        makeExternalTool(script.parent_path(), script), makeRequest(work_root));
+    INFO("runner message: " << result.message);
+    REQUIRE(result.ok);
+
+    const auto lines = readLines(result.work_dir / "probe.txt");
+    REQUIRE(lines.size() == 6);
+    CHECK(lines[0] == "cwd=" + fs::canonical(result.work_dir).string());
+    CHECK(lines[1] == "marker=marker-value");
+    CHECK(lines[2] == "arg=--request");
+    CHECK(lines[3] == "arg=" + (result.work_dir / "request.json").string());
+    CHECK(lines[4] == "arg=--result");
+    CHECK(lines[5] == "arg=" + result.result_path.string());
+}
+
+TEST_CASE("external tool without a shebang still runs through the shell",
+          "[extensions][runner][launch]") {
+    // execvp() ran files the kernel refuses with ENOEXEC through /bin/sh; the
+    // launch path has to keep doing so.
+    const fs::path work_root =
+        fs::temp_directory_path() / ("rfsim_launch_noshebang_" + test_temp_paths::processTag());
+    ScopedRemove cleanup{work_root};
+    const fs::path script = work_root / "tool" / "no_shebang.sh";
+    writeExecutableScript(script, R"SH(result=
+prev=
+for arg in "$@"; do
+  if [ "$prev" = "--result" ]; then result=$arg; fi
+  prev=$arg
+done
+printf '{"message":"ok"}' > "$result"
+)SH");
+
+    const ExternalToolRunResult result = ExternalToolRunner{}.run(
+        makeExternalTool(script.parent_path(), script), makeRequest(work_root));
+    INFO("runner message: " << result.message);
+    CHECK(result.ok);
+    CHECK(result.message == "ok");
+}
+
+TEST_CASE("external tool without execute permission is never run", "[extensions][runner][launch]") {
+    const fs::path work_root =
+        fs::temp_directory_path() / ("rfsim_launch_noexec_" + test_temp_paths::processTag());
+    ScopedRemove cleanup{work_root};
+    const fs::path script = work_root / "tool" / "not_executable.sh";
+    fs::create_directories(script.parent_path());
+    {
+        std::ofstream out(script);
+        out << kProbeToolScript;
+    }
+
+    const ExternalToolRunResult result = ExternalToolRunner{}.run(
+        makeExternalTool(script.parent_path(), script), makeRequest(work_root));
+    CHECK_FALSE(result.ok);
+    CHECK(result.exit_code == 127);
+    CHECK_FALSE(fs::exists(result.result_path));
+}
 
 } // namespace
