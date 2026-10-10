@@ -1,0 +1,440 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:fe066aa7d7d8db9d801e1ab7b33a207d798bde9250a00bda7c3372f3eb5d5ac5",
+  "claims": [
+    {
+      "id": "claim_a5d34dc063a74201bb8985c468f82861",
+      "statement": "The bridge reads stdin one byte at a time on a reader thread, queues each completed line as a Line event, and queues an Oversized event for a line over the cap, discarding input through the next newline.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/mcp_bridge.cpp#L323-L373",
+          "version": "repo-lines-v1:sha256:b59cba70d9bc8819671e48fb3b3d9bd2c275cf2fb18603e7e785c099c447261f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwNDk4Y2NmYTFkMzhlNWM4Y2U3YTk0Mzk0NTk5ZTI5YWMxNWVlYWRhM2RkOTQ4NGExN2ExM2E3N2EwMmE4ZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4OTQzYmJiYTJkM2I4ODE3MGJhZjQ5YWY3Y2U4NTFmYzFkMWRiZWQ1YjA4ODJiOTNlYmIxNGZmMjIwOTg3MTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwZjU2ODZkOGY4ODIwYmRlYjgyZGYwZjEwZDNmMTY0YTEzNGU5ZTA2MjhmYzIyN2M0MGFlOWM4YmZkNTJkNzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd38ac6d67f54a91b7b20c3544060093",
+      "statement": "AgentLineReader strips one trailing CR before the LF and applies the 1 MiB cap (kAgentMaxLineBytes, 1 << 20) to the line without that CR, reporting Oversized for a longer line.",
+      "evidence": [
+        {
+          "resource": "repo://agent/protocol/include/agent_wire.h#L11-L12",
+          "version": "repo-lines-v1:sha256:ceb054d4354a1abe4b9c4abb448a6020d67bd712949970182e02bce63bf15ff6:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2RmZmMxYWRlNzA1YjYxY2I5ZjlhZmIwNjY4NDBlYjJhOTU0MzRiYzM0Yzg3YjZmNDkxZTIyMWVmZjBhZGNmNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDhhZmQzNTY5NDA5ZmQ4YTg2YmExMzdhYjU4ZjAwNDc2YmQyN2ZiOTllODg0YzA3YTI2M2NjOGZlOWE2MDVlZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjdhYmNlNmE3M2JkNmRjYzFlZWZkOGMyNTMzNTM1MTczMWJjZWJlOGE3YzVlNmI1NmUzYTU4MmZiOTU3Zjg4YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWVhNmFkOWU4NWNhNDBlNDVmMWMwNzE5NjgyZGMxNzVhMDUyM2QyMzBjMTZhNTZhZTQ3YmI0NzM1OTJhNTI2NyJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_wire.cpp#L7-L38",
+          "version": "repo-lines-v1:sha256:739b898f2360735eb74b322f325c112a0ef2ef249639a889af49bbe930ba894a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyNWJlMDEwYjk0ODExOGYzYTM2Y2QzZGE5MjMzMTUzYjE5Y2U2OWVkNjA2MTU5MzljNzQzMWQwMjgxODIyN2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkNGU2ZjJlN2Q0YTlkNmExNDk0ZWMwNTFhYjBhZmM3MGIyYzg3NGYxNWU1MmU3MWE1MmM0NGIxYWQ1OTMxOGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVmNzIwOGMyYzQ3MGNkY2YyNTFkNmE3NmU2NzE5NDk5OTRiNDkwNzA3OWJhMjM5YzQ5MjU5YzNhNzVkODhhNmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiZWRhMWNhYTUzMTljNTk1NjUxNmY5YjcwZWUxOWQxNjhlNTU2MjVjZjgyMTA4NDg0MjgzMjQ4NWM5MWJkZWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5fd19669732640cf9543486284724758",
+      "statement": "An oversized stdio line produces one JSON-RPC Invalid Request error with a null id, and its content is not parsed.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/mcp_bridge.cpp#L233-L237",
+          "version": "repo-lines-v1:sha256:2cd112cb18d377c0121962d1be72866d018b33a25269286fe2ec815e289eaabc:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmM1ODkyY2RjYjE0MzBmYzIzZWQwNDU3ZTA1YWQyMWMxMTBiM2FlODdlYmQyOTQzNGIyNmU5M2U3NmY1ZjZkZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjliZmU3ODgzOTE0ZTBkYTI5ZTkyZmUxY2ExZTBlNGIxMDE3ZDNmMmNmZDc3NjExMjg3NjE2MGUwNDg4MmExNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjJmZDg5ZjJkZGRhMGVkNzM1MzJjNmFhODQ3ZjQwZjg0OTM5MTU5YzMzYzZiZDJiY2UyZTAyNGM3MjkxMWRlOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmE5MjU3YjcxNzIzOGJkNTBhNmE3ODVhOTY3NmVmYWYyNWJlNWFjMjA1MmU0OWM5MmJjMjc2NDgwOTRiN2U4MSJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/mcp_session.cpp#L44-L47",
+          "version": "repo-lines-v1:sha256:1999bf74e1c8838f5ff581414d25df5fdca76cb0ed8f3de7c84150ffa72eb9f9:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjkwZjk3M2UwYzU3ZDQzZDg1OWVkMzI0YzI5MDRkOGM4YjRhMjY2OGM3MzI1ZWUzYzI0NGY1ZWM1YzYwYmJmNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWE0YWY3Y2NkN2RmMmRhZmFjMzRkOTllYjgyYWVhODZjZjkyZGM3YzlhYTczZmIxZWYyMjQ3NDdkMzM2NjYyYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjBmMWNmZjJmODk4YTRhMTM3YjU5YTlmNzQ0M2RlMjIzZWI5NDFkNzg3OWQxMTllNzgxNDM0ZTBlM2FkMmU3NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjg0YzRmOThmYTAwOWIxZmZkYTNhYTE0ZmJjOWU1ZTJjNjYxYzlkYWVhMzcyZGVkNjViZDJjMTYxYmYyZDBjOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb14678111b744edb64f5d8e5e7b6130",
+      "statement": "McpSession accepts protocol 2026-07-28 per request through the io.modelcontextprotocol/protocolVersion _meta key, rejects other modern versions with -32022, and requires initialize before requests without modern _meta (-32600); initialize selects 2025-06-18 or 2025-11-25, defaulting to 2025-11-25.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/src/mcp_session.cpp#L101-L117",
+          "version": "repo-lines-v1:sha256:25ddd405448d7d127bb12342459e845603231141b63cde5de6bae528969afb2e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2ZDhhMDcwNjU5ZjBhMDg2NDQwYWVlYjllMGUxOThlMGJmZTlmODNiZDFmNWRmMDQyYmQ3Yjk0Y2UwOWQ5NjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiMzZiZDY2Y2QyNTA1YWUxYzdhMTg0OWVkMWQwY2EzY2U0MTNlY2NiMzMzNDY1NDJmZjMwZDg0YWQ0MDI4ZjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3NzU5MTIwYjU4OTA1MGNjYzgzNzllYTRkZWFmYTQ0ZDliNGYyOTVkZmI1ODc5MzVkNjY0ZDcxOWIyZTdkNGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5OTc2M2VkOGMyZjZlZTc2ZWVmZmU2NjZmYmZhYjg0MmZjMzg0NjU4MDAxMzQwNzA2OThiNjU5NDg1MTQyNDIifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/mcp_session.cpp#L11-L14",
+          "version": "repo-lines-v1:sha256:ab2c7766e93f5930ef629b4c8dd679a907e1a691358bada1e226c3f4a234349c:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGUzZjQxYTg2ZjJmYTY0NTNkNDQ2ZDBjZDczMzRhN2RhM2VhNTAzYjUzNmU3OGVkYTViZDIxMDZmNzc4MTcyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTZkNGY5NGI3NGVjZDQzZjBiMTg2M2UzMGRhY2NkNWYzYTA4ZjU3N2IyNzcxMWY3ZWMyNmQxMzMxMWI1NTE2ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzVmZTY0MmRiMGZiMDk5YWMyNzhlMWJhZjNkZTM5ZDAyNGRjMmZlMTVjZWFlNjVmODY5ZTdkMDNjYjkxNTEyZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWQzYmY3YTAwOWFjZmM2MWM0YjViNWU4MTBlNDFhN2JhYmJmMDhhOWY4MmNkZjU0YTQ4ZjFiNjEzYWE2MzRmMyJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/mcp_session.cpp#L134-L146",
+          "version": "repo-lines-v1:sha256:bb934209b4d439789b0265c122fe417fc56077cc828b648f4e5afa28b8c95c24:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5ZmNkZTBkMDM5MGE4ODg1ZWE4MGQyZTk0MGQ4MWUxMTM5YzNkYWVkMjcxMjMwNDhlMjM4OWQ2OGNhODg1MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2MGE2ZTZjNjQ0YmM4OTZiMGM4MDVkYzAxZWNkNTRiZDY3NGFiY2MwZWY2ZjRjMGEyNWZkM2YwZDI4NmZiNWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxMTM1ZWY0NDY4N2M3NjNkYTI5YzUwNDQ3ZmRiM2M1MDlmYjNjOGI1YWIxZjdkODdkOWZhMmY5MjA4Yzk3ZDcifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/mcp_session.cpp#L160-L163",
+          "version": "repo-lines-v1:sha256:8e0358fa898ac1fc2dbefae52fcefca6045e8504a5a6a402700df5fcb9f85e80:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTliMzM5MTEwZmMwYzAwOWU5ZDc4YmM4NzM0NDFjOGM0OGExNzllMWE0NWY5NDc1YjExZTU2MmFmZWEzY2FmNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzFjNDI1ZWU5NTgyZDAwNGJjMTkzNDVjYTY2ZDZiOGY2NzYzYWFjNTk4YjU2YjdlNzBhZTM0MTAwMjBkNjc0YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWUxN2MyNzk1ZjgwZGI4Mzg2YjNiNzhhZmI5NDgwNWJkMjc4N2E3MGIwMGI5NTBiOGIzNDVlNDFiMzliN2VjYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWQyNzUxNzEzMDA2MmVlYzJhMjcwMjNlNzg5YmIwZDExMDM0NDJmNTNiZTQ4NmEwZmIxNzE2MDNmMDhjOGNhYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_99b7f7216450454a89ee2c2b14d25343",
+      "statement": "GuiLink connects lazily when no channel is open: it reads the endpoint file, opens a loopback connection within the 3 s connect timeout, sends hello with the bridge token, protocol, and client identity within the 5 s hello timeout, and keeps the link only when the GUI token matches the endpoint file and the catalog version equals the bridge's.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/include/gui_link.h#L12-L18",
+          "version": "repo-lines-v1:sha256:1017747681ded3b5d87a72a3433d3db55a3a5e2a4c8193ae945f47e93c24e168:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjNkMTllOTlhNDkxZGIxZDdjZDY5ZTM2NzI2ZmFmZjFjNDM5MGY3YjE3ZWIzZjUwZWU0ODNlZjQyYzkxZWU0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDE2YmViNjA5ZmMzYTRlMmQwNDQyOTVhNTU4MWY2MWU1MjdmOTM3ODA3NmE3ZDE5ZGEzZGQ3YzUxZjRiN2I5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmMxZTdhMTUxNGE4NGJjMjlkODhjMTkwNjg2YjJiM2ZhOTI0MzhjZWI0MzhhYjYxYWZjZGQ0NjlkNzk0YjRkOCJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L82-L169",
+          "version": "repo-lines-v1:sha256:71d8d12f3adfa5b83e4179835939380d632786b040128b6a8d11e0f5326ba3ab:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlMjhhZjBjZDEyZjUyMjU1NzQyZTAyYzFhOGNiZWIwYTBlZDlkMThhOGQ4MjE0YmQxZjBmMGIwZGI4YzBmNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzZGQ5YjM1NzEzOWFmOGUxN2UxZThhM2M2YmNhZTE2YWJjOTYwYWU5ZTI5NzY4MmFjYWZkMWIwNTFjMzljNjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU0ZTkxM2VmYjIxODY1MjgyMzEwNjZjMDMyN2ZkYzljNGI0Y2NkOWIwNmJjMTc1OGJlYzY0ZTJkNzc3ZDQ3MTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0ZTRiNjBlZWE5NDUxNTBjNjI2NjQyNTg2YmE2ZmU1NzQ4N2NlN2JlNDc4MGY5NjRjNzM2Mjg3NGQwNThjNmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1b5fd05c410d4a27aa8c0b61c04d36be",
+      "statement": "GuiLink call waits up to the 120 s call timeout for the reply, drops its channel after a transport failure or a JSON-RPC error reply, and reports SimulatorUnavailable with a fixed reachability message when the GUI cannot be reached.",
+      "evidence": [
+        {
+          "resource": "repo://agent/mcp/include/gui_link.h#L12-L18",
+          "version": "repo-lines-v1:sha256:1017747681ded3b5d87a72a3433d3db55a3a5e2a4c8193ae945f47e93c24e168:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjNkMTllOTlhNDkxZGIxZDdjZDY5ZTM2NzI2ZmFmZjFjNDM5MGY3YjE3ZWIzZjUwZWU0ODNlZjQyYzkxZWU0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDE2YmViNjA5ZmMzYTRlMmQwNDQyOTVhNTU4MWY2MWU1MjdmOTM3ODA3NmE3ZDE5ZGEzZGQ3YzUxZjRiN2I5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmMxZTdhMTUxNGE4NGJjMjlkODhjMTkwNjg2YjJiM2ZhOTI0MzhjZWI0MzhhYjYxYWZjZGQ0NjlkNzk0YjRkOCJ9"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L172-L232",
+          "version": "repo-lines-v1:sha256:35c6f015a7a8d1790c9f0882f1f545dd34bd47f097e3260d1d0b07dc058f5cb8:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4YjhkYzg3YjMyYTM2Y2RkZGU4Mjg2NDMwYjQ2M2Q3Njg0ZTFjNzNmNzkwNWM2OGVlMTY3NmE2Zjg3YjY0NWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ5MmVjMTcxMGI1Yjk1NTZhNTFmZTY2NDYwZDRhMjRjNzA0ODNjZGUxYTNiZDhiNzQ5ZjMyYjk2YmU5ZTM2N2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhNmNmNWJlNzA0MjlhN2JhN2MyZjIwZWJiYTcxMGY1OTAxZTY5ZWRhZDhhMjViN2VjNzQ4NjM3ZDVkZmFhZDcifQ"
+        },
+        {
+          "resource": "repo://agent/mcp/src/gui_link.cpp#L22-L24",
+          "version": "repo-lines-v1:sha256:8b036ea58aa76862f8d907241e910592c9e9d27415837f8c29a8aea38eac7164:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDRhNzU2NjUyNzU2YzlmZjZkNzVhZmEyMmRlYTlmOGM5N2E2NDU0Njg0OTNjYmJiN2ViM2NmZGNjMDkxNzUwYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzc5ZDk1Y2RiM2ZjN2U4Y2Y3YmI5YWVmMWJkNWExMzc5MGE5YTM5NTU0NDRmNjU1ZDA4OTNiOWUwNTJmYzM2ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOThlY2ZmMGM5Y2U1MDBhMDQwOGVlZDhiMTNlZWM5NWVjYTRkYmMyMDEzMmFmYmM0NTI1MzYwZTI5ZmE0YzA2ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzgxZjcxM2NiYzBhNTBmMzk1MzI2NjVkOTlmYjFiZTg3ZTNhNjEwOWNiYzk1YmFhYWY0NDVhZDNlZTk0ZDZkMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_96093d8ccb524b36ac45cd5852e82d28",
+      "statement": "The GUI listener accepts loopback peers only; AgentServer admits one authenticated client, answers a second connection with a BUSY error, and closes a session that has not completed hello within hello_timeout (5 s).",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/include/agent_server.h#L16-L16",
+          "version": "repo-lines-v1:sha256:9e20c8f086a6bf1bb0795ddd66f0bbe79359f974f9cbc5a04b07d72ee7221a4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWUyMGM4ZjA4NmE2YmYxYmIwNzk1ZGRkNjZmMGJiZTc5MzU5Zjk3NGY5Y2JjNWEwNGIwN2Q3MmVlNzIyMWE0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWUyMGM4ZjA4NmE2YmYxYmIwNzk1ZGRkNjZmMGJiZTc5MzU5Zjk3NGY5Y2JjNWEwNGIwN2Q3MmVlNzIyMWE0ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWZmODE0M2U1ZWJjNDhmZjlkMzMwOGQyYjU3MzFiODc4MDk3OWIwMDNmMGEyNjJjNDBhYmM3YjM3ZjEyYTk1NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2Q0NzZiOTNmMjZmOTJmMTVkMmZmZGY1M2UwZDJjYjQ1MDIwMmVmNWE1MTE0NjY3YWFkNjhiOGYwNDc4NDFjMiJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L544-L554",
+          "version": "repo-lines-v1:sha256:e43b3c69b3a20d414d456e5ec90021c3ca7f38bf68d373a0a0aeb21263feb44b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyZGU3MzY4YTc3Y2QxZWZiYTJmNjcyYTFlYTkwNDFjOWMxZjM2NGFkNjU3MDU1NzBlMjVlNDVhODkxODgxMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzYTkyMjgxMDE4NGVhYTRlNDg5M2RiNDM2NjU3MDhkZjA0NWM1ZmIxZGFkNTcwY2YzYjZjZGVmMzdhNzU1MWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwNjhhNTdlMWZiMzQxZDNhOTdhMWZhMWFlYzBlMDBjYjZlMjQzMDRkODEwMDAzM2QyYWY3NWIxZDYyMzZlYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBhMzMzYWMxODlkYTQzNzVhNDY1NWRjOGY4MDlkZjBlODNlMTc3MTRhYjgzZWM3MGVkYTExYTE3N2QxYmFmM2QifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L569-L573",
+          "version": "repo-lines-v1:sha256:3c06eff96bc5a6dae2376e12e0d4fc8148ddfb47746a61e1632f745525776150:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzc5YzYxMTU0MjJlYWY1MzdkMjYzNzkyNjMzN2MwZWJlNWU3YjY4ZTM0ZjM0ZWY2NjM0MTljM2NhZjM5NWIwMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjNhOTIyODEwMTg0ZWFhNGU0ODkzZGI0MzY2NTcwOGRmMDQ1YzVmYjFkYWQ1NzBjZjNiNmNkZWYzN2E3NTUxZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWQ2YmRkNzU3ZjM5OWUxMmEyNzYwNTIwOWFiZDI1ZWUwYWRkZjBiZTJjOGNkYTcwZWU3NTQyNzVmMThiNTk3YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTcwZTdmZjNiNDg2N2I5YTE5MWRmOWY1OTQ5NDI1ZGNiOGVlYzBjZTBkZTA5YTZhYmY3OTA4YTEzNjc0NzY0YyJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_socket.cpp#L592-L644",
+          "version": "repo-lines-v1:sha256:c2330206c743bea48da2d653c347d2cbbe13cd65d76202eadfd4eadc409d0a75:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5M2E0Yzg2NjUxYjEyZTU3NjE4ZDczYzkyZGNhMWI5YjgyZmI1YmIxZDU2MDA4MmJjMmU5NmQyYzU5MTVjZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiYmQyOTFhNDZjZDhlMzFiZDI1MDA1NTI3YzcyNTExZWEzYWM5ZGUxNTI2MWM2ZjJhYjJjZGQ0NTk3MTU4ZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3MTRiNDg5YjQ5NzViZDQxOTkzYTAzYjkzZTE4ZjFmMDZlNzY3YjljMGU1MDJkZGJjNmUzNWIxNGZlN2UxNjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_589b0be8ba664b6b8e2354b5e4c6acf0",
+      "statement": "The server answers a hello whose catalog_version differs with VERSION_MISMATCH and otherwise replies with the GUI token and the current epoch.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L662-L705",
+          "version": "repo-lines-v1:sha256:bc9cf511b50a983862c86b382829b3195b2d36e96605bde43ed3ddf6d06f47a9:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYjVlNzNlNTg2ZGJmM2E3Y2RmZGZkZjQyOTg4MDg3N2IxNWJmODgzOGJkOGIwNzY0YTNlMzQ4ZDZhZjEyNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiYmVhNDFkYmVjMzVlYmNlYjc1Y2QzMmNlZGE1MzBhZGFkYWUzNWNmMmMwNGQzNTdjNzA4ODE5ZjdjMDMzMjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwMDUxMmEzZWNiYTU5NjU3NjRlNTcxMThiMGY5ODhkMjg1MDZmNTcwYWRjYTg4MmMzMzBlMTFmOTNiZGY5MjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3104474a93b84f3a9c8e36ce49de6711",
+      "statement": "The listener thread only frames sockets and validates envelopes, queueing calls under a mutex; pump on the UI thread alone checks dialog state and invokes the executor.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L17-L17",
+          "version": "repo-lines-v1:sha256:0b4d2caa4606fab0bc5095a8a022ae2c8f336642755697856af8491e77bfb7d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGI0ZDJjYWE0NjA2ZmFiMGJjNTA5NWE4YTAyMmFlMmM4ZjMzNjY0Mjc1NTY5Nzg1NmFmODQ5MWU3N2JmYjdkMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGI0ZDJjYWE0NjA2ZmFiMGJjNTA5NWE4YTAyMmFlMmM4ZjMzNjY0Mjc1NTY5Nzg1NmFmODQ5MWU3N2JmYjdkMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTkyMzQ0MmNlYTZhY2UzNDdiYTg0MGZmMzk3YjA5MGJhZTI3YTI1OTIwOGQ2ZWJiMTJjNjJmMGU3ZWFiYmU2OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTU1ZTU4OGFjYmIyNGI0NmM0YWZiNmM1NTIxMDA2NjliNTU0YjEyNDQ2ZGNmYmY5YTg2ZjY2NzgwNjBkZTgxYyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L409-L431",
+          "version": "repo-lines-v1:sha256:017261ae20d0f9d0da77bb17fee67f5917a21532d965b4b9d6b9dea4d51da329:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNzgxZDA1MTBjM2IyNWY1MGQ2YzJjOWNhOTIyNGY2NWIyMTljNWM0YjUxNWM2NmI0NmIxNzRkYzU0Mzg5OTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjOGY5YWRkZDUwMTUyZDQ3NzIzYjY3MmI3Y2I2YjNlZmEzNjU0ZGE5MWFkOTE5ZTgyMWM2ODNlYjIyNDVlYjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmMTdhNGRiZjE3NWZmNmFiMTRjYTNjNzY2YzcxOTAyNzcyNWIzMjAyOTI3NTU5YmQ5OTI5NWViNmU1NDU0M2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjViNzdhNTg3ZTk0YjU5NTZiMTQ3ZjA3NWYwMTU4NWI4OWVlZDU3YmIxZTlkN2RlMTFlYmI1MjY5ZWYyOWZiNDQifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L494-L494",
+          "version": "repo-lines-v1:sha256:df3883d671fd924dc484d9ef376c84a7e55383308f0be4b37588fcd67eea6a2c:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGYzODgzZDY3MWZkOTI0ZGM0ODRkOWVmMzc2Yzg0YTdlNTUzODMzMDhmMGJlNGIzNzU4OGZjZDY3ZWVhNmEyYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGYzODgzZDY3MWZkOTI0ZGM0ODRkOWVmMzc2Yzg0YTdlNTUzODMzMDhmMGJlNGIzNzU4OGZjZDY3ZWVhNmEyYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmFlYjViMzQ5MjBjOGRlZWQzMjEwNmU2OTAzNjRhZGFiMTQwMGEyZDMyNjY0ZTkzMDY5MWMwZTg2Yzc1ZGM2OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTM1N2YxNjFkNTM1ZDBkNGQ5NDc3YTA3YTBkMmE2NzViZWY3MzMzNzg0ZWZiYjJiZjk2ZjFjZTFhMzMwYTEyOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7ef2fd8014fa4db8a8cbd725cf746047",
+      "statement": "RFSimulatorApp::update_dsp calls AgentServer::pump before the circuit-runtime update; within a pump, calls run in FIFO order, dialog state is checked before each call, at least one call completes unless the head is parked, and the 8 ms pump_budget is checked only after a call completes.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/include/agent_server.h#L14-L14",
+          "version": "repo-lines-v1:sha256:78fd22a9b7396b4a3a75089b4d3aff27feaf0ad4f4d88f4fd7454381767f0289:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzhmZDIyYTliNzM5NmI0YTNhNzUwODliNGQzYWZmMjdmZWFmMGFkNGY0ZDg4ZjRmZDc0NTQzODE3NjdmMDI4OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzhmZDIyYTliNzM5NmI0YTNhNzUwODliNGQzYWZmMjdmZWFmMGFkNGY0ZDg4ZjRmZDc0NTQzODE3NjdmMDI4OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzE2NjI2MDgzNmRiODEzYmI1YmQ5ZmJiZjcyNjE0MmRkYWMyOTBjN2QxZGY3ODdkOGViZTMxMDE2M2M3N2ZjNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzZhYjkxMzA2ZmViMDY5MjA5ODI5ZmI4ZDZiN2EyY2EyZDdlODI2NjY3NTQyN2VlZGJhMjFjMzViM2RjZjA4NyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L421-L423",
+          "version": "repo-lines-v1:sha256:86044fbd6315abe520b8eef76033d1cfcb3cbbc83d14d52be9dafad12e9d9ad3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGU4OGE3Y2Y4MmM3NTkxNTgyMTBhYzYzMmI3YmI1YjZjZGExYjM2NTM4N2UyYTNkYWIxMTM5OTQzM2ZiZGEyOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjliZmU3ODgzOTE0ZTBkYTI5ZTkyZmUxY2ExZTBlNGIxMDE3ZDNmMmNmZDc3NjExMjg3NjE2MGUwNDg4MmExNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGFkOWVkMjg3MDZjN2NkMTFmYjcwYzc3YTY3ZTkyMDQzNzc4YTExMTE0Y2MzZjIwOWFiZjA1Zjk4YTFmZGJhOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWM3MTlmZTNhYzIwMWUyZGFkN2IwMWI2OTZlMWIxZmFjOTM1MTExMTg4ZDZkMTQxZTc2MDg0OWZiM2RjMzA5OSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L474-L475",
+          "version": "repo-lines-v1:sha256:b08620f637964aed4fa44636f2274e636328805523f7016d6021ee6434589391:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmUyMzZhMzU5MTcyZTU5OGU4ZTQxZjliMzQ3OWVlOTgwN2ViM2QwMjM3M2E4NmNmNDhlYzRkOTNlNGJiZGIzMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDUyN2E4ZjI3MjJiMjgwMDkxMjMxYzViYzZmNzI3ZDNjN2ViNmU2Nzc0MmNiNTJkMjhkZTAzNDlmOTA1NmZmNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTg3YzA2NzA3OWVkNzdjNzI3OTg2ZDk2OTUwYWRhOGI2Y2UyYzk0NDNkODQ0ZWIxMDM5Yjc2YTQ1NzMzYTkwZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTc2MWJmNGJlMWIxZmM5Mzk0MTJkN2I2OGFjZWRmZTI2M2MxY2JjMjIyMzEyMTJkZjM5MDljNzIyOWNkMTZlYyJ9"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L1311-L1315",
+          "version": "repo-lines-v1:sha256:ecbcd6f4736640e46e505ad827940efd86e83eeed125d1159ce1594e82ecf389:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzc1NWJhOTc5NzA1NmQwOGIxMzBkYWE0ZDNmYjI4YTA3NTM2MjIxN2Q2NWEzMTZmNjcxNzAxZTU1MTc5OTc5ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQxMTM0OWJmMjA4YTgyNTk5OGU1ZTUzNmQ4ZDI3OWIyMDY4MWM5NjRlMDRmN2NiMWI4YjI4MTg2NDI0MGE4YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTllNzYzNTVjZjExOTk0ODBjM2Y5OTgzNmIxNDg2Yzg0MWQ4OTFmYWFkOTA0YzYwOGUwOTMwMjJkMzc1N2FlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGQ5MmFmMmI3NjlmZGY0N2IyNzI5OWIzZGY5Mjk3Y2NjODMwZWUyNGU0MjFhZWQ0NThhOTg1OTE2YWJlMThjYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_6e8775ac50ce436c808f6cb281758429",
+      "statement": "While a dialog is open the pump parks the queue; the park clock starts when the pump first sees the dialog and resets when it sees none, and the head call receives BUSY with the dialog message once the dialog has stayed open longer than park_timeout (30 s).",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L19-L19",
+          "version": "repo-lines-v1:sha256:b8f2ba3f822a648e205a6ea9f18757f9317e58d87650312c891a5ab829b97e06:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjhmMmJhM2Y4MjJhNjQ4ZTIwNWE2ZWE5ZjE4NzU3ZjkzMTdlNThkODc2NTAzMTJjODkxYTVhYjgyOWI5N2UwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjhmMmJhM2Y4MjJhNjQ4ZTIwNWE2ZWE5ZjE4NzU3ZjkzMTdlNThkODc2NTAzMTJjODkxYTVhYjgyOWI5N2UwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2I4MDg0MDA3ZWU3YjIwY2U5NWEzNzNjZGY5NGQ4MDljOTI2ODIwOGVmOTk4OTE1ZDhiMjdjNjZjMzcxNDc5YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjUwZmQ3YjA2ZGVkMjk4NjQwMTQ0ZDE2NjYxZmIxM2IzZjc0NDJkYjQxZjc0OWNlYjdjN2YwYTBjNWJmNGU3OCJ9"
+        },
+        {
+          "resource": "repo://agent/api/include/agent_server.h#L15-L15",
+          "version": "repo-lines-v1:sha256:0eed849c254eac642dded285129fa76dbc678cf7e9485c42610d815539dd7c43:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGVlZDg0OWMyNTRlYWM2NDJkZGVkMjg1MTI5ZmE3NmRiYzY3OGNmN2U5NDg1YzQyNjEwZDgxNTUzOWRkN2M0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGVlZDg0OWMyNTRlYWM2NDJkZGVkMjg1MTI5ZmE3NmRiYzY3OGNmN2U5NDg1YzQyNjEwZDgxNTUzOWRkN2M0MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTkxMjkzOTc4ZDU2MmNhYjEyZjNmNDkxNmVjZWZkMmQxMzE4NDlmOWZjNDRkMjQ1Y2I5MzA4NmNkZTYyNmNjNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTk5N2UwYmMxYzkzMWRiMGEzOGIzMjVmODQ2NjllNThlODViMjdhNTc2MDZhNmE5YjhkMTJlYjg1MjRiNjhhOSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L452-L487",
+          "version": "repo-lines-v1:sha256:b6b1823d4dec30ac0f56817168b6cdb940ef44a92250722982234cdabc53cfea:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5ZTI4OWUyNjg4Mzg0MGVmNTI5ZTI0NmQxYWNiYzExMTA2MTQ1MDJkNGVmMWY0YmY3OTdiMDQyZWRlN2JlNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MjJkZWEyMzQ5ZjIyMDY0MmYwMzNhOGI1Njg0NGJkNDcwYjFhNWZiMDUzMDlmZjE0YmI4MWI5ODM4YjFlZTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5ZGUwZTVhMGNkMjYwNzNmMDFkZjUzMGI3MWQxNjdjMThlMzkwZWIwNzk3ZWExM2JjOTI0YWQ1OTRiODM1NjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4OTViYjE4OTg3YzcwNDNmN2YxYTJjZjQ2ZmIwM2FmZTA0ZjAxYzQ2Mzc0NDFiOTUxM2QxMTU5ZmM3ODhkNDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f5a53f9a10c1439da2837f767c3f7de2",
+      "statement": "Exceptions from the dialog-state query and from the executor become INTERNAL results instead of unwinding the pump, and completion handlers run after the pump releases its lock.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L429-L446",
+          "version": "repo-lines-v1:sha256:d20b25533077c5f15efb693cdbd7ac95c3aa16bd73cd74183725f2df10acb839:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhYTBkZDVhZGViZDhjMjA5ZTAzZDE2MDk4NDBlYjJmOWE5NGUxOTk3YjczMTUzZTg5NDYwYmUxYzFiYmM4ZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmMzQ3OGQ5ZDkyOWY5ODNjOTZlZGZhOTljZjU5OWYwODg0ZmY2MGQ3MzljYWE1MGZiMGVmY2ZhZTdkOGQxYWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQyZGQ1NTc4MzMzNDVlMzQ5MzExNTliYWRjNzkxNzcxMTIzYjcyZjdmYzhmMzY3ZmQyMWViNWUwNjU2NzJmODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEwZDk0NmI2YWE3OWY4Njk1MmQxODMyYmEwYjNkYmMyZmM5MDZjOTQ4OGNlOTE0MDlmNzM1NzhiMWFhMjZhZDUifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L493-L497",
+          "version": "repo-lines-v1:sha256:f62c94ec3d259298739028ae968e78c44a1868e89b003a17d9ec8e6335bc35b4:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzEyNTM3YmQzOTJkMDE3OTMxZGU5ZDUyNGFiNGQxZDViNzhhNzVhZTY4YzBkOWU5NGQ1ODY0MDZmOGM1ODYwMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWEyMDM4Yzc5ZTY2YmQyMDVlMmNiMzJhMzMwYmU3NjAyMTIyMzI3MGQ5YzcxYjYxMWQ1YjBhYThjYWM2YzZjYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTExOGM5OTIyYjQzMDk5MDhiN2JjMjhmNDUyZDBjY2VlMDYxNWNmYmNlOWIyZTlhY2ViOThiODliZjIwOTBhMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDY4YzFiYzg1MDZkNTBkNmJiYzIzZDc3ZGYxMDE3MjFjNjJmNzg5YmJhNTM1YTg3OGU5MTNlNjlhNmI3N2JkMyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L509-L511",
+          "version": "repo-lines-v1:sha256:9a7e846c343b2a24ead30fba9cad0cff6fc95f721b66f8fa948bdb5df544bce3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmI2NTk3MTRlZjA3ZDIwOWY3ZTczNzUzZTQ3OGM1YzdmYTFlYzdlNWViNWNkNzNkYWRhYmVhNzM2NjFhZWJhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGViN2U4NTc2OTQ1MTJlMTJjMjU1NDkxZmNmYzIyMTYyNGYxZmE2MDdiNTBjMmI5Y2M2MjRmZTkxZjMyOGMzMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmFkZTRlNjk5MDU5NDZiYzg1MjE5MGM2OWE3MTAyNzJjYzcxYzU4N2YxNmQxMDZmMGNkNGJkMTNkMjEzZGZmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzNlOTcwM2Q3MzE5Y2I2ZGE3NWFiOGU0MTBiZDNhYWIyNTFlNTBjZTg2MmVjNTNlOTEyM2NkMTU3ZWE4NWQ5MyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1440ddae8611447fb9e0f7a0a6528208",
+      "statement": "AgentApi::execute routes by tool name through an if-chain of ten branches; an unknown name returns InvalidArgument with the current epoch, AgentArgumentError and other exceptions are returned as error results, and an unexpected exception becomes INTERNAL.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/agent_api.cpp#L110-L123",
+          "version": "repo-lines-v1:sha256:ae6b8c44ea2169c19632562de019ebd416afcdb7e23d02ec31dfa512493818c7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMDg5MTEzNmY0MjU2ODQ5MDkwM2Y3ZDMzYjJkNTRiZDU5MmM4MDFlZGM0MmUwMTAzZTBkNDg2ZmFkNjdkMDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0OWIxMzY2ZjkyZjliNGM1NGFkYTFmZjQyMmI2ZDM4N2Q0MTA0ZjY5YTA4ZTM4NjAzZTU3NGZjNzhlMGUwZjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkNDU3MDcyM2ZkMTk2ZWM1ZjY0NTU5OWQ0ZmNkMzZmZWZhYmQ3NWVhZjZhYmYyYTNmMWI0OGFjY2ZiMDdlNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiZGE4NWM1MmY2MGYyMjQyMDc1ZjBiMzhkMzUyYWI0YjBmYmQ0M2ZhZjUzM2EzMDJjODc1Mjk5NjhmZTk0NDUifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_api.cpp#L68-L107",
+          "version": "repo-lines-v1:sha256:aea08b74c44456492630e520d4870305535c15b573ae56c164883b3e624a1bfe:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkOGQ3Y2VjYmFlNGUyMDdiZTBmNDRkMTYwMjg3MmI5YmQ3NTQ0OGQxMDllZjQ0MThmMzdmZjdiYjE5ZWVhNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3MDJiYjU4MDZlODU3Njk0NjUxODA0Mzc3ODk5M2RmOTI5YmFiZTAwMjI4Y2E4YTI0ZDY0YzNmMTljNzYyODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2YjUyNzdlYzc3ZTQ2ODhjYWE4NDcxM2ZhYmU5OWMxODYxODA4YmFlMzI4NDFiZDU3MWIwNGJiNTYxYzU2YTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxZTU4NjA2ZjVmZTdjNTFkNmQyNDJkZDE2OWE1MGQxYTNhMmUxZGE1NjQ5ZDQwZTA0MTlmMDFlYjUwOTMxMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1adbf7a66f944dac84646380a16eb636",
+      "statement": "A failed tool result has is_error true and structured {epoch, error:{code, message}}, with hint, op_index, and details present only when set and epoch null when unknown.",
+      "evidence": [
+        {
+          "resource": "repo://agent/protocol/include/agent_errors.h#L29-L35",
+          "version": "repo-lines-v1:sha256:6632e9b669c6420981884a615cce37b57592bcc1fe45a89510d9a847df183fb3:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGZmZTdlNjA2MTlhN2FhNjkxYzJhY2JlYzI0N2U4OGIwYWExY2Q5ZmNmOTk3OTM5YzkxZjkyOGExNzg5MDdkYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWNjMzMxMGRhYTI4NWYxYTAwNTY1Y2VkM2ZiMWEzYTUwYzY1N2RkMGM4Y2IzYTkwMTY5NDM3MDhmMjJlNWQ5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTdhYmNhYzg3ZmMwOWU1MTY0ZDFkNzQ5MzViNWQ1ZTRlZDU0YmM2YTkyOTE3N2Y3MzU0NzdhZDNhNTY3NDg4OSJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_errors.cpp#L39-L61",
+          "version": "repo-lines-v1:sha256:5b65c754b3325ba847b15804f65bf5faaf6080a863b7d3c7fda467007b51b871:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1OTc0ZDI3ODY1NGQwODVjY2ExYzdjNzIyMTM1MzVhYzFhZGNhNGYyYTQ3OTkzYTU2Njg4OGY5ZGUyN2ZhOWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQzN2FiM2FkZjFjYjIyYmMyZjU2NWZhYTUxNTJkYzBiMWFjMzQyNmE2ZmYxOWVkYThlMDAxZWM2ZWZlNWRmYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyNWJmYTU2MWVlYmY3YWY2MGU2YjBmN2QwMTk0MjE1OGQyZjE4MjY1YTk1MjczZDVmMWRjZmQzZTkxYmQ0YWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9f4b8847de6843cc9e312b0841f618ee",
+      "statement": "circuit_edit requires an epoch equal to the current epoch and between 1 and 64 ops; a stale epoch returns STALE_EPOCH with details.epoch, details.cause when a replacement was recorded, and details.undone after a revert.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L408-L433",
+          "version": "repo-lines-v1:sha256:9ef3ab0304fcee9dd309e08a0ab9179a494928f378e155add9d4bbeba3bd7b4b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YTI5NDdkODJiYzZhZWZjOTQxMDhiZjI4NGNlZjk3NmJjNjBhNzg4NzMzNjZjYWY3NDVlYmIyZjY3MTdiN2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkZDlkYjU0MmI1NTdjMjEzMGRhM2NjZmY2M2U2ZjlhNjI0YTE0NzVjZmQzMjdiMjNiZmZlNmU1ZmQzNzBlMTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNTFiYWYxYmFkOGQ4MzRjZmNiMzdkYzU1ZmYyZDk5ZjFmZGQxMTJhNjA1Y2EyN2YxNzA3NmY4OTVhZGEwZmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e618a45910744c269504d9bcf6da4442",
+      "statement": "receiver_measure checks its epoch before any other argument, so a stale call reports STALE_EPOCH even when its other arguments are invalid.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L118-L122",
+          "version": "repo-lines-v1:sha256:db6b5dd20ea06e55295f0026dc4cd7896484280ae4d3a226e8fff9fe2ca0969f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmMyODc4MTM5MDliMTBjYzFhMDVkZDEwZTE2NjVmMjhkNzI5N2I2OGM2ODJhYTY2ZWMyMDczODAyNTQ5NDllNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDBjZWM0ZDgwZmJkMzYyNDNiMTZjM2M1OWQxOTYxZDEyOWYwY2I3ZTQ0Y2VmM2NmOWY4N2JjMWU3MDFiMDZjOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTcyOTgxODg2YmIxMGIzOGNiNzIxZmFhZTI1ZDAzMTE3ODhhMjU0M2NhNzhkOGUwMGU0MGNjNDZlNTQ2NmMwOSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L73-L86",
+          "version": "repo-lines-v1:sha256:fa4e44ee7e5c7a4c137a724005a6a596816dcf65b544ac62b6172d0a793689f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhZThmMzM0MGIxNjZkODIwZDZjNzhiNzdkZGI1ZWM2ZjI0MDRiZjY1ZmQzNTE2ODJhYTU1YzRkNzIzMTA2OTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0ZTFiZWM1MWYwMjAyNzljMzg5ZTliMmZlNzc0Zjg3MGVjOTUyNzI4ZWIzNjg3OGIyOGFkYjg1OWZhZGUzMTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjYmM4MDllNmI1Y2Q4MWIxNWRiMTM4ZGU2NWU3YTIzMjgxMmE1OGNhYmVkMzUzMDk0YTNkNTZlZTAwZjgxNjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f84f99a85bd04fce9dc45f6b5cd5d8b3",
+      "statement": "circuit_edit opens a checkpoint before its first op; its finish step discards the checkpoint when nothing was applied, otherwise commits it with a summary and places added components; an error whose details.reason is RESTORE_FAILED commits even an empty checkpoint.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L435-L455",
+          "version": "repo-lines-v1:sha256:0a229135693945e30dd41116c4d4b67b50fb8fc5962a08c2cdad6a5dfcb96de9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmY2Q2M2ZhMWE4MDBjNDRhM2JmYjc1MjM0ZGE4ZWMwMDZlOTViZWMyODU4NWYyY2EwYzA1MmI1YjY1ZGUzZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhZTg2ODg3NTAzNGFjYmYxMjRkZDEwOTMwYjIxNjkwYTNkOWVmYjM1NDFmNDc1YmYzODQ3M2ZkYmZiYTIzYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlmZDBmZTBmNWY1Y2Y0ZThlYjU3NTIxNDU0OGU0M2Q3NTE4ZmIxYTM1ZDQzNGI0YzQyOGMwOGFlZTE2YzgxM2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0NmY4Njg1MDQ5ODgyZTE5NDJiNDVjZDM3NzhjMWE3MGU2MzE3YzZmZTUwZjcxM2Q1MzM2NDZiNTZjZTZhMDAifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L717-L722",
+          "version": "repo-lines-v1:sha256:1cae3a72dc7038a4aba0187362e37aeecc5b34c681a6541e44d6aed4b6ca13db:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjY1NDhhMDhjNzAyNjI1ZTE3ZDI0ZjdkZmM4MWJmNTI3MzEyNjQ5OGExOWVjMmFhYWE0YmE5NWIxYmFkNmE0NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2M1YzM0MDM2MDAxOTliMzY5ZGM1ZWVhOTBjNjVjMjIzMzFkYWQ4OTgwMzA3NTQ2NWJkZjgzZjM2OTU0ZTM0YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGM5NTFjNzI3YWEzY2I5YTJmZDFjOTc3YTFlYjA4YjFhMDI2ZTE1ODZhMGZjMmZhOTUzNzU5ZjFhM2IzN2ExNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCJ9"
+        },
+        {
+          "resource": "repo://app/src/app_agent_host.cpp#L22-L27",
+          "version": "repo-lines-v1:sha256:831afe7d5a44d3042743a8adf46ceec057b89af7487d1a38d045d4a8553a31a4:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjIyYmIxNzJmOWU0NTMxMDFhM2Q3MmVlZjhkMzkwNDBlZWVhNTNkY2VhZDg4MzM3YWIwOGMyMWVmMWZlNTQxYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGIzZDQ1NTZjYjM2OTcxMGFiMDYzYjM5NDllYjM1MTNiNjE5ZmU5MmUyMzY3MTRiMDJjZjk4M2E5YTM3NGE2MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDllY2VkZDRhZGIwNjgzZTQ3MWNlZGQ4NmQ5ZDExZTNlNzIwZDliNjAzNGU0YmE2MDA0NDNkNjc4MTJmMzQxNCJ9"
+        },
+        {
+          "resource": "repo://app/src/app_agent_host.cpp#L29-L56",
+          "version": "repo-lines-v1:sha256:bb2bd4e497ed22d77fb85859f23fff873331227158fc16f5c9c000b3106b6614:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyNmZhMjM0MTMyNTJkMDkwYzUwMmVmYWJiZTIyMDk5MGI2NjhhNThkYzE5MGRlMGI3MjQ0NjA4YzVhN2M3NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyNTNmMWFjMTg3NDVhM2FmMDYzNGIxYmM5YWQyYzhjMWQ2ZDdiZTQ4Y2UxYzM0ZjA5YjA2YTc5OTBiNDk1ZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk4NzBjODllOGMwNGExNjMyOTAyNDM3OGU2ZDM2NzZkY2Y4ZDVlMjhmNTJlMjM2NzFjNDRhYzdmODQyMGIzOTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1b30cbaef4ee4308a0f331b8029324df",
+      "statement": "On the first failing op circuit_edit stops, returns op_index, and reports the applied prefix in structured.applied, which stays committed; a success returns epoch, revision, applied, and refs, where refs name call-local refs.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L196-L200",
+          "version": "repo-lines-v1:sha256:80624e975f31c5624a77bbc8a1fd3ff06c62d988ff0c6c130057403a55dc635f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTI2MTNlMGU3ODFkMDdmYTRhOTAwNDAyMmIwM2EzNzcyNmEwNjlkMmU3ODEzOTA5Y2RkOTQ0Yjk2NmZjN2QyZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDFlYTIwYmFjNzgzZDYzYzliMzM0NGE0Y2RkNjE1NWM0OTg1MTk3ZTgwNTRhN2ZlZDQ5Yjk5YWQyZjY0YzVjYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGQxYTcxMjM0ZTVjZDVkNTMxOTMwNzAyYjM3NWE5MjU1ZjkzNWJmNTUzNTMzYmZmOTM2MmNmZmQzNGVmZWMzMyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L309-L316",
+          "version": "repo-lines-v1:sha256:fb74a8401a0c90610b558b4f338c4994668be7dc18d566738041885a965e2c32:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGQ5ZjhhY2NkYzgyYmM5OWRkOGJmY2I5Yzg5NmIwNjQ2NDFhZTJmM2VkYWUwMjQ0MmU4ODA1MDM2YThlYWRjMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGViZGIzNjViYzBiNTc5YTc3MjY4YTZhNjdiNjBlNDBjMDBhZjEwMzc4MGVjMWU3NTYyM2ExNGVkZjM3ZmZhYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmE3YzkzOTk2ZTYxNTJjMTkxM2ExYTA0NTU2M2E1NTk4MmFmYjNiMTA4MmE4Nzk3Mzc4YWYwOWFkYzZiYWMzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjA2ZjcwMjYzZTdiMGM4ODQ4NDE0ZDRiZWE0OGFlM2VkNjQ5MTc1OWZhMjZhNDQ4NTJkN2VmNjNhNGNlYmRkNSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L717-L723",
+          "version": "repo-lines-v1:sha256:94ae278ea6684b135311864e4aeafb7e0c8ddfbeee87bc8c4d01a7d4d30df982:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjY1NDhhMDhjNzAyNjI1ZTE3ZDI0ZjdkZmM4MWJmNTI3MzEyNjQ5OGExOWVjMmFhYWE0YmE5NWIxYmFkNmE0NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGM5NTFjNzI3YWEzY2I5YTJmZDFjOTc3YTFlYjA4YjFhMDI2ZTE1ODZhMGZjMmZhOTUzNzU5ZjFhM2IzN2ExNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODhiMDUyMTg2Y2E2M2U1ZmViMWUxZGVjNmVkMzZlNTEwMzM0NDBjOWI0M2QyM2Q5OWEzMjQ5ZTYwNjIzMTM0MyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L727-L728",
+          "version": "repo-lines-v1:sha256:7c044db66e4c2f62b0f9207c2b6d594a60800611057243a099b293961adc3abb:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmJkNTFlMTAzZDNiNzhlNTA3ZTg3OGM2M2I1NGU2ZDBmM2QyMDNiNWExZWRmNjdiZTg5MTdhMzliYmZlZDdmMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGRhMTQwNmE4OTExYTVlZWNhNzg4YmJkYjc0MWZiNjU4NTZmNWJkNDBhMDgyMDljNTZmNmRjNzNhOTM0NTJiOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODhiMDUyMTg2Y2E2M2U1ZmViMWUxZGVjNmVkMzZlNTEwMzM0NDBjOWI0M2QyM2Q5OWEzMjQ5ZTYwNjIzMTM0MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d09f84fac58f4e59a1e40da380c10396",
+      "statement": "AppAgentHost keeps the newest 20 committed checkpoints, and removeCheckpointsFrom(id) drops checkpoints at or after id and returns their summaries oldest-first.",
+      "evidence": [
+        {
+          "resource": "repo://app/src/app_agent_host.cpp#L43-L48",
+          "version": "repo-lines-v1:sha256:b976bbcd5d8e3b2a269df09890a6f7f9076eeb427bcb9e573108879bb08178a0:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDJmNzkzODFkOGU0ZWVkMDNhNzJkMTNiOTcyODBiYWQxYzkyNGY5ZTk0OTFkNzZkNzk4N2E5NWUzZDY1N2M4OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTFlMWYwMjBkNzcwZTc1ZDE3NGQ5NjUxMTU4ZmI5ODEwN2ZlODBjMTNhM2M1YzRiNzM4MTNhYjU5NTUyOGZlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2Q2MmUxNzkzOTIwZjY3ODU1YWQxN2YxOTg3OWM1NDhjYjMyYTE4ZDhjZDM3ZjhlNjYzNGE2MzVlNzU0NDUyMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTU5NGE5MGVjMWMxMmNmMWRmNmZjNjAzYjMwZjY0YTdiZDQ0NDJmZGNkYTZhMWI0ZjBjNWViODgyYzYyYjgyMiJ9"
+        },
+        {
+          "resource": "repo://app/src/app_agent_host.cpp#L66-L79",
+          "version": "repo-lines-v1:sha256:0a107c73ab391138ebc355722161b9eb4c6c44add44ba68978695b394b8e6a64:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM2YWFiMWY1MTU0MjMxNTM1NTVlNTVjMjE4YjU2MWNhYmM3ZjM4ZmM2ZWJkYTA3NDFiNjFhNjZhMGM1YWI0ZDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlNDRlMjYxYzU3MTViZTY2YjQ1NTU0NjlkM2JiMTY0MzRjNDY1NTQwMzc4MzEzOTc5NzRlZjViZWVmZDhmYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzZWU0NTdkMDhhYWU4NjM4YzgzZThlN2U1ZTJmM2ZhYmQ4YzEzOThhNzJiZGM0MjhkY2VkNjM3YzE3YWIyNDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_151a819f9760483e80ae100608442600",
+      "statement": "The API keeps the undone summaries from a revert through noteProjectReplaced and reports them in the details of the next stale circuit_edit call.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/include/agent_api.h#L55-L56",
+          "version": "repo-lines-v1:sha256:1e54aaf9c82d4d9a0d1b52f4de9b59137a8ddd6dd16ec208718d379de8487257:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmI4NWIwODA2NmFjOGJiZDIxZWQ2MjQ0YWJlYzg2ZjJmNzJiNzVkZWY0NDBlNmJkMGE3ZTEwNjRhOWUwZjFjNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTVmMTU4YjYxNTZlMTQ0MzhmZWRkNDM3M2FlODVhMzVjM2JiYTQ2MGRhYTM4ODVkNWM5OGU2OTBiYzY0MmY1ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDQ0ZWIzNGNmZjUxMmUwMTJiNWMzZjhiM2MxMDg5ZmUwMmNjMDQzOGFiOTU3MjM4YzEwNWQxNDg0MWZjMmUzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWJkOWQ3NTRiOTE5MDg3ODg0ZTM2OGFmYTY2N2U1ZjY3MDg4Yzk2ZGFlMDEwMGZkY2FjNjVhNzgwM2IwZDg5NyJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_circuit_edit.cpp#L428-L429",
+          "version": "repo-lines-v1:sha256:47d8254075682b04c62481682cf28f6958f6cf77cafdd117b4664fff274af71e:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQzMmNjZTAzODY4ZTc4ZWRjZTljMzAwNDA4ZTFmMjhlYjc2OWNjNzZjMjI0NzYxZGUyZjQ4YWJmNmYzODgxNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmRkNmMzOTQ5MzUxM2I2ZTVlMDhiYTMzODU2ODljNTI5NjZiZGQzMDE0YzdiYTg4ZmQ1OWZiMjc3MjM0YzVmMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWM4NzIwNzM1ZjEwNjU4MDk5ZTY3NTRjZmU5NWNkMjRjZmQyY2YxMzljNjQ0ZGFmZTZhNGZkY2Y4Y2FmNWM4OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjdkZDRhMzAyNmUxMDVkNjAyNjRlNzAwYzE2NjBkZTkyNWQ5M2I1ZGU1ZGVlNmJmYmNlZjVkNzY3ZDJlNWFkZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_59fb30f4944340bab4efb8032b3d6e09",
+      "statement": "receiver_measure and data_file_read begin no checkpoint, call no EditorCommands, and write no file.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_data_file.cpp",
+          "version": "repo-file-v1:sha256:5e5d17959958acd46c9f90181b49dfddfc316f178497295237cfd47af9ab29da"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp",
+          "version": "repo-file-v1:sha256:092f1808accd03dee283c06604b8c7e88e49c572eaec4de2e8f0929765e44b0e"
+        }
+      ]
+    },
+    {
+      "id": "claim_89242efdfb6e4ba8be4c90b91e8d38cb",
+      "statement": "receiver_measure rejects non-finite request numbers as InvalidArgument and encodes each series point through agentNumber, so the NaN the engine uses for an unavailable point becomes JSON null.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L108-L114",
+          "version": "repo-lines-v1:sha256:bc41bf29581e22435c83183d714b7029e3d38e58cf0e1b397f300e0293339ab4:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzg2MmQwZjRmODg4NDI1N2I2NmEyMzBkOTMyM2QwOGVlZWVlYTJlYzcyN2NiODA1NDNmNzVkOTFkYjAyNzZjYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjQzOGMxZTg1YTkzMjk4ZGQ1MWY5NDg1OGIzYWVjYjVlYmJiYTI3NzU3ZDlkZGJjNGEzNzY3YmU4ZjE3ZmM3YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L52-L64",
+          "version": "repo-lines-v1:sha256:aa7c77a9b8b385fa52e44a568c6f060c96c13255f7485bf4d617cee0746225ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkNmMzZTJhMWNhMGE2ZWExNTM3NDAzYjg1MGQ0ZmRmNzgxMmZhMzRmNjRlYzliOTc4NTlkNjk0MmNhODY1YTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwODJiZDU4NjA4MWFjYjU3NGExN2ExNDUyYTJlNzVmNDFmYzViNDg0NGZkNjBkM2YwOTcwMjc2Y2QzNzM0NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwNmNkYWNlZTBiYzk3OTY3ZWFmOWVjNjAxZTA3YjZmOTY5MzdmYWQyZTdhMDU5OWQ4YjZmOGJlOGQ3YWY0YTgifQ"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_errors.cpp#L63-L65",
+          "version": "repo-lines-v1:sha256:586baeb325ae2db25e42781179fa877c0d0297ff86164936d85392894e017fe3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGY1YWMyNTMwN2VhMzhiNWEwNjkxZmIwMDZhMDMwNGIxYmE4ZWNhZmU0M2JlNjk4OTYxYjY4MDM0NWUwOTM4NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmE3YzkzOTk2ZTYxNTJjMTkxM2ExYTA0NTU2M2E1NTk4MmFmYjNiMTA4MmE4Nzk3Mzc4YWYwOWFkYzZiYWMzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_dab349f4b7ed4e569065b74c280d3ce3",
+      "statement": "data_file_read reports magnitude_dB through agentNumber, so a zero-magnitude sample becomes JSON null, and max_points defaults to 201 within the range 2 to 401.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_data_file.cpp#L136-L151",
+          "version": "repo-lines-v1:sha256:9208df24ecacc3f591fe8e5a0570c61ddbd520afc58a2e9222feae63c13e73c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4OWRmZWZjZjcwYWQ4MzljZjhlMmRmY2EyMmY5Y2EzN2FiZGNiYThhMmVhOTFlODRlYTM5ZTljNjMwMjc1ZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzEzNTkwNjY1NjMyM2QxYzVlYTQxNjU0ZWU2NmFmYjU4NWFjZGNmYWVhY2ExMjFkNWUzMGJmMTkzZWVkZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkZjBkYjMwMDc3YTcyNzU4YTZmMDBjYWQ2NWJiZmRkYmE1YTFjOGY5YzMzNGI0ZmZkMjE0MjgzNzUyNjNlZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk4ZDU5YmIzNDE5N2FiMDM0ODhiMTRmY2VmNDdiYjQ2YzUyYTUyOGM4YzFkNzk2ZWM1YzIyM2Y0MWRkZTZjNzkifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_data_file.cpp#L51-L60",
+          "version": "repo-lines-v1:sha256:9925609c2e84fb496d4e51dcc481699e87fd541b6960db5b9e65dd22adf06ffa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1YTNhNDFlMjY3MzliZjA0ZWUxNTVlZDY4YmIzYzQ1YmMwNzY1YTQwZDZiMzMyZjMwMTdjYzlhOTllM2M4NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYzFkZmViOTI2NDM0YWZjMzY0OTFlZTYxZTExMzQwMDU3NzNlNzBlZDQ1YjkxNjBkN2E3NzY3N2JkN2UyZjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI4ZDYzYTNjOWU5ZDI1MjAwMzhmZTMxZTg4MTA1MmJmNjI5MWJkY2U1MTI2ZDkzMzU0YmU1ZWQ1Y2E2NTQ3M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBiM2Y3NDYwODU5MjIzNDE5NGZlZTU3NzEwYTM4NGRjNjA4MGVhNDZjYjkxMjAzZWQ2Y2Y1YWY2ZTM1N2ExOGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ea5ea6ddcda949a78d4b6b53fd673212",
+      "statement": "Each reply line is capped at 1 MiB and written with a 5 s timeout; a tool result over the cap is replaced by an INTERNAL error with the current epoch, and flushOutbox honours a close_connection flag on outbox entries.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L18-L18",
+          "version": "repo-lines-v1:sha256:0c356f06255019aedfe0dc1071f4098523eba0638ce880aef7cc549061d91aa7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGMzNTZmMDYyNTUwMTlhZWRmZTBkYzEwNzFmNDA5ODUyM2ViYTA2MzhjZTg4MGFlZjdjYzU0OTA2MWQ5MWFhNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGMzNTZmMDYyNTUwMTlhZWRmZTBkYzEwNzFmNDA5ODUyM2ViYTA2MzhjZTg4MGFlZjdjYzU0OTA2MWQ5MWFhNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzlhMjY1ODlmMjAxMGM4MzBjODU2ODMyZDBmNGZjNWEwMmRhYjY3Zjg5M2Q4YzYxOGY3ZDY1ZmU3NWJkZGY1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTNiNjVhMmMwZjE5MWFhNmZmNjIxNGNkYzIzOWU1N2M5ZjRhMjY5ODY5ZTkwNDg1MTUzY2JmOTM2NmFlN2M5MiJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L124-L125",
+          "version": "repo-lines-v1:sha256:5211fb46883034cbce1f301f4b921455af434fa3e55747cf1288024ce3063c64:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjA2NTc1ZmE0MTk2YTRlMzc2ODU4ZmY2NWRlMDBhMDI1MDg1Nzg3NmYzZDU0MTNlZmQ2NDc2YTZkMjdmM2E0OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMThiOWEyZjk2ODZmNTUzYmRlOGU3NjYxMzI2M2NiYTU1YWVmYzg2NjJjYjY3YjhlYzY1MDViYzU0ZjQ1ZDQ5NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmZlZjUyNGVhZDQ3OTdjY2Y3MTI0NDJjNjZjYzNjNzY3OGNhNjQzYzM4ZmFjZjYzZGNjZmM1ODk1YTQ5MzYyNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTllZWQ4ZmU5ODNmNmQwOTJjY2MwMWJjNDNiNDM2ODQ4MDBiYjc2ZTc3ZWM1ZjdhYTgyZDEwZThlYmEyNThiZCJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L44-L49",
+          "version": "repo-lines-v1:sha256:bf990aa3c13ea409e19a17b3c451c5195c8cd38ee64da71d26604c0fc4803fde:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTRhMTU0ZDA5NDNjOWI0ZmY5NGEwZWZjODJlN2JkYjk0NjIyMzFiNWZmYzFjYjk2NDRlMTg1M2VjOWVkNGUxMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODM1NTUyOGYyMGU3YjAxZmU4YWMyNmJjMDU5ZmRmNDhmY2MxYWE3ODQxY2UwYzI2Yjg5OGU3M2IzMmFiNjQ5ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDZkMzQ4OWZiYTAyNDY0NjkzMDI3MDk1OTIzOTU0YTQxMjIxZTI2NzY5MjAzNjU3ZDQyMDY3ZWI5YzE5MDA4MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODgzNjhjMTE4MmUyMzg2NTI2NGZhZDMwMGIxNWRkNTU5MjFhODU2OGNkODFjNzYwNjI0YjIzMzFmZWUwM2VmOSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L66-L85",
+          "version": "repo-lines-v1:sha256:db8aded740011d878bc7aad510a01fc21e1467eae9a3d55a5af42cf386f5ec2c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViNjY3MzE0YTc2ZmU0ZTJhNGVhMDgzOTcwMTE5ZTc5MDA2MjFmOGU0MDJiZDA5ZGViYTQyNGI5Y2I2ZjQ3YTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjllY2JiOTQ2NmUzMThjM2JkZTgxMWE2YmQ1NjBkZTA2NDIyYWVkYTkwZDAxMGY0MmI2ZjhmNDg1YjUyMjg1ZjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5NTJjMTA0M2RiNGZlOTQzZDBkNzk5MjgxNmYwMzkyZGNhYjUwZDFlMjkxOTYxZDczNDhhZmNmODkyZmEwOWIifQ"
+        },
+        {
+          "resource": "repo://agent/api/src/agent_server.cpp#L803-L805",
+          "version": "repo-lines-v1:sha256:eba1b7f2c77697c2aa7e163366375804dc756c535ba90d8e9dfa4d82ea28b260:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGJmNzc1NmFhYmZlMjA0ODUyYzk3NzAzOTA3ZjgzYWJkNWM2N2MzN2Y4YTc2ZDJhYmJkZWMwNmIyYzYxYzhlYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWVlMzdkMmFkYjljNzM3NTFkMTkwZDZlY2UxNGRjZWJjMDUyODA0MDk4MWIyM2MyYTkzOTlkMDczMDFhNmVhYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGU1Yzc4Y2NkYjQxMGMxY2FlZjMyNDcxYjZiNWExMTY1Yzg2ZDQ2OTk3ZTA0MDE3NmY4ZmQzYjE5NTUwNDcwZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmMwM2Q0OTExMTI0MjFiYjJjNjc1ZDYxZWRhNmNmNmYxMWM1MGQzN2Q0NzEyODNkODA4NWExMGQ2YjI2NzU5OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_490134dede6041ea8782e02a71145fd6",
+      "statement": "receiver_measure runs one bounded update of an API-owned engine per call and returns in_progress, so callers repeat the call while in_progress is true.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L16-L16",
+          "version": "repo-lines-v1:sha256:dd7782ddeeda4ebb247bc4c11d404288ef83c07685604d5b50ad62dbd2c4a8ea:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGQ3NzgyZGRlZWRhNGViYjI0N2JjNGMxMWQ0MDQyODhlZjgzYzA3Njg1NjA0ZDViNTBhZDYyZGJkMmM0YThlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGQ3NzgyZGRlZWRhNGViYjI0N2JjNGMxMWQ0MDQyODhlZjgzYzA3Njg1NjA0ZDViNTBhZDYyZGJkMmM0YThlYSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTkwMDYzZjgzMDM2ZGRkZDBiMTVjNjFhNTRhYmVmZThmODc4YTgzODQzODU3NmYwOWQ4MjMzNWJiOWM5NTY3ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODdmZWNlYWMzOTMwNWY1ZjI5MmRmZDI2NTQ1N2M1MWVkNDFmZGU5NWVmZWQwYzhiNWFkYzEwZWQ2NTE2NmQ0MiJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L165-L169",
+          "version": "repo-lines-v1:sha256:95faabd0673367d37a42c33e798d121692bc6dec39c12192519ce47986f0fc66:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTcwMjQyMDg4MjZiNTZkZDQxNDlhMzQ0N2QzMzk0MmMzZWNmMmM4YzA0NDRmNzdjZmNmN2EzYzU2OGUzMTE5YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2VhMWNiN2Q5ZTU1MjBlYzE2N2EzMmM0NzZjOTg2ODU0ZGZhMjRjYzMyMDY5YzUxNGIzNzhkYzFiNWQyNGM2MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWE5YTdkZjU0MGIyNGNhZjc4MzJmOWE1MWU3N2NlYTY3MTFlYTI3NjlmNzk3MDlkNDMyMjRlNzY3MDhlZTM4OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2NjMjcwZjRkNWJlZDk2OTk3MzAxNzY3MzdjMzg4MjA3YTU5MGQ3MWE5MDE1YmJmZjJhMzJlMzkwYjM0Zjc4YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1cceb3b570e2462d9dc7208829193193",
+      "statement": "test_agent_api, test_agent_server, test_mcp_bridge, and test_agent_app are registered as standalone CTest targets in tests/CMakeLists.txt.",
+      "evidence": [
+        {
+          "resource": "repo://tests/CMakeLists.txt#L485-L512",
+          "version": "repo-lines-v1:sha256:74e77d90560bb0575bca56e081d091ae86db68033322a419905256d936832865:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmMWNhNzUzMTg1OTFmNGM2NGE3MDViMzgyMDlkZjRiYTMyNzhkNzYyNTVlZmE1NTQyODdjMGI2MzgwZDE2ODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhNTE2YzkxZWEzZmMwYTQ0YjliNDYxZWEyMWVjM2FjMDkyYzRlMjFlZjc3YjlhOGM1ZjkwOWJlYThlMjk5ODgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc4OTkxNjZjYWNmNTU3NzRkNGY2OGU0Yjg2MmM2YzBkYzA2YWJhNTJhYmE1MzlhYWVmNTRkZTllYTBlNTI2ZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cd15b71191304ed4a79186c3d9d0763d",
+      "statement": "Real-client interoperability, minimized-window behavior, and server-restart persistence are manual acceptance steps, not automated tests.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L57-L59",
+          "version": "repo-lines-v1:sha256:e219057bdac30e5e0d9088b6fcc901d27668f72c7147f449cbb213591db666b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjNkNTA5NGRiMTY1NDk5OTc1M2ZiYzc3MDgwYmM2Njc1MjM2NGM0YTBhNWQ1ZWRmYWQ0MDBkYTBkNzJhYTQyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjI4YzZhZTVmYmRiMzFiZjI5OTM1NjgxMzIwMDY5MWE1OGYxZjNmMTJiMjdiNjVhYjcwOWM2ZTA0YjRlYWJlYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTJjMzYyYThmODM4NjNlZWYyZTA3YTU3OTVkNTFiYjc1NGZiZDUwNGM2YWZlYzc3ZjBkZjY3NTgxZWU4YzIxMiJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.0",
+    "at": "2026-10-10T17:27:48.662Z"
+  }
+}
