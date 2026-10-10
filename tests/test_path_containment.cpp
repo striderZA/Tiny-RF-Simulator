@@ -579,3 +579,42 @@ TEST_CASE_METHOD(ImGuiFixture,
     CHECK(readFile(asset_path) == original_asset);
     fs::remove_all(base);
 }
+
+TEST_CASE("componentDataFilePath resolves contained data files and refuses escapes",
+          "[containment][library][data_file]") {
+    const auto base = scratchDir("containment_accessor_" + test_temp_paths::processTag());
+    const std::string decoy_name =
+        "containment_accessor_decoy_" + test_temp_paths::processTag() + ".s2p";
+    writeS2p(base / "good.s2p");
+    writeS2p(base.parent_path() / decoy_name);
+
+    // One library JSON per case, written the way the library containment tests above do.
+    const auto load = [&](const std::string &part_number, const std::string &data_path) {
+        nlohmann::json j;
+        j["schema_version"] = 2;
+        j["type"] = "amplifier";
+        j["part_number"] = part_number;
+        j["parameters"]["gain_dB"] = 20.0;
+        j["parameters"]["nf_dB"] = 1.0;
+        j["data_files"] = nlohmann::json::array();
+        j["data_files"].push_back({{"type", "s_parameters"}, {"path", data_path}});
+        const auto json_path = base / (part_number + ".json");
+        {
+            std::ofstream ofs(json_path);
+            ofs << j.dump(2);
+        }
+        ComponentLibrary lib;
+        lib.loadFile(json_path.string());
+        REQUIRE(lib.all().size() == 1);
+        return *lib.all().front();
+    };
+
+    const auto contained = load("ACCESSOR-OK", "good.s2p");
+    const auto found = componentDataFilePath(contained, "s_parameters");
+    REQUIRE(found.has_value());
+    CHECK(*found == std::filesystem::weakly_canonical(base / "good.s2p"));
+    CHECK_FALSE(componentDataFilePath(contained, "gain").has_value());
+
+    const auto escaping = load("ACCESSOR-ESCAPE", "../" + decoy_name);
+    CHECK_FALSE(componentDataFilePath(escaping, "s_parameters").has_value());
+}
