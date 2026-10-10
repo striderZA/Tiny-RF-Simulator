@@ -101,6 +101,27 @@ std::optional<nlohmann::json> receiveUntil(TestBridgeClient &client,
     return client.receive(timeout);
 }
 
+// Pumps until the client has a reply, so the test waits on the response instead of a fixed delay.
+std::optional<nlohmann::json> pumpUntilReply(AgentServer &server, TestBridgeClient &client,
+                                             std::chrono::milliseconds timeout = 2s) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        server.pump();
+        if (auto reply = client.receive(50ms))
+            return reply;
+    }
+    return std::nullopt;
+}
+
+// The listener answers a line that is not a call at once, and replies on one connection stay in
+// order. Receiving that answer therefore proves every call sent before it is already queued.
+void awaitQueuedCalls(TestBridgeClient &client) {
+    REQUIRE(client.sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
+    const auto answer = client.receive();
+    REQUIRE(answer.has_value());
+    REQUIRE(answer->contains("error"));
+}
+
 } // namespace
 
 TEST_CASE("start writes an endpoint and stop removes it", "[agent_server]") {
@@ -283,9 +304,7 @@ TEST_CASE("calls round-trip through pump with connected client status", "[agent_
     CHECK(server.status().client_version == "2.3");
 
     REQUIRE(client->call("test_tool", {{"value", 5}}));
-    std::this_thread::sleep_for(30ms);
-    server.pump();
-    const auto reply = receiveUntil(*client);
+    const auto reply = pumpUntilReply(server, *client);
     REQUIRE(reply.has_value());
     REQUIRE(reply->contains("result"));
     CHECK(reply->at("result").at("is_error") == false);
@@ -340,7 +359,7 @@ TEST_CASE("pump preserves arrival order and enforces budget while always progres
     REQUIRE(short_client.has_value());
     REQUIRE(short_client->hello());
     REQUIRE(short_client->call("over-budget"));
-    std::this_thread::sleep_for(30ms);
+    awaitQueuedCalls(*short_client);
     short_budget_server.pump();
     CHECK((short_budget_executor.calls == std::vector<std::string>{"over-budget"}));
     short_budget_server.stop();
@@ -362,7 +381,7 @@ TEST_CASE("modal calls park and time out with the exact BUSY response", "[agent_
     REQUIRE(client.has_value());
     REQUIRE(client->hello());
     REQUIRE(client->call("parked"));
-    std::this_thread::sleep_for(30ms);
+    awaitQueuedCalls(*client);
 
     server.pump();
     CHECK(executor.calls.empty());
@@ -390,7 +409,7 @@ TEST_CASE("stop fails queued calls with SIMULATOR_UNAVAILABLE", "[agent_server]"
     REQUIRE(client.has_value());
     REQUIRE(client->hello());
     REQUIRE(client->call("queued"));
-    std::this_thread::sleep_for(30ms);
+    awaitQueuedCalls(*client);
 
     server.stop();
     const auto response = receiveUntil(*client);
@@ -414,10 +433,7 @@ TEST_CASE("oversized tool results are replaced with a bounded internal error", "
     REQUIRE(client.has_value());
     REQUIRE(client->hello());
     REQUIRE(client->call("oversized"));
-    std::this_thread::sleep_for(30ms);
-
-    server.pump();
-    const auto response = receiveUntil(*client);
+    const auto response = pumpUntilReply(server, *client);
     REQUIRE(response.has_value());
     REQUIRE(response->contains("result"));
     const auto &result = response->at("result");
@@ -430,20 +446,6 @@ TEST_CASE("oversized tool results are replaced with a bounded internal error", "
     CHECK(response->dump().size() <= kAgentMaxLineBytes);
     server.stop();
 }
-
-namespace {
-// Pumps until the client has a reply, so the test waits on the response instead of a fixed delay.
-std::optional<nlohmann::json> pumpUntilReply(AgentServer &server, TestBridgeClient &client,
-                                             std::chrono::milliseconds timeout = 2s) {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (std::chrono::steady_clock::now() < deadline) {
-        server.pump();
-        if (auto reply = client.receive(50ms))
-            return reply;
-    }
-    return std::nullopt;
-}
-} // namespace
 
 TEST_CASE("Calls nested beyond the depth limit are refused and the server keeps serving",
           "[agent_server]") {
@@ -478,17 +480,6 @@ TEST_CASE("Calls nested beyond the depth limit are refused and the server keeps 
     CHECK(reply->at("result").at("is_error") == false);
     server.stop();
 }
-
-namespace {
-// The listener answers a line that is not a call at once, and replies on one connection stay in
-// order. Receiving that answer therefore proves every call sent before it is already queued.
-void awaitQueuedCalls(TestBridgeClient &client) {
-    REQUIRE(client.sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
-    const auto answer = client.receive();
-    REQUIRE(answer.has_value());
-    REQUIRE(answer->contains("error"));
-}
-} // namespace
 
 TEST_CASE("A parked call runs once the dialog closes, however long it waited", "[agent_server]") {
     ScratchDirectory scratch;
