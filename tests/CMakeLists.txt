@@ -92,6 +92,15 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+# Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
+# Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
+add_standalone_test(test_sparam_legacy_key
+    SOURCES test_sparam_legacy_key.cpp
+    LIBS simulator::amplifier_engine simulator::equalizer_engine
+         simulator::ideal_filter_engine simulator::signal_generator_engine
+         simulator::node_graph_engine
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine

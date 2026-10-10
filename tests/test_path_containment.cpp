@@ -192,6 +192,39 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project S-param paths a
 }
 
 // ---------------------------------------------------------------------------
+// Legacy `sparam_path` key: a project saved before the `sparam_filepath` rename
+// carries only `sparam_path`. Project load resolves it against the project dir,
+// and the engine must then load the file it names.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Project load loads an in-project legacy-only sparam_path",
+                 "[containment][project][legacy]") {
+    auto base = scratchDir("containment_legacy_key_" + test_temp_paths::processTag());
+    const auto project_path = base / "proj.rfsim";
+    writeS2p(base / "data/legacy.s2p");
+
+    nlohmann::json amp;
+    amp["type"] = "Amplifier"; // .rfsim project_type key
+    amp["params"]["gain_dB"] = 20.0;
+    amp["params"]["sparam_mode"] = true;
+    amp["params"]["sparam_path"] = "data/legacy.s2p"; // legacy key only
+    writeProject(project_path, nlohmann::json::array({amp}));
+
+    {
+        RfSimulatorApp app;
+        app.loadProject(project_path.string());
+        REQUIRE(app.componentCount() == 1);
+
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+        CHECK(amps[0]->sparamLoaded());
+        CHECK(amps[0]->sparamMode());
+        const auto expected = std::filesystem::weakly_canonical(base / "data/legacy.s2p").string();
+        CHECK(amps[0]->sparamFilepath() == expected);
+    }
+    std::filesystem::remove_all(base);
+}
+
+// ---------------------------------------------------------------------------
 // S1 — library boundary: data_files entries must stay within the library JSON
 // file's directory; absolute and '..' entries are skipped, not read.
 // ---------------------------------------------------------------------------
