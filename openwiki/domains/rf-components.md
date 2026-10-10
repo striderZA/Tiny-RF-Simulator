@@ -14,10 +14,14 @@ sources:
     resource: repo://app/src/app.cpp
   - id: openwiki-source-bc033392c5f8ce0dd75226a2
     resource: repo://app/src/circuit_runtime.cpp
+  - id: openwiki-source-dd0234525c20fcc7f7d85a35
+    resource: repo://app/src/component_library.cpp
   - id: openwiki-source-12d90ca6eb6eefd9b169f36a
     resource: repo://app/src/component_type_registry.cpp
   - id: openwiki-source-4913e16466a3d5781b608721
     resource: repo://app/src/inspector_panel.cpp
+  - id: openwiki-source-8d4941df53ba82a77f01e014
+    resource: repo://app/src/output_snr.cpp
   - id: openwiki-source-baedf8f3f47fa931244e3545
     resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-08c1f1d06fd7f97af3fd1d4b
@@ -34,6 +38,8 @@ sources:
     resource: repo://common/graph_link_policy.h
   - id: openwiki-source-06fabb405d59fd0718569cdc
     resource: repo://common/spectrum.h
+  - id: openwiki-source-96e834ec392460eeb8420f37
+    resource: repo://core/include/utils.h
   - id: openwiki-source-5b93bae6a9f587bf84e00f46
     resource: repo://equalizer/include/equalizer_engine.h
   - id: openwiki-source-15ca33de130b29fa444fea9f
@@ -42,8 +48,6 @@ sources:
     resource: repo://mixer/include/mixer_engine.h
   - id: openwiki-source-318263a7857c897eac3da71e
     resource: repo://network_analyzer/include/network_analyzer_engine.h
-  - id: openwiki-source-b28cfd6787af0436a1efadec
-    resource: repo://network_analyzer/src/measurement_chain_runner.cpp
   - id: openwiki-source-9a250414ad94d8c41379ca9b
     resource: repo://network_analyzer/src/network_analyzer_engine.cpp
   - id: openwiki-source-605cee387bb8dd9c0595ad81
@@ -62,6 +66,8 @@ sources:
     resource: repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp
   - id: openwiki-source-e9e03e69fc798aa353d98b03
     resource: repo://spectrum_analyzer/src/spectrum_analyzer_widget.cpp
+  - id: openwiki-source-c063649ec628c2c23017fa79
+    resource: repo://splitter/include/splitter_engine.h
   - id: openwiki-source-ff1a4cf5d084ead7139b2f59
     resource: repo://splitter/src/splitter_engine.cpp
   - id: openwiki-source-2394c03133ac41a39b442be4
@@ -74,6 +80,8 @@ sources:
     resource: repo://tests/test_component_dispatch.cpp
   - id: openwiki-source-8fbec6a99b37874b41a0f8fc
     resource: repo://tests/test_issue117_numeric_correctness.cpp
+  - id: openwiki-source-a3ea98aec0fcd00783847b01
+    resource: repo://tests/test_issue182_bounded_inputs.cpp
   - id: openwiki-source-b7db63ed89e897f943bf619a
     resource: repo://tests/test_issue70_pfb_reconnect.cpp
   - id: openwiki-source-44dc58c64deaf5ec52844046
@@ -90,10 +98,10 @@ sources:
     resource: repo://tests/test_rf_switch.cpp
   - id: openwiki-source-e2bb8f29e378f71c1aa407c0
     resource: repo://tests/test_spectrum_jitter.cpp
-generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
+generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-05T19:44:12.666Z
+    at: 2026-10-10T18:57:17.727Z
 ---
 
 # RF Components — DSP Engines, Channelizers, and Instruments
@@ -118,6 +126,8 @@ flowchart LR
 `ComponentTypeRegistry` describes the 13 graph-attached component engine types: `generator`, `amplifier`, `attenuator`, `coax`, `combiner`, `equalizer`, `filter`, `mixer`, `pfb`, `rf_switch_spdt`, `rf_switch_spdt_2to1`, `splitter`, and `adc`. A descriptor supplies canonical and project-file keys, labels, a node kind, a factory, inspector metadata, S-parameter capability, and an `authorable` flag. That flag selects the subset shown in the New Component authoring form; registered graph components are not all authorable. Spectrum and Network Analyzers are instruments, not entries in the graph component registry.
 
 Each engine serializes its own parameters through `serialize()` and `deserialize()`. The app persists graph topology separately, and `ProjectSerializer` reconstructs engine types through the shared type registry. Descriptor fields carry requiredness, numeric bounds, and enum values; `ComponentLibrary` validates definitions against them before instantiation. Library JSON uses canonical descriptor keys (for example `attenuation_dB` and `conversion_gain_dB`) rather than UI labels or legacy aliases.
+
+Bounded numeric fields in the inspector and instrument panels use `utils::inputDouble()` and `utils::inputFrequency()`. They limit user edits rather than the values they show: an engine value outside the field's limits stays as it is, is flagged in amber with a tooltip naming the range, and is logged once. A user edit clamps into the limits. An edit that clamping would reverse is ignored, and an edit that leaves the value unchanged commits nothing.
 
 ## Signal sources and sampling
 
@@ -196,13 +206,13 @@ IQ Plot is a display-side transform rather than a graph engine. Its pure helpers
 
 The Spectrum Analyzer consumes probed `Spectrum` objects and renders dBm traces. It separates per-bin noise power from tone impulses, applies RBW filtering to both, then VBW and trace mode. The RBW cache keys on spectrum pointer, generation, RBW, and bin width; jitter and VBW run per frame. Optional noise jitter affects only the noise floor, so deterministic tone peaks do not move between frames.
 
-The widget exposes RBW and VBW over 1 kHz–100 MHz in kHz units so the 1 kHz floor is directly typeable. This display range is a widget-level constraint; engine setters stay unclamped for tests and API callers. Trace modes are Clear/Write, Max Hold, Min Hold, and Video Average; hold/average histories are keyed by `Spectrum*` and pruned when probes change. Analyzer strongest-tone SNR uses its current RBW-filtered noise power and does not alter render caches or trace history.
+The widget exposes RBW and VBW over 1 kHz–100 MHz in kHz units so the 1 kHz floor is directly typeable. This display range is a widget-level constraint; engine setters stay unclamped for tests and API callers. Trace modes are Clear/Write, Max Hold, Min Hold, and Video Average; hold/average histories are keyed by `Spectrum*` and pruned on every widget draw to the output spectra of the currently active nodes. Analyzer strongest-tone SNR uses its current RBW-filtered noise power and does not alter render caches or trace history.
 
 ### Network Analyzer (`network_analyzer/`)
 
-The Network Analyzer is a singleton floating instrument, not an `IComponentEngine` and has no graph node. Point A and Point B are real output pins. It requires exactly one simple path between them and records the actual input and output port at every hop. It permits a 2:1 RF switch path only when exactly one throw input is linked; combiner, dual-fed switch, ambiguous, cyclic, missing, and same-node paths have no measurement. Multi-output components preserve the chosen output port in the clone chain.
+The Network Analyzer is a singleton floating instrument, not an `IComponentEngine`, and it has no graph node. Point A and Point B are real output pins. It measures the forward chain between them that `findMeasurementChainPath()` returns, on private scratch clones driven by a synthetic tone comb, so the live circuit is neither read for signal purposes nor modified. Switched filter banks that rejoin at a 2:1 RF switch are measured, while combiners and other multi-input components are refused. The discovery and rejection rules are in [Measurement Chains](../domains/measurement-chains.md).
 
-For a supported path, the host builds a private scratch graph and clones the downstream engines from canonical type keys and serialized parameters. A synthetic tone comb is injected into the clone chain; the live circuit's signal state and topology are not used for measurement or modified. Gain and noise figure are derived from the response; unavailable path/tone results are NaN. A signature over sweep settings, endpoints, and chain state skips recomputation when inputs have not changed.
+Gain and noise figure are derived from the response, and unavailable results are NaN. A signature over the path and sweep settings skips recomputation when inputs have not changed.
 
 ## Shared signal and noise invariants
 
@@ -216,6 +226,7 @@ For a supported path, the host builds a private scratch graph and clones the dow
 - `tests/test_pfb_sampling_ratio.cpp`, `tests/test_pfb_filter_design.cpp`, and `tests/test_node_hover_snr.cpp` cover ratio persistence, channel centers/bandwidth, integrated noise/ENBW, and RBW-independent active-channel hover SNR.
 - `tests/test_rf_switch.cpp`, `tests/test_rf_switch_2to1.cpp`, `tests/test_combiner.cpp`, and `tests/test_issue78_multi_output.cpp` cover path loss, port identity, noise, two-input updates, and project round trips.
 - `tests/test_spectrum_jitter.cpp` proves jitter varies the noise floor but not tone peaks; `tests/test_spectrum_analyzer_snr.cpp` covers RBW-based SNR and read-only measurement behavior.
-- `tests/test_network_analyzer.cpp` covers isolated chain runs, exact ports, singly-fed switches, and rejected combiner/dual-fed/ambiguous paths.
+- `tests/test_issue182_bounded_inputs.cpp` covers the bounded-edit clamp rules.
+- `tests/test_network_analyzer.cpp` covers isolated chain runs, exact ports, singly-fed switches, switched filter banks, and the rejected combiner, cycle, and multi-feed topologies; see [Measurement Chains](../domains/measurement-chains.md).
 
 For a model change, check limiting values, noise units, missing/invalid input, dirty invalidation, and serialization. For topology changes, verify every indexed input/output and the actual accepted link paths. For analyzer changes, distinguish display-only noise jitter from deterministic tones and distinguish RBW-based analyzer SNR from PFB integrated-noise SNR.
