@@ -70,6 +70,21 @@ std::optional<double> optionalFinite(const OrderedJson &arguments, std::string_v
     return requiredFinite(arguments, "", key);
 }
 
+// The epoch every call carries. It is judged before any other argument, so a stale call reports
+// STALE_EPOCH even when its other arguments are also invalid.
+std::uint64_t requiredEpoch(const OrderedJson &arguments) {
+    if (!arguments.is_object())
+        invalid("/", "expected an object");
+    const auto found = arguments.find("epoch");
+    if (found == arguments.end())
+        invalid("/epoch", "required argument is missing");
+    if (found->is_number_unsigned())
+        return found->get<std::uint64_t>();
+    if (found->is_number_integer() && found->get<std::int64_t>() >= 0)
+        return static_cast<std::uint64_t>(found->get<std::int64_t>());
+    invalid("/epoch", "expected a non-negative integer");
+}
+
 // The optional iip3 object: absent turns IIP3 off; present requires every field.
 std::optional<ReceiverIIP3TestSettings> parseIip3(const OrderedJson &arguments) {
     const auto found = arguments.find("iip3");
@@ -101,13 +116,12 @@ Json encodeSeries(const std::vector<double> &values, std::size_t count) {
 } // namespace
 
 AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall &call) {
-    AgentArgs args(call.arguments, {"epoch", "point_a", "point_b", "start_Hz", "stop_Hz", "points",
-                                    "output_power", "reference_tone_Hz", "iip3"});
     const std::uint64_t epoch = api.epoch();
-    const std::uint64_t sent_epoch = args.requiredUInt64("epoch");
-    if (sent_epoch != epoch)
+    if (requiredEpoch(call.arguments) != epoch)
         return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
                                           api.m_undone_summaries);
+    AgentArgs args(call.arguments, {"epoch", "point_a", "point_b", "start_Hz", "stop_Hz", "points",
+                                    "output_power", "reference_tone_Hz", "iip3"});
 
     const double start_Hz = requiredFinite(call.arguments, "", "start_Hz");
     const double stop_Hz = requiredFinite(call.arguments, "", "stop_Hz");

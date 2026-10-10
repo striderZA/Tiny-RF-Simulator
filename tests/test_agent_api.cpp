@@ -2446,3 +2446,35 @@ TEST_CASE("receiver_measure validates sweep points and finite start frequency",
     REQUIRE(errorFor(nan_start).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(nan_start).at("details").at("path") == "/start_Hz");
 }
+
+TEST_CASE("receiver_measure reports a stale epoch before checking other arguments",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    const nlohmann::ordered_json stale{{"epoch", fixture.api.epoch() + 99},
+                                       {"bogus", true},
+                                       {"point_a", {{"component", generator->id()}, {"port", 0}}},
+                                       {"point_b", {{"component", amplifier->id()}, {"port", 0}}}};
+    const auto result = fixture.call("receiver_measure", stale);
+    REQUIRE(errorFor(result).at("code") == "STALE_EPOCH");
+    CHECK(errorFor(result).at("details").at("epoch") == fixture.api.epoch());
+}
+
+TEST_CASE("receiver_measure requires a non-negative integer epoch",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    args.erase("epoch");
+    const auto missing = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(missing).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(missing).at("details").at("path") == "/epoch");
+    args["epoch"] = "0";
+    const auto text = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(text).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(text).at("details").at("path") == "/epoch");
+    args["epoch"] = -1;
+    const auto negative = fixture.call("receiver_measure", args);
+    REQUIRE(errorFor(negative).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(negative).at("details").at("path") == "/epoch");
+}
