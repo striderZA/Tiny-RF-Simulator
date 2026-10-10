@@ -20,6 +20,15 @@ struct ReceiverPerformanceMeasurements {
     std::vector<double> iip3_dBm;
 };
 
+// What one sweep measures. update(config, ...) derives it from the requirements config; the agent
+// tool builds it directly.
+struct ReceiverMeasurementRequest {
+    bool output_power = false;               // measure output power
+    bool iip3 = false;                       // measure IIP3
+    std::optional<double> reference_tone_Hz; // engaged selector; nullopt picks a sole tone
+    std::optional<ReceiverIIP3TestSettings> iip3_settings; // used when iip3 is true
+};
+
 class ReceiverPerformanceMeasurementEngine {
   public:
     ReceiverPerformanceMeasurementEngine(const NodeGraphEngine &graph,
@@ -27,6 +36,8 @@ class ReceiverPerformanceMeasurementEngine {
     ~ReceiverPerformanceMeasurementEngine();
 
     void update(const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
+                const std::vector<double> &sweep_frequencies_Hz);
+    void update(const ReceiverMeasurementRequest &request, int point_a_pin, int point_b_pin,
                 const std::vector<double> &sweep_frequencies_Hz);
     bool isInProgress() const { return m_in_progress; }
     const ReceiverPerformanceMeasurements &measurements() const { return m_measurements; }
