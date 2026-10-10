@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8ce866c00c334070544cc4da4cec20f7d41584edc21a5df863be31b7d7560702",
+  "claims": [
+    {
+      "id": "claim_c5104af8ab814fafa366016973af17dd",
+      "statement": "findMeasurementChainPath returns no path when Point B is unreachable from Point A, when both pins belong to one component, or when the circuit has a cycle.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L100-L101",
+          "version": "repo-lines-v1:sha256:89bc68b88cbf87673a5609245702a9f34a72872045f41cc769c2b2137bd0f3fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2EzOWVjN2Y5YzljZWIxZDk1M2IwNDE0YTlmOTI5ZGM2ZGQ3YmQyMzA4YjNjZjg2MTJkZmY2OTNlMmNiZWI2OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjZiZDU2MzEzODljZGFmYzZiNjNkNGYzY2RiODhlNDZlZDU2MjRlMzQ0MTlhNGM0NDhiZTU3N2QxYTA4ODI1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQ0ZGIzYmQwYmNlZDdiNGE4NTkyYzMyYTJkMWFhNTk4MTcwODA4MmUxMzhhZTkyYWM5ZTM4MzI1Mzc4NzliNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWRjNDkzZTdkMzUzMmViZTFlOGRiMzA0OWNmYTk0YmVmNGJhY2UyNDdkOGJjYTkzYWRkMDQ2ODc3MzhhYWQ5OCJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L184-L185",
+          "version": "repo-lines-v1:sha256:0b68a93251544e3b42a6134188df3c4df5f4dc14169a684a9912ce7957be4b41:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGZkZWYxNzI4MDRjNzMyNDYzMTEzM2RiMGJkMjJjNmIyY2Q1ODRkNmQyYzBiNzgyNTVhYzI0ZTE4MjA2ZTc2MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWE2M2NjNjUyZGE1ZjlmZThjYjUyOGQ5MzY0YTBlY2YzMDdmNGVhOGJmNGE0NmViYmJhMWUwMTYxZjE2NGMxNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzliMTU3Y2M2NzQ3MTlmMjkxMDEzNzFmZWJiNGFkN2UxNGVlYjVlNjc3M2ZjZjU1YzNmNmRjZTgzM2YzMzY2NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTBmMDdiNDRiMTFiMWI3NmRkYTMwN2UyNTQ4M2M2NmE1ZTdiZTYzNmZhYmIwNjdjYThiMWVmMmE5MTI3YzljOCJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L36-L37",
+          "version": "repo-lines-v1:sha256:8357e44d0d5359b3b216ab42f5fcde880b1b805c2d25ab720d60ac6151dfc978:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjVmYjViZTY3NTc5MDlmODM4NzRiZDAyZWVhZWYwNDJhMmQ3YTIxNjI2ZWJiMzUzNzJjZTc3ZTk5ZDAxN2NkNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjZiZDU2MzEzODljZGFmYzZiNjNkNGYzY2RiODhlNDZlZDU2MjRlMzQ0MTlhNGM0NDhiZTU3N2QxYTA4ODI1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjI2NTA0MWViOGE2ZGY0NDNjODM3OWEwMjViZTBiMDJlNDhmNzliZmViYTY3NWQ2NjQ5MTVhZjAyNzljZGVkOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjE3YmRhNWMzMjY1NGNiMTQ1ODg4Nzg5MWYxMGI1YzQzNzY0OTUyZjk4NjdkNWRiZmI5Mjc3MGU3NTdmZjVjMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_355db2afebfd460fb8e374f88625d9c8",
+      "statement": "findMeasurementChainPath refuses an input fed from outside the circuit, an input pin with two links, and a Point A component that feeds the circuit through more than one output port.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L117-L136",
+          "version": "repo-lines-v1:sha256:200b2f304f70ff989ccdb309932bcf8bf24b11be16be4a55673c1f7fe39acdec:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjYzRhOWYzMzQ2MmVhOTc1ZDY2OTIyN2MzMGY3NzEwYTEwNjliZjk3YzVlYjRhZGExOTA3MDJmMGJkMjBhMWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmZWVmNmU3NzMwMmI3NGU4ZmFjMTNjMmI1MTg0ZmVmOTdkMDhlNzhiY2U1YjBkMGI3Nzc2YTliNjhjMjk5MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ1NTgyZDQwN2E2NDQzOTc1NDJmMTJmNDc0YTlkM2FhNWEyOTgzNTA2OWM0Y2ZkZmIxZjA0ODM5N2QyMzhlNWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ad71fc3d48144245ad555cab24dbff82",
+      "statement": "findMeasurementChainPath refuses any component with several inputs unless it is an RF SPDT 2:1 switch, so combiners are never measured, and it requires Point B's component to be the last component in topological order.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L141-L146",
+          "version": "repo-lines-v1:sha256:4e6bae1c84d675cdcafd48092c31648a4009498230990b111800f343d725458e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTk4YTNhZDAxNTY0MzkzN2EyZGFlNDNlOWUwZWIwMDY3MjliZTQwNzVjYmVlNDRlYmYwNmZkMzMxNThiYTM3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzIyYmU3YmVhYmQ4NzUxYjJhOGYwZThjYjg2YTIzMzA1ZWI5MWQ2ZTQ2ODdhMTZjMTI1ZDUyMjNkOGYyMjNjOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTYzNGE3YzI1YTk3MDc0YzA4MzkwY2Y4ZjEyYWFhYzY2NDQ1MzI0NDdhYmQyMTdlNzdkNDU4YThjMGFhOTMyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWM2YzgxODFmMTFiODYyOGViYWYzNjQ4N2Y0MGU1ZTE5ZDY5ZjAzMjcyMWVkYWUzYmQ0YTY3NjMyNWU4NzVjNyJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L187-L191",
+          "version": "repo-lines-v1:sha256:57e7ece77cff5fc5ac4da0e4d81c5c525302b141e945ebd701f7ddf2c3aa172c:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2Q5OGYyZmI0OTcwMjM2NmVkNGE4OGQ3ZmFlMWEwMzFiYzNhMGQ4ZDNkNzAwYmEwNzE4NjY5ODVjOWY1ODA3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjZiZDU2MzEzODljZGFmYzZiNjNkNGYzY2RiODhlNDZlZDU2MjRlMzQ0MTlhNGM0NDhiZTU3N2QxYTA4ODI1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTM0NGVjNjM0NjZjNjQ5OWIwNWEwOWQ1OTk4NjhlMjQzNGZmY2Q4NjVhOTRiMDQ3OTI4MmQzM2I4NzZmOGFmOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjYzZDU0NWM0MzI3Mjg1ODVmNWY2Yjc0MzU5YzYzOTFiYmRiM2FhZWYxNzIwOGQ3ZTViMzNmYmVjZmQ3YzhhZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_751412a52b3c472ebdb90099e54fdb7f",
+      "statement": "A switched filter bank whose branches rejoin at an RF SPDT 2:1 switch is a supported measured circuit, and the switch passes the selected throw at insertion loss and the other throw at isolation.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/include/measurement_chain_runner.h#L32-L35",
+          "version": "repo-lines-v1:sha256:2fce83849d304f387cee3a51e48df375d62bca60e8afc3309c3982c9e8d5edd2:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTY2OTQ2YjZkNGNmMzUzMDZiODAzYzJmZWU3OWJjZjdjYjY1NmEyMTNjNjNlZWQ2ZmRhNDA3MWE3YTE2NjkyNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGVhNDJiM2QyOWJhNzNiMDE4ZGUzZTc4MmExZjQ3OGYwMmUyZjdkNGUxNzk4MTNhOTU0MmI2OTJlNzQ4YzY4ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDY4MDBiNDdlMjVhMzQ4MmFmNjM3YjdmZThkNDRhMDgwYmU4MzQxNmFjYjZkMzgyMDRlZWRiZTM2MGM4MDVhZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmZlM2U5MDAzYmQyZjcxYjA0N2ZkMDZiMmFhYjA5NTJjOTc1ZmQyMGRjNDU2MzJjNTg2NzQwYWUyMGFmYWIzMyJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L141-L144",
+          "version": "repo-lines-v1:sha256:b01c40f4c973ade0481e7953e8930bf6bd6b6efdbe62d13d976eb0080859f5d8:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTk4YTNhZDAxNTY0MzkzN2EyZGFlNDNlOWUwZWIwMDY3MjliZTQwNzVjYmVlNDRlYmYwNmZkMzMxNThiYTM3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQ5YzI0MWQxNzY1ZDAzNjEyYzkzYjU1NTNkMTYyM2JhOTYyMTI5NzZiNmE0OTVkOGY5ZjM4MDk1NjMyODMyYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTYzNGE3YzI1YTk3MDc0YzA4MzkwY2Y4ZjEyYWFhYzY2NDQ1MzI0NDdhYmQyMTdlNzdkNDU4YThjMGFhOTMyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWE0MjY4MjYyZDMzODY4ZWVjY2VjMjBmZWEwZjU4Zjk5ZGU3YWEyY2RiMmNlYmY2ZWIxM2NkOTAwOWNmZjg4MyJ9"
+        },
+        {
+          "resource": "repo://tests/test_network_analyzer.cpp#L340-L373",
+          "version": "repo-lines-v1:sha256:be3dff896c75a95b6e07ce8d1392dcb8522cb317144f9cc1ccaa45f6ff871122:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYjZkOTE2NDA4YjY0ZDMxNTE5M2IwYzI1YWEzMjhmMzMzOWM1MTM3NWM0ZTAyZjBlZDViYTExYmNhNmI4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzMjBmYzY0NGI0YTNlZDhjMDRlYmY2YzRhNDhlZmU2NjllNjQwMTRiNjA2NGRiNGVlMDYwZWUyNTgzMzViYmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b1ba33b369a04c7eafb1a7be94eec23b",
+      "statement": "IsolatedChainRunner never clones Point A's component; it clones each later component by type and id, copies its serialized state, wires each edge by pointing the clone input at the source output, and fails to prepare unless at least one edge carries the stimulus.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/include/measurement_chain_runner.h#L35-L36",
+          "version": "repo-lines-v1:sha256:db4cbf28f96ffc635df045b1c8cb0be764ecd2302e56c1c27ae6d345af37a341:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGVhNDJiM2QyOWJhNzNiMDE4ZGUzZTc4MmExZjQ3OGYwMmUyZjdkNGUxNzk4MTNhOTU0MmI2OTJlNzQ4YzY4ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjk3MzY0OWU4ZjVjZWVhZjk2NjZhY2UzMzNmNWVlODU0ZTAwNjNkMWIyZTdhZjY5MDg4NWI5Mzg0ZDk3ZDQyMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDQ5MzU0MDVlZDQ3OGRlZGExNzlkZTI5MDBiYWMxNWQzN2M4YjBkMDY5OWUwOGQyODYzY2JiY2YzZWFmYjFjYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjc5ZGJhOGMwYWI2Y2VkYmE2YWUxMTc1MTcyZDgyYjI1ZDQ5Mjg3NzE2YzA2Mjg2YzcwZTE3ZmFiNTBjYjJjOCJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/include/measurement_chain_runner.h#L81-L82",
+          "version": "repo-lines-v1:sha256:7d701a2f411aeeaf26df7ad96b974dc452cfef61d6915383b2d4899304b601f7:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2YxM2NlOTkwMzU0OGE2YjZiMWVhNmI5MDgyOGEyZWNmOTE0YWFhOThmNWEwY2UxNjY4NmUwNmVhOGVkYjk2MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTljOTE4YWI0NzJlZTA3MTgxYmQ4MDhkY2E0N2JhOTBjOTY5YzBmOGFmYzMzYzA4MmM4MGI3YjY3NTQwODY4YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzI3OTg2YjZiMzdjN2JhYTk0YWNjNjg1NmYxNzEwMjEzOGJmODMzZjQ2MWNhMTk2N2I1ZmRmY2M3NjY4Nzc4NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzgzMjBkOTU5OWVhZGQxMTBhNDM3NzUwMDFjZWQzMzgwMmY3MjliZThlYWJhYTc4ZDAxYzQ2NmQwOGQzNWMxNCJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L220-L230",
+          "version": "repo-lines-v1:sha256:665b12622a3c244b702358f4a4efd8750851d1d5a8f01a7542993b00e19f745e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhZjBkZTlkYTNkOWI4MDk1ZDFmNGJiMWJjNTE3M2RmNTk4Y2MxNWNiMjRhMWY2NDZlNTMzYTNjMTY3ZDRjNmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExNGEyOTBlZDFlOGM5YTdlNTc3ODJiZTQ5NGUwOWQ4M2ZlY2YxY2U3N2U0ODY1MjY2YzY3YTIxZGM1OTc4YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdiN2JlMWMzMjk5MjJhYWVkMjRmNjhiYWFkNTQzZGVlY2UxNmU4MWVhM2U2YzQyMGZiMjAyYzliYmU3NDcwYjcifQ"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L239-L260",
+          "version": "repo-lines-v1:sha256:d332a40a765c2e6e167e5972d16dd83e904ad58e08e841857284d1ba665e591a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlNzM5NWZmNTQwZDZlOWQ3OTM0NDY0NWMyM2JmZTJjNTA3ZjE5ZTBhNGJmMWU4ODgyNDVmYmFjNGIyNmNlMGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2ODliMWFkMjExMzU3MzRjNzIwNGFiYTUwYWRhMTg4ZmZmMWExZWRlOGMwNDk5MmY0Y2NkNWVjOTc5YmI1MzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjZGE5ZGJjZTBlNGZhNmIzMjVkNDAxMDRhYzg5NDM0YzI0MjI3NGI1YWVhODg2YzA3Y2I3OGFmMzVhZTNhZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyZWEwYzQ5MDgzODk0YjE3Y2JhNWM3N2QyMjI5OGM3OTBlZmI4ZDgyMGIyZGRmMGEzYzJlNTdjMWIyZjU5NmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_afc69d9f84ee45a0b23bfa25b585d119",
+      "statement": "IsolatedChainRunner::run feeds the stimulus to the inputs linked from Point A, updates the clones in topological order, and returns Point B's output from the last clone; that returned spectrum is invalidated by the next run call or by destroying the runner.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/include/measurement_chain_runner.h#L72-L76",
+          "version": "repo-lines-v1:sha256:45bff3e201eeb40e9084659d7913a597d98d7b40a78395b0d3d08e2d4089fdfc:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGUxNjFkNDEzYjdmNzU5ZWRkNGEzZTdmNTUzNjZiMzhlZDkxOWZlNGFmMTg2Zjk0OWI2OTBlM2E1YzQwMDcxOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTA0MmUzMzdjYTIyNTZlNTIzM2Y5MGFlZjY0NjI2MjBmNmFiZDBhNGJmMjMxZTlmNWQ2MWFmNDhmZTg1ODYwZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGE2MjQ3NzQ2OWQ0ZjBmNjAxNjYxNDg5ZDQ3ODU4YWRhYzEzOTlkMmU4NTJmYmZjZjNlODBmY2ZlOTk2NjI5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTZiNGVlOTI3Yjg4NTA4MWU1NmU0YjI1ZDE5OTU3NzM4N2U3ZTQ1NDhmOGU0NDk1N2Q1NDNmNWNiZDU5MWY0NSJ9"
+        },
+        {
+          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L269-L284",
+          "version": "repo-lines-v1:sha256:071589aeae4e1493f4a8eefac0ff26d504b03406998fa755a91140ce34b72cf4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyMGRmNTBjYzZhMTQwYWY2Y2ViNjUzNTA3YjhmZDBlMjllNmE3Zjk2YTgzOGRlZjIxMWYzMjMxMmY1MGVlMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExYmQwODA0NDhlMzU4NGE5ODM2OWQ2YzE5M2JlYjUxM2VkNThkMWM4MTZkYmE4OWNkZmViMmQ5NmFjYmRmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0105b369bed94560af201fba09688454",
+      "statement": "The application supplies the scratch host through RfSimulatorApp::NaHost and NaScratch, which create clones by registry type inside a scratch graph owned by the scratch object.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/app.h#L237-L252",
+          "version": "repo-lines-v1:sha256:b3dc96ff265ea7912faa407ba0259b633e6e298f78dc3053c1e7e22277b9091f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1ZTA4Yzg0ZWFlMjQwM2I0ODBkZjMxYzgxYTU4NzJkMjQwZjBjODNhZDcwMzE2NTI1NTM4ZmUyNGYyMTcyZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwMjE5YWM0OGMxMDE4OTBhM2JiYTE4NWRkMGQyYTliMDVlM2ZlNjE4NDM3MWVmN2RhNjdjYzcxMTY0ZjgwNGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhNWM0ZTEwZWU2OTQ0YTdiYjJiMjMzYjZkZGNlMTgwZmJjMmI1ZDBkYzYxODEzMjE1MDMzNGNiOGJkMTljNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYyYzI4ZThiMzQ5NDBkNDY4MzdjNGVjOTg5NzIwY2JkY2UwNmM1ZTRkNjI4Njk1ODUwMDZkYzdiZTJiYWQ2MWEifQ"
+        },
+        {
+          "resource": "repo://app/src/app.cpp#L301-L310",
+          "version": "repo-lines-v1:sha256:4c5789d5e1744bb8cb3d3cf2d859033810a9dce69018f9f78c2563106d48f2c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkMDEwYzYwZmI1NzMwZGFiMzkxZTBlNWJiMTNiZWQ2MmUyNTU1YWVhYjViZjRmZWYxMDA2ZGZkNDVjNjJjM2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1NGE5NzI2M2RiODBhMzJmNzgzMWZiOTA3MWM4ZTcxMzYzMGY0Y2E3ZTk2ODEwYzY2Y2IwOTczYmU0NDg1MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1ZmI4ODJiNzVkMGIxZGQ1M2IzOWMxYzY1YzFkZjdjYWVmMGRhNWM5NjI3YzFjOWExZTllN2EwNDhhOWI1YWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5ZTY4YmNlMjhlM2ZkMjYyYTA3ODExMWU4ZDI4YWViZjBiOWRiNmE5NzFjZjYyYTgzYWNmYzc4MDI4ZTJlNzgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7623d5fe05f4f989dec2a8bc6be32ac",
+      "statement": "The Network Analyzer clears its gain and noise-figure arrays to NaN when no chain exists, and it reuses its last result while the path signature and sweep settings are unchanged.",
+      "evidence": [
+        {
+          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp#L77-L92",
+          "version": "repo-lines-v1:sha256:cf125c14c29d8fc76adca9e955e2675bef672e2689c3ec300b193b8bb9779b07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMjBkMDgwNDc4YmEyNDAxMGM2YzNkOGMwZWZmNTA3NTc2MTBhNWQ4YWFkZjE5OGVmZjhjNTM2NDg0M2ZiYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkMmJiYzdjNmUwYTE1ZGU0NDk2MGYzOGU4ZGY1MmVhNzI4MzZlNWIzY2YyNDFlMjNjZWEwYTcwYjRjYTc1NzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5ODE0ZTM4MzBkNmZhNTVlZTBkYWY2NzJiMmY0MWIyZWI0NmVhNmI3NWZjOWFlOGI4OWVhNGI2ZGVjNDAxYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxOGRiZWQwNjk5ZTRhNjhmMTZkY2NmMmIwYmQ4YjAwNmU5NGQ0ZjRjNjgxOGY4NDU3YWQ3NjU5NDAyY2Y2MTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b0e63cb25af14a4bb3bbc4fae7758e12",
+      "statement": "The receiver measurement engine re-discovers the chain on each update; it returns early with cached results for a completed request repeated unchanged, resumes an unchanged request that is still in progress, and, when the request changes, resets its output-power and IIP3 measurements to unavailable and prepares a new IsolatedChainRunner only when a chain exists and the runner can be prepared, otherwise completing that request with unavailable results. Each update is bounded to a 4 ms wall-clock budget or an optional run cap.",
+      "evidence": [
+        {
+          "resource": "repo://app/include/receiver_performance_measurement.h#L42-L50",
+          "version": "repo-lines-v1:sha256:732f50f21fab1a4edf7b57d482db3edf23e670e750414472cc4529d3c3248d56:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjIzZGExZGMxODQyMWM2YWNlYWE2NzRjNjkyZWFkOTc1Mjk0ODJkODM3NTVkZWVlNWNjY2ZjNGIyZDU2MGZlMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGIyODkxMjY1MDczNDJmYjBjMGZjNzBlOTZjYmQ2ZWVhZmE5ZDQxMTk0NjE4NmQ2MTdiZDA1N2QyZDUyNmVhMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTEwMDVjZDIzM2FmMWMyOWZmYjQ4Yjg3MTUyZTlhMTJiZmI0ZmQ2NmEyMjc2ZmNhOGEzMjdlOTMxN2E3MTQzOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjdhMmU0YmM3MTEyMDg3M2IzZGYwYTYwYmQ0ZmQ5ZDI4MjQ3YTNhYjUxODVkY2UxOTk1NGM2YzY0NzA5ZWJhYiJ9"
+        },
+        {
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L187-L199",
+          "version": "repo-lines-v1:sha256:531bc4982889203f3e4fdabe4e199f7570a287b4d1db35194eb5da58657ab765:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhZTM2ZDQ3Y2NiZmIzN2QwYzkyMTY2ODYyZTc3NTAxZTFjMWIxMDdlNDU4ZmI2MmI1Y2JlMDEwNmY3YjI3YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyYjQwNWJhMWE0ZGQyMmNiZDc3OTBjMDczNzJlNDI3YThhMzk0OTJiZmU3NDIyMGQ4MWFiYTIxOWQ3MTZmNGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyOTViMmVhZjlmZWY4Mzk0MDY2MmVjMjgyN2ViZjFjYThiNzQ2Y2NjYWJjNTBhYjgzODdhY2FhMGQwYmQwZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmZjI4MWNiODkyNWZlZWFhNzhlN2Y5MDliN2E3OWJjMTZlYWM5MzgxN2JlNmJlNWQ4NjliMGVlNGIwYzAyZGQifQ"
+        },
+        {
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L227-L251",
+          "version": "repo-lines-v1:sha256:17af43080b05eeffba67fe0f9adfd862791e0f65954358618c0b6208093ab016:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmNjExY2NkNDdiOTE4ODgxOWQwNmI0MDZmMzNiZDQ4YmEzZDlmMDQ3ZDNlZmZkNDRkMWIyMjg1Njc5M2RiNGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5YWE0MGE3MTlhZDIyMmNkOGFmZWRjMWYwM2VhMGE5YjZlZWVkZDE1ODNmZGE1YzQ3ZmViMTUxNzU0MGI2MzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmOTVkOTlkODcxMjczMTc4NDY0NzM1YjA1ZDIzYjBmNmVlYWFkMzk0NmI3MDlhNjM4YTU0ZjRjNTlkOTJkZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzZGRmMGQwZWVkNDRkMWZkNGY2MDU4ZWMwYzBjYTA3MjljYmM5ZDU0N2JmMzhjOTFhMmYyMzdjNGMxY2YwNzcifQ"
+        },
+        {
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L246-L251",
+          "version": "repo-lines-v1:sha256:dc5abf797265ab487c83eec71df2ff39aac9aba4e1daafa48ad188ab864059ea:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmRkZWU3Y2M3ZmZmODI1NWNlM2VhNmM0NWE1ZWYyMzc3OWYwZWI4OGJiYTdkMTgwM2IzYjlhMTNlMGRkNThhMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjlhYTQwYTcxOWFkMjIyY2Q4YWZlZGMxZjAzZWEwYTliNmVlZWRkMTU4M2ZkYTVjNDdmZWIxNTE3NTQwYjYzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjcwZmIwYzYyNDRmNGQxZjg1MGUyMzE2MDA4ZmFmNWMwYjgwMjBmZWFmOGZjN2JlZGZmN2U5MjYyZmRiNTRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDNkZGYwZDBlZWQ0NGQxZmQ0ZjYwNThlYzBjMGNhMDcyOWNiYzlkNTQ3YmYzOGM5MWEyZjIzN2M0YzFjZjA3NyJ9"
+        },
+        {
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L297-L302",
+          "version": "repo-lines-v1:sha256:983d3eadf80ea0b3d5f42f643334f5ec86dd3eef9e2e1c4cfa87397011509c27:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmZmNmY3ZjMwMTI0Y2Q3NWM3NTU3ODI0ZjgxYmYxODkxMDQ5NzA5MGYwYzZmZTNhYzM4Zjc1YzlkZTBjMDU1YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQ5ZTEyNTQ2NDI1NTc2ZDNkZWFlOGM5YjlkYmYxMjhkNWQ2ZGRhZjVkN2ZlODU3OTM0OTI3ZGVmZmEzYjlkZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDg5MzA4MGZiY2IwOGRhY2E3MDZjMGViNzc3ZWNlN2U4MWFiYzRhMmNkYjMwOWFlYzA5OWNiMTg3M2FlNTdmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWRlNTY1MGJiOWIwNWVlZWMzZWYwMTljNDEzNTc4OWJmMTlkOTQ5OGRjOTJlNmRmOTg0YmUxMjM3M2Y4YjU0OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_48450d33552f40f6a96b0ff060e2b200",
+      "statement": "The agent network_analyzer_sweep and receiver_measure tools return NO_MEASUREMENT with details.reason NO_PATH when no chain exists, and network_analyzer_sweep returns NO_VALID_POINTS when a chain exists but has no valid sweep points.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_measure.cpp#L416-L423",
+          "version": "repo-lines-v1:sha256:2fb717c6e6f983adfb75232ed5377551d34bce06a4fdb665b7c3df1c21b442d8:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY3NmZhZTdlMjZiNzJiNWU2MDBjNTk1ODBmMDNmNmYzNTU5OTNlYzQzN2ZhZDZhMzRhNjY2MThiNGU4MzRmOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWIzZjIyZTg1OTI0ZWQ1ZTM0YmZhMGViM2MzN2Y4NWQ4ZmUwMDhkNDkwMjlmZjE0NThmOWQ0NTA4YTE0OTA2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODY2ZjkyOTZiM2VjYjMxMDRkMDNkYTQ2YWQ4M2EwNGY0MzRlMTZjN2Q1YWU3MTVkODkwYzY5YWZlZmU1NzQ4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGQ4OWEyOTRjMTc2MWNkMDFjMjM5NWFhN2YzMTk2YzdiNDk1MGM0M2M4YjZjODMyNzIzMDRjNGUyMmE3YjU4NSJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L141-L148",
+          "version": "repo-lines-v1:sha256:b93c920d4be7ee8420bda564e0e307ce053bbb5417eb5d75142bda664eca909a:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM3NzVjNmMwZmJiZDNhZDdmZWUxYzU1Yzk1NjM1NTM3Y2ZkMjdmZTcxMmQ1MDg3NTAyNjg0MTAwYmE4YmM0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTlhYzEwNmY4NWZkNDA5OTYxN2JkZDYzYzlhMzk1NzQwZTZlMjI3MTY4NGFhY2JjNDRiZGI1ZjU0YWJlMjBmZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzlhZTE0NWJiY2NiNzVhOWUwMmZkZTQ1MTM0ZmViZGIyYzI2MGY4MmQ4MWEwNWQyMDQ5NjkzZjYwMGQ3MzIxNCJ9"
+        },
+        {
+          "resource": "repo://agent/protocol/src/agent_catalog.cpp#L491-L492",
+          "version": "repo-lines-v1:sha256:a91089ea199f5bdfbb438287b017f3950bbe3e0d1fc71b4b803eeb8d0577b3c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDg3NjE4NTQ2YjRiODE5OGFkNjFlY2RjYjUzZDNhZDdjMTBjMWRmYTU5NGQyNDAxNDhhMTQ3M2YxNWQwNmUzYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzE3YTZiODMxMjE1NWM3ZWFjYmM3ODVkZGMxNWU5NWIzNGIxMTZlMjRkMmIxMGYxYmJkNDFjOGZiODUwM2NmZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGY0OTllMGYyZmMyYjkwNGZhYWE5MGNmNDE1ZDliYTdlYTMyNDQwZWQ1YTFjNzQyMDQ2MmUyZDQ3ZDFjMmYzZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWJkM2EzYjVjMGQ5M2JjZTJjMDZiNmVlMWE5NTUzMmNhMTE5NmUyZjZkNTM0NzhlYzUzNDI4MTkyYjQwM2Q3MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_974a930f4772412cbe2e566009937d0b",
+      "statement": "The receiver_measure tool advances its sweep by at most 4 ms per call, and its catalog description tells callers to repeat the call while in_progress is true.",
+      "evidence": [
+        {
+          "resource": "repo://agent/protocol/src/agent_catalog.cpp#L705-L708",
+          "version": "repo-lines-v1:sha256:8c26c954cf11772c1954dc9d01976b4b2d67efbc39a411a1b255a3e39a0f4af6:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTg3MDZiZmQxNjE5MWFjYTQzZWYxN2RhYTdmYWI4YWNiM2M1NzIyOWNkMjZmOTlkYWI1YmE0ZjQ3OTdhZDFjZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzczN2EyOTY5MTI2NzVjN2JhMzM3YjgwNjhkNjE4ZWZhZDhlMDA3ODRiYTU3YjkxNWZkZGQ2ZmFjNGVhMzZiOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTUxYzhlMjg0ZTYxMWYyMzVhMWNmYTE1YmQ4MWQ4MGQ4ZjhiMTM2NzdmMTg1YzFjNGFjZTcyNmEyMzhjYzhmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDlmZjg4YWQyNzQxOGQ0MzljYmU0ZTU0NzZkZmVhMmZhYjdlMjZhYWNjYzljYzNiODA1NWQwZmQ0NTdmMzg3MiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5692cec2bdc04ae780c84061f397d69d",
+      "statement": "The measure_port tool does not use measurement-chain discovery; it recomputes the live runtime and then reads the requested output port.",
+      "evidence": [
+        {
+          "resource": "repo://agent/AGENTS.md#L13-L13",
+          "version": "repo-lines-v1:sha256:659e1a9eb7342fd9e7497e769b252456b66f19d8cb5289ea5675e015b3d2282f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU5ZTFhOWViNzM0MmZkOWU3NDk3ZTc2OWIyNTI0NTZiNjZmMTlkOGNiNTI4OWVhNTY3NWUwMTViM2QyMjgyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU5ZTFhOWViNzM0MmZkOWU3NDk3ZTc2OWIyNTI0NTZiNjZmMTlkOGNiNTI4OWVhNTY3NWUwMTViM2QyMjgyZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDNmYWFiOWZhYzRlZWI5MzBiMWI5MmQ3YjNkMWE3N2I5ZDAyN2YyOTcyODczYjBhYzg1YWUwMjU3ODNjMzVjOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTkyMzQ0MmNlYTZhY2UzNDdiYTg0MGZmMzk3YjA5MGJhZTI3YTI1OTIwOGQ2ZWJiMTJjNjJmMGU3ZWFiYmU2OCJ9"
+        },
+        {
+          "resource": "repo://agent/api/src/tool_measure.cpp#L211-L330",
+          "version": "repo-lines-v1:sha256:962c81e6e0b90b3ef2fe2427bf178b75082befdc2a90235f6fa3c893e81930ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzMjNhMmFlMDgzNzUyODRhMDc5MmJlODNlZWFhODFkZjZmODlkZjJjYjVhMzc3NmE3MTVkYTc2ZTVjMjUzYjczIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjdlNWFlYzMwNTljNDY4MDM0Mzc3NGJlZWI4MGJhMmU4NGQxNDM2M2FjZWU2NjA5NTQ4ZjdiZDhlYWE4M2YzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhMTcwZDMxODgwMzYzZGFhNjBmN2ZjYmQ4YzM4N2EwNjNkYWM4ZTZiN2NhMDlkYzY0ZDEwM2UzMWVkMjVjNDFhIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_558f8e5e83e6431fbe5aca7ff8f13eb4",
+      "statement": "Chain discovery and runner behavior are covered by the network analyzer runner test cases, including the rejected topologies and the switched filter bank, and receiver measurement caching and resumption are covered by the receiver measurement test cases.",
+      "evidence": [
+        {
+          "resource": "repo://tests/test_network_analyzer.cpp#L188-L338",
+          "version": "repo-lines-v1:sha256:46697c134d2cda5c650675fd83aee89a0238844fe3229589ba19929d82e79fc7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyYWY2NDE5N2JiNDMwYTRlODkxMTk4ZTE3MTZhZDBkZjNmMjQyZjhlNWZiYWIyNzE3NzAyNjA5NTE1YWMwODFmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjYTU3N2NiYzZhOGQ2NzMxNmZlZjlhMGQ3ZjU1ZDMzMTc5YjhmNjg4OWQ0MWFkZTc5OWJhYzhhYzc4NDY5ZWQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4Y2Y4ZjZlODg4Y2JmNjJkY2JiZWZhZmExNGYzODA2OWE1OTVmYTczNTQ0ZGQyNGMxODZhYTM3ZDllODU5NWFkIn0"
+        },
+        {
+          "resource": "repo://tests/test_network_analyzer.cpp#L340-L390",
+          "version": "repo-lines-v1:sha256:ac5b09ec28883ead53e39e89bc755e815ce7d8c24a89b810afea7d6924fdb2a0:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYjZkOTE2NDA4YjY0ZDMxNTE5M2IwYzI1YWEzMjhmMzMzOWM1MTM3NWM0ZTAyZjBlZDViYTExYmNhNmI4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NDk5ZmJkOWZkZmI4YmYzOWQ2ZmNkMmUwMTgxMDFmNmQ2NzQwODAwYjBlMzFhMTYxNDkyYzU2NWY0NWQ1ZDkifQ"
+        },
+        {
+          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L455-L482",
+          "version": "repo-lines-v1:sha256:1318b9a8a0a984bc482c763f826b945d022751378f9fbc95198ddb40a64c1864:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyZDIxNzQ5MTZkYTYxYzljOGYzZjFmNWNmMjIyMGRhZmM5NjczZTMyYmJkNDk4YTEwOGNkMTYxYzRlZGYzODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2NTExZTRiZGEwNTNhNjY5ZmU0Y2VkNDY0ODc1NjJjZWEwMGJhZjMyNmU3Njc5NWE4ZTExNDFjYTg2ZGFkZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1NzY3ZTRjMjk5ZjQ0MGJmYTBjZjc2N2UzOGFkOTZmODY5YzEyYWY4ZTQ3OGY3MGQ2OThlNmZmZTI4Mzc1NWUifQ"
+        },
+        {
+          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L627-L628",
+          "version": "repo-lines-v1:sha256:3c1b0ef64db93e64e51ddff59e64f109db3023507569e164500f039019698565:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDc1MzA5NzE0MjFiYjlkMzc4YTM4Y2M1M2Y3Y2ZmYWQxOGQwYjk0Zjc3YmUwODFmOTRhYTMxNzVjNGEwYWU4OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2E4ZDUwOTI0MTY4YTA3ZWRiMGVmYjQ4Yzg5YzQ1MDg3MzJmYzAwYzlhMWU5NGNhNTBmZGQzZjA2MTdiNjc2OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNlNTY0NmM1OGQwNzAzOWFlZDQzNDdmMDZkNzc3NmFmNDg5YTBmNjZiYTNiMTJkM2M4NThiOGE3MmM4MzViMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGJjN2FlZDc5OWYzMmYwNmE2Y2NlZDUyNjEyMWI0ZWYyYzdmNTZkODhkZTFhZjA0OThiM2YzZWFmN2Y3MTEzNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_02163db104604d3eb85fe927ebe2c395",
+      "statement": "The agent API tests pin the NO_PATH reason for network_analyzer_sweep and receiver_measure when endpoints have no measurement path.",
+      "evidence": [
+        {
+          "resource": "repo://tests/test_agent_api.cpp#L1538-L1541",
+          "version": "repo-lines-v1:sha256:a876935c4463b0518b8c504651e1d47e1b9e85316027df74b4e1943f6cbac57e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQwNDU3OWEwZGU2M2U3YjdkOWIzMmRiNjM5ZGY1OGEwYWVlOWJhNTYwNGExNWQwOTRlMWUzMDE2YjMyNGU1YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTU2ZGM5MzY5N2ZhMDA0MDhhNThjZDEzN2MxODM4ZGJkZTNlNWY3N2ViMDExMGNjOTFjYmYzYzE2MzIwMjIzMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmQ2ZTM3OWIwZWZhMWEwYWIwOWY0YzgzMWQwNTcwYWI1ZTIyM2UxODE2NjIzYjE3YjViNDI1Y2ZmMmRjZTI2NSJ9"
+        },
+        {
+          "resource": "repo://tests/test_agent_api.cpp#L2341-L2344",
+          "version": "repo-lines-v1:sha256:25a0ba6faa40cc645893365dcda0121a656f6904af4cf5edbdf4023103d39a01:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjZiYmViNDZiMTc1ZWE0MjdhY2E3MDc0N2YyOTUyY2Y1OGVlNWI0OTJiYTBlNmMyYjU1OTE5NTA1NTU2MzRhNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjY4MDQ0MGYzYWUyNDIyZTQyMmViYzc4NzQ5MTc0NWI2MjA5MjEzY2VlMTNiNDRmNTVkZjdjMjY3Y2Q4MWY2NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNmZGJmMzRmMWVhMjg2OGJhZGU0MDU5M2MyNmMxN2JiNzJhNTQzY2VlMDhlMWE3YzFjZjFiMmM1NTA0NmNjYiJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.0",
+    "at": "2026-10-10T19:01:57.003Z"
+  }
+}

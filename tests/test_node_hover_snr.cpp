@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "output_snr.h"
 #include "pfb_channelizer_engine.h"
 #include "splitter_engine.h"
 #include <catch2/catch_approx.hpp>
@@ -75,12 +76,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Node hover carries the analyzer SNR of the first
     REQUIRE_FALSE(info.summary.empty());
     REQUIRE(info.summary == app.testComponents().hoverSummary(node_id));
 
-    // The reported SNR is exactly what the analyzer API measures for output 0.
-    const std::optional<double> expected =
-        app.testSpectrumAnalyzerEngine().computeStrongestToneSNRdB(splitter.node().outputs[0]);
-    REQUIRE(expected.has_value());
+    // The reported SNR is the value returned by the shared output policy.
+    const OutputSnr expected = computeOutputSnr(splitter, 0, app.testSpectrumAnalyzerEngine());
+    REQUIRE(expected.snr_dB.has_value());
     REQUIRE(info.snr_dB.has_value());
-    REQUIRE(*info.snr_dB == Catch::Approx(*expected).margin(0.25));
+    REQUIRE(*info.snr_dB == Catch::Approx(*expected.snr_dB).margin(0.25));
 
     // -20 dBm (1e-5 W) against a 4 MHz-wide slice of 1e-18 W/Hz (4e-12 W).
     REQUIRE(*info.snr_dB == Catch::Approx(64.0).margin(0.25));
@@ -121,12 +121,14 @@ TEST_CASE_METHOD(ImGuiFixture, "PFB node hover SNR uses integrated channel noise
     REQUIRE(active.noise_W > 0.0);
     const double expected_dB =
         active.tones[0].power_dBm - (10.0 * std::log10(active.noise_W) + 30.0);
+    const OutputSnr expected = computeOutputSnr(pfb, 0, app.testSpectrumAnalyzerEngine());
+    REQUIRE(expected.snr_dB.has_value());
 
     app.testSpectrumAnalyzerEngine().setResBw(4e6);
     const NodeHoverInfo first = app.testGraphWidget().onNodeHover(pfb.graphNodeId());
     REQUIRE(first.snr_dB.has_value());
     REQUIRE(*first.snr_dB == Catch::Approx(expected_dB).margin(0.25));
-
+    REQUIRE(*first.snr_dB == Catch::Approx(*expected.snr_dB).margin(0.25));
     const auto analyzer_snr =
         app.testSpectrumAnalyzerEngine().computeStrongestToneSNRdB(pfb.node().outputs[0]);
     REQUIRE(analyzer_snr.has_value());
@@ -142,4 +144,98 @@ TEST_CASE_METHOD(ImGuiFixture, "PFB node hover SNR uses integrated channel noise
     pfb.update(0.0);
     const NodeHoverInfo no_tone = app.testGraphWidget().onNodeHover(pfb.graphNodeId());
     REQUIRE_FALSE(no_tone.snr_dB.has_value());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Output SNR uses the analyzer RBW for ordinary ports",
+                 "[app][snr]") {
+    RfSimulatorApp app;
+    auto &splitter = static_cast<SplitterEngine &>(*app.testCreateComponent("splitter", 10003));
+    splitter.node().outputs[0] = makeOutputSpectrum(-20.0);
+
+    auto &analyzer = app.testSpectrumAnalyzerEngine();
+    analyzer.setResBw(kRbw_Hz);
+
+    const OutputSnr result = computeOutputSnr(splitter, 0, analyzer);
+    const auto expected = analyzer.computeStrongestToneSNRdB(splitter.node().outputs[0]);
+
+    REQUIRE(expected.has_value());
+    REQUIRE(result.snr_dB.has_value());
+    REQUIRE(*result.snr_dB == Catch::Approx(*expected).margin(1e-12));
+    REQUIRE(result.basis == SnrBasis::Rbw);
+    REQUIRE(result.rbw_Hz == Catch::Approx(analyzer.rbw()));
+    REQUIRE(result.enbw_Hz == 0.0);
+    REQUIRE_FALSE(result.channel_noise_dBm.has_value());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "PFB output zero SNR reports channel metadata and ignores RBW",
+                 "[app][snr][pfb]") {
+    RfSimulatorApp app;
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10004));
+
+    Spectrum input;
+    input.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        input.frequencies[i] = -200e6 + i * 1e6;
+    input.noise_total_W.assign(input.frequencies.size(), 1e-20);
+    input.tones.push_back({6.25e6, -20.0, 0.0});
+    input.fs_Hz = 400e6;
+
+    pfb.setActiveChannel(16);
+    pfb.node().inputs[0] = &input;
+    pfb.update(0.0);
+
+    const auto &active = pfb.channels().at(pfb.activeChannel());
+    REQUIRE(active.noise_W > 0.0);
+    REQUIRE(active.enbw_Hz > 0.0);
+    const auto expected_snr = pfb.computeActiveChannelSNRdB();
+    const double expected_noise_dBm = 10.0 * std::log10(active.noise_W) + 30.0;
+    auto &analyzer = app.testSpectrumAnalyzerEngine();
+    analyzer.setResBw(4e6);
+
+    const OutputSnr first = computeOutputSnr(pfb, 0, analyzer);
+    REQUIRE(expected_snr.has_value());
+    REQUIRE(first.snr_dB.has_value());
+    REQUIRE(*first.snr_dB == Catch::Approx(*expected_snr).margin(1e-12));
+    REQUIRE(first.basis == SnrBasis::PfbChannel);
+    REQUIRE(first.enbw_Hz == Catch::Approx(active.enbw_Hz));
+    REQUIRE(first.channel_noise_dBm.has_value());
+    REQUIRE(*first.channel_noise_dBm == Catch::Approx(expected_noise_dBm).margin(1e-12));
+
+    analyzer.setResBw(8e6);
+    const OutputSnr second = computeOutputSnr(pfb, 0, analyzer);
+    REQUIRE(second.snr_dB.has_value());
+    REQUIRE(*second.snr_dB == Catch::Approx(*first.snr_dB).margin(1e-12));
+    REQUIRE(second.channel_noise_dBm.has_value());
+    REQUIRE(*second.channel_noise_dBm == Catch::Approx(*first.channel_noise_dBm).margin(1e-12));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Other PFB output ports use RBW and missing ports are unavailable",
+                 "[app][snr][pfb]") {
+    RfSimulatorApp app;
+    auto &pfb = static_cast<PFBChannelizerEngine &>(*app.testCreateComponent("pfb", 10005));
+
+    Spectrum input;
+    input.frequencies.resize(401);
+    for (int i = 0; i < 401; ++i)
+        input.frequencies[i] = -200e6 + i * 1e6;
+    input.noise_total_W.assign(input.frequencies.size(), 1e-20);
+    input.tones.push_back({6.25e6, -20.0, 0.0});
+    input.fs_Hz = 400e6;
+
+    pfb.setActiveChannel(16);
+    pfb.node().inputs[0] = &input;
+    pfb.update(0.0);
+
+    REQUIRE(pfb.node().outputs.size() > 1);
+    auto &analyzer = app.testSpectrumAnalyzerEngine();
+    analyzer.setResBw(kRbw_Hz);
+    const OutputSnr other_port = computeOutputSnr(pfb, 1, analyzer);
+    const auto expected = analyzer.computeStrongestToneSNRdB(pfb.node().outputs[1]);
+
+    REQUIRE(expected.has_value());
+    REQUIRE(other_port.snr_dB.has_value());
+    REQUIRE(*other_port.snr_dB == Catch::Approx(*expected).margin(1e-12));
+    REQUIRE(other_port.basis == SnrBasis::Rbw);
+    REQUIRE(other_port.rbw_Hz == Catch::Approx(analyzer.rbw()));
+    REQUIRE_FALSE(computeOutputSnr(pfb, 7, analyzer).snr_dB.has_value());
 }

@@ -135,21 +135,20 @@ std::optional<double> estimateIIP3(const std::vector<std::pair<double, double>> 
 // generator) and every link between them, so a switched filter bank's throws
 // and wiring are covered. Conditions of a disabled metric are omitted because
 // update() never reads them.
-std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin, int point_b_pin,
+std::string requestKey(const ReceiverMeasurementRequest &request, int point_a_pin, int point_b_pin,
                        const std::vector<double> &sweep,
                        const std::optional<MeasurementChainPath> &path) {
-    const auto &conditions = config.measurement_conditions;
     nlohmann::json key;
     key["point_a"] = point_a_pin;
     key["point_b"] = point_b_pin;
     key["grid"] = sweep;
-    key["output_enabled"] = config.output_power.has_value();
-    key["tone_selector"] = config.output_power && conditions.output_reference_tone_frequency_Hz
-                               ? nlohmann::json(*conditions.output_reference_tone_frequency_Hz)
+    key["output_enabled"] = request.output_power;
+    key["tone_selector"] = request.output_power && request.reference_tone_Hz
+                               ? nlohmann::json(*request.reference_tone_Hz)
                                : nlohmann::json(nullptr);
-    key["iip3_enabled"] = config.iip3_min_dBm.has_value();
-    if (config.iip3_min_dBm && conditions.iip3) {
-        const auto &settings = *conditions.iip3;
+    key["iip3_enabled"] = request.iip3;
+    if (request.iip3 && request.iip3_settings) {
+        const auto &settings = *request.iip3_settings;
         key["iip3_settings"] = {{"spacing", settings.tone_spacing_Hz},
                                 {"start", settings.input_start_dBm},
                                 {"stop", settings.input_stop_dBm},
@@ -163,12 +162,26 @@ std::string requestKey(const ReceiverRequirementsConfig &config, int point_a_pin
 } // namespace
 
 ReceiverPerformanceMeasurementEngine::ReceiverPerformanceMeasurementEngine(
-    const NodeGraphEngine &graph, IMeasurementChainHost &host)
+    const NodeGraphEngine &graph, const IMeasurementChainHost &host)
     : m_graph(graph), m_host(host) {}
 
 ReceiverPerformanceMeasurementEngine::~ReceiverPerformanceMeasurementEngine() = default;
 
 void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConfig &config,
+                                                  int point_a_pin, int point_b_pin,
+                                                  const std::vector<double> &sweep_frequencies_Hz) {
+    const auto &conditions = config.measurement_conditions;
+    ReceiverMeasurementRequest request;
+    request.output_power = config.output_power.has_value();
+    if (request.output_power)
+        request.reference_tone_Hz = conditions.output_reference_tone_frequency_Hz;
+    request.iip3 = config.iip3_min_dBm.has_value() && conditions.iip3.has_value();
+    if (request.iip3)
+        request.iip3_settings = conditions.iip3;
+    update(request, point_a_pin, point_b_pin, sweep_frequencies_Hz);
+}
+
+void ReceiverPerformanceMeasurementEngine::update(const ReceiverMeasurementRequest &request,
                                                   int point_a_pin, int point_b_pin,
                                                   const std::vector<double> &sweep_frequencies_Hz) {
     const auto path = findMeasurementChainPath(m_graph, m_host, point_a_pin, point_b_pin);
@@ -180,7 +193,7 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
                           ? dynamic_cast<SignalGeneratorEngine *>(generator_component)
                           : nullptr;
     const std::string key =
-        requestKey(config, point_a_pin, point_b_pin, sweep_frequencies_Hz, path);
+        requestKey(request, point_a_pin, point_b_pin, sweep_frequencies_Hz, path);
     const bool same_request = m_has_cached_request && key == m_cached_request;
     if (same_request && !m_in_progress)
         return;
@@ -237,9 +250,9 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
             return;
         m_runner = std::move(runner);
 
-        if (config.output_power && generator) {
+        if (request.output_power && generator) {
             const auto &tones = generator->tones();
-            const auto selector = config.measurement_conditions.output_reference_tone_frequency_Hz;
+            const auto selector = request.reference_tone_Hz;
             const Spectrum::Tone *selected_tone = nullptr;
             if (selector || tones.size() == 1) {
                 const double frequency = selector ? *selector : tones.front().freq_Hz;
@@ -258,8 +271,8 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
                     std::pair{selected_tone->power_dBm, selected_tone->phase_deg};
         }
 
-        if (config.iip3_min_dBm && config.measurement_conditions.iip3) {
-            m_iip3_settings = config.measurement_conditions.iip3;
+        if (request.iip3 && request.iip3_settings) {
+            m_iip3_settings = request.iip3_settings;
             m_iip3_level_count = receiverIIP3LevelCount(*m_iip3_settings);
         }
         if (m_iip3_level_count) {

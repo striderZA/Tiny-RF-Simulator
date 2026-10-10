@@ -12,12 +12,14 @@
 #include "imnodes.h"
 #include "implot.h"
 #include "signal_generator_engine.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -268,4 +270,50 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(app.componentCount() == 0);
     const auto cwd_root = fs::weakly_canonical(fs::current_path() / "rf-sim-extensions");
     REQUIRE(app.testExtensionManager().projectExtensionRoot() == cwd_root);
+}
+
+// A malformed low saved counter must not undo the IDs consumed while rebuilding
+// this project. The serialized runtime counter lets the test inspect that value
+// without adding another application test accessor.
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #113: a low saved ID counter does not collide with restored components",
+                 "[issue113][project]") {
+    TempTree tree("id_counter");
+    const auto source = tree.file("source.rfsim");
+    {
+        RfSimulatorApp seed;
+        seed.newProject();
+        REQUIRE(seed.testCreateComponent("generator", 100) != nullptr);
+        REQUIRE(seed.testCreateComponent("amplifier", 101) != nullptr);
+        REQUIRE(seed.testCreateComponent("generator", 102) != nullptr);
+        seed.saveProject(source.string());
+    }
+
+    auto low_counter_project = readJson(source);
+    low_counter_project["graph_state"]["next_component_id"] = 100;
+    const auto low_counter = tree.file("low_counter.rfsim");
+    writeJson(low_counter, low_counter_project);
+
+    RfSimulatorApp app;
+    app.loadProject(low_counter.string());
+    REQUIRE(app.componentCount() == 3);
+
+    std::vector<int> restored_ids;
+    int max_restored_id = 0;
+    for (IComponentEngine *component : app.testComponents().all()) {
+        REQUIRE(component != nullptr);
+        restored_ids.push_back(component->id());
+        max_restored_id = std::max(max_restored_id, component->id());
+    }
+    REQUIRE(restored_ids.size() == 3);
+
+    const auto counter_snapshot = tree.file("after_load.rfsim");
+    app.saveProject(counter_snapshot.string());
+    const int next_component_id =
+        readJson(counter_snapshot)["graph_state"]["next_component_id"].get<int>();
+    CHECK(next_component_id > max_restored_id);
+
+    IComponentEngine *created = app.testCreateComponent("generator", next_component_id);
+    REQUIRE(created != nullptr);
+    CHECK(std::find(restored_ids.begin(), restored_ids.end(), created->id()) == restored_ids.end());
 }

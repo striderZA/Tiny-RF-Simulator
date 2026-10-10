@@ -3,6 +3,7 @@ project(test_flow LANGUAGES CXX)
 
 add_library(test_flow STATIC
     src/flow_author.cpp
+    src/flow_boundary.cpp
     src/flow_metrics.cpp
     src/flow_params.cpp
     src/flow_result.cpp

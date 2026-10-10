@@ -1,9 +1,17 @@
 ---
 type: workflow guide
 title: Test Flow Workflow
-description: Defines the JSON sweep contract and traces Test Flow authoring, exhaustive preflight, synchronous execution, full component-state restoration, failure latching, and JSON results.
-tags: [test-flow, harness, authoring, measurements, execution, validation]
+description: Defines the JSON Test Flow sweep contract and traces authoring, preflight, the shared RunFlowWithinBoundary seam used by the panel and the test_flow_run agent tool, once-per-run restoration, failure latching, and JSON results.
+tags: [test-flow, harness, authoring, measurements, execution, validation, restoration, agent-tool]
 sources:
+  - id: openwiki-source-d7b5e27be67d03af04c422d5
+    resource: repo://agent/api/include/agent_api.h
+  - id: openwiki-source-09cfc1b32d53a6a762f8fcf1
+    resource: repo://agent/api/src/agent_api.cpp
+  - id: openwiki-source-51a2566382a8dd93c7ef78ca
+    resource: repo://agent/api/src/tool_test_flow.cpp
+  - id: openwiki-source-880b52865addec60737d5a6c
+    resource: repo://agent/protocol/src/agent_errors.cpp
   - id: openwiki-source-8c3f2a1fe9422d9010bcc799
     resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-b5f6d8bb035c1246d584d593
@@ -26,19 +34,23 @@ sources:
     resource: repo://test_flow/include/flow_runner.h
   - id: openwiki-source-31da9fc309aaca20fabd0f25
     resource: repo://test_flow/include/flow_types.h
+  - id: openwiki-source-7cf82ec60f61d2c0858950cf
+    resource: repo://test_flow/src/flow_boundary.cpp
   - id: openwiki-source-1425d7c9bb71c8e6d4145122
     resource: repo://test_flow/src/flow_runner.cpp
+  - id: openwiki-source-d8865e23d4aeb9130e4e47be
+    resource: repo://tests/test_agent_api.cpp
   - id: openwiki-source-59642b0a96e98716b082cc11
     resource: repo://tests/test_test_flow_widget.cpp
-generated: { by: "omp", at: "2026-10-05T19:44:12.666Z" }
+generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-05T19:44:12.666Z
+    at: 2026-10-10T18:57:17.727Z
 ---
 
 # Test Flow Workflow
 
-A Test Flow is a repeatable parameter sweep over the live RF circuit. The app-owned panel is an authoring and orchestration client; the GUI-free `test_flow` library owns the file schema, condition paths, value rules, validation, execution, metrics, and error wording. Keeping the contract in the library lets the same behavior run in Catch2 tests without ImGui.
+A Test Flow is a repeatable parameter sweep over the live RF circuit. The app-owned panel and the `test_flow_run` agent tool are clients of the GUI-free `test_flow` library, which owns the file schema, condition paths, value rules, validation, execution, metrics, and error wording. Keeping the contract in the library lets the same behavior run in Catch2 tests without ImGui.
 
 ## File contract and addressing
 
@@ -49,7 +61,7 @@ A flow file is a JSON object with:
 - optional `conditions` array; each item is `{ "component": id, "path": key, "values": [numbers...] }`;
 - required non-empty `measure` array; each item is `{ "component": id, "port": integer, "metric": name }`.
 
-`component` is `IComponentEngine::id()`, not a graph-node ID. The runner and panel resolve it by scanning live engines. `CircuitRuntime` allocates IDs monotonically, so removing a component does not renumber surviving live engines. A project load resets the counter and recreates components in saved order: deleting or reordering components before a save/load can make old IDs shift, disappear, or bind to a different engine. Revalidate flows after circuit changes; flow IDs are not stable portable identifiers.
+`component` is `IComponentEngine::id()`, not a graph-node ID. The runner and panel resolve it by scanning live engines. `CircuitRuntime` allocates IDs monotonically, so removing a component does not renumber surviving live engines. A project load resets the counter to 100, creates the saved components in file order, and then raises the counter to the saved `next_component_id` if that is higher. Deleting or reordering components before a save can therefore make an old ID shift, disappear, or bind to a different engine after reload. Revalidate flows after circuit changes; flow IDs are not stable portable identifiers.
 
 `port` is a zero-based output-port index. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`. The loader rejects malformed records, wrong field types, empty value or measurement lists, unknown metrics, duplicate `(component, path)` targets, and duplicate `(component, port, metric)` readings. A failed load resets the parsed `FlowSpec`; partially parsed conditions never escape in `FlowLoadResult`.
 
@@ -72,43 +84,58 @@ The harness resolves a path once and checks all candidate values against its exi
 
 `LoadFlowFile()` parses and validates JSON structure without reading or changing a circuit. `ValidateFlow(spec, components)` is the live-circuit preflight: it checks every condition component and every value for its path, then each measurement component, output port, and metric. It is read-only and returns errors in the order and wording that `RunFlow()` uses. The panel can therefore disable Run without inventing its own verdict.
 
-`RunFlow()` repeats that same preflight before producing rows, then rejects cyclic graph topology. It freezes one serialized baseline per targeted component. Each row starts from those baselines, applies that row's condition values, rewires inputs through the shared `rewireComponentInputs()` pass, updates engines in graph topological order, and records every requested metric. It executes the Cartesian product of condition values; the last condition varies fastest. With no conditions it produces one measurement row. The GUI-free harness has no row limit.
+`RunFlow()` repeats that same preflight before producing rows, then rejects cyclic graph topology. It freezes one serialized baseline per targeted component. Each row starts from copies of those baselines, applies that row's condition values, deserializes the targeted engines, rewires inputs through the shared `rewireComponentInputs()` pass, updates engines in graph topological order, and records every requested metric. It executes the Cartesian product of condition values; the last condition varies fastest. With no conditions it produces one measurement row. The harness itself has no row limit.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
-    File["Flow JSON"] --> Load["LoadFlowFile"]
-    Load -->|valid spec| Preflight["ValidateFlow against live engine ids and serialized keys"]
-    Load -->|invalid file| Error["FlowLoadResult error; spec reset"]
-    Preflight -->|issues| Refused["RunFlow fails before rows"]
-    Preflight -->|no issues| Cycle["Check graph ordering for cycles"]
+    File["Flow JSON"] --> Load["LoadFlowFile parses and checks structure"]
+    Load -->|valid spec| Preflight["ValidateFlow against live component IDs and serialized keys"]
+    Load -->|invalid file| LoadError["Load error and parsed spec reset"]
+    Preflight -->|issues| Refused["RunFlow fails before any row"]
+    Preflight -->|no issues| Cycle["Reject cyclic graph topology"]
     Cycle -->|cycle| Refused
-    Cycle -->|acyclic| Baseline["Freeze targeted component baselines"]
-    Baseline --> Rows["Cartesian sweep: restore baseline, patch values"]
-    Rows --> Rewire["Shared graph input rewiring"]
+    Cycle -->|acyclic| Baseline["Freeze one serialized baseline per targeted component"]
+    Baseline --> Rows["Per row: copy baselines, patch condition values, deserialize"]
+    Rows --> Rewire["Shared rewireComponentInputs pass"]
     Rewire --> Update["Update engines in topological order"]
-    Update --> Capture["Capture metrics into FlowRows"]
+    Update --> Capture["Capture metrics into a FlowRow"]
+    Capture -->|next row| Rows
 ```
 
-Fatal validation, cycle, or deserialization errors produce `ok == false` and zero result rows. If a component deserialization fails during execution, the harness attempts to restore the targeted baselines and includes rollback failure details in its error.
+Fatal validation, cycle, or deserialization errors produce `ok == false` and zero result rows. `RunFlow()` rolls the targeted baselines back only when a deserialization fails inside the row loop, then returns the failure with any rollback error appended. After a successful sweep it restores nothing, so the live engines keep the last row's swept values until the run boundary restores them.
 
-## Panel authoring and preview
+## Run boundary and restoration
 
-`TestFlowWidget` holds either a loaded file or an in-tool draft. The draft is the effective spec while it exists; preview, run, and save all consume that same accessor. `New from Circuit` creates a draft with a measurement on the first component with an output port and pre-fills the authoring form with the first sweepable serialized key and its current value. The sweep remains the author's choice.
+Both callers run flows through `RunFlowWithinBoundary()` in `test_flow/src/flow_boundary.cpp`. The panel's `TestFlowWidget::run()` calls it directly. The agent tool calls it through an `AgentApi` seam that defaults to it and that `AgentApi::setFlowRunBoundary()` replaces in tests. The boundary wraps one `RunFlow()` call and performs these steps in order:
 
-The authoring form discovers component IDs from the registry and paths from each engine's own `serialize()` snapshot. It commits conditions and measurements only after asking the harness to validate candidates. It also rejects duplicate targets/readings that the loader rejects but `ValidateFlow()` does not. A refused authoring edit does not materialize or change a draft.
+1. Snapshot every non-null live engine with `serialize()`, keyed by component ID. If a snapshot throws, it returns `SnapshotFailed` before anything runs.
+2. Run `RunFlow()` once. An exception is recorded as `ExecutionFailed`, and restoration still runs.
+3. Restore each snapshot once, after the last row, by looking up its component ID. A missing component is reported as no longer present. A failed restore is recorded, and later restores still run.
+4. Rewire inputs through `rewireComponentInputs()` in every case.
+5. If any restore failed, return `RestoreFailed` and discard the run's result, even when the run itself succeeded. Otherwise return `Completed`, which carries the run's `FlowResult` (an ordinary validation error is kept there), or `ExecutionFailed`.
 
-Preview resolves component IDs and output ports against the live circuit, shows a bounded set of values and useful numeric path hints, and displays the harness's own errors. Its predicted row count is the saturating product of all condition-value counts. `saveFlow()` requires a measurement and a valid preflight, writes through `buildFlowDocument()` and `writeFlowFile()`, then loads the saved file back so the panel holds exactly the document on disk.
+Restoration happens once per run, not once per row. Inside a sweep, `RunFlow()` changes the live engines row by row, and only step 3 returns them to their snapshots.
 
-Loading or reloading a file discards an in-tool draft and clears previous result rows; the panel reports that unsaved edits were discarded. A hand-edited flow can be reloaded without changing its selected path.
+Panel behavior lives in `TestFlowWidget::run()`. A Cartesian sweep above `TestFlowWidget::kMaxRunRows` (10,000) is refused before any snapshot, because the sweep runs synchronously on the UI thread; the reusable `RunFlow()` harness has no cap. A snapshot failure refuses the run and does not latch. A restore failure clears the result, stores the failure notice in the status, and latches the panel: later runs are refused with the same notice until `resetAfterCircuitReload()` runs after a circuit reload. That reset clears the latch, result, and status but retains the selected flow and draft, and preview revalidates those references against the new circuit instead of silently discarding author work. An ordinary flow error stays as the result diagnostic when restoration succeeded. The panel never marks the project dirty.
 
-## Run boundary, restoration, and reload
+## Agent tool: `test_flow_run`
 
-The panel runs flows synchronously on the UI thread, so it refuses a Cartesian sweep above `TestFlowWidget::kMaxRunRows` (10,000) before taking snapshots. This is a UI safety limit; the reusable `RunFlow()` harness has no cap.
+`test_flow_run` takes `epoch` (required), `conditions` (optional), and `measure` (required). Its checks run in this order:
 
-Before execution, the widget snapshots `serialize()` state for every live engine. It refuses to run if the snapshot pass fails. `RunFlow()` temporarily deserializes sweep values into the live components, but the widget always attempts to restore each snapshot independently afterward and rewires graph inputs. The flow harness takes a const graph and does not change topology. Successful restoration leaves component serialization, graph links, and project revision unchanged.
+1. **Epoch.** `epoch` must equal the current agent epoch. A mismatch returns the stale-epoch error (`STALE_EPOCH`) before any condition or measurement is parsed, and nothing runs.
+2. **Latch.** While the agent's flow latch is set, a matching call returns `INTERNAL` with the latch message and the hint `reload the project before running flows again`, without parsing or running anything. `AgentApi::noteProjectReplaced()` clears the latch, and the app calls it when a project is replaced.
+3. **Shape.** `conditions` holds at most 4 entries, each with `component`, `path`, and `values`, where `values` is a non-empty array of finite numbers. `measure` holds 1 to 8 entries, each with `component`, `port`, and `metric`. Unknown fields are rejected as `INVALID_ARGUMENT`.
+4. **Duplicates.** Two conditions that sweep the same component and path, or two measurements that read the same metric on the same component and port, return `INVALID_ARGUMENT` at the later entry.
+5. **Row budget.** The row count is the saturating product of the value counts. Above 1,000 rows the call returns `INVALID_ARGUMENT` with `requested` and `limit` details, before any snapshot is taken.
+6. **Run.** The call runs through the boundary and maps the outcome:
+   - `SnapshotFailed`: `INTERNAL` with "cannot snapshot the circuit"; no latch.
+   - `ExecutionFailed`: `INTERNAL` with "flow execution failed"; no latch.
+   - `RestoreFailed`: the message is latched, the project is marked modified, and the call returns `INTERNAL` with the latch hint. Unlike the panel, the agent path marks the project dirty.
+   - `Completed` with `ok == false`: the flow error maps by code. A missing component or port maps to `NOT_FOUND`; an inapplicable path maps to `ParamRejected` (serialized as `PARAM_REJECTED`); metric, duplicate, shape, and type errors map to `INVALID_ARGUMENT`; cyclic graphs and deserialization failures map to `INTERNAL`.
+   - `Completed` with `ok == true`: the reply below.
+7. **Reply.** `{epoch, row_count, rows}`. Each row holds `conditions` (`component`, `path`, `value`) and `metrics` (`component`, `port`, `name`, `value`, `unit`, `valid`). A non-finite `value` is encoded as JSON `null`, and `valid` is false only for NaN samples. A completed run does not mark the project modified.
 
-An ordinary flow error remains available as the result diagnostic if restoration succeeded. A snapshot/restore exception is a separate failure: it clears the result, keeps restoration details in status, and latches the panel so later runs are refused until a circuit reload. `resetAfterCircuitReload()` clears the latch, result, and status but retains the selected flow and draft; preview revalidates those references against the new circuit instead of silently discarding author work.
+The `[test_flow_run]` cases in `tests/test_agent_api.cpp` cover the epoch, duplicate, row-budget, error-mapping, and latch behavior above; the latch case injects a `RestoreFailed` outcome through `setFlowRunBoundary()`.
 
 ```mermaid
 stateDiagram-v2
@@ -118,9 +145,10 @@ stateDiagram-v2
     LoadedFile --> Preview: ValidateFlow against live circuit
     Draft --> Preview: edit draft
     Preview --> Refused: validation or row-budget issue
-    Preview --> Running: RunFlow starts
-    Running --> Restoring: success or ordinary error
-    Restoring --> Completed: every component restored
+    Preview --> Running: boundary starts
+    Running --> Refused: snapshot fails before any change
+    Running --> Restoring: RunFlow returns or throws
+    Restoring --> Completed: every snapshot restored
     Restoring --> RestoreLatched: a restore fails
     RestoreLatched --> ReloadRequired: later runs refused
     ReloadRequired --> Preview: circuit reload clears latch
@@ -137,11 +165,21 @@ The panel does not mark the project dirty. Runs restore the live engines, and th
 
 ## Focused tests
 
-Run both the GUI-free harness and app panel contracts:
+Run the GUI-free harness, boundary, panel, and agent-tool contracts:
 
 ```bash
 cmake --build build
-ctest --test-dir build -R 'test_issue87_flow|test_test_flow_widget' --output-on-failure
+ctest --test-dir build -R 'test_issue87_flow|test_flow_boundary|test_test_flow_widget|test_agent_api' --output-on-failure
 ```
 
-`test_issue87_flow` covers loader errors, path/type/value validation, metric math, Cartesian rows, rollback, result JSON, authoring discovery, value grammar, and atomic flow-file writes. `test_test_flow_widget` covers panel preview and run limits, no-condition and multi-condition row counts, snapshot/restore and unchanged project revision, ordinary and latched failures, reload recovery, authoring/draft behavior, and export. Both are standalone CTest targets in `tests/CMakeLists.txt`; the widget target is `RUN_SERIAL` because app-level tests share executable-relative session state on Windows.
+- `test_issue87_flow` covers loader errors, path/type/value validation, metric math, Cartesian rows, rollback, result JSON, authoring discovery, value grammar, and atomic flow-file writes.
+- `test_flow_boundary` covers a no-condition run that leaves the circuit as it was, a restore failure that is reported while later engines are still restored, an execution failure that still restores, and a snapshot failure that refuses the run before anything executes.
+- `test_test_flow_widget` covers panel preview and run limits, no-condition and multi-condition row counts, snapshot/restore and unchanged project revision, ordinary and latched failures, reload recovery, authoring/draft behavior, and export. It is marked `RUN_SERIAL` in `tests/CMakeLists.txt`.
+- `test_agent_api` runs the `[test_flow_run]` cases: an unchanged project after a sweep, duplicate rejection, the 1,000-row refusal, `STALE_EPOCH` without running, error-code mapping, the latch until project replacement, a 1,000-row reply within the reply cap, the zero-condition single row, and the one-measurement minimum.
+
+## Related pages
+
+- [Agent tool-call lifecycle](agent-tool-calls.md)
+- [Agent interface architecture](../architecture/agent-interface.md)
+- [RF components](../domains/rf-components.md)
+- [Testing guidance](../testing/guidance.md)

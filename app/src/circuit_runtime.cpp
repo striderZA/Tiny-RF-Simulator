@@ -115,6 +115,7 @@ void CircuitRuntime::clearComponentsAndResetIds() {
     rewireComponentInputs(m_components.all(), m_graph);
     m_graph.setNextIds(1, 100, 1000);
     m_next_component_id = 100;
+    ++m_epoch;
 }
 
 const NodeGraphEngine &CircuitRuntime::graph() const { return m_graph; }
@@ -126,3 +127,5 @@ const ViewManager &CircuitRuntime::viewManager() const { return m_view_manager; 
 int CircuitRuntime::nextComponentId() const { return m_next_component_id; }
 
 void CircuitRuntime::setNextComponentId(int id) { m_next_component_id = id; }
+
+std::uint64_t CircuitRuntime::epoch() const { return m_epoch; }

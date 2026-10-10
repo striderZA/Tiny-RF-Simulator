@@ -3,11 +3,11 @@
 #include "component_interface.h"
 #include "component_registry.h"
 #include "flow_author.h"
+#include "flow_boundary.h"
 #include "flow_metrics.h"
 #include "flow_params.h"
 #include "imgui.h"
 #include "node_graph_engine.h"
-#include "rewire.h"
 #include "signal_node.h"
 
 #include <algorithm>
@@ -56,12 +56,6 @@ constexpr size_t kValuesBufferHeadroom = 64;
 constexpr const char *kDefaultMetric = "power_dBm";
 
 const ImVec4 kIssueColor(1.0f, 0.45f, 0.45f, 1.0f);
-
-void appendError(std::string &out, const std::string &detail) {
-    if (!out.empty())
-        out += "; ";
-    out += detail;
-}
 
 // Appends a notice on its own line, so one status can carry a second fact (the
 // latched restoration failure, or a draft a load discarded) without overwriting
@@ -197,89 +191,41 @@ bool TestFlowWidget::run() {
         return false;
     }
 
-    // 1. Snapshot every live engine. RunFlow() deserializes into the real
-    //    components, so an engine that cannot even be captured cannot be
-    //    restored afterwards — refuse the run instead of performing it
-    //    unguarded.
-    std::vector<std::pair<int, nlohmann::json>> snapshots;
-    snapshots.reserve(m_components.size());
-    try {
-        for (IComponentEngine *component : m_components.all()) {
-            if (!component)
-                continue;
-            snapshots.emplace_back(component->id(), component->serialize());
-        }
-    } catch (const std::exception &error) {
+    // The shared run boundary snapshots every engine, runs the flow, restores each snapshot
+    // independently, and rewires. Its outcome decides what the panel shows, exactly as it does
+    // for the agent tool.
+    const BoundaryOutcome outcome = RunFlowWithinBoundary(spec(), m_components.all(), m_graph);
+    switch (outcome.status) {
+    case BoundaryStatus::SnapshotFailed:
         m_result.reset();
-        setStatus(std::string("Run refused: cannot snapshot the circuit (") + error.what() + ")");
+        setStatus("Run refused: cannot snapshot the circuit (" + outcome.message + ")");
         return false;
-    } catch (...) {
+    case BoundaryStatus::ExecutionFailed:
         m_result.reset();
-        setStatus("Run refused: cannot snapshot the circuit (unknown exception)");
+        setStatus("Execution failed: " + outcome.message);
         return false;
-    }
-
-    // 2. Execute. From here the circuit has been touched whatever happens, so
-    //    the restore below is unconditional.
-    FlowResult result;
-    std::string execution_error;
-    try {
-        result = RunFlow(spec(), m_components.all(), m_graph);
-    } catch (const std::exception &error) {
-        execution_error = error.what();
-    } catch (...) {
-        execution_error = "unknown exception";
-    }
-
-    // 3. Restore every snapshot, independently: one deserialize() failure must
-    //    not strand the components after it. The shared pass then re-points
-    //    every input at the output its (untouched) graph link names, exactly as
-    //    the app's own rewireInputs() does.
-    std::string restore_error;
-    for (const auto &snapshot : snapshots) {
-        IComponentEngine *component = findById(m_components.all(), snapshot.first);
-        if (!component) {
-            appendError(restore_error,
-                        "component " + std::to_string(snapshot.first) + ": no longer present");
-            continue;
-        }
-        try {
-            component->deserialize(snapshot.second);
-        } catch (const std::exception &error) {
-            appendError(restore_error,
-                        "component " + std::to_string(snapshot.first) + ": " + error.what());
-        } catch (...) {
-            appendError(restore_error,
-                        "component " + std::to_string(snapshot.first) + ": unknown exception");
-        }
-    }
-    rewireComponentInputs(m_components.all(), m_graph);
-
-    // 4. Classify. A restore failure outranks everything — the live circuit may
-    //    no longer match the project — and latches until a circuit reload. An
-    //    execution exception is a run failure. An ordinary FlowResult error is
-    //    the user's diagnostic and is kept, because restoration succeeded.
-    if (!restore_error.empty()) {
+    case BoundaryStatus::RestoreFailed:
+        // A restore failure outranks everything: the live circuit may no longer match the
+        // project, so the panel latches until a circuit reload.
         m_result.reset();
-        // Store the notice before taking the latch: later status writes read it
-        // back so the reason for the blocked panel survives new selections.
+        // Store the notice before taking the latch: later status writes read it back so the
+        // reason for the blocked panel survives new selections.
         m_restore_failure =
-            "Restore failed: " + restore_error + " — reload the circuit to run flows again.";
+            "Restore failed: " + outcome.message + " — reload the circuit to run flows again.";
         m_status = m_restore_failure;
         m_restore_failed = true;
         return false;
+    case BoundaryStatus::Completed:
+        break;
     }
-    if (!execution_error.empty()) {
-        m_result.reset();
-        setStatus("Execution failed: " + execution_error);
+    // An ordinary FlowResult error is the user's diagnostic and is kept, because restoration
+    // succeeded.
+    m_result = outcome.result;
+    if (!outcome.result.ok) {
+        setStatus(outcome.result.error.message);
         return false;
     }
-    m_result = result;
-    if (!result.ok) {
-        setStatus(result.error.message);
-        return false;
-    }
-    setStatus("Flow completed: " + std::to_string(result.rows.size()) + " row(s).");
+    setStatus("Flow completed: " + std::to_string(outcome.result.rows.size()) + " row(s).");
     return true;
 }
 

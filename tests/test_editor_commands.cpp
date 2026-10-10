@@ -1,5 +1,6 @@
 #include "app.h"
 #include "circuit_runtime.h"
+#include "component_library.h"
 #include "component_type_registry.h"
 #include "editor_commands.h"
 #include "graph_editor_actions.h"
@@ -51,6 +52,11 @@ std::string tempProjectPath(const std::string &name) {
     return (std::filesystem::temp_directory_path() /
             ("editor_commands_" + name + "_" + test_temp_paths::processTag() + ".rfsim"))
         .string();
+}
+
+std::string zx60DefinitionPath() {
+    return std::string(PROJECT_SOURCE_DIR) +
+           "/component_data/library/amplifiers/mini-circuits/zx60-33ln.json";
 }
 
 } // namespace
@@ -177,6 +183,73 @@ TEST_CASE("componentsAdded adopts components created outside the command service
     f.commands.componentsAdded();
     REQUIRE(f.commands.isDirty());
     REQUIRE(f.components_changed == 1);
+}
+
+TEST_CASE("addLibraryPart adds the part in one revision", "[editor_commands][agent]") {
+    CommandFixture f;
+    ComponentLibrary library;
+    library.loadFile(zx60DefinitionPath());
+    const auto definitions = library.all();
+    REQUIRE(definitions.size() == 1);
+
+    const std::uint64_t revision_before = f.commands.revision();
+    const ComponentAddResult result = f.commands.addLibraryPart(library, *definitions.front());
+
+    REQUIRE(result.component != nullptr);
+    CHECK(result.params.status == ParamWriteStatus::Unchanged);
+    CHECK(result.params.ok());
+    CHECK(f.runtime.components().size() == 1);
+    CHECK(f.commands.revision() == revision_before + 1);
+    CHECK(f.components_changed == 1);
+
+    bool found_part_number = false;
+    for (const auto &node : f.runtime.graph().nodes()) {
+        if (node.node_id == result.component->graphNodeId()) {
+            CHECK(node.part_number == "ZX60-33LN+");
+            found_part_number = true;
+        }
+    }
+    CHECK(found_part_number);
+}
+
+TEST_CASE("Parameters given to addLibraryPart override the part's values",
+          "[editor_commands][agent]") {
+    CommandFixture f;
+    ComponentLibrary library;
+    library.loadFile(zx60DefinitionPath());
+    const auto definitions = library.all();
+    REQUIRE(definitions.size() == 1);
+
+    const std::uint64_t revision_before = f.commands.revision();
+    const nlohmann::ordered_json params = {{"gain_dB", 20}};
+    const ComponentAddResult result =
+        f.commands.addLibraryPart(library, *definitions.front(), params);
+
+    REQUIRE(result.component != nullptr);
+    CHECK(result.params.status == ParamWriteStatus::Applied);
+    const nlohmann::json state = result.component->serialize();
+    CHECK(state["gain_dB"].get<double>() == 20.0);
+    CHECK(state["nf_dB"].get<double>() == 1.1);
+    CHECK(f.commands.revision() == revision_before + 1);
+    CHECK(f.components_changed == 1);
+}
+
+TEST_CASE("An add whose parameters are rejected leaves nothing behind",
+          "[editor_commands][agent]") {
+    CommandFixture f;
+    const std::size_t component_count_before = f.runtime.components().size();
+    const std::uint64_t revision_before = f.commands.revision();
+    const int callbacks_before = f.components_changed;
+    const nlohmann::ordered_json params = {{"nope", 1}};
+
+    const ComponentAddResult result =
+        f.commands.createComponentWithParams(descriptor("amplifier").create, params);
+
+    CHECK(result.component == nullptr);
+    CHECK(result.params.status == ParamWriteStatus::UnknownKey);
+    CHECK(f.runtime.components().size() == component_count_before);
+    CHECK(f.commands.revision() == revision_before);
+    CHECK(f.components_changed == callbacks_before);
 }
 
 TEST_CASE("PFB view sync follows the registry and keeps surviving views' visibility",

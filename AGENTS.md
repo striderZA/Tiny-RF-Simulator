@@ -91,6 +91,7 @@ Default section order:
 - The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
 
 - ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
+- S-parameter engines (attenuator, combiner, amplifier, equalizer, ideal filter) read the legacy `sparam_path` key when `sparam_filepath` is absent, so legacy-only project and library entries load their file; `sparam_filepath` wins when both are present. A missing `sparam_fwd_idx` selects S21 for a loaded file, as `setSParamFilepath()` does (index 0 when no file is loaded); an explicit index is kept.
 - PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
 - The active PFB channel's integrated noise readout is based on the channel response integrated over the current input frequency grid; show its channel noise in dBm with effective ENBW. The PFB node-hover SNR compares its strongest active-channel tone against this integrated noise and is independent of analyzer RBW; ordinary analyzer traces/SNR remain RBW-based.
 - Spectrum-display noise jitter is a cosmetic effect on the noise floor only; it must never perturb deterministic signal tones, so tone peaks stay fixed frame to frame.
@@ -110,6 +111,7 @@ Default section order:
 - Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, plus a `strict-build` matrix whose leg list `classify-release` selects from the tag (Linux GCC Debug only on patch tags; the full four-way matrix on minor/major tags).
 - `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft. `scripts/release-notes.sh <X.Y.Z>` is the single changelog-section extractor used by the workflow and the local script; it rejects an empty section.
 - The `package` job builds the Linux/Windows artifacts attached to a GitHub release with `CMAKE_BUILD_TYPE=Release` and validates that Release build configuration with CTest (Linux runs the full suite including `test_ui` under Xvfb; Windows excludes `test_ui` and adds the MinGW `TEST_CASE` registration floor, set once as the workflow's `MINGW_TEST_CASE_FLOOR`); it runs on every tag, so the shipped configuration is always exercised. CI does not launch the packaged GUI executable itself. Debug builds are validation-only and are never shipped.
+- The Linux tarball `rf-simulator-linux-x86_64.tar.gz` contains exactly two root-level regular-file members: `rf-simulator-linux` (copied from `tiny-rf-simulator`) and its sibling `rf-sim-mcp`. Do not package them inside an `rf-simulator-linux/` directory.
 - The clang-format file set is defined once in `scripts/format-dirs.sh` (shared by `scripts/format.sh`, `.githooks/pre-commit`, and the workflow's `format` job).
 - `CHANGELOG.md` is the source of truth for GitHub release descriptions.
 
@@ -132,6 +134,7 @@ Default section order:
 - [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
 - [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
+- [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
 
 <!-- OPENWIKI:START -->
 

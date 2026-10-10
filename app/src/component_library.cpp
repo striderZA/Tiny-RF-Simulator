@@ -127,6 +127,18 @@ void appendFilterCutoffIssues(const nlohmann::json &parameters,
 
 } // namespace
 
+std::optional<fs::path> componentDataFilePath(const ComponentDefinition &definition,
+                                              std::string_view data_type) {
+    if (definition.source_path.empty())
+        return std::nullopt;
+    const fs::path json_dir = fs::path(definition.source_path).parent_path();
+    for (const DataFileRef &ref : definition.data_files) {
+        if (ref.type == data_type)
+            return resolveDataFilePath(json_dir, ref.path); // first matching entry decides
+    }
+    return std::nullopt;
+}
+
 std::string sanitizePathSegment(const std::string &s, const std::string &fallback) {
     std::string out;
     out.reserve(s.size());

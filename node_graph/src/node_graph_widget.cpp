@@ -2,6 +2,7 @@
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -17,6 +18,55 @@ NodeGraphWidget::NodeGraphWidget(const NodeGraphEngine &engine, NodeGraphWidgetA
 
 NodeGraphWidget::~NodeGraphWidget() { ImNodes::EditorContextFree(m_context); }
 
+void NodeGraphWidget::setNodeEditorSpacePosition(int node_id, ImVec2 position) {
+    ImNodes::EditorContextSet(m_context);
+    ImNodes::SetNodeEditorSpacePos(node_id, position);
+    m_registered_in_pool.insert(node_id);
+    m_last_node_grid_positions[node_id] = position;
+    m_prev_node_grid_positions[node_id] = position;
+    m_cached_grid_positions[node_id] = ImNodes::GetNodeGridSpacePos(node_id);
+}
+
+std::optional<NodeGraphBounds>
+NodeGraphWidget::nodeBoundsExcluding(const std::unordered_set<int> &excluded_node_ids) const {
+    const ImVec2 kFallbackNodeDimensions(260.0f, 160.0f);
+    std::optional<NodeGraphBounds> bounds;
+    const auto include_bounds = [&bounds](const NodeGraphBounds &candidate) {
+        if (!bounds) {
+            bounds = candidate;
+            return;
+        }
+        bounds->min.x = std::min(bounds->min.x, candidate.min.x);
+        bounds->min.y = std::min(bounds->min.y, candidate.min.y);
+        bounds->max.x = std::max(bounds->max.x, candidate.max.x);
+        bounds->max.y = std::max(bounds->max.y, candidate.max.y);
+    };
+
+    for (const auto &node : m_engine.nodes()) {
+        if (excluded_node_ids.count(node.node_id))
+            continue;
+
+        const auto position_it = m_last_node_grid_positions.find(node.node_id);
+        const ImVec2 position = position_it != m_last_node_grid_positions.end()
+                                    ? position_it->second
+                                    : ImVec2(0.0f, 0.0f);
+        const auto dimensions_it = m_cached_node_dimensions.find(node.node_id);
+        const ImVec2 dimensions = dimensions_it != m_cached_node_dimensions.end()
+                                      ? dimensions_it->second
+                                      : kFallbackNodeDimensions;
+        include_bounds({position, position + dimensions});
+    }
+
+    for (const auto &group : m_engine.groups()) {
+        if (!group.collapsed || !m_rendered_collapsed_groups.count(group.id))
+            continue;
+        const auto bounds_it = m_cached_collapsed_group_bounds.find(group.id);
+        if (bounds_it != m_cached_collapsed_group_bounds.end())
+            include_bounds(bounds_it->second);
+    }
+    return bounds;
+}
+
 void NodeGraphWidget::syncNodesFromEngine() {
     ImNodes::EditorContextSet(m_context);
     for (const auto &node : m_engine.nodes()) {
@@ -27,6 +77,10 @@ void NodeGraphWidget::syncNodesFromEngine() {
         // time we see a given node ID.
         if (m_registered_in_pool.insert(node.node_id).second) {
             ImNodes::SetNodeGridSpacePos(node.node_id, ImVec2(0, 0));
+            const ImVec2 editor_position = ImNodes::GetNodeEditorSpacePos(node.node_id);
+            m_cached_grid_positions[node.node_id] = ImNodes::GetNodeGridSpacePos(node.node_id);
+            m_last_node_grid_positions[node.node_id] = editor_position;
+            m_prev_node_grid_positions[node.node_id] = editor_position;
         }
     }
 }
@@ -36,6 +90,9 @@ void NodeGraphWidget::captureGridPositions() {
     m_cached_grid_positions.clear();
     for (const auto &node : m_engine.nodes()) {
         m_cached_grid_positions[node.node_id] = ImNodes::GetNodeGridSpacePos(node.node_id);
+        const ImVec2 editor_position = ImNodes::GetNodeEditorSpacePos(node.node_id);
+        m_last_node_grid_positions[node.node_id] = editor_position;
+        m_prev_node_grid_positions[node.node_id] = editor_position;
     }
 }
 
@@ -261,6 +318,7 @@ void NodeGraphWidget::drawNodes() {
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
+        m_cached_node_dimensions[node.node_id] = ImNodes::GetNodeDimensions(node.node_id);
     }
 }
 
@@ -484,6 +542,7 @@ void NodeGraphWidget::handleNodeDeletion() {
                 m_node_screen_positions.erase(node_id);
                 m_cached_grid_positions.erase(node_id);
                 m_last_node_grid_positions.erase(node_id);
+                m_prev_node_grid_positions.erase(node_id);
             }
             ImNodes::ClearNodeSelection();
         }

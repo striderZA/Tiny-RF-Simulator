@@ -68,6 +68,7 @@ void NodeGraphWidget::drawGroupBackgrounds() {
 
 void NodeGraphWidget::drawGroupCollapsedBlocks() {
     m_rendered_collapsed_groups.clear();
+    m_cached_collapsed_group_bounds.clear();
     for (const auto &g : m_engine.groups()) {
         if (!g.collapsed)
             continue;
@@ -92,7 +93,6 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             continue;
         ImVec2 centroid_grid(sum.x / count, sum.y / count);
         ImNodes::SetNodeGridSpacePos(g.id, centroid_grid - ImVec2(60, 40));
-        m_rendered_collapsed_groups.insert(g.id);
 
         // Render the block as an imnodes node
         ImNodes::BeginNode(g.id);
@@ -166,6 +166,10 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
         ImNodes::EndNode();
+        const ImVec2 group_position = ImNodes::GetNodeEditorSpacePos(g.id);
+        const ImVec2 group_dimensions = ImNodes::GetNodeDimensions(g.id);
+        m_cached_collapsed_group_bounds[g.id] = {group_position, group_position + group_dimensions};
+        m_rendered_collapsed_groups.insert(g.id);
     }
 }
 
@@ -199,21 +203,28 @@ void NodeGraphWidget::drawGroupTitleBar(const Group &g, const ImVec2 &top_left_s
     }
 }
 void NodeGraphWidget::detectNodeMoves() {
-    // Require BOTH a mouse release AND an actual position change.
-    // This prevents false positives: clicking menu items won't trigger,
-    // and stale position caches from a previous project load won't trigger
-    // because there was no mouse release during the load process.
-    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-        return;
-    bool moved = false;
+    // Always cache current positions for every drawn node, so
+    // nodeGridPosition() returns valid values even in headless frames.
     for (const auto &node : m_engine.nodes()) {
         // Skip nodes not drawn this frame (newly added nodes haven't been
         // through BeginNode yet, so GetNodeEditorSpacePos would assert).
         if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
             continue;
+        m_last_node_grid_positions[node.node_id] = ImNodes::GetNodeEditorSpacePos(node.node_id);
+    }
+
+    // Move detection requires a mouse release to avoid false positives
+    // from menu clicks or stale caches from a previous project load.
+    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        return;
+
+    bool moved = false;
+    for (const auto &node : m_engine.nodes()) {
+        if (m_node_screen_positions.find(node.node_id) == m_node_screen_positions.end())
+            continue;
         ImVec2 current = ImNodes::GetNodeEditorSpacePos(node.node_id);
-        auto it = m_last_node_grid_positions.find(node.node_id);
-        if (it != m_last_node_grid_positions.end()) {
+        auto it = m_prev_node_grid_positions.find(node.node_id);
+        if (it != m_prev_node_grid_positions.end()) {
             float dx = current.x - it->second.x;
             float dy = current.y - it->second.y;
             if (dx * dx + dy * dy > 1.0f) {
@@ -222,7 +233,7 @@ void NodeGraphWidget::detectNodeMoves() {
                 moved = true;
             }
         }
-        m_last_node_grid_positions[node.node_id] = current;
+        m_prev_node_grid_positions[node.node_id] = current;
     }
     if (moved && onNodeMoved)
         onNodeMoved();

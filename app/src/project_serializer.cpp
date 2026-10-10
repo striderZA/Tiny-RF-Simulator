@@ -10,6 +10,7 @@
 #include "node_graph_engine.h"
 #include "node_graph_widget.h"
 #include "pfb_view_manager.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -469,6 +470,65 @@ std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
 }
 
 bool ProjectSerializer::save(const std::string &path) {
+    const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
+    nlohmann::json root = toJson({save_project_dir, true});
+
+    auto pos = path.find_last_of("\\/");
+    std::string fname = (pos != std::string::npos) ? path.substr(pos + 1) : path;
+    auto dot = fname.find_last_of('.');
+    root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
+
+    // Atomic save (issue #113): the previous contents must survive a failed
+    // write so issue #77's retry contract never retries against a truncated
+    // file. Serialize into a sibling "<path>.tmp", flush/close it, and only
+    // then rename it over the target, without a remove+rename fallback.
+    const fs::path target(path);
+    fs::path temp = target;
+    temp += ".tmp";
+    const std::string temp_str = temp.string();
+
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
+        return false;
+    }
+    out << root.dump(2);
+    out.flush();
+    if (!out) {
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        out.close();
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
+        return false;
+    }
+    out.close();
+    if (!out) {
+        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
+        return false;
+    }
+
+    // std::filesystem::rename atomically replaces an existing target on every
+    // supported platform (POSIX rename / Windows MoveFileEx with
+    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
+    // fallback: deleting the target first would reintroduce the data-loss
+    // window this function exists to close. If the rename fails the original
+    // is still intact — drop the temp and report the failure.
+    std::error_code ec;
+    fs::rename(temp, target, ec);
+    if (ec) {
+        LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
+        return false;
+    }
+
+    LOG_INFO("Saved project to %s", path.c_str());
+    return true;
+}
+
+nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
     nlohmann::json root;
     root["version"] = 1;
     if (m_receiver_requirements.config) {
@@ -506,11 +566,6 @@ bool ProjectSerializer::save(const std::string &path) {
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
 
-    auto pos = path.find_last_of("\\/");
-    std::string fname = (pos != std::string::npos) ? path.substr(pos + 1) : path;
-    auto dot = fname.find_last_of('.');
-    root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
-
     // Ensure all engine nodes are registered with the imnodes context
     // so GetNodeEditorSpacePos() doesn't assert on node IDs added without
     // a prior render frame (e.g. via newProject then programmatic add).
@@ -518,14 +573,14 @@ bool ProjectSerializer::save(const std::string &path) {
 
     // Save components by iterating the registry
     nlohmann::json comps_arr = nlohmann::json::array();
-    // S1: S-param paths are persisted relative to the project dir for portability.
-    const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
+    // S1: When provided, S-param paths are persisted relative to the project root.
     for (auto *comp : components().all()) {
         nlohmann::json cj;
         const auto *desc = ComponentTypeRegistry::instance().find(comp->type_name());
         cj["type"] = desc ? desc->project_type : "Unknown";
         cj["params"] = comp->serialize();
-        relativizeSparamParams(cj["params"], save_project_dir);
+        if (options.sparam_root)
+            relativizeSparamParams(cj["params"], *options.sparam_root);
 
         // Save node position via imnodes
         int nid = comp->graphNodeId();
@@ -640,64 +695,16 @@ bool ProjectSerializer::save(const std::string &path) {
     }
     root["groups"] = groups_arr;
 
-    // Window state (canonical flag list shared with the load-time shape guard
-    // and restore — see windowFlags()).
-    for (const auto &[key, member] : windowFlags())
-        root["window_state"][key] = *member;
+    // Window flags are shared with fromJson's optional validation and restore.
+    if (options.window_state) {
+        for (const auto &[key, member] : windowFlags())
+            root["window_state"][key] = *member;
+    }
 
     // Graph state counters (for later additions)
     root["graph_state"]["next_component_id"] = m_runtime.nextComponentId();
 
-    // Atomic save (issue #113): the previous contents must survive a failed
-    // write so issue #77's retry contract never retries against a truncated
-    // file. Serialize into a sibling "<path>.tmp", flush/close it, and only
-    // then rename it over the target. A failure before the rename leaves the
-    // original byte-identical; the fixed sibling name is what the regression
-    // test blocks to force a write failure deterministically.
-    const fs::path target(path);
-    fs::path temp = target;
-    temp += ".tmp";
-    const std::string temp_str = temp.string();
-
-    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
-        return false;
-    }
-    out << root.dump(2);
-    out.flush();
-    if (!out) {
-        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
-        out.close();
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
-    }
-    out.close();
-    if (!out) {
-        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
-    }
-
-    // std::filesystem::rename atomically replaces an existing target on every
-    // supported platform (POSIX rename / Windows MoveFileEx with
-    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
-    // fallback: deleting the target first would reintroduce the data-loss
-    // window this function exists to close. If the rename fails the original
-    // is still intact — drop the temp and report the failure.
-    std::error_code ec;
-    fs::rename(temp, target, ec);
-    if (ec) {
-        LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
-    }
-
-    LOG_INFO("Saved project to %s", path.c_str());
-    return true;
+    return root;
 }
 
 bool ProjectSerializer::load(const std::string &path) {
@@ -738,6 +745,14 @@ bool ProjectSerializer::load(const std::string &path) {
         LOG_ERROR("Invalid project file: %s", e.what());
         return false;
     }
+    return fromJson(std::move(root), {project_dir, true}, path);
+}
+
+bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &options,
+                                 const std::string &source_label) {
+    m_last_load_reset = false;
+    const std::string &path = source_label;
+
     if (!root.is_object()) {
         LOG_ERROR("Invalid project file (root is not a JSON object): %s", path.c_str());
         return false;
@@ -764,7 +779,8 @@ bool ProjectSerializer::load(const std::string &path) {
         };
         if (!require_array("components") || !require_array("links") ||
             !require_array("probe_pins") || !require_array("groups") ||
-            !require_object("network_analyzer") || !require_object("window_state") ||
+            !require_object("network_analyzer") ||
+            (options.window_state && !require_object("window_state")) ||
             !require_object("graph_state")) {
             // A wrong-shaped top-level section makes the file unusable. Reset
             // to the empty state a normal load would produce (regression tests
@@ -776,13 +792,13 @@ bool ProjectSerializer::load(const std::string &path) {
             return false;
         }
 
-        // Field-level shape guard for the two singleton sections, validated
-        // here (before reset) so an invalid optional scalar is *rejected* and
-        // cannot mutate the live project: a corrupt UI flag or counter must not
-        // discard the project the user already has open (issue #113). This
-        // deliberately differs from the section-shape failure above, which
-        // resets because no coherent project can be recovered from it.
+        // Field-level guards validate enabled window flags and graph counters
+        // before reset so malformed scalars cannot discard the open project
+        // (issue #113). This differs from a wrong top-level section, which
+        // resets because no coherent project can be restored.
         const auto window_state_ok = [&]() -> bool {
+            if (!options.window_state)
+                return true;
             if (!root.contains("window_state") || root["window_state"].is_null())
                 return true;
             const auto &ws = root["window_state"];
@@ -872,11 +888,10 @@ bool ProjectSerializer::load(const std::string &path) {
                     continue;
                 }
                 comp = m_runtime.createComponent(desc->create);
-                // S1: resolve S-param paths against the project file's
-                // directory and neutralize any path that escapes it (the
-                // engine's deserialize() only sees the raw params JSON and
-                // cannot know the project dir).
-                resolveSparamParams(params, project_dir);
+                // File loads pass their project directory as sparam_root and
+                // neutralize escaping paths before deserialize sees the params.
+                if (options.sparam_root)
+                    resolveSparamParams(params, *options.sparam_root);
                 comp->deserialize(params);
 
                 // Restore position. Malformed optional metadata must not abort
@@ -1154,22 +1169,23 @@ bool ProjectSerializer::load(const std::string &path) {
         // Rebuild derived group boundaries once, after all restored topology and groups exist.
         m_editor_actions.topologyChanged();
 
-        // Restore window state. These fields were shape-validated before
-        // reset(), so a present key is guaranteed boolean; an absent key keeps
-        // the section default (true). Null sections leave the live values.
-        auto &ws = root["window_state"];
-        if (!ws.is_null()) {
-            // An absent flag keeps the section default (true). Presence was
-            // shape-validated before reset(), so get<bool>() cannot throw.
-            for (const auto &[key, member] : windowFlags())
-                *member = ws.contains(key) ? ws[key].get<bool>() : true;
+        if (options.window_state) {
+            // Restore only when requested; absent flags keep the load default.
+            auto &ws = root["window_state"];
+            if (!ws.is_null()) {
+                for (const auto &[key, member] : windowFlags())
+                    *member = ws.contains(key) ? ws[key].get<bool>() : true;
+            }
         }
 
-        // Restore graph state counters. Pre-validation guarantees a present
-        // next_component_id is a non-negative int, so no wrap/truncation.
+        // Restore the saved counter without losing IDs consumed during project
+        // reconstruction. Pre-validation guarantees a present next_component_id
+        // is a non-negative int, so no wrap or truncation is possible.
         auto &gs = root["graph_state"];
-        if (!gs.is_null() && gs.contains("next_component_id"))
-            m_runtime.setNextComponentId(gs["next_component_id"].get<int>());
+        if (!gs.is_null() && gs.contains("next_component_id")) {
+            m_runtime.setNextComponentId(
+                std::max(gs["next_component_id"].get<int>(), m_runtime.nextComponentId()));
+        }
     } catch (const std::exception &e) {
         // Broadened from nlohmann::json::exception: any exception escaping
         // restoration (including non-JSON engine/container errors on

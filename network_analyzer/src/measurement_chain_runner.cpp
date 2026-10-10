@@ -203,7 +203,7 @@ std::optional<MeasurementChainPath> findMeasurementChainPath(const NodeGraphEngi
     return result;
 }
 
-IsolatedChainRunner::IsolatedChainRunner(IMeasurementChainHost &host) : m_host(host) {}
+IsolatedChainRunner::IsolatedChainRunner(const IMeasurementChainHost &host) : m_host(host) {}
 
 bool IsolatedChainRunner::prepare(const MeasurementChainPath &path) {
     m_last_result = nullptr;
