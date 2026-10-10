@@ -1590,3 +1590,27 @@ TEST_CASE("Measurement results carry epochs and missing endpoints return NOT_FOU
     CHECK(errorFor(missing_port).at("code") == "NOT_FOUND");
     CHECK(missing_port.structured.at("epoch") == fixture.api.epoch());
 }
+
+TEST_CASE("set_params rejects a partial tone element and leaves the generator unchanged",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    generator->addTone(1.1e9, -14.0);
+    const auto before = generator->serialize();
+    const auto revision = fixture.commands.revision();
+
+    const auto result = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "set_params"},
+              {"component", generator->id()},
+              {"params", {{"tones", nlohmann::ordered_json::array({{{"freq_Hz", 3e9}}})}}}}}));
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("epoch") == fixture.api.epoch());
+    CHECK(errorFor(result).at("code") == "PARAM_REJECTED");
+    CHECK(errorFor(result).at("details").at("reason") == "TYPE_MISMATCH");
+    CHECK(errorFor(result).at("details").at("path") == "tones[0]");
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(generator->serialize() == before);
+}
