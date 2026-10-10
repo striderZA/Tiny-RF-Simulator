@@ -368,6 +368,34 @@ Json networkAnalyzerSuccessSchema() {
                         {"epoch", "settings", "summary"});
 }
 
+Json dataFileReadSuccessSchema() {
+    Json range = objectSchema(properties({{"min", numberSchema("Lowest frequency in Hz.")},
+                                          {"max", numberSchema("Highest frequency in Hz.")}}),
+                              {"min", "max"});
+    Json selector = objectSchema(properties({{"row", integerSchema("S-parameter row.", 0, 3)},
+                                             {"col", integerSchema("S-parameter column.", 0, 3)}}),
+                                 {"row", "col"});
+    Json sample = objectSchema(properties({{"freq_Hz", numberSchema("Sample frequency in Hz.")},
+                                           {"magnitude_dB", nullableSchema(numberSchema())},
+                                           {"phase_deg", nullableSchema(numberSchema())}}),
+                               {"freq_Hz", "magnitude_dB", "phase_deg"});
+    return objectSchema(
+        properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                    {"source", enumSchema({"component", "library"})},
+                    {"type", stringSchema("Component type of the source.")},
+                    {"part_number", nullableSchema(stringSchema())},
+                    {"file", stringSchema("Data file basename.")},
+                    {"ports", integerSchema("Port count of the file.", 1)},
+                    {"points", integerSchema("Frequency point count of the file.", 1)},
+                    {"reference_impedance_ohm", numberSchema("Reference impedance in ohms.")},
+                    {"format", enumSchema({"DB", "MA", "RI"})},
+                    {"frequency_range_Hz", std::move(range)},
+                    {"s_parameter", std::move(selector)},
+                    {"samples", arraySchema(std::move(sample), 1, 401)}}),
+        {"epoch", "source", "type", "part_number", "file", "ports", "points",
+         "reference_impedance_ohm", "format", "frequency_range_Hz", "s_parameter", "samples"});
+}
+
 Json outputSchema(Json success) {
     return Json{{"type", "object"},
                 {"anyOf", Json::array({std::move(success), agentErrorSchema()})}};
@@ -576,7 +604,27 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                       {"stop_Hz", 1.0e9},
                       {"points", 201},
                       {"arrays", Json{{"max_points", 101}}}}),
-             networkAnalyzerSuccessSchema(), idempotentAnnotations())};
+             networkAnalyzerSuccessSchema(), idempotentAnnotations()),
+        tool("data_file_read", "Read Data File",
+             "Summarize the S-parameter file behind a circuit component or library part. Takes "
+             "no file paths and never writes.",
+             inputSchema(
+                 properties(
+                     {{"epoch", integerSchema("Epoch from the latest circuit read; required with "
+                                              "component.",
+                                              0)},
+                      {"component",
+                       integerSchema("Component id whose S-parameter file to read.", 0)},
+                      {"part_number", stringSchema("Exact library part number.")},
+                      {"type",
+                       stringSchema("Optional component type that disambiguates part_number.")},
+                      {"s_row", withDefault(integerSchema("S-parameter row, 0 to 3.", 0, 3), 1)},
+                      {"s_col", withDefault(integerSchema("S-parameter column, 0 to 3.", 0, 3), 0)},
+                      {"max_points",
+                       withDefault(integerSchema("Maximum number of samples, 2 to 401.", 2, 401),
+                                   201)}}),
+                 {}, Json{{"part_number", "AM1143"}}),
+             dataFileReadSuccessSchema(), readOnlyAnnotations())};
     return catalog;
 }
 

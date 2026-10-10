@@ -85,6 +85,9 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "network_analyzer_sweep") {
             result = executeNetworkAnalyzerSweepTool(*this, call);
             summary = "Run network analyzer sweep";
+        } else if (call.tool == "data_file_read") {
+            result = executeDataFileReadTool(*this, call);
+            summary = "Read data file";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

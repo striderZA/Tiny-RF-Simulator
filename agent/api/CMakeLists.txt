@@ -11,6 +11,7 @@ add_library(agent_api STATIC
     src/tool_circuit_edit.cpp
     src/tool_measure.cpp
     src/agent_library.cpp
+    src/tool_data_file.cpp
 )
 add_library(simulator::agent_api ALIAS agent_api)
 
@@ -29,6 +30,7 @@ target_link_libraries(agent_api
         simulator::spectrum_analyzer_engine
         simulator::power_meter_engine
         simulator::test_flow
+        simulator::touchstone_parser
         Threads::Threads
 )
 set_target_properties(agent_api PROPERTIES FOLDER "Library")

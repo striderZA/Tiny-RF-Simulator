@@ -27,11 +27,16 @@
 #include "flow_metrics.h"
 #include "output_snr.h"
 #include "power_meter_engine.h"
+#include "test_temp_paths.h"
+#include "touchstone_parser.h"
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
+#include <complex>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 
 #include <algorithm>
@@ -1613,4 +1618,295 @@ TEST_CASE("set_params rejects a partial tone element and leaves the generator un
     CHECK(errorFor(result).at("details").at("path") == "tones[0]");
     CHECK(fixture.commands.revision() == revision);
     CHECK(generator->serialize() == before);
+}
+
+namespace {
+
+std::filesystem::path dataFileScratch(const std::string &name) {
+    const auto dir = std::filesystem::temp_directory_path() /
+                     ("data_file_read_" + name + "_" + test_temp_paths::processTag());
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+void writeDataFileText(const std::filesystem::path &path, const std::string &text) {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out << text;
+}
+
+std::string admS2pPath() {
+    return std::string(PROJECT_SOURCE_DIR) +
+           "/component_data/amplifiers/adm-3844psm/ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+}
+
+std::string am1143S2pPath() {
+    return std::string(PROJECT_SOURCE_DIR) +
+           "/component_data/library/amplifiers/anatech/AM1143.s2p";
+}
+
+} // namespace
+
+TEST_CASE("data_file_read summarizes a component's S-parameter file",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admS2pPath()}});
+    const auto parsed = TouchstoneParser::parse(admS2pPath());
+    REQUIRE(parsed.has_value());
+
+    const auto result = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    REQUIRE_FALSE(result.is_error);
+    const auto &data = result.structured;
+    CHECK(data.at("epoch") == fixture.api.epoch());
+    CHECK(data.at("source") == "component");
+    CHECK(data.at("file") == "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
+    CHECK(data.at("ports") == parsed->num_ports);
+    CHECK(data.at("points") == parsed->frequencies.size());
+    CHECK(data.at("reference_impedance_ohm") == parsed->reference_impedance);
+    CHECK(data.at("frequency_range_Hz").at("min") == parsed->frequencies.front());
+    CHECK(data.at("frequency_range_Hz").at("max") == parsed->frequencies.back());
+    CHECK(data.at("s_parameter").at("row") == 1);
+    CHECK(data.at("s_parameter").at("col") == 0);
+    const auto &samples = data.at("samples");
+    REQUIRE(samples.size() == std::min<std::size_t>(201, parsed->frequencies.size()));
+    CHECK(samples[0].at("freq_Hz") == parsed->frequencies.front());
+    const double s21_dB = 20.0 * std::log10(std::abs(parsed->parameters.front()[2]));
+    CHECK(samples[0].at("magnitude_dB").get<double>() == Catch::Approx(s21_dB));
+}
+
+TEST_CASE("data_file_read library route matches the component route on the same file",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto library = fixture.call("data_file_read", {{"part_number", "AM1143"}});
+    REQUIRE_FALSE(library.is_error);
+    CHECK(library.structured.at("epoch") == fixture.api.epoch());
+    CHECK(library.structured.at("source") == "library");
+    CHECK(library.structured.at("part_number") == "AM1143");
+    CHECK(library.structured.at("file") == "AM1143.s2p");
+
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", am1143S2pPath()}});
+    const auto component = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    REQUIRE_FALSE(component.is_error);
+    CHECK(component.structured.at("samples") == library.structured.at("samples"));
+}
+
+TEST_CASE("data_file_read requires exactly one source, and an epoch with a component",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto neither = fixture.call("data_file_read", {{"epoch", fixture.api.epoch()}});
+    REQUIRE(errorFor(neither).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(neither).at("details").at("path") == "/");
+
+    const auto both =
+        fixture.call("data_file_read",
+                     {{"epoch", fixture.api.epoch()}, {"component", 1}, {"part_number", "AM1143"}});
+    REQUIRE(errorFor(both).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(both).at("details").at("path") == "/");
+
+    const auto no_epoch = fixture.call("data_file_read", {{"component", 1}});
+    REQUIRE(errorFor(no_epoch).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(no_epoch).at("details").at("path") == "/epoch");
+}
+
+TEST_CASE("data_file_read rejects s_row and s_col outside the file's port count",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admS2pPath()}});
+    const auto row = fixture.call(
+        "data_file_read",
+        {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}, {"s_row", 2}});
+    REQUIRE(errorFor(row).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(row).at("details").at("path") == "/s_row");
+    CHECK(errorFor(row).at("hint") == "file has 2 ports");
+    const auto column = fixture.call(
+        "data_file_read",
+        {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}, {"s_col", 2}});
+    REQUIRE(errorFor(column).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(column).at("details").at("path") == "/s_col");
+}
+
+TEST_CASE("data_file_read refuses a component without a usable S-parameter file",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    const auto read_component = [&]() {
+        return fixture.call("data_file_read",
+                            {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    };
+    REQUIRE(errorFor(read_component()).at("code") == "NOT_FOUND");
+
+    amplifier->deserialize({{"sparam_filepath", "relative.s2p"}});
+    REQUIRE(errorFor(read_component()).at("code") == "NOT_FOUND");
+
+    const auto dir = dataFileScratch("missing");
+    amplifier->deserialize(
+        {{"sparam_mode", true}, {"sparam_filepath", (dir / "missing.s2p").string()}});
+    REQUIRE(errorFor(read_component()).at("code") == "NOT_FOUND");
+}
+
+TEST_CASE("data_file_read refuses non-S-parameter and unparseable component files",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    const auto read_component = [&]() {
+        return fixture.call("data_file_read",
+                            {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    };
+    const auto dir = dataFileScratch("refusals");
+
+    const auto admittance = dir / "admittance.s2p";
+    writeDataFileText(admittance, "# HZ Y RI R 50\n1000000000 0.5 0 0 0 0.5 0 0.5 0\n");
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admittance.string()}});
+    REQUIRE(errorFor(read_component()).at("code") == "NOT_FOUND");
+
+    const auto garbage = dir / "garbage.s2p";
+    writeDataFileText(garbage, "# HZ S RI R 50\n1000000000 abc def\n");
+    REQUIRE_FALSE(TouchstoneParser::parse(garbage.string()).has_value());
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", garbage.string()}});
+    REQUIRE(errorFor(read_component()).at("code") == "INTERNAL");
+}
+
+TEST_CASE("data_file_read encodes a zero-magnitude sample as null", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto path = dataFileScratch("zero") / "zero_s21.s2p";
+    // Touchstone 2-port order is S11, S21, S12, S22, so the second pair is S21 and is zero.
+    writeDataFileText(path, "# HZ S RI R 50\n1000000000 0.5 0 0 0 0.5 0 0.5 0\n");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", path.string()}});
+
+    const auto result = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    REQUIRE_FALSE(result.is_error);
+    const auto &samples = result.structured.at("samples");
+    REQUIRE(samples.size() == 1);
+    CHECK(samples[0].at("magnitude_dB").is_null());
+    CHECK(samples[0].at("phase_deg") == 0.0);
+}
+
+TEST_CASE("data_file_read is read-only", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admS2pPath()}});
+    const auto before = amplifier->serialize();
+    const auto revision = fixture.commands.revision();
+    const auto dirty = fixture.commands.isDirty();
+
+    const auto result = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(amplifier->serialize() == before);
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.commands.isDirty() == dirty);
+}
+
+TEST_CASE("data_file_read reports stale epochs with replacement details",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admS2pPath()}});
+
+    const auto stale = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch() + 1}, {"component", amplifier->id()}});
+    REQUIRE(errorFor(stale).at("code") == "STALE_EPOCH");
+    CHECK(errorFor(stale).at("details").at("epoch") == fixture.api.epoch());
+}
+
+TEST_CASE("data_file_read refuses a library path loaded from disk that escapes its directory",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto root = dataFileScratch("escape_file");
+    const auto lib_dir = root / "library";
+    std::filesystem::create_directories(lib_dir);
+    writeDataFileText(root / "decoy.s2p", "# HZ S RI R 50\n1000000000 0.5 0 0 0 0.5 0 0.5 0\n");
+    nlohmann::json library_json;
+    library_json["schema_version"] = 2;
+    library_json["type"] = "amplifier";
+    library_json["part_number"] = "DFR-ESCAPE";
+    library_json["parameters"]["gain_dB"] = 20.0;
+    library_json["parameters"]["nf_dB"] = 1.0;
+    library_json["data_files"] = nlohmann::json::array();
+    library_json["data_files"].push_back({{"type", "s_parameters"}, {"path", "../decoy.s2p"}});
+    writeDataFileText(lib_dir / "escape.json", library_json.dump(2));
+    fixture.library.loadFile((lib_dir / "escape.json").string());
+
+    const auto result = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"part_number", "DFR-ESCAPE"}});
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+}
+
+TEST_CASE("data_file_read refuses an escaping library path resolved in memory",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto root = dataFileScratch("escape_memory");
+    const auto lib_dir = root / "library";
+    std::filesystem::create_directories(lib_dir);
+    writeDataFileText(root / "decoy.s2p", "# HZ S RI R 50\n1000000000 0.5 0 0 0 0.5 0 0.5 0\n");
+    auto all = fixture.library.all();
+    const auto am1143 = std::find_if(
+        all.begin(), all.end(), [](const auto *part) { return part->part_number == "AM1143"; });
+    REQUIRE(am1143 != all.end());
+    ComponentDefinition escaping = **am1143;
+    escaping.part_number = "DFR-ESCAPE-MEMORY";
+    escaping.source_path = (lib_dir / "escape-memory.json").string();
+    escaping.data_files = {{"s_parameters", "../decoy.s2p"}};
+    fixture.library.upsert(escaping);
+
+    const auto result = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"part_number", "DFR-ESCAPE-MEMORY"}});
+    REQUIRE(errorFor(result).at("code") == "NOT_FOUND");
+}
+
+TEST_CASE("data_file_read reports unknown library parts", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto unknown = fixture.call(
+        "data_file_read", {{"epoch", fixture.api.epoch()}, {"part_number", "NO-SUCH-PART"}});
+    REQUIRE(errorFor(unknown).at("code") == "UNKNOWN_PART");
+}
+
+TEST_CASE("data_file_read reports ambiguous library parts", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto all = fixture.library.all();
+    const auto am1143 = std::find_if(
+        all.begin(), all.end(), [](const auto *part) { return part->part_number == "AM1143"; });
+    REQUIRE(am1143 != all.end());
+    ComponentDefinition duplicate = **am1143;
+    duplicate.source_path += ".duplicate";
+    duplicate.manufacturer = "Duplicate vendor";
+    fixture.library.upsert(duplicate);
+
+    const auto ambiguous =
+        fixture.call("data_file_read", {{"epoch", fixture.api.epoch()}, {"part_number", "AM1143"}});
+    REQUIRE(errorFor(ambiguous).at("code") == "AMBIGUOUS_PART");
+}
+
+TEST_CASE("data_file_read caps samples at max_points and keeps the first and last",
+          "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", admS2pPath()}});
+    const auto parsed = TouchstoneParser::parse(admS2pPath());
+    REQUIRE(parsed.has_value());
+
+    const auto result = fixture.call(
+        "data_file_read",
+        {{"epoch", fixture.api.epoch()}, {"component", amplifier->id()}, {"max_points", 2}});
+    REQUIRE_FALSE(result.is_error);
+    const auto &samples = result.structured.at("samples");
+    REQUIRE(samples.size() == 2);
+    CHECK(samples[0].at("freq_Hz") == parsed->frequencies.front());
+    CHECK(samples[1].at("freq_Hz") == parsed->frequencies.back());
 }

@@ -11,6 +11,7 @@ AgentToolResult executeLibrarySearchTool(const AgentApi &api, const AgentCall &c
 AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeDataFileReadTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 
