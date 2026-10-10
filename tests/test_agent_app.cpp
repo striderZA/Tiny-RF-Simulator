@@ -476,6 +476,8 @@ TEST_CASE_METHOD(AppFixture, "The agent pump runs before the DSP update", "[agen
     REQUIRE(gens.size() == 1);
     CHECK(gens[0]->toneCount() == 1);
     CHECK(gens[0]->tones()[0].freq_Hz == Catch::Approx(1.0e9));
+    REQUIRE_FALSE(gens[0]->node().outputs.empty());
+    CHECK(gens[0]->node().outputs[0].tones.size() == 1);
 }
 
 // ======================================================================
