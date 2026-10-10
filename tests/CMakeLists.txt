@@ -404,6 +404,13 @@ add_standalone_test(test_test_flow_widget
 # RfSimulatorApp::~RfSimulatorApp() writes, exactly like test_ui: a concurrent
 # run would read-modify-write that one file from two processes.
 set_tests_properties(test_test_flow_widget PROPERTIES RUN_SERIAL TRUE)
+
+# UI-free run boundary shared by the Test Flow panel and the agent tool.
+add_standalone_test(test_flow_boundary
+    SOURCES test_flow_boundary.cpp
+    LIBS simulator::test_flow simulator::editor_services common
+)
+
 # Standalone, UI-free behavioral coverage for component/topology ownership.
 add_standalone_test(test_circuit_runtime
     SOURCES test_circuit_runtime.cpp
