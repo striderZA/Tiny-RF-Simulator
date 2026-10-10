@@ -269,10 +269,10 @@ Json circuitComponentSchema(bool include_params) {
 Json networkAnalyzerPointsSchema() {
     return objectSchema(properties({{"point_a", nullableSchema(outputEndpointSchema())},
                                     {"point_b", nullableSchema(outputEndpointSchema())},
-                                    {"start_Hz", numberSchema()},
-                                    {"stop_Hz", numberSchema()},
+                                    {"start_Hz", nullableSchema(numberSchema())},
+                                    {"stop_Hz", nullableSchema(numberSchema())},
                                     {"points", integerSchema("Sweep point count.")},
-                                    {"stimulus_dBm", numberSchema()}}),
+                                    {"stimulus_dBm", nullableSchema(numberSchema())}}),
                         {"point_a", "point_b", "start_Hz", "stop_Hz", "points", "stimulus_dBm"});
 }
 
@@ -323,10 +323,11 @@ Json traceInputSchema() {
 }
 
 Json measurementSnrBasisSchema() {
-    Json rbw = objectSchema(properties({{"kind", constString("rbw")}, {"rbw_Hz", numberSchema()}}),
-                            {"kind", "rbw_Hz"});
+    Json rbw = objectSchema(
+        properties({{"kind", constString("rbw")}, {"rbw_Hz", nullableSchema(numberSchema())}}),
+        {"kind", "rbw_Hz"});
     Json pfb = objectSchema(properties({{"kind", constString("pfb_channel")},
-                                        {"enbw_Hz", numberSchema()},
+                                        {"enbw_Hz", nullableSchema(numberSchema())},
                                         {"channel_noise_dBm", nullableSchema(numberSchema())}}),
                             {"kind", "enbw_Hz", "channel_noise_dBm"});
     return Json{{"oneOf", Json::array({std::move(rbw), std::move(pfb)})}};
@@ -350,10 +351,11 @@ Json networkMetricSummarySchema() {
 }
 
 Json networkAnalyzerSuccessSchema() {
-    Json arrays = objectSchema(properties({{"frequencies_Hz", arraySchema(numberSchema())},
-                                           {"gain_dB", arraySchema(nullableSchema(numberSchema()))},
-                                           {"nf_dB", arraySchema(nullableSchema(numberSchema()))}}),
-                               {"frequencies_Hz", "gain_dB", "nf_dB"});
+    Json arrays =
+        objectSchema(properties({{"frequencies_Hz", arraySchema(nullableSchema(numberSchema()))},
+                                 {"gain_dB", arraySchema(nullableSchema(numberSchema()))},
+                                 {"nf_dB", arraySchema(nullableSchema(numberSchema()))}}),
+                     {"frequencies_Hz", "gain_dB", "nf_dB"});
     Json summary =
         objectSchema(properties({{"valid_points", integerSchema("Valid sweep points.", 0)},
                                  {"gain_dB", networkMetricSummarySchema()},

@@ -992,6 +992,46 @@ TEST_CASE("Schemas use only supported JSON Schema keywords", "[catalog]") {
     }
 }
 
+namespace {
+// A nullable schema is an anyOf with a null branch.
+bool acceptsNull(const nlohmann::json &schema) {
+    return schema.contains("anyOf") &&
+           std::any_of(schema.at("anyOf").begin(), schema.at("anyOf").end(),
+                       [](const auto &branch) { return branch.value("type", "") == "null"; });
+}
+} // namespace
+
+TEST_CASE("Numeric outputs the API can emit as null accept null", "[catalog]") {
+    const auto *measure_port = findAgentTool("measure_port");
+    REQUIRE(measure_port != nullptr);
+    const auto &measure = measure_port->output_schema.at("anyOf").at(0).at("properties");
+    CHECK(acceptsNull(measure.at("snr_basis").at("oneOf").at(0).at("properties").at("rbw_Hz")));
+    CHECK(acceptsNull(measure.at("snr_basis").at("oneOf").at(1).at("properties").at("enbw_Hz")));
+
+    const auto *sweep = findAgentTool("network_analyzer_sweep");
+    REQUIRE(sweep != nullptr);
+    const auto &sweep_success = sweep->output_schema.at("anyOf").at(0).at("properties");
+    const auto &settings = sweep_success.at("settings").at("properties");
+    for (const std::string_view field : {"start_Hz", "stop_Hz", "stimulus_dBm"}) {
+        CAPTURE(field);
+        CHECK(acceptsNull(settings.at(field)));
+    }
+    const auto &frequencies = sweep_success.at("arrays").at("properties").at("frequencies_Hz");
+    CHECK(acceptsNull(frequencies.at("items")));
+
+    const auto *circuit_get = findAgentTool("circuit_get");
+    REQUIRE(circuit_get != nullptr);
+    const auto &network = circuit_get->output_schema.at("anyOf")
+                              .at(0)
+                              .at("properties")
+                              .at("network_analyzer")
+                              .at("properties");
+    for (const std::string_view field : {"start_Hz", "stop_Hz", "stimulus_dBm"}) {
+        CAPTURE(field);
+        CHECK(acceptsNull(network.at(field)));
+    }
+}
+
 TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
     CHECK(agentServerInstructions() ==
           "RF Simulator tools act on the project open in the user's RF Simulator window. "
