@@ -528,6 +528,34 @@ TEST_CASE("Unexpected bridge failures use a generic INTERNAL result", "[bridge]"
     CHECK(result.structured.dump().find("exception") == std::string::npos);
 }
 
+TEST_CASE("A throwing GUI call becomes the generic INTERNAL result and the bridge keeps serving",
+          "[bridge]") {
+    for (const bool std_exception : {true, false}) {
+        CAPTURE(std_exception);
+        auto options = bridgeOptions();
+        options.call_override = [std_exception](const std::string &,
+                                                const OrderedJson &) -> AgentToolResult {
+            if (std_exception)
+                throw std::runtime_error("secret detail that must not reach the client");
+            throw 42;
+        };
+        std::string input;
+        appendBridgeLine(input,
+                         modernBridgeRequest(5, "tools/call", bridgeCallParams("library_search")));
+        appendBridgeLine(input, modernBridgeRequest(6, "tools/list"));
+
+        const auto run = invokeBridge(std::move(input), options);
+        CHECK(run.status == 0);
+        const auto *failed = bridgeResponse(run, 5);
+        REQUIRE(failed != nullptr);
+        CHECK(failed->at("result").at("isError") == true);
+        CHECK(failed->at("result").at("structuredContent").at("error").at("code") == "INTERNAL");
+        CHECK(failed->dump().find("secret") == std::string::npos);
+        CHECK(run.stderr_text.find("bridge call") != std::string::npos);
+        CHECK(bridgeResponse(run, 6) != nullptr);
+    }
+}
+
 TEST_CASE("Stdout carries only JSON-RPC messages", "[bridge]") {
     std::string first_input;
     appendBridgeLine(

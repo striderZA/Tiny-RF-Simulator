@@ -289,7 +289,9 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                     link->setClientInfo(task.client_info.first, task.client_info.second);
                     link_client = task.client_info;
                 }
-                result = link->call(task.call.tool, task.call.arguments);
+                result = options.call_override
+                             ? options.call_override(task.call.tool, task.call.arguments)
+                             : link->call(task.call.tool, task.call.arguments);
             } catch (const std::exception &error) {
                 LOG_ERROR("MCP bridge call for tool %s failed: %s", task.call.tool.c_str(),
                           error.what());
