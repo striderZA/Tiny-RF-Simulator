@@ -292,6 +292,12 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 result = options.call_override
                              ? options.call_override(task.call.tool, task.call.arguments)
                              : link->call(task.call.tool, task.call.arguments);
+                if (!options.call_override && link) {
+                    const std::string cause = link->lastConnectError();
+                    if (!cause.empty())
+                        write_log_line("rf-sim-mcp: RF Simulator unreachable: " +
+                                       escapeLogField(cause));
+                }
             } catch (const std::exception &error) {
                 LOG_ERROR("MCP bridge call for tool %s failed: %s", task.call.tool.c_str(),
                           error.what());

@@ -94,8 +94,10 @@ class GuiLink::Impl {
         }
 
         auto connected = connectAgentLoopback(endpoint->port, timeouts.connect, &error);
-        if (!connected)
+        if (!connected) {
+            connect_error = error;
             return ConnectResult::Unavailable;
+        }
         channel.emplace(std::move(*connected));
 
         const auto deadline = Clock::now() + timeouts.hello;
@@ -168,6 +170,7 @@ class GuiLink::Impl {
     }
 
     AgentToolResult call(const std::string &tool, const OrderedJson &arguments) {
+        connect_error.clear();
         if (!agentJsonDepthWithin(arguments))
             return invalidArguments();
         const auto connection = connect();
@@ -234,6 +237,7 @@ class GuiLink::Impl {
     std::uint64_t next_id{1};
     std::string client_name, client_version;
     int mismatch_version{kAgentCatalogVersion};
+    std::string connect_error;
 };
 
 GuiLink::GuiLink(std::filesystem::path endpoint_file, GuiLinkTimeouts timeouts)
@@ -250,3 +254,5 @@ void GuiLink::setClientInfo(std::string name, std::string version) {
 AgentToolResult GuiLink::call(const std::string &tool, const nlohmann::ordered_json &arguments) {
     return m_impl->call(tool, arguments);
 }
+
+std::string GuiLink::lastConnectError() const { return m_impl->connect_error; }

@@ -1484,3 +1484,94 @@ TEST_CASE("GuiLink refuses over-deep arguments before contacting the GUI", "[gui
     CHECK(result.is_error);
     CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
 }
+
+TEST_CASE("A notification nested beyond the depth limit gets no response", "[mcp]") {
+    McpSession session(testIdentity());
+    REQUIRE(initializeLegacy(session, "2025-11-25").replies.size() == 1);
+    // An id-less object is a notification, so its depth refusal must not answer it.
+    const std::string deep =
+        R"({"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":)" +
+        std::string(100, '[') + std::string(100, ']') + "}}";
+    const auto step = session.onLine(deep);
+    CHECK(step.replies.empty());
+    CHECK_FALSE(step.cancel_id.has_value());
+}
+
+TEST_CASE("A malformed id-less object beyond the depth limit gets an invalid request", "[mcp]") {
+    McpSession session(testIdentity());
+    REQUIRE(initializeLegacy(session, "2025-11-25").replies.size() == 1);
+    const std::string nesting = std::string(100, '[') + std::string(100, ']') + "}}";
+    SECTION("a wrong jsonrpc version is answered with a null id") {
+        const auto step = session.onLine(
+            R"({"jsonrpc":"1.0","method":"notifications/cancelled","params":{"requestId":)" +
+            nesting);
+        REQUIRE(step.replies.size() == 1);
+        CHECK(step.replies[0].at("id").is_null());
+        CHECK(rpcError(step).at("code") == -32600);
+    }
+    SECTION("a missing method is answered with a null id") {
+        const auto step = session.onLine(R"({"jsonrpc":"2.0","params":{"requestId":)" + nesting);
+        REQUIRE(step.replies.size() == 1);
+        CHECK(step.replies[0].at("id").is_null());
+        CHECK(rpcError(step).at("code") == -32600);
+    }
+}
+
+TEST_CASE("initialize rejects a non-object _meta before activating the session", "[mcp]") {
+    McpSession session(testIdentity());
+    const OrderedJson params{{"protocolVersion", "2025-11-25"},
+                             {"capabilities", OrderedJson::object()},
+                             {"clientInfo", {{"name", "test-client"}, {"version", "1.0"}}},
+                             {"_meta", 5}};
+    const auto initialized = sendLegacy(session, 1, "initialize", params);
+    REQUIRE(initialized.replies.size() == 1);
+    REQUIRE(initialized.replies[0].contains("error"));
+    CHECK(rpcError(initialized).at("code") == -32602);
+    const auto list = sendLegacy(session, 2, "tools/list");
+    REQUIRE(list.replies.size() == 1);
+    CHECK(rpcError(list).at("code") == -32600);
+}
+
+TEST_CASE("An unreachable GUI reports the OS connect cause, not a timeout", "[gui_link]") {
+    std::string error;
+    auto listener = AgentListener::bindLoopback(&error);
+    REQUIRE(listener.has_value());
+    const int closed_port = listener->port();
+    listener->close();
+
+    const auto dir = std::filesystem::temp_directory_path() /
+                     ("rfsim-refused-gui-" + test_temp_paths::processTag());
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } cleanup{dir};
+    REQUIRE(ensurePrivateDirectory(dir, &error));
+    AgentEndpoint endpoint;
+    endpoint.port = closed_port;
+    endpoint.bridge_token = std::string(64, 'b');
+    endpoint.gui_token = std::string(64, 'd');
+    endpoint.app_version = "test";
+    endpoint.catalog_version = kAgentCatalogVersion;
+    endpoint.pid = 1;
+    const auto file = dir / "agent-endpoint.json";
+    REQUIRE(writeAgentEndpoint(file, endpoint, &error));
+
+    GuiLink link(file, {});
+    const auto result = link.call("library_search", OrderedJson::object());
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
+    CHECK(link.lastConnectError().find("connect loopback") != std::string::npos);
+    CHECK(link.lastConnectError().find("timed out") == std::string::npos);
+
+    std::string input;
+    appendBridgeLine(input,
+                     modernBridgeRequest(5, "tools/call", bridgeCallParams("library_search")));
+    auto options = bridgeOptions(file);
+    options.timeouts = GuiLinkTimeouts{}; // the production default, not the suite's 200 ms
+    const auto run = invokeBridge(std::move(input), options);
+    CHECK(run.stderr_text.find("RF Simulator unreachable: connect loopback") != std::string::npos);
+    CHECK(run.stderr_text.find("timed out") == std::string::npos);
+}

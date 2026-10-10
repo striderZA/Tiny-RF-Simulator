@@ -57,6 +57,12 @@ McpStep McpSession::onLine(const std::string &line) {
         return step;
     }
     if (!agentJsonDepthWithin(request)) {
+        // A valid notification gets no response, even a refused one: JSON-RPC sends none for it.
+        // Any other id-less object is answered below as an invalid request with a null id.
+        if (request.is_object() && !request.contains("id") && request.contains("jsonrpc") &&
+            request["jsonrpc"].is_string() && request["jsonrpc"] == "2.0" &&
+            request.contains("method") && request["method"].is_string())
+            return step;
         // Copy only a scalar id: a nested one must not reach the recursive id copy below.
         const bool scalar_id = request.is_object() && request.contains("id") &&
                                !request["id"].is_array() && !request["id"].is_object();
@@ -87,6 +93,11 @@ McpStep McpSession::onLine(const std::string &line) {
         return step;
     }
     const std::string method = request["method"].get<std::string>();
+    if (request.contains("params") && request["params"].is_object() &&
+        request["params"].contains("_meta") && !request["params"]["_meta"].is_object()) {
+        fail(-32602, "Invalid params");
+        return step;
+    }
     if (method == "initialize") {
         if (notification)
             return step;
@@ -152,10 +163,6 @@ McpStep McpSession::onLine(const std::string &line) {
         return step;
     }
     if (!params.is_object()) {
-        fail(-32602, "Invalid params");
-        return step;
-    }
-    if (params.contains("_meta") && !params["_meta"].is_object()) {
         fail(-32602, "Invalid params");
         return step;
     }
