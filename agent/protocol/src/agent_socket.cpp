@@ -47,6 +47,15 @@ constexpr NativeSocket kInvalidSocket = -1;
 
 constexpr std::size_t kSocketBufferBytes = 8192;
 
+// Linux creates listener and accepted sockets close-on-exec in one step
+// (SOCK_CLOEXEC, accept4). Other POSIX systems set FD_CLOEXEC afterwards with
+// markCloseOnExec(), which leaves a short window against a concurrent fork.
+#if defined(__linux__)
+constexpr int kCloseOnExecSocketType = SOCK_CLOEXEC;
+#else
+constexpr int kCloseOnExecSocketType = 0;
+#endif
+
 enum class WaitStatus { Ready, Timeout, Error };
 
 void setError(std::string *error, std::string message) {
@@ -243,6 +252,23 @@ bool configureNoSigPipe(NativeSocket socket, int &error_code) {
 #elif defined(SO_NOSIGPIPE)
     const int enabled = 1;
     if (setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
+        error_code = errno;
+        return false;
+    }
+    return true;
+#endif
+}
+
+// Gives a socket FD_CLOEXEC when it could not be created that way, so tools
+// launched by the GUI cannot inherit it. Linux sockets are already close-on-exec
+// and Windows sockets are not inherited, so both need no step.
+bool markCloseOnExec(NativeSocket socket, int &error_code) {
+#if defined(_WIN32) || defined(__linux__)
+    static_cast<void>(socket);
+    static_cast<void>(error_code);
+    return true;
+#else
+    if (fcntl(socket, F_SETFD, FD_CLOEXEC) != 0) {
         error_code = errno;
         return false;
     }
@@ -493,13 +519,19 @@ std::optional<AgentListener> AgentListener::bindLoopback(std::string *error) {
         return std::nullopt;
     }
 
-    const NativeSocket socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const NativeSocket socket =
+        ::socket(AF_INET, SOCK_STREAM | kCloseOnExecSocketType, IPPROTO_TCP);
     if (isInvalidSocket(socket)) {
         setError(error, socketErrorMessage("socket", lastSocketError()));
         return std::nullopt;
     }
 
     int setup_error = 0;
+    if (!markCloseOnExec(socket, setup_error)) {
+        closeNativeSocket(socket);
+        setError(error, socketErrorMessage("fcntl(FD_CLOEXEC) listener", setup_error));
+        return std::nullopt;
+    }
     if (!configureNoSigPipe(socket, setup_error)) {
         closeNativeSocket(socket);
         setError(error, socketErrorMessage("setsockopt(SO_NOSIGPIPE)", setup_error));
@@ -577,8 +609,14 @@ std::optional<AgentChannel> AgentListener::accept(std::chrono::milliseconds time
 #else
         socklen_t peer_length = sizeof(peer_address);
 #endif
+#if defined(__linux__)
+        // accept4() creates the channel close-on-exec in one step.
+        const NativeSocket accepted = ::accept4(
+            listener, reinterpret_cast<sockaddr *>(&peer_address), &peer_length, SOCK_CLOEXEC);
+#else
         const NativeSocket accepted =
             ::accept(listener, reinterpret_cast<sockaddr *>(&peer_address), &peer_length);
+#endif
         if (isInvalidSocket(accepted)) {
             failure = lastSocketError();
             if (isAcceptTransientFailure(failure)) {
@@ -590,6 +628,10 @@ std::optional<AgentChannel> AgentListener::accept(std::chrono::milliseconds time
         if (peer_address.sin_family == AF_INET &&
             peer_address.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
             int setup_error = 0;
+            if (!markCloseOnExec(accepted, setup_error)) {
+                closeNativeSocket(accepted);
+                return std::nullopt;
+            }
             if (!setNonBlocking(accepted, false, setup_error) ||
                 !configureNoSigPipe(accepted, setup_error)) {
                 closeNativeSocket(accepted);

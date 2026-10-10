@@ -164,6 +164,13 @@ add_standalone_test(test_extensions
     LIBS simulator::app
 )
 
+if(NOT WIN32)
+    add_standalone_test(test_external_tool_launch
+        SOURCES test_external_tool_launch.cpp
+        LIBS simulator::app simulator::agent_protocol
+    )
+endif()
+
 add_standalone_test(test_issue37_pfb_input_removal
     SOURCES test_issue37_pfb_input_removal.cpp
     LIBS simulator::app
