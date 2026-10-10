@@ -153,11 +153,18 @@ WaitStatus waitForSocket(NativeSocket socket, bool writable, Clock::time_point d
 
         fd_set read_set;
         fd_set write_set;
+        fd_set except_set;
         FD_ZERO(&read_set);
         FD_ZERO(&write_set);
+        FD_ZERO(&except_set);
         FD_SET(socket, writable ? &write_set : &read_set);
-        const int result = select(0, writable ? nullptr : &read_set,
-                                  writable ? &write_set : nullptr, nullptr, &timeout);
+        // Winsock reports a refused nonblocking connect only in the exception set, so a writable
+        // wait watches it too. The caller then reads SO_ERROR for the actual cause.
+        if (writable)
+            FD_SET(socket, &except_set);
+        const int result =
+            select(0, writable ? nullptr : &read_set, writable ? &write_set : nullptr,
+                   writable ? &except_set : nullptr, &timeout);
         if (result > 0) {
             return WaitStatus::Ready;
         }

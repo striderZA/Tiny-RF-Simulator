@@ -684,7 +684,8 @@ TEST_CASE("A timed loopback write closes when its peer does not read", "[agent_p
     CHECK_FALSE(server->isOpen());
 }
 
-TEST_CASE("Connecting to a closed port fails within the timeout", "[agent_protocol]") {
+TEST_CASE("Connecting to a closed port is refused without waiting out the timeout",
+          "[agent_protocol]") {
     std::string error;
     auto listener = AgentListener::bindLoopback(&error);
     REQUIRE(listener.has_value());
@@ -692,12 +693,13 @@ TEST_CASE("Connecting to a closed port fails within the timeout", "[agent_protoc
     listener->close();
 
     const auto start = std::chrono::steady_clock::now();
-    auto client = connectAgentLoopback(closed_port, std::chrono::milliseconds{250}, &error);
+    auto client = connectAgentLoopback(closed_port, std::chrono::seconds{10}, &error);
     const auto elapsed = std::chrono::steady_clock::now() - start;
 
     CHECK_FALSE(client.has_value());
-    CHECK_FALSE(error.empty());
-    CHECK(elapsed < std::chrono::seconds{2});
+    CHECK(error.starts_with("connect loopback"));
+    CHECK(error.find("timed out") == std::string::npos);
+    CHECK(elapsed < std::chrono::seconds{5});
 }
 
 namespace {
