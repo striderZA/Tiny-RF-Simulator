@@ -3,6 +3,9 @@ type: Integration Guide
 title: S-Parameter System
 description: Traces Touchstone parsing and complex S-parameter application through the five S-parameter-capable component engines, the component-form picker, library and project data-file resolution, path containment, and the read-only data_file_read agent tool.
 tags: [s-parameter, touchstone, rf-components, persistence, path-containment, data-file-read]
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-10T19:32:12.266Z
 sources:
   - id: openwiki-source-5463a01543f8384d18b05f52
     resource: repo://agent/api/src/tool_data_file.cpp
@@ -48,10 +51,7 @@ sources:
     resource: repo://touchstone/src/s_parameter_data.cpp
   - id: openwiki-source-13f3b5d657436db7924cde15
     resource: repo://touchstone/src/touchstone_parser.cpp
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
+generated: { by: "omp", at: "2026-10-10T19:32:12.266Z" }
 ---
 
 # S-Parameter System
@@ -72,9 +72,9 @@ Each S-parameter-capable engine applies its data inside its own update() by call
 
 S-parameter-capable engine deserializers reload the persisted file path before enabling a requested S-parameter mode, and activation requires a successful parse plus enough ports: at least two for the amplifier, attenuator, equalizer, and ideal filter and exactly three for the combiner, so missing, malformed, or too-small data leaves the branch disabled.
 
-The amplifier, equalizer, and ideal filter persist their forward entry as sparam_fwd_idx, labelled Forward S-Parameter Index in the component type registry; loading a file through setSParamFilepath selects the S21 entry, while deserialize reads a missing sparam_fwd_idx as index 0 (S11).
+The amplifier, equalizer, and ideal filter persist their forward entry as sparam_fwd_idx, labelled Forward S-Parameter Index in the component type registry; loading a file through setSParamFilepath selects the S21 entry, and deserialize selects that same entry when sparam_fwd_idx is missing and a file is loaded (index 0, S11, when no file is loaded). An explicit sparam_fwd_idx is kept.
 
-Only the attenuator and combiner deserializers fall back to the legacy sparam_path key; the amplifier, equalizer, and ideal filter read sparam_filepath alone. Project load and library instantiate resolve both keys in place under their original names, so a legacy-only sparam_path value is never copied into sparam_filepath, and those three engines fall back to their manual model.
+All five S-parameter-capable engines (attenuator, combiner, amplifier, equalizer, and ideal filter) read the legacy sparam_path key when sparam_filepath is absent, so a contained legacy-only path loads its file, and a present sparam_filepath takes precedence.
 
 ## Project files
 
@@ -103,6 +103,7 @@ Built-in component libraries prefer the executable-relative component_data/libra
 ## Tests
 
 - `tests/test_path_containment.cpp`: project load and save of S-parameter paths, library containment, `componentDataFilePath()`, and authoring names.
+- `tests/test_sparam_legacy_key.cpp`: the legacy `sparam_path` fallback, precedence of `sparam_filepath`, the S21 default for a missing forward index, and an explicit index kept, in the amplifier, equalizer, and ideal filter.
 - `tests/test_issue79_component_validation.cpp`: library validation, instantiate rollback, and path-bearing parameter containment.
 - `tests/test_amplifier_sparam.cpp` and `tests/test_issue117_numeric_correctness.cpp`: engine S-parameter activation and combiner port checks.
 - `tests/test_agent_api.cpp`: `[data_file_read]` cases.
