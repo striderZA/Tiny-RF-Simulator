@@ -10,11 +10,13 @@
 #include "measurement_chain_runner.h"
 #include "network_analyzer_engine.h"
 #include "node_graph_engine.h"
+#include "receiver_performance_measurement.h"
 #include "spectrum_analyzer_engine.h"
 #include "view_manager.h"
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -74,6 +76,7 @@ class AgentApi final : public IAgentCallExecutor {
 
     mutable int m_next_type_engine_id = 1;
     AgentApiContext m_context;
+    std::unique_ptr<ReceiverPerformanceMeasurementEngine> m_receiver_engine;
     std::string m_last_replacement_cause;
     std::vector<std::string> m_undone_summaries;
     FlowRunBoundary m_run_boundary = RunFlowWithinBoundary;

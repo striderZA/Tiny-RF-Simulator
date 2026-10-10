@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -20,7 +21,9 @@ std::string errorCode(const AgentToolResult &result) {
 
 } // namespace
 
-AgentApi::AgentApi(AgentApiContext context) : m_context(context) {}
+AgentApi::AgentApi(AgentApiContext context)
+    : m_context(context), m_receiver_engine(std::make_unique<ReceiverPerformanceMeasurementEngine>(
+                              context.runtime.graph(), context.chain_host)) {}
 
 std::uint64_t AgentApi::epoch() const { return m_context.runtime.epoch(); }
 IComponentEngine *AgentApi::scratchTypeEngine(std::string_view type) const {

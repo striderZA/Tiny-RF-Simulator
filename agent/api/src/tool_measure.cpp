@@ -100,13 +100,30 @@ std::optional<int> analyzerPoints(const OrderedJson &object) {
                                                      std::numeric_limits<int>::max()));
 }
 
-struct Endpoint {
-    IComponentEngine *component = nullptr;
-    int port = -1;
-    int pin = -1;
-};
+Json optionalNumber(double value) { return agentNumber(value); }
 
-Endpoint endpoint(const AgentApiContext &context, const OrderedJson &value, std::string_view path) {
+Json powerMeasurement(const Spectrum &spectrum, std::string_view name) {
+    const auto *metric = MetricRegistry::instance().find(std::string(name));
+    return metric ? optionalNumber(metric->compute(spectrum)) : Json(nullptr);
+}
+
+Json errorNoMeasurement(const AgentApi &api, std::string reason, std::string message) {
+    AgentError error{AgentErrorCode::NoMeasurement, std::move(message)};
+    error.details = {{"reason", std::move(reason)}};
+    return agentErrorResult(error, api.epoch()).structured;
+}
+
+AgentToolResult errorResult(Json value) {
+    AgentToolResult result;
+    result.is_error = true;
+    result.structured = std::move(value);
+    return result;
+}
+
+} // namespace
+
+AgentEndpoint resolveOutputEndpoint(const AgentApiContext &context, const OrderedJson &value,
+                                    std::string_view path) {
     checkKeys(value, {"component", "port"}, path);
     const int component_id =
         optionalBoundedInt(value, "component", -1, 0, std::numeric_limits<int>::max(),
@@ -135,28 +152,6 @@ Endpoint endpoint(const AgentApiContext &context, const OrderedJson &value, std:
                  std::to_string(component_id));
     return {component, port, pin};
 }
-
-Json optionalNumber(double value) { return agentNumber(value); }
-
-Json powerMeasurement(const Spectrum &spectrum, std::string_view name) {
-    const auto *metric = MetricRegistry::instance().find(std::string(name));
-    return metric ? optionalNumber(metric->compute(spectrum)) : Json(nullptr);
-}
-
-Json errorNoMeasurement(const AgentApi &api, std::string reason, std::string message) {
-    AgentError error{AgentErrorCode::NoMeasurement, std::move(message)};
-    error.details = {{"reason", std::move(reason)}};
-    return agentErrorResult(error, api.epoch()).structured;
-}
-
-AgentToolResult errorResult(Json value) {
-    AgentToolResult result;
-    result.is_error = true;
-    result.structured = std::move(value);
-    return result;
-}
-
-} // namespace
 
 AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
                                            const std::vector<std::string> &undone) {
@@ -223,7 +218,7 @@ AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &cal
                                           api.m_undone_summaries);
     }
     const auto &at_json = requiredObject(call.arguments, "at", "/at");
-    const Endpoint at = endpoint(context, at_json, "/at");
+    const AgentEndpoint at = resolveOutputEndpoint(context, at_json, "/at");
 
     // Recompute synchronously so parameter edits are visible even before the next UI/DSP frame.
     context.runtime.update(0.0);
@@ -344,10 +339,10 @@ AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const Agent
         return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
                                           api.m_undone_summaries);
     }
-    const Endpoint point_a =
-        endpoint(context, requiredObject(call.arguments, "point_a", "/point_a"), "/point_a");
-    const Endpoint point_b =
-        endpoint(context, requiredObject(call.arguments, "point_b", "/point_b"), "/point_b");
+    const AgentEndpoint point_a = resolveOutputEndpoint(
+        context, requiredObject(call.arguments, "point_a", "/point_a"), "/point_a");
+    const AgentEndpoint point_b = resolveOutputEndpoint(
+        context, requiredObject(call.arguments, "point_b", "/point_b"), "/point_b");
     std::optional<double> start;
     std::optional<double> stop;
     std::optional<double> stimulus;

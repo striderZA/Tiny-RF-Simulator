@@ -19,3 +19,12 @@ AgentError agentParamError(const ParamWriteResult &result, int op_index);
 IComponentEngine *findById(const CircuitRuntime &runtime, int component_id);
 AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
                                            const std::vector<std::string> &undone);
+
+// A measured output endpoint: a live component, its output port index, and its graph pin.
+struct AgentEndpoint {
+    IComponentEngine *component = nullptr;
+    int port = -1;
+    int pin = -1;
+};
+AgentEndpoint resolveOutputEndpoint(const AgentApiContext &context,
+                                    const nlohmann::ordered_json &value, std::string_view path);
