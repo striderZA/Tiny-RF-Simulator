@@ -1910,3 +1910,11 @@ TEST_CASE("data_file_read caps samples at max_points and keeps the first and las
     CHECK(samples[0].at("freq_Hz") == parsed->frequencies.front());
     CHECK(samples[1].at("freq_Hz") == parsed->frequencies.back());
 }
+
+TEST_CASE("data_file_read rejects a negative component id", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto result =
+        fixture.call("data_file_read", {{"epoch", fixture.api.epoch()}, {"component", -1}});
+    REQUIRE(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/component");
+}
