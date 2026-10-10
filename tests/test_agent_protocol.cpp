@@ -155,6 +155,23 @@ TEST_CASE("Agent wire lines contain one serialized JSON message and a newline",
     CHECK(line == "{\"id\":7,\"method\":\"hello\"}\n");
 }
 
+TEST_CASE("Agent JSON nesting is bounded at 64 containers", "[agent_protocol]") {
+    // Each level is moved into a new array, so building the fixture never recurses.
+    const auto nested = [](std::size_t containers) {
+        nlohmann::ordered_json value = nlohmann::ordered_json::array();
+        for (std::size_t level = 1; level < containers; ++level) {
+            nlohmann::ordered_json outer = nlohmann::ordered_json::array();
+            outer.push_back(std::move(value));
+            value = std::move(outer);
+        }
+        return value;
+    };
+    CHECK(agentJsonDepthWithin(nlohmann::ordered_json{{"scalar", 1}}));
+    CHECK(agentJsonDepthWithin(nested(kAgentMaxJsonDepth)));
+    CHECK_FALSE(agentJsonDepthWithin(nested(kAgentMaxJsonDepth + 1)));
+    CHECK_FALSE(agentJsonDepthWithin(nested(200000)));
+}
+
 TEST_CASE("Non-finite numbers encode as null and finite numbers stay numeric", "[agent_protocol]") {
     CHECK(agentNumber(12.5) == nlohmann::json(12.5));
     CHECK(agentNumber(std::numeric_limits<double>::quiet_NaN()).is_null());

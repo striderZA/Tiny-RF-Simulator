@@ -712,6 +712,11 @@ struct AgentServer::Impl {
             request.is_object() && request.contains("id") && validRpcId(request["id"])
                 ? AgentJson(request["id"])
                 : AgentJson(nullptr);
+        if (!agentJsonDepthWithin(request)) {
+            const AgentJson invalid =
+                rpcError(id, "INVALID_ARGUMENT", "call request is nested too deeply");
+            return writeAgentMessage(channel, invalid);
+        }
         if (!request.is_object() || !request.contains("jsonrpc") ||
             !request["jsonrpc"].is_string() || request["jsonrpc"] != "2.0" ||
             !request.contains("id") || !validRpcId(request["id"]) || !request.contains("method") ||

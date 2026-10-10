@@ -1410,3 +1410,49 @@ TEST_CASE("Malformed GUI JSON-RPC replies are unavailable", "[gui_link]") {
         CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
     }
 }
+
+namespace {
+// Raw text, so building and dumping the request never recurses over the nesting.
+std::string deepArgumentsRequest(std::size_t depth) {
+    return R"({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"library_search","arguments":{"deep":)" +
+           std::string(depth, '[') + std::string(depth, ']') + "}}}";
+}
+} // namespace
+
+TEST_CASE("Tool arguments nested beyond the depth limit never reach a recursive copy", "[mcp]") {
+    McpSession session(testIdentity());
+    REQUIRE(initializeLegacy(session, "2025-11-25").replies.size() == 1);
+
+    SECTION("arguments within the limit are forwarded") {
+        const auto step = session.onLine(deepArgumentsRequest(40));
+        CHECK(step.call.has_value());
+    }
+    SECTION("arguments past the limit are an invalid request") {
+        const auto step = session.onLine(deepArgumentsRequest(100));
+        CHECK_FALSE(step.call.has_value());
+        REQUIRE(step.replies.size() == 1);
+        CHECK(rpcError(step).at("code") == -32600);
+    }
+    SECTION("arguments far past the limit cannot overflow the bridge") {
+        const auto step = session.onLine(deepArgumentsRequest(200000));
+        CHECK_FALSE(step.call.has_value());
+        REQUIRE(step.replies.size() == 1);
+        CHECK(rpcError(step).at("code") == -32600);
+    }
+}
+
+TEST_CASE("GuiLink refuses over-deep arguments before contacting the GUI", "[gui_link]") {
+    GuiLink link(std::filesystem::temp_directory_path() /
+                     ("rfsim-deep-arguments-" + test_temp_paths::processTag()) /
+                     "agent-endpoint.json",
+                 {});
+    OrderedJson deep = OrderedJson::array();
+    for (std::size_t level = 1; level < 100; ++level) {
+        OrderedJson outer = OrderedJson::array();
+        outer.push_back(std::move(deep));
+        deep = std::move(outer);
+    }
+    const auto result = link.call("library_search", OrderedJson{{"deep", std::move(deep)}});
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+}

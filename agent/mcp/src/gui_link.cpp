@@ -36,6 +36,13 @@ AgentToolResult unavailable() {
                             std::nullopt);
 }
 
+AgentToolResult invalidArguments() {
+    return agentErrorResult({AgentErrorCode::InvalidArgument,
+                             "tool arguments are nested too deeply", std::nullopt, std::nullopt,
+                             Json::object()},
+                            std::nullopt);
+}
+
 AgentToolResult versionMismatch(int bridge, int gui) {
     return agentErrorResult({AgentErrorCode::VersionMismatch,
                              "rf-sim-mcp catalog " + std::to_string(bridge) +
@@ -161,6 +168,8 @@ class GuiLink::Impl {
     }
 
     AgentToolResult call(const std::string &tool, const OrderedJson &arguments) {
+        if (!agentJsonDepthWithin(arguments))
+            return invalidArguments();
         const auto connection = connect();
         if (connection == ConnectResult::Unavailable)
             return unavailable();

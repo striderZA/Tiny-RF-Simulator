@@ -1,6 +1,7 @@
 #include "mcp_session.h"
 
 #include "agent_catalog.h"
+#include "agent_wire.h"
 
 #include <string_view>
 
@@ -53,6 +54,14 @@ McpStep McpSession::onLine(const std::string &line) {
         request = OrderedJson::parse(line);
     } catch (...) {
         step.replies.push_back(rpcError(nullptr, -32700, "Parse error"));
+        return step;
+    }
+    if (!agentJsonDepthWithin(request)) {
+        // Copy only a scalar id: a nested one must not reach the recursive id copy below.
+        const bool scalar_id = request.is_object() && request.contains("id") &&
+                               !request["id"].is_array() && !request["id"].is_object();
+        step.replies.push_back(
+            rpcError(scalar_id ? Json(request["id"]) : Json(nullptr), -32600, "Invalid Request"));
         return step;
     }
     if (!request.is_object()) {

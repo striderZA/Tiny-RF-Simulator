@@ -430,3 +430,51 @@ TEST_CASE("oversized tool results are replaced with a bounded internal error", "
     CHECK(response->dump().size() <= kAgentMaxLineBytes);
     server.stop();
 }
+
+namespace {
+// Pumps until the client has a reply, so the test waits on the response instead of a fixed delay.
+std::optional<nlohmann::json> pumpUntilReply(AgentServer &server, TestBridgeClient &client,
+                                             std::chrono::milliseconds timeout = 2s) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        server.pump();
+        if (auto reply = client.receive(50ms))
+            return reply;
+    }
+    return std::nullopt;
+}
+} // namespace
+
+TEST_CASE("Calls nested beyond the depth limit are refused and the server keeps serving",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    server.pump();
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello("deep-client", "1.0"));
+    REQUIRE(waitFor([&] { return server.status().state == AgentServerState::Connected; }));
+
+    nlohmann::json deep = nlohmann::json::array();
+    for (std::size_t level = 1; level < 70; ++level) {
+        nlohmann::json outer = nlohmann::json::array();
+        outer.push_back(std::move(deep));
+        deep = std::move(outer);
+    }
+    REQUIRE(client->call("test_tool", nlohmann::json{{"deep", std::move(deep)}}));
+    const auto rejected = pumpUntilReply(server, *client);
+    REQUIRE(rejected.has_value());
+    REQUIRE(rejected->contains("error"));
+    CHECK(rejected->at("error").at("data").at("code") == "INVALID_ARGUMENT");
+
+    REQUIRE(client->call("test_tool", {{"value", 5}}));
+    const auto reply = pumpUntilReply(server, *client);
+    REQUIRE(reply.has_value());
+    REQUIRE(reply->contains("result"));
+    CHECK(reply->at("result").at("is_error") == false);
+    server.stop();
+}

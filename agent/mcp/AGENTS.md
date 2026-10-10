@@ -19,6 +19,7 @@ Provide the UI- and simulator-independent MCP session layer over the agent tool 
 - `GuiLink` authenticates `gui_token` with `agentTokensEqual`; malformed reply envelopes or JSON-RPC error fields drop the channel and return `SIMULATOR_UNAVAILABLE`.
 - Mapped GUI JSON-RPC tool errors preserve `data.code` and top-level `message` in the common result shape, using `epoch: null` when no epoch is available.
 - `runBridge` scans stdio framing incrementally while preserving the 1 MiB limit, CRLF handling, and oversized-line discard through newline. Client identity fields and exception diagnostics are control-escaped in stderr. Unexpected caller exceptions are logged to stderr but return a generic `INTERNAL` result with no exception details exposed to MCP clients.
+- `McpSession::onLine` refuses a parsed request nested beyond 64 containers with `-32600` before any copy of its id or arguments; only a scalar id is echoed, otherwise the id is null.
 
 ## Work Guidance
 
