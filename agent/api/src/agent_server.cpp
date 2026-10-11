@@ -31,6 +31,7 @@ using SteadyClock = std::chrono::steady_clock;
 using TimePoint = SteadyClock::time_point;
 
 bool validRpcId(const OrderedJson &id) { return id.is_string() || id.is_number(); }
+bool validRpcId(const AgentJson &id) { return id.is_string() || id.is_number(); }
 
 AgentJson rpcError(const AgentJson &id, std::string code, std::string message) {
     return {{"jsonrpc", "2.0"},
@@ -651,9 +652,9 @@ struct AgentServer::Impl {
     bool handleHello(const std::string &line, AgentChannel &channel, std::uint64_t session,
                      const std::string &expected_bridge_token, const std::string &gui_token,
                      std::string &name, std::string &version) {
-        OrderedJson request;
+        AgentJson request;
         try {
-            request = OrderedJson::parse(line);
+            request = AgentJson::parse(line);
         } catch (...) {
             return false;
         }
@@ -664,7 +665,7 @@ struct AgentServer::Impl {
             !request.contains("params") || !request["params"].is_object())
             return false;
 
-        const OrderedJson &params = request["params"];
+        const AgentJson &params = request["params"];
         if (!params.contains("protocol") || !params["protocol"].is_string() ||
             params["protocol"] != std::string{kAgentWireProtocol} ||
             !params.contains("bridge_token") || !params["bridge_token"].is_string() ||

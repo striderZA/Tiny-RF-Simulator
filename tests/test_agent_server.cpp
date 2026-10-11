@@ -239,6 +239,34 @@ TEST_CASE("a second connected client receives BUSY and closes", "[agent_server]"
     server.stop();
 }
 
+TEST_CASE("a pre-auth line with many distinct keys cannot delay stop", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    std::string members;
+    for (int index = 0; index < 20000; ++index) {
+        if (index > 0)
+            members += ',';
+        members += "\"k" + std::to_string(index) + "\":0";
+    }
+    const std::string line =
+        R"({"jsonrpc":"2.0","id":1,"method":"hello","params":{)" + members + "}}";
+    REQUIRE(client->sendRawLine(line));
+    // Let the listener pick up the line before stop() asks it to shut down.
+    std::this_thread::sleep_for(100ms);
+    const auto start = std::chrono::steady_clock::now();
+    server.stop();
+    CHECK(std::chrono::steady_clock::now() - start < 1s);
+    std::string reply;
+    CHECK(client->readStatus(reply, 2s) == AgentReadStatus::Closed);
+    server.stop();
+}
+
 TEST_CASE("catalog mismatch is answered and then closed", "[agent_server]") {
     ScratchDirectory scratch;
     TestExecutor executor;
