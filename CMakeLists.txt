@@ -3,7 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.20)
 
-project (RfSimulator VERSION 0.27.0)
+project (RfSimulator VERSION 0.28.0)
 
 # FetchContent'd dependencies below call their own project() commands, which
 # resets PROJECT_VERSION (and _MAJOR/_MINOR/_PATCH) for the remainder of this
