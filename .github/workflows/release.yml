@@ -7,16 +7,19 @@ on:
 
 env:
   # MinGW-w64 silently drops TEST_CASEs past a ceiling in the main `tests`
-  # binary. Both Windows legs below fail if the registered count drops below
-  # this verified floor; bump it when the registered count changes.
+  # binary. The build-and-test action fails its Windows legs when the registered
+  # count drops below this verified floor; bump it when the count changes.
   MINGW_TEST_CASE_FLOOR: "223"
+
+permissions:
+  contents: read
 
 jobs:
   classify-release:
     runs-on: ubuntu-24.04
     outputs:
       # JSON array of build legs for strict-build's matrix. Patch tags get a
-      # single Linux GCC Debug leg; minor/major tags get the full 4-way matrix.
+      # single Linux GCC Debug leg; minor/major tags add Linux Clang and MinGW Debug.
       matrix: ${{ steps.classify.outputs.matrix }}
     steps:
       - name: Classify tag and build the validation matrix
@@ -34,7 +37,6 @@ jobs:
           if [ "$PATCH" = "0" ]; then
             MATRIX=$(jq -c -n --argjson linux "$LINUX" '[
               $linux + {label:"Linux GCC 14 (Debug)", build_type:"Debug"},
-              $linux + {label:"Linux GCC 14 (Release)", build_type:"Release"},
               $linux + {label:"Linux Clang 18", build_type:"Debug", cxx_compiler:"clang++-18", c_compiler:"clang-18"},
               {os:"windows-latest", label:"Windows MinGW-w64", shell:"msys2 - {0}", cxx_compiler:"g++", c_compiler:"gcc", cmake_flags:"", build_type:"Debug"}
             ]')
@@ -68,8 +70,10 @@ jobs:
 
   # No pull-request pipeline exists. Release validation runs only on release
   # tags: format and sanitizer on every tag; strict-build's leg list is chosen
-  # by classify-release (one Linux GCC Debug leg for patch tags, the full 4-way
-  # matrix for minor/major tags). docs.yml is separate and is not tag-gated.
+  # by classify-release (one Linux GCC Debug leg for patch tags, plus Linux
+  # Clang and MinGW Debug legs for minor/major tags). Release configurations
+  # are built only by the package job. docs.yml is separate and is not
+  # tag-gated.
   format:
     needs: classify-release
     runs-on: ubuntu-24.04
@@ -77,7 +81,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install clang-format
-        run: sudo apt-get install -y -qq clang-format-18
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang-format-18
       - name: Check formatting
         # scripts/format.sh is the single source of truth for the checked file
         # set (scripts/format-dirs.sh), shared with .githooks/pre-commit.
@@ -92,84 +98,18 @@ jobs:
         include: ${{ fromJSON(needs.classify-release.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: ${{ matrix.shell }}
-
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-          if [ "${{ matrix.cxx_compiler }}" = "clang++-18" ]; then
-            sudo apt-get install -y -qq clang-18
-          else
-            sudo apt-get install -y -qq g++-14
-          fi
-
-      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
+      - name: Build and test
+        uses: ./.github/actions/build-and-test
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-python
-
-      - name: Configure
-        run: >-
-          cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          ${{ matrix.cmake_flags }}
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Test
-        run: |
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
-          else
-            # test_ui is excluded on Windows: it drives an interactive ImGui
-            # window and needs a display, so it cannot run headless in CI.
-            # ("ADC DDC output grid spans [-Fs/4, Fs/4)" was previously excluded
-            # by name too. Root cause: the bracket-paren pattern in that name
-            # broke catch_discover_tests' unquoted list parsing, merging it and
-            # every later test into one ';'-joined CTest entry that Catch2
-            # rejects as "Invalid Filter". The test was renamed to "ADC DDC
-            # output grid spans from -Fs/4 to Fs/4" (tests/test_adc.cpp) and now
-            # registers as its own CTest entry, so the exclusion is removed.)
-            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
-          fi
-
-      - name: Verify MinGW TEST_CASE registration count
-        if: runner.os == 'Windows'
-        run: |
-          # The MinGW-w64 toolchain silently drops TEST_CASEs registered beyond
-          # a ceiling in the main `tests` binary (see tests/AGENTS.md). Count
-          # the registered cases (each emits one indented tag line) and fail if
-          # the count ever falls below the verified floor, so a silent drop is
-          # caught in CI instead of shipping unrun tests. Bump
-          # MINGW_TEST_CASE_FLOOR (workflow env) when the registered count
-          # changes; new coverage that must run on Windows goes in a standalone
-          # executable (e.g. test_signal_domain), not the main tests binary.
-          COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
-          echo "registered TEST_CASEs: $COUNT (expected >= $MINGW_TEST_CASE_FLOOR)"
-          if [ "$COUNT" -lt "$MINGW_TEST_CASE_FLOOR" ]; then
-            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $MINGW_TEST_CASE_FLOOR"
-            exit 1
-          fi
+          shell: ${{ matrix.shell }}
+          cxx-compiler: ${{ matrix.cxx_compiler }}
+          c-compiler: ${{ matrix.c_compiler }}
+          build-type: ${{ matrix.build_type }}
+          cmake-flags: ${{ matrix.cmake_flags }}
+          mingw-test-case-floor: ${{ env.MINGW_TEST_CASE_FLOOR }}
 
   sanitizer:
     needs: [classify-release, validate-version]
@@ -232,71 +172,30 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
-            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
-          sudo apt-get install -y -qq g++-14
-
-      - name: Install Windows dependencies (MSYS2 + MinGW-w64)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
+      # Release-facing: the exact Release build that ships is configured, built,
+      # and tested here on every tag. strict-build never builds a Release leg.
+      - name: Build and test
+        uses: ./.github/actions/build-and-test
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-python
-
-      - name: Configure
-        run: >-
-          cmake -B build -G Ninja
-          -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          ${{ matrix.cmake_flags }}
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Test
-        run: |
-          # Package artifacts are release-facing: run the suite against the exact
-          # Release build that ships. strict-build skips patch tags and has no
-          # Windows Release leg, so this job is the only place both shipped
-          # configurations are exercised on every tag. UI tests need a display:
-          # xvfb on Linux, excluded on Windows (same rationale as strict-build).
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
-          else
-            ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
-          fi
-
-      - name: Verify MinGW TEST_CASE registration count
-        if: runner.os == 'Windows'
-        run: |
-          # Same floor as strict-build; MINGW_TEST_CASE_FLOOR is defined once at
-          # workflow scope. Both Windows legs guard against TEST_CASEs silently
-          # dropped by MinGW-w64.
-          COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[')
-          echo "registered TEST_CASEs: $COUNT (expected >= $MINGW_TEST_CASE_FLOOR)"
-          if [ "$COUNT" -lt "$MINGW_TEST_CASE_FLOOR" ]; then
-            echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $MINGW_TEST_CASE_FLOOR"
-            exit 1
-          fi
+          shell: ${{ matrix.shell }}
+          cxx-compiler: ${{ matrix.cxx_compiler }}
+          c-compiler: ${{ matrix.c_compiler }}
+          build-type: ${{ matrix.build_type }}
+          cmake-flags: ${{ matrix.cmake_flags }}
+          mingw-test-case-floor: ${{ env.MINGW_TEST_CASE_FLOOR }}
 
       - name: Collect MinGW runtime DLLs
         if: runner.os == 'Windows'
         run: |
+          set -euo pipefail
           mkdir -p mingw-dlls
+          # A missing runtime DLL fails this step instead of shipping a broken zip.
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-            cp /mingw64/bin/$dll mingw-dlls/
+            if [ ! -f "/mingw64/bin/$dll" ]; then
+              echo "ERROR: required MinGW runtime DLL is missing: /mingw64/bin/$dll"
+              exit 1
+            fi
+            cp "/mingw64/bin/$dll" mingw-dlls/
           done
 
       - name: Upload build artifacts
