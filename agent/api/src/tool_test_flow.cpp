@@ -149,6 +149,7 @@ AgentErrorCode agentCodeFor(FlowErrorCode code) {
     case FlowErrorCode::None:
     case FlowErrorCode::CyclicGraph:
     case FlowErrorCode::DeserializeFailed:
+    case FlowErrorCode::SerializeFailed:
         break;
     }
     return AgentErrorCode::Internal;

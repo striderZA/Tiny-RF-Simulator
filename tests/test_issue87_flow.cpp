@@ -57,6 +57,39 @@ class ThrowingEngine final : public IComponentEngine {
     NodeGraphEngine *m_graph = nullptr;
 };
 
+class SerializeThrowingEngine final : public IComponentEngine {
+  public:
+    SerializeThrowingEngine(int id, NodeGraphEngine &graph) : m_id(id), m_graph(&graph) {
+        m_graph_node_id = graph.addNode("Serialize-throwing", &m_node, 0, 1);
+        m_node.outputs.resize(1);
+    }
+
+    int id() const override { return m_id; }
+    int graphNodeId() const override { return m_graph_node_id; }
+    int outputPinId() const override { return m_graph->outputPinId(m_graph_node_id); }
+    std::string hoverSummary() const override { return "Serialize-throwing"; }
+    SignalNode &node() override { return m_node; }
+    const SignalNode &node() const override { return m_node; }
+    void update(double) override {}
+    std::string_view type_name() const override { return "serialize-throwing"; }
+
+    nlohmann::json serialize() const override {
+        if (m_value != 0.0)
+            throw std::runtime_error("intentional serialize failure");
+        return {{"value", m_value}};
+    }
+    void deserialize(const nlohmann::json &snapshot) override {
+        m_value = snapshot.at("value").get<double>();
+    }
+
+  private:
+    int m_id;
+    int m_graph_node_id = -1;
+    double m_value = 0.0;
+    SignalNode m_node;
+    NodeGraphEngine *m_graph = nullptr;
+};
+
 using Catch::Approx;
 
 namespace {
@@ -1173,6 +1206,27 @@ TEST_CASE("issue183 runner: rows and JSON report normalized condition values",
     const nlohmann::json exported = result.toJson();
     REQUIRE(exported["rows"][0]["conditions"]["200:decimation"].get<double>() == Approx(2.0));
     REQUIRE(exported["rows"][1]["conditions"]["200:decimation"].get<double>() == Approx(8.0));
+}
+
+TEST_CASE("issue183 runner: serialization failure restores component state", "[issue183][runner]") {
+    NodeGraphEngine graph;
+    SerializeThrowingEngine engine(302, graph);
+    std::vector<IComponentEngine *> comps{&engine};
+
+    FlowSpec spec;
+    spec.name = "serialize-throwing";
+    spec.conditions.push_back(Condition{302, "value", {1.0}});
+    spec.measure.push_back(Measurement{302, 0, "power_dBm"});
+    const nlohmann::json before = engine.serialize();
+
+    FlowResult result;
+    REQUIRE_NOTHROW(result = RunFlow(spec, comps, graph));
+    REQUIRE_FALSE(result.ok);
+    REQUIRE(result.error.code == FlowErrorCode::SerializeFailed);
+    REQUIRE(result.error.message.find("intentional serialize failure") != std::string::npos);
+    REQUIRE(result.toJson()["error"]["code"] == "serialize_failed");
+    REQUIRE(result.rows.empty());
+    REQUIRE(engine.serialize() == before);
 }
 
 TEST_CASE("issue87 stability: serialize -> deserialize -> serialize is identical for swept engines",

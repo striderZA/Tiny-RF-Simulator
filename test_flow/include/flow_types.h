@@ -22,6 +22,7 @@ enum class FlowErrorCode {
     DuplicateMeasurement,
     CyclicGraph,
     DeserializeFailed,
+    SerializeFailed,
 };
 
 inline const char *flowErrorCodeName(FlowErrorCode code) {
@@ -56,6 +57,8 @@ inline const char *flowErrorCodeName(FlowErrorCode code) {
         return "cyclic_graph";
     case FlowErrorCode::DeserializeFailed:
         return "deserialize_failed";
+    case FlowErrorCode::SerializeFailed:
+        return "serialize_failed";
     }
     return "unknown";
 }
