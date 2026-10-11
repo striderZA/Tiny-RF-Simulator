@@ -106,12 +106,12 @@ sh scripts/release.sh X.Y.Z      # Windows
 1. Write the `## [X.Y.Z] - YYYY-MM-DD` section (with at least one bullet) at the top of `CHANGELOG.md`.
 2. Prepare the release. The script runs these stages in order and changes nothing until the checks pass:
    - **Checks:** the version is newer than `CMakeLists.txt`; neither the tag nor `release/vX.Y.Z` exists; the working tree holds nothing but `CHANGELOG.md` (untracked files count, and are listed); the changelog section exists.
-   - **Configure:** if `build/` has no `build/CMakeCache.txt`, it runs `cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc` (about 90 s the first time). A failure stops here.
+   - **Configure:** if `build/CMakeCache.txt` is missing, runs `cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc` (about 90 s the first time). `--skip-gates` skips this stage. A failure stops here.
    - **Bump:** only the version token on the `project` line of `CMakeLists.txt` changes. The script checks that exactly one line changed and that its line ending is unchanged.
    - **Gates** on the bumped tree: `scripts/format.sh --check --all`, `cmake --build build`, and `ctest --test-dir build`.
    - **Commit:** creates `release/vX.Y.Z` (skipped with `--on-master`) and commits `CHANGELOG.md` and `CMakeLists.txt` as `chore: prepare release vX.Y.Z`.
 
-   `--dry-run` prints the plan without changing anything. `--skip-gates` skips the gates, so the tag workflow becomes the first full check, after the tag is pushed.
+   `--dry-run` prints the plan without changing anything. `--skip-gates` skips configure and the gates, so the tag workflow becomes the first full check, after the tag is pushed.
 
    If prepare stops, its message names the state:
    - A refused check or a failed configure changes nothing. A failed gate restores `CMakeLists.txt`. Either way you stay on `master`; fix the cause and re-run.
