@@ -35,6 +35,12 @@ bool conditionSlotAccepts(ConditionSlotKind kind, double value, std::string *err
 bool resolveConditionSlot(const nlohmann::json &snapshot, const std::string &path,
                           ConditionSlotKind *kind, std::string *error);
 
+// Reads the numeric value at `path` inside `snapshot` using the same dot/bracket
+// syntax as applyConditionValue(). Returns false and sets `error` (when non-null)
+// for a malformed path, a path that does not resolve, or a non-numeric slot.
+bool readConditionValue(const nlohmann::json &snapshot, const std::string &path, double &value,
+                        std::string *error);
+
 // Writes `value` at `path` inside `snapshot`, preserving the JSON type of the
 // existing slot: an integer slot requires an integral value and is written back
 // as an integer, an unsigned slot requires a non-negative integral value and

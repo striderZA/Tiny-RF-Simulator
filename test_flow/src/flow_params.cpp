@@ -187,6 +187,30 @@ bool resolveConditionSlot(const nlohmann::json &snapshot, const std::string &pat
     return true;
 }
 
+bool readConditionValue(const nlohmann::json &snapshot, const std::string &path, double &value,
+                        std::string *error) {
+    const auto fail = [&](const std::string &message) {
+        if (error)
+            *error = conditionPathErrorPrefix(path) + message;
+        return false;
+    };
+
+    std::vector<Token> tokens;
+    std::string reason;
+    if (!parsePath(path, tokens, reason))
+        return fail(reason);
+
+    const nlohmann::json *node = walkToSlot(&snapshot, tokens, reason);
+    if (node == nullptr)
+        return fail(reason);
+
+    ConditionSlotKind kind = ConditionSlotKind::Float;
+    if (!classifySlot(*node, &kind, reason))
+        return fail(reason);
+    value = node->get<double>();
+    return true;
+}
+
 bool applyConditionValue(nlohmann::json &snapshot, const std::string &path, double value,
                          std::string *error) {
     const auto fail = [&](const std::string &message) {

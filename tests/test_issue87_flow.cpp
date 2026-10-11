@@ -1151,6 +1151,30 @@ TEST_CASE("issue87 runner: every sweep value is validated before the first row",
     }
 }
 
+TEST_CASE("issue183 runner: rows and JSON report normalized condition values",
+          "[issue183][runner]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(kAdcId, graph);
+    std::vector<IComponentEngine *> comps{&adc};
+
+    const auto loaded = LoadFlowFile(writeTempFlow("issue183_normalized_condition.flow.json",
+                                                   R"({"version": 1,
+            "conditions": [{"component": 200, "path": "decimation", "values": [3, 8]}],
+            "measure": [{"component": 200, "metric": "power_dBm"}]})"));
+    REQUIRE(loaded.ok);
+    REQUIRE(ValidateFlow(loaded.spec, comps).empty());
+
+    const FlowResult result = RunFlow(loaded.spec, comps, graph);
+    REQUIRE(result.ok);
+    REQUIRE(result.rows.size() == 2);
+    REQUIRE(result.rows[0].conditions[0].value == Approx(2.0));
+    REQUIRE(result.rows[1].conditions[0].value == Approx(8.0));
+
+    const nlohmann::json exported = result.toJson();
+    REQUIRE(exported["rows"][0]["conditions"]["200:decimation"].get<double>() == Approx(2.0));
+    REQUIRE(exported["rows"][1]["conditions"]["200:decimation"].get<double>() == Approx(8.0));
+}
+
 TEST_CASE("issue87 stability: serialize -> deserialize -> serialize is identical for swept engines",
           "[issue87][stability]") {
     NodeGraphEngine graph;
