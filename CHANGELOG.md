@@ -1,3 +1,26 @@
+## [0.28.0] - 2026-10-11
+
+### Added
+
+- **Agent interface (MCP)** — an MCP client such as Claude Code can read and edit the circuit in an open RF Simulator window. Keep the window running, open `View > Agent`, and enable `Agent Server`, then point the client at the `rf-sim-mcp` bridge that ships beside the simulator. Agents can read the circuit and component parameters, apply up to 64 edits per call with checkpoints, discover component types and library parts, run port measurements, network-analyzer sweeps, receiver measurements, and test flows, and read contained data files. Agents cannot open, save, or name files. The Agent panel lists recent agent activity and checkpoints, and reverts to a checkpoint only after confirmation. (#190)
+
+### Changed
+
+- **Release archives include `rf-sim-mcp`** — the Linux tarball now holds `rf-sim-mcp` beside `rf-simulator-linux` at its root, and the Windows zip adds `rf-sim-mcp.exe` beside `tiny-rf-simulator.exe`.
+
+### Fixed
+
+- **Out-of-range values stay as loaded (#182)** — numeric fields in the inspector and the analyzer and generator widgets show a value outside their limits as it is, flagged with an amber field and a tooltip naming the range, and log it once. Previously the limit replaced the value on the next frame or edit. Edits are still clamped into the limits.
+- **Ideal filter cutoffs are required per filter type (#181)** — low-pass and high-pass library definitions must include `fc_low_Hz`, and band-pass and band-stop definitions must include both `fc_low_Hz` and `fc_high_Hz` with the low cutoff below the high one. Definitions that omit them are now refused instead of silently using the 100 and 200 MHz engine defaults. The New/Edit Component form shows only the cutoffs the chosen type uses.
+- **S-parameter picker in the component form (#184)** — the component form now exposes the S-parameter picker.
+- **Legacy S-parameter entries load their file (#190)** — projects and libraries saved before the `sparam_filepath` rename use their S-parameter file in amplifier, equalizer, and ideal filter components instead of the manual model. A loaded file without a forward index now uses S21, not S11.
+- **Agent edits no longer abort on collapsed groups (#190)** — an agent edit that checkpoints a project with a collapsed group no longer aborts the app.
+
+### Testing
+
+- Add agent protocol, API, bridge, and app-host coverage (`ctest --test-dir build -R 'test_agent_|test_mcp_bridge'`), plus the standalone `test_sparam_legacy_key` case for legacy S-parameter keys.
+- Pin component parameter serialization mappings (#174).
+
 ## [0.27.0] - 2026-10-06
 
 ### Added
