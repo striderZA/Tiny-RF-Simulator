@@ -98,6 +98,17 @@ McpStep McpSession::onLine(const std::string &line) {
         fail(-32602, "Invalid params");
         return step;
     }
+    if (notification && method == "notifications/cancelled") {
+        // A standard cancellation is a bare notification, possibly from a client that never
+        // initialized or sent _meta. Route it before negotiation so the matching reply is
+        // suppressed; GUI work that was already dispatched continues.
+        if (request.contains("params") && request["params"].is_object() &&
+            request["params"].contains("requestId") &&
+            validId(Json(request["params"]["requestId"]))) {
+            step.cancel_id = Json(request["params"]["requestId"]);
+        }
+        return step;
+    }
     if (method == "initialize") {
         if (notification)
             return step;
@@ -177,12 +188,8 @@ McpStep McpSession::onLine(const std::string &line) {
         return step;
     }
     if (method == "notifications/cancelled") {
-        if (!notification) {
-            fail(-32601, "Method not found");
-            return step;
-        }
-        if (params.contains("requestId"))
-            step.cancel_id = Json(params["requestId"]);
+        // Reached only with an id: notifications/cancelled is not a request method.
+        fail(-32601, "Method not found");
         return step;
     }
     if (notification)

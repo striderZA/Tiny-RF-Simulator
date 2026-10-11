@@ -463,6 +463,83 @@ TEST_CASE("A cancelled call gets no response and later calls still work", "[brid
     CHECK(later_call->at("result").at("content")[0].at("text") == "{\"completed\":true}");
 }
 
+TEST_CASE("A bare cancellation from a never-initialized client suppresses its reply", "[bridge]") {
+    FakeGui gui;
+    std::mutex gui_mutex;
+    std::condition_variable gui_changed;
+    bool first_call_entered = false;
+    bool release_first_call = false;
+    std::vector<std::string> gui_call_order;
+    gui.setScript([&](const Json &request) -> std::optional<FakeGui::Reply> {
+        {
+            std::unique_lock lock(gui_mutex);
+            gui_call_order.push_back(
+                request.at("params").at("arguments").at("query").get<std::string>());
+            if (gui_call_order.size() == 1) {
+                first_call_entered = true;
+                gui_changed.notify_all();
+                gui_changed.wait(lock, [&] { return release_first_call; });
+            }
+        }
+        return FakeGui::Reply{Json{{"jsonrpc", "2.0"},
+                                   {"id", request.at("id")},
+                                   {"result",
+                                    {{"is_error", false},
+                                     {"structured", {{"completed", true}}},
+                                     {"text", "{\"completed\":true}"}}}}};
+    });
+
+    // The standard cancellation is a bare notification: no _meta, and no initialize first.
+    std::string input;
+    appendBridgeLine(input, modernBridgeRequest(1, "tools/call", bridgeCallParams("cancel")));
+    appendBridgeLine(input, OrderedJson{{"jsonrpc", "2.0"},
+                                        {"method", "notifications/cancelled"},
+                                        {"params", OrderedJson{{"requestId", 1}}}});
+    appendBridgeLine(input, modernBridgeRequest(2, "tools/list"));
+    appendBridgeLine(input, modernBridgeRequest(3, "tools/call", bridgeCallParams("continue")));
+
+    BlockingInputBuffer input_buffer;
+    input_buffer.append(input);
+    input_buffer.closeInput();
+    std::istream in(&input_buffer);
+    FlushObservingBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::thread bridge_thread(
+        [&] { bridge_status = runBridge(in, out, err, bridgeOptions(gui.endpointFile())); });
+
+    bool first_call_waiting = false;
+    {
+        std::unique_lock lock(gui_mutex);
+        first_call_waiting = gui_changed.wait_for(lock, 2s, [&] { return first_call_entered; });
+    }
+    const bool cancellation_processed = output_buffer.waitForResponse(2, 2s);
+    {
+        std::lock_guard lock(gui_mutex);
+        release_first_call = true;
+    }
+    gui_changed.notify_all();
+    bridge_thread.join();
+
+    std::vector<std::string> observed_gui_call_order;
+    {
+        std::lock_guard lock(gui_mutex);
+        observed_gui_call_order = gui_call_order;
+    }
+    const auto stdout_text = output_buffer.snapshot();
+    const BridgeRun run{bridge_status.load(), stdout_text, err.str(),
+                        parseBridgeOutput(stdout_text)};
+    CHECK(first_call_waiting);
+    CHECK(cancellation_processed);
+    CHECK(run.status == 0);
+    CHECK((observed_gui_call_order == std::vector<std::string>{"cancel", "continue"}));
+    CHECK(bridgeResponse(run, 1) == nullptr);
+    const auto *later_call = bridgeResponse(run, 3);
+    REQUIRE(later_call != nullptr);
+    REQUIRE(later_call->contains("result"));
+}
+
 TEST_CASE("CRLF-terminated input lines parse", "[bridge]") {
     const auto request = modernBridgeRequest(23, "server/discover");
     std::string input;
@@ -1180,6 +1257,17 @@ TEST_CASE("Cancellation names the request to drop", "[mcp]") {
         CHECK(step.replies.empty());
         REQUIRE(step.cancel_id.has_value());
         CHECK(*step.cancel_id == "legacy-request-8");
+    }
+
+    SECTION("a bare cancellation needs neither initialize nor _meta") {
+        McpSession session(testIdentity());
+        const OrderedJson notification{{"jsonrpc", "2.0"},
+                                       {"method", "notifications/cancelled"},
+                                       {"params", OrderedJson{{"requestId", "bare-request-9"}}}};
+        const auto step = session.onLine(notification.dump());
+        CHECK(step.replies.empty());
+        REQUIRE(step.cancel_id.has_value());
+        CHECK(*step.cancel_id == "bare-request-9");
     }
 }
 
