@@ -528,7 +528,10 @@ out/
 graphify-out/
 
 # AI agent session state
-.agents/
+# Tracked agent material: .agents/skills/ and .agents/AGENTS.md
+.agents/*
+!.agents/skills/
+!.agents/AGENTS.md
 
 # Secret safety
 .env
