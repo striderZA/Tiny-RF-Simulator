@@ -52,6 +52,11 @@ Json endpointJson(const IComponentEngine &component, int port) {
     return Json{{"component", component.id()}, {"port", port}};
 }
 
+Json probeEndpointJson(const IComponentEngine &component, int port, std::string_view direction) {
+    return Json{
+        {"component", component.id()}, {"port", port}, {"direction", std::string(direction)}};
+}
+
 Json outputEndpoint(const AgentApiContext &context, int pin_id) {
     const auto &runtime = context.runtime;
     const auto &graph = runtime.graph();
@@ -107,26 +112,23 @@ Json componentPorts(const AgentApiContext &context, const GraphNode &node) {
 Json probeEndpoints(const AgentApiContext &context) {
     const auto &runtime = context.runtime;
     const auto &graph = runtime.graph();
-    const auto &probe_pins = graph.probePins();
-    const auto probed_sources = graph.probedSignalNodes();
+    // A probe is identified by the pin it is attached to. The probed signal's source can belong
+    // to another component (an input probe's upstream output), so the source is not reported.
     Json probes = Json::array();
-    for (std::size_t index = 0; index < probe_pins.size(); ++index) {
-        const auto &source = probed_sources[index];
-        IComponentEngine *component = componentForSignal(runtime, source.node);
-        if (component && source.output_index >= 0) {
-            probes.push_back(endpointJson(*component, source.output_index));
-            continue;
-        }
-        const int node_id = graph.nodeIdForPin(probe_pins[index]);
+    for (const int pin_id : graph.probePins()) {
+        const int node_id = graph.nodeIdForPin(pin_id);
         const auto *node = graphNode(graph, node_id);
-        component = runtime.components().find(node_id);
+        IComponentEngine *component = runtime.components().find(node_id);
         if (!component || !node)
             continue;
-        int port = portIndex(node->output_pin_ids, probe_pins[index]);
-        if (port < 0)
-            port = portIndex(node->input_pin_ids, probe_pins[index]);
-        if (port >= 0)
-            probes.push_back(endpointJson(*component, port));
+        const int output_port = portIndex(node->output_pin_ids, pin_id);
+        if (output_port >= 0) {
+            probes.push_back(probeEndpointJson(*component, output_port, "output"));
+            continue;
+        }
+        const int input_port = portIndex(node->input_pin_ids, pin_id);
+        if (input_port >= 0)
+            probes.push_back(probeEndpointJson(*component, input_port, "input"));
     }
     return probes;
 }

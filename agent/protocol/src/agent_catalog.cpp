@@ -199,10 +199,33 @@ Json disconnectOperationSchema() {
         {"op", "to"});
 }
 
+// A probe endpoint names a port on either side. Reads always carry `direction`. Requests may omit
+// it, and an omitted direction means output, which is what v1 probes always addressed.
+Json probeEndpointSchema() {
+    return objectSchema(properties({{"component", integerSchema("Component id.", 0)},
+                                    {"port", integerSchema("Zero-based port index.", 0)},
+                                    {"direction", enumSchema({"output", "input"})}}),
+                        {"component", "port", "direction"});
+}
+
+Json probeTargetSchema() {
+    const Json direction = withDefault(enumSchema({"output", "input"}), "output");
+    Json component_port =
+        objectSchema(properties({{"component", integerSchema("Component id.", 0)},
+                                 {"port", integerSchema("Zero-based port index.", 0)},
+                                 {"direction", direction}}),
+                     {"component", "port"});
+    Json ref_port = objectSchema(
+        properties({{"ref", Json{{"type", "string"}, {"pattern", "^[A-Za-z][A-Za-z0-9_]{0,31}$"}}},
+                    {"port", integerSchema("Zero-based port index.", 0)},
+                    {"direction", direction}}),
+        {"ref", "port"});
+    return Json{{"oneOf", Json::array({std::move(component_port), std::move(ref_port)})}};
+}
+
 Json probeOperationSchema(std::string_view operation) {
-    return objectSchema(
-        properties({{"op", constString(operation)}, {"at", componentOrRefPortSchema()}}),
-        {"op", "at"});
+    return objectSchema(properties({{"op", constString(operation)}, {"at", probeTargetSchema()}}),
+                        {"op", "at"});
 }
 
 Json editOperationSchema() {
@@ -551,7 +574,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                              {"project_name", nullableSchema(stringSchema(
                                                   "Project file stem, or null when untitled."))},
                              {"components", arraySchema(circuitComponentSchema(true))},
-                             {"probes", arraySchema(componentPortSchema())},
+                             {"probes", arraySchema(probeEndpointSchema())},
                              {"network_analyzer", networkAnalyzerPointsSchema()}}),
                  {"epoch", "revision", "dirty", "project_name", "components", "probes",
                   "network_analyzer"}),

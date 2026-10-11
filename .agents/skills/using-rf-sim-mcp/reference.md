@@ -11,7 +11,7 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 - `{op:"set_params", component | ref, params}`
 - `{op:"connect", from, to}`: `from` is an output port and `to` is an input port. Each endpoint is `{component, port}` or `{ref, port}`.
 - `{op:"disconnect", to}`: the input side only. An unconnected input returns `NOT_FOUND`.
-- `{op:"probe_add" | "probe_remove", at}`: `at` is an output port.
+- `{op:"probe_add" | "probe_remove", at}`: `at` names a port. `direction` is `"output"` (the default) or `"input"`. `circuit_get` lists each probe as `{component, port, direction}`, and that endpoint can be passed back as `at`.
 - Ports are zero-based. A batch holds 1 to 64 ops.
 - `ref`: a letter, then letters, digits, or underscores, at most 32 characters. It names a component added earlier in the same call and is unusable outside that call.
 - Success returns `epoch`, `revision`, `applied`, and `refs` (name to id). Each `applied` entry has `op_index` and `op`, plus `component`, `ref`, `label`, `params`, `also_changed` (`{path, old_value, new_value}` records), and `unchanged` where relevant.

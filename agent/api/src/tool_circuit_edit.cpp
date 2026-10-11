@@ -260,6 +260,23 @@ Endpoint parseEndpoint(const OrderedJson &value, std::string_view path, bool out
     return {component, port, pin};
 }
 
+// Probe endpoints also name a side. `direction` defaults to output, so a request without it
+// addresses the same port it always did; the key is removed before the shared resolver runs.
+Endpoint parseProbeEndpoint(const OrderedJson &value, std::string_view path,
+                            const CircuitRuntime &runtime,
+                            const std::unordered_map<std::string, int> &refs) {
+    bool output = true;
+    OrderedJson endpoint = value;
+    if (value.is_object() && value.contains("direction")) {
+        const OrderedJson &direction = value["direction"];
+        if (!direction.is_string() || (direction != "output" && direction != "input"))
+            invalid(childPath(path, "direction"), "direction must be \"output\" or \"input\"");
+        output = direction == "output";
+        endpoint.erase("direction");
+    }
+    return parseEndpoint(endpoint, path, output, runtime, refs);
+}
+
 std::string labelFor(const NodeGraphEngine &graph, const IComponentEngine &component) {
     const GraphNode *node = findGraphNode(graph, component.graphNodeId());
     return node ? node->label : std::string{};
@@ -673,8 +690,8 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
         if (op == "probe_add" || op == "probe_remove") {
             requireOperationKeys(operation, operation_path, {"op", "at"});
             const Endpoint endpoint =
-                parseEndpoint(required(operation, "at", operation_path),
-                              childPath(operation_path, "at"), true, context.runtime, refs_by_name);
+                parseProbeEndpoint(required(operation, "at", operation_path),
+                                   childPath(operation_path, "at"), context.runtime, refs_by_name);
             const auto &pins = context.runtime.graph().probePins();
             const bool already_probed =
                 std::find(pins.begin(), pins.end(), endpoint.pin) != pins.end();
@@ -693,13 +710,13 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
                     fail(std::move(error));
                 }
                 if (!context.commands.addProbePin(endpoint.pin))
-                    notFound("output port could not be probed");
+                    notFound("port could not be probed");
                 ++summary.probes_added;
             } else {
                 if (!already_probed)
-                    notFound("output port is not probed");
+                    notFound("port is not probed");
                 if (!context.commands.removeProbePin(endpoint.pin))
-                    notFound("output port is not probed");
+                    notFound("port is not probed");
                 ++summary.probes_removed;
             }
             applied_entry["component"] = endpoint.component->id();

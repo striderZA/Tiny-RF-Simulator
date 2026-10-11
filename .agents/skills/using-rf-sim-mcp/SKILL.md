@@ -33,6 +33,7 @@ The rf-sim tools act on the project open in the user's RF Simulator window. Argu
 - Ops stop at the first error, but earlier ops stay applied. Read `op_index` and `applied`, call `circuit_get`, and send only the remaining work. If a target is `NOT_FOUND`, confirm the intent with the user rather than reassigning the op.
 - `from` is an output port and `to` is an input port. To rewire an occupied input (`LINK_REJECTED`, `INPUT_OCCUPIED`), put `{op:"disconnect", to}` before the `connect` in the same call.
 - PFB channelizer input 0 accepts only RF ADC output 0 (`ADC_TO_PFB_ONLY`). If no ADC exists, add one (`type: "adc"`, with a `ref`) and route through it in the same call.
+- Probes name a side. `probe_add` and `probe_remove` take `at` as a port with an optional `direction`, `"output"` by default or `"input"`. `circuit_get` reports each probe as `{component, port, direction}`; pass that object back as `at` to remove the same probe.
 
 ## Parameters
 

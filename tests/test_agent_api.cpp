@@ -230,6 +230,8 @@ TEST_CASE("circuit_get reports components, ports, links, probes and analyzer poi
     CHECK(data.at("probes")[0].at("port") == 0);
     CHECK(data.at("probes")[1].at("component") == splitter->id());
     CHECK(data.at("probes")[1].at("port") == 1);
+    CHECK(data.at("probes")[0].at("direction") == "output");
+    CHECK(data.at("probes")[1].at("direction") == "output");
     CHECK(data.at("network_analyzer").at("point_a") ==
           nlohmann::json{{"component", generator->id()}, {"port", 0}});
     CHECK(data.at("network_analyzer").at("point_b") ==
@@ -2477,4 +2479,67 @@ TEST_CASE("receiver_measure requires a non-negative integer epoch",
     const auto negative = fixture.call("receiver_measure", args);
     REQUIRE(errorFor(negative).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(negative).at("details").at("path") == "/epoch");
+}
+
+TEST_CASE("circuit_get reports an input-side probe at its own pin and direction",
+          "[agent_api][probes]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(
+        fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    REQUIRE(fixture.commands.addProbePin(amplifier->inputPinId()));
+
+    const auto result = fixture.call("circuit_get");
+    REQUIRE_FALSE(result.is_error);
+    const auto &probes = result.structured.at("probes");
+    REQUIRE(probes.size() == 1);
+    CHECK(probes[0] ==
+          nlohmann::json{{"component", amplifier->id()}, {"port", 0}, {"direction", "input"}});
+}
+
+TEST_CASE("probe_remove accepts the endpoint circuit_get reports for an input probe",
+          "[agent_api][probes]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(
+        fixture.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    REQUIRE(fixture.commands.addProbePin(amplifier->inputPinId()));
+
+    // Without a direction the probe is looked up on the output side, where it does not sit.
+    const auto output_side = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "probe_remove"}, {"at", {{"component", amplifier->id()}, {"port", 0}}}}}));
+    REQUIRE(output_side.is_error);
+    CHECK(errorFor(output_side).at("code") == "NOT_FOUND");
+
+    const auto read = fixture.call("circuit_get");
+    REQUIRE_FALSE(read.is_error);
+    const nlohmann::ordered_json reported = read.structured.at("probes").at(0);
+    const auto removed = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "probe_remove"}, {"at", reported}}}));
+    REQUIRE_FALSE(removed.is_error);
+    CHECK(fixture.runtime.graph().probePins().empty());
+
+    const auto added = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "probe_add"},
+              {"at", {{"component", amplifier->id()}, {"port", 0}, {"direction", "input"}}}}}));
+    REQUIRE_FALSE(added.is_error);
+    CHECK(fixture.runtime.graph().probePins().size() == 1);
+
+    const auto refused = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "probe_add"},
+              {"at", {{"component", generator->id()}, {"port", 0}, {"direction", "sideways"}}}}}));
+    REQUIRE(refused.is_error);
+    CHECK(errorFor(refused).at("code") == "INVALID_ARGUMENT");
 }
