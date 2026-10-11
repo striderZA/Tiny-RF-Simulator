@@ -540,3 +540,6 @@ graphify-out/
 *.pem
 secrets.json
 credentials.json
+
+# MkDocs build output
+site/
