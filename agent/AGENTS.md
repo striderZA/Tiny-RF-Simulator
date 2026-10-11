@@ -48,6 +48,7 @@ Provide the UI-independent protocol and integration boundary for agent clients.
 - POSIX endpoint writes and token-gated removals hold the same exclusive advisory `flock` on the parent directory across temporary-file replacement and identity/token-checked unlink; Windows retains handle-based behavior.
 - Never expose extension trust grants/revocations, external-tool execution, component-library authoring, or `.rflib` import/export to agents.
 - Any listener thread under this subsystem may share only the mutex-protected inbox, outbox, connection status, and pump-refreshed epoch snapshot with the UI thread. It must not touch simulator engines, graph state, or UI objects.
+- The coding-agent skill `.agents/skills/using-rf-sim-mcp/SKILL.md` covers this subsystem's call workflow and epoch rules; its `reference.md` covers error codes and field details. Update both in the same change as any catalog, error-code, epoch-semantics, or parameter or link-rule change.
 
 ## Work Guidance
 
