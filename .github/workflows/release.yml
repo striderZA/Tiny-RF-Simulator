@@ -9,7 +9,7 @@ env:
   # MinGW-w64 silently drops TEST_CASEs past a ceiling in the main `tests`
   # binary. The build-and-test action fails its Windows legs when the registered
   # count drops below this verified floor; bump it when the count changes.
-  MINGW_TEST_CASE_FLOOR: "223"
+  MINGW_TEST_CASE_FLOOR: "227"
 
 permissions:
   contents: read
