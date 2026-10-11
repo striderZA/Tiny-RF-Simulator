@@ -566,9 +566,10 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
 
-    // Ensure all engine nodes are registered with the imnodes context
-    // so GetNodeEditorSpacePos() doesn't assert on node IDs added without
-    // a prior render frame (e.g. via newProject then programmatic add).
+    // Register engine nodes with the imnodes pool before saving, including nodes added without
+    // a prior render frame. Live reads in editorPositionForSave() assert on unregistered IDs.
+    // syncNodesFromEngine() also seeds the grid cache for each node it registers, which hidden
+    // collapsed-group members rely on.
     m_graph_widget.syncNodesFromEngine();
 
     // Save components by iterating the registry
@@ -582,10 +583,9 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
         if (options.sparam_root)
             relativizeSparamParams(cj["params"], *options.sparam_root);
 
-        // Save node position via imnodes
+        // Save node position in editor space; collapsed-group members are outside the imnodes pool.
         int nid = comp->graphNodeId();
-        ImNodes::EditorContextSet(m_graph_widget.context());
-        ImVec2 pos_n = ImNodes::GetNodeEditorSpacePos(nid);
+        ImVec2 pos_n = m_graph_widget.editorPositionForSave(nid);
         cj["pos"]["x"] = pos_n.x;
         cj["pos"]["y"] = pos_n.y;
 

@@ -102,6 +102,18 @@ void NodeGraphWidget::markNodesRegistered() {
     }
 }
 
+ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
+    ImNodes::EditorContextSet(m_context);
+    if (!m_hidden_last_frame.count(node_id))
+        return ImNodes::GetNodeEditorSpacePos(node_id);
+    // A hidden member has no pool entry. Its grid cache was taken on its last visible frame or
+    // at registration. A member with no cache entry was never placed, so origin is its default
+    // placement, the grid position syncNodesFromEngine() gives a newly registered node.
+    const auto grid_it = m_cached_grid_positions.find(node_id);
+    const ImVec2 grid = grid_it != m_cached_grid_positions.end() ? grid_it->second : ImVec2(0, 0);
+    return grid + ImNodes::EditorContextGetPanning();
+}
+
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
     markNodesRegistered();
@@ -226,6 +238,7 @@ void NodeGraphWidget::drawNodes() {
                 hidden_nodes.insert(nid);
         }
     }
+    m_hidden_last_frame = hidden_nodes;
 
     bool first_visible = true;
     for (const auto &node : m_engine.nodes()) {

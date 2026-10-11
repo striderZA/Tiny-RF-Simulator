@@ -88,6 +88,7 @@ class NodeGraphWidget {
         m_node_screen_positions.clear();
         m_registered_in_pool.clear();
         m_rendered_collapsed_groups.clear();
+        m_hidden_last_frame.clear();
     }
     // Snapshots the current grid-space position of every engine node into the
     // cache. Call only while all engine nodes are registered in the imnodes pool
@@ -109,6 +110,11 @@ class NodeGraphWidget {
         auto it = m_last_node_grid_positions.find(node_id);
         return it != m_last_node_grid_positions.end() ? it->second : ImVec2(-1, -1);
     }
+    // Editor-space position for project saves. Members of collapsed groups as of the last draw
+    // are outside the imnodes pool, so their pan-independent grid cache plus the current pan gives
+    // the position GetNodeEditorSpacePos would report. Every other node is in the pool, so ImNodes
+    // answers directly.
+    ImVec2 editorPositionForSave(int node_id);
 
   private:
     const NodeGraphEngine &m_engine;
@@ -153,6 +159,9 @@ class NodeGraphWidget {
     ImVec2 m_rubber_band_end = ImVec2(0, 0);
     std::vector<int> m_rubber_band_members;
     std::unordered_map<int, ImVec2> m_node_screen_positions;
+    // Collapsed-group members as of the last draw. ImNodes dropped them at that frame's
+    // EndNodeEditor, so their positions come from the grid cache rather than from ImNodes.
+    std::unordered_set<int> m_hidden_last_frame;
     ImVec2 m_grid_to_screen_offset = ImVec2(0, 0);
 
     // Last known grid-space (pan-independent) position of every node the

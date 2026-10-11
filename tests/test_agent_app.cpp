@@ -932,3 +932,84 @@ TEST_CASE("The Agent panel renders every server state", "[agent_app]") {
     CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Busy)]);
     CHECK(exercised_states[static_cast<std::size_t>(AgentServerState::Error)]);
 }
+
+// ======================================================================
+// Test: Checkpoints read collapsed-group members from the grid cache
+// ======================================================================
+//
+// Collapsed-group members leave the imnodes pool, so checkpoint capture must
+// derive their editor-space position from the pan-independent grid cache plus
+// the current pan. The first checkpoint is taken with the group collapsed after
+// a pan change; the second follows an expansion that has not been redrawn yet.
+// Neither may abort, and both must report grid plus the current pan.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Checkpoints save collapsed-group members at grid plus current pan",
+                 "[agent_app][collapsed]") {
+    app.newProject();
+    const auto addOne = [&](const char *ref, const char *type) {
+        return app.testAgentCall(
+            "circuit_edit",
+            ordered_json{
+                {"epoch", app.testProjectEpoch()},
+                {"ops", ordered_json::array({{{"op", "add"}, {"ref", ref}, {"type", type}}})}});
+    };
+    REQUIRE_FALSE(addOne("gen", "generator").is_error);
+    REQUIRE_FALSE(addOne("amp", "amplifier").is_error);
+    REQUIRE_FALSE(addOne("free", "generator").is_error);
+
+    std::vector<int> node_ids;
+    for (auto *component : app.testComponents().all())
+        node_ids.push_back(component->graphNodeId());
+    REQUIRE(node_ids.size() == 3);
+    const int group_id = app.testCreateGroup("Collapsed", {node_ids[0], node_ids[1]});
+    REQUIRE(group_id >= 0);
+    // New groups start collapsed; expand so the members are drawn before collapsing.
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+
+    const auto editorPos = [&](int node_id) {
+        ImNodes::EditorContextSet(app.testGraphWidget().context());
+        return ImNodes::GetNodeEditorSpacePos(node_id);
+    };
+    const ImVec2 pan_before{120.0f, -40.0f};
+    bool open = true;
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
+    ImNodes::EditorContextResetPanning(pan_before);
+    runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+    const ImVec2 member0_before = editorPos(node_ids[0]);
+    const ImVec2 member1_before = editorPos(node_ids[1]);
+
+    REQUIRE(app.testSetGroupCollapsed(group_id, true));
+    runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+    REQUIRE(app.testGraphWidget().collapsedGroupBlockRendered(group_id));
+
+    // Move the pan so the hidden members' expected positions must be re-based.
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
+    ImNodes::EditorContextResetPanning(ImVec2(-300.0f, 75.0f));
+    const ImVec2 pan_now = ImNodes::EditorContextGetPanning();
+    const ImVec2 shift{pan_now.x - pan_before.x, pan_now.y - pan_before.y};
+    const ImVec2 expected0{member0_before.x + shift.x, member0_before.y + shift.y};
+    const ImVec2 expected1{member1_before.x + shift.x, member1_before.y + shift.y};
+
+    const auto expectPos = [](const json &snapshot, std::size_t index, ImVec2 expected) {
+        const auto &pos = snapshot.at("components").at(index).at("pos");
+        CHECK(pos.at("x").get<float>() == Catch::Approx(expected.x).margin(1e-3));
+        CHECK(pos.at("y").get<float>() == Catch::Approx(expected.y).margin(1e-3));
+    };
+
+    // Checkpoint taken while the group is collapsed: hidden members come from the
+    // cache, and the visible node still reports its live editor position.
+    REQUIRE_FALSE(addOne("late", "amplifier").is_error);
+    const json collapsed_snapshot = app.testAgentHost().checkpoints().back().snapshot;
+    REQUIRE(collapsed_snapshot.at("components").size() == 3);
+    expectPos(collapsed_snapshot, 0, expected0);
+    expectPos(collapsed_snapshot, 1, expected1);
+    expectPos(collapsed_snapshot, 2, editorPos(node_ids[2]));
+
+    // Expansion without a redraw: the members are still outside the pool.
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+    REQUIRE_FALSE(addOne("later", "amplifier").is_error);
+    const json expanded_snapshot = app.testAgentHost().checkpoints().back().snapshot;
+    REQUIRE(expanded_snapshot.at("components").size() == 4);
+    expectPos(expanded_snapshot, 0, expected0);
+    expectPos(expanded_snapshot, 1, expected1);
+}
