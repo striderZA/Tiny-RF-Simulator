@@ -156,6 +156,28 @@ def scenario_f(root):
     check("F no .old created on denied rename", olds(d) == [])
 
 
+def scenario_g(root):
+    # The restore hint printed after a failed link must run as printed in cmd, from any directory.
+    d = os.path.join(root, "restore hint", "bin")
+    os.makedirs(d)
+    exe = os.path.join(d, "rf-sim-mcp.exe")
+    shutil.copy(PING, exe)
+    before = sha(exe)
+    rc, out = cmake("aside", d, exe)
+    check("G setup: aside exits 0", rc == 0, out[:200])
+    hints = [line.split("restore with: ", 1)[1].strip() for line in out.splitlines() if "restore with: " in line]
+    check("G restore hint is printed once", len(hints) == 1, out[:200])
+    if len(hints) != 1:
+        return
+    batch = os.path.join(root, "restore-hint.cmd")
+    with open(batch, "w", encoding="ascii") as f:
+        f.write(hints[0] + "\r\n")
+    r = subprocess.run(["cmd", "/c", batch], cwd=root, capture_output=True, text=True, timeout=60)
+    check("G restore hint runs in cmd from another directory", r.returncode == 0, (r.stdout + r.stderr)[:200])
+    check("G restore hint puts the exe back unchanged", os.path.exists(exe) and sha(exe) == before)
+    check("G restore hint leaves no .old copy", olds(d) == [])
+
+
 def main():
     if os.name != "nt":
         print("SKIP: bridge_relink is Windows only")
@@ -164,7 +186,7 @@ def main():
     K32 = kernel32()
     root = tempfile.mkdtemp(prefix="rfsim-relink-check-")
     try:
-        for scenario in (scenario_ab, scenario_c, scenario_d, scenario_e, scenario_f):
+        for scenario in (scenario_ab, scenario_c, scenario_d, scenario_e, scenario_f, scenario_g):
             try:
                 scenario(root)
             except Exception as error:  # keep later scenarios running; report the cause
