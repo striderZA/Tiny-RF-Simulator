@@ -2316,6 +2316,27 @@ TEST_CASE("receiver_measure reports unavailable output power as null when output
         std::all_of(power.begin(), power.end(), [](const auto &value) { return value.is_null(); }));
 }
 
+TEST_CASE("receiver_measure keeps every frequency finite across extreme finite bounds",
+          "[agent_api][receiver_measure]") {
+    ApiFixture fixture;
+    const auto [generator, amplifier] = buildReceiverChain(fixture);
+    auto args = receiverArgs(fixture, generator->id(), amplifier->id());
+    const double start = 1e308;
+    const double stop = 1.1e308;
+    args["start_Hz"] = start;
+    args["stop_Hz"] = stop;
+    args["points"] = 401;
+    const auto result = runReceiverToCompletion(fixture, args);
+    const auto &frequencies = result.structured.at("frequencies_Hz");
+    REQUIRE(frequencies.size() == 401);
+    for (std::size_t index = 0; index < frequencies.size(); ++index) {
+        // The reference stays finite: the width is finite and scaled by a fraction in [0, 1].
+        const double expected = start + (stop - start) * (static_cast<double>(index) / 400.0);
+        CHECK(frequencies[index].is_number());
+        CHECK(frequencies[index].get<double>() == Catch::Approx(expected).epsilon(1e-12));
+    }
+}
+
 TEST_CASE("receiver_measure rejects an IIP3 sweep with a zero input step",
           "[agent_api][receiver_measure]") {
     ApiFixture fixture;

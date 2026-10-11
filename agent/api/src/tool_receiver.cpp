@@ -149,8 +149,8 @@ AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall 
 
     std::vector<double> grid(static_cast<std::size_t>(points));
     for (std::size_t index = 0; index < grid.size(); ++index)
-        grid[index] = start_Hz + (stop_Hz - start_Hz) * static_cast<double>(index) /
-                                     static_cast<double>(points - 1);
+        grid[index] = std::lerp(start_Hz, stop_Hz,
+                                static_cast<double>(index) / static_cast<double>(points - 1));
 
     ReceiverMeasurementRequest request;
     request.output_power = output_power;
