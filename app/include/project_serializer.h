@@ -2,6 +2,9 @@
 
 #include "receiver_requirements.h"
 #include <array>
+#include <filesystem>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -13,6 +16,11 @@ class NodeGraphEngine;
 class NodeGraphWidget;
 class PFBViewManager;
 
+struct ProjectJsonOptions {
+    std::optional<std::filesystem::path> sparam_root;
+    bool window_state = true;
+};
+
 // Owns the .rfsim JSON save/load/new logic previously inlined in
 // RfSimulatorApp (issue #51: 1320-line god-object).
 class ProjectSerializer {
@@ -23,20 +31,25 @@ class ProjectSerializer {
                       bool &show_spectrum, bool &show_properties, bool &show_node_editor,
                       NetworkAnalyzerEngine &na_engine);
 
+    // Build or restore project state without file I/O. Without sparam_root,
+    // paths remain verbatim; window_state controls UI-flag writing/restoration.
+    nlohmann::json toJson(const ProjectJsonOptions &options);
+    bool fromJson(nlohmann::json root, const ProjectJsonOptions &options,
+                  const std::string &source_label);
+
     bool save(const std::string &path); // false on open/write/flush/close failure (logged)
-    bool load(const std::string &path); // false on parse/unknown-type failure (logged)
-    // True when the latest load reset project state before returning.
+    bool load(const std::string &path); // false on file/parse/restoration failure (logged)
+    // True when the latest restoration reset project state before returning.
     bool lastLoadReset() const { return m_last_load_reset; }
     // newProject: links, components, probes, counters. Clears PFB views because
     // it destroys every engine; the app re-syncs component-bound views after
-    // reset() and load().
+    // reset() and every fromJson() restoration.
     void reset();
 
   private:
-    // Canonical `window_state` scalar flags as (JSON key, live member). save()
-    // writes them, load()'s shape guard validates them, and load()'s restore
-    // reads them — all from this one list, so a new flag cannot be persisted
-    // without also being shape-validated (issue #113).
+    // Canonical `window_state` scalar flags as (JSON key, live member). toJson()
+    // writes them; fromJson() validates enabled flags and restores them from
+    // this one list (issue #113).
     using WindowFlag = std::pair<const char *, bool *>;
     std::array<WindowFlag, 4> windowFlags();
 

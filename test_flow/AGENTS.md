@@ -20,6 +20,7 @@ component output ports.
 - `include/flow_metrics.h` — `MetricSample`, `MetricDefinition`, `MetricRegistry` (four built-ins)
 - `include/flow_result.h` — `ConditionValue`, `FlowRow`, `FlowResult`, `toJson()`
 - `include/flow_runner.h` — `LoadFlowFile()`, `ValidateFlow()`, `RunFlow()`
+- `include/flow_boundary.h` — `RunFlowWithinBoundary()`, the UI-free run boundary (`BoundaryOutcome`, `BoundaryStatus`) shared by the Test Flow panel and the agent `test_flow_run` tool; implemented in `src/flow_boundary.cpp`
 - `CMakeLists.txt` — `simulator::test_flow` STATIC target
 
 ## Local Contracts
@@ -28,7 +29,7 @@ component output ports.
 - **Addressing is positional and volatile.** A load re-creates components in saved order from the counter's base of 100 (`ProjectSerializer::reset()`), so ids assigned in save order survive a clean save/load, but any deletion or reorder shifts every later id — and because ids stay dense, a stale flow reference can then *silently bind to a different component* (often the same type, so the path still applies) instead of failing. Only `ValidateFlow()`/`RunFlow()`'s resolution decides; a flow file is not portable across a circuit edit until flows address something stable.
 - `ValidateFlow(spec, components)` is the single pre-flight: every condition's component and path/value compatibility, then every measurement's component, output port and metric, as a `FlowError` list in the order `RunFlow()` checks them. `RunFlow()` runs this same pass and reports the first issue verbatim, so an attached UI can never call a flow runnable that the harness refuses. It strictly reads the circuit. `RunFlow()` takes `const NodeGraphEngine &` and uses topology/order for reads plus the shared const-graph rewire pass; it never mutates graph topology or editor state.
 - `ValidateFlow()` is exhaustive — every value of every condition, not a sample — and stays affordable per frame because it resolves each condition's `path` once with `resolveConditionSlot()` and then checks the values arithmetically with `conditionSlotAccepts()`, with no JSON write per candidate.
-- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading. Neither the loader nor the runner caps the row count, and the product is executed synchronously, so a caller that faces a user must bound it itself (the app panel refuses above `TestFlowWidget::kMaxRunRows`).
+- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading. Neither the loader nor the runner caps the row count, and the product is executed synchronously, so a caller that faces a user must bound it itself (the app panel refuses above `TestFlowWidget::kMaxRunRows`; the agent `test_flow_run` tool refuses above 1000 rows).
 - This library must not link `simulator::app`, ImGui, implot, or imnodes. It takes
   `std::span<IComponentEngine *const>` rather than `ComponentRegistry`, which lives in `app/`.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
@@ -68,6 +69,7 @@ component output ports.
   never leaks partially parsed conditions.
 - `RunFlow()` converts component `deserialize()` exceptions into `DeserializeFailed`, attempts to restore
   targeted baseline snapshots, reports rollback failure details, and returns no rows.
+- `RunFlowWithinBoundary()` is the run path a UI or agent uses. It snapshots every engine first (a failure returns `SnapshotFailed` before anything runs), runs `RunFlow()` (an exception becomes `ExecutionFailed`), restores each snapshot independently by id (a failure never stops later restores; a missing id is reported as no longer present), then always rewires. A restore failure outranks the run: it returns `RestoreFailed` and discards the result, and the caller owns the latch that follows. A `Completed` outcome restores every engine's `serialize()` state and every link, and a flow error inside it is the run's own diagnostic; the boundary never touches the project revision.
 - `test_flow` is one of the mirrored format-check directory lists in `scripts/format.sh`,
   `.githooks/pre-commit`, and `.github/workflows/release.yml`; keep all three in lockstep when
   directories are added or removed.

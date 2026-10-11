@@ -75,6 +75,13 @@ function(add_standalone_test NAME)
     add_test(NAME ${NAME} COMMAND ${NAME} ${ARG_ARGS} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endfunction()
 
+if(WIN32)
+    add_standalone_test(test_session_state_unicode
+        SOURCES test_session_state_unicode.cpp
+        LIBS common
+    )
+endif()
+
 add_standalone_test(test_attenuator
     SOURCES test_attenuator.cpp
     LIBS simulator::attenuator_engine simulator::node_graph_engine
@@ -83,6 +90,15 @@ add_standalone_test(test_attenuator
 add_standalone_test(test_combiner
     SOURCES test_combiner.cpp
     LIBS simulator::combiner_engine simulator::node_graph_engine
+)
+
+# Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
+# Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
+add_standalone_test(test_sparam_legacy_key
+    SOURCES test_sparam_legacy_key.cpp
+    LIBS simulator::amplifier_engine simulator::equalizer_engine
+         simulator::ideal_filter_engine simulator::signal_generator_engine
+         simulator::node_graph_engine
 )
 
 add_standalone_test(test_rf_switch
@@ -137,6 +153,11 @@ add_standalone_test(test_component_authoring
     SOURCES test_component_authoring.cpp
     LIBS simulator::app
 )
+# Standalone contract test for serialized component state metadata and array-path normalization.
+add_standalone_test(test_component_params
+    SOURCES test_component_params.cpp
+    LIBS simulator::editor_services simulator::test_flow
+)
 
 # Standalone for the same reason as test_component_authoring: TEST_CASEs appended
 # to the main `tests` binary are silently dropped by the MinGW-w64 toolchain, and
@@ -151,6 +172,13 @@ add_standalone_test(test_extensions
     SOURCES test_extensions.cpp
     LIBS simulator::app
 )
+
+if(NOT WIN32)
+    add_standalone_test(test_external_tool_launch
+        SOURCES test_external_tool_launch.cpp
+        LIBS simulator::app simulator::agent_protocol
+    )
+endif()
 
 add_standalone_test(test_issue37_pfb_input_removal
     SOURCES test_issue37_pfb_input_removal.cpp
@@ -307,6 +335,14 @@ add_standalone_test(test_issue113_project_load
     SOURCES test_issue113_project_load.cpp
     LIBS simulator::app
 )
+# Constructs RfSimulatorApp, which writes the shared exe-relative app.ini, so run it serially.
+set_tests_properties(test_issue113_project_load PROPERTIES RUN_SERIAL TRUE)
+# Standalone serializer JSON transformation coverage, separate from file I/O.
+add_standalone_test(test_project_json
+    SOURCES test_project_json.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_project_json PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #116 coverage: collapsed subcircuit blocks render from a
 # cached grid position, links between two different collapsed groups are drawn
@@ -360,6 +396,8 @@ add_standalone_test(test_node_hover_snr
     SOURCES test_node_hover_snr.cpp
     LIBS simulator::app
 )
+# Constructs RfSimulatorApp, which writes the shared exe-relative app.ini, so run it serially.
+set_tests_properties(test_node_hover_snr PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone coverage for the app-owned Test Flow runner panel: the
 # all-component snapshot/restore boundary around RunFlow() (a sweep must leave
@@ -375,6 +413,13 @@ add_standalone_test(test_test_flow_widget
 # RfSimulatorApp::~RfSimulatorApp() writes, exactly like test_ui: a concurrent
 # run would read-modify-write that one file from two processes.
 set_tests_properties(test_test_flow_widget PROPERTIES RUN_SERIAL TRUE)
+
+# UI-free run boundary shared by the Test Flow panel and the agent tool.
+add_standalone_test(test_flow_boundary
+    SOURCES test_flow_boundary.cpp
+    LIBS simulator::test_flow simulator::editor_services common
+)
+
 # Standalone, UI-free behavioral coverage for component/topology ownership.
 add_standalone_test(test_circuit_runtime
     SOURCES test_circuit_runtime.cpp
@@ -397,6 +442,12 @@ add_standalone_test(test_editor_commands
     LIBS simulator::app
 )
 set_tests_properties(test_editor_commands PROPERTIES RUN_SERIAL TRUE)
+# Standalone, UI-free coverage for the editor-services public build boundary.
+add_standalone_test(test_editor_services_boundary
+    SOURCES test_editor_services_boundary.cpp
+    LIBS simulator::editor_services
+)
+set_target_properties(test_editor_services_boundary PROPERTIES FOLDER "Library")
 
 # Standalone UI-free validator/evaluator and draft-application coverage.
 add_standalone_test(test_receiver_requirements
@@ -432,3 +483,39 @@ add_standalone_test(test_issue174_parameter_keys
     SOURCES test_issue174_parameter_keys.cpp
     LIBS simulator::app
 )
+
+# Standalone, UI-free agent protocol framing and error-shape contract tests.
+add_standalone_test(test_agent_protocol
+    SOURCES test_agent_protocol.cpp
+    LIBS simulator::agent_protocol
+)
+
+# Standalone, UI-free behavioral contract tests for the AgentApi read surface.
+add_standalone_test(test_agent_api
+    SOURCES test_agent_api.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+# Standalone real-loopback coverage for AgentServer transport, authentication,
+# UI-thread pumping, modal parking, endpoint ownership, and shutdown.
+add_standalone_test(test_agent_server
+    SOURCES test_agent_server.cpp
+    LIBS simulator::agent_api
+)
+
+# Standalone, UI- and simulator-free coverage for both MCP protocol eras.
+add_standalone_test(test_mcp_bridge
+    SOURCES test_mcp_bridge.cpp
+    LIBS simulator::mcp_adapter
+)
+
+# Standalone app-level agent host coverage: checkpoint lifecycle and trimming
+# (newest 20 kept), component auto-layout placement, explicit positions, and
+# activity logging (newest 50 kept, "Agent:" prefix). Constructs RfSimulatorApp
+# through AgentFixture (ImGuiFixture), so it shares the exe-relative app.ini
+# and must run serially.
+add_standalone_test(test_agent_app
+    SOURCES test_agent_app.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)

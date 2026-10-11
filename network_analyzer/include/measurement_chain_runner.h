@@ -67,7 +67,7 @@ std::optional<MeasurementChainPath> findMeasurementChainPath(const NodeGraphEngi
 
 class IsolatedChainRunner {
   public:
-    explicit IsolatedChainRunner(IMeasurementChainHost &host);
+    explicit IsolatedChainRunner(const IMeasurementChainHost &host);
     bool prepare(const MeasurementChainPath &path);
     // Feeds the stimulus to every input linked from Point A's component and
     // runs the clones in order. The returned spectrum is owned by a scratch
@@ -76,7 +76,7 @@ class IsolatedChainRunner {
     const Spectrum *run(const Spectrum &stimulus);
 
   private:
-    IMeasurementChainHost &m_host;
+    const IMeasurementChainHost &m_host;
     std::unique_ptr<IMeasurementChainScratch> m_scratch;
     // Mirrors path.components; m_clones[0] stays null because Point A's
     // component is never cloned.

@@ -177,3 +177,19 @@ TEST_CASE("CircuitRuntime consumes reserved component IDs and resets IDs on clea
     CHECK(runtime.nextComponentId() == 100);
     CHECK((std::is_const_v<std::remove_reference_t<decltype(runtime.graph())>>));
 }
+
+TEST_CASE("CircuitRuntime advances its epoch only on whole-project clear", "[circuit_runtime]") {
+    CircuitRuntime runtime;
+    auto *generator = runtime.createComponent(createEngine<SignalGeneratorEngine>);
+    auto *amplifier = runtime.createComponent(createEngine<AmplifierEngine>);
+    const auto link = runtime.connect(generator->outputPinId(), amplifier->inputPinId());
+    REQUIRE(link.has_value());
+
+    CHECK(runtime.epoch() == 0);
+    CHECK(runtime.disconnect(*link));
+    CHECK(runtime.removeComponent(amplifier->graphNodeId()));
+    CHECK(runtime.epoch() == 0);
+
+    runtime.clearComponentsAndResetIds();
+    CHECK(runtime.epoch() == 1);
+}

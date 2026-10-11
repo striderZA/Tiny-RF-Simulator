@@ -49,10 +49,17 @@
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
 #include "view_manager.h"
+
+#include "agent_host.h"
+#include "agent_panel_widget.h"
+#include "agent_server.h"
+#include "app_agent_host.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 enum class PendingAction { None, New, Open, Exit, Tutorial };
@@ -131,6 +138,21 @@ class RfSimulatorApp {
     std::string m_current_project_path;
     void markDirty();
     void testMakeDirty();
+    // Test-only access to checkpoint serialization and the replacement epoch.
+    ProjectSerializer &testProjectSerializer() { return *m_serializer; }
+    std::uint64_t testProjectEpoch() const { return m_circuit_runtime.epoch(); }
+
+    // -- Agent API accessors -----------------------------------------------
+    bool setAgentServerEnabled(bool enabled, std::string *error = nullptr);
+    void startAgentServerIfEnabled();
+    bool agentServerRunning() const;
+    void revertAgentCheckpoint(std::uint64_t checkpoint_id);
+    bool testStartAgentServer(AgentServerConfig config, std::string *error = nullptr);
+    AgentServer *testAgentServer();
+    AgentToolResult testAgentCall(const std::string &tool, nlohmann::ordered_json arguments);
+    AppAgentHost &testAgentHost();
+    AgentPanelWidget &testAgentPanelWidget() { return m_agent_panel_widget; }
+    void testStartTutorial();
     // Test-only commands keep fixture mutations explicit; read accessors below are const.
     IComponentEngine *testCreateComponent(std::string_view type, int engine_id);
     IComponentEngine *testCreateComponent(
@@ -269,4 +291,14 @@ class RfSimulatorApp {
     std::unique_ptr<ProjectSerializer> m_serializer;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
+
+    [[noreturn]] void exitApplication();
+
+    std::unique_ptr<AppAgentHost> m_agent_host;
+    std::unique_ptr<AgentApi> m_agent_api;
+    std::unique_ptr<AgentServer> m_agent_server;
+    bool m_agent_server_enabled = false;
+    std::string m_agent_startup_error;
+    bool m_show_agent = false;
+    AgentPanelWidget m_agent_panel_widget;
 };

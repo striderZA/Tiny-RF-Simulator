@@ -192,6 +192,39 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project S-param paths a
 }
 
 // ---------------------------------------------------------------------------
+// Legacy `sparam_path` key: a project saved before the `sparam_filepath` rename
+// carries only `sparam_path`. Project load resolves it against the project dir,
+// and the engine must then load the file it names.
+// ---------------------------------------------------------------------------
+TEST_CASE_METHOD(ImGuiFixture, "Project load loads an in-project legacy-only sparam_path",
+                 "[containment][project][legacy]") {
+    auto base = scratchDir("containment_legacy_key_" + test_temp_paths::processTag());
+    const auto project_path = base / "proj.rfsim";
+    writeS2p(base / "data/legacy.s2p");
+
+    nlohmann::json amp;
+    amp["type"] = "Amplifier"; // .rfsim project_type key
+    amp["params"]["gain_dB"] = 20.0;
+    amp["params"]["sparam_mode"] = true;
+    amp["params"]["sparam_path"] = "data/legacy.s2p"; // legacy key only
+    writeProject(project_path, nlohmann::json::array({amp}));
+
+    {
+        RfSimulatorApp app;
+        app.loadProject(project_path.string());
+        REQUIRE(app.componentCount() == 1);
+
+        auto amps = app.testComponents().byType<AmplifierEngine>();
+        REQUIRE(amps.size() == 1);
+        CHECK(amps[0]->sparamLoaded());
+        CHECK(amps[0]->sparamMode());
+        const auto expected = std::filesystem::weakly_canonical(base / "data/legacy.s2p").string();
+        CHECK(amps[0]->sparamFilepath() == expected);
+    }
+    std::filesystem::remove_all(base);
+}
+
+// ---------------------------------------------------------------------------
 // S1 — library boundary: data_files entries must stay within the library JSON
 // file's directory; absolute and '..' entries are skipped, not read.
 // ---------------------------------------------------------------------------
@@ -578,4 +611,43 @@ TEST_CASE_METHOD(ImGuiFixture,
     CHECK_FALSE(app.testSaveComponentForm());
     CHECK(readFile(asset_path) == original_asset);
     fs::remove_all(base);
+}
+
+TEST_CASE("componentDataFilePath resolves contained data files and refuses escapes",
+          "[containment][library][data_file]") {
+    const auto base = scratchDir("containment_accessor_" + test_temp_paths::processTag());
+    const std::string decoy_name =
+        "containment_accessor_decoy_" + test_temp_paths::processTag() + ".s2p";
+    writeS2p(base / "good.s2p");
+    writeS2p(base.parent_path() / decoy_name);
+
+    // One library JSON per case, written the way the library containment tests above do.
+    const auto load = [&](const std::string &part_number, const std::string &data_path) {
+        nlohmann::json j;
+        j["schema_version"] = 2;
+        j["type"] = "amplifier";
+        j["part_number"] = part_number;
+        j["parameters"]["gain_dB"] = 20.0;
+        j["parameters"]["nf_dB"] = 1.0;
+        j["data_files"] = nlohmann::json::array();
+        j["data_files"].push_back({{"type", "s_parameters"}, {"path", data_path}});
+        const auto json_path = base / (part_number + ".json");
+        {
+            std::ofstream ofs(json_path);
+            ofs << j.dump(2);
+        }
+        ComponentLibrary lib;
+        lib.loadFile(json_path.string());
+        REQUIRE(lib.all().size() == 1);
+        return *lib.all().front();
+    };
+
+    const auto contained = load("ACCESSOR-OK", "good.s2p");
+    const auto found = componentDataFilePath(contained, "s_parameters");
+    REQUIRE(found.has_value());
+    CHECK(*found == std::filesystem::weakly_canonical(base / "good.s2p"));
+    CHECK_FALSE(componentDataFilePath(contained, "gain").has_value());
+
+    const auto escaping = load("ACCESSOR-ESCAPE", "../" + decoy_name);
+    CHECK_FALSE(componentDataFilePath(escaping, "s_parameters").has_value());
 }

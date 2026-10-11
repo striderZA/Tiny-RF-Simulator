@@ -21,16 +21,54 @@ target_link_libraries(circuit_runtime
 )
 
 # --------------------------------------------------
+# UI-free editor services library
+# --------------------------------------------------
+add_library(editor_services STATIC
+    src/editor_commands.cpp
+    src/component_params.cpp
+    src/graph_editor_actions.cpp
+    src/component_type_registry.cpp
+    src/component_library.cpp
+    src/receiver_requirements.cpp
+    src/receiver_performance_measurement.cpp
+    src/output_snr.cpp
+)
+add_library(simulator::editor_services ALIAS editor_services)
+target_include_directories(editor_services PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(editor_services
+    PUBLIC
+        simulator::circuit_runtime
+        simulator::signal_generator_engine
+        simulator::amplifier_engine
+        simulator::mixer_engine
+        simulator::pfb_channelizer_engine
+        simulator::spectrum_analyzer_engine
+        simulator::splitter_engine
+        simulator::adc_engine
+        simulator::coax_cable_engine
+        simulator::equalizer_engine
+        simulator::ideal_filter_engine
+        simulator::attenuator_engine
+        simulator::combiner_engine
+        simulator::rf_switch_engine
+        simulator::rf_switch_2to1_engine
+        simulator::network_analyzer_engine
+        simulator::logging_core
+        common
+)
+set_target_properties(editor_services PROPERTIES FOLDER "Library")
+
+# --------------------------------------------------
 # App library
 # --------------------------------------------------
 add_library(app STATIC
     src/app.cpp
-    src/editor_commands.cpp
-    src/graph_editor_actions.cpp
+    src/app_agent_host.cpp
+    src/agent_panel_widget.cpp
     src/inspector_panel.cpp
-    src/component_library.cpp
     src/library_browser_widget.cpp
-    src/component_type_registry.cpp
     src/component_form_model.cpp
     src/component_form_widget.cpp
     src/extension_manifest.cpp
@@ -41,8 +79,6 @@ add_library(app STATIC
     src/pfb_calculator_widget.cpp
     src/project_serializer.cpp
     src/test_flow_widget.cpp
-    src/receiver_requirements.cpp
-    src/receiver_performance_measurement.cpp
     src/receiver_requirements_widget.cpp
 )
 add_library(simulator::app ALIAS app)
@@ -61,27 +97,15 @@ target_include_directories(app PUBLIC
 # --------------------------------------------------
 target_link_libraries(app
     PUBLIC
+        simulator::agent_api
         simulator::circuit_runtime
+        simulator::editor_services
         simulator::core
-        simulator::signal_generator_engine
         simulator::signal_generator_widget
-        simulator::amplifier_engine
-        simulator::mixer_engine
-        simulator::pfb_channelizer_engine
         simulator::pfb_channelizer_widget
         simulator::iq_plot_widget
-        simulator::splitter_engine
-        simulator::adc_engine
-        simulator::coax_cable_engine
-        simulator::equalizer_engine
-        simulator::spectrum_analyzer_engine
         simulator::spectrum_analyzer_widget
-        simulator::ideal_filter_engine
-        simulator::attenuator_engine
-        simulator::combiner_engine
-        simulator::rf_switch_engine
-        simulator::rf_switch_2to1_engine
-        simulator::network_analyzer_engine
+        simulator::spectrum_analyzer_engine
         simulator::network_analyzer_widget
         simulator::node_graph_engine
         simulator::power_meter_engine

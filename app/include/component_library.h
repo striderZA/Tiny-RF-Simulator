@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class CircuitRuntime;
@@ -49,6 +50,12 @@ struct ComponentDefinition {
     std::vector<DataFileRef> data_files;
     std::vector<ValidationIssue> issues;
 };
+
+// Containment-checked absolute path of the first data_files entry of `data_type`, resolved
+// against the directory of definition.source_path. Returns nullopt when source_path is empty,
+// no entry matches, or the entry escapes that directory.
+std::optional<std::filesystem::path> componentDataFilePath(const ComponentDefinition &definition,
+                                                           std::string_view data_type);
 
 class ComponentLibrary {
   public:

@@ -6,6 +6,7 @@ int main() {
     RfSimulatorCore core;
     ImNodes::CreateContext();
     RfSimulatorApp app;
+    app.startAgentServerIfEnabled();
     core.Run([&app]() {
         app.update_dsp();
         app.draw_ui();

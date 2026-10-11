@@ -863,3 +863,89 @@ TEST_CASE("Receiver IIP3 through a switched filter bank matches the selected bra
     REQUIRE(isFinite(bank_iip3));
     CHECK(bank_iip3 == Catch::Approx(reference_iip3).margin(1e-3));
 }
+
+namespace {
+// The same sweep loop as runToCompletion, driven through the request overload.
+void runRequestToCompletion(ReceiverPerformanceMeasurementEngine &engine,
+                            const ReceiverMeasurementRequest &request, int point_a, int point_b,
+                            const std::vector<double> &grid) {
+    engine.update(request, point_a, point_b, grid);
+    for (int update = 0; engine.isInProgress() && update < 1000; ++update)
+        engine.update(request, point_a, point_b, grid);
+    REQUIRE_FALSE(engine.isInProgress());
+}
+
+// Element-wise equality that treats NaN as equal to NaN, so unavailable values compare equal.
+bool sameSamples(const std::vector<double> &left, const std::vector<double> &right) {
+    if (left.size() != right.size())
+        return false;
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        const bool both_nan = std::isnan(left[index]) && std::isnan(right[index]);
+        if (!both_nan && left[index] != right[index])
+            return false;
+    }
+    return true;
+}
+} // namespace
+
+TEST_CASE("Receiver request overload measures exactly what the config overload measures",
+          "[receiver_measurements][request]") {
+    Circuit c;
+    c.attenuator.setAttenuation(7.0);
+    c.amplifier.setGain_dB(12.0);
+    const std::vector<double> grid{1.0e9, 1.1e9};
+
+    SECTION("output power only") {
+        auto settings = config();
+        settings.iip3_min_dBm.reset();
+        settings.measurement_conditions.iip3.reset();
+        ReceiverMeasurementRequest request;
+        request.output_power = true;
+        request.reference_tone_Hz = 1.0e9;
+
+        ReceiverPerformanceMeasurementEngine by_config(c.graph, c.host);
+        ReceiverPerformanceMeasurementEngine by_request(c.graph, c.host);
+        runToCompletion(by_config, settings, c.generator.outputPinId(), c.pointB(), grid);
+        runRequestToCompletion(by_request, request, c.generator.outputPinId(), c.pointB(), grid);
+        REQUIRE(by_request.measurements().output_power_dBm.size() == 2);
+        CHECK(isFinite(by_request.measurements().output_power_dBm[0]));
+        CHECK(sameSamples(by_request.measurements().output_power_dBm,
+                          by_config.measurements().output_power_dBm));
+        CHECK(sameSamples(by_request.measurements().iip3_dBm, by_config.measurements().iip3_dBm));
+    }
+
+    SECTION("output power and IIP3") {
+        c.amplifier.setEnableNonlinear(true);
+        const auto settings = config();
+        ReceiverMeasurementRequest request;
+        request.output_power = true;
+        request.reference_tone_Hz = 1.0e9;
+        request.iip3 = true;
+        request.iip3_settings = ReceiverIIP3TestSettings{2.0e6, -60.0, -40.0, 2.0};
+
+        ReceiverPerformanceMeasurementEngine by_config(c.graph, c.host);
+        ReceiverPerformanceMeasurementEngine by_request(c.graph, c.host);
+        runToCompletion(by_config, settings, c.generator.outputPinId(), c.pointB(), grid);
+        runRequestToCompletion(by_request, request, c.generator.outputPinId(), c.pointB(), grid);
+        REQUIRE(by_request.measurements().output_power_dBm.size() == 2);
+        CHECK(isFinite(by_request.measurements().output_power_dBm[0]));
+        CHECK(sameSamples(by_request.measurements().output_power_dBm,
+                          by_config.measurements().output_power_dBm));
+        CHECK(sameSamples(by_request.measurements().iip3_dBm, by_config.measurements().iip3_dBm));
+    }
+}
+
+TEST_CASE("Receiver request with an unmatched reference tone leaves output power unavailable",
+          "[receiver_measurements][request]") {
+    Circuit c;
+    c.amplifier.setGain_dB(12.0);
+    ReceiverMeasurementRequest request;
+    request.output_power = true;
+    request.reference_tone_Hz = -1.0;
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    runRequestToCompletion(engine, request, c.generator.outputPinId(), c.pointB(), {1.0e9, 1.1e9});
+    const auto &measured = engine.measurements().output_power_dBm;
+    REQUIRE(measured.size() == 2);
+    for (const double power : measured)
+        CHECK(std::isnan(power));
+}

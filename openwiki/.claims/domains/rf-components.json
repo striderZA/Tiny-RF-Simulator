@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:749cf4c4ffffc75e8d2be310450668e3c3c056f67582fb8c0256037fb5d88f41",
+  "pageVersion": "sha256:958bf1b2d5ae10e4d3f4e6de577a540853affdc0abe5b005578d17fc75010cde",
   "claims": [
     {
       "id": "claim_eeb03f8e355c4632b150721068dfaed8",
@@ -22,27 +22,23 @@
     },
     {
       "id": "claim_77559d2a10f74d519e1f32d65b449fd3",
-      "statement": "ComponentTypeRegistry defines 13 graph-attached engine descriptors and their canonical/project keys, fields, capabilities, and factories; its authorable flag selects only the subset offered by the New Component form. Spectrum and Network Analyzers are separate instruments, not graph registry components.",
+      "statement": "ComponentTypeRegistry defines 13 graph-attached engine descriptors with canonical and project keys, fields, capabilities, and factories; its authorable flag selects only the subset offered by the New Component form. Spectrum and Network Analyzers are separate instruments, not graph registry components.",
       "evidence": [
         {
-          "resource": "repo://app/include/component_type_registry.h#L31-L47",
-          "version": "repo-lines-v1:sha256:4e2067da809192b84d6227b88dd9acb4f164e3e4b7510d964f6eb65412d7e506:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjNDAyMjQ2ZjcwNGJkMmU1YjY5MzY4YmI2ZTQzZTMzNzUzMjY1NjI4YzdjNjNjZDRlN2U3Y2IyMjk0YTBhYWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjkwNGY4MzQ5ZTUyMjlmYmYxZjQyNjZmYTIxYjYwNzUwNzFhMGI2NWE2NjhjNGYzN2UyYmVkZTFhNDFhYTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU2NDMwMWQ1MmQxNTkwYzk4YmIxNDgwYzNjMTNiMDRlZjUzZTFhMGNhMTJiYmU0ZjhmZmUwZWJiYjUwZjJmN2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3MmVkY2ZhNGNmNjM1NmU1MWU4MTg3MjI1NzAzMzcxNThkYWNjNmMyZGIwM2E0ODk0ZWQ0OTRiNjQzMWJlMDAifQ"
+          "resource": "repo://app/include/component_type_registry.h#L32-L55",
+          "version": "repo-lines-v1:sha256:b205cca74e358de72b69bb2a133a265c1c4562de710b560eaac0ed345aab5d87:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjNDAyMjQ2ZjcwNGJkMmU1YjY5MzY4YmI2ZTQzZTMzNzUzMjY1NjI4YzdjNjNjZDRlN2U3Y2IyMjk0YTBhYWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVkYjBjZjM4ZmUwZDUxYjcwZTNmY2E5YmRmZWE5ZDUyN2E0YTUwNDUxZWNiYzcxNmI2N2Y5MzRjZDAxZGI1M2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNhY2M3NTIxZWQxOGVlNmNhMTBlNDA0MmI3ODY5Y2M2YWQ2N2JmMWNjYjMyMzQ3MWRiMzU1NmM4YzUxYjViYTgifQ"
         },
         {
-          "resource": "repo://app/src/component_type_registry.cpp#L292-L327",
-          "version": "repo-lines-v1:sha256:93010a626a6ea6bd96e3769048084ab924c294c379e41b7daf609e0d126bb407:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3M2IwZjNkMWVhZGUxNjMxYmFjNGQzZmQ2NzgyM2VlZmFkYjYxMTU2MWNlY2ExMmI2ZmRhNTk5ODg3NDYxMDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmYTNiOGYwOTA4OGM2ODhhOTkyMjZkZTU0OWU4YWNiZTY0OWQwNTRjNjIwYTY0YThkMDU5MTg2MjFjYzNlMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://app/src/component_type_registry.cpp#L107-L504",
+          "version": "repo-lines-v1:sha256:5723d3ff77aec51d1e1412aeadb029f1e55e97e3705b886b38135ed8d208fda3:eyJzZWxlY3RlZExpbmVDb3VudCI6Mzk4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4ODA4ZGYyZWRhNjc4ZDUwZWI2MjQ1NmNjYjkzOWJhMzhmZjQ4ZTJhMDgwYmU0MzExZmE4NzM3ZmY5ZDY5NjY2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIxZGZjNjYxNjQzZDcyZjgxY2FjNTU0NjkxZmM5MWZjM2ViYzBkYWJkMzM0NGU0MTI2OGY2Yzk1NWE5YzczMmY1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4YTAwM2FmYzFhNDc2YWYzMmU4YTNmNjE5ZDg2NTE3YjkzZWM4NWNiMDdiY2E4MTIxNDI5MDc4NDE0ZGJhYTIzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyNTE3M2EzZThkNzFhYTU1ZDRhYTlkZjEyZmFhMTUzYTQ2MWIxMDUzYjBlZTAzZDJjOTgxYzk3NWIzYTljZDE0In0"
         },
         {
-          "resource": "repo://app/src/component_type_registry.cpp#L47-L67",
-          "version": "repo-lines-v1:sha256:0bd713f9ede17d729c2fbb1fee17c5e394ad155b84ce990b13fbd9bf798925fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0Y2MzYjk1ZDY2ZGM1NDFiMzRkOTgyMGEwNGQzZWNhMWM1NmI0YjViMGY0ZDVmYjBkZmRmOTMzMDYzNDliNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNzczMDJhNDVjMmJjOWYwNjE4NGMxZTdhMzJlZTljZDNmYzA1MmZhMTI4NzJhMjc4MjcyNGY2ZTJiMjhjYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhN2M5Mzk5NmU2MTUyYzE5MTNhMWEwNDU1NjNhNTU5ODJhZmIzYjEwODJhODc5NzM3OGFmMDlhZGM2YmFjM2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhMWQ0MTRmZGFjNDUzMWZmOWU2NjE4Mzc3YjllNjMyZDgyMWRiYWI1OGI0NTMwMmFjNTEwNDBlODY0ZjkwZjEifQ"
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L11-L13",
+          "version": "repo-lines-v1:sha256:d8af7dd3e7492aa0d71f05f53101207b5607919fe8320a90726074115a3359c1:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2RmMmUzMmFjN2YxNTg0ZTZjN2I3ODkxNzQxZWNlMWEzODRmMDE1MjRkNWNmMjk1NzY0NzFkNDhmZTk4ZDY4OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGZhZjk0Mzk3OGVlNTA0OGVjOThlMzYxMThmZTUxY2JjNTJjNzE1YmIwOGMyZWVmNDdmMTFjNGE5NDMyMDZhYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjRlYmVhOGI4YmI4YzE4ZmVmNWM1YjIwNWFkZWZmZjE5NjdmZDNkMmVhY2NhZmI5YjFjMWQwNDQ1YTgzZTQxZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWRkYzk3YzY0NjhmYTIyZTQwNzFiZDM5ZWEyOTI5ZDNjMmE5NmFiYjhmYTA5OGM4NjdhMmQ3Mjc3NDYzNTY5ZCJ9"
         },
         {
-          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L11-L25",
-          "version": "repo-lines-v1:sha256:24c076dbd2bb1e8d64d3dcaa4f2fbc858cc3d3004b5dae42c6209771d363f47f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkZjJlMzJhYzdmMTU4NGU2YzdiNzg5MTc0MWVjZTFhMzg0ZjAxNTI0ZDVjZjI5NTc2NDcxZDQ4ZmU5OGQ2ODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkOGZhM2FlMWUwNTM5OGFlN2JmNjcxMDU1NjdjNGU2YTA0NTkxZmIxYzBjZWYwNGNlNjFlYTRlZDljZGQ2ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZWJlYThiOGJiOGMxOGZlZjVjNWIyMDVhZGVmZmYxOTY3ZmQzZDJlYWNjYWZiOWIxYzFkMDQ0NWE4M2U0MWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlNTFiZTBkYWEwN2M2MTM1MDIyNzVlODQ0OWNjZDk4MDc5ZDViYmI4NWUwM2FiMjlhZTMzZDg4NWEyODcyYjcifQ"
-        },
-        {
-          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L11-L13",
-          "version": "repo-lines-v1:sha256:889ce0793522225db64c3a79d5dcab796415d82a454308b459173a124cc379ae:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2Q3MTllNGFmZjhhZjZkYmRkZGQ5YzU5Mjk1ZDc1ZDcxYTM2N2M2Y2ZiYjM2NDAzYTgwZDZlMzNlODI4ZTU3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDI0ZDNkMzBlNTI0Mjc2MDI4ODEwNmU1ZjZhZTdmMDc5MWY3NmEzNjE5YmE3NzUwZWJiYmM0ZDdmMTJlZjhkMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjBjODZhNjJhYzk1MjdlZjljMWYyOTAxOTY1YjM4MjU1M2FkYzc1ODZhMjk2OGMxYTk1YjMwZGE2NWNmY2I4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGZhYzM2ZjU0MzYyZjc2MTU0NGE4NDNmNzEwMjY4Mzg2MmJkOTAwZGM0OWI1MjdjNGFjZjE1YTU4M2Q0N2ZiNSJ9"
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L11-L12",
+          "version": "repo-lines-v1:sha256:69b5b3d2affe14bccc9c95a8f1640750724f90d304af5d9e03d4646d39f12c7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2Q3MTllNGFmZjhhZjZkYmRkZGQ5YzU5Mjk1ZDc1ZDcxYTM2N2M2Y2ZiYjM2NDAzYTgwZDZlMzNlODI4ZTU3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM1ZDMwZTZmN2I1MDE0ZjY3OGExZDhlODgyNTFjNWQ4ZTVmODMwOTk1OTc3M2U5ZTdkMDMzYzZmOWY2ZjA4NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjBjODZhNjJhYzk1MjdlZjljMWYyOTAxOTY1YjM4MjU1M2FkYzc1ODZhMjk2OGMxYTk1YjMwZGE2NWNmY2I4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNiNzZmNjY4MTA4ODliM2JkZjU0ZDgwNzU1MzgzYWI2MzkzODExNTBhNjVmNDZmZGZjOTg5NDdjNDkzODBlMCJ9"
         },
         {
           "resource": "repo://tests/test_component_dispatch.cpp#L60-L79",
@@ -52,75 +48,103 @@
     },
     {
       "id": "claim_e2d0e622b6c84b8a8f35cc92eef2c29c",
-      "statement": "The current ADC contract uses fs_Hz, nsd_dBm_per_Hz, decimation, and nco_fs_fraction, with sample-rate, supported-decimation, and NCO-fraction bounds enforced by setters; legacy bits and v_fs are not engine parameters.",
+      "statement": "The ADC engine contract uses fs_Hz, nsd_dBm_per_Hz, decimation, and nco_fs_fraction, with sample-rate, supported-decimation, and NCO-fraction bounds enforced by its setters; legacy bits and v_fs are not engine parameters.",
       "evidence": [
         {
-          "resource": "repo://adc/include/adc_engine.h",
-          "version": "repo-file-v1:sha256:ee92b986e19919ae736e1cdb75b6f2a5be09cf697f45e491b327ccc5cd24612d"
+          "resource": "repo://adc/include/adc_engine.h#L21-L61",
+          "version": "repo-lines-v1:sha256:2d79130d79f0463655edeb975794634ac4cd5b9ae75d9b6b0aed880cc54e71d1:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5ZGJiMmQwYjM3YzYyM2Q5MTY3ZDY2OWE5ZDEyODI5MzhhNGIzOGI0NTM1OGMwN2NmOGNjMzMwMWVmYzRmMmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlmMTg4MzA4M2ExNzlmMTc4MmJhZDc5YTk0N2VkYTYxZmJmNWI4YTVkZDI4Y2IzN2I0YjgwZmI0MGQxYWU1ZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg5YjZkNDVhMjU1YTA4YjAxMWQyYzU5YWEzYzhhZjk4OWFiMzVjNjY2NDMzNmMwYzY2OTFiOGEyMjA1ZTlhNmMifQ"
         },
         {
-          "resource": "repo://app/src/component_type_registry.cpp#L254-L290",
-          "version": "repo-lines-v1:sha256:e8b08c3b23b3151a2e68ba29bf53df4439dc1d5eaf56dc07234493227f9871ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjZmE1YmE5MGZhOGQ2MzZhMjQwYmJiY2Q1Y2IwYjM5NWY3YTdhNzFkNDY4ZjE2NGYzYTY2YzMwYjFkZmNmYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjMzNmZmVjMDBkMWQwZDAyNWU1MWU3NGFmZjgwZDFlYzlhNjU3MDdhYzFkMjkxMjBjMmZjMWI4OTAyY2RlY2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZhZWNmNGNiOGY5NDc4YzM3NmI5OGMzMjkxNWRlNGUwMzk1ZGEwZTQ0MzZkYjFiMzQwMWNjNDE4YWQyMGRkOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4M2U0ZWM1MjE3ZTIyNDMwNGRiMjQ0NDg4YzAxOTU4NzlmOTZlYWQyNjZhMWViMDljMTg5MGZhYzE1NjExYzAifQ"
+          "resource": "repo://app/src/component_type_registry.cpp#L417-L439",
+          "version": "repo-lines-v1:sha256:a4aa889b132636787ee4a9892bf86b20be55166a325054f6f37f169ff35af440:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0ZmNkN2ExZGJjNjJkMGNjM2EwZDk0NmY2ZDgyMjg3MjIxZDFhY2Q1MjA2ODAwODc2NDgxNGZjOGM1MTZkZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkOWUxMjU0NjQyNTU3NmQzZGVhZThjOWI5ZGJmMTI4ZDVkNmRkYWY1ZDdmZTg1NzkzNDkyN2RlZmZhM2I5ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFlMzA2OThiN2NiMWM2M2VhOGNmNWVjMjAyNjY2NjA5ZDhmZjJiOTlmNjA1ODYxZjgyZGRhZDBjZjIyYWJlNjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM2ZjBkN2E0M2E2NGNkMmEzMDQ2YTZjZjRhNDNiYTBkMTgyNzU0NzdkODcxY2U1MDAxODM2ZGNhNGIzODFiZDIifQ"
         },
         {
           "resource": "repo://tests/test_component_authoring.cpp#L55-L82",
-          "version": "repo-lines-v1:sha256:a225d5d655a643739e2e12f038d12bf7235671f3766cec45fa928730f06ce556:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0YzcxYWFiMzc4MWZlODUxOTJiMjM0Mjg4MTY0MTkwNWNmZTcyZjUyOTY2NmZjMmY4OWZlMjYzNWY3OWI5MWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkZmU0NzZjMTZlODhmNTdiZGYzMzM2M2I5MjZiZTJlZDFmMGUxNjcxNmI5YWFkN2ExMGU2YzM0OWE3NDFlZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhZDczYjZhZmQyZGRkNTFmMWIzZjJlYTMwNTEyNmQ2YmM1ZjQ0NzNjNjZjODM1Nzg5YTk0MWZlNjk5OTBjZjIifQ"
+          "version": "repo-lines-v1:sha256:ca9123e2567390af27563418eacfa4b80b24b15eab036ed1a8aab940521668bc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmOGVhNTJmMjlkYzliNDI2ZTllMzYzYjRkOTBlMjc1NTFjYzMyZGQwZmM4YmU1NGM5ZWNiNjQxMzNhNTNhOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlODM1ZTAxM2JjNTcwNDFmY2YzYWZhNTZlMGM2M2YyNzk5Y2Y3NGY2MzcyMTFkYTAyZjFjZDZmYWIyYzQxNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhMmNmYWE3NDg3NzFjMGQ4ZTA5ZDY0NDMxMmQyYjZhNTY3ODk1NDQ2ODFjNGMzMWUwN2MxYjAwYzIyY2I0NDcifQ"
         }
       ]
     },
     {
       "id": "claim_fd73ab0f7c274b55b1e3a7c36513fa95",
-      "statement": "RF processing engines implement distinct physical or idealized models: amplifier gain/NF/nonlinearity and S21, mixer sidebands and NF, filter passband or S21 behavior, equalizer slope or S21, passive attenuation, and frequency-dependent coax loss and delay.",
+      "statement": "RF processing engines implement distinct models: the amplifier applies S21 to tones and models gain, noise figure, and optional nonlinearity; the mixer exposes LO frequency, conversion gain, and noise figure; the ideal filter selects LPF, HPF, BPF, or BSF; the equalizer applies a slope or S21; the attenuator takes attenuation_dB or S-parameter data; and the coax cable models cable length and connector loss.",
       "evidence": [
         {
-          "resource": "repo://amplifier/src/amplifier_engine.cpp#L192-L224",
-          "version": "repo-lines-v1:sha256:6486a4d2b87bc904b81f6527d2fc04d20d67a3b14e08e654c58d8a5b1a77adbf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlZjZjMzk4ZDhiYzcxMGEyZTYyNDgyNjIxOWNmOGIxY2JjMThiMGM0ODc4NWVhNWRmYjBhNWNkYTBjZmU3OTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkYWE4YTFkZjUwNmU2ZTEzODg0YjBhYjk5YTYyMjg3MDA1Y2Y0MTEyOWI0MjJiODM3NGQyYTM5ZDRjNGRhMDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0OGRjNTI4MjJjZTg1ZWExNDMyZmYyMTY1ODk3ZDc0NTBjNWE3ODMyZGRjOTExOTYyYTFmMWE4ZTFmNzBhY2YifQ"
+          "resource": "repo://amplifier/src/amplifier_engine.cpp#L206-L207",
+          "version": "repo-lines-v1:sha256:f788a67340d3b22fce0b45d47e1a5f404ee153a6d84023e5bc1453189b3116a6:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU1YzFkNjM2OTBhNGYwMzU3ZjMzMDg0OWRhMzA5YjU4MzdkN2ZhZDNkNzUwMzYxZjc4ZTQ0ZDRkYjM4MDY1MCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQxZDQ4MDRhNjA0NWRhZmQxMGY0MWU4MThhNWI5OGNjZjAxYzJhYmQ2ZDIwYzAyZjFkNjgzNGNiZTE4ZDYzZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTAzOGMxNzdmZmM5ZWNmOWJhMzk2YzU5NGUyMDA1NDYwZTZhMzU4MmUwMDY1Njk4MTNiMzFmNjJkMjlmOTVlMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjkyZTMxNTg3OGUzMDcwN2FhZDkyNzAyMmVjNDkyMWU3YjQ0NWVkOTA1YzRjNzQ3ZDg2YjI4MWNmMTMyMDI1MCJ9"
         },
         {
-          "resource": "repo://attenuator/include/attenuator_engine.h",
-          "version": "repo-file-v1:sha256:12f708eff6fba19d914556775c5323046affd82bdb2b23d8971fbbd54b5b2f49"
+          "resource": "repo://amplifier/src/amplifier_engine.cpp#L48-L62",
+          "version": "repo-lines-v1:sha256:056334c1f283743e59459c39cdd2424ac138975ef254d58972061d1400999258:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4NjYzZjU2NDVkYjM2YzMwOWQ5ODZlZWNjOWZkODI3ZjkxZWIxNGZmNzJhNmNlODhiMDU1ZGUzYTBlZGNmYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MDNiMWU5YWMwZmE3NGNjZDViNjZmZTVhOWIwMTRmYTdkNjhkZjQwMjdlNmMwMjFjM2ZmOGIxNTQ0ODJiNzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI0MzYwYTA1YjkzMmMwOGIzMzRkNjI2ZTc2YWU4MTU2MWZjNzgxMzFiOTdjZmM3YjJjZWZmNTI5NmYwYWJlMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiMGY3YjA5ZDMxZmE5ZDdmMWVmYjA0NDVlMjlkMTM3MTdhNzFlNTI4ZTYyZTZhZTYzODg4NDAwMTM2NjQyNjYifQ"
         },
         {
-          "resource": "repo://coax/include/coax_cable_engine.h",
-          "version": "repo-file-v1:sha256:fdd4749d7cbe8694d711dff70d5feab81f1d2c1362b19d35a94d41f10c820e78"
+          "resource": "repo://amplifier/src/amplifier_engine.cpp#L87-L104",
+          "version": "repo-lines-v1:sha256:e8f213e83969cfd2fbdd7944ab2134673b3c54448e8985a5d548cccf85a60f84:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3OWZhNGEzN2E4YTY5MzA3NWZmZWI5NTkzZjBlOWY0ZmU2MWEwNjkzMGRkODc1NDlhMGRmYTRkNDg5ZjY0NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjNGE2ODQxNTczNDliMzkxYWMyMzc0NTU1ZWY2Y2VkNDg4ZDQyNzM5ZjMwZTk5N2M3OTAyY2ExN2U3ZGFhZDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzMjFjYmIzZTliZGY4OTgxOGM5MjE1OTQ2NGY5M2QxZjRkMjcwN2Q1MGYwOTBkYTVmMjg2ZDE2Njg4YjNlZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzY2ZlNTI5MDYyM2M5NjU2NWVhODk5OGNiNGM0OTQ2NTE2M2MzZmUyNmRhNDE3MTdhZjBkNGY4Y2M5YjQyNzUifQ"
         },
         {
-          "resource": "repo://equalizer/include/equalizer_engine.h",
-          "version": "repo-file-v1:sha256:c5eb3503419e80c6bbcd6324de31ebad9ac27fc6981fe867d6a01ecdb7c29918"
+          "resource": "repo://app/src/component_type_registry.cpp#L160-L160",
+          "version": "repo-lines-v1:sha256:84235c0a3561c26a5afe272ae0fb80ebd203f7c9b8d3b0f0e8c7c87df5733279:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQyMzVjMGEzNTYxYzI2YTVhZmUyNzJhZTBmYjgwZWJkMjAzZjdjOWI4ZDNiMGYwZThjN2M4N2RmNTczMzI3OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODQyMzVjMGEzNTYxYzI2YTVhZmUyNzJhZTBmYjgwZWJkMjAzZjdjOWI4ZDNiMGYwZThjN2M4N2RmNTczMzI3OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTIwY2NmZmRkZGI4MGMzYjk2NzRlODNiYzRhMWM1NWVhZWMzYmZiMWZkOTk1MjU2OGU2MDY5ZGI4Mjc1ZjNmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmJlZTIxMDQ2YTM5YTVkYzk5ZDdiZDNjYzgzOWE3OGZjMWEyN2YyMTA1ZTVkMjgzYTEwZmUyNGU0Mjg1OTcxNSJ9"
         },
         {
-          "resource": "repo://ideal_filter/include/ideal_filter_engine.h",
-          "version": "repo-file-v1:sha256:b9e8c4ef6404456dab24910e6c7b37d350245a243e92c9116029f2fb5ba8fc49"
+          "resource": "repo://attenuator/include/attenuator_engine.h#L29-L32",
+          "version": "repo-lines-v1:sha256:aaafbc753f80882fb7d8ea3edad995c16e8254ead08cacd40d0e4a415d1088f7:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGY0MmMwYThmZGFjOTZjODNiMmEyNmE3MzJjNjZmOTQzZTY3MjBiMmVhMzQ5YWZkY2FkMWJkOWU3MTBlMWNhMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY3MDAzZTIyMDIxMDI2ZjcwNjcyODY3ZjA2YzdhZWFkMmU5MDY0NDA0YzVlMzBhYTk5MzI0NjFhODczZTM0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWUzM2E0MGRhNWNjZjYyNTZhNDNmNzAxZTI1YmZiY2VhMGEyZjAxODJlYTk0MjE5NGU3ZjE3MTVkOGExMjVmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzI3ZDFhMWMwZmZhMTQ2YzRkZjdjYjEzMmE1NTkyNTFiNWExODAxMTM0MTRlMjIzZjY4YmVhY2E0MjVkZWVjMyJ9"
         },
         {
-          "resource": "repo://mixer/include/mixer_engine.h",
-          "version": "repo-file-v1:sha256:00e9aff0c546828f6e452c76d0ae96f2f85bf3a2c8be8687f249a9f60376ec76"
+          "resource": "repo://coax/include/coax_cable_engine.h#L22-L33",
+          "version": "repo-lines-v1:sha256:e95a1cb2cfeef49540493c631747ec6a3071771b96bae6fede4527cac8bfc7c6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2YzkxNWNkNGYwYThjYzUwMDFkNmE1YzkzMjE2NWRmMGMyMWQ5ZGQ2MDkxOWZlYzRkZjFlNjRlNzAxNjFmZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhYTMwYmE5Yzc3ZDZlMTk4MTg0OTk5NWRkZmI3N2Q1YmQ5MzU0YjBlYWRmZDBjYWUxY2I5NGExMmE3YWI2YzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyMDQ3ZjI4NzMyM2JlZTllNTQ3Y2Y2ODYwNDljZmFlZGRmZGY4N2U5NzgzMmUwYTA2ZWUyYTYxZWZmMjgxNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljODUzMjc4MGI0ODg1YzgyYzA4ZWUwZTVmZjBhN2ZjZDkzMzU0MmM2OTQ1OTM4MjhiM2VkZGY1MjkwMjA5NzkifQ"
+        },
+        {
+          "resource": "repo://equalizer/include/equalizer_engine.h#L31-L55",
+          "version": "repo-lines-v1:sha256:afba737e7ed43085f940bfbf71c71d49c9ce81b52fc7bb9b08a6a2b7b29a9f9e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNWI3ZjBjYmVkM2Y3Y2VmMmQxZTQ2NjdlYTMxODE4NzJmNTlhMjFkY2UzY2U1NmJmNDZkMmFmNThlMWE0N2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2N2IyMzBlN2Q3YTFiZWQ0MDBiMjg3N2Y3ZWNmYWM2OWRjN2ZhODBmM2UxZTVmY2NjMTFhY2E4YjE4ZjM2ZTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQzMTYyNzhhNWFhOGQ3ODExMGNkZGViMGViYTE2NDkwZDE0ZjJlZGIzNjgzM2EwYjE4NDFjODA5MWY5NDE5MTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkZWZmMDZhOWRmNWQyYzkwMzFhYWYxYzQ4NzYxZTA4NTUzYmU1NDhiNTQzNmYxZjI1ZTQwYjc0YmRjZTA2NTIifQ"
+        },
+        {
+          "resource": "repo://ideal_filter/include/ideal_filter_engine.h#L7-L53",
+          "version": "repo-lines-v1:sha256:1219691279ab809d0c773142b41bd2ea2120f45b45ca9434774b33fd8c8dfdbf:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0NTU2ZTZhOTBhM2IzNmIyMDZhNTNlNmY5NDFmMWY3YjFiOTc2MWY4YjIzNjhlOWZkNWVkZmExMGQ0YmYyMTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5OWIxZjU0NDc4MWQ3NzBjMDZlMzA3NGRjMTFkYmY5MGYzMGI1OTBmYTY5M2Y5ZGJiN2QxZTBlN2VlMTkwNTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwM2NhOTdlZmQwZDU5NzNkYTExNzQ4ZTkzYTM0MzU5NzlhNTY2YjMwNDc5MGI3ZjMzYzBjNWEyMzc0MzU5ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxMDEzODNiNjI3N2JlMjcxNWQ1NzUxMjBlZWE0YTU4YzgxNWM3ODEwYjQxMTNlOWE4MDg5N2RlY2VjNTU0OWQifQ"
+        },
+        {
+          "resource": "repo://mixer/include/mixer_engine.h#L14-L35",
+          "version": "repo-lines-v1:sha256:bfb555c1c63d37fbc11338dea308be4b7d9d32780949444dd48218b5ed36e0ca:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYjMxZmNlYTJiOWQyNDFmZDE2YWJmMmRlOTAxYmIwM2Q5MzA5NDJjMjUwZmJkMzNlN2Y2ZWRkZGEzYTM4NmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0NDM4OTU2ZDNhMDY3YTk5MmYyMGFmYjVhZGRkZWRkOTg5OTBmNjU4YTkyOTU3ZWY4MzExOGFkODZlZjFhNjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2ZmEzYmM3M2U2MDE4MGI2NmMyZmMzMmVkMmU4ZDRkNGIxM2JhNmYxN2EwZjg2MGM1ZjY5ZjYzY2VhOWI4NjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMxYzg5N2QxMDllZTAwYzQxMWZjN2QzNjBmMjVhZWJiYWFjN2Q2ZjgwYTA3NTlmYjIyMDI3YTkzYzAzMDM4YjUifQ"
         }
       ]
     },
     {
       "id": "claim_e2f5465a823845e2964ee36864118bb6",
-      "statement": "The splitter applies fixed 3.0103 dB loss to each of its two output paths; manual Combiner mode applies the same loss to each input tone path and incoherently sums noise, while three-port S-parameter mode maps S21/S31 and adds only non-negative passive thermal noise.",
+      "statement": "The splitter applies a fixed 3.0103 dB loss to each output, and manual Combiner mode applies the same loss to each input tone path and incoherently sums noise; in three-port S-parameter mode the combiner maps S21 and S31 and adds only non-negative passive thermal noise.",
       "evidence": [
         {
-          "resource": "repo://combiner/src/combiner_engine.cpp#L120-L172",
-          "version": "repo-lines-v1:sha256:a606c5c98e58151515fbb32ac8cff0e8139c30ee173de84fa11c8ce07cc4f4c9:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1MjdmNzlhYjE4NzhhZjNmZWEyYWRhYzNiYTIwOTY2ZjYxYjg1NjExZDA5NzUyMTUyNTYyMTY2OWQ0YmU4NmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhMGRjOWU1YmJlZjFiYzJjMTY2M2ZkZjRiZWM0YjYzY2ZhMGNkNWI3ODU0ZmRiODAwNmFjZjkyNTRkNzM0ZTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzMzhmZDI4MWYxMDY0NzIxODQzZDM0ZjA3OGNjYzJjNGNjNjk4M2U1YzgyYmQ4MmJlZjk5MjYxZWQwNmNmMjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0YTg0OTNmYWEwNTIyMmM0YWM2ZGVhOGQ5ZjlmNDU4N2JmNDg3ZGI0YWFhNzZmZWQzNDA0NzljYjE4YTk2MGYifQ"
+          "resource": "repo://combiner/include/combiner_engine.h#L49-L49",
+          "version": "repo-lines-v1:sha256:14e6fcdad778ccac27c272437df04b618c219948ba66ea8b3004e404ca2f22a4:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTRlNmZjZGFkNzc4Y2NhYzI3YzI3MjQzN2RmMDRiNjE4YzIxOTk0OGJhNjZlYThiMzAwNGU0MDRjYTJmMjJhNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTRlNmZjZGFkNzc4Y2NhYzI3YzI3MjQzN2RmMDRiNjE4YzIxOTk0OGJhNjZlYThiMzAwNGU0MDRjYTJmMjJhNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzdkZGM5ZTA0MDM5MjkyOTFiNjA0ZDE0OGM2MmYwYzYwNWJmMDIyZDYyNzFmY2Q5MDNhNDE5NDMyYTBhYjUwYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCJ9"
         },
         {
-          "resource": "repo://combiner/src/combiner_engine.cpp#L217-L257",
-          "version": "repo-lines-v1:sha256:24f319e2b257fadcaa36a8d56301dd63636812980a17e0fd56be4355b08a67ba:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjExZTI4NDM5Y2ZmNzAwOTAxZGZkMGVjOTVhYzlkYzA0OTM4ZDYxZjFiZmI4YTk4YzQ1ZTZlYzg3MjdmNThlMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhOTg2ODJjZWZkNTc0ZWZiYzAyOGEyNTQ5MDM3YTMyNDU5NDQwMGViNTJmNjdhZGZmMzUzODBkODczYjg2NDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NzM1ZjFmNjRlYzE5ZWMzM2ZmMjVlZTNiZDI3NGIxMzM0Mjc0MTYxNWJjODUzYmNiMmY4ZTU5MmQ4Y2EwOWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+          "resource": "repo://combiner/src/combiner_engine.cpp#L120-L121",
+          "version": "repo-lines-v1:sha256:b986b56251132bdafa402dc6120bc6368daa5d71174cc1be0311de793c2c8789:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzM5Y2E3MTBiOWJhNDc5N2ZkNDJmZWQzZDhhM2JjYjg2ZWRmOTRjMWRkN2I1NjFhYjE0M2MxZDBlM2YwZmQ4YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2YyMjk4NDlhZWJmODgxNmVjZDA4ZmNhNDc3Mzc1OTEwNTM0NmFlYjFiNjNlMTlmY2E1OWViYTlkMjVkMzE0NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGEzNTYwZDkzNmU4ZmQwMjEwODc0YTAxYzM0NWY2YTE1NWQ0NTcwMzk4Mzg5ZGQyMDZkMGY5NGEwYmQyZjBkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmRmMDE0ZjI0Mzk3MDk1Yjc3YjljNGQ1YTgwNjkzNGU1ZjM4OWMzNDQ0YWVjMzE0ZjA2Y2QxMDQzYmE1ZGJiZCJ9"
         },
         {
-          "resource": "repo://splitter/src/splitter_engine.cpp#L20-L73",
-          "version": "repo-lines-v1:sha256:526e442dea48bb1c9a60766139d2b8cc221fdc07b102306566c2bcbc12ef6d21:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwOTRlYzQzYjU3ZTE2ODJhZDgxOGM0NDgyNGViOTY3ZGQwZGNjNTRmOWQzZTkyNmZhODdmM2Q2MWU2MWUzZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiZjMzMTc2YjgxODgwMzUyYWYwYTEwNzI4MGI2NTBmZWMwYjNjYWUwYTE0ZmE4MDYwNDU3YTY3YjY1Yjg3NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZkOWE3OGU1NzUxNzM1MWVjYjJkZDQ3MzE1YWFjNDQ3MTg3NWQ2NzcxMmY1Zjk4ZjY2M2YyZDg4MzA1NmNkOTkifQ"
+          "resource": "repo://combiner/src/combiner_engine.cpp#L169-L170",
+          "version": "repo-lines-v1:sha256:2bf28316d756a886fe7f549f5a0e7d9ed234ece840bd583db38ef761d5638580:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTYyOTNhZDc5ODJmY2E4OTA2ZGM0MDQxNzNiMzcwNjNiZjY5MmE0NGY4NjNhYjkwNzRmYTQ5YzQyZDJiMDc0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDVjZjUxM2Q3ZjhhNWYxMjkzM2FiNzdiY2M5ZmY1YzZmYmQ5Y2NlZjk1OGEwOTQ3Yzk4YTY4ZDgxMmJkMmI5MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzc1NDE1ZTc2OGJkOThjMjAwNDUyMjY0OGUyZDZlNjZkMWFkODQzNDZiYWM4ZjJjMmZjOTFiMzI5NDRlYTc5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzM3YjhlY2VjMDc2NTgxNDJmMWVlNDMzMjgzMjMyMDA0OTAyYzJlYzU2YjZlZmZjMWJkZGY5YjhjNDIxOThmYSJ9"
         },
         {
-          "resource": "repo://tests/test_combiner.cpp#L26-L71",
-          "version": "repo-lines-v1:sha256:b8cc123aa7fd6ca8e6681df19e32b047403870b5b16ff0dd3f5fa7890cdf99e7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNjhmNTRkN2M3ODU3YTk5YmExNzU5ZDVmNDIyNzNlNTVkYzVjMGY4NGU4OWRhNDZkMjljMWQwMDY4ZGRiYWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiNjMzODA1ZTQ5ODcwNTYzZTUwN2E5MzYzZDA0NTFmMmE3Y2FiYmQ2MTZjNGUwN2EwZGJhZDY1MmIzODgzNmEifQ"
+          "resource": "repo://combiner/src/combiner_engine.cpp#L216-L248",
+          "version": "repo-lines-v1:sha256:7bcd27df9fc4f3f2c8e3a61c8b5750ad2c54ac2dbd5460bc20d3505d3f71097c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjExZTI4NDM5Y2ZmNzAwOTAxZGZkMGVjOTVhYzlkYzA0OTM4ZDYxZjFiZmI4YTk4YzQ1ZTZlYzg3MjdmNThlMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjNDkzNDAyOTVmMWE3ZGUyOTdhYzk0Zjc4ZDE4ZDM5NmI3MGM0NDVhNjAxZTZkNWI2MWMwYzk1ZDVhNDNiMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NzM1ZjFmNjRlYzE5ZWMzM2ZmMjVlZTNiZDI3NGIxMzM0Mjc0MTYxNWJjODUzYmNiMmY4ZTU5MmQ4Y2EwOWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5M2UwYmI3YTY4NjY4NzhlYWQ4ZTA1MzJkZGFiYjcyYjM4ZDI0ODBiNGViMDIyZjQyZTY0ZWM4NmVjMjkwYmMifQ"
         },
         {
-          "resource": "repo://tests/test_issue117_numeric_correctness.cpp#L182-L220",
-          "version": "repo-lines-v1:sha256:e5c389df6eaa32dad25ac95b86fb0dad3d1807be917cdaac6f4597988be79990:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjNWNlMDZmYjNkNTFhYjQzZmRhMzYxZWEwNzExNzk2M2MzMDc2YTAyOWM4NDYzYjA0MTAyNTQ0NTdlNjc0YjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlM2I5ZmNlOGQyZTAyNjI2ZGVhY2RlZmNmOWNjZmM2ODY0NDM5ZGY2ZWY1ZTdjMGRiNTNlMTk2NzgwMGJhZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhMmMxM2Q2YjQ2NjA1OWIzNDBiOGNiNzk5MTBhYWUyMmRjOGFjYmI2OTZhZDllOGE2MThkNzlkNWVlZDE3YmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+          "resource": "repo://splitter/include/splitter_engine.h#L22-L22",
+          "version": "repo-lines-v1:sha256:b227e1a5087eaa07b5a08289959ace1f57ffe87d0fd4f080b0786dbee8da32df:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjIyN2UxYTUwODdlYWEwN2I1YTA4Mjg5OTU5YWNlMWY1N2ZmZTg3ZDBmZDRmMDgwYjA3ODZkYmVlOGRhMzJkZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjIyN2UxYTUwODdlYWEwN2I1YTA4Mjg5OTU5YWNlMWY1N2ZmZTg3ZDBmZDRmMDgwYjA3ODZkYmVlOGRhMzJkZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjkxNzlkN2NjN2JmMTlhNWY4ZTBkNGYzMjIwNjRiNDg5ZjcyY2Q0MGExMzU3ODJiMTMzYjRmZDc1MzhmOGRkZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWExZDFhNjMzOTAyMjljNzk4MzQ3ZTgzYTA0MDU0NDFjOTQwMDAzNTI4NGFkMTY4YzFiZjZjZGYxZDcwYTM3MCJ9"
+        },
+        {
+          "resource": "repo://splitter/src/splitter_engine.cpp#L40-L41",
+          "version": "repo-lines-v1:sha256:c5e36b332bb32c16807aab625b387192da4b7d4580ac543f0e865846cbad4dd4:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWY3ZTg3OWY0ZGQ4MDZiMTA5OGMyMzg0YjQ5NWM2MTVlOWIxNmI5OWNkY2Q5NzI1NDRmMmNkY2ZiMWU4NTNkNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTk0Yjc4N2FmMDlhY2U5N2FhNGIxMGJiNDNkOGY2ZTIxYmU2MTVhYTAwNTdkOGFkZTUzMjA5MjBhZTJjODQ5MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzNiN2VmNGRhZTQ0ODJlMTg0NzNlMzhiMzYxNDBjYTk4OGI0YWY0MmEzODMzMzlhMWVjZDljZTZkYTJkM2Y3OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWUwZmY0ZTcxMmI2MTMxMWJkMThiM2MxNWRhZjM2OTc3MDJiYmVhYjY3MjUyNjhlNmYyZDNiYjc1MmUyNWUwOSJ9"
+        },
+        {
+          "resource": "repo://splitter/src/splitter_engine.cpp#L59-L65",
+          "version": "repo-lines-v1:sha256:2e1a487a684a5517fb16188319c769b8216f32e9f8b312760abb4935021136f2:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDdkNTE5ZjllMGE3MWJkYzM5YzI4YjVmNDUxZTA2ZWVjNmMxMjE1ODQwYWQyOTZiNmVmZjJkYjhjYjE5YjM0YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzZjMGEzNzJiZmYwMjA5ZWJhZTE1NzVjNjIwZWVkOWFiNmFhMmE1NWFjMDMwYjljZDlmMDkwMzMzNjFlZjYyOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWQwYmE1YWVlYzJiOTk3ZTFkNzk3YzY2MDE1MzIxZDZjMjMwZTZjNjFhNjcxZTg4OWUwOTFkYjlhN2MzOWUxMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzMzOWE5ZmYzZjQ2MmY2YmZkMTg1OTc3MWZiYmI4YjA4YTQ2MjlkMzIwMjExZjVhMGQ1ZTAxOTllY2NlMDdiYSJ9"
+        },
+        {
+          "resource": "repo://tests/test_combiner.cpp#L26-L44",
+          "version": "repo-lines-v1:sha256:a5844384bea60b2cd8ee46d6170748f695061e36af3f6565c4e92baf4823704f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlNjhmNTRkN2M3ODU3YTk5YmExNzU5ZDVmNDIyNzNlNTVkYzVjMGY4NGU4OWRhNDZkMjljMWQwMDY4ZGRiYWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNTc3Y2JjNmE4ZDY3MzE2ZmVmOWEwZDdmNTVkMzMxNzliOGY2ODg5ZDQxYWRlNzk5YmFjOGFjNzg0NjllZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg2OGMxNWE2NTdlYjY1MzkwNTA4MjY0ZGFiNTFjMWM0NmUwY2Y3NTdjODA5ZjE4ZTBiN2Y0MGYyNDRiNTE1ZDgifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue117_numeric_correctness.cpp#L182-L219",
+          "version": "repo-lines-v1:sha256:19eb4f0f97f34ff2d9a2a346c586729710c37ce78cf67ba64c9d924dcb4a3d6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjNWNlMDZmYjNkNTFhYjQzZmRhMzYxZWEwNzExNzk2M2MzMDc2YTAyOWM4NDYzYjA0MTAyNTQ0NTdlNjc0YjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhMmMxM2Q2YjQ2NjA1OWIzNDBiOGNiNzk5MTBhYWUyMmRjOGFjYmI2OTZhZDllOGE2MThkNzlkNWVlZDE3YmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
     },
@@ -178,27 +202,39 @@
     },
     {
       "id": "claim_e3e1890b0f7b43d1884f862213b0befc",
-      "statement": "SpectrumAnalyzerEngine separates per-bin noise and tone power for RBW processing, caches that work by spectrum pointer/generation/RBW/bin width, applies VBW and optional noise-only jitter per frame, and keys trace histories by Spectrum pointer; its widget exposes 1 kHz–100 MHz RBW/VBW controls in kHz while engine setters remain unclamped.",
+      "statement": "SpectrumAnalyzerEngine is not a graph engine; it separates per-bin noise and tone power for RBW processing, caches that work by spectrum pointer, generation, RBW, and bin width, applies VBW and optional noise-only jitter every frame, and keys trace histories by Spectrum pointer. Its widget exposes RBW and VBW over 1 kHz to 100 MHz in kHz, while the engine setters stay unclamped.",
       "evidence": [
         {
-          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L15-L45",
-          "version": "repo-lines-v1:sha256:64f8edf9f3d03195a1e5bc67af682d81b5ed2e9e6562cbf76adfd60f8171c899:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjNzRjY2FmNTI1MGYwYmIxMjBhNzQ0MDcxNDg3YTZjZTI0ZjBkMjAyNmJhOWMyNzExYzU4MjQyNmI0ZWIzZGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViNmNiYzJkMzM4NDJiYmZmMGIzN2YzOTZkMjJiNDZlYThhOWQ3MjU4NDcyNzM0MjY1ZGRiYzJlMzhjZTEwMDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0NWViM2I1ZTc5N2ZiYTdjMGVkZGVlMTI3NzQ4MGU2NDA3YjQ1ZTgzNTU2MjljYjhjOTc4ZjdkM2RkYjhmN2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBhNjM2ZWJkZmY5MjczYzA4ZTZlM2FjMjU5MzNmMWM1N2QyYjJiNTQzYzk2N2NkNWNhZDQ3OWQ3ZjFlNzFjNTMifQ"
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L101-L103",
+          "version": "repo-lines-v1:sha256:c89143fa8d147c8503295db831da96cf3a112cbedef85273ac8853b9f5f578a9:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjgyOGNiODVjMDE2MjEwMmU5ODZmYjI0NmJiMDMwMmMxZGE2NTU4NTkwYTAzNDMxODM5MGM5YzNmZjgzYjJkYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTUxYzlmZTA1ZWQ2MDk5MTUwYmY1YmNmMmI5NjM1ZWIyY2ViM2JiOWE5YWQ3YTlkYmZlMDE3YWI4NjVmNDY3YSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjNkY2RhOTAzMjZkZDQ4MWMxOTcxZmQzMDA3ZjcxMDc2NDk1NjA4OTIyYjkxNTQ0ODdhOGVjMzg0NDUwMDUzYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzI0ODI5Mjc3MDRkNGQ0OTRiYjk4MWVkNTQyNTI4MGIwOTY2YTM5YmEzYmI4ZDFlMGE0ZmUyOWM4NjA2YzM3NCJ9"
         },
         {
-          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L74-L105",
-          "version": "repo-lines-v1:sha256:07b24435778f32b306ccc4fb7511282b415e086466d7d5214daa557816159fa1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxOWU0MGMzODczZjhiNTA1ODAwNWNkZTY2OGY5Y2JjMzIzODQwMThlMTUwOTA3ZmMyMGY5ZTAxZGU2ZjI4Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmYjRhNWE1YjI0YzA1YzkwZDU4ZjE4NDE5NDhhZDc4MjgwOTMwZWI3YzkxYzAzZjlmOWNjMzI0ZjRhMDhjZjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIyOTVmMjNjMjMzZWVjNzkyMGRmZGEzNWVlYTMxMDFjMDRjYTZkZDA4MjJjMmQwZWIyN2IwYWM2Mzk5NjIzNzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmZTExYTcxMmI4YzczYzA5N2U4YTFmMGFjYmE5YzQyMjYxNWMzYjllZTc3ZjdhNzBiMTZhZGYxMTk3MTNlMGQifQ"
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L11-L12",
+          "version": "repo-lines-v1:sha256:69b5b3d2affe14bccc9c95a8f1640750724f90d304af5d9e03d4646d39f12c7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2Q3MTllNGFmZjhhZjZkYmRkZGQ5YzU5Mjk1ZDc1ZDcxYTM2N2M2Y2ZiYjM2NDAzYTgwZDZlMzNlODI4ZTU3MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM1ZDMwZTZmN2I1MDE0ZjY3OGExZDhlODgyNTFjNWQ4ZTVmODMwOTk1OTc3M2U5ZTdkMDMzYzZmOWY2ZjA4NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjBjODZhNjJhYzk1MjdlZjljMWYyOTAxOTY1YjM4MjU1M2FkYzc1ODZhMjk2OGMxYTk1YjMwZGE2NWNmY2I4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNiNzZmNjY4MTA4ODliM2JkZjU0ZDgwNzU1MzgzYWI2MzkzODExNTBhNjVmNDZmZGZjOTg5NDdjNDkzODBlMCJ9"
         },
         {
-          "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp#L19-L117",
-          "version": "repo-lines-v1:sha256:7c4ccb7259b78902b3397fdf3f2cfba97e553de9ca37a518da0c83247c105931:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzYjMwODk1ODM4MTBiYjc5NmI2MmQ2MGExY2QyMzMxODFiNTBkYTYxMGZiZGI1MmU0ZjM3NjRmYmU4MTdhZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1MjdkOTliNDIyYjNjYzU1ZWM5MTg3MzA2ZDc4ODY3NzNjYzMwNzg3OTVjOWU0OGNiNDNhY2I5Y2I4ODNiMDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlNjk4NDU2ZjZhMTJkMmViMmZlZDEyMTMwYzI2YTVlZjk3ZjJmMzYyYjk4M2RiOTNjZGQ5MWVjZmI4MjU3ZmQifQ"
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L21-L23",
+          "version": "repo-lines-v1:sha256:86d2718516170a06b63dec1efa0848649c6a348e594402823ca29e8caa55884b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IzMjQ2NDAzMjI2MTBjZDMxM2MwODY2NDAxYTYxYWRjZjJjODc4Yjc3MTdlNjkzZTk5OTUzNzUzYTQ1MTYxYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2JkYWFhOTI2MjZlNDA0M2UzMWJjNGVmNmYzMzY0ZTU4ZTlkMGM1MTA1OTJhYjE3NzYwMDA5Nzc3Y2FhOGE1MiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDk0YzYzYWJjMWY2NTUyMDQ3MThiYzVmNTZmYjc5ZWQxOTIyMDk1YzdlODMxMGZmY2EyNWEyZDQxOTBjYTcxMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjc0MmQ3MmU3N2FjMmVhYWMwNzQwYWRjZWQwNzQ5MzQ5NDUxZDg4ZThjYjQ0NWMyNDBmNWQxZDY1NmMwNDMwOSJ9"
         },
         {
-          "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp#L62-L80",
-          "version": "repo-lines-v1:sha256:de654157ef4ba064fda2ab0eb5f4f083ee85e643a01b62ca1ce9077061ff9b1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMjlmNjFlMWU1NWZhZTkzYWZkN2M0YjljOWVlZTNlNzU2MTc1NGJjYTY2MTZkMGEzYmEwNTY2ODUxM2RmNWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5YjAyMjAwNzkxODdkZmIyNmExY2UxOGVjYzBiMTIzMTM1MzJmN2E1MTc5ZjY5YmFjOGNhMzY5YjNlY2VmODMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3NGI3OGE4NjBkYTViZTNiNDJiNTg5N2JlN2U3Mjk4ZGIxZWQzMzdkYWViNjUwODA4NGQ2YWYxNjdkNWE2OGMifQ"
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L74-L90",
+          "version": "repo-lines-v1:sha256:621c0628e13e10ba80f5c5a98952eb479a06216cff57caf6c3873fffd80a884e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxOWU0MGMzODczZjhiNTA1ODAwNWNkZTY2OGY5Y2JjMzIzODQwMThlMTUwOTA3ZmMyMGY5ZTAxZGU2ZjI4Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzZDU4ZGMxZjEyMDc4ZTkxNjlhZTNiYzA1YjliM2U4NTAyNWMwNzNkZTI4OGEzNWJlMTY0MTZlMGFiMzhkNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIyOTVmMjNjMjMzZWVjNzkyMGRmZGEzNWVlYTMxMDFjMDRjYTZkZDA4MjJjMmQwZWIyN2IwYWM2Mzk5NjIzNzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjczOWRiZDQyZDFjZWFlMDIxMTZhZjI4ZTU1ZDMyOTEzMDc4ZmM1MjNiNGQ4YjNkYmZjOGQ4N2Q3ZGM5M2E4M2MifQ"
+        },
+        {
+          "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp#L407-L417",
+          "version": "repo-lines-v1:sha256:9ccdb90ada1e339ee973ead194e70401ed4fe62ee8d5802885d61287da3f48b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4NjNmN2ZiZTE2NjY2MTUwYmZiMDVhZmY0MTkxNzgyOTUzYmZhNDYzZDkzNmUwMjBkNTVhZDhhMjY3ZWI0MjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2ZjkzZmY4YzE4ZDgyMmIxYTc3YTZkZDI4Mjk4NjdjNjNhMDVmODRkNjEyMzc5OTU3NzVhZTI2YmI2MWNhYWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwOGFjMDgzZGQzMTJlMmJiM2M4Yzk5NWFmMjc1ODZmOTYyN2QwNjI0ODFjNmI0MjIxOGVhOWRhN2U1ZjFkYWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzNzM5ZmIwMGU3NjUwYTcxNjY2OGVkOWJhNWM5OTE1NmViNzMwZTYxZTc5YTE4MGQ0YmNiZThhZDUyOTAzNGEifQ"
+        },
+        {
+          "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp#L63-L72",
+          "version": "repo-lines-v1:sha256:39f68914b2a7f876ccd6bc2b3c72c354eda01c4f8638668dbfc5195ea9482205:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0M2FiM2UwMjllMzFlMmVlODIwZTViMjk2Yjg1YzBiZDBiZDhmZjFiZGZiZmMwMTNhNDg5M2FjZTdkMzBlMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkMTU0ZTFkYTI5NTFlYTE5N2QwZTljMTNmZTVhZjk1M2JiYmJjYTA4YjU2YzFjYzMyNDY5NTNmNzk3ZDAzNmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwZTcxNDY0M2VjMmU0NTNkOWUzZWFkZmQwYzI0MWE4MTZiZGE5MDJlMWU3MzljNTNmNWY1YzBkMTc2MTBmYzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3YzAxMTAwMDgyZDhhYzZjMWYyNjU4YTZmMWNkNjdkN2UwMGMxNDIwNDgzYWIxNzdlOWFkZGEyZDJhYzVhNDkifQ"
+        },
+        {
+          "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp#L93-L115",
+          "version": "repo-lines-v1:sha256:cc7b6438ca99c216f643a59f4121ed80c4ebbc0cb4e7d58b289457ad4dffe28d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNzk1NjAxY2FlYTgwZDMzNDMyMjI5ZTM1M2IxZDkyNzVjZGZmZGNlZTQ4YjVkMmRiZGQzNmQ5YzAzMWI3ZmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZDI4ZmY5Y2U3OTY1Zjk1ZjIwN2FlMzU3M2U0NmI2NDMyN2IwYWE3NTE3MWYzZTg1OTc0MGMyYzI0OGVjNTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhM2RlM2VjMjk1OGZkYWQ1YjJhZTE0MjlkNzg5NzM5NDZlMTU0YjRhNTA5NGY3YWJhYjZkYTkxZTIxNGQyOTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlNzY3YzljZWI0YzAxYjNjMGNlOGEwZTQwYzI1MWQ3OTY0ZGNmZWY1MTU2MTM1ZjJjNWVkYWE5YzAwMmEwNjYifQ"
         },
         {
           "resource": "repo://spectrum_analyzer/src/spectrum_analyzer_widget.cpp#L172-L186",
-          "version": "repo-lines-v1:sha256:c4300b6d46f8662c847c0403f2bc1123ded6157846ef77c5c630502d5b34d132:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMTllNDQ5ZmI1MmQ1NTE3NGMxNWQ0ZWFhMDIwZTcwYTFjM2VmMDM3YWZlZTllNTk1MDFkMjI2NTI2M2ZkZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxOWY1NWRkYjFkZGM5NGQwMzgxNWNiODQ0M2E3MDU2OTA0NjlkYTY0MTk2NzFmYjk2OTc5Nzg0ZDgwOTdkMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwNjNlOTM2NmRiOThlMDliNTE4NzlmYjg1MGM3NDZlMWQyN2FkMjhmNTQzZjM4YjRhMzkxNGYwNTA3NzY2YzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEzMGQzNWNhOGE5NWUxODZhYmQyMjQ0YzdlZDYyOGE4ZTQ0ZmNkYWQ0NWViYjIzZWJmMzdkMTBjYzY1NDUwNmUifQ"
+          "version": "repo-lines-v1:sha256:d70e756a8ccf5559a78b879ec0df2d1a08f42a2200b96a0b16bf4a72136e4a7a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlMTllNDQ5ZmI1MmQ1NTE3NGMxNWQ0ZWFhMDIwZTcwYTFjM2VmMDM3YWZlZTllNTk1MDFkMjI2NTI2M2ZkZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUxODI5YWFmOTBjYzRhOGRiMDA3ZWQzYjJmZjkzMTU1MjcyZTMxMTQxYTJmM2E2MGJiOGJjMWE2NzhhODI1MGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwNjNlOTM2NmRiOThlMDliNTE4NzlmYjg1MGM3NDZlMWQyN2FkMjhmNTQzZjM4YjRhMzkxNGYwNTA3NzY2YzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1N2I2ZWZjMmZlYTU4ZmViMTg5ZmUwNTkyYjg1MzYyNzFmYzkxNWMzMjExMTg0NGNhOGRiODMxNzUwYjQ1NTkifQ"
         },
         {
           "resource": "repo://tests/test_spectrum_jitter.cpp#L54-L95",
@@ -208,27 +244,19 @@
     },
     {
       "id": "claim_fa32d0b2779c4e56884cf95b692e89db",
-      "statement": "Network Analyzer is a non-component instrument that measures a unique path between real output pins on private scratch clones using a synthetic tone comb, preserving exact ports; it supports a singly-fed 2:1 switch but rejects combiner, dual-fed switch, and ambiguous paths, reports unavailable results as NaN, and caches from serialized chain plus sweep/endpoints.",
+      "statement": "The Network Analyzer is a non-component instrument that measures the forward chain between its two output pins on private scratch clones driven by a synthetic tone comb, preserving exact ports; it reports unavailable results as NaN and skips recomputation when the path signature and sweep settings are unchanged.",
       "evidence": [
         {
-          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L11-L25",
-          "version": "repo-lines-v1:sha256:24c076dbd2bb1e8d64d3dcaa4f2fbc858cc3d3004b5dae42c6209771d363f47f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkZjJlMzJhYzdmMTU4NGU2YzdiNzg5MTc0MWVjZTFhMzg0ZjAxNTI0ZDVjZjI5NTc2NDcxZDQ4ZmU5OGQ2ODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkOGZhM2FlMWUwNTM5OGFlN2JmNjcxMDU1NjdjNGU2YTA0NTkxZmIxYzBjZWYwNGNlNjFlYTRlZDljZGQ2ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZWJlYThiOGJiOGMxOGZlZjVjNWIyMDVhZGVmZmYxOTY3ZmQzZDJlYWNjYWZiOWIxYzFkMDQ0NWE4M2U0MWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlNTFiZTBkYWEwN2M2MTM1MDIyNzVlODQ0OWNjZDk4MDc5ZDViYmI4NWUwM2FiMjlhZTMzZDg4NWEyODcyYjcifQ"
+          "resource": "repo://network_analyzer/include/network_analyzer_engine.h#L11-L23",
+          "version": "repo-lines-v1:sha256:804ada9e3ec24cddd770da3bf75cd5b69cfc5d4c9d55af9007b7174d7d76b9b8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkZjJlMzJhYzdmMTU4NGU2YzdiNzg5MTc0MWVjZTFhMzg0ZjAxNTI0ZDVjZjI5NTc2NDcxZDQ4ZmU5OGQ2ODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4M2UwYzhjOThhNmU4YzczZDIzMTk2NTI3OTIwNTQwYzRhNzYyNzg3OGE4M2Y0NDdmYjc0Yjg4Y2I3ZGM2MjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZWJlYThiOGJiOGMxOGZlZjVjNWIyMDVhZGVmZmYxOTY3ZmQzZDJlYWNjYWZiOWIxYzFkMDQ0NWE4M2U0MWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkYTNhYmUwYzY3YTI3OTcwMGQ4ODhlMDZmZDBiNGZjZDQ4MTEwYWI3ZWVjZWQyOWMzNjY3ZWVlYTY1NmYwZDEifQ"
         },
         {
-          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L153-L223",
-          "version": "repo-lines-v1:sha256:7d01d66875e823d1a986a0a89536aa0ead1a41890cb83dbeba18ccf3f71722e2:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhY2M4YmM0NWFkMTQxZDE4MmUzOWJhOWNkNmNkZTI4Y2E1ZjExNmFjODE5M2EyN2MzMzVmMWVmMGQ0MjQwYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxZmM5YjIwNDYxMWZkNTI2MjIwNDZmNjFkZjBjZjNjNGMwYmYzYjViOWFmZGNiOGFhYzIwNzk3Y2ViZmEyMjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp#L77-L92",
+          "version": "repo-lines-v1:sha256:cf125c14c29d8fc76adca9e955e2675bef672e2689c3ec300b193b8bb9779b07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMjBkMDgwNDc4YmEyNDAxMGM2YzNkOGMwZWZmNTA3NTc2MTBhNWQ4YWFkZjE5OGVmZjhjNTM2NDg0M2ZiYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkMmJiYzdjNmUwYTE1ZGU0NDk2MGYzOGU4ZGY1MmVhNzI4MzZlNWIzY2YyNDFlMjNjZWEwYTcwYjRjYTc1NzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5ODE0ZTM4MzBkNmZhNTVlZTBkYWY2NzJiMmY0MWIyZWI0NmVhNmI3NWZjOWFlOGI4OWVhNGI2ZGVjNDAxYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxOGRiZWQwNjk5ZTRhNjhmMTZkY2NmMmIwYmQ4YjAwNmU5NGQ0ZjRjNjgxOGY4NDU3YWQ3NjU5NDAyY2Y2MTgifQ"
         },
         {
-          "resource": "repo://network_analyzer/src/measurement_chain_runner.cpp#L31-L149",
-          "version": "repo-lines-v1:sha256:7e4cb4274b00a492032bb6e81dd735992c9b0a937d2f278f9ac684d034ac55ad:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlZmRhYmM4NzVkZTA2NmQzMTA0MmIxMTM2OTFjNTE1NzU4OTQwN2NlZTIwNTI5ZjFjNTA1ODVjZjljOTcwZDcyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiYTdjOTM5OTZlNjE1MmMxOTEzYTFhMDQ1NTYzYTU1OTgyYWZiM2IxMDgyYTg3OTczNzhhZjA5YWRjNmJhYzNiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyMWZjOWIyMDQ2MTFmZDUyNjIyMDQ2ZjYxZGYwY2YzYzRjMGJmM2I1YjlhZmRjYjhhYWMyMDc5N2NlYmZhMjI5In0"
-        },
-        {
-          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp#L75-L100",
-          "version": "repo-lines-v1:sha256:32f8f12a54da613b792b715d3e5e668566db87b492dbf1b5a80839030c7039a0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4OGIzMDNkN2ZmNzM3YmRlNGU5OTkyZTZiOTExZTg2YWVlYTEyZjEyN2Y1MjhkMzBmN2M4MDRkYzIzZjc1MTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4ODM4MzgyYzM2MTAwYzAwYjI4NjY2MGJmZGVkMDg4Njc0YTE5ZGYyYmYwNzM3NGQ2MTliZWE2ZDUzM2I0YjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzMDEyY2Y5NTVlY2E0YzUxYjQ0MzY1NzQ1N2MyYjVhYmZjZGUyNzNiNjQ2NzQzNzhkOTNjMTljZDY5OGQyNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiOWUyYzNkMTkwMTQ1NjgzMGI2ODk4MTcxOWVhOTU5NWJmOTdiMmU1ZjBmNDlmOGY3ZWY2ZTY4NGE0M2ZlNmQifQ"
-        },
-        {
-          "resource": "repo://tests/test_network_analyzer.cpp#L205-L264",
-          "version": "repo-lines-v1:sha256:745a13ee3786b98fd50cc00d6fe46e6ff64df608d6cba0217203d1bd5abf6adf:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkZTBkMThiYzQyMGMyYmJhYjczNDFjYWI1NDQyZWNkNzQ0Y2IyNWRjMDNkNzdiYzlhZjIzYjA2YzFlYWM3MGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZhM2RlMTZiMjM5MDIwMjA4YTExODUzOTE2ZmZmMWFiMWFjMDRmYzFiMmM0N2MxODM5MWJkYTcxNjU3ZjY2OTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4MWIyZWExOWFjZjNmYzIwODc1YzMyNTk3NTlhZDcxYWM0ZjE1ZmM3MGIxNWM1ODBhMzllZjUzY2FmNDlhMWQifQ"
+          "resource": "repo://tests/test_network_analyzer.cpp#L340-L373",
+          "version": "repo-lines-v1:sha256:be3dff896c75a95b6e07ce8d1392dcb8522cb317144f9cc1ccaa45f6ff871122:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYjZkOTE2NDA4YjY0ZDMxNTE5M2IwYzI1YWEzMjhmMzMzOWM1MTM3NWM0ZTAyZjBlZDViYTExYmNhNmI4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzMjBmYzY0NGI0YTNlZDhjMDRlYmY2YzRhNDhlZmU2NjllNjQwMTRiNjA2NGRiNGVlMDYwZWUyNTgzMzViYmYifQ"
         }
       ]
     },
@@ -256,23 +284,39 @@
     },
     {
       "id": "claim_5e081a011d764981a8e4e44901cc1d03",
-      "statement": "Component-library definitions are validated at the load boundary against registry-required fields, numeric ranges, and enum values, and canonical keys include attenuation_dB, conversion_gain_dB, and named RF-switch active_throw values.",
+      "statement": "Component-library definitions are validated at the load boundary: ComponentLibrary::validate checks registry fields and enum values, and definitions with type, range, or enum issues are rejected before they reach the insertion UI or the engine factory. Canonical keys include attenuation_dB, conversion_gain_dB, and the RF-switch active_throw values T1 and T2.",
       "evidence": [
         {
-          "resource": "repo://app/src/component_type_registry.cpp#L127-L152",
-          "version": "repo-lines-v1:sha256:5e59eaa6a089022ab28c91d42ae715d8dd021831a6d47dd3e23a3141deafe363:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1MDExMzEyOWM2MjhlNzE3MWQ2OTUzNWViYWRjNzVjYmUzOTJiYTJlZWJhMDFmMzdmZWI0NzI2OGNhZWQ3NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3ZTM2NzZkM2M5ZTUxYzI1NTYyNGYxYTUyY2I0ZmFmMWE5MjJjY2E3YWM5ZWVhYWM1ZjY4NzQ1ZTVmMTVjMDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1NmI5NDhkY2IxYWI4MTA1MzU2ZTdiMTNkYWJmMGY2OTdjZDBlZGY4NzVkMDBmZTQ4YjQ4OGM0NmM4ZmE1MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmNGJjNzk2ZGRmODkxZjYxNTc0MTc5ZWFlNTQyMTE3NGRkNDQ3YmU2ZDAwM2IyNTgxMjJkZmMxMzJlYjM2MTAifQ"
+          "resource": "repo://app/src/component_library.cpp#L164-L166",
+          "version": "repo-lines-v1:sha256:6d91732044fe80fe1c178b8b8fc8f92cbed193563da2fbc72005636ab454c450:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2Y5ZGZiYzg3MmI2MmJkYTUxYjAyNzQ1Y2YwM2Y4NWRmZmI4YTU3MTU3YjE2YTVjOWMyNDgzOWYyNTU5ZjYxYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODcyMWMzODIwNmUzNmVhNTc4OWVhODlkYjEyZDZiNjI2YzI5NzZmZjgyZGRlMDk1ZGMxOGJjZTEwOGE3NGU1NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDUzYjU0NzA5NWNlYjBmYzE2YjkxYjM4ZDAyMjc5YjY4ZGFiMWE5MzAzYWI4MWI2ZTZkNWUxYzUzMDYyNGMxMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzIyZDYxMjE4ZjM1MjIzNmVmOTY0NGE3Njg2MmViNjE0NDM5OTc3OGVjZTIwYjFmZDFmODRiZjAyMmY1MTVlNSJ9"
         },
         {
-          "resource": "repo://app/src/component_type_registry.cpp#L69-L84",
-          "version": "repo-lines-v1:sha256:1d401292051d9d23b36363190e78248ef32c513fa395e86341e14ad167220294:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyZWFiNjlmMGMzYWQ1YjQyODI2ODkzMWNkZGFjODVhMWE0ZTE2Mjg1MDQzN2YzOGQ3YWNlOGJmZjRkNWZkNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNzQ5YzdmOWFiZWQ2YThkYjdmZTgzZjc1ODkwMTZkMjE3NmZiZDdlODEzNDZmYWMwMWU1YTJmMDBiYTAzZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIxNmQ0ZDNkMGJmNDUyYWJlNTFiMjU1MWVkN2M3M2NmNjdmMjkyMDBhZDQ2MzYxMmEwMjk0Y2EyZjIxNmIwZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY0YzQ3ZDg4OTE5MWVkMDE1NmJiNzliNzlmZDliOTY1NDVhNTU0MWE3OTZmNGRmNDBlOTMyNGZlMmU3OTBmY2QifQ"
+          "resource": "repo://app/src/component_library.cpp#L209-L213",
+          "version": "repo-lines-v1:sha256:a0c52ec41a9b2a30af6df3581adeb3fcfcf17f302866692fe1c728fc62e86026:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDczNWRlYzNjOGU3OWVmZDc1N2Y2MDdiODE5YzUyMDc3MGY1YTIzNDM1ZDk5NzNhMTc2MDJkNzVlNzBkNDZhZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2EzM2Q1MDk3NzRjY2NiMGUxNzA0ZTc1MzI1YTdmYTIyNmZlNzUxNDRmZjYxNTJmODZmNTZiM2JiZTU2MmM0NSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjMyMzQ2YjJmODVhYjg5NjQ0NjkxZGEyODQ0NWU3MTg5Zjg4YjNkMDM2YmVhNTFlNjAzMTZmMjg1ZTJhYzMyZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDEwNmZlMmRjZjgyYjA5NGZhNDQzNTU5MzNmYzljNWQyNDZmNTUwNTgyNzUzMmQ4ZjBmNTk4MmNhODM0MTA2MSJ9"
+        },
+        {
+          "resource": "repo://app/src/component_library.cpp#L333-L341",
+          "version": "repo-lines-v1:sha256:b36dff0338e0ff54f0a61fc61f81590fbad429742ad39b2fbc858d972ffe7bb8:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWFkY2IwYjMwOTNlY2Y4MDA0YTRlMzQ1NTZlNmU0OTVlZmFkOGRhMjYyOWU0YTQ1ODA2MzQ0MjU0MTgzNjhhZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM0NWY4N2IxNmVjMDFkYmJlNGVjODkwNjM2MWQ5YzBhOTMwNDg1MDEzOTA1ODI3ZmJmNTlhYzg3ODZjYWQ4NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGE5Zjg2ZDI4ZTc4NGY5ZmQzMWZiNzJkMTVmNjBjYmNlYWFmZGQ2NjljYmQ1YjZkYTc4ODhhMDIzMzIxZWJiOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTE3ZGJlZWRjYjc1NTZkNzMzZWU4ZjYzNzk2YTdlYzUwMWUyMjJiM2VmOWRlNzViNzAwY2U5ZTkxYThkMmJiNyJ9"
+        },
+        {
+          "resource": "repo://app/src/component_library.cpp#L437-L442",
+          "version": "repo-lines-v1:sha256:a8838ef55b4a0b2e00c11036ff994b1b88e24c54f8e614de0a8c3b8a63e68888:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjczMTg5NDU1OGJlN2U3NWY0NzM3NGY1ZDA2NTY0NTdmZmViNDQ3YzczOTFmNmE4NjdlYjJiNGJkYmNlMzI3NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODU0YTk3MjYzZGI4MGEzMmY3ODMxZmI5MDcxYzhlNzEzNjMwZjRjYTdlOTY4MTBjNjZjYjA5NzNiZTQ0ODUyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzRkYjZiODk4NjhjZTE1OTMxZDg2YmMyYjcxM2U2OWM5YWMxMzdkODAxM2IzMmVmM2VkZTBkMzhmYzAyOWIyZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDMzMGVjZGI2MDYzNjEyMDkzZDkyM2NiMjI2ZGU5NDM5Nzg4NzJmNTRmOTdhOWRlMmU4MzZlMTU2MDdjYzFkNSJ9"
+        },
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L160-L160",
+          "version": "repo-lines-v1:sha256:84235c0a3561c26a5afe272ae0fb80ebd203f7c9b8d3b0f0e8c7c87df5733279:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQyMzVjMGEzNTYxYzI2YTVhZmUyNzJhZTBmYjgwZWJkMjAzZjdjOWI4ZDNiMGYwZThjN2M4N2RmNTczMzI3OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODQyMzVjMGEzNTYxYzI2YTVhZmUyNzJhZTBmYjgwZWJkMjAzZjdjOWI4ZDNiMGYwZThjN2M4N2RmNTczMzI3OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTIwY2NmZmRkZGI4MGMzYjk2NzRlODNiYzRhMWM1NWVhZWMzYmZiMWZkOTk1MjU2OGU2MDY5ZGI4Mjc1ZjNmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmJlZTIxMDQ2YTM5YTVkYzk5ZDdiZDNjYzgzOWE3OGZjMWEyN2YyMTA1ZTVkMjgzYTEwZmUyNGU0Mjg1OTcxNSJ9"
+        },
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L242-L242",
+          "version": "repo-lines-v1:sha256:de9e3d006a64f26cb642a06841a3ed3335bf5715bd4c81a3cac2b4c212aa6501:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGU5ZTNkMDA2YTY0ZjI2Y2I2NDJhMDY4NDFhM2VkMzMzNWJmNTcxNWJkNGM4MWEzY2FjMmI0YzIxMmFhNjUwMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGU5ZTNkMDA2YTY0ZjI2Y2I2NDJhMDY4NDFhM2VkMzMzNWJmNTcxNWJkNGM4MWEzY2FjMmI0YzIxMmFhNjUwMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWZjOWYyNzRkNjA1ZDNmOGJjNzdmMmY2NjBiNzVlMzZlMjg5MTNlZjg0ZDc1MGY4N2MwMzUwYzM1YTFjMmQ5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTMzNDg5ZTcwYTk1ZjIwMWFkMTUzNmZkM2NlZGRjOTIwNzcxYjYxNTU4MmRiMmZjZjczNDM3YjgwMDllMjdmMCJ9"
+        },
+        {
+          "resource": "repo://app/src/component_type_registry.cpp#L355-L355",
+          "version": "repo-lines-v1:sha256:ea4841e5d9d04269f1e3a6d6bdc9ffae14a0d5524b61c004264d2d115071c7a7:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWE0ODQxZTVkOWQwNDI2OWYxZTNhNmQ2YmRjOWZmYWUxNGEwZDU1MjRiNjFjMDA0MjY0ZDJkMTE1MDcxYzdhNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWE0ODQxZTVkOWQwNDI2OWYxZTNhNmQ2YmRjOWZmYWUxNGEwZDU1MjRiNjFjMDA0MjY0ZDJkMTE1MDcxYzdhNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDkzOGU3MmI3YjY5ZWE3NTgzMTViZmMzOGQ0ODllMGM4ZTViZDZlMDIwOGM1ZTI5YjdkMTViOTNlNzFlMmNhNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTQxN2YzZDZlNjFhOWRmMTQyYzgwMjA5MDYwZWYxODQzZjM4ODllNjUxMjk2MzU0YTA0ZGRmMzc1YmU4MDkzNiJ9"
         },
         {
           "resource": "repo://tests/test_component_authoring.cpp#L190-L221",
-          "version": "repo-lines-v1:sha256:9de9ccbbee4244df625bd9eda221b48c4eb8d318ef2af37fecdd5c8236a53939:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5OWU5YWU3N2ZjMDgxZTQxYzRmMmZkZGU5ZjI3NTcxMjBlMDRhNTQ4NTQ4NDdiOWY5ZGFlYTBiYmE4ZGI3YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlM2I5ZmNlOGQyZTAyNjI2ZGVhY2RlZmNmOWNjZmM2ODY0NDM5ZGY2ZWY1ZTdjMGRiNTNlMTk2NzgwMGJhZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY3MzY5NjJmYmYzN2E4Njk4MjA2NzcyNDI4Mzc3NzMyZGEzYmVjYWRmNTFhMWNhMTM1MGNlZGY3YTg0YzkyMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiMzkyMjk3ODMxODc3NTNkNGU0ODEzNmE3NWMwMTgxMGZmZTVlYjlmOTQ5MWM0ZGM1NThiZjJlNWYwNzNjNjYifQ"
-        },
-        {
-          "resource": "repo://tests/test_component_authoring.cpp#L99-L175",
-          "version": "repo-lines-v1:sha256:d9b4364aec806633ce1a0c6e2cc2b735173f6de44f6f648a18d9f72afc92333f:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzYWE3MmY5ZGY1OWU5ZTVjYzgyYmZmNjM0NjJmN2QzMTc0ODE0Njc1ZTFiZTYwMTU5NGVhMmRmODc0ZTdhZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4MWQ2NGIzMDFiNDY5ODIzOTY0ODMyN2ZhYjFhMTQzZDE5OTM0OWIzMTU1NDMyMTZkNTQwYzAwZjY0MjAyNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZkZjBhNTUzZjM3OWFiNmI0Y2QyYTZkNDc2ZTY0ZWQzYzIzMzM0ZGExZjNmMTk0NmFmOWVjNmJlMjE0ZTgyOGYifQ"
+          "version": "repo-lines-v1:sha256:be60033b79b4dcbfef1eae8b45b1e4d6364ec5ffac931a94aa1be23470197ec6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4OWFhYjA4NzhiNTk1NmRhMTQ0Mjg0MmEyZDcxNzZiYzkwNDE5YzA4NDNjYWVjN2E3NmMzMTI2OGVmMzExMzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2OTNiNzVhYjYwYWNhYzRkNDgwYjQ3ZDBlNjQ4MzUzNjIyZjdiMzcyYTQ3MDc4ODM5Y2JhNGVjNzc3ZWJiMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlMDkwY2E0Mzc5MTNkOTYxMzA2MDA4NjI3MTZiOThmMjJhMDIyMDQxNDk5NzRlNWZiODMzMDkwNDg1ZjhjMmEifQ"
         }
       ]
     },
@@ -285,7 +329,7 @@
           "version": "repo-lines-v1:sha256:7eb7cbded9f1cb5ac3e26558ab7b6664ef120049140711aff0f516b659a220d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjZGE3NWI2YjlhNTUzODkxNjQyNDAyZDBhYzJhNzhlNzAyMzFmMjc5YjcwYjYwOGE4NzRjMWZlMzRiZGJiOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExYmQwODA0NDhlMzU4NGE5ODM2OWQ2YzE5M2JlYjUxM2VkNThkMWM4MTZkYmE4OWNkZmViMmQ5NmFjYmRmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ZmRhZGUwNzQ4NTFlMWFkZmQ5ZmVlMDQxYzViMDFiMmEzOTJiMTJlZmJiNDk5NWI1MDU2ZDU4NzJlMGExODAifQ"
         },
         {
-          "resource": "repo://app/src/project_serializer.cpp#L963-L976",
+          "resource": "repo://app/src/project_serializer.cpp#L978-L991",
           "version": "repo-lines-v1:sha256:ba6ad0ee8cae3b2ae1f0d60de8c7d718b7352e9632248de27f796569cea70c7e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmOTZmNjA2ZGRlOTQxNzZhNTExNmNkOTcwMzBlMTVkZTE1YzI3NTRjNmU1MGYxODNlNjIyNzMwYWQ0YjhlNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiZThlNWMwMzE4YjY1Y2FhY2UyZTVlNTk1OTkxYTU3ZTM2MjY2NDJmM2E5MTdiMjEzYmJhOTE4NGRjOTY5NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNWM5NzdkOGZjZDEwZDU3ZDU3OTlhZWZhMmZhOTNhNjMxYWIwMjI2ZWNjNjg3ODlhMmI5YTg5YmQ3YmU3NjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0MTY1ZGU2ODQ0ZWI0YzYxNjgxYWM0NWJjYjc3OTJhZDU4OTU5Mjk0YzgwODdlYzQ0ZDI5ZGQzNWRjMjEwYTcifQ"
         },
         {
@@ -307,7 +351,7 @@
       "statement": "PFB channel noise and ENBW are integrated on the current input grid using the squared channel response and input-bin width, and the inspector presents the active-channel noise in dBm with effective ENBW.",
       "evidence": [
         {
-          "resource": "repo://app/src/inspector_panel.cpp#L879-L896",
+          "resource": "repo://app/src/inspector_panel.cpp#L883-L900",
           "version": "repo-lines-v1:sha256:f481016ce8cf3907d67b34ce861518c74fea3266c94ab6f9b2975fd1034d74d6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhY2ZjZGExMmU3ZjVlNmRmNTQwOTEzMDk3MzBlMmI0Y2ViNjVmMjQyZTdmMWVmZDZjMDNhZWZiYmUwZmM3MDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhZDllZDNiMWY5NDAzNDU3MjVkNWQzNjRkYzNjMWFkMjhiOGI1ZGMzOTBmZjU2MDdlYjdmY2VhYTAxNzM4OGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRhNzNlMDI0OWM4OWFjN2MwM2I5NWE2NmNmOTZiYzI0MmFiNzFhZmVhM2VjYzdjMzY5MmQ2YTJlODk1YWU0MmUifQ"
         },
         {
@@ -326,25 +370,59 @@
     },
     {
       "id": "claim_29e7fea8f7874709946e6eb36a9798a3",
-      "statement": "PFB node-hover SNR compares the strongest active-channel tone against integrated channel noise independently of analyzer RBW, while ordinary component hover SNR uses the Spectrum Analyzer's RBW-based measurement.",
+      "statement": "PFB node-hover SNR compares the strongest active-channel tone against integrated channel noise independently of analyzer RBW, while ordinary component hover SNR uses the Spectrum Analyzer's RBW-based strongest-tone measurement.",
       "evidence": [
         {
-          "resource": "repo://app/src/app.cpp#L109-L124",
-          "version": "repo-lines-v1:sha256:6dbb41b675e419a6a56eadbd42739cf42f9e6ba1e9a5b35b89c24a03a7c91294:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjYTdjZTE5ZDgzYmM0Yjk4MjExYmZhNzhkMGVhNDE1M2E5MzYxNjQzMGE3Zjg1ODg5MGUwOTg3ZTZmNTA5ZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4MjVkNDFkMmFkZDgzYjk2NGQ2OWM1ZDQ3MzJjMzc1YTU1N2JiZjgxNWI5NzRlZTA0MGY5YjA0MGVhZmVjMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJkNjEzMjRmZGE1NmFkNDRkNjI3ZDc1ZmIxODdhYjQ0NWY5MzgzODNmY2FkYjRlNjcwZmEyMWIxMzA2ODY2YjAifQ"
+          "resource": "repo://app/src/app.cpp#L115-L119",
+          "version": "repo-lines-v1:sha256:505fd9f9aaa3820356a0830994f199e14774db75c2dca07181e80fa7a672028f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2NhN2NlMTlkODNiYzRiOTgyMTFiZmE3OGQwZWE0MTUzYTkzNjE2NDMwYTdmODU4ODkwZTA5ODdlNmY1MDlkZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTcxMWRlNmEzOTc1NjYzOGVlNTRlOTc4MzY3M2ZhY2Q1YTQ1MTc1Njc3NmMwMzBmNTU5ZDc0YjUyMjBiYmIwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDgyNWQ0MWQyYWRkODNiOTY0ZDY5YzVkNDczMmMzNzVhNTU3YmJmODE1Yjk3NGVlMDQwZjliMDQwZWFmZWMzNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTM3MjM2NDMyYTA5NTMwMzdlMjkwYmQ3OWEzMjZmYTRiYWJjN2M1MTk1ZTdiNzAxYzIxNGEwMDg5YzBjZjcwNCJ9"
+        },
+        {
+          "resource": "repo://app/src/output_snr.cpp#L18-L19",
+          "version": "repo-lines-v1:sha256:c46bb83c3f9496d1ea9d56be43ad5de756b1e40310d2d8b40914789fb038e734:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTIzMmIwYmUxYzg5ODliZWZjMjM3OTE2NzY5NmY2M2ZiNzZhMDE4NzNhNGE4YmExNzQ3OGMwZmRmMTMwZWM4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDNjZjY3M2IxNmI0ZmMwYjY1NmY3YTBmYmY1MzhmZDM5ZTk2YmU0YzYyN2UyMGUzMzdkNjFhM2MwODc3MTQ4ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjI0MjRjODkwYjVhZmUyZjVkYzJmMWY4Nzg4OWVhYmYwOTg5MTVhM2UzYzk1ZDcxZjM4MGU4YzRlMWE2MWRkMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTU1MmM5Y2ZiNjYwM2Y3OTJiOWMzNTliM2FiOWIwOGE5MWIyOWM1OTM4NDY1NDg4MDllZTM4MTYyYWU0OTAyMSJ9"
+        },
+        {
+          "resource": "repo://app/src/output_snr.cpp#L34-L35",
+          "version": "repo-lines-v1:sha256:778f79820fc093e71a6c75fdf217f8b252d47cb1b9d790848fca8ee107fffa5a:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzg2YjMyNmRhMTIwN2UyMWY4NWNjOGIyZjNmOTJmNGE2YmZjNTIyNzhhNzFjMjIzODI5NTFkYWU5MWUyYmZiYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTAzNjQzOGJjMzViNTg1Njc0YmNlYTYyMmQwMTk1Y2FmNGFmYzQ4ODkyNzhiMWE1ZTIwZjZmMDgyMTEwNDdiNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTdmNTUwOTYzODllMDQxYTQ3MTc4OTkzNTc2ZTdmMGYzZTI4MzBhYjQ2YTI0YWNkMWIzMWExODk4OGQ2NjU4YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjIsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzhmODgyY2VhMGQyNTU0M2NmYzdjNzQ3ZjZmOTg4NWI0ZThiZjYxN2M3MTU1YjUxYjlkOTE1YzRiZGQyZmQ3OSJ9"
         },
         {
           "resource": "repo://pfb_channelizer/src/pfb_channelizer_engine.cpp#L362-L381",
           "version": "repo-lines-v1:sha256:4bf79a4f5fffa4262ab31c396c9756e9980382a20ec601080045405e2551b83d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4OGRhNDNiZmVjYWRlMDc5N2IzMmQzOTU5YTk5M2UyNzQwMzA5OTMwMTEzODUxYjJlYWJkNjkxMWEyZTkyYzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5OTM1NmJmZDMxZTViNDY3ZDUxYzA2MGE5MGQ0MDNkYWQ4NTJjODAyMTZkYTkyY2FjYzExYjk4M2NiY2RjNmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQwNDM2NDkwZjZjYmRjNjBlMDVmOTAzNjUyM2IxNzhiZTMyNjJkZWI2Nzg3OGNmNTZhOWM2Y2M5ZmY4NmE0MDcifQ"
         },
         {
+          "resource": "repo://spectrum_analyzer/include/spectrum_analyzer_engine.h#L52-L63",
+          "version": "repo-lines-v1:sha256:702c74b2d04ba329d3eb4eaf60f0c374bc89b00d459a10c3fa8df4771be0307d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyMzY4YmE3YjNlYzRkNTliN2ViYWNhNGNlOGVlYzUwNzc2MWIyOTEyNGJlNTAyMmU3ZjgyMTZjNmM0MDE2NGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5NmNlM2U2NWZmMzcyMDc0MmI3NzUzYWY3MTc3ZTBkY2M5MTMzMDUzMzQ5Y2I1ZDQ0N2Q5MDAyODQ2ZTQyZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMzNWFjNzg5ZTA4Njk1YTIxZGM3ZmUzMzQyNGUyODFiOTEyMTVlMTJhOTczNzFhZjI2ODAyZTZiMzRlNTM4NjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmODk3OWFmZmU0MTZlMmZlYmEzMjE0MGZlYTcxMjFmMmNiZTBjOGExNDhlYjQwMjA5MGZhZDE3YzI0YTllNDIifQ"
+        },
+        {
           "resource": "repo://tests/test_node_hover_snr.cpp#L102-L145",
-          "version": "repo-lines-v1:sha256:89ddcc4a8d7a0a5bdf125cce5b6e94cf26d4fb10ee369307a286b3fdec433cfb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwZGQyZjRmNmRhN2ZmMzBkNzE1ZjFjNDgzODdkNmEzYjE4NzBkMWYzMWM4NTNlZjhmY2YyZWU5MTlhNTIwN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0YTZiMzA2OTg0NmU5MmNkMDk2ZDczMGY3NDZiOTBhZDI1ZDIyYmUzNTIwZDQ2NDNjNDg4Y2I2ZWM3ZGQ0OWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+          "version": "repo-lines-v1:sha256:79c9152621c5152de0f50bbbda7a586b8a5c0c2799dd3d71aa4ee696e4b57ced:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwZGQyZjRmNmRhN2ZmMzBkNzE1ZjFjNDgzODdkNmEzYjE4NzBkMWYzMWM4NTNlZjhmY2YyZWU5MTlhNTIwN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5MWJkZjU4NmI0MzljZmRjMWVmODA3M2M2NGZmMzFiZmU3ODk5NGYwODg0ZWJkOTk3ZDRjYTlkY2VkMjE1MzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0YTZiMzA2OTg0NmU5MmNkMDk2ZDczMGY3NDZiOTBhZDI1ZDIyYmUzNTIwZDQ2NDNjNDg4Y2I2ZWM3ZGQ0OWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0YTZiMzA2OTg0NmU5MmNkMDk2ZDczMGY3NDZiOTBhZDI1ZDIyYmUzNTIwZDQ2NDNjNDg4Y2I2ZWM3ZGQ0OWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cde386d60f0b46ebae658675703051c4",
+      "statement": "utils::inputDouble and utils::inputFrequency limit user edits rather than displayed values: an engine value outside the limits is shown as is, flagged amber with a tooltip, and logged once; a user edit clamps into the limits, is ignored when clamping would reverse it, and commits nothing when it leaves the value unchanged.",
+      "evidence": [
+        {
+          "resource": "repo://core/include/utils.h#L110-L128",
+          "version": "repo-lines-v1:sha256:3ea85e7b677d3cfe5885be6570a9711bcb8f2e533cd435101a09398f8ef0fb53:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhiZmI5NGQ2YTNhYjkzNzg1Yjc0MGU0NTYyNTg4YTlkOTYzNzllNThiZWRiMjEwNGQ1NGQ4MWVlY2U5MTA1OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVhYWIwNjdkMTI0MmIyNGRlYzQyYjA3M2QxM2EyZWQ1NDNhMzZkNmI4ZjFiYjk2MzJlN2ExNWM1Y2RhMjNjZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA1ZmE4MzAyMDU4YWJlZjRmMTdkYTY0M2I5ZDFhYmUxMDAwNzczYTVkOGEzNDQ5YWMyNzgxMWI4ZWRiNzc0M2EifQ"
+        },
+        {
+          "resource": "repo://core/include/utils.h#L20-L34",
+          "version": "repo-lines-v1:sha256:1b5725b8cf4ba04fe9d2241679b969736ae22fc179d90e0c80fa22364cbdebc9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5NWQ3MjY1MmVmNmE1YjQ0NmI5OGU5ODU5ZGVlM2RlYTc2MDMwNWU1YWJiNjg5ODQ1YjMzMjYzMmFmYzVkYTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmNWRkMTFhYzQxMmYyYzE0ZmFlMTMyZGQxMDdjYTg2OTUyNWE4YWFjYTIxYjA3NjlkNDljYTA2OGM2ZmUyZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjMmY1YjAwZjlmOTcxZjUyZDQ1NDRkMzZlZmZlMmFjYTM3M2M1MjM3MTMzODgyNWIzMWRkZTI4NGFhZjM0MzIifQ"
+        },
+        {
+          "resource": "repo://core/include/utils.h#L52-L97",
+          "version": "repo-lines-v1:sha256:eca5c8e9ba48d99d147596de2498b9eacce5e40c15659edc2c1b446d220825b8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxZDE2NTA2YTI3YWVkZDVmNjE3YWExMTc0YWZmNjgyMzU5ZTk2ZTQxMjkwYWYzYzk2YjQ2ZDliYTU5Mjg4YWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhYmJhNmJmNTgxMjBhYWM0Yzg4NDdjMzFjMDgyNjQwMmM5NjMwZDI3NmY3M2Y0OTk4NWE2NmZhNGM4OGQ2YWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBiMTMwN2EyNzVhNTY4YjFkZDA3ODViZjk5NGZkZDQyYTNmYmJiYWM3OGY1MWYxZTU1YjBhNmU0ZjFjYThlNGIifQ"
+        },
+        {
+          "resource": "repo://tests/test_issue182_bounded_inputs.cpp#L101-L104",
+          "version": "repo-lines-v1:sha256:225e076639de84a785cff3182ba652d7cca881c1a73d40d45540458d2ecd9447:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGFlNjNjMGU2Y2ZmODkyYTBlMGJlMzM3Njc0NDgxNGUxNWEyYzY4ZTE5ZGJjNjg0ZGE1NzU0MTk2YjJmZWViMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWU1YmMzOGY2MTJiNDM1ODM5NDMyNmM2N2Y0ZDJlYmMxNmFlZWQ2MjdmZjk2NmQwYWFjNzJiN2Q4YzU2MTI5ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2E1NzdjYmM2YThkNjczMTZmZWY5YTBkN2Y1NWQzMzE3OWI4ZjY4ODlkNDFhZGU3OTliYWM4YWM3ODQ2OWVkNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmMwNDk0ZGIzYzc1ZGQ0YzM0YzZiZTJmNTliYTg1ZDRkYzlkOTgyZjM2N2UxNDE1ZjA2YjA2OTU0N2E4NjA5ZiJ9"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.7.0",
-    "at": "2026-10-05T19:44:12.666Z"
+    "at": "2026-10-10T18:57:17.727Z"
   }
 }

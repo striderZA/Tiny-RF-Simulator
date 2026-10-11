@@ -3,6 +3,9 @@ type: Runbook
 title: Build & Operations
 description: Reliable contributor and release-operator procedures for configuring, building, testing, formatting, installing, packaging, and troubleshooting Tiny RF Simulator. Covers pinned dependency fetching, platform constraints, executable-relative runtime data, CI gates, and release publication.
 tags: [build, testing, packaging, ci, operations, release]
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-10T17:27:48.662Z
 sources:
   - id: openwiki-source-6983d4a49fc6ae63a12ff946
     resource: repo://.githooks/commit-msg
@@ -12,6 +15,8 @@ sources:
     resource: repo://.githooks/pre-push
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
+  - id: openwiki-source-3fa73b0f154188231bdb99e6
+    resource: repo://agent/mcp/CMakeLists.txt
   - id: openwiki-source-8037e2358a2c4f9b2c722a11
     resource: repo://AGENTS.md
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
@@ -22,6 +27,8 @@ sources:
     resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-d44494ef3e497fea81240ef8
     resource: repo://CMakeLists.txt
+  - id: openwiki-source-65d144a9bd5b3da69b76d204
+    resource: repo://common/AGENTS.md
   - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
     resource: repo://common/session_state.h
   - id: openwiki-source-f317ee207e1653d2033c81a4
@@ -30,6 +37,8 @@ sources:
     resource: repo://layout/src/layout_manager.cpp
   - id: openwiki-source-c5119c072dddff32b56e1e2e
     resource: repo://scripts/format.sh
+  - id: openwiki-source-d86f2b14681b2024bcf52a41
+    resource: repo://scripts/install-clang-format.sh
   - id: openwiki-source-76478c25db28b99104e23105
     resource: repo://scripts/release.sh
   - id: openwiki-source-84d4847b3b591b7a766682c8
@@ -40,15 +49,12 @@ sources:
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-06T04:13:15.031Z" }
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-06T04:13:15.031Z
+generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
 ---
 
 # Build & Operations
 
-The project is a C++20 CMake build. The authoritative application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.27.0`), not an older changelog entry. Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
+The project is a C++20 CMake build. The application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.27.0`). Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
 
 ## Build lifecycle
 
@@ -66,20 +72,20 @@ flowchart TD
     J --> K["Publish draft GitHub release"]
 ```
 
-This shows the repository's local build path and the tag-triggered release path; the release workflow requires every validation job to succeed before publication.
+This shows the local build path and the tag-triggered release path; the release workflow requires every validation job to succeed before publication.
 
 ## Prerequisites and platform rules
 
 - CMake 3.20 or newer, Ninja, Git, and a C++20 compiler are required. OpenGL development libraries and GLFW's platform dependencies are required on Linux/macOS.
-- Windows supports **MinGW-w64 g++**, not MSVC `cl.exe`. The supported CI environment is MSYS2 `MINGW64`, with Git, GCC, CMake, Ninja, pkg-config, and Python installed.
-- Linux release CI uses GCC 14 and also validates Clang 18 on minor/major tags. CI disables Wayland with `-DGLFW_BUILD_WAYLAND=OFF`; use that option on Linux when X11 compatibility is needed.
+- Windows supports **MinGW-w64 g++**, not MSVC `cl.exe`. The CI environment is MSYS2 `MINGW64`, with Git, GCC, CMake, Ninja, pkg-config, and Python installed.
+- Linux release legs use GCC 14, and the minor/major matrix adds Clang 18; see [CI and release operations](#ci-and-release-operations). Linux legs configure with `-DGLFW_BUILD_WAYLAND=OFF`; use that option on Linux when X11 compatibility is needed.
 - Enable hooks once per clone if you want commit-time checks:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-`clang-format-18` is required by the formatting script and hook. If it is unavailable, run `scripts/install-clang-format.sh`; it installs a cached copy that `scripts/format.sh` can find.
+`clang-format-18` is required by the formatting script and the pre-commit hook. If the system package manager does not provide it, `scripts/install-clang-format.sh` installs clang-format 18.1.8 into `$HOME/.cache/clang-format-18`, where `scripts/format.sh` and the hook look for it.
 
 ## Configure and build
 
@@ -98,13 +104,13 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build
 ```
 
-The first configure may take about 60–90 seconds while dependencies are cloned. Subsequent builds reuse `build/_deps` and the CMake cache. `CMAKE_EXPORT_COMPILE_COMMANDS` is enabled by the root project, so `build/compile_commands.json` is available to clangd.
+Subsequent builds reuse `build/_deps` and the CMake cache. The root project enables `compile_commands.json` export, so `build/compile_commands.json` is available to clangd.
 
 ### When to reconfigure or clean
 
 - Source edits normally need only `cmake --build build`.
 - Re-run `cmake -B build` after adding or removing sources, targets, subdirectories, or CMake options.
-- Delete `build/` and configure again when switching compilers or generators, after a broken/incompatible dependency cache, or when the cache contains stale platform options. On Unix:
+- Delete `build/` and configure again when switching compilers or generators, or when the dependency cache is broken. On Unix:
 
 ```bash
 rm -rf build
@@ -116,7 +122,7 @@ Do not clean merely because a normal source change was made; cleaning discards f
 
 ## FetchContent and reproducibility
 
-The root `CMakeLists.txt` fetches dependencies into the active build tree. The important immutable references are:
+The root `CMakeLists.txt` fetches dependencies into the active build tree. The pinned references are:
 
 | Dependency | Repository | Reference |
 |---|---|---|
@@ -130,7 +136,7 @@ The root `CMakeLists.txt` fetches dependencies into the active build tree. The i
 | kissFFT | `mborgerding/kissfft` | `131.1.0` |
 | nlohmann/json | `nlohmann/json` | `v3.11.3` |
 
-`imgui`, `implot`, GLFW, `imgui_test_engine`, and `imnodes` use immutable commit pins; Catch2, kissFFT, and nlohmann/json use the listed tags. portable-file-dialogs and kissFFT are populated as source-only dependencies because their upstream build setup is not used here. Change pins only deliberately and reconfigure a clean build when validating such a change.
+imgui, implot, GLFW, imgui_test_engine, imnodes, and portable-file-dialogs use commit pins; Catch2, kissFFT, and nlohmann/json use tags. imnodes, portable-file-dialogs, and kissFFT are fetched with `FetchContent_Populate`, so their upstream CMake files are not used. Change pins only deliberately and reconfigure a clean build when validating such a change.
 
 ## Running the application
 
@@ -141,15 +147,15 @@ build/bin/tiny-rf-simulator
 build/bin/tiny-rf-simulator.exe   # Windows
 ```
 
-Runtime assets use executable-relative paths for installed operation:
+Runtime assets use executable-relative paths:
 
 - `component_data/` and `extensions/` are installed beside the executable. Build-tree runs use source-tree fallbacks; component-data lookup prefers the installed executable-relative root when present.
-- `layout/` stores the default `rf_simulator_layout.ini` and named layouts under `<exe_dir>/layouts/`.
-- tutorial completion uses `<exe_dir>/.tutorial_completed`.
+- `LayoutManager` stores the default layout at `<exe_dir>/rf_simulator_layout.ini` and named layouts under `<exe_dir>/layouts`.
+- Tutorial completion is stored at `<exe_dir>/.tutorial_completed`.
 - `SessionState` persists window preferences to `<exe_dir>/app.ini` on Windows only; it is a no-op on non-Windows platforms. Project files separately store a subset of window flags.
-- extension discovery also considers user and project-local roots. Source-tree built-ins take precedence over executable-relative, global, and project-local duplicates; project-local external tools remain trust-gated.
+- Extension discovery also considers user and project-local roots. Source-tree built-ins take precedence over executable-relative, global, and project-local duplicates; project-local external tools remain trust-gated.
 
-Moving an installed executable without its adjacent `bin/component_data` and `bin/extensions` directories breaks shipped-data lookup. On Windows, app-level tests share `app.ini`; layout and tutorial tests also share executable-relative files.
+Keep `component_data/` and `extensions/` beside the executable: the install tree and release packages place them under `bin/`. On Windows, app-level tests share `app.ini`; layout and tutorial tests share executable-relative files.
 
 ## Tests and isolation
 
@@ -159,26 +165,18 @@ Run the complete CTest registration with failure output:
 ctest --test-dir build --output-on-failure
 ```
 
-Useful focused commands (optional):
+Focused commands:
 
 ```bash
-build/bin/tests [bench]
-build/bin/tests [sparam]
-build/bin/tests [filter]
-build/bin/tests [edge]
+build/bin/tests "[sparam]"
 ctest --test-dir build -R 'test_test_flow_widget|test_issue87_flow' --output-on-failure
 ```
 
-The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. MinGW-w64 can silently drop `TEST_CASE`s beyond a compiler-specific registration ceiling. CI separately requires `build/bin/tests.exe --list-tests` to report at least the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223). Put new coverage in a standalone target when the main binary approaches its ceiling, rather than assuming a silently dropped `TEST_CASE` ran.
+Catch2 accepts tag and name filters on the `tests` executable. The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. MinGW-w64 can silently drop `TEST_CASE`s beyond a compiler-specific registration ceiling, and the Windows release jobs require `tests.exe --list-tests` to report at least the `MINGW_TEST_CASE_FLOOR` (currently 223). Put new coverage in a standalone target rather than assuming a silently dropped `TEST_CASE` ran.
 
-UI tests are optional locally and require a display:
+The `test_ui` target needs a display. On Linux, run it under `xvfb-run --auto-servernum`; CI does not run it on Windows.
 
-```bash
-build/bin/test_ui
-xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E Benchmark
-```
-
-CTest can run discovered cases in parallel, but do not run two CTest invocations against the same build tree concurrently. Some app-level tests share Windows `app.ini`; layout and tutorial tests share `<exe_dir>/layouts` and `.tutorial_completed`; extension tests mutate the source `extensions/` root. Relevant targets use `RUN_SERIAL` within one CTest invocation, but that does not serialize separate CTest invocations. Start with a clean `extensions/` directory. Scratch fixtures must be process-unique when adding tests because `ctest -jN` launches separate processes. `test_ui` is excluded from CI's headless Windows path; Linux CI uses Xvfb. Benchmarks are excluded from release CI with `-E "Benchmark"`.
+CTest can run discovered cases in parallel, but do not run two CTest invocations against the same build tree concurrently. Some app-level tests share Windows `app.ini`, layout and tutorial tests share `<exe_dir>/layouts` and `.tutorial_completed`, and extension tests mutate the source `extensions/` root. Relevant targets use `RUN_SERIAL` within one CTest invocation, but that does not serialize separate CTest invocations. Benchmarks are excluded from release CI with `-E "Benchmark"`.
 
 ## Format and local gates
 
@@ -206,36 +204,37 @@ Enable the repository's local hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook checks staged C++ with clang-format 18 using the shared directory list in `scripts/format-dirs.sh`. The commit-msg hook enforces the documented `<type>[(scope)][!]: <summary>` subject format under 70 characters; GitHub-side squash merges bypass the local hook, so PR titles should follow the same format. The pre-push hook blocks non-fast-forward updates to existing remote refs. For an intentional one-off rewrite, use `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`; `git push --no-verify` skips all hooks. Run `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
-
+The pre-commit hook checks staged C++ with clang-format 18 using the shared directory list in `scripts/format-dirs.sh`. The commit-msg hook enforces the `<type>[(scope)][!]: <summary>` subject format. The pre-push hook blocks non-fast-forward updates to existing remote refs. For an intentional one-off rewrite, use `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`; `git push --no-verify` skips all hooks. Run `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
 
 ## Install and package
 
-The install tree places the executable and runtime payloads together:
+The install tree places the executables and runtime payloads together:
 
 ```bash
 cmake --install build --prefix /path/to/install
 ```
 
-It installs `tiny-rf-simulator`, `component_data/`, and `extensions/` under `bin/`; `README.md`, `LICENSE`, and `openwiki/` go under `share/doc/rf-simulator` (excluding `.git` and `.last-update.json`). CPack is configured as `TGZ` on non-Windows and `ZIP` on Windows, with names based on `rf-simulator-<version>-<system>-<processor>`:
+The root and `agent/mcp` CMake files install `tiny-rf-simulator` and `rf-sim-mcp` into `bin/`, so they sit side by side in the install tree. `component_data/` and `extensions/` are installed under `bin/`, and documentation is installed under `share/doc/rf-simulator`. CPack generates `TGZ` packages off Windows and `ZIP` packages on Windows:
 
 ```bash
 cpack --config build/CPackConfig.cmake
 ```
 
-A package must retain `component_data/` and `extensions/` beside the executable (under `<prefix>/bin/` in the install tree). The simple release-workflow archives are separate binary distributions: Linux packages the optimized executable as `rf-simulator-linux-x86_64.tar.gz`; Windows packages the executable plus MinGW runtime DLLs as `rf-simulator-windows-x86_64.zip`.
+A package must retain `component_data/` and `extensions/` beside the executable (under `<prefix>/bin/` in the install tree). The release-workflow archives are described under [Release artifacts](#release-artifacts).
 
 ## CI and release operations
 
-Pull requests run **no automated CI pipeline**. Run the local format, build, and test gates before requesting review. Automated CI starts only when a release tag is pushed:
+Pull requests run **no automated CI pipeline**. Run the local format, build, and test gates before requesting review. Automated validation starts only when a `v*` tag is pushed:
 
-1. `classify-release` accepts semantic `X.Y.Z` tags. Patch tags (`Z > 0`) get Linux GCC 14 Debug strict validation; `vX.Y.0` and `vX.0.0` get the four-leg Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 matrix.
-2. `validate-version` matches the tag to `CMakeLists.txt` and uses `scripts/release-notes.sh` to require a non-empty matching changelog section.
-3. Every tag runs clang-format 18 over the full checked set, Linux AddressSanitizer, and the tag-class strict-build matrix. Linux UI tests run under Xvfb; headless Windows validation excludes `test_ui`. Windows checks the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223).
-4. Every tag builds and tests the optimized Release Linux and Windows package configurations. Those are the shipped builds; Debug is validation-only.
-5. After all required jobs pass, the workflow creates a **draft** GitHub release using the matching changelog section.
+1. `classify-release` accepts only `X.Y.Z` tags. Patch tags (`Z > 0`) run one Linux GCC 14 Debug validation leg. Minor and major tags (`Z = 0`) run four legs: Linux GCC 14 Debug, Linux GCC 14 Release, Linux Clang 18 Debug, and Windows MinGW-w64 Debug.
+2. `validate-version` requires the tag version to equal the `CMakeLists.txt` project version and runs `scripts/release-notes.sh` for the tag, failing when the matching changelog section is missing or empty.
+3. The format job runs the clang-format 18 check and the sanitizer job runs a Debug AddressSanitizer build on every release tag. The strict-build matrix runs the leg list from step 1. The strict-build and package jobs run CTest with `Benchmark` excluded; Linux runs under `xvfb-run`, and Windows also excludes `test_ui` because it needs an interactive display. Windows checks the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223).
+4. The package job builds the optimized Release Linux and Windows package configurations, and those are the only binaries that ship. Debug is validation-only.
+5. After all required jobs pass, the release job creates a **draft** GitHub release whose body is the matching changelog section.
 
-Prepare releases only after adding a `## [X.Y.Z] - YYYY-MM-DD` section with at least one bullet to `CHANGELOG.md`. The usual path prepares a `release/vX.Y.Z` branch for review, then tags the merged version on `master`:
+### Release preparation
+
+Prepare releases only after adding a changelog section for the version to `CHANGELOG.md`. The usual path prepares a `release/vX.Y.Z` branch for review, then tags the merged version on `master`:
 
 ```bash
 # POSIX shells
@@ -251,9 +250,14 @@ sh scripts/release.sh X.Y.Z --on-master
 sh scripts/release.sh X.Y.Z --tag
 ```
 
-Prepare mode requires `master` and a clean tree apart from the changelog edit; by default it creates a release branch, bumps `CMakeLists.txt`, runs format/build/test gates, and commits. `--on-master` is the sanctioned direct-to-master alternative; `--skip-gates` skips preparation gates and requires a manual run afterward. Tag mode requires a clean `master` at the matching version, creates and pushes an annotated tag, and must run only after the version bump has landed.
+Prepare mode refuses a working tree with changes other than `CHANGELOG.md` and refuses a version not greater than the current one. It creates the release branch (unless `--on-master`, which commits the bump directly on master), bumps the `project (RfSimulator VERSION ...)` line in `CMakeLists.txt`, runs the format, build, and test gates unless `--skip-gates` is given, and commits `CMakeLists.txt` and `CHANGELOG.md`. Tag mode refuses unless `CMakeLists.txt` is at the requested version, the tree is clean, and HEAD is on `master`; it then creates an annotated tag and pushes it.
 
 On Windows, run the release script as `sh scripts/release.sh …` from Git for Windows MSYS. Because its `sed -i` can normalize mixed line endings in `CMakeLists.txt`, verify `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the expected two-line version change before pushing. If it does not, restore `CMakeLists.txt` from `HEAD~1`, reapply the version bump byte-preservingly, and amend the preparation commit.
+
+### Release artifacts
+
+- `rf-simulator-linux-x86_64.tar.gz` contains exactly two root-level members: `rf-simulator-linux` (copied from `tiny-rf-simulator`) and `rf-sim-mcp`. Do not place them in a directory inside the archive.
+- `rf-simulator-windows-x86_64.zip` contains one `rf-simulator-windows/` folder with `tiny-rf-simulator.exe`, `rf-sim-mcp.exe`, and the MinGW runtime DLLs.
 
 ## Troubleshooting
 
@@ -263,8 +267,7 @@ On Windows, run the release script as `sh scripts/release.sh …` from Git for W
 | FetchContent is slow or headers are missing | Let the first configure finish; inspect `build/_deps`; reconfigure or clean only if the dependency cache is incomplete. |
 | Link errors after adding files | Add the source to its module `CMakeLists.txt`, then reconfigure. |
 | Linux GLFW/Wayland configuration trouble | Reconfigure with `-DGLFW_BUILD_WAYLAND=OFF` and install the X11/OpenGL development packages. |
-| UI test hangs or fails headlessly | Use `xvfb-run` on Linux; do not expect `test_ui` to run on Windows CI. |
+| UI test hangs or fails headlessly | Use `xvfb-run` on Linux; `test_ui` does not run on Windows CI. |
 | Tests disappear on MinGW | Check `build/bin/tests.exe --list-tests`; move new cases to a standalone target if the count is below the workflow's `MINGW_TEST_CASE_FLOOR` (currently 223). |
 | Parallel tests fail around shared app state or extensions | On Windows, app-level tests share `app.ini`; layouts and tutorial tests share executable-relative state and extension tests mutate the source `extensions/` root. Clean leftovers, run one CTest invocation, honor `RUN_SERIAL`, and never overlap separate CTest runs on one build tree. |
-| DSP output becomes NaN | Trace zero or invalid frequency through logarithmic gain calculations; guard inputs before `log10`/square-root paths and add a zero-frequency regression test. |
 | Installed app cannot find examples or extensions | Verify the executable directory contains `component_data/` and `extensions/` (`<prefix>/bin/component_data/` and `<prefix>/bin/extensions/` for an install tree), rather than relying on the source-tree fallback. |

@@ -215,12 +215,14 @@ void AmplifierEngine::deserialize(const nlohmann::json &j) {
     if (!j.contains("enable_nonlinear") &&
         (j.contains("oip2_dBm") || j.contains("oip3_dBm") || j.contains("p1db_dBm")))
         m_nonlinear.setEnabled(true);
-    m_sparam_filepath = j.value("sparam_filepath", "");
+    m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
         m_sparam_data.load(m_sparam_filepath);
     m_sparam_mode =
         j.value("sparam_mode", false) && m_sparam_data.loaded() && m_sparam_data.numPorts() >= 2;
-    m_sparam_fwd_idx = j.value("sparam_fwd_idx", 0);
+    // An absent index selects S21 for a loaded file, as setSParamFilepath() does.
+    const int default_fwd_idx = m_sparam_data.loaded() ? m_sparam_data.numPorts() : 0;
+    m_sparam_fwd_idx = j.value("sparam_fwd_idx", default_fwd_idx);
     m_dirty = true;
 }
 

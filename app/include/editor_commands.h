@@ -1,6 +1,7 @@
 #pragma once
 
 #include "circuit_runtime.h"
+#include "component_params.h"
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -8,6 +9,13 @@
 #include <vector>
 
 class GraphEditorActions;
+class ComponentLibrary;
+struct ComponentDefinition;
+
+struct ComponentAddResult {
+    IComponentEngine *component = nullptr;
+    ParamWriteResult params;
+};
 
 // EditorCommands — the single entry point for user-level project edits.
 //
@@ -33,6 +41,12 @@ class EditorCommands {
     std::function<void()> onComponentsChanged;
 
     IComponentEngine *createComponent(const ComponentFactory &factory);
+    ComponentAddResult createComponentWithParams(const ComponentFactory &factory,
+                                                 const nlohmann::ordered_json &params);
+    ComponentAddResult
+    addLibraryPart(ComponentLibrary &library, const ComponentDefinition &definition,
+                   const nlohmann::ordered_json &params = nlohmann::ordered_json::object());
+    ParamWriteResult setComponentParams(int graph_node_id, const nlohmann::ordered_json &params);
     bool removeComponent(int graph_node_id);
     // Adopts components that were created directly through the runtime (e.g.
     // ComponentLibrary::instantiate()): syncs views and records the edit.

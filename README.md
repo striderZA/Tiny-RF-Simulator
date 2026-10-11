@@ -56,6 +56,34 @@ build/bin/tiny-rf-simulator.exe
 > 💡 **First build** takes 60-90s (FetchContent downloads all dependencies).
 > For detailed setup, prerequisites, and per-platform instructions see the [Quickstart Guide](openwiki/quickstart.md).
 
+## 🤖 Connect an Agent
+
+An MCP client launches the local `rf-sim-mcp` bridge over standard input/output. Keep the RF Simulator GUI running, then open `View > Agent` and enable `Agent Server`; the client can connect only while the server is enabled.
+
+Add this generic MCP server configuration to your client:
+
+```json
+{
+  "mcpServers": {
+    "rf-sim": {
+      "command": "<install dir>/rf-sim-mcp"
+    }
+  }
+}
+```
+
+For Claude Code, run:
+
+```sh
+claude mcp add rf-sim -- "<install dir>/rf-sim-mcp"
+```
+
+Replace `<install dir>` with the directory containing the simulator executables. On Windows, use `rf-sim-mcp.exe` in the JSON `command` and Claude Code command.
+
+Agents cannot open, save, or name files.
+
+The local bridge protects the GUI endpoint against access from other local accounts and web pages. It does not protect against software running as the same user or administrators.
+
 ---
 
 

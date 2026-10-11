@@ -1,6 +1,7 @@
 #pragma once
 
 #include "component_registry.h"
+#include <cstdint>
 #include <functional>
 #include <optional>
 
@@ -19,6 +20,7 @@ class CircuitRuntime {
     bool disconnect(int link_id);
     void update(double dt);
     void clearComponentsAndResetIds();
+    std::uint64_t epoch() const;
 
     const NodeGraphEngine &graph() const;
     const ComponentRegistry &components() const;
@@ -33,4 +35,5 @@ class CircuitRuntime {
     ViewManager m_view_manager;
     ComponentRegistry m_components;
     int m_next_component_id = 100;
+    std::uint64_t m_epoch = 0;
 };
