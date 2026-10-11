@@ -239,6 +239,23 @@ TEST_CASE("a second connected client receives BUSY and closes", "[agent_server]"
     server.stop();
 }
 
+TEST_CASE("a replacement client is admitted after the previous client closes", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto first = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(first.has_value());
+    REQUIRE(first->hello("first"));
+    first->close();
+    auto second = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(second.has_value());
+    CHECK(second->hello("second"));
+    server.stop();
+}
+
 TEST_CASE("a pre-auth line with many distinct keys cannot delay stop", "[agent_server]") {
     ScratchDirectory scratch;
     TestExecutor executor;

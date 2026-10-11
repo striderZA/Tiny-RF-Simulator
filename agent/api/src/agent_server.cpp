@@ -525,6 +525,21 @@ struct AgentServer::Impl {
         TimePoint hello_deadline{};
         std::string client_name;
         std::string client_version;
+        // A newcomer that arrives while the previous client is still registered waits here, for
+        // at most kReplacementGrace, until that client's EOF is observed. Bridge identity changes
+        // close one link and then open the next, so the newcomer is not refused BUSY meanwhile.
+        std::optional<AgentChannel> waiting;
+        TimePoint waiting_deadline{};
+        constexpr auto kReplacementGrace = std::chrono::milliseconds{100};
+        const auto admit = [&](AgentChannel channel) {
+            client.emplace(std::move(channel));
+            session = allocateSession();
+            hello_deadline = SteadyClock::now() +
+                             std::max(config.hello_timeout, std::chrono::milliseconds::zero());
+            authenticated = false;
+            client_name.clear();
+            client_version.clear();
+        };
 
         try {
             for (;;) {
@@ -541,20 +556,18 @@ struct AgentServer::Impl {
                         client ? std::chrono::milliseconds{1} : std::chrono::milliseconds{10};
                     auto accepted = listener.accept(accept_timeout);
                     if (accepted) {
-                        if (client) {
-                            const AgentJson busy =
-                                rpcError(nullptr, "BUSY", "another agent is connected");
-                            (void)writeAgentMessage(*accepted, busy);
-                            accepted->close();
+                        if (client || waiting) {
+                            if (waiting) {
+                                const AgentJson busy =
+                                    rpcError(nullptr, "BUSY", "another agent is connected");
+                                (void)writeAgentMessage(*accepted, busy);
+                                accepted->close();
+                            } else {
+                                waiting.emplace(std::move(*accepted));
+                                waiting_deadline = SteadyClock::now() + kReplacementGrace;
+                            }
                         } else {
-                            client.emplace(std::move(*accepted));
-                            session = allocateSession();
-                            hello_deadline =
-                                SteadyClock::now() +
-                                std::max(config.hello_timeout, std::chrono::milliseconds::zero());
-                            authenticated = false;
-                            client_name.clear();
-                            client_version.clear();
+                            admit(std::move(*accepted));
                         }
                     }
                 } else if (!requested_stop) {
@@ -603,7 +616,10 @@ struct AgentServer::Impl {
                                     session = 0;
                                 }
                             } else if (read_status == AgentReadStatus::Timeout) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds{8});
+                                // No idle sleep while a newcomer waits, so the grace check
+                                // below runs right after this read, not up to 8 ms later.
+                                if (!waiting)
+                                    std::this_thread::sleep_for(std::chrono::milliseconds{8});
                             }
                         }
                     }
@@ -613,6 +629,15 @@ struct AgentServer::Impl {
                     session = 0;
                 }
 
+                if (waiting && !client) {
+                    admit(std::move(*waiting));
+                    waiting.reset();
+                } else if (waiting && SteadyClock::now() >= waiting_deadline) {
+                    const AgentJson busy = rpcError(nullptr, "BUSY", "another agent is connected");
+                    (void)writeAgentMessage(*waiting, busy);
+                    waiting->close();
+                    waiting.reset();
+                }
                 if (!flushOutbox(client, authenticated, session)) {
                     closeSession(client, authenticated, session, client_name, client_version);
                     authenticated = false;
@@ -640,6 +665,8 @@ struct AgentServer::Impl {
 
         if (client)
             closeSession(client, authenticated, session, client_name, client_version);
+        if (waiting)
+            waiting->close();
         listener.close();
     }
 
