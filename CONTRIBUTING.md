@@ -74,12 +74,12 @@ Pull requests run **no automated pipeline**. Release validation runs when a rele
 
 - **Format check** — clang-format 18 enforces code style across all source modules
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
-- **Packaging builds** — optimized Release Linux and Windows binaries (the artifacts attached to the GitHub release); each package leg runs the test suite against the build it ships (UI tests excluded on Windows)
+- **Packaging builds** — optimized Release Linux GCC 14 and Windows MinGW-w64 binaries, the artifacts attached to the GitHub release. The `package` job is the only place these Release configurations are built, and it tests the build it ships (UI tests excluded on Windows). Build, test, and the MinGW floor check are shared through `.github/actions/build-and-test`.
 
 On top of that, the `strict-build` validation matrix is chosen by tag class:
 
 - **Patch release tags** (`vX.Y.Z` where `Z > 0`) build and test **Linux GCC 14 Debug** only (Xvfb for UI tests).
-- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the full **validation matrix**: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
+- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) add **Linux Clang 18 Debug** and **Windows MinGW-w64 Debug** builds to the Linux GCC 14 Debug leg. The Windows leg runs unit tests only; UI tests need a display and run on Linux.
 
 Pushes to master that change the manual or its build files also run a strict docs build in `.github/workflows/docs.yml`. That run never publishes; publishing is covered under [Release Process](#release-process).
 
@@ -94,19 +94,52 @@ NO_MKDOCS_2_WARNING=true mkdocs build --strict   # user manual; needs requiremen
 
 ### Release Process
 
-Releases are prepared through a pull request by default; the tag is created only on `master`, after the version bump has landed. `scripts/release.sh` implements these steps; `--on-master` prepares directly on `master` instead of a release branch:
+Releases are prepared on a `release/vX.Y.Z` branch by default, and the tag is created only on `master`, after the version bump has landed. `--on-master` prepares directly on `master` instead. `scripts/release.sh` runs these steps.
+
+Run it with `bash` on Linux and macOS. On Windows, run it with `sh` instead, from Git for Windows: WSL's `bash` on `PATH` cannot run the script.
+
+```bash
+bash scripts/release.sh X.Y.Z    # Linux and macOS
+sh scripts/release.sh X.Y.Z      # Windows
+```
 
 1. Write the `## [X.Y.Z] - YYYY-MM-DD` section (with at least one bullet) at the top of `CHANGELOG.md`.
-2. Run `bash scripts/release.sh X.Y.Z`. From a clean `master` tree it creates `release/vX.Y.Z`, bumps `CMakeLists.txt`, runs the local gates, and commits `chore: prepare release vX.Y.Z`. Use `--on-master` to commit on `master` instead, or `--dry-run` to preview without changing anything.
-3. If it created a release branch, open a PR against `master` (the script prints the command) and merge after review; `--on-master` skips this step, so push `master` directly.
-4. Once the version bump is on `master`, tag it: `bash scripts/release.sh X.Y.Z --tag`. It verifies the version matches `CMakeLists.txt`, cuts the annotated `vX.Y.Z` tag, and pushes it.
-5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the tag-class build/test matrix, and packages Linux and Windows binaries.
+2. Prepare the release. The script runs these stages in order and changes nothing until the checks pass:
+   - **Checks:** the version is newer than `CMakeLists.txt`; neither the tag nor `release/vX.Y.Z` exists; the working tree holds nothing but `CHANGELOG.md` (untracked files count, and are listed); the changelog section exists.
+   - **Configure:** if `build/` has no `build/CMakeCache.txt`, it runs `cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc` (about 90 s the first time). A failure stops here.
+   - **Bump:** only the version token on the `project` line of `CMakeLists.txt` changes. The script checks that exactly one line changed and that its line ending is unchanged.
+   - **Gates** on the bumped tree: `scripts/format.sh --check --all`, `cmake --build build`, and `ctest --test-dir build`.
+   - **Commit:** creates `release/vX.Y.Z` (skipped with `--on-master`) and commits `CHANGELOG.md` and `CMakeLists.txt` as `chore: prepare release vX.Y.Z`.
+
+   `--dry-run` prints the plan without changing anything. `--skip-gates` skips the gates, so the tag workflow becomes the first full check, after the tag is pushed.
+
+   If prepare stops, its message names the state:
+   - A refused check or a failed configure changes nothing. A failed gate restores `CMakeLists.txt`. Either way you stay on `master`; fix the cause and re-run.
+   - A failed commit is rolled back: `CMakeLists.txt` is restored and the release branch is removed. `CHANGELOG.md` is left as you had it, staged or not.
+   - A commit that already landed is kept, even if the script stops right after it: nothing is rolled back, and the message names the commit.
+   - A bump left uncommitted by a killed process is reported with the command that discards it. Run that command, then re-run.
+   - Re-running after a successful prepare reports where the release is committed (`release/vX.Y.Z` or `master`) and the next step.
+3. If prepare created a release branch, push it and open a PR against `master` (the script prints the command), then merge after review. With `--on-master`, push `master` directly.
+4. Once the version bump is on `master`, tag it: `sh scripts/release.sh X.Y.Z --tag` on Windows, `bash` elsewhere. It verifies the version matches `CMakeLists.txt`, cuts the annotated `vX.Y.Z` tag, and pushes it.
+5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the format check, the AddressSanitizer build, and the tag-class build/test matrix, and packages Linux and Windows binaries.
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
 
 On Windows, run the script with Git for Windows `sh` rather than `bash`, which may resolve to the WSL launcher. After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the two-line version change.
 
 Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
+
+### Failed release tag
+
+The release workflow starts when `vX.Y.Z` is pushed. When a run fails, retag the same version, as long as that release has not been published:
+
+1. Read the failing job's log, and cancel the run if it is still going.
+2. Fix the cause on `master` through a PR. The version stays `X.Y.Z`.
+3. Delete the draft release if the run created one: `gh release delete vX.Y.Z --yes`.
+4. Delete the tag on the remote and locally: `git push origin :refs/tags/vX.Y.Z`, then `git tag -d vX.Y.Z`.
+5. Once the fix is on `master`, tag again: `sh scripts/release.sh X.Y.Z --tag` on Windows, `bash` elsewhere.
+
+Never move the tag of a published release. Ship the fix as the next patch release (`X.Y.(Z+1)`) instead.
 
 ## Architecture (Quick Reference)
 
