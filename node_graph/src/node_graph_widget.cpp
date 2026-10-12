@@ -27,6 +27,12 @@ void NodeGraphWidget::setNodeEditorSpacePosition(int node_id, ImVec2 position) {
     m_cached_grid_positions[node_id] = ImNodes::GetNodeGridSpacePos(node_id);
 }
 
+void NodeGraphWidget::selectNode(int node_id) {
+    ImNodes::EditorContextSet(m_context);
+    ImNodes::ClearNodeSelection();
+    ImNodes::SelectNode(node_id);
+}
+
 std::optional<NodeGraphBounds>
 NodeGraphWidget::nodeBoundsExcluding(const std::unordered_set<int> &excluded_node_ids) const {
     const ImVec2 kFallbackNodeDimensions(260.0f, 160.0f);

@@ -5,6 +5,7 @@
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
 #include "common.h"
+#include "component_library.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "imgui.h"
@@ -133,6 +134,55 @@ std::string InspectorPanel::labelForHit(const Hit &hit) const {
     return hit.desc->display_name + " " + std::to_string(hit.engine->id());
 }
 
+void InspectorPanel::drawPartPicker(const IComponentEngine &engine) {
+    const int node_id = engine.graphNodeId();
+    std::string current;
+    for (const GraphNode &node : m_graph.nodes()) {
+        if (node.node_id == node_id)
+            current = node.part_number;
+    }
+    // Only a library component has a part to change; a manual component shows no picker.
+    if (current.empty() || !libraryParts || !onSwapLibraryPart)
+        return;
+
+    if (ImGui::BeginCombo("Part", current.c_str())) {
+        for (const ComponentDefinition *definition : libraryParts()) {
+            if (!definition)
+                continue;
+            const bool is_current =
+                definition->part_number == current && definition->type == engine.type_name();
+            std::string label = definition->part_number;
+            if (!definition->description.empty())
+                label += "  " + definition->description;
+            if (ImGui::Selectable(label.c_str(), is_current) && !is_current) {
+                m_pending_part = definition;
+                m_pending_part_node = node_id;
+            }
+            if (is_current)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Replaces this part in place. Its position, links, probes, and group "
+                          "membership are kept; the new part starts from its library parameters.");
+    if (!m_part_swap_error.empty() && m_part_swap_error_node == node_id)
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_part_swap_error.c_str());
+}
+
+void InspectorPanel::applyPendingPartSwap() {
+    if (!m_pending_part)
+        return;
+    const ComponentDefinition *definition = m_pending_part;
+    const int node_id = m_pending_part_node;
+    m_pending_part = nullptr;
+    m_pending_part_node = -1;
+    m_part_swap_error = onSwapLibraryPart(node_id, *definition);
+    m_part_swap_error_node = node_id;
+}
+
 void InspectorPanel::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -197,6 +247,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
 
     ImGui::SeparatorText(labelForHit(Hit{hit.desc, edit_engine}).c_str());
+    drawPartPicker(*edit_engine);
 
     if (hit.desc->type == "pfb" && !m_pfb_ptrs.empty()) {
         std::string combo_label = "PFB##selector";
@@ -222,6 +273,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     if (m_param_edited && onParamChange)
         onParamChange();
 
+    applyPendingPartSwap();
     ImGui::End();
 }
 

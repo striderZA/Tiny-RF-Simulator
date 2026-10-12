@@ -494,6 +494,22 @@ const std::vector<int> &NodeGraphEngine::groupsContainingNode(int node_id) const
     return empty;
 }
 
+void NodeGraphEngine::remapNodeReferences(int old_node_id, int new_node_id,
+                                          const std::map<int, int> &pin_map) {
+    for (int &pin : m_probe_pins) {
+        const auto it = pin_map.find(pin);
+        if (it != pin_map.end())
+            pin = it->second;
+    }
+    for (auto &g : m_groups) {
+        for (int &member : g.member_node_ids) {
+            if (member == old_node_id)
+                member = new_node_id;
+        }
+    }
+    rebuildNodeToGroupCache();
+}
+
 void NodeGraphEngine::rebuildNodeToGroupCache() {
     m_node_to_group_cache.clear();
     for (const auto &g : m_groups) {

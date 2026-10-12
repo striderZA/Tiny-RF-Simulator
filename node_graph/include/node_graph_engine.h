@@ -2,6 +2,7 @@
 
 #include "group.h"
 #include "signal_node.h"
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -119,6 +120,12 @@ class NodeGraphEngine {
     int firstOutputBoundaryPin(int group_id) const;
     int groupIdForNode(int node_id) const;
     const std::vector<int> &groupsContainingNode(int node_id) const;
+
+    // Re-targets the references that survive an in-place component replacement: group membership
+    // moves from old_node_id to new_node_id, and each probed pin found in pin_map is replaced in
+    // place so the probe keeps its slot. A probed pin absent from pin_map is left alone, so the
+    // caller must refuse the replacement first; removeNode() would otherwise drop that probe.
+    void remapNodeReferences(int old_node_id, int new_node_id, const std::map<int, int> &pin_map);
 
   private:
     int m_next_node_id = 1;

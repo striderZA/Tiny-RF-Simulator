@@ -1,6 +1,7 @@
 #pragma once
 
 #include "circuit_runtime.h"
+#include <map>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,9 @@ class GraphEditorActions {
 
     void resetForProjectReplacement();
     void topologyChanged();
+    // Moves the probe and group references of a node that an in-place replacement retires onto
+    // its successor (see NodeGraphEngine::remapNodeReferences()).
+    void replaceNodeReferences(int old_node_id, int new_node_id, const std::map<int, int> &pin_map);
 
   private:
     CircuitRuntime &m_runtime;

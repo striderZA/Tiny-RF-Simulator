@@ -133,6 +133,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         (void)m_editor_commands.removeComponent(graph_node_id);
     };
+    m_inspector_panel->libraryParts = [this]() { return m_library.all(); };
+    m_inspector_panel->onSwapLibraryPart = [this](int graph_node_id,
+                                                  const ComponentDefinition &definition) {
+        return swapLibraryPart(graph_node_id, definition);
+    };
 
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
                                        nullptr, // iq_plot (per-PFB toggles used instead)
@@ -382,6 +387,39 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
     return true;
 }
+
+std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
+                                            const ComponentDefinition &definition) {
+    if (!m_circuit_runtime.components().find(graph_node_id))
+        return "The component is no longer in the circuit.";
+    // The replacement takes the predecessor's canvas spot and keeps its instrument points. The
+    // Network Analyzer Point A/B and the Power Meter source are app state the command cannot see.
+    const ImVec2 position = m_graph_widget->editorPositionForSave(graph_node_id);
+    const std::vector<int> instrument_pins = {m_na_engine.pointAPin(), m_na_engine.pointBPin(),
+                                              m_power_meter_widget->sourcePin()};
+    // The successor is a new engine under a new graph node, so sync() builds its views with the
+    // defaults for a new PFB. Read the IQ Plot and Grid visibility set on the predecessor first.
+    const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
+    const ComponentSwapResult swap =
+        m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
+    if (!swap.component)
+        return swap.error;
+
+    if (visibility)
+        m_pfb_views.setVisibilityFor(swap.new_graph_node_id, *visibility);
+
+    const auto moved = [&swap](int pin) {
+        const auto it = swap.pin_map.find(pin);
+        return it == swap.pin_map.end() ? pin : it->second;
+    };
+    m_na_engine.setPointA(moved(m_na_engine.pointAPin()));
+    m_na_engine.setPointB(moved(m_na_engine.pointBPin()));
+    m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
+    m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
+    m_graph_widget->selectNode(swap.new_graph_node_id);
+    return {};
+}
+
 void RfSimulatorApp::newProject() {
     m_power_meter_widget->clearSource();
     m_serializer->reset();
@@ -444,6 +482,19 @@ void RfSimulatorApp::testMakeDirty() { markDirty(); }
 IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int engine_id) {
     const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
     return descriptor ? testCreateComponent(descriptor->create, engine_id) : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testAddLibraryPart(const std::string &part_number) {
+    for (const ComponentDefinition *definition : m_library.all()) {
+        if (definition && definition->part_number == part_number)
+            return m_editor_commands.addLibraryPart(m_library, *definition).component;
+    }
+    return nullptr;
+}
+
+std::string RfSimulatorApp::testSwapLibraryPart(int graph_node_id,
+                                                const ComponentDefinition &definition) {
+    return swapLibraryPart(graph_node_id, definition);
 }
 
 IComponentEngine *RfSimulatorApp::testCreateComponent(

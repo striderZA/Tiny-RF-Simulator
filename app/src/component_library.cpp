@@ -423,7 +423,8 @@ std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::str
 
 IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                                                 CircuitRuntime &runtime,
-                                                GraphEditorActions &editor_actions) {
+                                                GraphEditorActions &editor_actions,
+                                                std::optional<int> component_id) {
     const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
     if (!descriptor) {
         LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
@@ -442,7 +443,9 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
         return nullptr;
     }
 
-    IComponentEngine *result = runtime.createComponent(descriptor->create);
+    IComponentEngine *result =
+        component_id ? runtime.createComponentWithId(descriptor->create, *component_id)
+                     : runtime.createComponent(descriptor->create);
     if (!result)
         return nullptr;
 
