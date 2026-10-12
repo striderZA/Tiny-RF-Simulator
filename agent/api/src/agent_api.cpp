@@ -21,6 +21,89 @@ std::string errorCode(const AgentToolResult &result) {
 
 } // namespace
 
+namespace {
+
+class CompletedAgentCallTask final : public IAgentCallTask {
+  public:
+    explicit CompletedAgentCallTask(AgentToolResult result) : m_result(std::move(result)) {}
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration) override {
+        if (!m_result)
+            return std::nullopt;
+        std::optional<AgentToolResult> result{std::move(*m_result)};
+        m_result.reset();
+        return result;
+    }
+
+    void cancel() noexcept override { m_result.reset(); }
+
+  private:
+    std::optional<AgentToolResult> m_result;
+};
+
+class ActivityAgentCallTask final : public IAgentCallTask {
+  public:
+    ActivityAgentCallTask(std::unique_ptr<IAgentCallTask> task,
+                          std::function<void(const AgentToolResult &)> record_activity,
+                          std::function<AgentToolResult()> cancellation_result)
+        : m_task(std::move(task)), m_record_activity(std::move(record_activity)),
+          m_cancellation_result(std::move(cancellation_result)) {}
+
+    ~ActivityAgentCallTask() override { cancel(); }
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration budget) override {
+        if (m_complete)
+            return std::nullopt;
+        auto result = m_task->advance(budget);
+        if (result) {
+            m_complete = true;
+            m_record_activity(*result);
+        }
+        return result;
+    }
+
+    void cancel() noexcept override {
+        if (m_complete)
+            return;
+        m_task->cancel();
+        m_complete = true;
+        try {
+            const AgentToolResult result = m_cancellation_result();
+            recordActivity(result);
+        } catch (...) {
+            // Activity reporting must not unwind AgentServer shutdown.
+        }
+    }
+
+    void cancelWithResult(const AgentToolResult &result) noexcept override {
+        if (m_complete)
+            return;
+        m_task->cancel();
+        m_complete = true;
+        recordActivity(result);
+    }
+
+  private:
+    void recordActivity(const AgentToolResult &result) noexcept {
+        try {
+            m_record_activity(result);
+        } catch (...) {
+            // Activity reporting must not unwind AgentServer shutdown.
+        }
+    }
+
+    std::unique_ptr<IAgentCallTask> m_task;
+    std::function<void(const AgentToolResult &)> m_record_activity;
+    std::function<AgentToolResult()> m_cancellation_result;
+    bool m_complete = false;
+};
+
+} // namespace
+
+std::unique_ptr<IAgentCallTask> IAgentCallExecutor::beginCall(const AgentCall &call) {
+    return std::make_unique<CompletedAgentCallTask>(execute(call));
+}
+
 AgentApi::AgentApi(AgentApiContext context)
     : m_context(context), m_receiver_engine(std::make_unique<ReceiverPerformanceMeasurementEngine>(
                               context.runtime.graph(), context.chain_host)) {}
@@ -63,6 +146,59 @@ void AgentApi::noteProjectReplaced(AgentReplacementCause cause,
 
 void AgentApi::setFlowRunBoundary(FlowRunBoundary boundary) {
     m_run_boundary = std::move(boundary);
+    m_custom_flow_boundary = true;
+}
+
+std::unique_ptr<IAgentCallTask> AgentApi::beginCall(const AgentCall &call) {
+    if (call.tool != "test_flow_run" || m_custom_flow_boundary)
+        return IAgentCallExecutor::beginCall(call);
+
+    const auto started = std::chrono::steady_clock::now();
+    const auto activity_time = std::chrono::system_clock::now();
+    std::unique_ptr<IAgentCallTask> task;
+    try {
+        task = startTestFlowRunTask(*this, call);
+    } catch (const AgentArgumentError &error) {
+        task = std::make_unique<CompletedAgentCallTask>(agentErrorResult(error.error(), epoch()));
+    } catch (const std::exception &error) {
+        LOG_ERROR("Agent tool %s failed: %s", call.tool.c_str(), error.what());
+        task = std::make_unique<CompletedAgentCallTask>(
+            agentErrorResult(AgentError{AgentErrorCode::Internal, "internal error in " + call.tool +
+                                                                      "; see the RF Simulator log"},
+                             epoch()));
+    } catch (...) {
+        LOG_ERROR("Agent tool %s failed: %s", call.tool.c_str(), "unknown exception");
+        task = std::make_unique<CompletedAgentCallTask>(
+            agentErrorResult(AgentError{AgentErrorCode::Internal, "internal error in " + call.tool +
+                                                                      "; see the RF Simulator log"},
+                             epoch()));
+    }
+
+    const std::string client = call.client;
+    auto record_activity = [this, client, started, activity_time](const AgentToolResult &result) {
+        AgentActivity activity;
+        activity.time = activity_time;
+        activity.tool = "test_flow_run";
+        activity.client = client;
+        activity.summary = "Run test flow";
+        activity.ok = !result.is_error;
+        activity.error_code = errorCode(result);
+        activity.duration_ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)
+                .count();
+        try {
+            m_context.host.recordActivity(activity);
+        } catch (const std::exception &error) {
+            LOG_ERROR("Agent tool %s failed: %s", "test_flow_run", error.what());
+        } catch (...) {
+            LOG_ERROR("Agent tool %s failed: %s", "test_flow_run", "unknown exception");
+        }
+    };
+    auto cancellation_result = [this] {
+        return agentErrorResult(AgentError{AgentErrorCode::Busy, "agent call cancelled"}, epoch());
+    };
+    return std::make_unique<ActivityAgentCallTask>(std::move(task), std::move(record_activity),
+                                                   std::move(cancellation_result));
 }
 
 AgentToolResult AgentApi::execute(const AgentCall &call) {

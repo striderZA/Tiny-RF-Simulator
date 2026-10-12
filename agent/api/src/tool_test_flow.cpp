@@ -2,12 +2,16 @@
 #include "agent_tools.h"
 #include "flow_boundary.h"
 
+#include "logging_core.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -155,38 +159,40 @@ AgentErrorCode agentCodeFor(FlowErrorCode code) {
     return AgentErrorCode::Internal;
 }
 
+Json encodeRow(const FlowRow &row) {
+    Json conditions = Json::array();
+    for (const ConditionValue &swept : row.conditions)
+        conditions.push_back(
+            {{"component", swept.component}, {"path", swept.path}, {"value", swept.value}});
+    Json metrics = Json::array();
+    for (const MetricSample &sample : row.metrics)
+        metrics.push_back({{"component", sample.component},
+                           {"port", sample.port},
+                           {"name", sample.name},
+                           {"value", agentNumber(sample.value)},
+                           {"unit", sample.unit},
+                           {"valid", sample.valid}});
+    return {{"conditions", std::move(conditions)}, {"metrics", std::move(metrics)}};
+}
+
 Json encodeRows(const FlowResult &result) {
     Json rows = Json::array();
-    for (const FlowRow &row : result.rows) {
-        Json conditions = Json::array();
-        for (const ConditionValue &swept : row.conditions)
-            conditions.push_back(
-                {{"component", swept.component}, {"path", swept.path}, {"value", swept.value}});
-        Json metrics = Json::array();
-        for (const MetricSample &sample : row.metrics)
-            metrics.push_back({{"component", sample.component},
-                               {"port", sample.port},
-                               {"name", sample.name},
-                               {"value", agentNumber(sample.value)},
-                               {"unit", sample.unit},
-                               {"valid", sample.valid}});
-        rows.push_back({{"conditions", std::move(conditions)}, {"metrics", std::move(metrics)}});
-    }
+    for (const FlowRow &row : result.rows)
+        rows.push_back(encodeRow(row));
     return rows;
 }
 
-} // namespace
-
-AgentToolResult executeTestFlowRunTool(AgentApi &api, const AgentCall &call) {
+std::optional<AgentToolResult>
+parseTestFlowRequest(const AgentCall &call, std::uint64_t epoch,
+                     const std::string &last_replacement_cause,
+                     const std::vector<std::string> &undone_summaries,
+                     const std::string &flow_latch_message, FlowSpec &spec) {
     AgentArgs args(call.arguments, {"epoch", "conditions", "measure"});
-    const std::uint64_t epoch = api.epoch();
     const std::uint64_t sent_epoch = args.requiredUInt64("epoch");
     if (sent_epoch != epoch)
-        return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
-                                          api.m_undone_summaries);
-    if (!api.m_flow_latch_message.empty()) {
-        AgentError latched{AgentErrorCode::Internal, api.m_flow_latch_message,
-                           std::string(kLatchHint)};
+        return staleMeasurementEpochError(epoch, last_replacement_cause, undone_summaries);
+    if (!flow_latch_message.empty()) {
+        AgentError latched{AgentErrorCode::Internal, flow_latch_message, std::string(kLatchHint)};
         return agentErrorResult(latched, epoch);
     }
 
@@ -232,36 +238,158 @@ AgentToolResult executeTestFlowRunTool(AgentApi &api, const AgentCall &call) {
         fail(std::move(error));
     }
 
-    const FlowSpec spec{1, "agent", std::move(conditions), std::move(measurements)};
-    const BoundaryOutcome outcome = api.m_run_boundary(
-        spec, api.m_context.runtime.components().all(), api.m_context.runtime.graph());
-    switch (outcome.status) {
-    case BoundaryStatus::SnapshotFailed:
-        return agentErrorResult(
-            AgentError{AgentErrorCode::Internal, "cannot snapshot the circuit: " + outcome.message},
-            epoch);
-    case BoundaryStatus::ExecutionFailed:
-        return agentErrorResult(
-            AgentError{AgentErrorCode::Internal, "flow execution failed: " + outcome.message},
-            epoch);
-    case BoundaryStatus::RestoreFailed:
-        api.m_flow_latch_message =
-            "circuit could not be fully restored after a flow run: " + outcome.message;
-        api.m_context.commands.markModified();
-        return agentErrorResult(
-            AgentError{AgentErrorCode::Internal, api.m_flow_latch_message, std::string(kLatchHint)},
-            epoch);
-    case BoundaryStatus::Completed:
-        break;
+    spec = FlowSpec{1, "agent", std::move(conditions), std::move(measurements)};
+    return std::nullopt;
+}
+
+class CompletedFlowTask final : public IAgentCallTask {
+  public:
+    explicit CompletedFlowTask(AgentToolResult result) : m_result(std::move(result)) {}
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration) override {
+        if (!m_result)
+            return std::nullopt;
+        std::optional<AgentToolResult> result{std::move(*m_result)};
+        m_result.reset();
+        return result;
     }
 
-    const FlowResult &result = outcome.result;
-    if (!result.ok)
-        return agentErrorResult(AgentError{agentCodeFor(result.error.code), result.error.message},
-                                epoch);
+    void cancel() noexcept override { m_result.reset(); }
 
-    AgentToolResult reply;
-    reply.structured =
-        Json{{"epoch", epoch}, {"row_count", result.rows.size()}, {"rows", encodeRows(result)}};
-    return reply;
+  private:
+    std::optional<AgentToolResult> m_result;
+};
+} // namespace
+
+class AgentTestFlowRunTask final : public IAgentCallTask {
+  public:
+    AgentTestFlowRunTask(AgentApi &api, FlowSpec spec, std::uint64_t epoch)
+        : m_api(api), m_epoch(epoch), m_revision(api.m_context.commands.revision()),
+          m_session(spec, api.m_context.runtime.components().all(), api.m_context.runtime.graph()),
+          m_encoded_rows(Json::array()) {}
+
+    ~AgentTestFlowRunTask() override { cancel(); }
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration budget) override {
+        if (m_complete)
+            return std::nullopt;
+
+        const std::uint64_t current_epoch = m_api.epoch();
+        if (current_epoch != m_epoch) {
+            m_session.abandon();
+            m_complete = true;
+            return staleMeasurementEpochError(current_epoch, m_api.m_last_replacement_cause,
+                                              m_api.m_undone_summaries);
+        }
+        if (m_api.m_context.commands.revision() != m_revision) {
+            m_session.abandon();
+            m_complete = true;
+            return agentErrorResult(
+                AgentError{
+                    AgentErrorCode::Busy,
+                    "the circuit changed during the flow run; retry with the current circuit"},
+                current_epoch);
+        }
+
+        const bool complete = m_session.advance(kMaxRowsPerAdvance, budget);
+        appendNewRows();
+        if (!complete)
+            return std::nullopt;
+
+        AgentToolResult result =
+            resultFor(m_api, m_session.outcome(), m_epoch, std::move(m_encoded_rows));
+        m_complete = true;
+        return result;
+    }
+
+    void cancel() noexcept override {
+        if (m_complete)
+            return;
+        try {
+            if (m_api.epoch() != m_epoch || m_api.m_context.commands.revision() != m_revision) {
+                m_session.abandon();
+            } else {
+                m_session.cancel();
+                if (m_session.outcome().status == BoundaryStatus::RestoreFailed)
+                    static_cast<void>(resultFor(m_api, m_session.outcome(), m_epoch));
+            }
+        } catch (const std::exception &error) {
+            LOG_ERROR("Agent test-flow cancellation failed: %s", error.what());
+        } catch (...) {
+            LOG_ERROR("Agent test-flow cancellation failed: %s", "unknown exception");
+        }
+        m_complete = true;
+    }
+
+    static AgentToolResult resultFor(AgentApi &api, const BoundaryOutcome &outcome,
+                                     std::uint64_t epoch,
+                                     std::optional<Json> encoded_rows = std::nullopt) {
+        switch (outcome.status) {
+        case BoundaryStatus::SnapshotFailed:
+            return agentErrorResult(AgentError{AgentErrorCode::Internal,
+                                               "cannot snapshot the circuit: " + outcome.message},
+                                    epoch);
+        case BoundaryStatus::ExecutionFailed:
+            return agentErrorResult(
+                AgentError{AgentErrorCode::Internal, "flow execution failed: " + outcome.message},
+                epoch);
+        case BoundaryStatus::RestoreFailed:
+            api.m_flow_latch_message =
+                "circuit could not be fully restored after a flow run: " + outcome.message;
+            api.m_context.commands.markModified();
+            return agentErrorResult(AgentError{AgentErrorCode::Internal, api.m_flow_latch_message,
+                                               std::string(kLatchHint)},
+                                    epoch);
+        case BoundaryStatus::Completed:
+            break;
+        }
+
+        const FlowResult &result = outcome.result;
+        if (!result.ok)
+            return agentErrorResult(
+                AgentError{agentCodeFor(result.error.code), result.error.message}, epoch);
+
+        AgentToolResult reply;
+        Json rows = encoded_rows ? std::move(*encoded_rows) : encodeRows(result);
+        reply.structured =
+            Json{{"epoch", epoch}, {"row_count", result.rows.size()}, {"rows", std::move(rows)}};
+        return reply;
+    }
+
+  private:
+    static constexpr std::size_t kMaxRowsPerAdvance = 64;
+
+    void appendNewRows() {
+        const auto &rows = m_session.outcome().result.rows;
+        for (; m_encoded_count < rows.size(); ++m_encoded_count)
+            m_encoded_rows.push_back(encodeRow(rows[m_encoded_count]));
+    }
+
+    AgentApi &m_api;
+    std::uint64_t m_epoch;
+    std::uint64_t m_revision;
+    FlowRunSession m_session;
+    Json m_encoded_rows;
+    std::size_t m_encoded_count = 0;
+    bool m_complete = false;
+};
+
+AgentToolResult executeTestFlowRunTool(AgentApi &api, const AgentCall &call) {
+    const std::uint64_t epoch = api.epoch();
+    FlowSpec spec;
+    if (auto early = parseTestFlowRequest(call, epoch, api.m_last_replacement_cause,
+                                          api.m_undone_summaries, api.m_flow_latch_message, spec))
+        return std::move(*early);
+    const BoundaryOutcome outcome = api.m_run_boundary(
+        spec, api.m_context.runtime.components().all(), api.m_context.runtime.graph());
+    return AgentTestFlowRunTask::resultFor(api, outcome, epoch);
+}
+
+std::unique_ptr<IAgentCallTask> startTestFlowRunTask(AgentApi &api, const AgentCall &call) {
+    const std::uint64_t epoch = api.epoch();
+    FlowSpec spec;
+    if (auto early = parseTestFlowRequest(call, epoch, api.m_last_replacement_cause,
+                                          api.m_undone_summaries, api.m_flow_latch_message, spec))
+        return std::make_unique<CompletedFlowTask>(std::move(*early));
+    return std::make_unique<AgentTestFlowRunTask>(api, std::move(spec), epoch);
 }
