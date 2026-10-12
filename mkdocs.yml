@@ -18,6 +18,8 @@ nav:
       - Spectrum Analyzer: measurements/spectrum.md
       - Network Analyzer: measurements/network-analyzer.md
       - Receiver Requirements: measurements/receiver-requirements.md
+      - Power Meter: measurements/power-meter.md
+      - PFB Filter Calculator: measurements/pfb-filter-calculator.md
 markdown_extensions:
   - admonition
   - attr_list
