@@ -42,7 +42,7 @@ A flow file is JSON with these keys:
 
 - `version` is required and must be `1`.
 - `name` is optional text.
-- `conditions` is an optional list. Each item has `component` (a whole number), `path` (text), and `values` (a list of at least one number). A component and path pair may appear only once.
-- `measure` is required and must not be empty. Each item has `component` (a whole number), an optional `port` (a whole number of zero or more), and `metric` (one of the names in the table). A metric may appear only once for the same component and port.
+- `conditions` is an optional list. Each item has `component` (an integer), `path` (text), and `values` (a list of at least one number). A component and path pair may appear only once.
+- `measure` is required and must not be empty. Each item has `component` (an integer), an optional `port` (an integer of zero or more), and `metric` (one of the names in the table). A metric may appear only once for the same component and port.
 
 The `component` numbers identify components in the circuit the flow was saved from. A flow made for one circuit can refer to different components in another, so build a flow from the circuit that is open, with **New from Circuit**.
