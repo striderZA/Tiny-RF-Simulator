@@ -35,3 +35,9 @@ add_test(NAME test_ui COMMAND test_ui)
 # local -jN runs only. The cheaper follow-up is to make the state directory
 # injectable and drop this.
 set_tests_properties(test_ui PROPERTIES RUN_SERIAL TRUE)
+
+# Issue #194 measurement harness: matched frame, startup, load, and agent-call timings.
+# Opt-in: build with `cmake --build build --target perf_app`. Not a ctest target.
+add_executable(perf_app EXCLUDE_FROM_ALL perf_main.cpp)
+target_link_libraries(perf_app PRIVATE imgui_test_engine simulator::app simulator::core common)
+target_compile_definitions(perf_app PRIVATE RFSIM_PERF_AGENT=1)
