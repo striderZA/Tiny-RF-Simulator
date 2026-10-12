@@ -1,3 +1,21 @@
+## [0.28.2] - 2026-10-12
+
+### Added
+
+- **Swap placed library components in place (#200)** — the Properties panel's Part dropdown replaces a placed library component with another part, taking its parameters from the new part's library definition. The successor keeps its id, canvas position, selection, links (reattached by port index), probes, group membership, and Network Analyzer and Power Meter pins; a swapped PFB keeps its IQ Plot and Channelizer Grid visibility for the current session. A swap is refused, with the reason shown and the circuit unchanged, when the new part lacks a connected, probed, or instrument port, when a link would break the physical link policy, or when the part cannot be built.
+- **Active project Git status in the header (#206)** — the menu header shows the active circuit project's commit and counts of staged, unstaged, untracked, and conflicted paths; hover for the branch and full status. The status is read from the saved project's repository, or the working directory for an untitled project. Git queries run off the UI thread and fail soft when Git or the status is unavailable.
+- **User manual, part 1 of 3 (#192)** — MkDocs manual source under `manual/pages/` with home, install, and guided tutorial pages, built under a strict gate.
+
+### Changed
+
+- **README download and build sections (#192)** — Quick Start points to the release archives, developer build steps move under their own heading, and the feature list covers receiver requirements and IIP3 checks.
+
+### Testing
+
+- Cover the swap command and its app-level carry-over, including PFB visibility and the Network Analyzer and Power Meter pin remap (`test_component_swap`, `test_component_swap_app`) (#200).
+- Restore the window flags `test_project_json` changes in the shared `app.ini`, so `test_ui` no longer depends on the saved layout (#200).
+- Add Git parsing, process, monitor, and header-width regression coverage (#206).
+
 ## [0.28.1] - 2026-10-12
 
 ### Fixed
