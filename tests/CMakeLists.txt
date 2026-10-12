@@ -449,6 +449,13 @@ add_standalone_test(test_editor_services_boundary
 )
 set_target_properties(test_editor_services_boundary PROPERTIES FOLDER "Library")
 
+# Standalone, UI-free coverage for the in-place library part swap (issue #200): id and link
+# preservation, port/probe/instrument refusals, group and probe remapping, and the PFB link policy.
+add_standalone_test(test_component_swap
+    SOURCES test_component_swap.cpp
+    LIBS simulator::editor_services
+)
+
 # Standalone UI-free validator/evaluator and draft-application coverage.
 add_standalone_test(test_receiver_requirements
     SOURCES test_receiver_requirements.cpp

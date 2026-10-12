@@ -15,6 +15,10 @@ class CircuitRuntime {
     CircuitRuntime();
 
     IComponentEngine *createComponent(const ComponentFactory &factory);
+    // Builds a component under an explicit component id and leaves the id counter alone. Only an
+    // in-place replacement uses it, while the component that held `component_id` is still
+    // registered; that predecessor must be removed before the command returns.
+    IComponentEngine *createComponentWithId(const ComponentFactory &factory, int component_id);
     bool removeComponent(int graph_node_id);
     std::optional<int> connect(int start_pin_id, int end_pin_id);
     bool disconnect(int link_id);

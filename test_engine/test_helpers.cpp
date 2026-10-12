@@ -23,6 +23,9 @@ int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const c
     return nodes.back().node_id;
 }
 void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
+    // The Node Editor is a top-level window: address it from the root ref, since callers
+    // often leave a window ref such as "Properties" set from an earlier inspector check.
+    ctx->SetRef("");
     ctx->WindowFocus("Node Editor");
     ctx->Yield(4); // Let imnodes draw and register nodes in object pool
     ImNodes::ClearNodeSelection();
@@ -79,6 +82,10 @@ void InspectorHelper::selectComboItem(ImGuiTestContext *ctx, const char *comboLa
     ctx->SetRef("Properties");
     ctx->ItemClick(comboLabel);
     ctx->Yield(2);
-    ctx->ItemClick(itemLabel);
+    // The combo list is its own popup window, so resolve the item across windows from the root.
+    ctx->SetRef("");
+    char item_path[256];
+    snprintf(item_path, sizeof(item_path), "**/%s", itemLabel);
+    ctx->ItemClick(item_path);
     ctx->Yield(2);
 }

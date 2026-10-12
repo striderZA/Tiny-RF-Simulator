@@ -73,6 +73,9 @@ class NodeGraphWidget {
     // Place a node in editor-space coordinates and keep the widget's position
     // caches current.
     void setNodeEditorSpacePosition(int node_id, ImVec2 position);
+    // Makes `node_id` the only selected node, which is what the Properties panel reads. The node
+    // must already be in the editor pool, as setNodeEditorSpacePosition() guarantees.
+    void selectNode(int node_id);
     // Bounds of existing component nodes and currently rendered collapsed groups in editor space,
     // excluding IDs added by the current batch. Nodes without a cached position are at the origin.
     std::optional<NodeGraphBounds>

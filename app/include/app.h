@@ -159,6 +159,8 @@ class RfSimulatorApp {
         const std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)>
             &factory,
         int engine_id);
+    // Places a built-in or extension library part through EditorCommands::addLibraryPart().
+    IComponentEngine *testAddLibraryPart(const std::string &part_number);
     std::optional<int> testConnectLink(int start_pin_id, int end_pin_id);
     bool testDisconnectLink(int link_id);
     bool testRemoveComponent(int graph_node_id);
@@ -227,6 +229,10 @@ class RfSimulatorApp {
     // project-local external tool record in the Extensions panel.
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
     bool saveComponentForm();
+    // Replaces a placed library component in place (EditorCommands::swapLibraryPart()) and carries
+    // the canvas position, selection, and instrument points over. Returns the refusal reason, or
+    // an empty string once the swap has happened.
+    std::string swapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
 
     // --- Measurement-chain host adapter ------------------------------------
     // The reusable network-analyzer runner depends only on common and

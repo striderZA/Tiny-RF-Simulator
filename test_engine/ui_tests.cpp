@@ -857,6 +857,108 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(amp->nf_dB(), 3.5);
     };
 
+    // Issue #200: a library part gets a Part dropdown that swaps it in place. The seeded amplifier
+    // is a manual part, so its Properties panel has none. The two library parts are written to a
+    // temporary project-local library, as the component-library case above does, because the
+    // built-in library is not installed beside the test executable.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_part_swap_in_place");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        namespace fs = std::filesystem;
+        struct ScopedLibrary {
+            RfSimulatorApp &app;
+            fs::path original_cwd;
+            std::string original_project_path;
+            fs::path root;
+            ~ScopedLibrary() {
+                std::error_code ec;
+                fs::current_path(original_cwd, ec);
+                app.m_current_project_path = original_project_path;
+                app.refreshExtensions();
+                fs::remove_all(root, ec);
+            }
+        };
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        const fs::path root =
+            fs::temp_directory_path() / ("rf_sim_issue200_" + std::to_string(stamp));
+        ScopedLibrary scoped{*s_app, fs::current_path(), s_app->m_current_project_path, root};
+        const auto write_part = [&root](const char *part_number, const char *description,
+                                        double gain_dB) {
+            const fs::path path = root / "rf-sim-libraries" / "amplifier" / "Issue 200" /
+                                  (std::string(part_number) + ".json");
+            fs::create_directories(path.parent_path());
+            std::ofstream file(path);
+            file << "{\"schema_version\": 1, \"type\": \"amplifier\", \"part_number\": \""
+                 << part_number << "\", \"manufacturer\": \"Issue 200\", \"description\": \""
+                 << description << "\", \"parameters\": {\"gain_dB\": " << gain_dB
+                 << ", \"nf_dB\": 2.0}}";
+        };
+        write_part("UI-SWAP-A", "Swap source", 10.0);
+        write_part("UI-SWAP-B", "Swap target", 20.0);
+        fs::current_path(root);
+        s_app->m_current_project_path = (root / "issue200.rfsim").string();
+        s_app->refreshExtensions();
+
+        const auto &graph = s_app->testGraphEngine();
+        const auto part_of = [&graph](int node_id) {
+            for (const auto &node : graph.nodes()) {
+                if (node.node_id == node_id)
+                    return node.part_number;
+            }
+            return std::string();
+        };
+        int manual_node = -1;
+        for (auto *amp : s_app->testComponents().byType<AmplifierEngine>()) {
+            if (part_of(amp->graphNodeId()).empty()) {
+                manual_node = amp->graphNodeId();
+                break;
+            }
+        }
+        IM_CHECK(manual_node >= 0);
+        NodeHelper::selectNode(ctx, manual_node);
+        InspectorHelper::waitForPopulated(ctx, manual_node);
+        ctx->SetRef("Properties");
+        IM_CHECK(!ctx->ItemExists("Part"));
+
+        IComponentEngine *placed = s_app->testAddLibraryPart("UI-SWAP-A");
+        IM_CHECK(placed != nullptr);
+        const int component_id = placed->id();
+        const int old_node = placed->graphNodeId();
+        NodeHelper::selectNode(ctx, old_node);
+        InspectorHelper::waitForPopulated(ctx, old_node);
+        ctx->SetRef("Properties");
+        IM_CHECK(ctx->ItemExists("Part"));
+        const ImVec2 old_position = s_app->testGraphWidget().editorPositionForSave(old_node);
+        InspectorHelper::selectComboItem(ctx, "Part", "UI-SWAP-B  Swap target");
+        ctx->Yield(4);
+
+        // The successor keeps the component id, carries the new part and its own parameters, and
+        // is the sole selected node, which is what the Properties panel reads.
+        const IComponentEngine *swapped = nullptr;
+        for (IComponentEngine *component : s_app->testComponents().all()) {
+            if (component && component->id() == component_id)
+                swapped = component;
+        }
+        IM_CHECK(swapped != nullptr);
+        IM_CHECK(swapped->graphNodeId() != old_node);
+        IM_CHECK(part_of(swapped->graphNodeId()) == "UI-SWAP-B");
+        IM_CHECK_EQ(swapped->serialize().at("gain_dB").get<double>(), 20.0);
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);
+        int selected = -1;
+        ImNodes::GetSelectedNodes(&selected);
+        IM_CHECK_EQ(selected, swapped->graphNodeId());
+        // The successor takes over the predecessor's editor position.
+        const ImVec2 new_position =
+            s_app->testGraphWidget().editorPositionForSave(swapped->graphNodeId());
+        IM_CHECK(std::fabs(new_position.x - old_position.x) < 0.01f);
+        IM_CHECK(std::fabs(new_position.y - old_position.y) < 0.01f);
+
+        // Remove the test part so later cases see the seeded circuit.
+        // selectComboItem left the Properties ref set; re-root so the Node Editor resolves.
+        ctx->SetRef("");
+        ctx->WindowFocus("Node Editor");
+        NodeHelper::deleteSelectedNode(ctx);
+    };
+
     // =========================================================================
     // Connection Creation Tests
     // =========================================================================
