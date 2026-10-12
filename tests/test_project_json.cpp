@@ -39,6 +39,32 @@ std::string readBytes(const std::filesystem::path &path) {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
+
+// The app saves these panels to the shared app.ini when it is destroyed. Capture them
+// on construction and restore them when the scope ends, so a case that changes them
+// leaves app.ini as it found it. Declare it after the app: destructors run in reverse
+// order, so the restore runs before the app saves, including when a REQUIRE throws.
+class ScopedWindowState {
+  public:
+    explicit ScopedWindowState(RfSimulatorApp &app)
+        : m_app(app), m_log(app.m_show_log), m_spectrum(app.m_show_spectrum),
+          m_properties(app.m_show_properties), m_node_editor(app.m_show_node_editor) {}
+    ~ScopedWindowState() {
+        m_app.m_show_log = m_log;
+        m_app.m_show_spectrum = m_spectrum;
+        m_app.m_show_properties = m_properties;
+        m_app.m_show_node_editor = m_node_editor;
+    }
+    ScopedWindowState(const ScopedWindowState &) = delete;
+    ScopedWindowState &operator=(const ScopedWindowState &) = delete;
+
+  private:
+    RfSimulatorApp &m_app;
+    bool m_log;
+    bool m_spectrum;
+    bool m_properties;
+    bool m_node_editor;
+};
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture, "save writes toJson plus the project name", "[project_json]") {
@@ -84,6 +110,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Checkpoint snapshots keep S-parameter paths verb
 
 TEST_CASE_METHOD(ImGuiFixture, "fromJson can leave window state alone", "[project_json]") {
     RfSimulatorApp app;
+    ScopedWindowState restore_window_state(app);
     app.m_show_log = true;
     app.m_show_spectrum = false;
     app.m_show_properties = false;
@@ -103,6 +130,7 @@ TEST_CASE_METHOD(ImGuiFixture, "fromJson can leave window state alone", "[projec
 TEST_CASE_METHOD(ImGuiFixture, "fromJson ignores window-state shape when disabled",
                  "[project_json]") {
     RfSimulatorApp app;
+    ScopedWindowState restore_window_state(app);
     app.newProject();
     app.m_show_log = false;
 

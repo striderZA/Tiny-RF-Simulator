@@ -81,6 +81,11 @@ static RfSimulatorApp *s_app = nullptr;
 void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     s_app = &app;
 
+    // The suite drives Properties and Node Editor without opening them first, so open
+    // them here rather than inherit whatever layout the shared app.ini holds.
+    app.m_show_properties = true;
+    app.m_show_node_editor = true;
+
     // The first-run tutorial offer is a blocking modal, which would stop every
     // other test from reaching the menu bar. Suppress it here (before the first
     // frame) — tutorial_first_run_prompt_marks_completed re-arms it explicitly.
