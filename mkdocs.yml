@@ -9,6 +9,7 @@ nav:
   - Getting started:
       - Install: install.md
       - Guided tutorial: tutorial.md
+      - Agent (MCP): agent.md
 markdown_extensions:
   - admonition
   - attr_list
