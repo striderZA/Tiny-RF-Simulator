@@ -814,13 +814,19 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
     REQUIRE(circuit_get != nullptr);
     CHECK(circuit_get->input_schema.at("properties").at("include_params").at("default") == false);
 
+    const auto &circuit_component =
+        circuit_get->output_schema.at("anyOf").at(0).at("properties").at("components").at("items");
+    REQUIRE(circuit_component.at("properties").contains("position"));
+    CHECK(circuit_component.at("properties").at("position").at("required") ==
+          nlohmann::json::array({"x", "y"}));
+
     const auto *circuit_edit = findAgentTool("circuit_edit");
     REQUIRE(circuit_edit != nullptr);
     const auto &operations = circuit_edit->input_schema.at("properties").at("ops");
     CHECK(operations.at("minItems") == 1);
     CHECK(operations.at("maxItems") == 64);
     const auto &variants = operations.at("items").at("oneOf");
-    REQUIRE(variants.size() == 9);
+    REQUIRE(variants.size() == 10);
     std::set<std::string> operation_names;
     for (const auto &variant : variants) {
         REQUIRE(variant.at("properties").contains("op"));
@@ -828,7 +834,8 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
         operation_names.insert(variant.at("properties").at("op").at("const").get<std::string>());
     }
     CHECK((operation_names == std::set<std::string>{"add", "remove", "set_params", "connect",
-                                                    "disconnect", "probe_add", "probe_remove"}));
+                                                    "disconnect", "probe_add", "probe_remove",
+                                                    "move"}));
 
     const auto *measure_port = findAgentTool("measure_port");
     REQUIRE(measure_port != nullptr);

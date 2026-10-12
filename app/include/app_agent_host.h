@@ -52,6 +52,8 @@ class AppAgentHost final : public IAgentHost {
     void commitCheckpoint(const std::string &summary) override;
     void discardCheckpoint() override;
     void placeComponents(const std::vector<AgentPlacement> &placements) override;
+    std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const override;
+    void setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override;
     bool appModalOpen() const override;
     std::optional<std::string> projectName() const override;
     void recordActivity(const AgentActivity &activity) override;

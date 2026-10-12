@@ -616,6 +616,61 @@ TEST_CASE_METHOD(AppFixture, "Revert restores the checkpoint and tells the agent
     CHECK(app.isDirty());
 }
 
+TEST_CASE_METHOD(AppFixture, "Agent component moves update the canvas and revert restores position",
+                 "[agent_app]") {
+    app.newProject();
+
+    const AgentToolResult add = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"},
+                                                   {"type", "generator"},
+                                                   {"position", {{"x", 20.0}, {"y", 30.0}}}}})}});
+    REQUIRE_FALSE(add.is_error);
+
+    const AgentToolResult before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(before.is_error);
+    REQUIRE(before.structured.at("components").size() == 1);
+    const int component_id = before.structured.at("components").at(0).at("id").get<int>();
+    const auto components = app.testComponents().all();
+    REQUIRE(components.size() == 1);
+    const int graph_node_id = components.front()->graphNodeId();
+    const ImVec2 original_position = app.testGraphWidget().editorPositionForSave(graph_node_id);
+    const std::uint64_t revision = before.structured.at("revision").get<std::uint64_t>();
+    const double target_x = static_cast<double>(original_position.x) + 220.0;
+    const double target_y = static_cast<double>(original_position.y) + 45.0;
+
+    const AgentToolResult move = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "move"},
+                                          {"component", component_id},
+                                          {"position", {{"x", target_x}, {"y", target_y}}}}})}});
+    REQUIRE_FALSE(move.is_error);
+
+    const AgentToolResult after = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(after.is_error);
+    CHECK(after.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(target_x));
+    CHECK(after.structured.at("components").at(0).at("position").at("y").get<double>() ==
+          Catch::Approx(target_y));
+    CHECK(after.structured.at("revision") == revision + 1);
+    CHECK(after.structured.at("dirty") == true);
+
+    REQUIRE(app.testAgentHost().checkpoints().size() == 2);
+    const std::uint64_t move_checkpoint = app.testAgentHost().checkpoints().back().id;
+    app.revertAgentCheckpoint(move_checkpoint);
+
+    const AgentToolResult restored = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(restored.is_error);
+    CHECK(restored.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(original_position.x));
+    CHECK(restored.structured.at("components").at(0).at("position").at("y").get<double>() ==
+          Catch::Approx(original_position.y));
+    CHECK(restored.structured.at("dirty") == true);
+}
+
 // ======================================================================
 // Test: Revert keeps S-parameter data from outside the project folder
 //

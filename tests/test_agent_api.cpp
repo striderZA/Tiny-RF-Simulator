@@ -48,6 +48,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -102,6 +103,13 @@ class FakeAgentHost final : public IAgentHost {
     void placeComponents(const std::vector<AgentPlacement> &placements) override {
         last_placements = placements;
     }
+    std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const override {
+        const auto found = node_positions.find(graph_node_id);
+        return found == node_positions.end() ? std::array<float, 2>{0.0f, 0.0f} : found->second;
+    }
+    void setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+        node_positions[graph_node_id] = position;
+    }
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
     void recordActivity(const AgentActivity &entry) override {
@@ -121,6 +129,7 @@ class FakeAgentHost final : public IAgentHost {
     std::vector<AgentPlacement> last_placements;
     std::vector<AgentActivity> activities;
     std::string last_checkpoint_summary;
+    std::unordered_map<int, std::array<float, 2>> node_positions;
 };
 
 struct ApiFixture {
@@ -259,6 +268,81 @@ TEST_CASE("circuit_get reports components, ports, links, probes and analyzer poi
     const AgentToolResult no_params = fixture.call("circuit_get");
     REQUIRE_FALSE(no_params.is_error);
     CHECK_FALSE(no_params.structured.at("components")[0].contains("params"));
+}
+
+TEST_CASE("circuit_get reports editor-space component positions", "[agent_api]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.host.node_positions[generator->graphNodeId()] = {12.5f, -7.25f};
+
+    const AgentToolResult result = fixture.call("circuit_get");
+    REQUIRE_FALSE(result.is_error);
+    const auto &component = result.structured.at("components").at(0);
+    REQUIRE(component.contains("position"));
+    CHECK(component.at("position") == nlohmann::json{{"x", 12.5}, {"y", -7.25}});
+}
+
+TEST_CASE("circuit_edit moves a component and marks the project modified",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.host.node_positions[generator->graphNodeId()] = {10.0f, 20.0f};
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const AgentToolResult result = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "move"},
+                                                 {"component", generator->id()},
+                                                 {"position", {{"x", 30.0}, {"y", 40.0}}}}}));
+
+    REQUIRE_FALSE(result.is_error);
+    CHECK(result.structured.at("revision") == revision + 1);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+    CHECK(fixture.host.last_checkpoint_summary == "1 component moved");
+    const AgentToolResult read = fixture.call("circuit_get");
+    REQUIRE_FALSE(read.is_error);
+    CHECK(read.structured.at("components").at(0).at("position") ==
+          nlohmann::json{{"x", 30.0}, {"y", 40.0}});
+}
+
+TEST_CASE("circuit_edit rejects a move to an unknown component without changing state",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const AgentToolResult result = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "move"}, {"component", 999}, {"position", {{"x", 30.0}, {"y", 40.0}}}}}));
+
+    CHECK(errorFor(result).at("code") == "NOT_FOUND");
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.host.checkpoint_discards == 1);
+}
+
+TEST_CASE("circuit_edit rejects non-finite move coordinates without changing state",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.host.node_positions[generator->graphNodeId()] = {10.0f, 20.0f};
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const AgentToolResult result = editCall(
+        fixture,
+        nlohmann::ordered_json::array(
+            {{{"op", "move"},
+              {"component", generator->id()},
+              {"position", {{"x", std::numeric_limits<double>::infinity()}, {"y", 40.0}}}}}));
+
+    CHECK(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/ops/0/position");
+    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.host.node_positions.at(generator->graphNodeId()) ==
+          std::array<float, 2>{10.0f, 20.0f});
+    CHECK(fixture.host.checkpoint_discards == 1);
 }
 
 TEST_CASE("Calls that take ids require the current epoch", "[agent_api]") {

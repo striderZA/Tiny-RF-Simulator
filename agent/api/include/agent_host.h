@@ -39,6 +39,8 @@ class IAgentHost {
     virtual void commitCheckpoint(const std::string &summary) = 0;
     virtual void discardCheckpoint() = 0;
     virtual void placeComponents(const std::vector<AgentPlacement> &) = 0;
+    virtual std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const = 0;
+    virtual void setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) = 0;
     virtual bool appModalOpen() const = 0;
     virtual std::optional<std::string> projectName() const = 0;
     virtual void recordActivity(const AgentActivity &) = 0;

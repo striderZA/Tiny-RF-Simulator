@@ -185,6 +185,12 @@ Json setParamsOperationSchema(bool use_ref) {
     fields["component"] = integerSchema("Component id to update.", 0);
     return objectSchema(std::move(fields), {"op", "component", "params"});
 }
+Json moveOperationSchema() {
+    return objectSchema(properties({{"op", constString("move")},
+                                    {"component", integerSchema("Component id to move.", 0)},
+                                    {"position", positionSchema()}}),
+                        {"op", "component", "position"});
+}
 
 Json connectOperationSchema() {
     return objectSchema(properties({{"op", constString("connect")},
@@ -233,7 +239,7 @@ Json editOperationSchema() {
         {"oneOf",
          Json::array({addOperationSchema(false), addOperationSchema(true), removeOperationSchema(),
                       setParamsOperationSchema(false), setParamsOperationSchema(true),
-                      connectOperationSchema(), disconnectOperationSchema(),
+                      connectOperationSchema(), disconnectOperationSchema(), moveOperationSchema(),
                       probeOperationSchema("probe_add"), probeOperationSchema("probe_remove")})}};
 }
 
@@ -282,11 +288,13 @@ Json circuitComponentSchema(bool include_params) {
                               {"label", stringSchema()},
                               {"part_number", stringSchema()},
                               {"inputs", arraySchema(componentInputSchema())},
-                              {"outputs", arraySchema(componentOutputSchema())}});
+                              {"outputs", arraySchema(componentOutputSchema())},
+                              {"position", positionSchema()}});
     if (include_params) {
         fields["params"] = paramsSchema();
     }
-    return objectSchema(std::move(fields), {"id", "type", "label", "inputs", "outputs"});
+    return objectSchema(std::move(fields),
+                        {"id", "type", "label", "inputs", "outputs", "position"});
 }
 
 Json networkAnalyzerPointsSchema() {
@@ -309,16 +317,17 @@ Json parameterChangeSchema() {
 }
 
 Json appliedOperationSchema() {
-    return objectSchema(properties({{"op_index", integerSchema("Zero-based operation index.", 0)},
-                                    {"op", enumSchema({"add", "remove", "set_params", "connect",
-                                                       "disconnect", "probe_add", "probe_remove"})},
-                                    {"component", integerSchema("Affected component id.", 0)},
-                                    {"ref", stringSchema()},
-                                    {"label", stringSchema()},
-                                    {"params", paramsSchema()},
-                                    {"also_changed", arraySchema(parameterChangeSchema())},
-                                    {"unchanged", booleanSchema()}}),
-                        {"op_index", "op"});
+    return objectSchema(
+        properties({{"op_index", integerSchema("Zero-based operation index.", 0)},
+                    {"op", enumSchema({"add", "remove", "set_params", "connect", "disconnect",
+                                       "probe_add", "probe_remove", "move"})},
+                    {"component", integerSchema("Affected component id.", 0)},
+                    {"ref", stringSchema()},
+                    {"label", stringSchema()},
+                    {"params", paramsSchema()},
+                    {"also_changed", arraySchema(parameterChangeSchema())},
+                    {"unchanged", booleanSchema()}}),
+        {"op_index", "op"});
 }
 
 Json circuitEditSuccessSchema() {
@@ -562,8 +571,8 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                 {"epoch", "parts", "total"}),
             readOnlyAnnotations()),
         tool("circuit_get", "Get Circuit",
-             "Read the current project circuit, component ids, topology, probes, and "
-             "network-analyzer settings.",
+             "Read the current project circuit, component ids, topology, canvas positions, probes, "
+             "and network-analyzer settings.",
              inputSchema(
                  properties({{"include_params", Json{{"type", "boolean"}, {"default", false}}}}),
                  {}, Json{{"include_params", true}}),

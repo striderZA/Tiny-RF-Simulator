@@ -19,7 +19,7 @@ The rf-sim tools act on the project open in the user's RF Simulator window. Argu
 
 1. `circuit_get` (`include_params: true` for values). Use each component's `id` field, not its label number.
 2. Before changing a component, call `component_get {epoch, component}`; its `param_info` gives keys, units, and read-only flags.
-3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order).
+3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` uses a component id and editor-space position from `circuit_get`.
 4. Measure with `measure_port` or `network_analyzer_sweep`. `null` means unavailable, never zero.
 
 ## Epochs

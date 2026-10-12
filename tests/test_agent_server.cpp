@@ -56,6 +56,8 @@ class TestHost final : public IAgentHost {
     void commitCheckpoint(const std::string &) override {}
     void discardCheckpoint() override {}
     void placeComponents(const std::vector<AgentPlacement> &) override {}
+    std::array<float, 2> nodeEditorSpacePosition(int) const override { return {0.0f, 0.0f}; }
+    void setNodeEditorSpacePosition(int, std::array<float, 2>) override {}
     bool appModalOpen() const override { return modal; }
     std::optional<std::string> projectName() const override { return std::nullopt; }
     void recordActivity(const AgentActivity &) override {}

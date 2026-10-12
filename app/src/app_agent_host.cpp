@@ -104,6 +104,14 @@ void AppAgentHost::placeComponents(const std::vector<AgentPlacement> &placements
         m_graph_widget.setNodeEditorSpacePosition(p.graph_node_id, pos);
     }
 }
+std::array<float, 2> AppAgentHost::nodeEditorSpacePosition(int graph_node_id) const {
+    const ImVec2 position = m_graph_widget.editorPositionForSave(graph_node_id);
+    return {position.x, position.y};
+}
+
+void AppAgentHost::setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) {
+    m_graph_widget.setNodeEditorSpacePosition(graph_node_id, ImVec2(position[0], position[1]));
+}
 
 // ======================================================================
 // Modal detection

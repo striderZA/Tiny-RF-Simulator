@@ -157,12 +157,12 @@ struct RefEntry {
 struct EditSummary {
     int components_added = 0;
     int components_removed = 0;
+    int components_moved = 0;
     int links_added = 0;
     int links_removed = 0;
     int parameter_changes = 0;
     int probes_added = 0;
     int probes_removed = 0;
-
     std::string text() const {
         std::vector<std::string> pieces;
         const auto append = [&pieces](int count, std::string_view singular, std::string_view plural,
@@ -177,6 +177,7 @@ struct EditSummary {
         };
         append(components_added, "component", "components", "+");
         append(components_removed, "component", "components", "-");
+        append(components_moved, "component moved", "components moved");
         append(links_added, "link", "links", "+");
         append(links_removed, "link", "links", "-");
         append(parameter_changes, "parameter change", "parameter changes");
@@ -617,6 +618,30 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
                     ++added_index;
                 }
             }
+            return;
+        }
+
+        if (op == "move") {
+            requireOperationKeys(operation, operation_path, {"op", "component", "position"});
+            const int component_id = intValue(required(operation, "component", operation_path),
+                                              childPath(operation_path, "component"));
+            const auto position = parsePosition(operation, operation_path);
+            if (!position)
+                invalid(childPath(operation_path, "position"), "required field is missing");
+            IComponentEngine *component = findComponentById(context.runtime, component_id);
+            if (!component)
+                notFound("component " + std::to_string(component_id) + " is not in this circuit");
+
+            applied_entry["component"] = component_id;
+            if (context.host.nodeEditorSpacePosition(component->graphNodeId()) == *position) {
+                applied_entry["unchanged"] = true;
+                applied.push_back(std::move(applied_entry));
+                return;
+            }
+            context.host.setNodeEditorSpacePosition(component->graphNodeId(), *position);
+            context.commands.markModified();
+            ++summary.components_moved;
+            applied.push_back(std::move(applied_entry));
             return;
         }
 
