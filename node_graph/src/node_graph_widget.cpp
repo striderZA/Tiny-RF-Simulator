@@ -236,7 +236,7 @@ void NodeGraphWidget::drawNodes() {
     // This ensures detectNodeMoves() only checks nodes that were actually drawn,
     // not stale entries from previous frames.
     m_node_screen_positions.clear();
-
+    const std::unordered_set<int> previously_hidden = m_hidden_last_frame;
     std::unordered_set<int> hidden_nodes;
     for (const auto &g : m_engine.groups()) {
         if (g.collapsed) {
@@ -251,7 +251,22 @@ void NodeGraphWidget::drawNodes() {
         if (hidden_nodes.count(node.node_id))
             continue;
 
+        const bool was_hidden = previously_hidden.count(node.node_id) > 0;
+        if (was_hidden) {
+            // ImNodes drops hidden members at EndNodeEditor. Restore the cached grid position
+            // before their first BeginNode after expansion.
+            const auto cached_position = m_cached_grid_positions.find(node.node_id);
+            if (cached_position != m_cached_grid_positions.end())
+                ImNodes::SetNodeGridSpacePos(node.node_id, cached_position->second);
+        }
+
         ImNodes::BeginNode(node.node_id);
+        // A cache restore is not a user drag; reset both movement baselines.
+        if (was_hidden) {
+            const ImVec2 editor_position = ImNodes::GetNodeEditorSpacePos(node.node_id);
+            m_last_node_grid_positions[node.node_id] = editor_position;
+            m_prev_node_grid_positions[node.node_id] = editor_position;
+        }
 
         // Cache screen-space positions after BeginNode registers the node in the imnodes
         // pool, so GetNodeScreenSpacePos/GetNodeGridSpacePos don't assert on first frame.

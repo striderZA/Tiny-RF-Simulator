@@ -9,11 +9,13 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 - `{op:"add", type, ref?, params?, position?:{x,y}}`, or `{op:"add", library_part:{part_number, type?}, ref?, params?, position?}`.
 - `{op:"remove", component}`
 - `{op:"move", component, position:{x,y}}` moves an existing node to an absolute editor-space position. `circuit_get.components[].position` reports the current `{x,y}` in the same coordinates.
+- Editor-space positions include the current canvas pan. A pan does not change `epoch`; call `circuit_get` again after a pan before a move.
+- A move can target only components that existed before the current `circuit_edit` call. Set a new component's position in its `add` operation.
 - `{op:"set_params", component | ref, params}`
 - `{op:"connect", from, to}`: `from` is an output port and `to` is an input port. Each endpoint is `{component, port}` or `{ref, port}`.
 - `{op:"disconnect", to}`: the input side only. An unconnected input returns `NOT_FOUND`.
 - `{op:"probe_add" | "probe_remove", at}`: `at` names a port. `direction` is `"output"` (the default) or `"input"`. `circuit_get` lists each probe as `{component, port, direction}`, and that endpoint can be passed back as `at`.
-- A changed move advances `revision`, marks the project dirty, and creates a checkpoint that can be reverted from the Agent panel. Invalid component ids return `NOT_FOUND`; non-finite coordinates return `INVALID_ARGUMENT`.
+- A changed move advances `revision`, marks the project dirty, and creates a checkpoint. **Revert to before this call** in the Agent panel discards later changes, including user edits, after confirmation. Invalid component ids return `NOT_FOUND`; non-finite coordinates return `INVALID_ARGUMENT`.
 - Ports are zero-based. A batch holds 1 to 64 ops.
 - `ref`: a letter, then letters, digits, or underscores, at most 32 characters. It names a component added earlier in the same call and is unusable outside that call.
 - Success returns `epoch`, `revision`, `applied`, and `refs` (name to id). Each `applied` entry has `op_index` and `op`, plus `component`, `ref`, `label`, `params`, `also_changed` (`{path, old_value, new_value}` records), and `unchanged` where relevant.

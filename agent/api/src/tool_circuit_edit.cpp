@@ -459,7 +459,11 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
     EditSummary summary;
 
     const auto finish = [&](bool preserve_empty_checkpoint = false) {
-        if (applied.empty() && !preserve_empty_checkpoint) {
+        // No-op results do not create empty checkpoints or evict real history.
+        const bool state_changed =
+            std::any_of(applied.begin(), applied.end(),
+                        [](const Json &entry) { return !entry.value("unchanged", false); });
+        if (!state_changed && !preserve_empty_checkpoint) {
             context.host.discardCheckpoint();
         } else {
             context.host.commitCheckpoint(summary.text());
@@ -631,6 +635,12 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
             IComponentEngine *component = findComponentById(context.runtime, component_id);
             if (!component)
                 notFound("component " + std::to_string(component_id) + " is not in this circuit");
+            if (std::find(added_node_ids.begin(), added_node_ids.end(), component->graphNodeId()) !=
+                added_node_ids.end()) {
+                invalid(childPath(operation_path, "component"),
+                        "cannot move a component added in this batch; set position in the add "
+                        "operation");
+            }
 
             applied_entry["component"] = component_id;
             if (context.host.nodeEditorSpacePosition(component->graphNodeId()) == *position) {

@@ -932,6 +932,27 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     CHECK(list_result.at("tools")[0].at("outputSchema") == catalog_tool->output_schema);
     CHECK(list_result.at("tools")[0].at("annotations") == catalog_tool->annotations);
 
+    const auto *circuit_get_tool = findAgentTool("circuit_get");
+    REQUIRE(circuit_get_tool != nullptr);
+    CHECK(tools[2].at("outputSchema") == circuit_get_tool->output_schema);
+    const auto &component_schema =
+        tools[2].at("outputSchema").at("anyOf").at(0).at("properties").at("components").at("items");
+    REQUIRE(component_schema.at("properties").contains("position"));
+    CHECK(component_schema.at("properties").at("position").at("required") ==
+          Json::array({"x", "y"}));
+
+    const auto *circuit_edit_tool = findAgentTool("circuit_edit");
+    REQUIRE(circuit_edit_tool != nullptr);
+    CHECK(tools[4].at("inputSchema") == circuit_edit_tool->input_schema);
+    const auto &edit_variants =
+        tools[4].at("inputSchema").at("properties").at("ops").at("items").at("oneOf");
+    bool has_move = false;
+    for (const auto &variant : edit_variants) {
+        if (variant.at("properties").at("op").at("const") == "move")
+            has_move = true;
+    }
+    CHECK(has_move);
+
     OrderedJson call_params{{"name", "library_search"},
                             {"arguments", OrderedJson{{"query", "LNA"}}}};
     const auto call_step = sendModern(session, 11, "tools/call", std::move(call_params));

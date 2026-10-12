@@ -19,13 +19,14 @@ The rf-sim tools act on the project open in the user's RF Simulator window. Argu
 
 1. `circuit_get` (`include_params: true` for values). Use each component's `id` field, not its label number.
 2. Before changing a component, call `component_get {epoch, component}`; its `param_info` gives keys, units, and read-only flags.
-3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` uses a component id and editor-space position from `circuit_get`.
+3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` uses the component id and position from the latest `circuit_get`; use `add.position` for a new component.
 4. Measure with `measure_port` or `network_analyzer_sweep`. `null` means unavailable, never zero.
 
 ## Epochs
 
 - Your edits don't change `epoch`, so the epoch from `circuit_get` stays valid. `revision` advances on each edit.
 - `STALE_EPOCH` means the project was replaced. Call `circuit_get` and re-plan; component ids restart at 100, so an old id may now name something else.
+- A canvas pan changes editor-space positions but does not change `epoch`. Call `circuit_get` again after a pan before you move a component.
 
 ## circuit_edit rules
 

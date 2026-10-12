@@ -3,6 +3,7 @@
 #include "agent_host.h"
 #include "node_graph_widget.h"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>

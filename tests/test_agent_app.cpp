@@ -671,6 +671,213 @@ TEST_CASE_METHOD(AppFixture, "Agent component moves update the canvas and revert
     CHECK(restored.structured.at("dirty") == true);
 }
 
+TEST_CASE_METHOD(AppFixture, "Agent rejects moving a new component in the same batch",
+                 "[agent_app]") {
+    app.newProject();
+
+    const AgentToolResult initial_add = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"}, {"type", "generator"}}})}});
+    REQUIRE_FALSE(initial_add.is_error);
+    const int next_component_id =
+        initial_add.structured.at("applied").at(0).at("component").get<int>() + 1;
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"}, {"type", "generator"}},
+                                                  {{"op", "move"},
+                                                   {"component", next_component_id},
+                                                   {"position", {{"x", 30.0}, {"y", 40.0}}}}})}});
+
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    CHECK(result.structured.at("error").at("details").at("path") == "/ops/1/component");
+    REQUIRE(result.structured.at("applied").size() == 1);
+    CHECK(result.structured.at("applied").at(0).at("component") == next_component_id);
+}
+
+TEST_CASE_METHOD(AppFixture, "Collapsed group members retain their positions after expansion",
+                 "[agent_app][collapsed]") {
+    app.newProject();
+    const auto add = [&](double x, double y) {
+        return app.testAgentCall(
+            "circuit_edit",
+            ordered_json{{"epoch", app.testProjectEpoch()},
+                         {"ops", ordered_json::array({{{"op", "add"},
+                                                       {"type", "generator"},
+                                                       {"position", {{"x", x}, {"y", y}}}}})}});
+    };
+    REQUIRE_FALSE(add(20.0, 30.0).is_error);
+    REQUIRE_FALSE(add(260.0, 140.0).is_error);
+
+    const auto components = app.testComponents().all();
+    REQUIRE(components.size() == 2);
+    const int first_node = components[0]->graphNodeId();
+    const int second_node = components[1]->graphNodeId();
+    const int group_id = app.testCreateGroup("Position test", {first_node, second_node});
+    REQUIRE(group_id >= 0);
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+
+    bool open = true;
+    const auto draw_canvas = [&]() {
+        runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+    };
+    draw_canvas();
+    const ImVec2 first_before = app.testGraphWidget().editorPositionForSave(first_node);
+    const ImVec2 second_before = app.testGraphWidget().editorPositionForSave(second_node);
+
+    REQUIRE(app.testSetGroupCollapsed(group_id, true));
+    draw_canvas();
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+    draw_canvas();
+
+    const ImVec2 first_after = app.testGraphWidget().editorPositionForSave(first_node);
+    const ImVec2 second_after = app.testGraphWidget().editorPositionForSave(second_node);
+    CHECK(first_after.x == Catch::Approx(first_before.x));
+    CHECK(first_after.y == Catch::Approx(first_before.y));
+    CHECK(second_after.x == Catch::Approx(second_before.x));
+    CHECK(second_after.y == Catch::Approx(second_before.y));
+}
+
+TEST_CASE_METHOD(AppFixture, "Agent moves to a collapsed member position that survives expansion",
+                 "[agent_app][collapsed]") {
+    app.newProject();
+    const auto add = [&](double x, double y) {
+        return app.testAgentCall(
+            "circuit_edit",
+            ordered_json{{"epoch", app.testProjectEpoch()},
+                         {"ops", ordered_json::array({{{"op", "add"},
+                                                       {"type", "generator"},
+                                                       {"position", {{"x", x}, {"y", y}}}}})}});
+    };
+    REQUIRE_FALSE(add(20.0, 30.0).is_error);
+    REQUIRE_FALSE(add(260.0, 140.0).is_error);
+
+    const auto components = app.testComponents().all();
+    REQUIRE(components.size() == 2);
+    const int component_id = components[0]->id();
+    const int first_node = components[0]->graphNodeId();
+    const int second_node = components[1]->graphNodeId();
+    const int group_id = app.testCreateGroup("Agent move test", {first_node, second_node});
+    REQUIRE(group_id >= 0);
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+
+    bool open = true;
+    const auto draw_canvas = [&]() {
+        runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+    };
+    draw_canvas();
+    REQUIRE(app.testSetGroupCollapsed(group_id, true));
+    draw_canvas();
+
+    const AgentToolResult before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(before.is_error);
+    const auto &position = before.structured.at("components").at(0).at("position");
+    const double target_x = position.at("x").get<double>() + 220.0;
+    const double target_y = position.at("y").get<double>() + 45.0;
+    const AgentToolResult move = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "move"},
+                                          {"component", component_id},
+                                          {"position", {{"x", target_x}, {"y", target_y}}}}})}});
+    REQUIRE_FALSE(move.is_error);
+
+    draw_canvas();
+    const AgentToolResult still_collapsed =
+        app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(still_collapsed.is_error);
+    CHECK(still_collapsed.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(target_x));
+    CHECK(still_collapsed.structured.at("components").at(0).at("position").at("y").get<double>() ==
+          Catch::Approx(target_y));
+
+    REQUIRE(app.testSetGroupCollapsed(group_id, false));
+    draw_canvas();
+    const AgentToolResult expanded = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(expanded.is_error);
+    CHECK(expanded.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(target_x));
+    CHECK(expanded.structured.at("components").at(0).at("position").at("y").get<double>() ==
+          Catch::Approx(target_y));
+}
+
+TEST_CASE_METHOD(AppFixture, "circuit_get positions include the current canvas pan",
+                 "[agent_app]") {
+    app.newProject();
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
+    ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+
+    const AgentToolResult add = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"},
+                                                   {"type", "generator"},
+                                                   {"position", {{"x", 20.0}, {"y", 30.0}}}}})}});
+    REQUIRE_FALSE(add.is_error);
+
+    bool open = true;
+    const auto draw_canvas = [&]() {
+        runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+    };
+    draw_canvas();
+    const AgentToolResult before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(before.is_error);
+    const auto &before_position = before.structured.at("components").at(0).at("position");
+    const double x_before = before_position.at("x").get<double>();
+    const double y_before = before_position.at("y").get<double>();
+    const std::uint64_t epoch = before.structured.at("epoch").get<std::uint64_t>();
+
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
+    ImNodes::EditorContextResetPanning(ImVec2(120.0f, -40.0f));
+    draw_canvas();
+
+    const AgentToolResult after = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(after.is_error);
+    CHECK(after.structured.at("epoch") == epoch);
+    CHECK(after.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(x_before + 120.0));
+    CHECK(after.structured.at("components").at(0).at("position").at("y").get<double>() ==
+          Catch::Approx(y_before - 40.0));
+}
+
+TEST_CASE_METHOD(AppFixture, "No-op agent move preserves checkpoint history", "[agent_app]") {
+    app.newProject();
+    const AgentToolResult add = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"},
+                                                   {"type", "generator"},
+                                                   {"position", {{"x", 20.0}, {"y", 30.0}}}}})}});
+    REQUIRE_FALSE(add.is_error);
+
+    const AgentToolResult before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(before.is_error);
+    const int component_id = before.structured.at("components").at(0).at("id").get<int>();
+    const auto position = before.structured.at("components").at(0).at("position");
+    const std::uint64_t revision = before.structured.at("revision").get<std::uint64_t>();
+    const std::size_t checkpoint_count = app.testAgentHost().checkpoints().size();
+    REQUIRE(checkpoint_count > 0);
+
+    const AgentToolResult move = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array(
+                        {{{"op", "move"}, {"component", component_id}, {"position", position}}})}});
+    REQUIRE_FALSE(move.is_error);
+    CHECK(move.structured.at("applied").at(0).at("unchanged") == true);
+    CHECK(app.testAgentHost().checkpoints().size() == checkpoint_count);
+
+    const AgentToolResult after = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(after.is_error);
+    CHECK(after.structured.at("revision") == revision);
+    CHECK(after.structured.at("dirty") == before.structured.at("dirty"));
+}
+
 // ======================================================================
 // Test: Revert keeps S-parameter data from outside the project folder
 //

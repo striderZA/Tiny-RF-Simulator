@@ -1068,7 +1068,9 @@ TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
           "RF Simulator tools act on the project open in the user's RF Simulator window. "
           "Start with circuit_get. Component ids are the numbers in node labels "
           "(\"Amplifier 103\" is 103). Send the epoch from your latest read with every call "
-          "that takes component ids; on STALE_EPOCH, call circuit_get again. Parameter units "
-          "are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot "
-          "open, save, or name files.");
+          "that takes component ids; on STALE_EPOCH, call circuit_get again. Positions include "
+          "the current canvas pan; after panning, call circuit_get again before moving a "
+          "component. Use add.position for a new component; move only targets components that "
+          "existed before the current edit call. Parameter units are encoded in key suffixes "
+          "(_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot open, save, or name files.");
 }
