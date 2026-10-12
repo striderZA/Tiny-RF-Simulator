@@ -1,0 +1,76 @@
+name: Docs
+
+on:
+  push:
+    branches: [master]
+    paths: [manual/**, mkdocs.yml, requirements-docs.txt, .github/workflows/docs.yml]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag or branch to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+      - run: pip install -r requirements-docs.txt
+      - name: Build (strict)
+        env:
+          NO_MKDOCS_2_WARNING: "true"
+        run: mkdocs build --strict
+      - name: Publish guard
+        if: github.event_name != 'push'
+        run: |
+          missing=0
+          while IFS= read -r page || [ -n "$page" ]; do
+            [ -z "$page" ] && continue
+            if [ ! -f "manual/pages/$page" ]; then
+              echo "Missing required page: $page"
+              missing=1
+            fi
+          done < manual/required-pages.txt
+          exit $missing
+      - name: Configure Pages
+        if: github.event_name != 'push'
+        uses: actions/configure-pages@v6
+      - name: Upload Pages artifact
+        if: github.event_name != 'push'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'push'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

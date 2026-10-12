@@ -1,0 +1,23 @@
+site_name: Tiny RF Simulator
+site_url: https://striderza.github.io/Tiny-RF-Simulator/
+repo_url: https://github.com/striderZA/Tiny-RF-Simulator
+docs_dir: manual/pages
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: install.md
+      - Guided tutorial: tutorial.md
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+validation:
+  links:
+    unrecognized_links: warn
+  nav:
+    omitted_files: warn

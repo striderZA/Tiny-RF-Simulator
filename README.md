@@ -40,9 +40,17 @@
 - 📘 **Guided tutorial** — first-run walkthrough with panel highlighting
 - 🧪 **Test Flow** — author repeatable parameter sweeps on a live circuit, capture built-in measurements, preview results, and export them as JSON (`View > Test Flow`)
 - 🧮 **PFB Filter Calculator** — plot the Kaiser prototype response, compare filter metrics with a rejection target, and apply designs to PFB channelizers (`View > Filter Calculator`)
+- 📐 **Receiver Requirements** — band, gain, and noise-figure limits, with a pass, fail, or incomplete status for each check (`View > Receiver Requirements`)
+- ⚡ **Receiver output power and IIP3 checks** — output-power limits at a reference tone and two-tone IIP3 sweeps, reported alongside gain and noise figure
 
 
 ## 🚀 Quick Start
+
+### Download
+
+Download the newest release from the [Releases page](https://github.com/striderZA/Tiny-RF-Simulator/releases). Use `rf-simulator-linux-x86_64.tar.gz` on Linux or `rf-simulator-windows-x86_64.zip` on Windows. The [user manual](https://striderza.github.io/Tiny-RF-Simulator/) covers installing, the first run, and the guided tutorial.
+
+### Build from source (developers)
 
 ```bash
 # Clone and build
@@ -91,6 +99,7 @@ The local bridge protects the GUI endpoint against access from other local accou
 
 | Topic | Link |
 | :--- | :--- |
+| User manual | [Install, tutorial, and reference](https://striderza.github.io/Tiny-RF-Simulator/) |
 | 🚀 Quickstart & Build | [Quickstart Guide](openwiki/quickstart.md) |
 | 🏛️ Architecture | [Architecture Overview](openwiki/architecture/overview.md) |
 | 📡 RF Components | [Components Reference](openwiki/domains/rf-components.md) |

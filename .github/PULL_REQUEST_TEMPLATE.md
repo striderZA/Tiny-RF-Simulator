@@ -14,6 +14,10 @@
 - [ ] Documentation
 - [ ] Build / CI
 
+## User docs
+
+- [ ] User-visible change: the matching page under `manual/pages/` is updated in this PR (N/A otherwise).
+
 ## Verification
 
 <!-- List the exact commands or scenarios run and their outcomes.

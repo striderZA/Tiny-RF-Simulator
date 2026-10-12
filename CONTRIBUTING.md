@@ -57,9 +57,19 @@ build/bin/tests.exe [bench]   # Windows
 
 > **See also:** [Testing Guide](openwiki/testing/guidance.md) for test structure, patterns, benchmarks, and UI tests.
 
+## User documentation
+
+The user manual is built with MkDocs from `manual/pages/` and published to GitHub Pages. Its contract is in [manual/AGENTS.md](manual/AGENTS.md).
+
+- **When to update:** any user-visible change: menus, panels, parameters, behavior, file formats, or what the release archives contain. Update the matching page in the same PR. A new published page needs a `mkdocs.yml` nav entry and a line in `manual/required-pages.txt`.
+- **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
+- **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
+- **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
+- **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
+
 ## CI Pipeline
 
-Pull requests run **no automated pipeline**. All CI validation happens when a release tag is pushed (`.github/workflows/release.yml`). Every release tag, patch included, runs:
+Pull requests run **no automated pipeline**. Release validation runs when a release tag is pushed (`.github/workflows/release.yml`). Every release tag, patch included, runs:
 
 - **Format check** — clang-format 18 enforces code style across all source modules
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
@@ -70,12 +80,15 @@ On top of that, the `strict-build` validation matrix is chosen by tag class:
 - **Patch release tags** (`vX.Y.Z` where `Z > 0`) build and test **Linux GCC 14 Debug** only (Xvfb for UI tests).
 - **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the full **validation matrix**: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
 
+Pushes to master that change the manual or its build files also run a strict docs build in `.github/workflows/docs.yml`. That run never publishes; publishing is covered under [Release Process](#release-process).
+
 Because nothing is checked automatically before merge, run the local gates on every branch before opening a PR:
 
 ```bash
 bash scripts/format.sh --check   # CI-equivalent formatting (also enforced by the pre-commit hook)
 cmake --build build
 ctest --test-dir build --output-on-failure
+NO_MKDOCS_2_WARNING=true mkdocs build --strict   # user manual; needs requirements-docs.txt installed
 ```
 
 ### Release Process
@@ -89,6 +102,8 @@ Releases are prepared through a pull request by default; the tag is created only
 5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the tag-class build/test matrix, and packages Linux and Windows binaries.
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
+
+Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
 
 ## Architecture (Quick Reference)
 
