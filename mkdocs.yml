@@ -9,6 +9,11 @@ nav:
   - Getting started:
       - Install: install.md
       - Guided tutorial: tutorial.md
+  - Building circuits:
+      - Components and ports: circuits/components-and-ports.md
+      - Probes: circuits/probes.md
+      - Subcircuits: circuits/subcircuits.md
+      - Projects: circuits/projects.md
 markdown_extensions:
   - admonition
   - attr_list
