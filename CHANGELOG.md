@@ -1,3 +1,15 @@
+## [0.28.1] - 2026-10-12
+
+### Fixed
+
+- **Test flow results show applied condition values (#197)** — result rows and JSON exports report the value a component actually applied after normalization. A requested ADC decimation of 3, for example, now reports the applied value 2.
+- **Test flow restores components on applied-state failures (#197)** — if an engine throws while the run reads back its applied state, the run restores the components to their pre-run state and returns a `serialize_failed` error.
+
+### Testing
+
+- Cover normalized condition values in rows and JSON, rollback after an applied-state readback failure, and agent error mapping for `serialize_failed` (#197).
+- Add `perf_app`, an opt-in timing harness (`EXCLUDE_FROM_ALL`, not a ctest target) for frame CPU, bounded inputs, startup, project load, and agent tool calls (#196).
+
 ## [0.28.0] - 2026-10-11
 
 ### Added
