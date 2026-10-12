@@ -519,3 +519,16 @@ add_standalone_test(test_agent_app
     LIBS simulator::app
 )
 set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)
+
+# Standalone tests for the active circuit project's Git branch, commit, and working-tree status.
+add_standalone_test(test_git_status
+    SOURCES test_git_status.cpp
+    LIBS simulator::app
+)
+
+# The fake Git process gives the status timeout regression a deterministic slow child.
+add_executable(test_git_status_hanging_git test_git_status_hanging_git.cpp)
+add_dependencies(test_git_status test_git_status_hanging_git)
+target_compile_definitions(test_git_status PRIVATE
+    GIT_STATUS_HANG_HELPER="$<TARGET_FILE:test_git_status_hanging_git>"
+)
