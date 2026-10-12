@@ -19,7 +19,7 @@ The Spectrum Analyzer plots the spectrum of each probed signal. Open it from **V
 - **Min Hold** keeps the lowest level seen at each frequency.
 - **Video Avg** averages the sweeps. **Avg Count** sets how many sweeps are averaged, from 2 to 100. Avg Count is active only in Video Avg mode.
 
-**Reset Hold** clears the accumulated trace.
+**Reset Hold** appears only in **Max Hold** and **Min Hold** mode. It clears the accumulated trace.
 
 ## Amplitude
 

@@ -4,7 +4,7 @@ The PFB Filter Calculator shows how a polyphase filter bank (PFB) channelizer pe
 
 ## Choose the target
 
-**Target PFB** selects the channelizer the calculator works on. **Auto (graph selection)** uses the PFB selected in the Node Editor. To use a particular channelizer, choose it by name.
+**Target PFB** selects the channelizer the calculator works on. **Auto (graph selection)** uses the PFB selected in the Node Editor when exactly one node is selected and that node is a PFB Channelizer. Otherwise it uses the first PFB Channelizer in the circuit. To use a particular channelizer, choose it by name.
 
 ## Set the parameters
 
@@ -26,4 +26,4 @@ The PFB Filter Calculator shows how a polyphase filter bank (PFB) channelizer pe
 - **Taps N = M*K** is the total number of filter taps.
 - **Flat-noise tilt** is shown in dB.
 
-If the calculator has no further hint to give, it shows **Rejection target met.**
+When the adjacent rejection meets the target, the calculator shows **Rejection target met.** Otherwise it shows a hint in the left column.

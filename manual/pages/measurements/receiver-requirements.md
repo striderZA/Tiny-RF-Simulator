@@ -20,8 +20,10 @@ Choose **Apply requirements** to save the limits and evaluate the circuit agains
 
 ## Results
 
-Each enabled metric shows a status: **Pass**, **Fail**, **Incomplete**, **Not configured**, or **Invalid configuration**. The **Overall** line shows the combined result.
+An enabled metric shows **Pass**, **Fail**, or **Incomplete**. A metric that is not enabled, or a panel with no applied requirements, shows **Not configured**. If the settings are invalid, every metric shows **Invalid configuration**. The **Overall** line shows the combined result.
 
-The measurements use the same measured path as the [Network Analyzer](network-analyzer.md), so the limits on circuits described there apply here too.
+A metric shows **Fail** when a point in the band is outside its limits. It shows **Incomplete** when the Network Analyzer sweep does not cover the whole band, or when a point in the band has no data.
+
+Gain, noise figure, output power, and IIP3 use the same Point A, Point B, and sweep as the [Network Analyzer](network-analyzer.md). Set those on the Network Analyzer first, and make its sweep cover the band. The unsupported cases described on that page can also leave Receiver Requirements without data.
 
 Requirements are saved with the project.
