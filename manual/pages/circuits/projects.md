@@ -12,3 +12,5 @@ A project is a single `.rfsim` file. It holds the circuit: components, links, pr
 ## Unsaved changes
 
 If the project has unsaved changes, **New**, **Open...**, and **Exit** first ask: "You have unsaved changes. Save before continuing?" Choose **Save** to save first, **Discard** to continue without saving, or **Cancel** to stay where you are.
+
+Adding or removing a probe does not mark the project as unsaved. If a probe is your only change, **New**, **Open...**, and **Exit** continue without asking, and the probe change is lost. Save the project after you change probes.
