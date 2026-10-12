@@ -396,6 +396,44 @@ FlowResult RunFlow(const FlowSpec &spec, std::span<IComponentEngine *const> comp
                     message += " (rollback failed: " + rollback_error + ")";
                 return fail(spec, FlowErrorCode::DeserializeFailed, message);
             }
+
+            // Deserialization can clamp or quantize a requested value. Read the
+            // canonical state back so the row and its exports describe what ran.
+            nlohmann::json applied;
+            try {
+                applied = engine->serialize();
+            } catch (const std::exception &e) {
+                const std::string rollback_error = restoreBaselines();
+                std::string message = "failed to serialize applied state for component " +
+                                      std::to_string(baselines[b].first) + ": " + e.what();
+                if (!rollback_error.empty())
+                    message += " (rollback failed: " + rollback_error + ")";
+                return fail(spec, FlowErrorCode::SerializeFailed, message);
+            } catch (...) {
+                const std::string rollback_error = restoreBaselines();
+                std::string message = "failed to serialize applied state for component " +
+                                      std::to_string(baselines[b].first) + ": unknown exception";
+                if (!rollback_error.empty())
+                    message += " (rollback failed: " + rollback_error + ")";
+                return fail(spec, FlowErrorCode::SerializeFailed, message);
+            }
+            for (size_t c = 0; c < n_conditions; ++c) {
+                const Condition &condition = spec.conditions[c];
+                if (condition.component != baselines[b].first)
+                    continue;
+
+                double applied_value = 0.0;
+                std::string error;
+                if (!readConditionValue(applied, condition.path, applied_value, &error)) {
+                    const std::string rollback_error = restoreBaselines();
+                    std::string message = "failed to read applied condition for component " +
+                                          std::to_string(baselines[b].first) + ": " + error;
+                    if (!rollback_error.empty())
+                        message += " (rollback failed: " + rollback_error + ")";
+                    return fail(spec, FlowErrorCode::PathNotApplicable, message);
+                }
+                row.conditions[c].value = applied_value;
+            }
         }
 
         // Mirrors RfSimulatorApp::rewireInputs() by calling the very same

@@ -2101,6 +2101,28 @@ TEST_CASE("test_flow_run maps unknown components, ports, and metrics to their co
     REQUIRE(errorFor(unknown_metric).at("code") == "INVALID_ARGUMENT");
 }
 
+TEST_CASE("test_flow_run maps serialize failures to INTERNAL",
+          "[agent_api][test_flow_run][issue183]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.api.setFlowRunBoundary(
+        [](const FlowSpec &, std::span<IComponentEngine *const>, const NodeGraphEngine &) {
+            BoundaryOutcome outcome;
+            outcome.status = BoundaryStatus::Completed;
+            outcome.result.ok = false;
+            outcome.result.error = {FlowErrorCode::SerializeFailed, "serialization failed"};
+            return outcome;
+        });
+
+    const auto result = fixture.call(
+        "test_flow_run", {{"epoch", fixture.api.epoch()},
+                          {"measure", nlohmann::ordered_json::array(
+                                          {measureMetric(generator->id(), 0, "power_dBm")})}});
+    REQUIRE(errorFor(result).at("code") == "INTERNAL");
+    CHECK(errorFor(result).at("message") == "serialization failed");
+}
+
 TEST_CASE("test_flow_run latches after a restore failure until the project is replaced",
           "[agent_api][test_flow_run]") {
     ApiFixture fixture;
