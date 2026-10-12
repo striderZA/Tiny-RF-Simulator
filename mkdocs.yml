@@ -16,6 +16,8 @@ nav:
       - Projects: circuits/projects.md
   - Measurements:
       - Spectrum Analyzer: measurements/spectrum.md
+      - Network Analyzer: measurements/network-analyzer.md
+      - Receiver Requirements: measurements/receiver-requirements.md
 markdown_extensions:
   - admonition
   - attr_list
