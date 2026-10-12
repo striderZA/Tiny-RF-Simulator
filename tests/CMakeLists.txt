@@ -229,6 +229,14 @@ add_standalone_test(test_issue48_json_loader
     SOURCES test_issue48_json_loader.cpp
     LIBS simulator::app
 )
+# Issue #200 app-level swap side effects: the Network Analyzer and Power Meter pins follow the
+# successor, and a PFB keeps its IQ Plot and Grid visibility. Constructs RfSimulatorApp, which
+# writes the shared exe-relative app.ini, so run it serially.
+add_standalone_test(test_component_swap_app
+    SOURCES test_component_swap_app.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_component_swap_app PROPERTIES RUN_SERIAL TRUE)
 add_standalone_test(test_adc_configuration
     SOURCES test_adc_configuration.cpp
     LIBS simulator::adc_engine simulator::node_graph_engine

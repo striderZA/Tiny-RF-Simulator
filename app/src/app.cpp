@@ -397,10 +397,16 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     const ImVec2 position = m_graph_widget->editorPositionForSave(graph_node_id);
     const std::vector<int> instrument_pins = {m_na_engine.pointAPin(), m_na_engine.pointBPin(),
                                               m_power_meter_widget->sourcePin()};
+    // The successor is a new engine under a new graph node, so sync() builds its views with the
+    // defaults for a new PFB. Read the IQ Plot and Grid visibility set on the predecessor first.
+    const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
     const ComponentSwapResult swap =
         m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
     if (!swap.component)
         return swap.error;
+
+    if (visibility)
+        m_pfb_views.setVisibilityFor(swap.new_graph_node_id, *visibility);
 
     const auto moved = [&swap](int pin) {
         const auto it = swap.pin_map.find(pin);
@@ -484,6 +490,11 @@ IComponentEngine *RfSimulatorApp::testAddLibraryPart(const std::string &part_num
             return m_editor_commands.addLibraryPart(m_library, *definition).component;
     }
     return nullptr;
+}
+
+std::string RfSimulatorApp::testSwapLibraryPart(int graph_node_id,
+                                                const ComponentDefinition &definition) {
+    return swapLibraryPart(graph_node_id, definition);
 }
 
 IComponentEngine *RfSimulatorApp::testCreateComponent(

@@ -161,6 +161,9 @@ class RfSimulatorApp {
         int engine_id);
     // Places a built-in or extension library part through EditorCommands::addLibraryPart().
     IComponentEngine *testAddLibraryPart(const std::string &part_number);
+    // Replaces a placed component through the app's swap path, which also carries the canvas
+    // position, selection, and instrument points over. Returns the refusal, or "" on success.
+    std::string testSwapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
     std::optional<int> testConnectLink(int start_pin_id, int end_pin_id);
     bool testDisconnectLink(int link_id);
     bool testRemoveComponent(int graph_node_id);
@@ -183,6 +186,7 @@ class RfSimulatorApp {
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
     std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
+    PFBViewManager &testPfbViews() { return m_pfb_views; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
     TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
