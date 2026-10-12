@@ -1477,21 +1477,62 @@ void RfSimulatorApp::draw_ui() {
         }
         if (!agent_indicator.empty() && ImGui::MenuItem(agent_indicator.c_str()))
             m_show_agent = true;
-        // Title / project name on the right
-        {
-            float tw = ImGui::GetContentRegionAvail().x;
-            ImGui::SameLine(tw - 300.0f);
-            if (!m_current_project_path.empty()) {
-                auto p = m_current_project_path.find_last_of("\\/");
-                std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1)
-                                                             : m_current_project_path;
-                ImGui::Text("%s%s", isDirty() ? "* " : "", fname.c_str());
-            } else if (isDirty()) {
-                ImGui::Text("*Untitled");
-            }
-            ImGui::SameLine();
-            ImGui::TextDisabled("%.1f FPS", io.Framerate);
+        // Track the repository containing the active circuit, or the launch
+        // directory while the project is untitled.
+        std::filesystem::path git_working_directory;
+        if (!m_current_project_path.empty())
+            git_working_directory = std::filesystem::path(m_current_project_path).parent_path();
+        if (git_working_directory.empty()) {
+            std::error_code error;
+            git_working_directory = std::filesystem::current_path(error);
+            if (error)
+                git_working_directory.clear();
         }
+        m_git_status_monitor.update(git_working_directory);
+
+        std::string project_title;
+        if (!m_current_project_path.empty()) {
+            const auto p = m_current_project_path.find_last_of("\\/");
+            const std::string filename = p != std::string::npos
+                                             ? m_current_project_path.substr(p + 1)
+                                             : m_current_project_path;
+            project_title = (isDirty() ? "* " : "") + filename;
+        } else if (isDirty()) {
+            project_title = "*Untitled";
+        }
+        char fps_title[32];
+        std::snprintf(fps_title, sizeof(fps_title), "%.1f FPS", io.Framerate);
+
+        const auto measure_text = [](std::string_view text) {
+            return ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
+        };
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float current_x = ImGui::GetCursorPosX();
+        const float available_width = ImGui::GetContentRegionAvail().x;
+        const float fps_width = measure_text(fps_title);
+        const auto &git_status = m_git_status_monitor.status();
+        const GitStatusHeaderLabels header_labels = fitGitHeaderLabels(
+            project_title, git_status, available_width, fps_width, spacing, measure_text);
+        const std::string &visible_project_title = header_labels.project_title;
+        const std::string &git_title = header_labels.git_title;
+        const bool show_project_title = !visible_project_title.empty();
+        const float gap_count = show_project_title ? 2.0f : 1.0f;
+        const float right_width = fps_width + measure_text(git_title) + spacing * gap_count +
+                                  (show_project_title ? measure_text(visible_project_title) : 0.0f);
+        ImGui::SameLine(std::max(current_x, current_x + available_width - right_width));
+        if (show_project_title) {
+            ImGui::Text("%s", visible_project_title.c_str());
+            if (visible_project_title != project_title && ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", project_title.c_str());
+            ImGui::SameLine();
+        }
+        ImGui::TextDisabled("%s", git_title.c_str());
+        if (ImGui::IsItemHovered()) {
+            const std::string tooltip = m_git_status_monitor.details();
+            ImGui::SetTooltip("%s", tooltip.c_str());
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", fps_title);
         ImGui::EndMainMenuBar();
     }
 

@@ -15,6 +15,7 @@
 #include "extension_manager.h"
 #include "extension_trust_store.h"
 #include "external_tool_runner.h"
+#include "git_status.h"
 #include "graph_editor_actions.h"
 
 #include "help_widget.h"
@@ -289,6 +290,7 @@ class RfSimulatorApp {
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
+    GitStatusMonitor m_git_status_monitor;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
 
