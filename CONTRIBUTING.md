@@ -65,6 +65,7 @@ The user manual is built with MkDocs from `manual/pages/` and published to GitHu
 - **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
 - **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
 - **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
+- **README demo videos:** use a GitHub `user-attachments` URL in a raw `<video src="..." controls></video>` tag; repository-hosted `.mp4` files do not render. Attachments must be `.mp4`, `.mov`, or `.webm` and are capped at 10 MB on a free-plan repository. A Markdown `![](attachment-url)` reference to an attachment renders as a broken image. `assets/*.mkv` files stay local and gitignored.
 - **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
 
 ## CI Pipeline
@@ -102,6 +103,8 @@ Releases are prepared through a pull request by default; the tag is created only
 5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the tag-class build/test matrix, and packages Linux and Windows binaries.
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
+
+On Windows, run the script with Git for Windows `sh` rather than `bash`, which may resolve to the WSL launcher. After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the two-line version change.
 
 Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
 
@@ -146,6 +149,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 - **Subject format:** `<type>[(<scope>)][!]: <imperative summary>`, under 70 characters. `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`; `scope` is optional lowercase (e.g. `test(pfb): cover grid invariance`); `!` marks a breaking change. A body is optional — leave a blank line after the subject and wrap it at 72 characters.
 - **Enforced locally** by [`.githooks/commit-msg`](.githooks/commit-msg) on every `git commit`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress (`git merge`). Keep it sensible with `git commit --no-verify` only when the rule genuinely does not apply.
 - **Test the hooks** with `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+- Keep hook files at mode `100755` (`git update-index --chmod=+x <path>`).
 - Commits created by GitHub's squash merge never run local hooks, so **write the PR title in the same format**.
 
 ### Pushing
