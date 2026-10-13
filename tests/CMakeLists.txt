@@ -101,6 +101,12 @@ add_standalone_test(test_sparam_legacy_key
          simulator::node_graph_engine
 )
 
+# AMP (MathWorks) IIP3/OIP3 reader. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amp_file
+    SOURCES test_amp_file.cpp
+    LIBS simulator::amplifier_engine
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine
