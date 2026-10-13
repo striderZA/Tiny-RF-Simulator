@@ -65,7 +65,7 @@ The user manual is built with MkDocs from `manual/pages/` and published to GitHu
 - **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
 - **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
 - **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
-- **README demo videos:** GitHub accepts `.mp4`, `.mov`, and `.webm` video uploads. Videos uploaded to a repository owned by a user or organization on the free plan are capped at 10 MB; on a paid plan the cap is 100 MB. Confirm the video renders on GitHub before merging. `assets/*.mkv` files stay local and gitignored.
+- README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
 - **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
 
 ## CI Pipeline

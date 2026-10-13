@@ -42,6 +42,8 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 - Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards.
 - DOX excludes `.agents/` and `.githooks/`. They MUST NOT contain AGENTS.md and must not appear in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
 - Sections, in order: Purpose, Ownership, Local Contracts, Work Guidance, Verification, Child DOX Index. Work Guidance names current standards only. Verification names checks that exist. Leave either empty if none exist.
+- Work Guidance must reflect the current standards of the project or user instructions; if there are no specific standards or instructions yet, leave it empty
+- Verification must reflect an existing check; if no verification framework exists yet, leave it empty and update it when one exists
 - The closer a doc is to the work, the more specific and practical it must be
 
 ## Style
@@ -49,6 +51,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 - Concise, current, operational. Document stable contracts, not diary entries. Delete stale notes instead of explaining history.
 - Trim obvious statements, repeated rules, misplaced detail, and warnings for risks that no longer exist.
 - Broad rules belong in parents and concrete details in children. Do not copy a rule into several files; point to the owning doc.
+- Do not duplicate rules across many files unless each scope needs a local version
 - Prefer direct bullets with explicit names.
 
 ## Document Surfaces
