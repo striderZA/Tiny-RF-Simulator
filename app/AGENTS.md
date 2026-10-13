@@ -80,6 +80,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `tests/test_test_flow_widget.cpp` — Test Flow panel snapshot/restore, validation, and row-limit behavior.
 - `tests/test_issue87_flow.cpp` — UI-free flow helper and flow-file behavior.
 - `tests/test_sparam_legacy_key.cpp` — legacy S-parameter key fallback and precedence.
+- `tests/test_issue79_component_validation.cpp` — library definition validation, and S-parameter and AMP path containment for library parts.
 
 ## Child DOX Index
 *(none)*
