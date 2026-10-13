@@ -1,6 +1,6 @@
-// Standalone, UI-free coverage for the run boundary shared by the Test Flow panel and the
-// agent tool: snapshot every engine, run the flow, restore each snapshot independently, then
-// rewire. Each failure mode is its own status, and a restore failure is never silent.
+// Standalone, UI-free coverage for the one-shot flow boundary and resumable session used by the
+// Test Flow panel and Agent Server. It pins snapshot/restore, rewiring, row ordering, and yielding;
+// a restore failure is never silent.
 #include "component_engine_base.h"
 #include "component_registry.h"
 #include "flow_boundary.h"
@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -168,4 +169,34 @@ TEST_CASE("A snapshot failure refuses the run before anything executes", "[test_
     REQUIRE(outcome.status == BoundaryStatus::SnapshotFailed);
     CHECK(outcome.message == "snapshot failed");
     CHECK(tracking.deserializeCalls() == 0);
+}
+
+TEST_CASE("Incremental flow sessions restore state between bounded slices",
+          "[test_flow][boundary]") {
+    NodeGraphEngine graph;
+    ViewManager view;
+    ComponentRegistry components{graph, view};
+    auto &tracking = components.add<TrackingEngine>(1, graph, 5.0);
+    const auto before = tracking.serialize();
+    FlowRunSession session(probeSpec({Condition{1, "value", {1.0, 2.0, 3.0}}}, 1), components.all(),
+                           graph);
+
+    REQUIRE_FALSE(session.complete());
+    CHECK_FALSE(session.advance(1, std::chrono::seconds(1)));
+    REQUIRE(session.outcome().result.rows.size() == 1);
+    CHECK(session.outcome().result.rows[0].conditions[0].value == 1.0);
+    CHECK(tracking.serialize() == before);
+
+    CHECK_FALSE(session.advance(1, std::chrono::seconds(1)));
+    REQUIRE(session.outcome().result.rows.size() == 2);
+    CHECK(session.outcome().result.rows[1].conditions[0].value == 2.0);
+    CHECK(tracking.serialize() == before);
+
+    CHECK(session.advance(1, std::chrono::seconds(1)));
+    REQUIRE(session.complete());
+    REQUIRE(session.outcome().status == BoundaryStatus::Completed);
+    REQUIRE(session.outcome().result.ok);
+    REQUIRE(session.outcome().result.rows.size() == 3);
+    CHECK(session.outcome().result.rows[2].conditions[0].value == 3.0);
+    CHECK(tracking.serialize() == before);
 }

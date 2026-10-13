@@ -12,6 +12,7 @@ With a saved project open, the menu bar shows its filename and the project's cur
 
 - [Install](install.md): download the release archive and run the simulator.
 - [Guided tutorial](tutorial.md): build and probe your first signal chain.
+- [Agent (MCP)](agent.md): connect an MCP client and move components in the open project.
 
 ## Release notes
 

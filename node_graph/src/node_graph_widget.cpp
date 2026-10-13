@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -18,13 +19,47 @@ NodeGraphWidget::NodeGraphWidget(const NodeGraphEngine &engine, NodeGraphWidgetA
 
 NodeGraphWidget::~NodeGraphWidget() { ImNodes::EditorContextFree(m_context); }
 
-void NodeGraphWidget::setNodeEditorSpacePosition(int node_id, ImVec2 position) {
+bool NodeGraphWidget::setNodeEditorSpacePosition(int node_id, ImVec2 position) {
     ImNodes::EditorContextSet(m_context);
+    const ImVec2 pan = ImNodes::EditorContextGetPanning();
+    const ImVec2 desired_grid = position - pan;
+    const bool registered = m_registered_in_pool.count(node_id) != 0;
+    const bool hidden = m_hidden_last_frame.count(node_id) != 0;
+
+    ImVec2 current_grid(0.0f, 0.0f);
+    const auto cached_grid = m_cached_grid_positions.find(node_id);
+    if (registered && !hidden)
+        current_grid = ImNodes::GetNodeGridSpacePos(node_id);
+    else if (cached_grid != m_cached_grid_positions.end())
+        current_grid = cached_grid->second;
+
+    const auto same_coordinate = [](float current, float desired, float canvas_pan,
+                                    float editor_position) {
+        if (current == desired)
+            return true;
+        if (!std::isfinite(current) || !std::isfinite(desired) || !std::isfinite(canvas_pan) ||
+            !std::isfinite(editor_position))
+            return false;
+        const float scale = std::max({1.0f, std::abs(canvas_pan), std::abs(editor_position)});
+        return std::abs(current - desired) <= std::numeric_limits<float>::epsilon() * scale;
+    };
+    const bool unchanged = same_coordinate(current_grid.x, desired_grid.x, pan.x, position.x) &&
+                           same_coordinate(current_grid.y, desired_grid.y, pan.y, position.y);
+    const bool needs_registration = !registered && !hidden;
+    if (unchanged && !needs_registration) {
+        if (registered && !hidden)
+            m_cached_grid_positions[node_id] = current_grid;
+        return false;
+    }
+
+    // Also register a new node whose desired position is already the origin.
     ImNodes::SetNodeEditorSpacePos(node_id, position);
     m_registered_in_pool.insert(node_id);
-    m_last_node_grid_positions[node_id] = position;
-    m_prev_node_grid_positions[node_id] = position;
+    const ImVec2 actual_editor_position = ImNodes::GetNodeEditorSpacePos(node_id);
+    m_last_node_grid_positions[node_id] = actual_editor_position;
+    m_prev_node_grid_positions[node_id] = actual_editor_position;
     m_cached_grid_positions[node_id] = ImNodes::GetNodeGridSpacePos(node_id);
+    return !unchanged;
 }
 
 void NodeGraphWidget::selectNode(int node_id) {
@@ -110,19 +145,20 @@ void NodeGraphWidget::markNodesRegistered() {
 
 ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
     ImNodes::EditorContextSet(m_context);
-    if (!m_hidden_last_frame.count(node_id))
-        return ImNodes::GetNodeEditorSpacePos(node_id);
-    // A hidden member has no pool entry. Its grid cache was taken on its last visible frame or
-    // at registration. A member with no cache entry was never placed, so origin is its default
-    // placement, the grid position syncNodesFromEngine() gives a newly registered node.
-    const auto grid_it = m_cached_grid_positions.find(node_id);
-    const ImVec2 grid = grid_it != m_cached_grid_positions.end() ? grid_it->second : ImVec2(0, 0);
-    return grid + ImNodes::EditorContextGetPanning();
+    if (!m_registered_in_pool.count(node_id) || m_hidden_last_frame.count(node_id)) {
+        // New GUI-created nodes may not have reached BeginNode yet. Collapsed-group members
+        // are also absent from the pool. Use the last known grid position, or origin for a
+        // never-placed node, then apply the current pan to produce editor-space coordinates.
+        const auto grid_it = m_cached_grid_positions.find(node_id);
+        const ImVec2 grid =
+            grid_it != m_cached_grid_positions.end() ? grid_it->second : ImVec2(0, 0);
+        return grid + ImNodes::EditorContextGetPanning();
+    }
+    return ImNodes::GetNodeEditorSpacePos(node_id);
 }
 
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
-    markNodesRegistered();
 
     if (ImGui::Begin(title, p_open)) {
         setupDarkTheme();
@@ -236,7 +272,7 @@ void NodeGraphWidget::drawNodes() {
     // This ensures detectNodeMoves() only checks nodes that were actually drawn,
     // not stale entries from previous frames.
     m_node_screen_positions.clear();
-
+    const std::unordered_set<int> previously_hidden = m_hidden_last_frame;
     std::unordered_set<int> hidden_nodes;
     for (const auto &g : m_engine.groups()) {
         if (g.collapsed) {
@@ -251,7 +287,23 @@ void NodeGraphWidget::drawNodes() {
         if (hidden_nodes.count(node.node_id))
             continue;
 
+        const bool was_hidden = previously_hidden.count(node.node_id) > 0;
+        if (was_hidden) {
+            // ImNodes drops hidden members at EndNodeEditor. Restore the cached grid position
+            // before their first BeginNode after expansion.
+            const auto cached_position = m_cached_grid_positions.find(node.node_id);
+            if (cached_position != m_cached_grid_positions.end())
+                ImNodes::SetNodeGridSpacePos(node.node_id, cached_position->second);
+        }
+
         ImNodes::BeginNode(node.node_id);
+        m_registered_in_pool.insert(node.node_id);
+        // A cache restore is not a user drag; reset both movement baselines.
+        if (was_hidden) {
+            const ImVec2 editor_position = ImNodes::GetNodeEditorSpacePos(node.node_id);
+            m_last_node_grid_positions[node.node_id] = editor_position;
+            m_prev_node_grid_positions[node.node_id] = editor_position;
+        }
 
         // Cache screen-space positions after BeginNode registers the node in the imnodes
         // pool, so GetNodeScreenSpacePos/GetNodeGridSpacePos don't assert on first frame.

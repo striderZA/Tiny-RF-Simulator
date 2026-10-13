@@ -3,9 +3,6 @@ type: Workflow
 title: Agent Tool-Call Lifecycle
 description: End-to-end trace of one agent tool call through MCP JSON-RPC framing, the GuiLink relay, the GUI AgentServer inbox, the UI-thread pump with modal parking, AgentApi dispatch, circuit edits and checkpoints, epoch-aware results, and reply size limits. Use it to debug a call that stalls, returns BUSY or STALE_EPOCH, or fails with INTERNAL.
 tags: [agent, mcp, tool-calls, lifecycle, epoch, checkpoints, framing]
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T17:27:48.662Z
 sources:
   - id: openwiki-source-4dd766881eeb1848d297e025
     resource: repo://agent/AGENTS.md
@@ -19,6 +16,8 @@ sources:
     resource: repo://agent/api/src/agent_server.cpp
   - id: openwiki-source-efe3f6f9c5f723b0b2c7d63f
     resource: repo://agent/api/src/tool_circuit_edit.cpp
+  - id: openwiki-source-4ded429cf8787c18dbe1448d
+    resource: repo://agent/api/src/tool_circuit_read.cpp
   - id: openwiki-source-5463a01543f8384d18b05f52
     resource: repo://agent/api/src/tool_data_file.cpp
   - id: openwiki-source-594ad266217b9f37cd806391
@@ -35,6 +34,8 @@ sources:
     resource: repo://agent/protocol/include/agent_errors.h
   - id: openwiki-source-ab1b628cf8814f0e781b181a
     resource: repo://agent/protocol/include/agent_wire.h
+  - id: openwiki-source-ea4d2883fe61311539ee1809
+    resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-880b52865addec60737d5a6c
     resource: repo://agent/protocol/src/agent_errors.cpp
   - id: openwiki-source-a22e52612dd2493037e131ad
@@ -45,9 +46,20 @@ sources:
     resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
+  - id: openwiki-source-9cfe8ddc08d1f0119df291d5
+    resource: repo://node_graph/src/node_graph_widget.cpp
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
-generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+  - id: openwiki-source-d8865e23d4aeb9130e4e47be
+    resource: repo://tests/test_agent_api.cpp
+  - id: openwiki-source-2c08b146e923be0a48822342
+    resource: repo://tests/test_agent_app.cpp
+  - id: openwiki-source-86949a298d24dfef3de6fc0c
+    resource: repo://tests/test_agent_position_read.cpp
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # Agent Tool-Call Lifecycle
@@ -89,7 +101,8 @@ sequenceDiagram
 
 ## 3. GUI listener and session
 
-- `AgentListener` accepts loopback peers only. `AgentServer` admits one authenticated client. A second connection receives a JSON-RPC `BUSY` error ("another agent is connected") and is closed. A session that has not completed `hello` within `hello_timeout` (5 s) is closed.
+- `AgentListener` accepts IPv4 loopback peers only. `AgentServer` handles one active client. It holds one new connection for up to 100 ms. If the active client closes during that time, the server admits the new connection. Otherwise, it sends JSON-RPC `BUSY` and closes it. A second new connection receives `BUSY` at once.
+- The server closes a client that does not complete `hello` within `hello_timeout` (5 s by default).
 - A `hello` with a different catalog version gets `VERSION_MISMATCH`. A matching `hello` gets the GUI token and the current epoch.
 - The listener thread only frames sockets and validates envelopes. It queues calls under a mutex. `pump()` on the UI thread is the only place that checks dialog state and invokes the executor (see [agent/AGENTS.md](../../agent/AGENTS.md)).
 
@@ -114,9 +127,25 @@ sequenceDiagram
 ## 7. circuit_edit and checkpoints
 
 - `circuit_edit` requires between 1 and 64 ops and an epoch equal to the current epoch. It opens an `AppAgentHost` checkpoint before the first op.
-- The finish step discards the checkpoint when nothing was applied. Otherwise it commits the checkpoint with a summary and places any added components. An error whose `details.reason` is `RESTORE_FAILED` commits even an empty checkpoint.
+- The finish step discards the checkpoint when every applied entry is unchanged. Otherwise it commits the checkpoint with a summary and places any added components. An error whose `details.reason` is `RESTORE_FAILED` commits even an empty checkpoint.
 - Ops name new components with call-local `ref` values. On the first failing op the call stops, returns that op's `op_index`, and reports the applied prefix in `structured.applied`; the prefix stays committed. A success returns `epoch`, `revision`, `applied`, and `refs`.
 - `AppAgentHost` keeps the newest 20 committed checkpoints. `removeCheckpointsFrom(id)` drops checkpoints at or after `id` and returns their summaries oldest-first. The API keeps those summaries from a revert (`noteProjectReplaced`) and reports them in the next stale `circuit_edit` details.
+
+### Editor-space positions
+
+`circuit_get` returns each component's position as an `x`/`y` object in editor-space coordinates. The v1 catalog marks `position` optional so clients can accept older producers that omit it. The current GUI returns the field.
+
+```json
+{"position":{"x":420.0,"y":220.0}}
+```
+
+These coordinates are absolute and include the current canvas pan. Use `add.position` for a new component. Use `move` for a component that existed before this edit batch. After a pan, call `circuit_get` before a move.
+
+```json
+{"epoch":12,"ops":[{"op":"move","component":101,"position":{"x":420.0,"y":220.0}}]}
+```
+
+The widget subtracts current pan to set grid coordinates and uses a pan-scaled float tolerance to detect no-ops. An unchanged move returns `applied[].unchanged: true`. If every operation is unchanged, the API discards the checkpoint and keeps the project revision unchanged. `test_agent_app` and `test_agent_position_read` cover no-op history and pan behavior. The latter also checks reads and saves before first draw and after a collapsed-group move.
 
 ## 8. Read-only measurement tools
 
@@ -136,7 +165,7 @@ sequenceDiagram
 |---|---|---|---|
 | `SimulatorUnavailable` | GuiLink connect | Endpoint file missing, or connect refused within 3 s | `gui_link.cpp` `connect()` |
 | `VERSION_MISMATCH` | hello | Bridge and GUI catalog versions differ | `agent_server.cpp` hello handling |
-| JSON-RPC `BUSY`, "another agent is connected" | listener | A second client while one is authenticated | `agent_server.cpp` session handling |
+| JSON-RPC `BUSY`, "another agent is connected" | listener | The active client stayed open past the 100 ms grace, or another new connection used the replacement slot | `agent_server.cpp` session handling |
 | `BUSY`, dialog message | pump | A dialog stayed open longer than 30 s with a queued call | `agent_server.cpp` `pump()` |
 | `STALE_EPOCH` | tool | Caller's epoch predates a replacement or revert | `details.cause`, `details.undone` |
 | JSON-RPC -32600 | stdio | Oversized stdin line, or a request before `initialize` | `mcp_session.cpp` |
@@ -144,7 +173,7 @@ sequenceDiagram
 
 ## Verification
 
-- Standalone targets: `test_agent_api`, `test_agent_server`, `test_mcp_bridge`, and `test_agent_app`, registered in `tests/CMakeLists.txt`. Run one focused target with `ctest --test-dir build -R '^test_mcp_bridge$' --output-on-failure`. Scope per file is in [tests/AGENTS.md](../../tests/AGENTS.md).
+- Standalone targets: `test_agent_api`, `test_agent_server`, `test_mcp_bridge`, `test_agent_app`, and `test_agent_position_read`, registered in `tests/CMakeLists.txt`. Run one focused target with `ctest --test-dir build -R '^test_mcp_bridge$' --output-on-failure`. Run position read/save coverage with `ctest --test-dir build -R '^test_agent_position_read$' --output-on-failure`. Scope per file is in [tests/AGENTS.md](../../tests/AGENTS.md).
 - Real-client interoperability, minimized-window behavior, and server-restart persistence remain manual acceptance steps (see [agent/AGENTS.md](../../agent/AGENTS.md)).
 
 ## Related

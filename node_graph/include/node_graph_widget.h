@@ -71,8 +71,8 @@ class NodeGraphWidget {
     NodeKind kindForLabel(const std::string &label) const;
 
     // Place a node in editor-space coordinates and keep the widget's position
-    // caches current.
-    void setNodeEditorSpacePosition(int node_id, ImVec2 position);
+    // caches current. Returns true only when its stored grid origin changes.
+    bool setNodeEditorSpacePosition(int node_id, ImVec2 position);
     // Makes `node_id` the only selected node, which is what the Properties panel reads. The node
     // must already be in the editor pool, as setNodeEditorSpacePosition() guarantees.
     void selectNode(int node_id);
@@ -106,6 +106,7 @@ class NodeGraphWidget {
     // Number of links drawn last frame whose two endpoints sat in different
     // collapsed groups (issue #116).
     int crossGroupLinksDrawn() const { return m_cross_group_links_drawn; }
+    // Call only after each engine node already has an ImNodes pool entry, as in project restore.
     void markNodesRegistered();
     ImVec2 gridToScreenOffset() const { return m_grid_to_screen_offset; }
     // Historical name: returns the cached editor-space position.
@@ -113,10 +114,9 @@ class NodeGraphWidget {
         auto it = m_last_node_grid_positions.find(node_id);
         return it != m_last_node_grid_positions.end() ? it->second : ImVec2(-1, -1);
     }
-    // Editor-space position for project saves. Members of collapsed groups as of the last draw
-    // are outside the imnodes pool, so their pan-independent grid cache plus the current pan gives
-    // the position GetNodeEditorSpacePos would report. Every other node is in the pool, so ImNodes
-    // answers directly.
+    // Project-save, checkpoint, and agent reads use editor-space coordinates. Nodes with an
+    // initialized pool position are read directly; unregistered nodes and collapsed-group
+    // members use the cached grid position (or the origin) plus the current pan.
     ImVec2 editorPositionForSave(int node_id);
 
   private:
@@ -186,8 +186,8 @@ class NodeGraphWidget {
     std::unordered_map<int, ImVec2> m_last_node_grid_positions;
     // Previous-frame snapshot for detecting node moves (requires mouse release).
     std::unordered_map<int, ImVec2> m_prev_node_grid_positions;
-    // Set of node IDs registered in the ImNodes pool, so syncNodesFromEngine
-    // can register new nodes without resetting existing positions.
+    // Positions initialized by setters, project restore, or BeginNode prevent
+    // syncNodesFromEngine() from resetting known positions; hidden nodes may leave the pool.
     std::unordered_set<int> m_registered_in_pool;
     std::vector<AddableComponent> m_addable_components;
     std::vector<std::pair<std::string, NodeKind>> m_kind_prefixes;

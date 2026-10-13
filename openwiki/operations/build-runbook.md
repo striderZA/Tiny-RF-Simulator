@@ -3,9 +3,6 @@ type: Runbook
 title: Build & Operations
 description: Reliable contributor and release-operator procedures for configuring, building, testing, formatting, installing, packaging, and troubleshooting Tiny RF Simulator. Covers pinned dependency fetching, platform constraints, executable-relative runtime data, CI gates, and release publication.
 tags: [build, testing, packaging, ci, operations, release]
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T17:27:48.662Z
 sources:
   - id: openwiki-source-6983d4a49fc6ae63a12ff946
     resource: repo://.githooks/commit-msg
@@ -49,12 +46,15 @@ sources:
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # Build & Operations
 
-The project is a C++20 CMake build. The application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.27.0`). Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
+The project is a C++20 CMake build. The application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.28.2`). Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
 
 ## Build lifecycle
 
