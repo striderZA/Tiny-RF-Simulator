@@ -65,6 +65,7 @@ The user manual is built with MkDocs from `manual/pages/` and published to GitHu
 - **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
 - **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
 - **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
+- README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
 - **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
 
 ## CI Pipeline
@@ -103,6 +104,8 @@ Releases are prepared through a pull request by default; the tag is created only
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
 
+On Windows, run the script with Git for Windows `sh` rather than `bash`, which may resolve to the WSL launcher. After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the two-line version change.
+
 Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
 
 ## Architecture (Quick Reference)
@@ -119,6 +122,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
   Run `bash scripts/format.sh` to reformat changed files, or `bash scripts/format.sh --check` to dry-run (CI-equivalent). The checked directory set lives once in `scripts/format-dirs.sh` (shared with the pre-commit hook and the release workflow). CI will reject PRs with formatting violations.
   Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
+  The pre-commit hook runs the format check only when staged C++ files fall in the checked directories.
 - **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`. Their limits bound user edits only: a value already outside them is shown as is (flagged, logged once) and kept until the user edits the field, so pass a local copy of the engine value and write it back only when the helper returns `true`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
@@ -146,6 +150,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 - **Subject format:** `<type>[(<scope>)][!]: <imperative summary>`, under 70 characters. `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`; `scope` is optional lowercase (e.g. `test(pfb): cover grid invariance`); `!` marks a breaking change. A body is optional — leave a blank line after the subject and wrap it at 72 characters.
 - **Enforced locally** by [`.githooks/commit-msg`](.githooks/commit-msg) on every `git commit`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress (`git merge`). Keep it sensible with `git commit --no-verify` only when the rule genuinely does not apply.
 - **Test the hooks** with `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+- Keep hook files at mode `100755` (`git update-index --chmod=+x <path>`).
 - Commits created by GitHub's squash merge never run local hooks, so **write the PR title in the same format**.
 
 ### Pushing

@@ -32,9 +32,7 @@ plus named, user-managed layout presets.
 ## Verification
 - `ctest --test-dir build -R LayoutManager --output-on-failure` (pure-filesystem
   unit tests in `tests/test_layout_manager.cpp`)
-- `build/bin/test_ui` (runs the full ImGui Test Engine suite, including
-  `layout_save_as_creates_file`/`layout_manage_delete_removes_file`, which
-  exercise the ImGui-context-dependent save/delete through the `app/` UI)
+- CTest target `test_ui` (ImGui Test Engine). `layout_save_as_creates_file` and `layout_manage_delete_removes_file` cover the context-dependent save and delete paths through `app/`.
 
 ## Child DOX Index
 *(none)*
