@@ -683,7 +683,7 @@ TEST_CASE("circuit_edit classifies occupied inputs, cycles, and ADC-to-PFB polic
     CHECK(errorFor(policy).at("op_index") == 2);
 }
 
-TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision semantics",
+TEST_CASE("circuit_edit probes enforce capacity and preserve revision semantics",
           "[agent_api][circuit_edit]") {
     ApiFixture fixture;
     const auto added = editCall(
@@ -706,7 +706,9 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
                       {{"op", "probe_add"}, {"at", {{"component", ids.at("d")}, {"port", 0}}}}}));
     REQUIRE_FALSE(fill.is_error);
     CHECK(fill.structured.at("epoch") == epoch);
-    CHECK(fixture.commands.revision() == revision);
+    // Each accepted probe_add is a project edit (issue #204), so four adds advance it four times.
+    CHECK(fixture.commands.revision() == revision + 4);
+    const auto revision_after_fill = fixture.commands.revision();
     CHECK(fixture.host.checkpoint_commits == 2);
     const auto commits_before_duplicate = fixture.host.checkpoint_commits;
     const auto discards_before_duplicate = fixture.host.checkpoint_discards;
@@ -716,7 +718,7 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     REQUIRE_FALSE(duplicate.is_error);
     CHECK(duplicate.structured.at("epoch") == epoch);
     CHECK(duplicate.structured.at("applied")[0].at("unchanged") == true);
-    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.commands.revision() == revision_after_fill);
     CHECK(fixture.host.checkpoint_commits == commits_before_duplicate);
     CHECK(fixture.host.checkpoint_discards == discards_before_duplicate + 1);
     const auto fifth = editCall(
@@ -734,6 +736,8 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     REQUIRE(missing.is_error);
     CHECK(missing.structured.at("epoch") == epoch);
     REQUIRE(errorFor(missing).at("code") == "NOT_FOUND");
+    // A refused remove of an absent probe is not a project edit.
+    CHECK(fixture.commands.revision() == revision_after_fill);
 }
 
 TEST_CASE("circuit_edit reports component port counts for a missing port",

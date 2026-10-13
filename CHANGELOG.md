@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **Probe add and remove mark the project unsaved (#204)** — adding or removing a probe now counts as an unsaved change, so New, Open, and Exit ask before discarding it.
+
 ## [0.28.3] - 2026-10-13
 
 ### Added

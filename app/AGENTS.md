@@ -23,7 +23,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 ## Local Contracts
 - `RfSimulatorApp::saveProject()`, `loadProject()`, and `newProject()` delegate to `ProjectSerializer::save()`, `load()`, and `reset()`. A failed load that resets project state clears the save target.
 - `ProjectSerializer::save()` is atomic: write a sibling temporary file and rename it over the target; never remove the target before rename.
-- Dirty state is derived from the `EditorCommands` revision. Edits outside `EditorCommands` call `markDirty()`; accepted commands advance the revision, rejected commands do not.
+- Dirty state is derived from the `EditorCommands` revision. Edits outside `EditorCommands` call `markDirty()`; accepted commands advance the revision, probe add and remove included, and rejected commands do not (a duplicate probe add or an absent probe remove is rejected).
 - `markClean()` sets the clean point: `saveProject()` calls it only after a successful save (issue #77); `newProject()` and a successful `loadProject()` call it after the serializer runs.
 - User-level edits use `EditorCommands`; component-bound views synchronize on component changes. `EditorCommands::setComponentParams()` validates ordered JSON against `ParameterField::state_fields`; top-level and array-element object members are validated in request insertion order, and the first invalid member is returned. Path parameters and read-only, unknown, and type-invalid values are rejected before mutation; enum labels or valid integral indices map to stored indices; arrays replace whole. Accepted edits deserialize within a snapshot/rollback boundary; engine normalization of requested values is rolled back and reported.
 - Persisted component parameters and Test Flow conditions use engine `serialize()` keys and encodings. `ParameterField::key` names authoring parameters; `state_fields` names serialized state. Do not rename or re-encode persisted keys without an explicit versioned migration.
@@ -79,6 +79,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `tests/test_test_flow_widget.cpp` — Test Flow panel snapshot/restore, validation, and row-limit behavior.
 - `tests/test_issue87_flow.cpp` — UI-free flow helper and flow-file behavior.
 - `tests/test_sparam_legacy_key.cpp` — legacy S-parameter key fallback and precedence.
+- `tests/test_editor_commands.cpp` — App test commands case: an accepted probe add or remove marks the project dirty; a refused duplicate add or absent remove leaves it clean.
 
 ## Child DOX Index
 *(none)*

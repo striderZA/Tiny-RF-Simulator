@@ -75,7 +75,7 @@ class EditorCommands {
     std::optional<int> connect(int start_pin_id, int end_pin_id);
     bool disconnect(int link_id);
 
-    // Probe edits do not advance the revision (pre-existing semantics).
+    // An accepted probe add or remove advances the revision; a refused one does not.
     bool addProbePin(int pin_id);
     bool removeProbePin(int pin_id);
 

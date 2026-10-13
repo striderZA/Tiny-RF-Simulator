@@ -231,12 +231,13 @@ TEST_CASE("library part swap refuses a probe or instrument on a port the new par
 
     SECTION("a probe on the missing port") {
         REQUIRE(f.commands.addProbePin(second_output));
+        const std::uint64_t probed_revision = f.commands.revision();
         const ComponentSwapResult swap = f.commands.swapLibraryPart(f.library, *zx60, old_node);
         CHECK(swap.component == nullptr);
         CHECK(swap.error.find("probed") != std::string::npos);
         CHECK(f.runtime.graph().probePins().size() == 1);
         CHECK(f.runtime.components().find(old_node) == splitter);
-        CHECK(f.commands.revision() == revision);
+        CHECK(f.commands.revision() == probed_revision);
     }
 
     SECTION("an instrument selection on the missing port") {
