@@ -10,7 +10,7 @@ DOX is this repository's AGENTS.md hierarchy. Agents follow it on every edit.
 
 ## Core Contract
 
-- AGENTS.md files are binding work contracts for their subtrees.
+- AGENTS.md files are binding work contracts for their subtrees. `.agents/` and `.githooks/` are outside DOX: they MUST NOT contain AGENTS.md.
 - Work products, source materials, instructions, records, assets, and durable docs must stay understandable from the nearest applicable AGENTS.md plus every parent AGENTS.md above it.
 - Parents hold broad rules and a Child DOX Index. Children hold local rules. A child may tighten a parent rule and never weaken DOX.
 
@@ -40,7 +40,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 - The root is the DOX rail: project-wide rules, global preferences, durable workflow rules, and the top-level Child DOX Index.
 - A child owns its domain rules and its own index. Each parent says what its direct children cover and what stays with the parent.
 - Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards.
-- DOX excludes `.agents/` and `.githooks/`. Do not create or keep AGENTS.md files there, and do not list them in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
+- DOX excludes `.agents/` and `.githooks/`. They MUST NOT contain AGENTS.md and must not appear in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
 - Sections, in order: Purpose, Ownership, Local Contracts, Work Guidance, Verification, Child DOX Index. Work Guidance names current standards only. Verification names checks that exist. Leave either empty if none exist.
 
 ## Style
