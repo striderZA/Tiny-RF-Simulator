@@ -7,7 +7,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `RfSimulatorApp` is the application orchestrator and owns UI, app state, and widgets; `CircuitRuntime` is UI-free and owns the live graph, components, IDs, topology operations, rewiring, and DSP updates.
 - `GraphEditorActions` adapts probe, group, selection, part-number, and group-boundary mutations. `EditorCommands` is the UI-free user-edit entry point; `ProjectSerializer` is app-bound and restores project state through the runtime and editor actions.
 - `ComponentRegistry` owns runtime components; `ComponentTypeRegistry` defines component creation, serialization metadata, and inspector dispatch. `simulator::editor_services` is the UI-free boundary for editor services, component library, receiver measurement, and shared output-SNR policy.
-- `InspectorPanel` edits component parameters through `EditorCommands`; component-bound views are owned and synchronized by the app.
+- `InspectorPanel` reports parameter edits through `onParamChange`, which marks the project dirty; component-bound views are owned and synchronized by the app.
 - `ExtensionManager`, `ExtensionTrustStore`, and `ExternalToolRunner` own extension discovery, trust records, and external-tool execution respectively.
 - `ExtensionTrustStore` keys approvals by the weakly canonical extension root, so a copy at another path needs its own approval; the record is `<exe_dir>/extension_trust.json`.
 - `TestFlowWidget` is app-owned; flow validation and execution use the UI-free `test_flow` boundary. Network Analyzer and receiver measurement use app-provided scratch graphs; `PowerMeterEngine` measures output power independently of UI.
