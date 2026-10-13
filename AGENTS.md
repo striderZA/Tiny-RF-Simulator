@@ -10,7 +10,7 @@ DOX is this repository's AGENTS.md hierarchy. Agents follow it on every edit.
 
 ## Core Contract
 
-- AGENTS.md files are binding work contracts for their subtrees. `.agents/` and `.githooks/` are outside DOX: they MUST NOT contain AGENTS.md.
+- Within the DOX hierarchy, AGENTS.md files are binding work contracts for their subtrees. `.agents/` and `.githooks/` are outside DOX and MUST NOT contain AGENTS.md.
 - Work products, source materials, instructions, records, assets, and durable docs must stay understandable from the nearest applicable AGENTS.md plus every parent AGENTS.md above it.
 - Parents hold broad rules and a Child DOX Index. Children hold local rules. A child may tighten a parent rule and never weaken DOX.
 
