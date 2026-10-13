@@ -13,6 +13,11 @@ With a saved project open, the menu bar shows its filename and the project's cur
 - [Install](install.md): download the release archive and run the simulator.
 - [Guided tutorial](tutorial.md): build and probe your first signal chain.
 
+## Build and measure
+
+- [Components and ports](circuits/components-and-ports.md): place components and connect their ports.
+- [Spectrum Analyzer](measurements/spectrum.md): read the spectrum of a probed signal.
+
 ## Release notes
 
 Changes for each version are listed in the [CHANGELOG on GitHub](https://github.com/striderZA/Tiny-RF-Simulator/blob/master/CHANGELOG.md).
