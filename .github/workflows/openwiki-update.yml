@@ -39,6 +39,11 @@ jobs:
           LANGCHAIN_PROJECT: openwiki
           LANGCHAIN_TRACING_V2: "false"
 
+      - name: Keep AGENTS.md edits inside the OpenWiki block
+        run: |
+          git show HEAD:scripts/check-openwiki-boundary.sh > "$RUNNER_TEMP/check-openwiki-boundary.sh"
+          bash "$RUNNER_TEMP/check-openwiki-boundary.sh" AGENTS.md
+
       - name: Create OpenWiki update pull request
         uses: peter-evans/create-pull-request@v8
         with:

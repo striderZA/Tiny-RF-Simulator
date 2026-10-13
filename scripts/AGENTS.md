@@ -1,7 +1,7 @@
 # Scripts
 
 ## Purpose
-- Own release, changelog, and format scripts and their operational contracts.
+- Own release, changelog, format, and OpenWiki boundary scripts and their operational contracts.
 
 ## Ownership
 - `scripts/release.sh`
@@ -9,6 +9,8 @@
 - `scripts/format.sh`
 - `scripts/format-dirs.sh`
 - `scripts/install-clang-format.sh`
+- `scripts/check-openwiki-boundary.sh`
+- `scripts/test-openwiki-boundary.sh`
 
 ## Local Contracts
 - `scripts/format-dirs.sh` is the single definition of the clang-format file set, used by `scripts/format.sh`, `.githooks/pre-commit`, and the release workflow's format job.
@@ -21,6 +23,7 @@
 - `CHANGELOG.md` is the source of truth for release descriptions.
 - The Linux tarball `rf-simulator-linux-x86_64.tar.gz` has exactly two root-level regular-file members: `rf-simulator-linux` (copied from `tiny-rf-simulator`) and `rf-sim-mcp`. Do not place them inside an `rf-simulator-linux/` directory.
 - On Windows, invoke scripts with Git for Windows `sh`; WSL `bash` is not supported. [INFERENCE]
+- `scripts/check-openwiki-boundary.sh` restores the HEAD text outside the `OPENWIKI` markers of `AGENTS.md` and fails when the markers are missing, duplicated, or misordered. `openwiki-update.yml` runs its HEAD copy, so the scheduled run cannot alter the check.
 
 ## Work Guidance
 
@@ -30,6 +33,7 @@
 - The package job builds with `CMAKE_BUILD_TYPE=Release` and runs CTest against that configuration. Debug builds are validation-only and are never shipped.
 - There is no pull-request CI trigger. `docs.yml` runs `mkdocs build --strict` for pushes to `master` touching manual/build inputs, published releases, or manual dispatch.
 - Formatting check: `bash scripts/format.sh --check --all`.
+- `bash scripts/test-openwiki-boundary.sh` runs the boundary guard against throwaway git repositories; it needs no network or OpenWiki run.
 
 ## Child DOX Index
 - None.
