@@ -122,6 +122,48 @@ void awaitQueuedCalls(TestBridgeClient &client) {
     REQUIRE(answer->contains("error"));
 }
 
+class YieldingTask final : public IAgentCallTask {
+  public:
+    YieldingTask(int &advances, bool &cancelled, int completion_step, std::string tool)
+        : m_advances(advances), m_cancelled(cancelled), m_completion_step(completion_step),
+          m_tool(std::move(tool)) {}
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration) override {
+        if (++m_advances < m_completion_step)
+            return std::nullopt;
+        return AgentToolResult{false, nlohmann::json{{"tool", m_tool}, {"done", true}}};
+    }
+
+    void cancel() noexcept override { m_cancelled = true; }
+
+  private:
+    int &m_advances;
+    bool &m_cancelled;
+    int m_completion_step;
+    std::string m_tool;
+};
+
+class YieldingExecutor final : public IAgentCallExecutor {
+  public:
+    AgentToolResult execute(const AgentCall &call) override {
+        executed.push_back(call.tool);
+        return {false, nlohmann::json{{"tool", call.tool}}};
+    }
+
+    std::unique_ptr<IAgentCallTask> beginCall(const AgentCall &call) override {
+        if (call.tool == "yield")
+            return std::make_unique<YieldingTask>(advances, cancelled, completion_step, call.tool);
+        return IAgentCallExecutor::beginCall(call);
+    }
+
+    std::uint64_t epoch() const override { return 41; }
+
+    int advances = 0;
+    int completion_step = 2;
+    bool cancelled = false;
+    std::vector<std::string> executed;
+};
+
 } // namespace
 
 TEST_CASE("start writes an endpoint and stop removes it", "[agent_server]") {
@@ -647,4 +689,93 @@ TEST_CASE("A call queued behind a long call still runs while the dialog stays cl
     REQUIRE(second_reply->contains("result"));
     CHECK(second_reply->at("result").at("is_error") == false);
     server.stop();
+}
+
+TEST_CASE("Deferred calls yield across pumps and keep later calls in FIFO order",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+
+    std::vector<std::string> completions;
+    std::vector<AgentToolResult> results;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &result) {
+        completions.push_back(result.structured.at("tool").get<std::string>());
+        results.push_back(result);
+    });
+    server.submit(AgentCall{.tool = "sync"}, [&](const AgentToolResult &result) {
+        completions.push_back(result.structured.at("tool").get<std::string>());
+        results.push_back(result);
+    });
+    server.pump();
+    CHECK(executor.advances == 1);
+    CHECK(completions.empty());
+    CHECK(server.status().state == AgentServerState::Busy);
+
+    server.pump();
+    CHECK(executor.advances == 2);
+    REQUIRE(results.size() == 2);
+    CHECK_FALSE(results[0].is_error);
+    CHECK_FALSE(results[1].is_error);
+    CHECK(completions == std::vector<std::string>{"yield", "sync"});
+    CHECK(executor.executed == std::vector<std::string>{"sync"});
+}
+
+TEST_CASE("An active deferred call parks and times out while a modal is open", "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    TestHost host;
+    auto now = std::chrono::steady_clock::time_point{};
+    auto config = configFor(scratch);
+    config.park_timeout = 30s;
+    config.now = [&] { return now; };
+    AgentServer server(executor, host, config);
+    bool completed = false;
+    AgentToolResult result;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &value) {
+        completed = true;
+        result = value;
+    });
+
+    server.pump();
+    REQUIRE(executor.advances == 1);
+    host.modal = true;
+    server.pump();
+    CHECK(executor.advances == 1);
+    CHECK_FALSE(completed);
+
+    now += 31s;
+    server.pump();
+    REQUIRE(completed);
+    CHECK(executor.advances == 1);
+    CHECK(executor.cancelled);
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "BUSY");
+}
+
+TEST_CASE("Stopping cancels an active deferred call", "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    executor.completion_step = 100;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    bool completed = false;
+    AgentToolResult result;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &value) {
+        completed = true;
+        result = value;
+    });
+
+    server.pump();
+    REQUIRE(executor.advances == 1);
+    CHECK_FALSE(completed);
+    server.stop();
+
+    REQUIRE(completed);
+    CHECK(executor.cancelled);
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
 }
