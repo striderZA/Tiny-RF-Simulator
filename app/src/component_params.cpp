@@ -33,7 +33,11 @@ ParamWriteResult failure(ParamWriteStatus status, std::string path = {},
 }
 
 bool isPathParameter(std::string_view key) {
-    return key == "sparam_filepath" || key == "sparam_path";
+    for (const char *path_key : kPathParameterKeys) {
+        if (key == path_key)
+            return true;
+    }
+    return false;
 }
 
 bool isInteger(const Json &value) {

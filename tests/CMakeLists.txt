@@ -114,6 +114,13 @@ add_standalone_test(test_nonlinear_frequency_oip3
     LIBS common
 )
 
+# AMP intercepts reaching the amplifier's nonlinear products through update(). Standalone for
+# the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_amp_file
+    SOURCES test_amplifier_amp_file.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine
