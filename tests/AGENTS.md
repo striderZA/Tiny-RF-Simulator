@@ -30,6 +30,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - Follow [CONTRIBUTING.md — Testing](../CONTRIBUTING.md#testing) for test commands and general coverage guidance.
 - `test_ui` shares `<exe_dir>/layouts/UITestLayout.ini`; `test_engine/CMakeLists.txt` registers `add_test(NAME test_ui COMMAND test_ui)` and sets `RUN_SERIAL TRUE`. `test_ui` is not defined in `tests/CMakeLists.txt`; run the whole `test_ui` target, not individual UI cases.
 - `perf_app` (`test_engine/perf_main.cpp`) is opt-in: `cmake --build build --target perf_app`. It is declared `EXCLUDE_FROM_ALL` and is not a CTest target.
+- Matched perf runs: `cmake --build build --target perf_app`, then `build/bin/perf_app <scenario>` from the repo root on each tag. Delete `build/bin/app.ini` first so both trees start from defaults, and interleave tags.
 - Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark
 - Node graph tests must verify probe routing, link topology, and topological sort
 - Touchstone parser tests must cover all format variants (DB, MA, RI) and frequency units
@@ -44,6 +45,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit
+- `ctest --test-dir build -j8` must also pass with zero failures; start it with a clean `extensions/` and never run a second `ctest` against the same build tree at the same time (see Local Contracts)
 
 Use `ctest --test-dir build --output-on-failure` for the full suite; this command is documented in `CONTRIBUTING.md`.
 
