@@ -42,6 +42,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 - Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards.
 - DOX excludes `.agents/` and `.githooks/`. They MUST NOT contain AGENTS.md and must not appear in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
 - Sections, in order: Purpose, Ownership, Local Contracts, Work Guidance, Verification, Child DOX Index. Work Guidance names current standards only. Verification names checks that exist. Leave either empty if none exist.
+- The closer a doc is to the work, the more specific and practical it must be
 
 ## Style
 
@@ -81,6 +82,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Keep `SKILL.md` under 500 words. Put error tables, field lists, and option matrices in a `reference.md` beside it, linked by relative path. Do not use `@` links, which force-load files.
 - Skills state only behavior verified against code or tests. A skill's facts come from the code it describes; for `using-rf-sim-mcp`, that is `agent/`, governed by `agent/AGENTS.md`. Update a skill in the same change as the code it describes.
 - Create or revise skills with the `writing-skills` workflow: run a blind baseline without the skill, then re-test with it, using the scenarios that matter.
+- Each `<skill-name>/` folder owns its `SKILL.md` and any reference file beside it.
 
 ## Child DOX Index
 
