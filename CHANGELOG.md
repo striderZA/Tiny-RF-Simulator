@@ -1,8 +1,16 @@
-## [Unreleased]
+## [0.28.3] - 2026-10-13
 
 ### Added
 
 - **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
+
+### Fixed
+
+- **Test flow runs yield between UI frames (#208)** — a test-flow run advances in bounded UI-thread slices and restores the circuit between slices, so the window keeps drawing during long runs. A resumed run is guarded against project replacement and user edits.
+
+### Testing
+
+- Add regression coverage for sliced test-flow runs and a frame-based responsiveness benchmark (#208).
 
 ## [0.28.2] - 2026-10-12
 
