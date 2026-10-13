@@ -8,6 +8,8 @@ sources:
     resource: repo://.github/workflows/release.yml
   - id: openwiki-source-d7b5e27be67d03af04c422d5
     resource: repo://agent/api/include/agent_api.h
+  - id: openwiki-source-51a2566382a8dd93c7ef78ca
+    resource: repo://agent/api/src/tool_test_flow.cpp
   - id: openwiki-source-e7932f8366579c2ce8c1865d
     resource: repo://app/src/test_flow_widget.cpp
   - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
@@ -22,8 +24,6 @@ sources:
     resource: repo://test_flow/CMakeLists.txt
   - id: openwiki-source-1f397e27ef8b0dc1f4f49d51
     resource: repo://test_flow/include/flow_boundary.h
-  - id: openwiki-source-3d3e3b78daf6b95b69159369
-    resource: repo://test_flow/include/flow_runner.h
   - id: openwiki-source-7cf82ec60f61d2c0858950cf
     resource: repo://test_flow/src/flow_boundary.cpp
   - id: openwiki-source-1425d7c9bb71c8e6d4145122
@@ -32,6 +32,8 @@ sources:
     resource: repo://tests/AGENTS.md
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
+  - id: openwiki-source-86949a298d24dfef3de6fc0c
+    resource: repo://tests/test_agent_position_read.cpp
   - id: openwiki-source-798feeba9e1cc5b47be50e7a
     resource: repo://tests/test_flow_boundary.cpp
   - id: openwiki-source-fb26cd54f157859706d14c13
@@ -42,10 +44,10 @@ sources:
     resource: repo://tests/test_test_flow_widget.cpp
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # Testing Guide
@@ -96,6 +98,9 @@ build/bin/tests [bench]
 # Focused Test Flow harness, widget, and shared run boundary
 ctest --test-dir build -R 'test_issue87_flow|test_test_flow_widget|test_flow_boundary' --output-on-failure
 
+# Focused agent position read/save regression
+ctest --test-dir build -R '^test_agent_position_read$' --output-on-failure
+
 # UI tests (a display server is required)
 build/bin/test_ui
 # Headless Linux
@@ -135,6 +140,7 @@ Each name below is an independently registered CTest target. The source is the s
 - `test_spectrum_jitter`, `test_spectrum_analyzer_snr`, and `test_node_hover_snr`: stable tone peaks despite display noise, analyzer SNR guards/read-only behavior, and node-hover first-output SNR/data fallback.
 - `test_test_flow_widget`: the app panel's run outcomes through the shared boundary (whole-circuit restoration observed through the panel, ordinary and latched failures, reload recovery), validation and row limits, authoring controls, preview, export, and bounded rendering.
 - `test_flow_boundary`: the UI-free shared run boundary (`RunFlowWithinBoundary()`) used by the Test Flow panel and the agent tool. A flow without conditions measures one row and leaves the circuit as it was; a restore failure is reported while later engines are still restored; an execution failure is reported and the circuit is still restored; a snapshot failure refuses the run before anything executes. Links `simulator::test_flow`, `simulator::editor_services`, and `common`.
+- `test_agent_position_read`: standalone app-level target for component positions before first draw. It checks `circuit_get` and project saves for canvas-added and duplicated components. Repeated moves after fractional and large pan remain no-ops. A moved member of a collapsed group keeps its position after save. The target runs serially because its `RfSimulatorApp` fixture shares executable-relative `app.ini`.
 
 - `test_circuit_runtime`, `test_graph_editor_actions`, and `test_editor_commands`: UI-free circuit lifecycle and link policy, probe/group mutation, revision-based dirty semantics, rejected-command behavior, and component-view synchronization.
 - `test_receiver_requirements`, `test_receiver_performance_measurements`, and `test_receiver_requirements_project`: requirement validation/status, real-engine gain/NF/output-power/IIP3 measurement, partial/cache behavior, persistence, and New/reset behavior.
@@ -149,7 +155,7 @@ The following shared resources require care:
 
 - Scratch paths must be process-unique because `catch_discover_tests` can launch separate cases as separate processes; `tests/test_temp_paths.h` provides a process-id tag for filenames.
 - `SessionState` writes the exe-relative `app.ini` on Windows and is a no-op elsewhere. `LayoutManager` and `TutorialState` use exe-relative files on all supported platforms. Extension tests also mutate the shared source-tree `extensions/` root.
-- CMake marks `test_ui` (in `test_engine/CMakeLists.txt`) and `test_network_analyzer`, `test_extensions`, `test_issue45_extension_trust`, `test_issue113_project_load`, `test_project_json`, `test_node_hover_snr`, `test_test_flow_widget`, `test_editor_commands`, `test_receiver_requirements_project`, and `test_agent_app` (in `tests/CMakeLists.txt`) `RUN_SERIAL` for shared executable-relative state, fixtures, or `app.ini`. This serializes only one CTest invocation; do not run two CTest processes against the same build tree. Start extension tests with a clean `extensions/` directory.
+- CMake marks `test_ui` (in `test_engine/CMakeLists.txt) and `test_network_analyzer`, `test_extensions`, `test_issue45_extension_trust`, `test_issue113_project_load`, `test_project_json`, `test_node_hover_snr`, `test_test_flow_widget`, `test_editor_commands`, `test_receiver_requirements_project`, `test_agent_app`, and `test_agent_position_read` (in `tests/CMakeLists.txt) `RUN_SERIAL` for shared executable-relative state, fixtures, or `app.ini`. This serializes only one CTest invocation; do not run two CTest processes against the same build tree. Start extension tests with a clean `extensions/` directory.
 - UI tests need a display. Linux CI supplies Xvfb; Windows release CI excludes `test_ui`. The ASan job excludes benchmarks and UI; Windows also checks the main-binary case count against the workflow's MinGW registration floor.
 
 ## Choosing coverage for a change

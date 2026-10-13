@@ -814,13 +814,21 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
     REQUIRE(circuit_get != nullptr);
     CHECK(circuit_get->input_schema.at("properties").at("include_params").at("default") == false);
 
+    const auto &circuit_component =
+        circuit_get->output_schema.at("anyOf").at(0).at("properties").at("components").at("items");
+    REQUIRE(circuit_component.at("properties").contains("position"));
+    CHECK(circuit_component.at("properties").at("position").at("required") ==
+          nlohmann::json::array({"x", "y"}));
+    CHECK(circuit_component.at("required") ==
+          nlohmann::json::array({"id", "type", "label", "inputs", "outputs"}));
+
     const auto *circuit_edit = findAgentTool("circuit_edit");
     REQUIRE(circuit_edit != nullptr);
     const auto &operations = circuit_edit->input_schema.at("properties").at("ops");
     CHECK(operations.at("minItems") == 1);
     CHECK(operations.at("maxItems") == 64);
     const auto &variants = operations.at("items").at("oneOf");
-    REQUIRE(variants.size() == 9);
+    REQUIRE(variants.size() == 10);
     std::set<std::string> operation_names;
     for (const auto &variant : variants) {
         REQUIRE(variant.at("properties").contains("op"));
@@ -828,7 +836,8 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
         operation_names.insert(variant.at("properties").at("op").at("const").get<std::string>());
     }
     CHECK((operation_names == std::set<std::string>{"add", "remove", "set_params", "connect",
-                                                    "disconnect", "probe_add", "probe_remove"}));
+                                                    "disconnect", "probe_add", "probe_remove",
+                                                    "move"}));
 
     const auto *measure_port = findAgentTool("measure_port");
     REQUIRE(measure_port != nullptr);
@@ -1061,7 +1070,9 @@ TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
           "RF Simulator tools act on the project open in the user's RF Simulator window. "
           "Start with circuit_get. Component ids are the numbers in node labels "
           "(\"Amplifier 103\" is 103). Send the epoch from your latest read with every call "
-          "that takes component ids; on STALE_EPOCH, call circuit_get again. Parameter units "
-          "are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot "
-          "open, save, or name files.");
+          "that takes component ids; on STALE_EPOCH, call circuit_get again. Positions include "
+          "the current canvas pan; after panning, call circuit_get again before moving a "
+          "component. Use add.position for a new component; move only targets components that "
+          "existed before the current edit call. Parameter units are encoded in key suffixes "
+          "(_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot open, save, or name files.");
 }

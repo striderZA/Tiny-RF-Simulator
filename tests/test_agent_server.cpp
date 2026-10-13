@@ -24,6 +24,7 @@
 #include <functional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -56,9 +57,21 @@ class TestHost final : public IAgentHost {
     void commitCheckpoint(const std::string &) override {}
     void discardCheckpoint() override {}
     void placeComponents(const std::vector<AgentPlacement> &) override {}
+    std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const override {
+        const auto position = node_positions.find(graph_node_id);
+        return position == node_positions.end() ? std::array<float, 2>{0.0f, 0.0f}
+                                                : position->second;
+    }
+    bool setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+        if (nodeEditorSpacePosition(graph_node_id) == position)
+            return false;
+        node_positions[graph_node_id] = position;
+        return true;
+    }
     bool appModalOpen() const override { return modal; }
     std::optional<std::string> projectName() const override { return std::nullopt; }
     void recordActivity(const AgentActivity &) override {}
+    std::unordered_map<int, std::array<float, 2>> node_positions;
     bool modal = false;
 };
 

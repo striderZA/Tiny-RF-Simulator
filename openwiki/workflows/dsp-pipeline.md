@@ -3,9 +3,6 @@ type: Runtime workflow
 title: DSP Pipeline & Runtime Workflows
 description: Follow real-time signals through CircuitRuntime rewiring and topological updates, ADC DDC, PFB channel outputs, analyzer measurements, component-ID and project-epoch guards, and revision-based project persistence.
 tags: [dsp, pipeline, runtime, adc, pfb, project-lifecycle]
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T17:27:48.662Z
 sources:
   - id: openwiki-source-e0fd99a5ab1663ac9509bb7f
     resource: repo://adc/include/adc_engine.h
@@ -86,6 +83,9 @@ sources:
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
 generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # DSP Pipeline & Runtime Workflows

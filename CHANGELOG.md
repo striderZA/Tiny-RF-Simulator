@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+- **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
+
 ## [0.28.2] - 2026-10-12
 
 ### Added

@@ -320,8 +320,7 @@ void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 po
     IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
     if (!comp)
         return;
-    ImNodes::EditorContextSet(m_graph_widget->context());
-    ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
+    m_graph_widget->setNodeEditorSpacePosition(comp->graphNodeId(), pos);
 }
 
 void RfSimulatorApp::syncComponentViews() {
@@ -380,8 +379,8 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
         return false;
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
-    ImNodes::EditorContextSet(m_graph_widget->context());
-    ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
+    m_graph_widget->setNodeEditorSpacePosition(new_nid,
+                                               ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
@@ -482,6 +481,25 @@ void RfSimulatorApp::testMakeDirty() { markDirty(); }
 IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int engine_id) {
     const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
     return descriptor ? testCreateComponent(descriptor->create, engine_id) : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testAddComponentAtPosition(std::string_view type,
+                                                             ImVec2 position) {
+    const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor)
+        return nullptr;
+    const std::size_t component_count = m_circuit_runtime.components().all().size();
+    addComponent(descriptor, position);
+    const auto components = m_circuit_runtime.components().all();
+    return components.size() == component_count + 1 ? components.back() : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testDuplicateComponent(int graph_node_id) {
+    const std::size_t component_count = m_circuit_runtime.components().all().size();
+    if (!duplicateComponent(graph_node_id))
+        return nullptr;
+    const auto components = m_circuit_runtime.components().all();
+    return components.size() == component_count + 1 ? components.back() : nullptr;
 }
 
 IComponentEngine *RfSimulatorApp::testAddLibraryPart(const std::string &part_number) {

@@ -182,9 +182,14 @@ Json circuitComponent(const AgentApiContext &context, const IComponentEngine &co
     if (!node)
         return Json::object();
     const Json ports = componentPorts(context, *node);
-    Json value{{"id", component.id()},         {"type", std::string(component.type_name())},
-               {"label", node->label},         {"part_number", node->part_number},
-               {"inputs", ports.at("inputs")}, {"outputs", ports.at("outputs")}};
+    const auto position = context.host.nodeEditorSpacePosition(component.graphNodeId());
+    Json value{{"id", component.id()},
+               {"type", std::string(component.type_name())},
+               {"label", node->label},
+               {"part_number", node->part_number},
+               {"inputs", ports.at("inputs")},
+               {"outputs", ports.at("outputs")},
+               {"position", {{"x", position[0]}, {"y", position[1]}}}};
     if (include_params)
         value["params"] = component.serialize();
     return value;

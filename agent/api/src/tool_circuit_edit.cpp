@@ -157,12 +157,12 @@ struct RefEntry {
 struct EditSummary {
     int components_added = 0;
     int components_removed = 0;
+    int components_moved = 0;
     int links_added = 0;
     int links_removed = 0;
     int parameter_changes = 0;
     int probes_added = 0;
     int probes_removed = 0;
-
     std::string text() const {
         std::vector<std::string> pieces;
         const auto append = [&pieces](int count, std::string_view singular, std::string_view plural,
@@ -177,6 +177,7 @@ struct EditSummary {
         };
         append(components_added, "component", "components", "+");
         append(components_removed, "component", "components", "-");
+        append(components_moved, "component moved", "components moved");
         append(links_added, "link", "links", "+");
         append(links_removed, "link", "links", "-");
         append(parameter_changes, "parameter change", "parameter changes");
@@ -338,6 +339,14 @@ void validateParams(const OrderedJson &params, std::string_view path) {
         invalid(std::string(path), "expected an object");
 }
 
+// A finite double at or beyond this magnitude rounds to an infinite float, and a conversion that
+// overflows the destination is undefined behavior ([conv.double]). Range-check before converting.
+constexpr double kFloatOverflowBoundary = 0x1p128 - 0x1p103;
+
+bool fitsFloat(double value) {
+    return std::isfinite(value) && std::fabs(value) < kFloatOverflowBoundary;
+}
+
 std::optional<std::array<float, 2>> parsePosition(const OrderedJson &operation,
                                                   std::string_view operation_path) {
     const auto position_it = operation.find("position");
@@ -348,14 +357,13 @@ std::optional<std::array<float, 2>> parsePosition(const OrderedJson &operation,
     const OrderedJson &x_value = required(*position_it, "x", path);
     const OrderedJson &y_value = required(*position_it, "y", path);
     if (!x_value.is_number() || !y_value.is_number())
-        invalid(path, "position coordinates must be finite numbers");
+        invalid(path, "position coordinates must be finite numbers in the 32-bit float range");
     const double x = x_value.get<double>();
     const double y = y_value.get<double>();
+    if (!fitsFloat(x) || !fitsFloat(y))
+        invalid(path, "position coordinates must be finite numbers in the 32-bit float range");
     const float x_position = static_cast<float>(x);
     const float y_position = static_cast<float>(y);
-    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(x_position) ||
-        !std::isfinite(y_position))
-        invalid(path, "position coordinates must be finite numbers");
     return std::array<float, 2>{x_position, y_position};
 }
 
@@ -458,7 +466,11 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
     EditSummary summary;
 
     const auto finish = [&](bool preserve_empty_checkpoint = false) {
-        if (applied.empty() && !preserve_empty_checkpoint) {
+        // No-op results do not create empty checkpoints or evict real history.
+        const bool state_changed =
+            std::any_of(applied.begin(), applied.end(),
+                        [](const Json &entry) { return !entry.value("unchanged", false); });
+        if (!state_changed && !preserve_empty_checkpoint) {
             context.host.discardCheckpoint();
         } else {
             context.host.commitCheckpoint(summary.text());
@@ -617,6 +629,35 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
                     ++added_index;
                 }
             }
+            return;
+        }
+
+        if (op == "move") {
+            requireOperationKeys(operation, operation_path, {"op", "component", "position"});
+            const int component_id = intValue(required(operation, "component", operation_path),
+                                              childPath(operation_path, "component"));
+            const auto position = parsePosition(operation, operation_path);
+            if (!position)
+                invalid(childPath(operation_path, "position"), "required field is missing");
+            IComponentEngine *component = findComponentById(context.runtime, component_id);
+            if (!component)
+                notFound("component " + std::to_string(component_id) + " is not in this circuit");
+            if (std::find(added_node_ids.begin(), added_node_ids.end(), component->graphNodeId()) !=
+                added_node_ids.end()) {
+                invalid(childPath(operation_path, "component"),
+                        "cannot move a component added in this batch; set position in the add "
+                        "operation");
+            }
+
+            applied_entry["component"] = component_id;
+            if (!context.host.setNodeEditorSpacePosition(component->graphNodeId(), *position)) {
+                applied_entry["unchanged"] = true;
+                applied.push_back(std::move(applied_entry));
+                return;
+            }
+            context.commands.markModified();
+            ++summary.components_moved;
+            applied.push_back(std::move(applied_entry));
             return;
         }
 

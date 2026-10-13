@@ -511,6 +511,13 @@ add_standalone_test(test_agent_api
     LIBS simulator::agent_api
 )
 target_include_directories(test_agent_api PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+# Standalone, UI-free circuit_edit move and editor-space position contracts. Kept apart from
+# test_agent_api.cpp, whose added cases were not registered on the MinGW-w64 build.
+add_standalone_test(test_agent_api_moves
+    SOURCES test_agent_api_moves.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api_moves PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
 # Standalone real-loopback coverage for AgentServer transport, authentication,
 # UI-thread pumping, modal parking, endpoint ownership, and shutdown.
 add_standalone_test(test_agent_server
@@ -534,6 +541,13 @@ add_standalone_test(test_agent_app
     LIBS simulator::app
 )
 set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)
+# Standalone app-level regression for agent-visible node positions: GUI-added and duplicated
+# nodes before their first draw, pan-aware round trips, agent moves, and collapsed-group persistence.
+add_standalone_test(test_agent_position_read
+    SOURCES test_agent_position_read.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_position_read PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone tests for the active circuit project's Git branch, commit, and working-tree status.
 add_standalone_test(test_git_status

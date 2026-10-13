@@ -145,9 +145,13 @@ Json componentOrRefPortSchema() {
 }
 
 Json positionSchema() {
-    return objectSchema(properties({{"x", numberSchema("ImNodes editor-space x coordinate.")},
-                                    {"y", numberSchema("ImNodes editor-space y coordinate.")}}),
-                        {"x", "y"});
+    return objectSchema(
+        properties(
+            {{"x",
+              numberSchema("ImNodes editor-space x coordinate, including the current canvas pan.")},
+             {"y", numberSchema(
+                       "ImNodes editor-space y coordinate, including the current canvas pan.")}}),
+        {"x", "y"});
 }
 
 Json libraryPartInputSchema() {
@@ -184,6 +188,15 @@ Json setParamsOperationSchema(bool use_ref) {
     }
     fields["component"] = integerSchema("Component id to update.", 0);
     return objectSchema(std::move(fields), {"op", "component", "params"});
+}
+Json moveOperationSchema() {
+    return objectSchema(
+        properties(
+            {{"op", constString("move")},
+             {"component",
+              integerSchema("Component id of a component that existed before this edit call.", 0)},
+             {"position", positionSchema()}}),
+        {"op", "component", "position"});
 }
 
 Json connectOperationSchema() {
@@ -233,7 +246,7 @@ Json editOperationSchema() {
         {"oneOf",
          Json::array({addOperationSchema(false), addOperationSchema(true), removeOperationSchema(),
                       setParamsOperationSchema(false), setParamsOperationSchema(true),
-                      connectOperationSchema(), disconnectOperationSchema(),
+                      connectOperationSchema(), disconnectOperationSchema(), moveOperationSchema(),
                       probeOperationSchema("probe_add"), probeOperationSchema("probe_remove")})}};
 }
 
@@ -282,7 +295,8 @@ Json circuitComponentSchema(bool include_params) {
                               {"label", stringSchema()},
                               {"part_number", stringSchema()},
                               {"inputs", arraySchema(componentInputSchema())},
-                              {"outputs", arraySchema(componentOutputSchema())}});
+                              {"outputs", arraySchema(componentOutputSchema())},
+                              {"position", positionSchema()}});
     if (include_params) {
         fields["params"] = paramsSchema();
     }
@@ -309,16 +323,17 @@ Json parameterChangeSchema() {
 }
 
 Json appliedOperationSchema() {
-    return objectSchema(properties({{"op_index", integerSchema("Zero-based operation index.", 0)},
-                                    {"op", enumSchema({"add", "remove", "set_params", "connect",
-                                                       "disconnect", "probe_add", "probe_remove"})},
-                                    {"component", integerSchema("Affected component id.", 0)},
-                                    {"ref", stringSchema()},
-                                    {"label", stringSchema()},
-                                    {"params", paramsSchema()},
-                                    {"also_changed", arraySchema(parameterChangeSchema())},
-                                    {"unchanged", booleanSchema()}}),
-                        {"op_index", "op"});
+    return objectSchema(
+        properties({{"op_index", integerSchema("Zero-based operation index.", 0)},
+                    {"op", enumSchema({"add", "remove", "set_params", "connect", "disconnect",
+                                       "probe_add", "probe_remove", "move"})},
+                    {"component", integerSchema("Affected component id.", 0)},
+                    {"ref", stringSchema()},
+                    {"label", stringSchema()},
+                    {"params", paramsSchema()},
+                    {"also_changed", arraySchema(parameterChangeSchema())},
+                    {"unchanged", booleanSchema()}}),
+        {"op_index", "op"});
 }
 
 Json circuitEditSuccessSchema() {
@@ -561,24 +576,25 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                             {"total", integerSchema("Total matching loaded definitions.", 0)}}),
                 {"epoch", "parts", "total"}),
             readOnlyAnnotations()),
-        tool("circuit_get", "Get Circuit",
-             "Read the current project circuit, component ids, topology, probes, and "
-             "network-analyzer settings.",
-             inputSchema(
-                 properties({{"include_params", Json{{"type", "boolean"}, {"default", false}}}}),
-                 {}, Json{{"include_params", true}}),
-             objectSchema(
-                 properties({{"epoch", integerSchema("Circuit epoch.", 0)},
-                             {"revision", integerSchema("Project revision.", 0)},
-                             {"dirty", booleanSchema()},
-                             {"project_name", nullableSchema(stringSchema(
-                                                  "Project file stem, or null when untitled."))},
-                             {"components", arraySchema(circuitComponentSchema(true))},
-                             {"probes", arraySchema(probeEndpointSchema())},
-                             {"network_analyzer", networkAnalyzerPointsSchema()}}),
-                 {"epoch", "revision", "dirty", "project_name", "components", "probes",
-                  "network_analyzer"}),
-             readOnlyAnnotations()),
+        tool(
+            "circuit_get", "Get Circuit",
+            "Read the current project circuit, component ids, topology, and editor-space positions "
+            "including the current canvas pan, probes, and network-analyzer settings.",
+            inputSchema(
+                properties({{"include_params", Json{{"type", "boolean"}, {"default", false}}}}), {},
+                Json{{"include_params", true}}),
+            objectSchema(
+                properties({{"epoch", integerSchema("Circuit epoch.", 0)},
+                            {"revision", integerSchema("Project revision.", 0)},
+                            {"dirty", booleanSchema()},
+                            {"project_name", nullableSchema(stringSchema(
+                                                 "Project file stem, or null when untitled."))},
+                            {"components", arraySchema(circuitComponentSchema(true))},
+                            {"probes", arraySchema(probeEndpointSchema())},
+                            {"network_analyzer", networkAnalyzerPointsSchema()}}),
+                {"epoch", "revision", "dirty", "project_name", "components", "probes",
+                 "network_analyzer"}),
+            readOnlyAnnotations()),
         tool("component_get", "Get Component",
              "Read one component's parameters, ports, parameter metadata, and hover summary using "
              "its current id and epoch.",
@@ -767,7 +783,10 @@ const std::string &agentServerInstructions() {
         "RF Simulator tools act on the project open in the user's RF Simulator window. Start with "
         "circuit_get. Component ids are the numbers in node labels (\"Amplifier 103\" is 103). "
         "Send the epoch from your latest read with every call that takes component ids; on "
-        "STALE_EPOCH, call circuit_get again. Parameter units are encoded in key suffixes (_Hz, "
-        "_dB, _dBm, _dBm_per_Hz). This version cannot open, save, or name files.";
+        "STALE_EPOCH, call circuit_get again. Positions include the current canvas pan; after "
+        "panning, call circuit_get again before moving a component. Use add.position for a new "
+        "component; move only targets components that existed before the current edit call. "
+        "Parameter units are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). This version "
+        "cannot open, save, or name files.";
     return instructions;
 }

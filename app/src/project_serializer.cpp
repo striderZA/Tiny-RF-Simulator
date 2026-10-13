@@ -566,10 +566,9 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
 
-    // Register engine nodes with the imnodes pool before saving, including nodes added without
-    // a prior render frame. Live reads in editorPositionForSave() assert on unregistered IDs.
-    // syncNodesFromEngine() also seeds the grid cache for each node it registers, which hidden
-    // collapsed-group members rely on.
+    // Synchronize engine nodes before saving, including nodes added without a render frame.
+    // editorPositionForSave() gates live reads to registered visible nodes; unregistered nodes
+    // and collapsed members use the grid cache or the origin plus current pan.
     m_graph_widget.syncNodesFromEngine();
 
     // Save components by iterating the registry

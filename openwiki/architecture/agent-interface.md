@@ -5,7 +5,7 @@ description: Layers, dependency rules, trust boundaries, and security contracts 
 tags: [agent, mcp, architecture, protocol, security, rf-simulator]
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-10T17:27:48.662Z
+    at: 2026-10-12T23:59:41.836Z
 sources:
   - id: openwiki-source-4dd766881eeb1848d297e025
     resource: repo://agent/AGENTS.md
@@ -15,6 +15,10 @@ sources:
     resource: repo://agent/api/include/agent_host.h
   - id: openwiki-source-cb224f0d93a904220be7cf22
     resource: repo://agent/api/src/agent_server.cpp
+  - id: openwiki-source-efe3f6f9c5f723b0b2c7d63f
+    resource: repo://agent/api/src/tool_circuit_edit.cpp
+  - id: openwiki-source-4ded429cf8787c18dbe1448d
+    resource: repo://agent/api/src/tool_circuit_read.cpp
   - id: openwiki-source-397ec13cde90874f660679b1
     resource: repo://agent/mcp/AGENTS.md
   - id: openwiki-source-3fa73b0f154188231bdb99e6
@@ -41,11 +45,15 @@ sources:
     resource: repo://app/include/app_agent_host.h
   - id: openwiki-source-8e028f5320373887a239daa1
     resource: repo://app/include/app.h
+  - id: openwiki-source-77fe8973b7526a7bc3ecf4c4
+    resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
+  - id: openwiki-source-9cfe8ddc08d1f0119df291d5
+    resource: repo://node_graph/src/node_graph_widget.cpp
   - id: openwiki-source-d364d949938a433276255c32
     resource: repo://src/main.cpp
-generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+generated: { by: "omp", at: "2026-10-12T23:59:41.836Z" }
 ---
 
 # Agent Interface Architecture
@@ -79,7 +87,7 @@ flowchart LR
 - `simulator::agent_api` links the protocol library, UI-free editor services, the network-analyzer, spectrum-analyzer, and power-meter engines, the test-flow and Touchstone libraries, and Threads. It does not link `simulator::app` or any UI library.
 - `simulator::mcp_adapter` exposes only the protocol library and Threads publicly; logging stays private. `rf-sim-mcp` links the adapter privately and installs into `bin`.
 - `rf-sim-mcp` answers MCP discovery and `tools/list` without a reachable GUI, and accepts `--endpoint`, `--version`, and `--help`.
-- The API reaches application behavior only through `IAgentHost`, a seven-method interface. Circuit edits still route through `EditorCommands`.
+- The nine-method `IAgentHost` boundary, implemented by `AppAgentHost`, provides UI-owned checkpoint, placement, and position behavior. `circuit_edit` routes component creation/removal, parameter writes, and topology edits through `EditorCommands`. Its `move` operation sets editor-space positions through `IAgentHost` and calls `EditorCommands::markModified()` only when the stored pan-independent grid position changes.
 - `AppAgentHost` implements `IAgentHost`, and `RfSimulatorApp` owns the API, the server, and the server opt-in as members.
 
 ## Startup and threading
@@ -93,7 +101,7 @@ flowchart LR
 ## Trust boundary
 
 - **Loopback only.** The GUI listener binds the IPv4 loopback address on an ephemeral port. `AgentListener::accept` closes any accepted peer that is not on loopback.
-- **One client.** While a client is connected, a second connection receives a `BUSY` reply ("another agent is connected") and is closed.
+- **One active client and one replacement candidate.** While a client is connected, one newcomer waits for up to 100 ms. If the active client disconnects during that window, the newcomer is admitted; if the window expires, it receives a `BUSY` reply and is closed. Any additional newcomer while one is already waiting receives `BUSY` and is closed.
 - **Handshake.** The bridge's hello must present the bridge token, checked with `agentTokensEqual`. The GUI token is a separately generated token, regenerated until it differs from the bridge token.
 - **Tokens.** `generateAgentToken()` draws 32 bytes from the OS CSPRNG (`BCryptGenRandom` on Windows, `getrandom` on Linux) and returns 64 lowercase hex characters. Without a usable source it returns no token rather than weaker entropy.
 - **Comparison.** `agentTokensEqual` returns false for unequal lengths. Otherwise it ORs per-byte XOR differences across the whole value before deciding.
@@ -106,6 +114,7 @@ flowchart LR
 
 - `kAgentCatalogVersion` is 1. The catalog defines exactly ten v1 tools: `component_types`, `library_search`, `circuit_get`, `component_get`, `circuit_edit`, `measure_port`, `network_analyzer_sweep`, `data_file_read`, `test_flow_run`, and `receiver_measure`.
 - Within one catalog version, changes are additive. Removing or retyping a field or tool requires a version increment.
+- The v1 `circuit_get` component schema includes `position` as an additive optional property. The GUI emits it, but older v1 producers may omit it without violating the schema.
 - No catalog tool grants extension trust, runs external tools, authors component-library entries, imports or exports `.rflib` files, or opens, saves, or names a file. `data_file_read` takes no paths and never writes, and agents may read only data files a component or library part already references.
 - The bridge verifies the GUI token and catalog version before relaying a call. A malformed reply or JSON-RPC error drops the channel, and a later call reconnects.
 - The MCP session selects a protocol era per request: legacy initialization-era versions `2025-06-18` and `2025-11-25`, or the stateless `2026-07-28` era, which carries its own version and capability metadata.
