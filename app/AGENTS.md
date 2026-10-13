@@ -9,6 +9,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `ComponentRegistry` owns runtime components; `ComponentTypeRegistry` defines component creation, serialization metadata, and inspector dispatch. `simulator::editor_services` is the UI-free boundary for editor services, component library, receiver measurement, and shared output-SNR policy.
 - `InspectorPanel` edits component parameters through `EditorCommands`; component-bound views are owned and synchronized by the app.
 - `ExtensionManager`, `ExtensionTrustStore`, and `ExternalToolRunner` own extension discovery, trust records, and external-tool execution respectively.
+- `ExtensionTrustStore` keys approvals by the weakly canonical extension root, so a copy at another path needs its own approval; the record is `<exe_dir>/extension_trust.json`.
 - `TestFlowWidget` is app-owned; flow validation and execution use the UI-free `test_flow` boundary. Network Analyzer and receiver measurement use app-provided scratch graphs; `PowerMeterEngine` measures output power independently of UI.
 - `PFBViewManager` owns the per-PFB IQ Plot and Channelizer Grid widgets and their visibility. `clear()` is reserved for bulk engine destruction and runs first in `ProjectSerializer::reset()`, before the engines are destroyed.
 - `NetworkAnalyzerEngine` and `NetworkAnalyzerWidget` are a singleton instrument owned by `RfSimulatorApp`. Each measurement runs in a private scratch graph (`NaScratch`, `IsolatedChainRunner`); the reusable `MeasurementChainPath` stays in `network_analyzer_engine`.
