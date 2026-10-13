@@ -40,6 +40,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 - The root is the DOX rail: project-wide rules, global preferences, durable workflow rules, and the top-level Child DOX Index.
 - A child owns its domain rules and its own index. Each parent says what its direct children cover and what stays with the parent.
 - Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards.
+- DOX excludes `.agents/` and `.githooks/`. Do not create or keep AGENTS.md files there, and do not list them in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
 - Sections, in order: Purpose, Ownership, Local Contracts, Work Guidance, Verification, Child DOX Index. Work Guidance names current standards only. Verification names checks that exist. Leave either empty if none exist.
 
 ## Style
@@ -54,6 +55,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 | Surface | Authority | Edited by |
 |---|---|---|
 | AGENTS.md (this tree) | Binding subtree contracts and the DOX pass | Humans and agents, through the DOX pass |
+| `.agents/skills/` and `.githooks/` | Not DOX. Skill rules: Agent Rules here. Hook rules: CONTRIBUTING.md | Humans and agents, under those rules |
 | CONTRIBUTING.md | Human conventions: setup, testing, style, git, CI, release | Humans |
 | `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | The scheduled OpenWiki job; regenerate after changing `openwiki/INSTRUCTIONS.md` |
 | `manual/` | Published user documentation (MkDocs) | Humans |
@@ -75,6 +77,10 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Never run filesystem-wide searches (`find /`, `dir /s`, drive-root greps). They hang headless runs past the watchdog. Search within the repository.
 - Planning and spec drafts (`docs/superpowers/`, `docs/specs/`, `.superpowers/`) are gitignored working material. Do not commit them.
 - Releases: follow CONTRIBUTING.md (Release Process). The binding release-script rules live in [scripts/AGENTS.md](scripts/AGENTS.md).
+- Repo skills live in `.agents/skills/<name>/`. The folder name matches the frontmatter `name` (lowercase, hyphenated, verb-first). The `description` starts with "Use when", is third person, and lists triggers and symptoms only, never the workflow.
+- Keep `SKILL.md` under 500 words. Put error tables, field lists, and option matrices in a `reference.md` beside it, linked by relative path. Do not use `@` links, which force-load files.
+- Skills state only behavior verified against code or tests. A skill's facts come from the code it describes; for `using-rf-sim-mcp`, that is `agent/`, governed by `agent/AGENTS.md`. Update a skill in the same change as the code it describes.
+- Create or revise skills with the `writing-skills` workflow: run a blind baseline without the skill, then re-test with it, using the scenarios that matter.
 
 ## Child DOX Index
 
@@ -89,10 +95,8 @@ Link to the owning document instead of restating its rules or commands on anothe
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
 - [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
 - [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
-- [.agents/AGENTS.md](.agents/AGENTS.md) — Repo-local coding-agent skills under `.agents/skills/`, including the rf-sim MCP usage guidance
 - [manual/AGENTS.md](manual/AGENTS.md) — User-facing MkDocs manual: page ownership, publish guard, docs contract
 - [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, and format scripts and the rules that bind them
-- [.githooks/AGENTS.md](.githooks/AGENTS.md) — Local commit and push gates
 
 <!-- OPENWIKI:START -->
 
