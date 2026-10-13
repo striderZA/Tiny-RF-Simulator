@@ -339,6 +339,14 @@ void validateParams(const OrderedJson &params, std::string_view path) {
         invalid(std::string(path), "expected an object");
 }
 
+// A finite double at or beyond this magnitude rounds to an infinite float, and a conversion that
+// overflows the destination is undefined behavior ([conv.double]). Range-check before converting.
+constexpr double kFloatOverflowBoundary = 0x1p128 - 0x1p103;
+
+bool fitsFloat(double value) {
+    return std::isfinite(value) && std::fabs(value) < kFloatOverflowBoundary;
+}
+
 std::optional<std::array<float, 2>> parsePosition(const OrderedJson &operation,
                                                   std::string_view operation_path) {
     const auto position_it = operation.find("position");
@@ -349,14 +357,13 @@ std::optional<std::array<float, 2>> parsePosition(const OrderedJson &operation,
     const OrderedJson &x_value = required(*position_it, "x", path);
     const OrderedJson &y_value = required(*position_it, "y", path);
     if (!x_value.is_number() || !y_value.is_number())
-        invalid(path, "position coordinates must be finite numbers");
+        invalid(path, "position coordinates must be finite numbers in the 32-bit float range");
     const double x = x_value.get<double>();
     const double y = y_value.get<double>();
+    if (!fitsFloat(x) || !fitsFloat(y))
+        invalid(path, "position coordinates must be finite numbers in the 32-bit float range");
     const float x_position = static_cast<float>(x);
     const float y_position = static_cast<float>(y);
-    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(x_position) ||
-        !std::isfinite(y_position))
-        invalid(path, "position coordinates must be finite numbers");
     return std::array<float, 2>{x_position, y_position};
 }
 

@@ -203,3 +203,39 @@ TEST_CASE("circuit_edit rejects non-finite move coordinates without changing sta
           std::array<float, 2>{10.0f, 20.0f});
     CHECK(fixture.host.checkpoint_discards == 1);
 }
+
+TEST_CASE("circuit_edit rejects coordinates outside the float range without converting them",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.host.node_positions[generator->graphNodeId()] = {10.0f, 20.0f};
+    const std::uint64_t revision = fixture.commands.revision();
+    // 1e300 is finite as a double but has no float value. 0x1p128 - 0x1p103 is the midpoint above
+    // FLT_MAX and rounds to infinity, so it is rejected too.
+    const std::array<double, 4> out_of_range{1e300, -1e300, 0x1p128, 0x1p128 - 0x1p103};
+    for (const double x : out_of_range) {
+        const AgentToolResult result = editCall(
+            fixture, nlohmann::ordered_json::array({{{"op", "move"},
+                                                     {"component", generator->id()},
+                                                     {"position", {{"x", x}, {"y", 40.0}}}}}));
+        REQUIRE(result.is_error);
+        CHECK(errorFor(result).at("code") == "INVALID_ARGUMENT");
+        CHECK(errorFor(result).at("details").at("path") == "/ops/0/position");
+        CHECK(fixture.commands.revision() == revision);
+        CHECK(fixture.host.node_positions.at(generator->graphNodeId()) ==
+              std::array<float, 2>{10.0f, 20.0f});
+    }
+    CHECK(fixture.host.checkpoint_discards == static_cast<int>(out_of_range.size()));
+    CHECK(fixture.host.checkpoint_commits == 0);
+
+    // The largest finite float is still a valid coordinate.
+    const double largest = static_cast<double>(std::numeric_limits<float>::max());
+    const AgentToolResult accepted = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "move"},
+                                                 {"component", generator->id()},
+                                                 {"position", {{"x", largest}, {"y", 40.0}}}}}));
+    REQUIRE_FALSE(accepted.is_error);
+    CHECK(fixture.host.node_positions.at(generator->graphNodeId())[0] ==
+          std::numeric_limits<float>::max());
+}
