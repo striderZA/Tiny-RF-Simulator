@@ -422,7 +422,7 @@ add_standalone_test(test_test_flow_widget
 # run would read-modify-write that one file from two processes.
 set_tests_properties(test_test_flow_widget PROPERTIES RUN_SERIAL TRUE)
 
-# UI-free run boundary shared by the Test Flow panel and the agent tool.
+# UI-free coverage for the one-shot Test Flow boundary and the AgentServer's resumable session.
 add_standalone_test(test_flow_boundary
     SOURCES test_flow_boundary.cpp
     LIBS simulator::test_flow simulator::editor_services common

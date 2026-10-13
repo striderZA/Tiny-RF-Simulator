@@ -1,6 +1,6 @@
-// Issue #194 measurement harness. Measurement only; not a ctest target.
+// Issues #194 and #205 measurement harness. Measurement only; not a ctest target.
 //   build/bin/perf_app.exe <scenario> [frames] [hide]
-// Build: cmake --build build --target perf_app. RFSIM_PERF_AGENT is set only in the v0.28.0 tree.
+// Build: cmake --build build --target perf_app. RFSIM_PERF_AGENT enables the agent scenarios.
 //
 // The frame loop mirrors RfSimulatorCore::MainLoop (core/src/core.cpp): PollEvents, NewFrame,
 // the default dock layout (frame 0 only, the core first-run block), DockSpaceOverViewport, app work
@@ -20,6 +20,8 @@
 //   bounded_in  40 utils::inputDouble fields per frame, in range
 //   bounded_out 40 utils::inputDouble fields per frame, each reset to an out-of-range value
 // Agent scenarios (RFSIM_PERF_AGENT only): pump, agent_calls (1 stage), agent_calls10 (8 stages).
+// test_flow_run is queued through AgentServer and measured while the full app frame loop runs;
+// other tools are timed through the direct AgentApi test seam.
 // Project scenarios: save <path> writes the chain; load <path> loads a project 10 times.
 // hide: comma list from node,props,log,spectrum; hides that window for attribution.
 //
@@ -52,6 +54,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -188,9 +191,8 @@ struct CallTiming {
     AgentToolResult last;
 };
 
-// Times AgentApi::execute through testAgentCall. This is the synchronous path that the server's
-// pump() runs on the UI thread; socket and framing costs are excluded. A call whose result is an
-// error marks the case INVALID, and its timing is never reported as valid.
+// Measures immediate tools through AgentApi::execute. test_flow_run is measured through the
+// AgentServer frame path below because its production task yields across app updates.
 CallTiming timeTool(RfSimulatorApp &app, const char *tool, const Json &args, int reps) {
     CallTiming timing;
     std::vector<double> us;
@@ -225,9 +227,115 @@ void printTool(const char *tool, const char *case_name, const CallTiming &t,
     std::printf(" %s\n", detail.c_str());
 }
 
+struct FrameSample {
+    double update_us = 0.0;
+    double app_us = 0.0;
+    double frame_us = 0.0;
+};
+
+FrameSample renderUiFrame(RfSimulatorApp &app, GLFWwindow *window, bool &layout_built) {
+    const auto frame_started = Clock::now();
+    glfwPollEvents();
+    ImGui_ImplOpenGL2_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    if (!layout_built) {
+        buildDefaultDockLayout();
+        layout_built = true;
+    }
+    ImGui::DockSpaceOverViewport(ImGui::GetID("MainDockSpace"), nullptr,
+                                 ImGuiDockNodeFlags_PassthruCentralNode);
+
+    const auto app_started = Clock::now();
+    app.update_dsp();
+    const auto update_done = Clock::now();
+    app.draw_ui();
+    const auto draw_done = Clock::now();
+
+    ImGui::Render();
+    int display_w = 0;
+    int display_h = 0;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+    ImGuiIO &io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+        glfwMakeContextCurrent(window);
+    }
+    glfwSwapBuffers(window);
+
+    return {microseconds(update_done - app_started), microseconds(draw_done - app_started),
+            microseconds(Clock::now() - frame_started)};
+}
+
+struct FlowFrameTiming {
+    bool completed = false;
+    bool ok = false;
+    std::string error;
+    int frames = 0;
+    std::size_t row_count = 0;
+    double total_ms = 0.0;
+    double max_update_us = 0.0;
+    double max_app_us = 0.0;
+    double max_frame_us = 0.0;
+};
+
+FlowFrameTiming timeFlowAcrossFrames(RfSimulatorApp &app, GLFWwindow *window, const Json &args,
+                                     bool &layout_built) {
+    FlowFrameTiming timing;
+    AgentServer *server = app.testAgentServer();
+    if (!server) {
+        timing.error = "no_agent_server";
+        return timing;
+    }
+
+    AgentCall call;
+    call.tool = "test_flow_run";
+    call.arguments = args;
+    call.client = "perf_app";
+    server->submit(std::move(call), [&timing](const AgentToolResult &result) {
+        timing.completed = true;
+        timing.ok = !result.is_error;
+        if (result.is_error)
+            timing.error = errorText(result);
+        else
+            timing.row_count = result.structured.value("row_count", std::size_t{0});
+    });
+
+    const auto started = Clock::now();
+    constexpr int kMaxFrames = 10000;
+    for (; timing.frames < kMaxFrames && !timing.completed; ++timing.frames) {
+        const FrameSample frame = renderUiFrame(app, window, layout_built);
+        timing.max_update_us = std::max(timing.max_update_us, frame.update_us);
+        timing.max_app_us = std::max(timing.max_app_us, frame.app_us);
+        timing.max_frame_us = std::max(timing.max_frame_us, frame.frame_us);
+    }
+    timing.total_ms = microseconds(Clock::now() - started) / 1000.0;
+    if (!timing.completed)
+        timing.error = "flow did not complete within the frame limit";
+    return timing;
+}
+
+void printFlowFrameTiming(int rows, const FlowFrameTiming &timing) {
+    if (!timing.completed || !timing.ok) {
+        std::printf("INVALID agent tool=test_flow_run case=%drows error=%s\n", rows,
+                    timing.error.c_str());
+        return;
+    }
+    std::printf("RESULT agent tool=test_flow_run case=%drows frames=%d total_ms=%.2f "
+                "max_update_us=%.1f max_app_us=%.1f max_frame_us=%.1f row_count=%zu\n",
+                rows, timing.frames, timing.total_ms, timing.max_update_us, timing.max_app_us,
+                timing.max_frame_us, timing.row_count);
+}
+
 // Agent calls on the chain. Component ids come from the engines and the epoch comes from a fresh
 // circuit_get. The fixture is checked against circuit_get before any call is timed.
-int runAgentCalls(RfSimulatorApp &app, const Pins &pins, std::size_t expected_components) {
+int runAgentCalls(RfSimulatorApp &app, GLFWwindow *window, const Pins &pins,
+                  std::size_t expected_components) {
     Json circuit_args = Json::object();
     circuit_args["include_params"] = true;
     const CallTiming circuit = timeTool(app, "circuit_get", circuit_args, 5);
@@ -354,8 +462,11 @@ int runAgentCalls(RfSimulatorApp &app, const Pins &pins, std::size_t expected_co
                     *std::max_element(rx_us.begin(), rx_us.end()));
     }
 
-    // test_flow_run sweeps tones[0].power_dBm on the generator and measures the amplifier output.
-    // The executor rejects sweeps above 1000 rows before running any row.
+    // test_flow_run uses AgentServer's per-frame task path. The number of updates depends on
+    // the time slice; max_update_us is the frame-budget measure while the result is pending.
+    app.m_show_tutorial_first_run_prompt = false;
+    bool layout_built = false;
+    static_cast<void>(renderUiFrame(app, window, layout_built));
     for (int rows : {10, 50, 200, 1000}) {
         Json values = Json::array();
         for (int i = 0; i < rows; ++i)
@@ -372,10 +483,7 @@ int runAgentCalls(RfSimulatorApp &app, const Pins &pins, std::size_t expected_co
         flow["epoch"] = epoch;
         flow["conditions"] = Json::array({cond});
         flow["measure"] = Json::array({measure});
-        const CallTiming run = timeTool(app, "test_flow_run", flow, 1);
-        printTool("test_flow_run", (std::to_string(rows) + "rows").c_str(), run,
-                  run.ok ? "row_count=" + std::to_string(run.last.structured.value("row_count", -1))
-                         : "");
+        printFlowFrameTiming(rows, timeFlowAcrossFrames(app, window, flow, layout_built));
     }
 
     // One add. Removal is not timed, because it needs an extra ref-based call.
@@ -594,7 +702,7 @@ int run(RfSimulatorApp &app, GLFWwindow *window, const std::string &scenario,
     }
     if (agent_fixture) {
 #ifdef RFSIM_PERF_AGENT
-        return runAgentCalls(app, pins, app.componentCount());
+        return runAgentCalls(app, window, pins, app.componentCount());
 #endif
     }
     const int frames = std::atoi(arg.c_str());
