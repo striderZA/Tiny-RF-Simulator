@@ -17,6 +17,8 @@ inline double vToDbm(double V) { return 10.0 * std::log10((V * V / 50.0) / 0.001
 class NonlinearModel {
   public:
     using GainFn = std::function<double(double freq_Hz)>;
+    // Output intercept (dBm) at a frequency, for intercepts that vary with frequency.
+    using Oip3Fn = std::function<double(double freq_Hz)>;
 
     void setOIP2_dBm(double oip2) {
         if (oip2 != m_oip2_dBm) {
@@ -61,7 +63,11 @@ class NonlinearModel {
         double compression_dB = 0.0;
     };
 
-    Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq) const {
+    // Products use the scalar OIP3 unless oip3_at_freq is given. With it, each
+    // harmonic uses the intercept at its own frequency, and each IM3 product uses
+    // the intercept at the fundamental it squares: 2f1 +- f2 uses f1, 2f2 +- f1 uses f2.
+    Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq,
+                   const Oip3Fn &oip3_at_freq = {}) const {
         using detail::dbmToV;
         using detail::dbmToW;
         using detail::vToDbm;
@@ -72,6 +78,11 @@ class NonlinearModel {
             return r;
 
         double total_distortion_mW = 0.0;
+
+        // Third-order coefficient for a fundamental at freq_Hz.
+        const auto k2_at = [&](double freq_Hz) {
+            return oip3_at_freq ? k2ForOip3(oip3_at_freq(freq_Hz)) : m_k2;
+        };
 
         // Harmonics (from each input tone)
         for (const auto &tone : input_tones) {
@@ -86,7 +97,7 @@ class NonlinearModel {
             total_distortion_mW += dbmToW(H2_dBm);
 
             // H3: v_in^3 term -> RMS k2*A^3/(4*sqrt(2)) = k2*Vp1^3/2, A = sqrt(2)*Vp1
-            double V_h3 = m_k2 * Vp1 * Vp1 * Vp1 / 2.0;
+            double V_h3 = k2_at(tone.freq_Hz) * Vp1 * Vp1 * Vp1 / 2.0;
             double H3_dBm = vToDbm(V_h3);
             r.extra_tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
             total_distortion_mW += dbmToW(H3_dBm);
@@ -111,13 +122,13 @@ class NonlinearModel {
                 r.extra_tones.push_back({f1 + f2, IM2_dBm, 0.0});
                 total_distortion_mW += 2.0 * dbmToW(IM2_dBm);
 
-                double V_im3_12 = (3.0 / 4.0) * m_k2 * Vp1 * Vp1 * Vp2;
+                double V_im3_12 = (3.0 / 4.0) * k2_at(f1) * Vp1 * Vp1 * Vp2;
                 double IM3_12_dBm = vToDbm(V_im3_12);
                 r.extra_tones.push_back({2.0 * f1 + f2, IM3_12_dBm, 0.0});
                 r.extra_tones.push_back({std::abs(2.0 * f1 - f2), IM3_12_dBm, 0.0});
                 total_distortion_mW += 2.0 * dbmToW(IM3_12_dBm);
 
-                double V_im3_21 = (3.0 / 4.0) * m_k2 * Vp1 * Vp2 * Vp2;
+                double V_im3_21 = (3.0 / 4.0) * k2_at(f2) * Vp1 * Vp2 * Vp2;
                 double IM3_21_dBm = vToDbm(V_im3_21);
                 r.extra_tones.push_back({2.0 * f2 + f1, IM3_21_dBm, 0.0});
                 r.extra_tones.push_back({std::abs(f1 - 2.0 * f2), IM3_21_dBm, 0.0});
@@ -151,11 +162,16 @@ class NonlinearModel {
     double m_k1 = 0.0;
     double m_k2 = 0.0;
 
+    // Third-order coefficient for an output intercept (dBm).
+    static double k2ForOip3(double oip3_dBm) {
+        const double V_oip3 = detail::dbmToV(oip3_dBm);
+        return 4.0 / (3.0 * V_oip3 * V_oip3);
+    }
+
     void recomputeCoefficients() {
         using detail::dbmToV;
         double V_oip2 = dbmToV(m_oip2_dBm);
-        double V_oip3 = dbmToV(m_oip3_dBm);
         m_k1 = 1.0 / V_oip2;
-        m_k2 = 4.0 / (3.0 * V_oip3 * V_oip3);
+        m_k2 = k2ForOip3(m_oip3_dBm);
     }
 };
