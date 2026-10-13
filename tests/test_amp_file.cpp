@@ -67,6 +67,17 @@ TEST_CASE("AMP scalar OIP3 is one value at every frequency", "[amp][parse]") {
     CHECK(result.file->oip3->dBmAt(5.0e9) == Approx(30.5));
 }
 
+TEST_CASE("AMP scalar IP3 ignores the units on its FREQ line", "[amp][parse]") {
+    // The MathWorks page says the second header line of a scalar section is ignored.
+    Scratch scratch;
+    const auto result = AmpFileParser::parse(
+        scratch.write("scalar_freq_units.amp", kNetwork + "OIP3 dBm\nFREQ THZ\n30.5\n"));
+
+    REQUIRE(result.file.has_value());
+    REQUIRE(result.file->oip3.has_value());
+    CHECK(result.file->oip3->dBmAt(1.0e9) == Approx(30.5));
+}
+
 TEST_CASE("AMP per-frequency IIP3 sorts rows and reads per-line frequency units", "[amp][parse]") {
     Scratch scratch;
     const auto result = AmpFileParser::parse(scratch.write(
@@ -217,6 +228,19 @@ TEST_CASE("AMP file needs network or power data and an IP3 section", "[amp][pars
         const auto result = AmpFileParser::parse(scratch.write("pout.amp", text));
         REQUIRE(result.file.has_value());
         CHECK(result.file->oip3->dBmAt(2.1e9) == Approx(30.0));
+    }
+
+    SECTION("an S section with no data rows does not count as network data") {
+        const std::string text = "S RI R 50\nFREQ GHZ\nOIP3 dBm\nFREQ GHZ\n30\n";
+        const auto path = scratch.write("empty_network.amp", text);
+        requireDiagnostic(AmpFileParser::parse(path), path, 1, "no numeric data rows");
+    }
+
+    SECTION("a POUT section whose rows are not numeric does not count") {
+        const std::string text = "POUT dBm\nPIN dBm FREQ=2.1GHz\nnot a data row\n"
+                                 "OIP3 dBm\nFREQ GHz\n30\n";
+        const auto path = scratch.write("text_pout.amp", text);
+        requireDiagnostic(AmpFileParser::parse(path), path, 1, "no numeric data rows");
     }
 }
 

@@ -161,6 +161,13 @@ std::optional<Diagnostic> parseFrequency(const std::string &token, double defaul
     return std::nullopt;
 }
 
+// True when a token begins with a number, as data rows do: "1.0", "1000MHZ", "-2e3".
+bool startsWithNumber(const std::string &token) {
+    double value = 0.0;
+    std::string suffix;
+    return splitNumber(token, value, suffix);
+}
+
 enum class Keyword { None, Iip3, Oip3, NetworkOrPower, Noise };
 
 Keyword classify(const std::string &token) {
@@ -190,6 +197,14 @@ struct Ip3Section {
         std::vector<std::string> tokens;
     };
     std::vector<Row> rows;
+};
+
+// An S, Y, Z, NOI, NF, or POUT section. Its data is not parsed. Only S, Y, Z, and POUT
+// count toward the file-level rule, and only when they hold a numeric data row.
+struct SkippedSection {
+    bool counts_as_network_or_power = false;
+    int header_line = 0;
+    int data_rows = 0;
 };
 
 // Builds the curve for a finished section, or reports its first problem.
@@ -279,10 +294,12 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
     file.seekg(0, std::ios::beg);
 
     // BeforeSection: no header yet. AwaitFrequencyHeader: an IP3 header was read and
-    // its FREQ line is due. Rows: IP3 data. Skipping: an S/Y/Z/NOI/NF/POUT section.
-    enum class Mode { BeforeSection, AwaitFrequencyHeader, Rows, Skipping };
+    // its FREQ line is due. Rows: IP3 data. AwaitSkippedHeader: an S/Y/Z/NOI/NF/POUT
+    // header was read and its second line is due. Skipping: that section's data.
+    enum class Mode { BeforeSection, AwaitFrequencyHeader, Rows, AwaitSkippedHeader, Skipping };
     Mode mode = Mode::BeforeSection;
     Ip3Section section;
+    SkippedSection skipped;
     AmpFile amp;
     bool seen_iip3 = false;
     bool seen_oip3 = false;
@@ -296,6 +313,16 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
             amp.oip3 = std::move(curve);
         else
             amp.iip3 = std::move(curve);
+        return std::nullopt;
+    };
+
+    const auto closeSkipped = [&]() -> std::optional<Diagnostic> {
+        if (!skipped.counts_as_network_or_power)
+            return std::nullopt;
+        if (skipped.data_rows == 0)
+            return Diagnostic{skipped.header_line,
+                              "network or power section has no numeric data rows"};
+        seen_network_or_power = true;
         return std::nullopt;
     };
 
@@ -321,6 +348,10 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
                 if (auto error = closeSection())
                     return failure(path, *error);
             }
+            if (mode == Mode::AwaitSkippedHeader || mode == Mode::Skipping) {
+                if (auto error = closeSkipped())
+                    return failure(path, *error);
+            }
 
             if (keyword == Keyword::Iip3 || keyword == Keyword::Oip3) {
                 const bool is_oip3 = keyword == Keyword::Oip3;
@@ -344,8 +375,10 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
                 section.value_unit = unit;
                 mode = Mode::AwaitFrequencyHeader;
             } else {
-                seen_network_or_power = seen_network_or_power || keyword == Keyword::NetworkOrPower;
-                mode = Mode::Skipping;
+                skipped = SkippedSection{};
+                skipped.counts_as_network_or_power = keyword == Keyword::NetworkOrPower;
+                skipped.header_line = line_no;
+                mode = Mode::AwaitSkippedHeader;
             }
             continue;
         }
@@ -354,7 +387,13 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
         case Mode::BeforeSection:
             return failure(path, {line_no, "data before a section header (IIP3, OIP3, S, Y, Z, "
                                            "NOI, NF, or POUT)"});
+        case Mode::AwaitSkippedHeader:
+            // The second header line is required by the format. Its content is not parsed.
+            mode = Mode::Skipping;
+            break;
         case Mode::Skipping:
+            if (skipped.counts_as_network_or_power && startsWithNumber(tokens.front()))
+                ++skipped.data_rows;
             break;
         case Mode::AwaitFrequencyHeader:
             if (lowerCase(tokens.front()) != "freq") {
@@ -385,6 +424,10 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
     }
     if (mode == Mode::Rows) {
         if (auto error = closeSection())
+            return failure(path, *error);
+    }
+    if (mode == Mode::AwaitSkippedHeader || mode == Mode::Skipping) {
+        if (auto error = closeSkipped())
             return failure(path, *error);
     }
     if (!seen_network_or_power)

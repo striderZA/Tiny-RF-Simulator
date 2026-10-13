@@ -12,13 +12,16 @@
 // value line (used at every frequency) or frequency/value rows in any order.
 // IP3 units are dBW, dBm, mW, or W and default to W. Frequency units are Hz,
 // kHz, MHz, or GHz. A unit may follow a value without a space (`1000MHZ`, `5mW`).
+// The IP3 text on the MathWorks page gives header-line defaults only. Per-value suffixes on
+// IP3 rows follow the issue's rule that a unit may follow a value.
 // Keywords and units are case-insensitive.
 //
 // Comments: a line whose first non-blank character is `*` or `!` is a comment,
 // and `;` starts a trailing comment. Blank lines are ignored.
 //
-// Skipped: S/Y/Z network, NOI, NF, and POUT sections. Their data is not parsed.
-// They count only toward the file-level rule below.
+// Skipped: S/Y/Z network, NOI, NF, and POUT sections. Their data is not parsed. S, Y, Z,
+// and POUT count toward the file-level rule below only with a numeric data row. An empty
+// one is rejected at its header line.
 //
 // Validity: the file must hold S, Y, Z, or POUT data and at least one IIP3 or
 // OIP3 section. Each IP3 kind appears once. Frequencies are positive and unique
