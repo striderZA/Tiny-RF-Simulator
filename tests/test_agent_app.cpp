@@ -878,6 +878,124 @@ TEST_CASE_METHOD(AppFixture, "No-op agent move preserves checkpoint history", "[
     CHECK(after.structured.at("dirty") == before.structured.at("dirty"));
 }
 
+TEST_CASE_METHOD(AppFixture, "Repeated move at fractional canvas pan is a no-op", "[agent_app]") {
+    app.newProject();
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
+    ImNodes::EditorContextResetPanning(ImVec2(-13.256257f, 0.5f));
+
+    const AgentToolResult add = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array({{{"op", "add"},
+                                                   {"type", "generator"},
+                                                   {"position", {{"x", 0.0}, {"y", 0.0}}}}})}});
+    REQUIRE_FALSE(add.is_error);
+    const int component_id = add.structured.at("applied").at(0).at("component").get<int>();
+    const std::uint64_t revision_after_add = add.structured.at("revision").get<std::uint64_t>();
+
+    const ordered_json target{{"x", 56.11579513549805}, {"y", 12.0}};
+    const auto move_to_target = [&]() {
+        return app.testAgentCall(
+            "circuit_edit", ordered_json{{"epoch", app.testProjectEpoch()},
+                                         {"ops", ordered_json::array({{{"op", "move"},
+                                                                       {"component", component_id},
+                                                                       {"position", target}}})}});
+    };
+
+    const AgentToolResult first_move = move_to_target();
+    REQUIRE_FALSE(first_move.is_error);
+    CHECK(first_move.structured.at("revision") == revision_after_add + 1);
+    const std::uint64_t revision_after_move =
+        first_move.structured.at("revision").get<std::uint64_t>();
+    const std::size_t checkpoint_count = app.testAgentHost().checkpoints().size();
+    const AgentToolResult after_first_move =
+        app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(after_first_move.is_error);
+    CHECK(after_first_move.structured.at("components").at(0).at("position").at("x").get<double>() ==
+          Catch::Approx(target.at("x").get<double>()).margin(1e-5));
+
+    const AgentToolResult repeated_move = move_to_target();
+    REQUIRE_FALSE(repeated_move.is_error);
+    CHECK(repeated_move.structured.at("applied").at(0).at("unchanged") == true);
+    CHECK(repeated_move.structured.at("revision") == revision_after_move);
+    CHECK(app.testAgentHost().checkpoints().size() == checkpoint_count);
+    const std::uint64_t revision_before_material_move =
+        repeated_move.structured.at("revision").get<std::uint64_t>();
+    const std::size_t checkpoints_before_material_move = app.testAgentHost().checkpoints().size();
+
+    const double clearly_different_x = target.at("x").get<double>() + 0.01;
+    const AgentToolResult material_move = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{{"epoch", app.testProjectEpoch()},
+                     {"ops", ordered_json::array(
+                                 {{{"op", "move"},
+                                   {"component", component_id},
+                                   {"position", {{"x", clearly_different_x}, {"y", 12.0}}}}})}});
+    REQUIRE_FALSE(material_move.is_error);
+    CHECK_FALSE(material_move.structured.at("applied").at(0).contains("unchanged"));
+    CHECK(material_move.structured.at("revision") == revision_before_material_move + 1);
+    CHECK(app.testAgentHost().checkpoints().size() == checkpoints_before_material_move + 1);
+}
+
+TEST_CASE_METHOD(AppFixture, "circuit_get handles a library component before editor registration",
+                 "[agent_app]") {
+    app.newProject();
+
+    // Create the window while the new project is empty. The next frame collapses an
+    // already-existing window, so Begin() skips the node editor body after the library insert.
+    bool open = true;
+    runFrame([&]() { app.testGraphWidget().draw("Node Editor Test", &open); });
+
+    const auto add_generator = [&](double x) {
+        return app.testAgentCall(
+            "circuit_edit",
+            ordered_json{{"epoch", app.testProjectEpoch()},
+                         {"ops", ordered_json::array({{{"op", "add"},
+                                                       {"type", "generator"},
+                                                       {"position", {{"x", x}, {"y", 30.0}}}}})}});
+    };
+    REQUIRE_FALSE(add_generator(20.0).is_error);
+    REQUIRE_FALSE(add_generator(260.0).is_error);
+
+    const auto previous_components = app.testComponents().all();
+    REQUIRE(previous_components.size() == 2);
+    const int previous_node_a = previous_components[0]->graphNodeId();
+    const int previous_node_b = previous_components[1]->graphNodeId();
+    const int highest_previous_node = std::max(previous_node_a, previous_node_b);
+    REQUIRE(app.testRemoveComponent(previous_node_a));
+    REQUIRE(app.testRemoveComponent(previous_node_b));
+
+    IComponentEngine *component = app.testAddLibraryPart("AM1143");
+    REQUIRE(component != nullptr);
+    REQUIRE(component->graphNodeId() > highest_previous_node);
+    CHECK(app.testGraphWidget().nodeGridPosition(component->graphNodeId()).x == -1.0f);
+    CHECK(app.testGraphWidget().nodeGridPosition(component->graphNodeId()).y == -1.0f);
+
+    runFrame([&]() {
+        ImGui::SetNextWindowCollapsed(true, ImGuiCond_Always);
+        app.testGraphWidget().draw("Node Editor Test", &open);
+    });
+    const ImGuiWindow *editor_window = ImGui::FindWindowByName("Node Editor Test");
+    REQUIRE(editor_window != nullptr);
+    REQUIRE(editor_window->Collapsed);
+
+    const AgentToolResult result = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(result.is_error);
+    const auto &position = result.structured.at("components").at(0).at("position");
+    CHECK(position.at("x").get<double>() == Catch::Approx(0.0));
+    CHECK(position.at("y").get<double>() == Catch::Approx(0.0));
+
+    const fs::path saved_path = makePath("unregistered_library_component.rfsim");
+    app.saveProject(saved_path.string());
+    std::ifstream saved_file(saved_path);
+    REQUIRE(saved_file.good());
+    const json saved_project = json::parse(saved_file);
+    REQUIRE(saved_project.at("components").size() == 1);
+    const auto &saved_position = saved_project.at("components").at(0).at("pos");
+    CHECK(saved_position.at("x").get<double>() == Catch::Approx(0.0));
+    CHECK(saved_position.at("y").get<double>() == Catch::Approx(0.0));
+}
+
 // ======================================================================
 // Test: Revert keeps S-parameter data from outside the project folder
 //

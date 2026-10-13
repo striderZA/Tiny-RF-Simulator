@@ -643,12 +643,11 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
             }
 
             applied_entry["component"] = component_id;
-            if (context.host.nodeEditorSpacePosition(component->graphNodeId()) == *position) {
+            if (!context.host.setNodeEditorSpacePosition(component->graphNodeId(), *position)) {
                 applied_entry["unchanged"] = true;
                 applied.push_back(std::move(applied_entry));
                 return;
             }
-            context.host.setNodeEditorSpacePosition(component->graphNodeId(), *position);
             context.commands.markModified();
             ++summary.components_moved;
             applied.push_back(std::move(applied_entry));

@@ -162,6 +162,10 @@ class RfSimulatorApp {
         int engine_id);
     // Places a built-in or extension library part through EditorCommands::addLibraryPart().
     IComponentEngine *testAddLibraryPart(const std::string &part_number);
+    // Calls the canvas insertion path to test editor-position reads before the first draw.
+    IComponentEngine *testAddComponentAtPosition(std::string_view type, ImVec2 position);
+    // Calls the context-menu duplicate path before its first draw.
+    IComponentEngine *testDuplicateComponent(int graph_node_id);
     // Replaces a placed component through the app's swap path, which also carries the canvas
     // position, selection, and instrument points over. Returns the refusal, or "" on success.
     std::string testSwapLibraryPart(int graph_node_id, const ComponentDefinition &definition);

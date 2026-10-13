@@ -8,10 +8,14 @@ sources:
     resource: repo://.github/workflows/release.yml
   - id: openwiki-source-4dd766881eeb1848d297e025
     resource: repo://agent/AGENTS.md
+  - id: openwiki-source-39e4bbac2a1d3ca7cc95bd2b
+    resource: repo://agent/api/CMakeLists.txt
   - id: openwiki-source-51a2566382a8dd93c7ef78ca
     resource: repo://agent/api/src/tool_test_flow.cpp
   - id: openwiki-source-3fa73b0f154188231bdb99e6
     resource: repo://agent/mcp/CMakeLists.txt
+  - id: openwiki-source-671643534997226ff2506cf3
+    resource: repo://agent/protocol/CMakeLists.txt
   - id: openwiki-source-b5f6d8bb035c1246d584d593
     resource: repo://app/include/test_flow_widget.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
@@ -38,17 +42,17 @@ sources:
     resource: repo://test_flow/include/flow_runner.h
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
-generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-10T18:46:08.812Z
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # RF Simulator — Quickstart
 
 RF Simulator is a C++20 desktop RF signal-chain simulator. Build a graph of RF components, probe spectra, measure a receiver chain, or run repeatable Test Flow sweeps. The app separates DSP engines from their ImGui widgets and includes spectrum, I/Q, power-meter, Network Analyzer, and Receiver Requirements views. An opt-in agent server lets an MCP client read and edit the open circuit.
 
-**Current project version:** `0.27.0` (from `CMakeLists.txt`) · **Build:** CMake 3.20+ and Ninja · **Windows compiler:** MinGW-w64 (MSVC is unsupported) · **Tests:** Catch2 v3.4.0 plus ImGui Test Engine.
+**Current project version:** `0.28.2` (from `CMakeLists.txt`) · **Build:** CMake 3.20+ and Ninja · **Windows compiler:** MinGW-w64 (MSVC is unsupported) · **Tests:** Catch2 v3.4.0 plus ImGui Test Engine.
 
 ## Build and run
 

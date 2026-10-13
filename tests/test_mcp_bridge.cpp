@@ -940,6 +940,8 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     REQUIRE(component_schema.at("properties").contains("position"));
     CHECK(component_schema.at("properties").at("position").at("required") ==
           Json::array({"x", "y"}));
+    CHECK(component_schema.at("required") ==
+          Json::array({"id", "type", "label", "inputs", "outputs"}));
 
     const auto *circuit_edit_tool = findAgentTool("circuit_edit");
     REQUIRE(circuit_edit_tool != nullptr);

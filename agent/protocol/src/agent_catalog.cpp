@@ -300,8 +300,7 @@ Json circuitComponentSchema(bool include_params) {
     if (include_params) {
         fields["params"] = paramsSchema();
     }
-    return objectSchema(std::move(fields),
-                        {"id", "type", "label", "inputs", "outputs", "position"});
+    return objectSchema(std::move(fields), {"id", "type", "label", "inputs", "outputs"});
 }
 
 Json networkAnalyzerPointsSchema() {

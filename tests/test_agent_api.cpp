@@ -107,8 +107,11 @@ class FakeAgentHost final : public IAgentHost {
         const auto found = node_positions.find(graph_node_id);
         return found == node_positions.end() ? std::array<float, 2>{0.0f, 0.0f} : found->second;
     }
-    void setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+    bool setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+        if (nodeEditorSpacePosition(graph_node_id) == position)
+            return false;
         node_positions[graph_node_id] = position;
+        return true;
     }
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
@@ -324,6 +327,27 @@ TEST_CASE("circuit_edit does not create a checkpoint for an unchanged move",
     CHECK(result.structured.at("revision") == revision);
     REQUIRE(result.structured.at("applied").size() == 1);
     CHECK(result.structured.at("applied").at(0).at("unchanged") == true);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 0);
+    CHECK(fixture.host.checkpoint_discards == 1);
+}
+
+TEST_CASE("circuit_edit discards a checkpoint for unchanged set_params",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    const auto params = nlohmann::ordered_json::parse(generator->serialize().dump());
+    const std::uint64_t revision = fixture.commands.revision();
+
+    const AgentToolResult result = editCall(
+        fixture, nlohmann::ordered_json::array(
+                     {{{"op", "set_params"}, {"component", generator->id()}, {"params", params}}}));
+
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(result.structured.at("applied").size() == 1);
+    CHECK(result.structured.at("applied").at(0).at("unchanged") == true);
+    CHECK(fixture.commands.revision() == revision);
     CHECK(fixture.host.checkpoint_begins == 1);
     CHECK(fixture.host.checkpoint_commits == 0);
     CHECK(fixture.host.checkpoint_discards == 1);
@@ -1017,6 +1041,8 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     CHECK(fill.structured.at("epoch") == epoch);
     CHECK(fixture.commands.revision() == revision);
     CHECK(fixture.host.checkpoint_commits == 2);
+    const auto commits_before_duplicate = fixture.host.checkpoint_commits;
+    const auto discards_before_duplicate = fixture.host.checkpoint_discards;
     const auto duplicate = editCall(
         fixture, nlohmann::ordered_json::array(
                      {{{"op", "probe_add"}, {"at", {{"component", ids.at("a")}, {"port", 0}}}}}));
@@ -1024,6 +1050,8 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     CHECK(duplicate.structured.at("epoch") == epoch);
     CHECK(duplicate.structured.at("applied")[0].at("unchanged") == true);
     CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.host.checkpoint_commits == commits_before_duplicate);
+    CHECK(fixture.host.checkpoint_discards == discards_before_duplicate + 1);
     const auto fifth = editCall(
         fixture, nlohmann::ordered_json::array(
                      {{{"op", "probe_add"}, {"at", {{"component", ids.at("e")}, {"port", 0}}}}}));

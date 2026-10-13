@@ -534,6 +534,12 @@ add_standalone_test(test_agent_app
     LIBS simulator::app
 )
 set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)
+# Standalone regression for app placement that happens after EndNodeEditor.
+add_standalone_test(test_agent_position_read
+    SOURCES test_agent_position_read.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_position_read PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone tests for the active circuit project's Git branch, commit, and working-tree status.
 add_standalone_test(test_git_status

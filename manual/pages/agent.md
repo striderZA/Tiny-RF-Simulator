@@ -12,9 +12,13 @@ The MCP client can connect while **Agent Server** is on.
 
 ## Move a component
 
-Call `circuit_get` to read the current circuit. Each component has a `position` object with numeric `x` and `y` values.
-These are editor-space coordinates. They include the current canvas pan.
-A pan changes these coordinates but does not change `epoch`. After a pan, call `circuit_get` again before you move a component.
+Call `circuit_get` to read the current circuit and each component's position.
+Each position has numeric `x` and `y` values in editor space.
+The editor-space values include the current canvas pan.
+
+A new component has a position before the editor shows the component.
+A pan changes these values but does not change `epoch`.
+After a pan, call `circuit_get` again before you move a component.
 
 Send a `move` operation to `circuit_edit`. The operation uses an absolute position, not a movement offset.
 Use the component `id` from `circuit_get`, not its label. A move applies only to components that existed before the current `circuit_edit` call.
@@ -36,6 +40,9 @@ Set a new component's position in its `add` operation.
 Send the current `epoch` from `circuit_get`. The `x` and `y` values must be finite numbers.
 
 A changed move advances `revision`, marks the project dirty, and creates a checkpoint.
+A move to the current position returns `unchanged: true`.
+The move does not change `revision` or create a checkpoint.
+
 Select **Revert to before this call** on a checkpoint to restore the project to its state before the edit.
 The dialog warns that a revert removes every change after the call. This also removes your later edits.
 Select **Revert** only if you want to discard those changes.

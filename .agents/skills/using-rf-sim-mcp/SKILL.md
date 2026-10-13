@@ -17,14 +17,14 @@ The rf-sim tools act on the project open in the user's RF Simulator window. Argu
 
 ## Workflow
 
-1. `circuit_get` (`include_params: true` for values). Use each component's `id` field, not its label number.
+1. `circuit_get` (`include_params: true` for values). Use each component's `id` field, not its label number. The response includes positions before the editor draws new nodes.
 2. Before changing a component, call `component_get {epoch, component}`; its `param_info` gives keys, units, and read-only flags.
 3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` uses the component id and position from the latest `circuit_get`; use `add.position` for a new component.
 4. Measure with `measure_port` or `network_analyzer_sweep`. `null` means unavailable, never zero.
 
 ## Epochs
 
-- Your edits don't change `epoch`, so the epoch from `circuit_get` stays valid. `revision` advances on each edit.
+- Your edits do not change `epoch`, so the epoch from `circuit_get` stays valid. `revision` advances only when an edit changes project state.
 - `STALE_EPOCH` means the project was replaced. Call `circuit_get` and re-plan; component ids restart at 100, so an old id may now name something else.
 - A canvas pan changes editor-space positions but does not change `epoch`. Call `circuit_get` again after a pan before you move a component.
 
@@ -35,6 +35,7 @@ The rf-sim tools act on the project open in the user's RF Simulator window. Argu
 - `from` is an output port and `to` is an input port. To rewire an occupied input (`LINK_REJECTED`, `INPUT_OCCUPIED`), put `{op:"disconnect", to}` before the `connect` in the same call.
 - PFB channelizer input 0 accepts only RF ADC output 0 (`ADC_TO_PFB_ONLY`). If no ADC exists, add one (`type: "adc"`, with a `ref`) and route through it in the same call.
 - Probes name a side. `probe_add` and `probe_remove` take `at` as a port with an optional `direction`, `"output"` by default or `"input"`. `circuit_get` reports each probe as `{component, port, direction}`; pass that object back as `at` to remove the same probe.
+- A repeated `move` target can differ slightly from read-back coordinates because of float rounding after a pan. The API returns `unchanged: true` and creates no checkpoint when that difference does not change the position.
 
 ## Parameters
 

@@ -819,6 +819,8 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
     REQUIRE(circuit_component.at("properties").contains("position"));
     CHECK(circuit_component.at("properties").at("position").at("required") ==
           nlohmann::json::array({"x", "y"}));
+    CHECK(circuit_component.at("required") ==
+          nlohmann::json::array({"id", "type", "label", "inputs", "outputs"}));
 
     const auto *circuit_edit = findAgentTool("circuit_edit");
     REQUIRE(circuit_edit != nullptr);

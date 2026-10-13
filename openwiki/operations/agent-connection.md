@@ -33,10 +33,10 @@ sources:
     resource: repo://common/session_state.h
   - id: openwiki-source-23775c3de52f3ab95a13cb8b
     resource: repo://README.md
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 
@@ -95,6 +95,10 @@ Replace `<install dir>` with the directory containing the simulator executables.
 - Each GuiLink connect reads the endpoint file, so a bridge that reconnects after a server restart uses the endpoint the restarted server wrote.
 - On Windows, a saved opt-in is retried at the next launch. A failed start keeps the opt-in set and shows the error in the Agent window.
 
+## Client replacement
+
+The server allows one active client and one replacement client. If a new client connects while the current client remains, the server can wait up to 100 ms for the current client to close. If it closes during this period, the server accepts the new client. Otherwise, the server sends `BUSY` and closes the new client. A second new client receives `BUSY` immediately.
+
 ## Diagnose failures
 
 The Agent window Status line shows one of these states: `Off`, `Waiting for a client`, `Connected: <client name> <client version>`, `Busy: calls are waiting`, or `Error: <reason>`. A startup failure appears as `Error` with the startup message.
@@ -106,7 +110,7 @@ The Agent window Status line shows one of these states: `Off`, `Waiting for a cl
 | stderr `RF Simulator unreachable: connect loopback timed out` | No OS cause was reported within the 3000 ms connect timeout | Check that the GUI process is running and the endpoint file is current |
 | `VERSION_MISMATCH` | The endpoint catalog version differs from the bridge's | Run the bridge and the GUI from the same build |
 | `BUSY` with a dialog message | A modal dialog stayed open for 30 s; calls park while it is open | Ask the user to close the dialog, then retry |
-| `BUSY` with `another agent is connected` | A second client connected while one was active; it is disconnected | Disconnect the other client |
+| `BUSY` with `another agent is connected` | The active client did not close within 100 ms, or a second client used the replacement slot | Wait for the active client to close, then retry |
 
 ## Manual acceptance
 

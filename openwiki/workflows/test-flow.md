@@ -36,16 +36,18 @@ sources:
     resource: repo://test_flow/include/flow_types.h
   - id: openwiki-source-7cf82ec60f61d2c0858950cf
     resource: repo://test_flow/src/flow_boundary.cpp
+  - id: openwiki-source-52f658720a7776b6f8c32339
+    resource: repo://test_flow/src/flow_params.cpp
   - id: openwiki-source-1425d7c9bb71c8e6d4145122
     resource: repo://test_flow/src/flow_runner.cpp
   - id: openwiki-source-d8865e23d4aeb9130e4e47be
     resource: repo://tests/test_agent_api.cpp
   - id: openwiki-source-59642b0a96e98716b082cc11
     resource: repo://tests/test_test_flow_widget.cpp
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
 verified:
   - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # Test Flow Workflow
@@ -61,7 +63,7 @@ A flow file is a JSON object with:
 - optional `conditions` array; each item is `{ "component": id, "path": key, "values": [numbers...] }`;
 - required non-empty `measure` array; each item is `{ "component": id, "port": integer, "metric": name }`.
 
-`component` is `IComponentEngine::id()`, not a graph-node ID. The runner and panel resolve it by scanning live engines. `CircuitRuntime` allocates IDs monotonically, so removing a component does not renumber surviving live engines. A project load resets the counter to 100, creates the saved components in file order, and then raises the counter to the saved `next_component_id` if that is higher. Deleting or reordering components before a save can therefore make an old ID shift, disappear, or bind to a different engine after reload. Revalidate flows after circuit changes; flow IDs are not stable portable identifiers.
+The `component` field uses `IComponentEngine::id()`, not a graph-node ID. The runner and panel find that ID by scanning live engines. `CircuitRuntime` uses IDs from a monotonic counter that starts at 100. Removing a component does not change the IDs of the remaining engines. A project load resets the counter to 100 and creates valid components in saved order. It then sets the counter to the larger of the saved and current values. If you remove components or change their order before a save, an old flow ID can be missing after reload. It can also refer to a different engine. Revalidate flows after circuit changes. Flow IDs do not identify components across project changes.
 
 `port` is a zero-based output-port index. Built-in metrics are `power_dBm`, `peak_power_dBm`, `peak_freq_Hz`, and `noise_floor_dBm_per_Hz`. The loader rejects malformed records, wrong field types, empty value or measurement lists, unknown metrics, duplicate `(component, path)` targets, and duplicate `(component, port, metric)` readings. A failed load resets the parsed `FlowSpec`; partially parsed conditions never escape in `FlowLoadResult`.
 
