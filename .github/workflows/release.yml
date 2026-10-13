@@ -66,10 +66,10 @@ jobs:
           fi
           echo "Version and changelog checks passed for $TAG_VERSION"
 
-  # The PR sanity pipeline was removed: all automated validation now runs at
-  # tag time. format and sanitizer run on every release tag; strict-build's leg
-  # list is chosen by classify-release (one Linux GCC Debug leg for patch tags,
-  # the full 4-way matrix for minor/major tags).
+  # No pull-request pipeline exists. Release validation runs only on release
+  # tags: format and sanitizer on every tag; strict-build's leg list is chosen
+  # by classify-release (one Linux GCC Debug leg for patch tags, the full 4-way
+  # matrix for minor/major tags). docs.yml is separate and is not tag-gated.
   format:
     needs: classify-release
     runs-on: ubuntu-24.04
