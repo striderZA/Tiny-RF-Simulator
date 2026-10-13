@@ -34,6 +34,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark
 - Node graph tests must verify probe routing, link topology, and topological sort
 - Touchstone parser tests must cover all format variants (DB, MA, RI) and frequency units
+- AMP parser tests must cover scalar and per-frequency IP3 sections, default and explicit units, and file:line diagnostics (`tests/test_amp_file.cpp`)
 
 ## Verification
 
