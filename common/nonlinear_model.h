@@ -63,9 +63,9 @@ class NonlinearModel {
         double compression_dB = 0.0;
     };
 
-    // Products use the scalar OIP3 unless oip3_at_freq is given. With it, each
-    // harmonic uses the intercept at its own frequency, and each IM3 product uses
-    // the intercept at the fundamental it squares: 2f1 +- f2 uses f1, 2f2 +- f1 uses f2.
+    // Products use the scalar OIP3 unless oip3_at_freq is given. With it, each harmonic
+    // uses the intercept at the frequency of the tone it comes from, and each IM3 product
+    // uses the intercept at the fundamental it squares: 2f1 +- f2 uses f1, 2f2 +- f1 uses f2.
     Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq,
                    const Oip3Fn &oip3_at_freq = {}) const {
         using detail::dbmToV;

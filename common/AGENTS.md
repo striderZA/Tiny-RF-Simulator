@@ -24,7 +24,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 - Engines (in other modules) include `signal_node.h` and `component_interface.h`. Widgets additionally include nothing from `common/` directly; they receive `SignalNode&` references via `IComponentEngine`.
 - `Group` is consumed by `NodeGraphEngine` and `NodeGraphWidget`. It is *not* consumed by any DSP engine — groups are a visual layer.
 - `SessionState` defaults to `<exe_dir>/app.ini` on Windows, accepts an explicit `std::filesystem::path`, and uses wide Win32 path/profile APIs. Narrow section/key/value/default strings preserve the legacy active-Windows-ACP byte semantics (`CP_ACP`) when converted to and from UTF-16; they are not UTF-8. Profile reads grow dynamically from 256 to a 32,768-wide-character cap. Persistence remains a no-op off Windows, where `load()` returns the caller's default. Existing ANSI `app.ini` files are not migrated.
-- `NonlinearModel::process()` uses the scalar OIP3 for every product unless it receives an `Oip3Fn`. With one, each harmonic uses the intercept at its own frequency, and each IM3 product uses the intercept at the fundamental it squares (`2f1 ± f2` uses `f1`, `2f2 ± f1` uses `f2`). Without the function, the scalar path is unchanged.
+- `NonlinearModel::process()` uses the scalar OIP3 for every product unless it receives an `Oip3Fn`. With one, each harmonic uses the intercept at the frequency of the tone it comes from, and each IM3 product uses the intercept at the fundamental it squares (`2f1 ± f2` uses `f1`, `2f2 ± f1` uses `f2`). Without the function, the scalar path is unchanged.
 
 ## Work Guidance
 
