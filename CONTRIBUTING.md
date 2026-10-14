@@ -125,7 +125,7 @@ sh scripts/release.sh X.Y.Z      # Windows
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
 
-On Windows, run the script with Git for Windows `sh` rather than `bash`, which may resolve to the WSL launcher. After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows only the two-line version change.
+After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows one insertion and one deletion: the replaced version line.
 
 Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
 
