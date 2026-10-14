@@ -127,6 +127,32 @@ TEST_CASE("AMP IIP3 section sets OIP3 as IIP3 plus the gain at each frequency",
     CHECK(powerAt(out, 3.9e9) == Approx(powerAt(at_f2.extra_tones, 3.9e9)));
 }
 
+TEST_CASE("AMP file with both IP3 sections uses its OIP3 section", "[amp][nonlinear]") {
+    Scratch scratch;
+    // IIP3 alone would give 10 dBm at 1.0 GHz (-10 dBm plus 20 dB). The OIP3 table says 25 dBm.
+    const auto path = scratch.write("both_ip3.amp", kNetwork + "IIP3 dBm\nFREQ GHZ\n1.0 -10.0\n" +
+                                                        "OIP3 dBm\nFREQ GHZ\n1.0 25.0\n");
+
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(20.0);
+    amp.setEnableNonlinear(true);
+    amp.setAmpFilepath(path);
+    REQUIRE(amp.ampLoaded());
+
+    const std::vector<Spectrum::Tone> tones = {{1.0e9, -30.0, 0.0}, {1.3e9, -30.0, 0.0}};
+    Spectrum source;
+    source.tones = tones;
+    amp.node().inputs[0] = &source;
+    amp.update(0.0);
+    const auto &out = amp.node().outputs[0].tones;
+
+    // The one-row OIP3 section applies at every frequency: 25 dBm.
+    const auto at_25 = scalarProducts(25.0, tones, 20.0);
+    CHECK(powerAt(out, 3.0e9) == Approx(powerAt(at_25.extra_tones, 3.0e9)));
+    CHECK(powerAt(out, 3.9e9) == Approx(powerAt(at_25.extra_tones, 3.9e9)));
+}
+
 TEST_CASE("Derived AMP intercepts keep every product finite at a vanishing gain",
           "[amp][nonlinear]") {
     Scratch scratch;

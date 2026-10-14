@@ -48,8 +48,9 @@ void AmplifierEngine::loadAmpFile(const std::string &path) {
     }
 }
 
-// Third-order intercept at each frequency. An OIP3 section is used as given. An IIP3
-// section gives OIP3 = IIP3 + small-signal gain at the same frequency.
+// Third-order intercept at each frequency. An OIP3 section is used as given, and it wins
+// when the file also has an IIP3 section. An IIP3 section alone gives OIP3 = IIP3 plus the
+// small-signal gain at the same frequency.
 NonlinearModel::Oip3Fn
 AmplifierEngine::intercept3Function(const NonlinearModel::GainFn &gain) const {
     if (!m_amp)

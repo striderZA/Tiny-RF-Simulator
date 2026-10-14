@@ -230,17 +230,51 @@ TEST_CASE("AMP file needs network or power data and an IP3 section", "[amp][pars
         CHECK(result.file->oip3->dBmAt(2.1e9) == Approx(30.0));
     }
 
-    SECTION("an S section with no data rows does not count as network data") {
-        const std::string text = "S RI R 50\nFREQ GHZ\nOIP3 dBm\nFREQ GHZ\n30\n";
-        const auto path = scratch.write("empty_network.amp", text);
-        requireDiagnostic(AmpFileParser::parse(path), path, 1, "no numeric data rows");
-    }
-
     SECTION("a POUT section whose rows are not numeric does not count") {
         const std::string text = "POUT dBm\nPIN dBm FREQ=2.1GHz\nnot a data row\n"
                                  "OIP3 dBm\nFREQ GHz\n30\n";
         const auto path = scratch.write("text_pout.amp", text);
         requireDiagnostic(AmpFileParser::parse(path), path, 1, "no numeric data rows");
+    }
+
+    SECTION("noise and noise figure data do not count as network or power data") {
+        const std::string text = "NOI\nFREQ GHz\n1.0 10.0 0.5 0.0 0.2\n"
+                                 "NF dB\nFREQ GHz\n1.0 10.0\n"
+                                 "OIP3 dBm\nFREQ GHz\n30\n";
+        const auto result = AmpFileParser::parse(scratch.write("noise_only.amp", text));
+        REQUIRE_FALSE(result.file.has_value());
+        CHECK(result.error.find("network or power") != std::string::npos);
+    }
+}
+
+TEST_CASE("AMP S, Y, Z, and POUT sections count only with a numeric data row",
+          "[amp][parse][diagnostics]") {
+    Scratch scratch;
+    struct Marker {
+        std::string name;
+        std::string header; // the two header lines
+        std::string row;    // one numeric data row
+    };
+    const std::vector<Marker> markers = {
+        {"S", "S RI R 50\nFREQ GHZ\n", "1.0 0.5 0.0 2.0 0.0 0.0 0.0 0.3 0.0\n"},
+        {"Y", "Y RI\nFREQ GHZ\n", "1.0 0.5 0.0 2.0 0.0 0.0 0.0 0.3 0.0\n"},
+        {"Z", "Z RI\nFREQ GHZ\n", "1.0 0.5 0.0 2.0 0.0 0.0 0.0 0.3 0.0\n"},
+        {"POUT", "POUT dBm\nPIN dBm FREQ=2.1GHz\n", "0.0 19.0 0.0\n"},
+    };
+    const std::string ip3 = "OIP3 dBm\nFREQ GHz\n30\n";
+
+    for (const auto &marker : markers) {
+        CAPTURE(marker.name);
+        // The two header lines with no data row: rejected at the header line.
+        const auto empty = scratch.write(marker.name + "_empty.amp", marker.header + ip3);
+        requireDiagnostic(AmpFileParser::parse(empty), empty, 1, "no numeric data rows");
+
+        // The same section with one numeric row is a valid file.
+        const auto populated =
+            scratch.write(marker.name + "_data.amp", marker.header + marker.row + ip3);
+        const auto result = AmpFileParser::parse(populated);
+        REQUIRE(result.file.has_value());
+        REQUIRE(result.file->oip3.has_value());
     }
 }
 
