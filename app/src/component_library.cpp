@@ -1,4 +1,5 @@
 #include "component_library.h"
+#include "component_params.h"
 #include "component_type_registry.h"
 #include "logging_core.h"
 #include <cctype>
@@ -460,14 +461,14 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
         // arbitrary file (mirrors the project-file load boundary).
         nlohmann::json params = def.parameters;
         if (params.is_object() && !def.source_path.empty()) {
-            for (const char *key : {"sparam_filepath", "sparam_path"}) {
+            for (const char *key : kPathParameterKeys) {
                 if (!params.contains(key) || !params[key].is_string())
                     continue;
                 const std::string value = params[key].get<std::string>();
                 if (auto resolved = resolveDataFilePath(json_dir, value)) {
                     params[key] = resolved->string();
                 } else {
-                    LOG_WARN("ComponentLibrary: rejecting S-param parameter path '%s' for "
+                    LOG_WARN("ComponentLibrary: rejecting path parameter '%s' for "
                              "%s (must stay within the library directory)",
                              value.c_str(), def.part_number.c_str());
                     params.erase(key);

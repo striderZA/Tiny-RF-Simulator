@@ -7,6 +7,12 @@
 
 class IComponentEngine;
 
+// Serialized keys whose values name data files. Project load and library instantiation
+// resolve and containment-check them, component authoring protects their files, and
+// agent and inspector writes never set them.
+inline constexpr const char *kPathParameterKeys[] = {"sparam_filepath", "sparam_path",
+                                                     "amp_filepath"};
+
 enum class ParamWriteStatus {
     Applied,
     Unchanged,

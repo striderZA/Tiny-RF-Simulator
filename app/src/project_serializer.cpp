@@ -1,5 +1,6 @@
 #include "project_serializer.h"
 #include "circuit_runtime.h"
+#include "component_params.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "graph_editor_actions.h"
@@ -86,14 +87,14 @@ std::optional<std::string> resolveSparamPath(const fs::path &project_dir,
     return resolved.string();
 }
 
-// Load boundary: rewrite S-param path params in-place. Contained paths are
+// Load boundary: rewrite data-file path params in-place. Contained paths are
 // resolved to their canonical absolute form (the engine loads them, and the
 // save boundary re-relativizes them for round-trip); paths that escape the
 // project dir are neutralized to "" with a warning.
 void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
     if (!params.is_object())
         return;
-    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+    for (const char *key : kPathParameterKeys) {
         if (!params.contains(key) || !params[key].is_string())
             continue;
         const std::string value = params[key].get<std::string>();
@@ -102,20 +103,20 @@ void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
         if (const auto resolved = resolveSparamPath(project_dir, value)) {
             params[key] = *resolved;
         } else {
-            LOG_WARN("Project S-param path rejected (outside project dir): %s", value.c_str());
+            LOG_WARN("Project data-file path rejected (outside project dir): %s", value.c_str());
             params[key] = "";
         }
     }
 }
 
-// Save boundary: keep the project file portable by persisting S-param paths
+// Save boundary: keep the project file portable by persisting data-file paths
 // relative to the project directory. Absolute paths the user configured that
 // stay inside the project dir are re-written relative; anything else is left
 // untouched (load-side containment already guards untrusted project files).
 void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir) {
     if (!params.is_object())
         return;
-    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+    for (const char *key : kPathParameterKeys) {
         if (!params.contains(key) || !params[key].is_string())
             continue;
         const fs::path p(params[key].get<std::string>());
