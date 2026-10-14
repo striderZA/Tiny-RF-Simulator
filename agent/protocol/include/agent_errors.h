@@ -18,6 +18,7 @@ enum class AgentErrorCode {
     PathParamsUnsupported,
     LinkRejected,
     NoMeasurement,
+    UnsavedChanges,
     Busy,
     SimulatorUnavailable,
     VersionMismatch,

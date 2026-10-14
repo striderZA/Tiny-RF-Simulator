@@ -480,6 +480,13 @@ Json receiverMeasureSuccessSchema() {
         {"epoch", "in_progress", "frequencies_Hz", "output_power_dBm", "iip3_dBm"});
 }
 
+Json projectFileSuccessSchema() {
+    return objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                                    {"path", stringSchema("Absolute path of the project file.")},
+                                    {"name", stringSchema("Project name, the file stem.")}}),
+                        {"epoch", "path", "name"});
+}
+
 Json outputSchema(Json success) {
     return Json{{"type", "object"},
                 {"anyOf", Json::array({std::move(success), agentErrorSchema()})}};
@@ -506,11 +513,11 @@ Json idempotentAnnotations() { return Json{{"idempotentHint", true}, {"openWorld
 nlohmann::json agentErrorSchema() {
     Json error = objectSchema(
         properties(
-            {{"code",
-              enumSchema({"INVALID_ARGUMENT", "NOT_FOUND", "STALE_EPOCH", "UNKNOWN_TYPE",
-                          "UNKNOWN_PART", "AMBIGUOUS_PART", "PARAM_REJECTED",
-                          "PATH_PARAMS_UNSUPPORTED", "LINK_REJECTED", "NO_MEASUREMENT", "BUSY",
-                          "SIMULATOR_UNAVAILABLE", "VERSION_MISMATCH", "INTERNAL"})},
+            {{"code", enumSchema({"INVALID_ARGUMENT", "NOT_FOUND", "STALE_EPOCH", "UNKNOWN_TYPE",
+                                  "UNKNOWN_PART", "AMBIGUOUS_PART", "PARAM_REJECTED",
+                                  "PATH_PARAMS_UNSUPPORTED", "LINK_REJECTED", "NO_MEASUREMENT",
+                                  "UNSAVED_CHANGES", "BUSY", "SIMULATOR_UNAVAILABLE",
+                                  "VERSION_MISMATCH", "INTERNAL"})},
              {"message", stringSchema("Problem description and recommended next step.")},
              {"hint", stringSchema("Optional recovery guidance.")},
              {"op_index", integerSchema("Zero-based failing operation index.", 0)},
@@ -764,7 +771,28 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                       {"point_b", {{"component", 2}, {"port", 0}}},
                       {"start_Hz", 1e9},
                       {"stop_Hz", 2e9}}),
-             receiverMeasureSuccessSchema(), readOnlyAnnotations())};
+             receiverMeasureSuccessSchema(), readOnlyAnnotations()),
+        tool("project_save", "Save Project",
+             "Save the open project as an absolute .rfsim file, or to its current file when path "
+             "is omitted. Replacing a different existing file needs overwrite true. Saving does "
+             "not change the circuit or epoch.",
+             inputSchema(
+                 properties(
+                     {{"path", stringSchema("Absolute path ending in .rfsim. Omit to save "
+                                            "to the current project file.")},
+                      {"overwrite",
+                       withDefault(booleanSchema("Replace a different existing file."), false)}}),
+                 {}, Json{{"path", "C:/Projects/amp-chain.rfsim"}}),
+             projectFileSuccessSchema(), destructiveAnnotations()),
+        tool("project_load", "Load Project",
+             "Replace the open circuit with an absolute .rfsim project file. Requires the epoch "
+             "from the latest circuit read and no unsaved changes. A successful load advances "
+             "the epoch and clears agent checkpoints.",
+             inputSchema(
+                 properties({{"epoch", integerSchema("Epoch from the latest circuit read.", 0)},
+                             {"path", stringSchema("Absolute path of an existing .rfsim file.")}}),
+                 {"epoch", "path"}, Json{{"epoch", 3}, {"path", "C:/Projects/amp-chain.rfsim"}}),
+             projectFileSuccessSchema(), destructiveAnnotations())};
     return catalog;
 }
 
@@ -786,7 +814,8 @@ const std::string &agentServerInstructions() {
         "STALE_EPOCH, call circuit_get again. Positions include the current canvas pan; after "
         "panning, call circuit_get again before moving a component. Use add.position for a new "
         "component; move only targets components that existed before the current edit call. "
-        "Parameter units are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). This version "
-        "cannot open, save, or name files.";
+        "Parameter units are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). Save and load "
+        "projects with project_save and project_load; loads need no unsaved changes. Other file "
+        "access is unavailable.";
     return instructions;
 }

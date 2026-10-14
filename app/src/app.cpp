@@ -193,6 +193,19 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
             return std::nullopt;
         return std::filesystem::path(m_current_project_path).stem().string();
     };
+    agent_hooks.project_path = [this]() -> std::optional<std::string> {
+        if (m_current_project_path.empty())
+            return std::nullopt;
+        return m_current_project_path;
+    };
+    agent_hooks.save_project = [this](const std::string &path) { return saveProject(path); };
+    agent_hooks.load_project = [this](const std::string &path) {
+        AgentProjectLoadResult result;
+        result.loaded = loadProject(path);
+        // A failed load that reset the serializer still replaced the open circuit.
+        result.cleared = !result.loaded && m_serializer->lastLoadReset();
+        return result;
+    };
     m_agent_host = std::make_unique<AppAgentHost>(*m_graph_widget, std::move(agent_hooks));
 
     m_agent_api = std::make_unique<AgentApi>(AgentApiContext{m_editor_commands, m_circuit_runtime,
@@ -837,17 +850,18 @@ void RfSimulatorApp::drawExtensionTrustPrompt() {
     ImGui::EndPopup();
 }
 
-void RfSimulatorApp::saveProject(const std::string &path) {
+bool RfSimulatorApp::saveProject(const std::string &path) {
     // Only a successful write may clear dirty state or adopt the path: a
     // failed save must leave the project dirty on its previous path so the
     // user keeps the chance to retry (issue #77).
     if (!m_serializer->save(path))
-        return;
+        return false;
     m_current_project_path = path;
     m_editor_commands.markClean();
+    return true;
 }
 
-void RfSimulatorApp::loadProject(const std::string &path) {
+bool RfSimulatorApp::loadProject(const std::string &path) {
     const bool loaded = m_serializer->load(path);
     // Every outcome re-syncs component-bound views: a successful or resetting
     // load replaced the components, and an intact failure leaves them as-is.
@@ -878,7 +892,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             m_agent_host->clearCheckpoints();
             m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
         }
-        return;
+        return false;
     }
     m_power_meter_widget->clearSource();
     m_current_project_path = path;
@@ -893,6 +907,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
 
     m_agent_host->clearCheckpoints();
     m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
+    return true;
 }
 
 void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {

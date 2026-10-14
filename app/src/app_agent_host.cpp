@@ -131,6 +131,25 @@ std::optional<std::string> AppAgentHost::projectName() const {
 }
 
 // ======================================================================
+// Project files
+// ======================================================================
+std::optional<std::string> AppAgentHost::projectPath() const {
+    if (m_hooks.project_path)
+        return m_hooks.project_path();
+    return std::nullopt;
+}
+
+bool AppAgentHost::saveProjectFile(const std::string &path) {
+    return m_hooks.save_project && m_hooks.save_project(path);
+}
+
+AgentProjectLoadResult AppAgentHost::loadProjectFile(const std::string &path) {
+    if (!m_hooks.load_project)
+        return {};
+    return m_hooks.load_project(path);
+}
+
+// ======================================================================
 // Activity log
 // ======================================================================
 void AppAgentHost::recordActivity(const AgentActivity &activity) {

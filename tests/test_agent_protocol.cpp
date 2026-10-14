@@ -107,6 +107,7 @@ TEST_CASE("Every agent error code maps to its protocol name", "[agent_protocol]"
                   std::string_view{"PATH_PARAMS_UNSUPPORTED"}},
         std::pair{AgentErrorCode::LinkRejected, std::string_view{"LINK_REJECTED"}},
         std::pair{AgentErrorCode::NoMeasurement, std::string_view{"NO_MEASUREMENT"}},
+        std::pair{AgentErrorCode::UnsavedChanges, std::string_view{"UNSAVED_CHANGES"}},
         std::pair{AgentErrorCode::Busy, std::string_view{"BUSY"}},
         std::pair{AgentErrorCode::SimulatorUnavailable, std::string_view{"SIMULATOR_UNAVAILABLE"}},
         std::pair{AgentErrorCode::VersionMismatch, std::string_view{"VERSION_MISMATCH"}},
@@ -744,12 +745,12 @@ bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
 
 } // namespace
 
-TEST_CASE("The catalog lists the ten v1 tools in a fixed order", "[catalog]") {
-    constexpr std::array<std::string_view, 10> expected{
+TEST_CASE("The catalog lists the v1 tools in a fixed order", "[catalog]") {
+    constexpr std::array<std::string_view, 12> expected{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
         "network_analyzer_sweep", "data_file_read", "test_flow_run",
-        "receiver_measure"};
+        "receiver_measure",       "project_save",   "project_load"};
     const auto &catalog = agentToolCatalog();
 
     REQUIRE(kAgentCatalogVersion == 1);
@@ -769,7 +770,7 @@ TEST_CASE("Tool annotations follow the spec", "[catalog]") {
     const nlohmann::json destructive{{"destructiveHint", true}, {"openWorldHint", false}};
     const nlohmann::json idempotent{{"idempotentHint", true}, {"openWorldHint", false}};
 
-    REQUIRE(catalog.size() == 10);
+    REQUIRE(catalog.size() == 12);
     CHECK(catalog[0].annotations == read_only);
     CHECK(catalog[1].annotations == read_only);
     CHECK(catalog[2].annotations == read_only);
@@ -780,6 +781,8 @@ TEST_CASE("Tool annotations follow the spec", "[catalog]") {
     CHECK(catalog[7].annotations == read_only);
     CHECK(catalog[8].annotations == idempotent);
     CHECK(catalog[9].annotations == read_only);
+    CHECK(catalog[10].annotations == destructive);
+    CHECK(catalog[11].annotations == destructive);
     CHECK(catalog[5].description.find("3.01 dB") != std::string::npos);
     CHECK(catalog[5].description.find("spectrum analyzer's displayed peak") != std::string::npos);
 }
@@ -1074,5 +1077,6 @@ TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
           "the current canvas pan; after panning, call circuit_get again before moving a "
           "component. Use add.position for a new component; move only targets components that "
           "existed before the current edit call. Parameter units are encoded in key suffixes "
-          "(_Hz, _dB, _dBm, _dBm_per_Hz). This version cannot open, save, or name files.");
+          "(_Hz, _dB, _dBm, _dBm_per_Hz). Save and load projects with project_save and "
+          "project_load; loads need no unsaved changes. Other file access is unavailable.");
 }

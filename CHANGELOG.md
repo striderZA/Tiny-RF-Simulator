@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **Agent project save and load (#199)** — the MCP bridge gains `project_save`, which writes the open project to an absolute `.rfsim` path or its current file (replacing a different existing file needs `overwrite`), and `project_load`, which replaces the open circuit with a `.rfsim` file at the current epoch. `project_load` is refused while the project has unsaved changes.
+
 ### Fixed
 
 - **Probe add and remove mark the project unsaved (#204)** — adding or removing a probe now counts as an unsaved change, so New, Open, and Exit ask before discarding it.

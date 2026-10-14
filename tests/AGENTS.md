@@ -43,6 +43,8 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_flow_boundary$' --output-on-failure`
 - `ctest --test-dir build -R '^test_issue174_parameter_keys$' --output-on-failure`
 - `ctest --test-dir build -R '^test_sparam_legacy_key$' --output-on-failure`
+- `ctest --test-dir build -R '^test_agent_api_project$' --output-on-failure`
+- `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit

@@ -15,6 +15,8 @@ AgentToolResult executeDataFileReadTool(const AgentApi &api, const AgentCall &ca
 AgentToolResult executeTestFlowRunTool(AgentApi &api, const AgentCall &call);
 std::unique_ptr<IAgentCallTask> startTestFlowRunTask(AgentApi &api, const AgentCall &call);
 AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeProjectSaveTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 

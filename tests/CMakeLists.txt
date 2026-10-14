@@ -569,6 +569,22 @@ add_standalone_test(test_agent_position_read
 )
 set_tests_properties(test_agent_position_read PROPERTIES RUN_SERIAL TRUE)
 
+# Standalone, UI-free contracts for the project_save and project_load tools: path and overwrite
+# rules, the unsaved-changes and epoch guards, the test-flow latch, and host outcome mapping.
+add_standalone_test(test_agent_api_project
+    SOURCES test_agent_api_project.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api_project PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+
+# Standalone app-level project_save and project_load round trips through RfSimulatorApp: real
+# .rfsim files, the GUI save and load paths, checkpoint clearing, and reset-on-failure.
+add_standalone_test(test_agent_project
+    SOURCES test_agent_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_project PROPERTIES RUN_SERIAL TRUE)
+
 # Standalone tests for the active circuit project's Git branch, commit, and working-tree status.
 add_standalone_test(test_git_status
     SOURCES test_git_status.cpp
