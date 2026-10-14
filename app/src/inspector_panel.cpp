@@ -341,16 +341,44 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
             m_param_edited = true;
         }
 
+        // With an AMP file loaded, OIP3 comes from its frequency table and this scalar is inactive.
+        ImGui::BeginDisabled(engine.ampLoaded());
         double oip3 = engine.oip3_dBm();
         if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP3_dBm(oip3);
             m_param_edited = true;
         }
+        ImGui::EndDisabled();
 
         double p1db = engine.p1db_dBm();
         if (utils::inputDouble("P1dB (dBm)", p1db, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setP1dB_dBm(p1db);
             m_param_edited = true;
+        }
+
+        ImGui::SeparatorText("AMP Intercepts");
+        ImGui::TextWrapped("File: %s",
+                           engine.ampFilepath().empty() ? "none" : engine.ampFilepath().c_str());
+        if (ImGui::Button("Browse##amp_intercepts")) {
+            auto result = pfd::open_file("Select AMP file", "", {"AMP Files", "*.amp"}).result();
+            if (!result.empty()) {
+                engine.setAmpFilepath(result[0]);
+                LOG_INFO("Amplifier AMP file: %s", result[0].c_str());
+                m_param_edited = true;
+            }
+        }
+        if (!engine.ampFilepath().empty()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Clear##amp_intercepts")) {
+                engine.setAmpFilepath("");
+                m_param_edited = true;
+            }
+        }
+        if (engine.ampLoaded()) {
+            ImGui::TextDisabled("Intercepts from AMP file: %s",
+                                engine.ampData()->oip3 ? "OIP3 table" : "IIP3 plus gain");
+        } else if (!engine.ampError().empty()) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", engine.ampError().c_str());
         }
     }
 

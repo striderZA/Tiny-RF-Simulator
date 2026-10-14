@@ -1,11 +1,13 @@
 #pragma once
 
+#include "amp_file.h"
 #include "component_engine_base.h"
 #include "node_graph_engine.h"
 #include "nonlinear_model.h"
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include <algorithm>
+#include <optional>
 
 class AmplifierEngine : public ComponentEngineBase {
   public:
@@ -70,6 +72,15 @@ class AmplifierEngine : public ComponentEngineBase {
     const std::string &sparamFilepath() const { return m_sparam_filepath; }
     const SParameterData &sparamData() const { return m_sparam_data; }
 
+    // AMP intercept file (MathWorks AMP, IIP3/OIP3 sections). While a file is loaded, its
+    // curves replace the scalar OIP3. A file that fails to load keeps its path and error,
+    // and the scalar OIP3 applies.
+    void setAmpFilepath(const std::string &path);
+    const std::string &ampFilepath() const { return m_amp_filepath; }
+    bool ampLoaded() const { return m_amp.has_value(); }
+    const AmpFile *ampData() const { return m_amp ? &*m_amp : nullptr; }
+    const std::string &ampError() const { return m_amp_error; }
+
   private:
     double m_gain_dB = 0.0;
     double m_nf_dB = 0.0;
@@ -82,4 +93,12 @@ class AmplifierEngine : public ComponentEngineBase {
     int m_sparam_fwd_idx = 0;
     const Spectrum *m_cached_sparam_input = nullptr;
     uint64_t m_cached_sparam_generation = 0;
+
+    // AMP intercept state
+    std::string m_amp_filepath;
+    std::optional<AmpFile> m_amp;
+    std::string m_amp_error;
+
+    void loadAmpFile(const std::string &path);
+    NonlinearModel::Oip3Fn intercept3Function(const NonlinearModel::GainFn &gain) const;
 };

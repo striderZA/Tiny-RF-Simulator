@@ -4,6 +4,7 @@
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
+#include "component_params.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -1103,7 +1104,7 @@ bool RfSimulatorApp::saveComponentForm() {
                         break;
                     }
                 }
-                for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                for (const char *key : kPathParameterKeys) {
                     const auto path = model.parameter(key);
                     if (path.is_string() &&
                         path_references_destination(path.get<std::string>(), model.sourcePath())) {
@@ -1127,7 +1128,7 @@ bool RfSimulatorApp::saveComponentForm() {
                     }
                     if (referenced_by_another_component || !other->parameters.is_object())
                         continue;
-                    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                    for (const char *key : kPathParameterKeys) {
                         if (!other->parameters.contains(key))
                             continue;
                         const auto &path = other->parameters[key];
