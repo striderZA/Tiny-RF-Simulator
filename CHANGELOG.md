@@ -6,11 +6,11 @@
 
 ### Fixed
 
-- **Test flow runs yield between UI frames (#208)** — a test-flow run advances in bounded UI-thread slices and restores the circuit between slices, so the window keeps drawing during long runs. A resumed run is guarded against project replacement and user edits.
+- **Agent Server test-flow runs yield between UI frames (#208)** — a test-flow run started through the Agent Server advances in bounded slices and restores the circuit before each yield, instead of blocking the UI for the whole run. A resumed run stops with an error if the project is replaced or the circuit changes during the run.
 
 ### Testing
 
-- Add regression coverage for sliced test-flow runs and a frame-based responsiveness benchmark (#208).
+- Add regression coverage for sliced Agent Server test-flow runs and a frame-based responsiveness benchmark (#208).
 
 ## [0.28.2] - 2026-10-12
 
