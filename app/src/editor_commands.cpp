@@ -256,12 +256,21 @@ bool EditorCommands::disconnect(int link_id) {
     return true;
 }
 
-// Probe edits keep their pre-EditorCommands semantics: they are saved in
-// .rfsim but do not, by themselves, mark the project dirty. Whether they
-// should is a separate product decision, not part of this command extraction.
-bool EditorCommands::addProbePin(int pin_id) { return m_editor_actions.addProbePin(pin_id); }
+// Probe add and remove are project edits: they are saved in .rfsim, so an accepted one advances
+// the revision and the project reads as unsaved until the next save.
+bool EditorCommands::addProbePin(int pin_id) {
+    if (!m_editor_actions.addProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
 
-bool EditorCommands::removeProbePin(int pin_id) { return m_editor_actions.removeProbePin(pin_id); }
+bool EditorCommands::removeProbePin(int pin_id) {
+    if (!m_editor_actions.removeProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
 
 int EditorCommands::createGroup(std::string name, std::vector<int> member_node_ids) {
     const int group_id = m_editor_actions.createGroup(std::move(name), std::move(member_node_ids));

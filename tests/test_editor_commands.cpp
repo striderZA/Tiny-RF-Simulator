@@ -123,11 +123,11 @@ TEST_CASE("Accepted topology commands each advance the revision", "[editor_comma
     REQUIRE(advanced());
     REQUIRE(amplifier->node().inputs[0] == &generator->node().outputs[0]);
 
-    // Probe edits keep their pre-existing semantics: no revision advance.
+    // Probe add and remove are project edits (issue #204): they advance the revision.
     REQUIRE(f.commands.addProbePin(generator->outputPinId()));
-    REQUIRE_FALSE(advanced());
+    REQUIRE(advanced());
     REQUIRE(f.commands.removeProbePin(generator->outputPinId()));
-    REQUIRE_FALSE(advanced());
+    REQUIRE(advanced());
 
     const int group =
         f.commands.createGroup("Chain", {generator->graphNodeId(), amplifier->graphNodeId()});
@@ -308,6 +308,28 @@ TEST_CASE_METHOD(ImGuiFixture, "App test commands share the editor's side effect
     REQUIRE(app.testPfbViewCount() == 0);
     REQUIRE(app.isDirty());
     REQUIRE(app.projectRevision() > saved);
+    // A probe add or remove is a project edit too (issue #204), so it dirties the project.
+    auto *generator = app.testCreateComponent("generator", 9002);
+    REQUIRE(generator != nullptr);
+    app.saveProject(path);
+    REQUIRE_FALSE(app.isDirty());
+    const int pin = generator->outputPinId();
+    REQUIRE(app.testAddProbePin(pin));
+    REQUIRE(app.testGraphEngine().probePins() == std::vector<int>{pin});
+    REQUIRE(app.isDirty());
+    app.saveProject(path);
+    REQUIRE_FALSE(app.isDirty());
+    // A refused duplicate add changes no project state.
+    REQUIRE_FALSE(app.testAddProbePin(pin));
+    REQUIRE_FALSE(app.isDirty());
+    REQUIRE(app.testRemoveProbePin(pin));
+    REQUIRE(app.testGraphEngine().probePins().empty());
+    REQUIRE(app.isDirty());
+    app.saveProject(path);
+    REQUIRE_FALSE(app.isDirty());
+    // A refused remove of an absent probe changes no project state.
+    REQUIRE_FALSE(app.testRemoveProbePin(pin));
+    REQUIRE_FALSE(app.isDirty());
     std::filesystem::remove(path);
 }
 
