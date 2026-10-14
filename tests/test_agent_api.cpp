@@ -683,7 +683,7 @@ TEST_CASE("circuit_edit classifies occupied inputs, cycles, and ADC-to-PFB polic
     CHECK(errorFor(policy).at("op_index") == 2);
 }
 
-TEST_CASE("circuit_edit probes enforce capacity and preserve revision semantics",
+TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision semantics",
           "[agent_api][circuit_edit]") {
     ApiFixture fixture;
     const auto added = editCall(
