@@ -326,6 +326,15 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
         return std::nullopt;
     };
 
+    // Closes the data section that is open when a header starts or the file ends.
+    const auto closeDataSection = [&]() -> std::optional<Diagnostic> {
+        if (mode == Mode::Rows)
+            return closeSection();
+        if (mode == Mode::AwaitSkippedHeader || mode == Mode::Skipping)
+            return closeSkipped();
+        return std::nullopt;
+    };
+
     std::string line;
     int line_no = 0;
     while (std::getline(file, line)) {
@@ -344,14 +353,8 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
                                {section.header_line, std::string(ip3Name(section.is_oip3)) +
                                                          " section needs a FREQ header line"});
             }
-            if (mode == Mode::Rows) {
-                if (auto error = closeSection())
-                    return failure(path, *error);
-            }
-            if (mode == Mode::AwaitSkippedHeader || mode == Mode::Skipping) {
-                if (auto error = closeSkipped())
-                    return failure(path, *error);
-            }
+            if (auto error = closeDataSection())
+                return failure(path, *error);
 
             if (keyword == Keyword::Iip3 || keyword == Keyword::Oip3) {
                 const bool is_oip3 = keyword == Keyword::Oip3;
@@ -422,14 +425,8 @@ AmpParseResult AmpFileParser::parse(const std::string &path) {
         return failure(path, {section.header_line,
                               std::string(ip3Name(section.is_oip3)) + " section has no data"});
     }
-    if (mode == Mode::Rows) {
-        if (auto error = closeSection())
-            return failure(path, *error);
-    }
-    if (mode == Mode::AwaitSkippedHeader || mode == Mode::Skipping) {
-        if (auto error = closeSkipped())
-            return failure(path, *error);
-    }
+    if (auto error = closeDataSection())
+        return failure(path, *error);
     if (!seen_network_or_power)
         return failure(path, {0, "no S, Y, Z, or POUT section; an AMP file needs network or "
                                  "power data"});
