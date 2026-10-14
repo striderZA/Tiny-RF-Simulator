@@ -1454,9 +1454,10 @@ TEST_CASE("Every catalog tool input example passes API argument validation", "[a
         CAPTURE(tool.name);
         REQUIRE_FALSE(tool.input_schema.at("examples").empty());
         auto arguments = tool.input_schema.at("examples").front();
-        // The project_save example names a folder that may not exist here, so it uses a unique
-        // path in the temp folder. test_agent_api_project covers the real path rules.
-        if (tool.name == "project_save") {
+        // The project examples name C:/ paths, which are not absolute on other platforms, and the
+        // save example names a folder that may not exist here. Both use a unique temp path instead;
+        // test_agent_api_project covers the real path rules.
+        if (tool.name == "project_save" || tool.name == "project_load") {
             arguments["path"] = (std::filesystem::temp_directory_path() /
                                  ("agent_example_" + test_temp_paths::processTag() + ".rfsim"))
                                     .string();
