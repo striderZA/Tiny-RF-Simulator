@@ -41,6 +41,7 @@
 #include <span>
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -113,6 +114,18 @@ class FakeAgentHost final : public IAgentHost {
     }
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
+    std::optional<std::string> projectPath() const override { return open_path; }
+    bool saveProjectFile(const std::string &path) override {
+        saved_paths.push_back(path);
+        if (!save_succeeds)
+            return false;
+        open_path = path;
+        return true;
+    }
+    AgentProjectLoadResult loadProjectFile(const std::string &path) override {
+        loaded_paths.push_back(path);
+        return load_outcome(path);
+    }
     void recordActivity(const AgentActivity &entry) override {
         ++activity_attempts;
         if (throw_on_activity)
@@ -124,6 +137,12 @@ class FakeAgentHost final : public IAgentHost {
     int activity_attempts = 0;
     bool throw_on_activity = false;
     std::optional<std::string> name;
+    std::optional<std::string> open_path;
+    bool save_succeeds = true;
+    std::vector<std::string> saved_paths;
+    std::vector<std::string> loaded_paths;
+    std::function<AgentProjectLoadResult(const std::string &)> load_outcome =
+        [](const std::string &) { return AgentProjectLoadResult{true, false}; };
     int checkpoint_begins = 0;
     int checkpoint_commits = 0;
     int checkpoint_discards = 0;

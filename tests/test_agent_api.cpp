@@ -1453,7 +1453,15 @@ TEST_CASE("Every catalog tool input example passes API argument validation", "[a
     for (const auto &tool : agentToolCatalog()) {
         CAPTURE(tool.name);
         REQUIRE_FALSE(tool.input_schema.at("examples").empty());
-        const auto result = fixture.call(tool.name, tool.input_schema.at("examples").front());
+        auto arguments = tool.input_schema.at("examples").front();
+        // The project_save example names a folder that may not exist here, so it uses a unique
+        // path in the temp folder. test_agent_api_project covers the real path rules.
+        if (tool.name == "project_save") {
+            arguments["path"] = (std::filesystem::temp_directory_path() /
+                                 ("agent_example_" + test_temp_paths::processTag() + ".rfsim"))
+                                    .string();
+        }
+        const auto result = fixture.call(tool.name, arguments);
         if (result.is_error)
             CHECK(errorFor(result).at("code") != "INVALID_ARGUMENT");
         CHECK(result.structured.contains("epoch"));

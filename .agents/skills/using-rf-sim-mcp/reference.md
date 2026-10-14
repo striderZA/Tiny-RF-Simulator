@@ -50,7 +50,19 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 | UNKNOWN_TYPE | Unknown component type. Check `component_types`. |
 | UNKNOWN_PART, AMBIGUOUS_PART | Library lookup failed. `details.candidates` lists up to five matches; pass `type` to disambiguate. |
 | NO_MEASUREMENT | `details.reason` is `NO_PATH` (no forward path between the points) or `NO_VALID_POINTS` (the sweep has no valid points). |
+| UNSAVED_CHANGES | The open project has unsaved changes, so `project_load` did not run. Save with `project_save` (with `path` if the project is untitled), or ask the user to save or discard the changes in RF Simulator. |
 | INTERNAL | Unexpected failure, or a reply over the 1 MiB protocol limit. Re-read with `circuit_get`, then report it. |
+
+## Projects
+
+- `project_save {path?, overwrite?}` writes the open project to `path`, or to the file it already has when `path` is omitted. An untitled project needs `path`. `path` must be absolute, end in `.rfsim`, not name a folder, and have an existing parent folder (`INVALID_ARGUMENT` at `/path`). A different existing file needs `overwrite: true` (`INVALID_ARGUMENT` at `/overwrite`).
+- Success returns `{epoch, path, name}`. The save takes no checkpoint and changes neither `epoch` nor `revision`. The project becomes clean, so `UNSAVED_CHANGES` clears.
+- `project_save` returns `INTERNAL` (`project not saved; ...`) after a failed test-flow restore. Reload the project in RF Simulator. A write failure also returns `INTERNAL`.
+- `project_load {epoch, path}` needs `epoch` from the latest read, or it returns `STALE_EPOCH`. `path` must be an absolute `.rfsim` file: a missing file is `NOT_FOUND`, and a folder is `INVALID_ARGUMENT`.
+- `project_load` returns `UNSAVED_CHANGES` without loading anything while the project has unsaved changes. Save first with `project_save`, or ask the user to save or discard the changes. After a test-flow latch, `project_save` is refused too, so ask the user.
+- A file that cannot be parsed leaves the circuit as it was (`INVALID_ARGUMENT` at `/path`). A restore failure that already cleared the circuit returns `INTERNAL` at the new epoch, so call `circuit_get`.
+- Success returns `{epoch, path, name}` at the new epoch. The load clears checkpoints, so `revert` cannot undo it, and the project is clean. Older epochs then return `STALE_EPOCH` with `details.cause` `opened_project`.
+- A test-flow restore failure marks the project unsaved and latches `project_save` (`INTERNAL`) until RF Simulator replaces the project (open, new, revert, or a successful `project_load`). A GUI save clears the unsaved flag but not the latch, so after the user saves, `project_load` can replace the project.
 
 ## Measurements
 
@@ -81,6 +93,6 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 
 ## Limits
 
-- You cannot open, save, name, or revert projects, or read and write files. `data_file_read` reads only files that a component or library part already references.
+- You cannot open file dialogs or revert projects. Project files are read and written only by `project_save` and `project_load`; `data_file_read` reads only files that a component or library part already references.
 - RF Simulator admits one agent client at a time.
 - Each reply is capped at 1 MiB. An oversized result becomes `INTERNAL`; request fewer points.

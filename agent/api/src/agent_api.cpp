@@ -238,6 +238,12 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "receiver_measure") {
             result = executeReceiverMeasureTool(*this, call);
             summary = "Receiver measure";
+        } else if (call.tool == "project_save") {
+            result = executeProjectSaveTool(*this, call);
+            summary = "Save project";
+        } else if (call.tool == "project_load") {
+            result = executeProjectLoadTool(*this, call);
+            summary = "Load project";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

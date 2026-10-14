@@ -85,6 +85,8 @@ class AgentApi final : public IAgentCallExecutor {
     friend std::unique_ptr<IAgentCallTask> startTestFlowRunTask(AgentApi &, const AgentCall &);
     friend class AgentTestFlowRunTask;
     friend AgentToolResult executeReceiverMeasureTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeProjectSaveTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeProjectLoadTool(const AgentApi &, const AgentCall &);
 
     IComponentEngine *scratchTypeEngine(std::string_view type) const;
 

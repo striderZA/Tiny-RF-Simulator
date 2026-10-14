@@ -70,6 +70,9 @@ class TestHost final : public IAgentHost {
     }
     bool appModalOpen() const override { return modal; }
     std::optional<std::string> projectName() const override { return std::nullopt; }
+    std::optional<std::string> projectPath() const override { return std::nullopt; }
+    bool saveProjectFile(const std::string &) override { return false; }
+    AgentProjectLoadResult loadProjectFile(const std::string &) override { return {}; }
     void recordActivity(const AgentActivity &) override {}
     std::unordered_map<int, std::array<float, 2>> node_positions;
     bool modal = false;

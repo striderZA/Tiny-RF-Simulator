@@ -88,7 +88,7 @@ claude mcp add rf-sim -- "<install dir>/rf-sim-mcp"
 
 Replace `<install dir>` with the directory containing the simulator executables. On Windows, use `rf-sim-mcp.exe` in the JSON `command` and Claude Code command.
 
-Agents cannot open, save, or name files.
+Agents can save and load `.rfsim` projects with `project_save` and `project_load`. They cannot open file dialogs; `project_save` is the only way they name a file.
 
 The local bridge protects the GUI endpoint against access from other local accounts and web pages. It does not protect against software running as the same user or administrators.
 

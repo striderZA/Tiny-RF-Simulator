@@ -16,12 +16,12 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `NaHost` is constructed from the runtime's const `components()` view, so Network Analyzer lookups cannot mutate runtime components through it.
 - `ReceiverPerformanceMeasurementEngine` is UI-free and caches output-power and IIP3 measurements over the shared `MeasurementChainPath`. The config and request overloads measure identically.
 - `PfbCalculatorWidget` binds M, K, beta, and the rejection target to the selected PFB through the engine setters. All response math comes from `PfbFilterDesign` in `pfb_channelizer/`, so the tool and the engine cannot drift.
-- `AppAgentHost` (the app-side `IAgentHost`) owns checkpoints, the activity ring, node placement, and modal detection. `AgentPanelWidget` renders the Agent view and holds only callbacks and the transient selected checkpoint id.
+- `AppAgentHost` (the app-side `IAgentHost`) owns checkpoints, the activity ring, node placement, modal detection, and the project-file hooks (`project_path`, `save_project`, `load_project`). The file hooks call `saveProject()` and `loadProject()` without the file dialogs; `load_project` reports `cleared` from `ProjectSerializer::lastLoadReset()` after a failed load. `AgentPanelWidget` renders the Agent view and holds only callbacks and the transient selected checkpoint id.
 - Checkpoints serialize with `toJson({std::nullopt, false})`; the project name is the current file stem, or none when untitled.
 - `ComponentFormModel` and `ComponentFormWidget` are the pure-logic and ImGui pair for the New/Edit Component form.
 
 ## Local Contracts
-- `RfSimulatorApp::saveProject()`, `loadProject()`, and `newProject()` delegate to `ProjectSerializer::save()`, `load()`, and `reset()`. A failed load that resets project state clears the save target.
+- `RfSimulatorApp::saveProject()` and `loadProject()` return success and delegate to `ProjectSerializer::save()` and `load()`; `newProject()` delegates to `reset()`. A failed load that resets project state clears the save target.
 - `ProjectSerializer::save()` is atomic: write a sibling temporary file and rename it over the target; never remove the target before rename.
 - Dirty state is derived from the `EditorCommands` revision. Edits outside `EditorCommands` call `markDirty()`; accepted commands advance the revision, probe add and remove included, and rejected commands do not (a duplicate probe add or an absent probe remove is rejected).
 - `markClean()` sets the clean point: `saveProject()` calls it only after a successful save (issue #77); `newProject()` and a successful `loadProject()` call it after the serializer runs.

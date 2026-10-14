@@ -126,8 +126,9 @@ class RfSimulatorApp {
     ~RfSimulatorApp();
 
     // Project save/load
-    void saveProject(const std::string &path);
-    void loadProject(const std::string &path);
+    // Both return true on success. Agent tools call them directly, without a dialog.
+    bool saveProject(const std::string &path);
+    bool loadProject(const std::string &path);
     void newProject();
     // Derived from the editor command service's revision: dirty while the
     // revision differs from the one recorded by the last save/load/New.

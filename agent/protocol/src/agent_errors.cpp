@@ -24,6 +24,8 @@ std::string_view agentErrorCodeName(AgentErrorCode code) {
         return "LINK_REJECTED";
     case AgentErrorCode::NoMeasurement:
         return "NO_MEASUREMENT";
+    case AgentErrorCode::UnsavedChanges:
+        return "UNSAVED_CHANGES";
     case AgentErrorCode::Busy:
         return "BUSY";
     case AgentErrorCode::SimulatorUnavailable:
