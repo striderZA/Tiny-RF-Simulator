@@ -197,6 +197,7 @@ Never move the tag of a published release. Ship the fix as the next patch releas
 
 - Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
 - No CI runs on pull requests — verify build, tests, and formatting locally before requesting review (see CI Pipeline).
+- Release workflow changes: run **Release** on the branch with `workflow_dispatch` (inputs: `version` as X.Y.Z, and `matrix` as `patch` or `minor`). The run validates and packages the artifacts but never publishes.
 - Squash-merge or rebase-merge to keep history clean.
 
 ## Where to Get Help

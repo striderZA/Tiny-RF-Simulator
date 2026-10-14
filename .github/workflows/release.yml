@@ -4,6 +4,20 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "X.Y.Z to validate. Must match CMakeLists.txt and CHANGELOG.md. Nothing is published."
+        required: true
+        type: string
+      matrix:
+        description: "patch: Linux GCC 14 Debug only. minor: also Linux Clang 18 and MinGW-w64 Debug."
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+        default: patch
 
 env:
   # MinGW-w64 silently drops TEST_CASEs past a ceiling in the main `tests`
@@ -21,18 +35,30 @@ jobs:
       # JSON array of build legs for strict-build's matrix. Patch tags get a
       # single Linux GCC Debug leg; minor/major tags add Linux Clang and MinGW Debug.
       matrix: ${{ steps.classify.outputs.matrix }}
+      version: ${{ steps.classify.outputs.version }}
     steps:
       - name: Classify tag and build the validation matrix
         id: classify
         shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_MATRIX: ${{ inputs.matrix }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_VERSION"
+          else
+            TAG="${GITHUB_REF_NAME#v}"
+          fi
           if [[ ! "$TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "ERROR: tag '$TAG' is not semantic version X.Y.Z"
             exit 1
           fi
           PATCH="${BASH_REMATCH[3]}"
+          # Dispatch takes its legs from the matrix input; tag pushes use the patch number.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DISPATCH_MATRIX" = "minor" ]; then PATCH=0; else PATCH=1; fi
+          fi
           LINUX='{"os":"ubuntu-24.04","shell":"bash","cxx_compiler":"g++-14","c_compiler":"gcc-14","cmake_flags":"-DGLFW_BUILD_WAYLAND=OFF"}'
           if [ "$PATCH" = "0" ]; then
             MATRIX=$(jq -c -n --argjson linux "$LINUX" '[
@@ -46,6 +72,7 @@ jobs:
             ]')
           fi
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
           echo "validation matrix: $MATRIX"
 
   validate-version:
@@ -56,8 +83,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Verify version and changelog entry
+        env:
+          TAG_VERSION: ${{ needs.classify-release.outputs.version }}
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
           CMAKE_VERSION=$(grep -oP 'VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
           if [ "$TAG_VERSION" != "$CMAKE_VERSION" ]; then
             echo "ERROR: Tag version ($TAG_VERSION) does not match CMakeLists.txt version ($CMAKE_VERSION)"
@@ -68,12 +96,12 @@ jobs:
           fi
           echo "Version and changelog checks passed for $TAG_VERSION"
 
-  # No pull-request pipeline exists. Release validation runs only on release
-  # tags: format and sanitizer on every tag; strict-build's leg list is chosen
-  # by classify-release (one Linux GCC Debug leg for patch tags, plus Linux
-  # Clang and MinGW Debug legs for minor/major tags). Release configurations
-  # are built only by the package job. docs.yml is separate and is not
-  # tag-gated.
+  # No pull-request pipeline exists. Release validation runs on release tags and
+  # on workflow_dispatch, which never publishes: format and sanitizer on every
+  # run; strict-build's leg list is chosen by classify-release (one Linux GCC
+  # Debug leg for patch validation, plus Linux Clang and MinGW Debug legs for
+  # minor/major). Release configurations are built only by the package job.
+  # docs.yml is separate and is not tag-gated.
   format:
     needs: classify-release
     runs-on: ubuntu-24.04
@@ -226,7 +254,9 @@ jobs:
           persist-credentials: false
 
       - name: Generate release notes from changelog
-        run: bash scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > release-notes.md
+        env:
+          RELEASE_VERSION: ${{ needs.classify-release.outputs.version }}
+        run: bash scripts/release-notes.sh "$RELEASE_VERSION" > release-notes.md
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -251,6 +281,8 @@ jobs:
           zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
 
       - name: Create Release (draft)
+        # workflow_dispatch validates and packages the same artifacts but never publishes.
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           body_path: release-notes.md

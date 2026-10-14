@@ -31,10 +31,11 @@
 ## Work Guidance
 
 ## Verification
-- At tag time, `release.yml` runs formatting, sanitizer, strict-build, package, and version/changelog validation. Linux tests run under Xvfb with `ctest -E "Benchmark"`, including `test_ui`; Windows legs (strict-build and package) and ASan exclude `Benchmark|test_ui`.
-- With a zero patch component (`vX.Y.0`, `vX.0.0`), `classify-release` selects three strict-build legs: Linux GCC 14 Debug, Linux Clang 18 Debug, and Windows MinGW-w64 Debug. Other patch tags select only Linux GCC 14 Debug. Release configurations build only in `package`.
+- On a tag or `workflow_dispatch`, `release.yml` runs formatting, sanitizer, strict-build, package, and version/changelog validation. Linux tests run under Xvfb with `ctest -E "Benchmark"`, including `test_ui`; Windows legs (strict-build and package) and ASan exclude `Benchmark|test_ui`.
+- On a tag, a zero patch component (`vX.Y.0`, `vX.0.0`) makes `classify-release` select three strict-build legs: Linux GCC 14 Debug, Linux Clang 18 Debug, and Windows MinGW-w64 Debug. Other patch tags select only Linux GCC 14 Debug. Release configurations build only in `package`.
 - The package job builds with `CMAKE_BUILD_TYPE=Release` and runs CTest against that configuration. Debug builds are validation-only and are never shipped.
 - The Windows package job fails when `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, or `libwinpthread-1.dll` is missing from `/mingw64/bin`.
+- `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `mkdocs build --strict` for pushes to `master` touching manual/build inputs, published releases, or manual dispatch.
 - Formatting check: `bash scripts/format.sh --check --all`.
 - `bash scripts/test-openwiki-boundary.sh` runs the boundary guard against throwaway git repositories; it needs no network or OpenWiki run.
