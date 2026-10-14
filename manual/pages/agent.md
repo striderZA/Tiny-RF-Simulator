@@ -3,7 +3,7 @@
 The local `rf-sim-mcp` bridge connects an MCP client to the project that is open in Tiny RF Simulator.
 For installation details, see [Install](install.md). For client configuration examples, see the [README](https://github.com/striderZA/Tiny-RF-Simulator/blob/master/README.md).
 
-The bridge can read the circuit, edit its components, run measurements, and save or load `.rfsim` project files. It cannot open file dialogs. `project_save` is the only way it names a file.
+The bridge can read the circuit, edit its components, run measurements, and save or load `.rfsim` project files. It cannot open file dialogs. Both project tools take absolute paths to `.rfsim` files.
 
 ## Connect an agent
 
