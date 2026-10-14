@@ -139,8 +139,8 @@ AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &cal
         // hint must not point back to project_save.
         const std::string hint =
             api.m_flow_latch_message.empty()
-                ? "save with project_save first, or ask the user to save or discard the changes "
-                  "in RF Simulator"
+                ? "save with project_save first (with path if the project is untitled), or "
+                  "ask the user to save or discard the changes in RF Simulator"
                 : "project_save is refused after a failed test-flow restore; ask the user to save "
                   "or discard the changes in RF Simulator";
         fail(AgentError{AgentErrorCode::UnsavedChanges, "the open project has unsaved changes",
