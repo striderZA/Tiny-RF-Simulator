@@ -242,3 +242,49 @@ TEST_CASE_METHOD(ProjectFixture, "a restore failure clears the open project and 
     CHECK(app.m_current_project_path.empty());
     CHECK(app.isDirty());
 }
+
+TEST_CASE_METHOD(ProjectFixture, "project tools refuse paths that name another file",
+                 "[agent_app][project]") {
+    buildCircuit({"generator"});
+    const fs::path victim = file("victim.txt");
+    writeText(victim, "keep me");
+    // The C runtime and Win32 stop reading a path at a NUL, so this text names victim.txt.
+    const std::string nul_path = victim.string() + std::string("\0.rfsim", 7);
+
+    SECTION("saving over a NUL-suffixed path leaves the other file unchanged") {
+        const AgentToolResult result =
+            call("project_save", {{"path", nul_path}, {"overwrite", true}});
+        CHECK(readText(victim) == "keep me");
+        REQUIRE(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    }
+    SECTION("saving to a NUL-suffixed name creates no file with that name") {
+        const fs::path ghost = file("ghost.txt");
+        const AgentToolResult result =
+            call("project_save", {{"path", ghost.string() + std::string("\0.rfsim", 7)}});
+        CHECK_FALSE(fs::exists(ghost));
+        REQUIRE(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    }
+    SECTION("loading a NUL-suffixed path does not read the other file") {
+        // victim.txt holds a valid project, so a truncated load would replace the open circuit.
+        const fs::path project = file("one.rfsim");
+        REQUIRE_FALSE(call("project_save", {{"path", project.string()}}).is_error);
+        writeText(victim, readText(project));
+        const std::uint64_t epoch = app.testProjectEpoch();
+
+        const AgentToolResult result = call("project_load", {{"epoch", epoch}, {"path", nul_path}});
+        CHECK(app.testProjectEpoch() == epoch);
+        REQUIRE(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    }
+#ifdef _WIN32
+    SECTION("saving to a stream name creates no file") {
+        const fs::path base = file("stream.txt");
+        const AgentToolResult result = call("project_save", {{"path", base.string() + ":s.rfsim"}});
+        CHECK_FALSE(fs::exists(base));
+        REQUIRE(result.is_error);
+        CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
+    }
+#endif
+}

@@ -360,3 +360,30 @@ TEST_CASE("project tools reject unknown or mistyped arguments", "[agent_api][pro
     CHECK(errorFor(mistyped).at("details").at("path") == "/overwrite");
     CHECK(fixture.host.saved_paths.empty());
 }
+
+TEST_CASE("project tools refuse paths that the OS would open under another name",
+          "[agent_api][project]") {
+    ApiFixture fixture;
+    ProjectTempDir temp;
+    const std::string victim = temp.file("notes.txt").string();
+    const auto refused = [&fixture](const std::string &path) {
+        const auto saved = fixture.call("project_save", {{"path", path}});
+        REQUIRE(saved.is_error);
+        CHECK(errorFor(saved).at("code") == "INVALID_ARGUMENT");
+        CHECK(errorFor(saved).at("details").at("path") == "/path");
+
+        const auto loaded =
+            fixture.call("project_load", {{"epoch", fixture.api.epoch()}, {"path", path}});
+        REQUIRE(loaded.is_error);
+        CHECK(errorFor(loaded).at("code") == "INVALID_ARGUMENT");
+        CHECK(errorFor(loaded).at("details").at("path") == "/path");
+    };
+    // The C runtime and Win32 stop reading a path at a NUL, so this text opens notes.txt.
+    refused(victim + std::string("\0.rfsim", 7));
+#ifdef _WIN32
+    // NTFS reads "name:stream" as an alternate data stream of "name".
+    refused(victim + ":s.rfsim");
+#endif
+    CHECK(fixture.host.saved_paths.empty());
+    CHECK(fixture.host.loaded_paths.empty());
+}

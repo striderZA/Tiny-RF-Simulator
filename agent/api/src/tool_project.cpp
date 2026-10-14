@@ -24,11 +24,21 @@ using Json = nlohmann::json;
 }
 
 // Agent project files are absolute and end in .rfsim. A relative path would resolve against the
-// GUI's working directory, and the extension keeps agent writes to project files.
+// GUI's working directory, and the extension keeps agent writes to project files. The extension
+// check reads the text as given, so the text must also name the file the OS opens: a NUL ends the
+// name at the C library and Win32 boundary, and on Windows a ':' after the root name opens an NTFS
+// alternate data stream of another file.
 fs::path projectFile(const std::string &text, const std::string &hint) {
+    if (std::any_of(text.begin(), text.end(),
+                    [](char c) { return static_cast<unsigned char>(c) < 0x20; }))
+        invalid("/path", "the path contains a byte below 0x20", hint);
     const fs::path path(text);
     if (text.empty() || !path.is_absolute())
         invalid("/path", "expected an absolute path to a .rfsim file", hint);
+#ifdef _WIN32
+    if (path.relative_path().string().find(':') != std::string::npos)
+        invalid("/path", "the path must not contain ':' after its root name", hint);
+#endif
     std::string extension = path.extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

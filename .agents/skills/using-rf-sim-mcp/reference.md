@@ -55,10 +55,10 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 
 ## Projects
 
-- `project_save {path?, overwrite?}` writes the open project to `path`, or to the file it already has when `path` is omitted. An untitled project needs `path`. `path` must be absolute, end in `.rfsim`, not name a folder, and have an existing parent folder (`INVALID_ARGUMENT` at `/path`). A different existing file needs `overwrite: true` (`INVALID_ARGUMENT` at `/overwrite`).
+- `project_save {path?, overwrite?}` writes the open project to `path`, or to the file it already has when `path` is omitted. An untitled project needs `path`. `path` must be absolute, end in `.rfsim`, contain no byte below 0x20 and, on Windows, no `:` after its root name, not name a folder, and have an existing parent folder (`INVALID_ARGUMENT` at `/path`). A different existing file needs `overwrite: true` (`INVALID_ARGUMENT` at `/overwrite`).
 - Success returns `{epoch, path, name}`. The save takes no checkpoint and changes neither `epoch` nor `revision`. The project becomes clean, so `UNSAVED_CHANGES` clears.
 - `project_save` returns `INTERNAL` (`project not saved; ...`) after a failed test-flow restore. Reload the project in RF Simulator. A write failure also returns `INTERNAL`.
-- `project_load {epoch, path}` needs `epoch` from the latest read, or it returns `STALE_EPOCH`. `path` must be an absolute `.rfsim` file: a missing file is `NOT_FOUND`, and a folder is `INVALID_ARGUMENT`.
+- `project_load {epoch, path}` needs `epoch` from the latest read, or it returns `STALE_EPOCH`. `path` must be an absolute `.rfsim` file with no byte below 0x20 and, on Windows, no `:` after its root name (`INVALID_ARGUMENT` at `/path`). A missing file is `NOT_FOUND`, and a folder is `INVALID_ARGUMENT`.
 - `project_load` returns `UNSAVED_CHANGES` without loading anything while the project has unsaved changes. Save first with `project_save`, or ask the user to save or discard the changes. After a test-flow latch, `project_save` is refused too, so ask the user.
 - A file that cannot be parsed leaves the circuit as it was (`INVALID_ARGUMENT` at `/path`). A restore failure that already cleared the circuit returns `INTERNAL` at the new epoch, so call `circuit_get`.
 - Success returns `{epoch, path, name}` at the new epoch. The load clears checkpoints, so `revert` cannot undo it, and the project is clean. Older epochs then return `STALE_EPOCH` with `details.cause` `opened_project`.
