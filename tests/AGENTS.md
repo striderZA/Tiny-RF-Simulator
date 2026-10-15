@@ -42,6 +42,8 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 
 - `ctest --test-dir build -R '^test_flow_boundary$' --output-on-failure`
 - `ctest --test-dir build -R '^test_issue174_parameter_keys$' --output-on-failure`
+- `ctest --test-dir build -R '^test_path_containment$' --output-on-failure` — project path containment and component-library asset checks.
+- `ctest --test-dir build -R '^test_external_project_data$' --output-on-failure` — external RF data save/reload, atomic failure, and MCP result.
 - `ctest --test-dir build -R '^test_sparam_legacy_key$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_api_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`

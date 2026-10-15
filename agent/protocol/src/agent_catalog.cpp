@@ -480,7 +480,17 @@ Json receiverMeasureSuccessSchema() {
         {"epoch", "in_progress", "frequencies_Hz", "output_power_dBm", "iip3_dBm"});
 }
 
-Json projectFileSuccessSchema() {
+Json projectFileSuccessSchema(bool include_copied_data_files = false) {
+    if (include_copied_data_files) {
+        return objectSchema(
+            properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                        {"path", stringSchema("Absolute path of the project file.")},
+                        {"name", stringSchema("Project name, the file stem.")},
+                        {"copied_data_files",
+                         arraySchema(stringSchema("Project-relative RF data file copied during "
+                                                  "this save."))}}),
+            {"epoch", "path", "name", "copied_data_files"});
+    }
     return objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
                                     {"path", stringSchema("Absolute path of the project file.")},
                                     {"name", stringSchema("Project name, the file stem.")}}),
@@ -783,7 +793,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                       {"overwrite",
                        withDefault(booleanSchema("Replace a different existing file."), false)}}),
                  {}, Json{{"path", "C:/Projects/amp-chain.rfsim"}}),
-             projectFileSuccessSchema(), destructiveAnnotations()),
+             projectFileSuccessSchema(true), destructiveAnnotations()),
         tool("project_load", "Load Project",
              "Replace the open circuit with an absolute .rfsim project file. Requires the epoch "
              "from the latest circuit read and no unsaved changes. A successful load advances "

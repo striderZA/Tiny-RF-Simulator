@@ -55,6 +55,8 @@ class IAgentHost {
     // false when the file cannot be written; the previous path and dirty state are kept.
     virtual std::optional<std::string> projectPath() const = 0;
     virtual bool saveProjectFile(const std::string &path) = 0;
+    // Project-relative external RF data files preserved by the most recent successful save.
+    virtual std::vector<std::string> savedProjectDataFiles() const { return {}; }
     virtual AgentProjectLoadResult loadProjectFile(const std::string &path) = 0;
     virtual void recordActivity(const AgentActivity &) = 0;
 };

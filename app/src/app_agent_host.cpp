@@ -142,6 +142,11 @@ std::optional<std::string> AppAgentHost::projectPath() const {
 bool AppAgentHost::saveProjectFile(const std::string &path) {
     return m_hooks.save_project && m_hooks.save_project(path);
 }
+std::vector<std::string> AppAgentHost::savedProjectDataFiles() const {
+    if (m_hooks.saved_project_data_files)
+        return m_hooks.saved_project_data_files();
+    return {};
+}
 
 AgentProjectLoadResult AppAgentHost::loadProjectFile(const std::string &path) {
     if (!m_hooks.load_project)

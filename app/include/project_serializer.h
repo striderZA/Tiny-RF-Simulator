@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 class CircuitRuntime;
 class GraphEditorActions;
@@ -37,7 +38,9 @@ class ProjectSerializer {
     bool fromJson(nlohmann::json root, const ProjectJsonOptions &options,
                   const std::string &source_label);
 
-    bool save(const std::string &path); // false on open/write/flush/close failure (logged)
+    // False on serialization, data-preservation, or write failure (logged); on
+    // success, copied_data_files receives newly copied project-relative files.
+    bool save(const std::string &path, std::vector<std::string> *copied_data_files = nullptr);
     bool load(const std::string &path); // false on file/parse/restoration failure (logged)
     // True when the latest restoration reset project state before returning.
     bool lastLoadReset() const { return m_last_load_reset; }

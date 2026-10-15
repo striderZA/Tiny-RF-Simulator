@@ -106,6 +106,7 @@ void writeProject(const std::filesystem::path &path, const nlohmann::json &compo
 // '..' traversal are neutralized (path cleared, nothing loaded); a contained
 // relative path resolves against the project dir (not the CWD) and loads.
 // ---------------------------------------------------------------------------
+#ifndef TEST_EXTERNAL_PROJECT_DATA_ONLY
 TEST_CASE_METHOD(ImGuiFixture, "Project load neutralizes S-param paths outside the project dir",
                  "[containment][project]") {
     auto base = scratchDir("containment_project_test");
@@ -652,6 +653,7 @@ TEST_CASE("componentDataFilePath resolves contained data files and refuses escap
     CHECK_FALSE(componentDataFilePath(escaping, "s_parameters").has_value());
 }
 
+#endif // !TEST_EXTERNAL_PROJECT_DATA_ONLY
 // ---------------------------------------------------------------------------
 // AMP intercept files (amp_filepath) use the same project-file boundary as
 // S-param files: a path outside the project dir or with '..' is neutralized, a
@@ -680,6 +682,7 @@ nlohmann::json ampComponent(const std::string &amp_filepath) {
 
 } // namespace
 
+#ifndef TEST_EXTERNAL_PROJECT_DATA_ONLY
 TEST_CASE_METHOD(ImGuiFixture, "Project load neutralizes AMP paths outside the project dir",
                  "[containment][project][amp]") {
     auto base = scratchDir("containment_amp_project_test");
@@ -757,3 +760,324 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project AMP paths as re
     }
     std::filesystem::remove_all(base);
 }
+#endif // !TEST_EXTERNAL_PROJECT_DATA_ONLY
+#ifdef TEST_EXTERNAL_PROJECT_DATA_ONLY
+TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external S-param file and reloads its model",
+                 "[containment][project][external]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_sparam_" + tag);
+    const auto external = base.parent_path() / ("external_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9901));
+        REQUIRE(amp != nullptr);
+        amp->setSParamFilepath(external.string());
+        amp->setSParamMode(true);
+        REQUIRE(amp->sparamLoaded());
+        REQUIRE(app.saveProject(project_path.string()));
+        CHECK(app.lastSavedDataFiles().size() == 1);
+        const auto first_save = nlohmann::json::parse(readFile(project_path));
+        const auto first_relative =
+            first_save["components"][0]["params"].value("sparam_filepath", "");
+        REQUIRE_FALSE(first_relative.empty());
+        const auto copied_before_retry = base / first_relative;
+        std::filesystem::remove(copied_before_retry);
+        auto stale_temp = copied_before_retry;
+        stale_temp += ".tmp";
+        {
+            std::ofstream out(stale_temp, std::ios::binary);
+            out << "stale staging file";
+        }
+        REQUIRE(app.saveProject(project_path.string()));
+        CHECK(app.lastSavedDataFiles().size() == 1);
+        CHECK(readFile(stale_temp) == "stale staging file");
+        REQUIRE(app.loadProject(project_path.string()));
+        CHECK(app.testComponents().byType<AmplifierEngine>().front()->sparamLoaded());
+    }
+    const auto saved = nlohmann::json::parse(readFile(project_path));
+    const auto relative = saved["components"][0]["params"].value("sparam_filepath", "");
+    REQUIRE_FALSE(relative.empty());
+    const auto copied = base / relative;
+    CHECK(std::filesystem::exists(copied));
+    CHECK(readFile(copied) == readFile(external));
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external AMP file and reloads its model",
+                 "[containment][project][external][amp]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_amp_" + tag);
+    const auto external = base.parent_path() / ("external_" + tag + ".amp");
+    const auto project_path = base / "project.rfsim";
+    writeAmp(external);
+
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9902));
+        REQUIRE(amp != nullptr);
+        amp->setAmpFilepath(external.string());
+        REQUIRE(amp->ampLoaded());
+        REQUIRE(app.saveProject(project_path.string()));
+        CHECK(app.testComponents().byType<AmplifierEngine>().front()->ampLoaded());
+        CHECK(app.lastSavedDataFiles().size() == 1);
+        REQUIRE(app.loadProject(project_path.string()));
+        CHECK(app.testComponents().byType<AmplifierEngine>().front()->ampLoaded());
+    }
+    const auto saved = nlohmann::json::parse(readFile(project_path));
+    const auto relative = saved["components"][0]["params"].value("amp_filepath", "");
+    REQUIRE_FALSE(relative.empty());
+    const auto copied = base / relative;
+    CHECK(std::filesystem::exists(copied));
+    CHECK(readFile(copied) == readFile(external));
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Failed external data copy preserves the previous project file",
+                 "[containment][project][external][failure]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_failure_" + tag);
+    const auto external = base.parent_path() / ("missing_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+
+    RfSimulatorApp app;
+    app.newProject();
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9903));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    amp->setSParamMode(true);
+    REQUIRE(amp->sparamLoaded());
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+    std::filesystem::remove(external);
+    CHECK_FALSE(app.saveProject(project_path.string()));
+    CHECK(readFile(project_path) == previous);
+    std::filesystem::remove_all(base);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Project save without external data has no data copies",
+                 "[containment][project][external]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_no_external_" + tag);
+    const auto project_path = base / "project.rfsim";
+    RfSimulatorApp app;
+    REQUIRE(app.saveProject(project_path.string()));
+    CHECK(app.lastSavedDataFiles().empty());
+    std::filesystem::remove_all(base);
+}
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project save resolves relative live model paths against the engine CWD",
+                 "[containment][project][external]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_relative_external_" + tag);
+    const auto external = base.parent_path() / ("relative_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+    {
+        std::ofstream decoy(base / external.filename(), std::ios::binary);
+        decoy << "# GHz S MA R 50\n"
+                 "1.0 0.1 0.0 2.0 0.0 0.1 0.0 0.1 0.0\n";
+    }
+
+    struct RestoreCwd {
+        std::filesystem::path path;
+        ~RestoreCwd() {
+            std::error_code ec;
+            std::filesystem::current_path(path, ec);
+        }
+    } restore{std::filesystem::current_path()};
+    std::filesystem::current_path(base.parent_path());
+
+    RfSimulatorApp app;
+    app.newProject();
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9904));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.filename().string());
+    REQUIRE(amp->sparamLoaded());
+    REQUIRE(app.saveProject(project_path.string()));
+    REQUIRE(app.loadProject(project_path.string()));
+    CHECK(app.testComponents().byType<AmplifierEngine>().front()->sparamLoaded());
+
+    const auto saved = nlohmann::json::parse(readFile(project_path));
+    const auto relative = saved["components"][0]["params"].value("sparam_filepath", "");
+    REQUIRE_FALSE(relative.empty());
+    const auto copied = base / relative;
+    CHECK(readFile(copied) == readFile(external));
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+TEST_CASE_METHOD(ImGuiFixture, "Failed project save rolls back earlier external data copies",
+                 "[containment][project][external][failure]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_rollback_" + tag);
+    const auto external = base.parent_path() / ("rollback_" + tag + ".s2p");
+    const auto missing = base.parent_path() / ("missing_" + tag + ".amp");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+
+    RfSimulatorApp app;
+    app.newProject();
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9905));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    amp->setAmpFilepath(missing.string());
+    REQUIRE(amp->sparamLoaded());
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+
+    CHECK_FALSE(app.saveProject(project_path.string()));
+    CHECK(readFile(project_path) == previous);
+    CHECK_FALSE(std::filesystem::exists(base / "rf_data"));
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Project save refuses to overwrite a changed rf_data destination",
+                 "[containment][project][external][collision]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_collision_" + tag);
+    const auto external = base.parent_path() / ("collision_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+
+    RfSimulatorApp app;
+    app.newProject();
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9906));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    REQUIRE(amp->sparamLoaded());
+    REQUIRE(app.saveProject(project_path.string()));
+
+    const auto saved = nlohmann::json::parse(readFile(project_path));
+    const auto relative = saved["components"][0]["params"].value("sparam_filepath", "");
+    REQUIRE_FALSE(relative.empty());
+    const auto copied = base / relative;
+    {
+        std::ofstream out(copied, std::ios::binary | std::ios::trunc);
+        out << "different bytes";
+    }
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+
+    CHECK_FALSE(app.saveProject(project_path.string()));
+    CHECK(readFile(project_path) == previous);
+    CHECK(readFile(copied) == "different bytes");
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+TEST_CASE_METHOD(ImGuiFixture, "Project save rejects symlinked RF data sources and destinations",
+                 "[containment][project][external][symlink]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_symlink_" + tag);
+    const auto external = base.parent_path() / ("symlink_target_" + tag + ".s2p");
+    const auto source_link = base.parent_path() / ("symlink_source_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+    std::error_code ec;
+    std::filesystem::create_symlink(external, source_link, ec);
+    if (ec) {
+        std::filesystem::remove_all(base);
+        std::filesystem::remove(external);
+        SKIP("file symlinks are unavailable: " + ec.message());
+    }
+
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9907));
+        REQUIRE(amp != nullptr);
+        amp->setSParamFilepath(source_link.string());
+        REQUIRE(amp->sparamLoaded());
+        const std::string previous = R"({"previous":"intact"})";
+        {
+            std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+            out << previous;
+        }
+        CHECK_FALSE(app.saveProject(project_path.string()));
+        CHECK(readFile(project_path) == previous);
+    }
+
+    std::filesystem::path copied;
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9908));
+        REQUIRE(amp != nullptr);
+        amp->setSParamFilepath(external.string());
+        REQUIRE(amp->sparamLoaded());
+        REQUIRE(app.saveProject(project_path.string()));
+        const auto saved = nlohmann::json::parse(readFile(project_path));
+        copied = base / saved["components"][0]["params"]["sparam_filepath"].get<std::string>();
+    }
+    std::filesystem::remove(copied, ec);
+    ec.clear();
+    std::filesystem::create_symlink(external, copied, ec);
+    if (ec) {
+        std::filesystem::remove_all(base);
+        std::filesystem::remove(source_link);
+        std::filesystem::remove(external);
+        SKIP("destination file symlinks are unavailable: " + ec.message());
+    }
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9909));
+        REQUIRE(amp != nullptr);
+        amp->setSParamFilepath(external.string());
+        REQUIRE(amp->sparamLoaded());
+        CHECK_FALSE(app.saveProject(project_path.string()));
+    }
+    CHECK(readFile(project_path) == previous);
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(source_link);
+    std::filesystem::remove(external);
+}
+TEST_CASE_METHOD(ImGuiFixture, "Project save refuses an oversized external RF data file",
+                 "[containment][project][external][size]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_external_oversize_" + tag);
+    const auto external = base.parent_path() / ("oversize_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    { std::ofstream out(external, std::ios::binary); }
+    std::error_code ec;
+    std::filesystem::resize_file(external, 256ULL * 1024 * 1024 + 1, ec);
+    REQUIRE_FALSE(ec);
+
+    RfSimulatorApp app;
+    app.newProject();
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9910));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    CHECK_FALSE(amp->sparamLoaded());
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+    CHECK_FALSE(app.saveProject(project_path.string()));
+    CHECK(readFile(project_path) == previous);
+    std::filesystem::remove_all(base);
+    std::filesystem::remove(external);
+}
+#endif // TEST_EXTERNAL_PROJECT_DATA_ONLY

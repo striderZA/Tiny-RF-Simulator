@@ -104,6 +104,59 @@ TEST_CASE_METHOD(ProjectFixture, "project_save writes the open circuit to a .rfs
     const auto saved = nlohmann::json::parse(readText(target));
     CHECK(saved.at("name") == "first");
     CHECK(saved.at("components").size() == 1);
+    CHECK(result.structured.at("copied_data_files").empty());
+}
+
+TEST_CASE_METHOD(ProjectFixture, "project_save reports external RF data copies",
+                 "[agent_app][project]") {
+    const fs::path external =
+        temp_dir.parent_path() / (temp_dir.filename().string() + "_external.s2p");
+    {
+        std::ofstream out(external, std::ios::binary);
+        out << "# GHz S MA R 50\n"
+               "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 100));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    REQUIRE(amp->sparamLoaded());
+
+    const fs::path target = file("external.rfsim");
+    const AgentToolResult result = call("project_save", {{"path", target.string()}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(result.structured.contains("copied_data_files"));
+    REQUIRE(result.structured["copied_data_files"].size() == 1);
+    const fs::path copied = temp_dir / result.structured["copied_data_files"][0].get<std::string>();
+    CHECK(fs::is_regular_file(copied));
+    CHECK(readText(copied) == readText(external));
+    const AgentToolResult reused = call("project_save");
+    REQUIRE_FALSE(reused.is_error);
+    CHECK(reused.structured.at("copied_data_files").empty());
+    fs::remove(external);
+}
+TEST_CASE_METHOD(ProjectFixture, "project_save reports external data copy failures as INTERNAL",
+                 "[agent_app][project][failure]") {
+    const fs::path external =
+        temp_dir.parent_path() / (temp_dir.filename().string() + "_missing.s2p");
+    {
+        std::ofstream out(external, std::ios::binary);
+        out << "# GHz S MA R 50\n"
+               "1.0 0.5 0.0 2.0 90.0 0.1 180.0 0.3 -45.0\n";
+    }
+    auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 101));
+    REQUIRE(amp != nullptr);
+    amp->setSParamFilepath(external.string());
+    REQUIRE(amp->sparamLoaded());
+    fs::remove(external);
+
+    const fs::path target = file("existing.rfsim");
+    const std::string previous = R"({"previous":"intact"})";
+    writeText(target, previous);
+    const AgentToolResult result =
+        call("project_save", {{"path", target.string()}, {"overwrite", true}});
+    REQUIRE(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "INTERNAL");
+    CHECK(readText(target) == previous);
 }
 
 TEST_CASE_METHOD(ProjectFixture,
