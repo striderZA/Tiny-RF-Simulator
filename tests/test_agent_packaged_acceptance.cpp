@@ -223,7 +223,9 @@ class McpProcess {
                     continue;
                 }
                 if (message.at("id") != expected_id)
-                    return std::nullopt;
+                    throw std::runtime_error("MCP response id mismatch: expected id " +
+                                             expected_id.dump() + ", received id " +
+                                             message.at("id").dump());
                 return message;
             }
             line.push_back(byte);
