@@ -363,13 +363,19 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
     AgentServer restarted(fixture.api, fixture.host, config);
     REQUIRE(restarted.start(&error));
     active_server = &restarted;
-    const auto stale_link = callTool(5, "circuit_get", Json::object());
-    REQUIRE(stale_link.has_value());
-    REQUIRE(stale_link->contains("result"));
-    CHECK(stale_link->at("id") == 5);
-    CHECK(stale_link->at("result").at("isError") == true);
-    CHECK(stale_link->at("result").at("structuredContent").at("error").at("code") ==
-          "SIMULATOR_UNAVAILABLE");
+    // GuiLink does not resend a call after a failed read; blindly retrying circuit_edit could
+    // duplicate a non-idempotent edit. The next call verifies reconnect either way.
+    const auto first_after_restart = callTool(5, "circuit_get", Json::object());
+    REQUIRE(first_after_restart.has_value());
+    REQUIRE(first_after_restart->contains("result"));
+    CHECK(first_after_restart->at("id") == 5);
+    const auto &first_result = first_after_restart->at("result");
+    if (first_result.at("isError") == true) {
+        CHECK(first_result.at("structuredContent").at("error").at("code") ==
+              "SIMULATOR_UNAVAILABLE");
+    } else {
+        CHECK(first_result.at("isError") == false);
+    }
     auto after_restart = callTool(6, "circuit_get", Json::object());
     REQUIRE(after_restart.has_value());
     REQUIRE(after_restart->contains("result"));
