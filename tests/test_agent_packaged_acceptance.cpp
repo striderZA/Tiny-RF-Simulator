@@ -10,9 +10,11 @@
 #include <cerrno>
 #include <csignal>
 #include <poll.h>
+#include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+extern char **environ;
 #endif
 
 #include "agent_api_test_support.h"
@@ -22,6 +24,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -97,28 +100,53 @@ class McpProcess {
         m_stdin = parent_stdin_write;
         m_stdout = parent_stdout_read;
 #else
+        const std::string executable = fs::path(RFSIM_MCP_EXECUTABLE).string();
+        const std::string endpoint_string = endpoint.string();
+        char endpoint_option[] = "--endpoint";
+        std::array<char *, 4> arguments{const_cast<char *>(executable.c_str()), endpoint_option,
+                                        const_cast<char *>(endpoint_string.c_str()), nullptr};
+
         int input[2];
-        int output[2];
-        if (pipe(input) != 0 || pipe(output) != 0)
+        if (pipe(input) != 0)
             throw std::runtime_error("pipe failed");
-        m_pid = fork();
-        if (m_pid < 0)
-            throw std::runtime_error("fork failed");
-        if (m_pid == 0) {
-            (void)dup2(input[0], STDIN_FILENO);
-            (void)dup2(output[1], STDOUT_FILENO);
+        int output[2];
+        if (pipe(output) != 0) {
+            close(input[0]);
+            close(input[1]);
+            throw std::runtime_error("pipe failed");
+        }
+
+        posix_spawn_file_actions_t actions;
+        int spawn_error = posix_spawn_file_actions_init(&actions);
+        if (spawn_error != 0) {
             close(input[0]);
             close(input[1]);
             close(output[0]);
             close(output[1]);
-            const std::string exe = fs::path(RFSIM_MCP_EXECUTABLE).string();
-            const std::string endpoint_string = endpoint.string();
-            execl(exe.c_str(), exe.c_str(), "--endpoint", endpoint_string.c_str(),
-                  static_cast<char *>(nullptr));
-            _exit(127);
+            throw std::runtime_error("posix_spawn file actions initialization failed");
         }
+        spawn_error = posix_spawn_file_actions_adddup2(&actions, input[0], STDIN_FILENO);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn_file_actions_addclose(&actions, input[0]);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn_file_actions_addclose(&actions, input[1]);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn_file_actions_addclose(&actions, output[0]);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn_file_actions_addclose(&actions, output[1]);
+        if (spawn_error == 0)
+            spawn_error = posix_spawn(&m_pid, executable.c_str(), &actions, nullptr,
+                                      arguments.data(), environ);
+        posix_spawn_file_actions_destroy(&actions);
         close(input[0]);
         close(output[1]);
+        if (spawn_error != 0) {
+            close(input[1]);
+            close(output[0]);
+            throw std::runtime_error("posix_spawn failed to start rf-sim-mcp");
+        }
         m_stdin = input[1];
         m_stdout = output[0];
 #endif
@@ -152,7 +180,8 @@ class McpProcess {
     }
 
     template <typename Pump>
-    std::optional<Json> receive(Pump pump, std::chrono::seconds timeout = 5s) {
+    std::optional<Json> receive(const Json &expected_id, Pump pump,
+                                std::chrono::seconds timeout = 5s) {
         std::string line;
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline) {
@@ -183,17 +212,24 @@ class McpProcess {
                 return std::nullopt;
 #endif
             if (byte == '\n') {
+                Json message;
                 try {
-                    return Json::parse(line);
+                    message = Json::parse(line);
                 } catch (const Json::exception &) {
                     return std::nullopt;
                 }
+                if (!message.is_object() || !message.contains("id")) {
+                    line.clear();
+                    continue;
+                }
+                if (message.at("id") != expected_id)
+                    return std::nullopt;
+                return message;
             }
             line.push_back(byte);
         }
         return std::nullopt;
     }
-
     void stop() noexcept {
 #ifdef _WIN32
         if (m_stdin != nullptr) {
@@ -278,15 +314,17 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
                                 {{"protocolVersion", "2025-06-18"},
                                  {"capabilities", Json::object()},
                                  {"clientInfo", {{"name", "acceptance"}, {"version", "1"}}}})));
-    const auto initialized = bridge.receive(pump);
+    const auto initialized = bridge.receive(1, pump);
     REQUIRE(initialized.has_value());
     REQUIRE(initialized->contains("result"));
+    CHECK(initialized->at("id") == 1);
     CHECK(initialized->at("result").at("protocolVersion") == "2025-06-18");
 
     REQUIRE(bridge.send(request(2, "tools/list")));
-    const auto listed = bridge.receive(pump);
+    const auto listed = bridge.receive(2, pump);
     REQUIRE(listed.has_value());
     REQUIRE(listed->contains("result"));
+    CHECK(listed->at("id") == 2);
     std::vector<std::string> names;
     for (const auto &tool : listed->at("result").at("tools"))
         names.push_back(tool.at("name").get<std::string>());
@@ -297,7 +335,7 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
         if (!bridge.send(request(id, "tools/call",
                                  {{"name", std::move(name)}, {"arguments", std::move(arguments)}})))
             return std::nullopt;
-        return bridge.receive(pump);
+        return bridge.receive(id, pump);
     };
     auto edited = callTool(
         3, "circuit_edit",
@@ -306,12 +344,14 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
     REQUIRE(edited.has_value());
     REQUIRE(edited->contains("result"));
     REQUIRE(edited->at("result").at("structuredContent").at("refs").contains("from_mcp"));
+    CHECK(edited->at("id") == 3);
     const int component_id =
         edited->at("result").at("structuredContent").at("refs").at("from_mcp").get<int>();
 
     auto read_back = callTool(4, "circuit_get", Json::object());
     REQUIRE(read_back.has_value());
     REQUIRE(read_back->contains("result"));
+    CHECK(read_back->at("id") == 4);
     const auto &components = read_back->at("result").at("structuredContent").at("components");
     REQUIRE(components.size() == 1);
     CHECK(components[0].at("id") == component_id);
@@ -324,12 +364,14 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
     const auto stale_link = callTool(5, "circuit_get", Json::object());
     REQUIRE(stale_link.has_value());
     REQUIRE(stale_link->contains("result"));
+    CHECK(stale_link->at("id") == 5);
     CHECK(stale_link->at("result").at("isError") == true);
     CHECK(stale_link->at("result").at("structuredContent").at("error").at("code") ==
           "SIMULATOR_UNAVAILABLE");
     auto after_restart = callTool(6, "circuit_get", Json::object());
     REQUIRE(after_restart.has_value());
     REQUIRE(after_restart->contains("result"));
+    CHECK(after_restart->at("id") == 6);
     const auto &restarted_components =
         after_restart->at("result").at("structuredContent").at("components");
     REQUIRE(restarted_components.size() == 1);
