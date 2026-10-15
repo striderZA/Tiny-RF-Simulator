@@ -28,6 +28,8 @@ std::string_view agentErrorCodeName(AgentErrorCode code) {
         return "UNSAVED_CHANGES";
     case AgentErrorCode::Busy:
         return "BUSY";
+    case AgentErrorCode::Overloaded:
+        return "OVERLOADED";
     case AgentErrorCode::SimulatorUnavailable:
         return "SIMULATOR_UNAVAILABLE";
     case AgentErrorCode::VersionMismatch:

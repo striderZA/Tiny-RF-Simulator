@@ -6,10 +6,13 @@
 #include "mcp_bridge_detail.h"
 #include "mcp_session.h"
 
+#include "agent_errors.h"
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <exception>
@@ -21,6 +24,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace {
 using Json = nlohmann::json;
@@ -56,12 +60,93 @@ std::string escapeLogField(std::string_view value) {
     return escaped;
 }
 
+constexpr std::size_t kMaxQueuedBridgeItems = 64;
+constexpr std::size_t kMaxQueuedBridgePayloadBytes = 8 * 1024 * 1024;
+// Reserve event entries for one completion and the two thread-done notifications.
+constexpr std::size_t kMaxQueuedBridgeDataEvents = kMaxQueuedBridgeItems - 3;
+// Reserve 3 MiB for one completed call payload while keeping the full event queue at 8 MiB.
+constexpr std::size_t kMaxQueuedBridgeDataBytes = 5 * 1024 * 1024;
+// Covers 61 queued data lines, 64 queued calls, one active call, and admission in progress.
+constexpr std::size_t kMaxTrackedBridgeCalls = 128;
+constexpr std::size_t kMaxTrackedBridgeCallIdBytes = 16 * 1024 * 1024;
+
+AgentToolResult overloadedResult() {
+    return agentErrorResult(AgentError{AgentErrorCode::Overloaded, "Agent request queue is full"},
+                            std::nullopt);
+}
+
+std::size_t callPayloadBytes(const McpToolCall &call,
+                             const std::pair<std::string, std::string> &client_info) {
+    return call.tool.size() + client_info.first.size() + client_info.second.size() +
+           call.arguments.dump().size() + 2 * call.id.dump().size();
+}
+
+std::optional<Json> overloadedRpcReply(std::string_view line) {
+    try {
+        const Json request = Json::parse(line);
+        if (!request.is_object() || !request.contains("id"))
+            return std::nullopt;
+        const Json &id = request["id"];
+        if (!id.is_string() && !id.is_number_integer())
+            return std::nullopt;
+        return Json{{"jsonrpc", "2.0"},
+                    {"id", id},
+                    {"error",
+                     {{"code", -32000},
+                      {"message", "Agent request queue is full"},
+                      {"data", {{"code", "OVERLOADED"}}}}}};
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<Json> mcpToolCallId(std::string_view line) {
+    try {
+        const Json request = Json::parse(line);
+        if (!agentJsonDepthWithin(request) || !request.is_object() || !request.contains("id") ||
+            !request["id"].is_string() && !request["id"].is_number_integer() ||
+            !request.contains("method") || request["method"] != "tools/call")
+            return std::nullopt;
+        return request["id"];
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+std::optional<Json> mcpCancellationId(std::string_view line) {
+    try {
+        const auto request = nlohmann::ordered_json::parse(line);
+        if (!agentJsonDepthWithin(request) || !request.is_object() || request.contains("id") ||
+            !request.contains("jsonrpc") || request["jsonrpc"] != "2.0" ||
+            !request.contains("method") || request["method"] != "notifications/cancelled")
+            return std::nullopt;
+        if (request.contains("params") && request["params"].is_object() &&
+            request["params"].contains("_meta") && !request["params"]["_meta"].is_object())
+            return std::nullopt;
+        const auto params = request.find("params");
+        if (params == request.end() || !params->is_object() || !params->contains("requestId"))
+            return std::nullopt;
+        const auto &id = (*params)["requestId"];
+        if (!id.is_string() && !id.is_number_integer())
+            return std::nullopt;
+        return Json(id);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+struct CancellationToken {
+    Json id;
+    std::atomic<bool> cancelled{false};
+};
+
 struct BridgeEvent {
     enum class Kind { Line, Oversized, ReaderDone, ToolCallDone, CallerDone } kind;
     std::string line;
     std::uint64_t ticket = 0;
     McpToolCall call;
     AgentToolResult result;
+    std::shared_ptr<CancellationToken> cancellation;
+    std::size_t payload_bytes = 0;
     bool input_failed = false;
 };
 
@@ -69,11 +154,11 @@ struct CallTask {
     std::uint64_t ticket;
     McpToolCall call;
     std::pair<std::string, std::string> client_info;
+    std::size_t payload_bytes = 0;
 };
 
 struct PendingCall {
-    Json id;
-    bool cancelled = false;
+    std::shared_ptr<CancellationToken> cancellation;
 };
 
 std::filesystem::path endpointFile(const BridgeOptions &options) {
@@ -141,24 +226,83 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
     McpServerIdentity identity;
     identity.version = options.server_version;
 
+    std::mutex cancellation_mutex;
+    std::vector<std::shared_ptr<CancellationToken>> cancellation_tokens;
+    std::size_t cancellation_id_bytes = 0;
+    const auto trackCall = [&](Json id) -> std::shared_ptr<CancellationToken> {
+        const std::size_t payload_bytes = id.dump().size();
+        std::lock_guard lock(cancellation_mutex);
+        if (cancellation_tokens.size() >= kMaxTrackedBridgeCalls ||
+            payload_bytes > kMaxTrackedBridgeCallIdBytes - cancellation_id_bytes)
+            return {};
+        auto token = std::make_shared<CancellationToken>();
+        token->id = std::move(id);
+        cancellation_tokens.push_back(token);
+        cancellation_id_bytes += payload_bytes;
+        return token;
+    };
+    const auto untrackCall = [&](const std::shared_ptr<CancellationToken> &token) {
+        if (!token)
+            return;
+        std::lock_guard lock(cancellation_mutex);
+        const auto found = std::find(cancellation_tokens.begin(), cancellation_tokens.end(), token);
+        if (found != cancellation_tokens.end()) {
+            cancellation_id_bytes -= (*found)->id.dump().size();
+            cancellation_tokens.erase(found);
+        }
+    };
+    const auto cancelMatchingCalls = [&](const Json &id) {
+        std::lock_guard lock(cancellation_mutex);
+        for (const auto &token : cancellation_tokens) {
+            if (token->id == id)
+                token->cancelled = true;
+        }
+    };
+
     std::mutex event_mutex;
     std::condition_variable event_ready;
+    std::condition_variable event_space;
     std::deque<BridgeEvent> events;
-    const auto post_event = [&](BridgeEvent event) {
-        {
-            std::lock_guard lock(event_mutex);
-            events.push_back(std::move(event));
+    std::size_t event_payload_bytes = 0;
+    std::size_t event_data_payload_bytes = 0;
+    std::size_t event_data_count = 0;
+    const auto post_event = [&](BridgeEvent &&event) {
+        const bool data_event =
+            event.kind == BridgeEvent::Kind::Line || event.kind == BridgeEvent::Kind::Oversized;
+        std::unique_lock lock(event_mutex);
+        if (data_event) {
+            if (events.size() >= kMaxQueuedBridgeItems - 3 ||
+                event_data_count >= kMaxQueuedBridgeDataEvents ||
+                event.payload_bytes > kMaxQueuedBridgeDataBytes - event_data_payload_bytes ||
+                event.payload_bytes > kMaxQueuedBridgePayloadBytes - event_payload_bytes)
+                return false;
+        } else if (event.kind == BridgeEvent::Kind::ToolCallDone) {
+            event_space.wait(lock, [&] {
+                return events.size() < kMaxQueuedBridgeItems - 2 &&
+                       event.payload_bytes <= kMaxQueuedBridgePayloadBytes - event_payload_bytes;
+            });
+        } else if (events.size() >= kMaxQueuedBridgeItems) {
+            return false;
         }
+        event_payload_bytes += event.payload_bytes;
+        if (data_event) {
+            event_data_payload_bytes += event.payload_bytes;
+            ++event_data_count;
+        }
+        events.push_back(std::move(event));
+        lock.unlock();
         event_ready.notify_one();
+        return true;
     };
 
     std::mutex call_mutex;
     std::condition_variable call_ready;
     std::deque<CallTask> calls;
+    std::size_t call_payload_bytes = 0;
     bool finish_calls = false;
 
     std::mutex writer_mutex;
-    bool output_failed = false;
+    std::atomic<bool> output_failed{false};
     const auto write_reply = [&](const Json &reply) {
         std::lock_guard lock(writer_mutex);
         try {
@@ -194,7 +338,14 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 event_ready.wait(lock, [&] { return !events.empty(); });
                 event = std::move(events.front());
                 events.pop_front();
+                event_payload_bytes -= event.payload_bytes;
+                if (event.kind == BridgeEvent::Kind::Line ||
+                    event.kind == BridgeEvent::Kind::Oversized) {
+                    event_data_payload_bytes -= event.payload_bytes;
+                    --event_data_count;
+                }
             }
+            event_space.notify_one();
 
             switch (event.kind) {
             case BridgeEvent::Kind::Line: {
@@ -209,24 +360,36 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                         client_logged = true;
                     }
                 }
-                for (const auto &reply : step.replies)
-                    write_reply(reply);
-                if (step.cancel_id) {
-                    for (auto &[ticket, pending] : pending_calls) {
-                        (void)ticket;
-                        if (pending.id == *step.cancel_id)
-                            pending.cancelled = true;
-                    }
+                if (!event.cancellation || !event.cancellation->cancelled) {
+                    for (const auto &reply : step.replies)
+                        write_reply(reply);
                 }
                 if (step.call) {
-                    const std::uint64_t ticket = next_ticket++;
-                    pending_calls.emplace(ticket, PendingCall{step.call->id, false});
-                    CallTask task{ticket, std::move(*step.call), session.clientInfo()};
+                    McpToolCall call = std::move(*step.call);
+                    const auto client_info = session.clientInfo();
+                    const std::size_t payload_bytes = callPayloadBytes(call, client_info);
+                    const auto cancellation = event.cancellation;
+                    bool queued = false;
                     {
                         std::lock_guard lock(call_mutex);
-                        calls.push_back(std::move(task));
+                        if (cancellation && calls.size() < kMaxQueuedBridgeItems &&
+                            payload_bytes <= kMaxQueuedBridgePayloadBytes - call_payload_bytes) {
+                            const std::uint64_t ticket = next_ticket++;
+                            pending_calls.emplace(ticket, PendingCall{cancellation});
+                            calls.push_back({ticket, std::move(call), client_info, payload_bytes});
+                            call_payload_bytes += payload_bytes;
+                            queued = true;
+                        }
                     }
-                    call_ready.notify_one();
+                    if (queued) {
+                        call_ready.notify_one();
+                    } else {
+                        if (!cancellation || !cancellation->cancelled)
+                            write_reply(session.toolCallResponse(call, overloadedResult()));
+                        untrackCall(cancellation);
+                    }
+                } else {
+                    untrackCall(event.cancellation);
                 }
                 break;
             }
@@ -250,8 +413,9 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
             case BridgeEvent::Kind::ToolCallDone: {
                 const auto pending = pending_calls.find(event.ticket);
                 if (pending != pending_calls.end()) {
-                    if (!pending->second.cancelled)
+                    if (!pending->second.cancellation || !pending->second.cancellation->cancelled)
                         write_reply(session.toolCallResponse(event.call, event.result));
+                    untrackCall(pending->second.cancellation);
                     pending_calls.erase(pending);
                 }
                 break;
@@ -278,6 +442,7 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
                 if (calls.empty() && finish_calls)
                     break;
                 task = std::move(calls.front());
+                call_payload_bytes -= task.payload_bytes;
                 calls.pop_front();
             }
 
@@ -315,9 +480,22 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
             completed.ticket = task.ticket;
             completed.call = std::move(task.call);
             completed.result = std::move(result);
-            post_event(std::move(completed));
+            std::size_t result_bytes = 0;
+            try {
+                result_bytes = completed.result.structured.dump().size();
+            } catch (...) {
+                completed.result = mcp_bridge_detail::internalFailureResult();
+                result_bytes = completed.result.structured.dump().size();
+            }
+            completed.payload_bytes = callPayloadBytes(completed.call, {}) + result_bytes;
+            if (result_bytes > 1024 * 1024 || completed.payload_bytes > 3 * 1024 * 1024) {
+                completed.result = mcp_bridge_detail::internalFailureResult();
+                completed.payload_bytes = callPayloadBytes(completed.call, {}) +
+                                          completed.result.structured.dump().size();
+            }
+            (void)post_event(std::move(completed));
         }
-        post_event(BridgeEvent{BridgeEvent::Kind::CallerDone});
+        (void)post_event(BridgeEvent{BridgeEvent::Kind::CallerDone});
     });
 
     std::thread reader_thread([&] {
@@ -327,12 +505,41 @@ int runBridge(std::istream &in, std::ostream &out, std::ostream &err,
         bool discarding_oversized = false;
         std::size_t line_bytes = 0;
         const auto queue_frame = [&](AgentLineReader::Next next) {
+            BridgeEvent event{BridgeEvent::Kind::Line};
             if (next == AgentLineReader::Next::Line) {
-                BridgeEvent event{BridgeEvent::Kind::Line};
                 event.line = std::move(line);
-                post_event(std::move(event));
+                event.payload_bytes = event.line.size();
+                if (const auto id = mcpCancellationId(event.line))
+                    cancelMatchingCalls(*id);
+                if (const auto id = mcpToolCallId(event.line)) {
+                    event.cancellation = trackCall(*id);
+                    if (!event.cancellation) {
+                        if (const auto reply = overloadedRpcReply(event.line))
+                            write_reply(*reply);
+                        return;
+                    }
+                }
             } else if (next == AgentLineReader::Next::Oversized) {
-                post_event(BridgeEvent{BridgeEvent::Kind::Oversized});
+                event.kind = BridgeEvent::Kind::Oversized;
+            } else {
+                return;
+            }
+            if (post_event(std::move(event)))
+                return;
+            if (event.cancellation)
+                untrackCall(event.cancellation);
+            if (next == AgentLineReader::Next::Line) {
+                if (!mcpCancellationId(event.line)) {
+                    if (const auto reply = overloadedRpcReply(event.line))
+                        write_reply(*reply);
+                }
+            } else {
+                write_reply(Json{{"jsonrpc", "2.0"},
+                                 {"id", nullptr},
+                                 {"error",
+                                  {{"code", -32000},
+                                   {"message", "Agent event queue is full"},
+                                   {"data", {{"code", "OVERLOADED"}}}}}});
             }
         };
         try {

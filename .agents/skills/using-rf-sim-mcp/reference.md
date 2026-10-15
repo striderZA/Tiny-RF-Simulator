@@ -40,6 +40,7 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 |---|---|
 | SIMULATOR_UNAVAILABLE | RF Simulator is not reachable. Ask the user to open it and turn on View > Agent > Agent Server, then retry. |
 | BUSY | "showing a dialog": ask the user to close it, then retry. "another agent is connected": RF Simulator admits one agent client; ask the user to stop the other agent. |
+| OVERLOADED | An MCP bridge or GUI request queue reached its count or payload-byte bound. Retry after queued work drains. Event-queue rejection is a JSON-RPC error (`error.data.code`); bridge call-queue and GUI inbox rejection are MCP tool results (`result.structuredContent.error.code`). Each echoes the request id when present. |
 | VERSION_MISMATCH | Bridge and GUI catalog versions differ. Ask the user to install the same release of both. |
 | STALE_EPOCH | The project was replaced. `details.cause` is `new_project`, `opened_project`, `tutorial`, or `reverted`; `details.undone` lists reverted edits; `details.epoch` is current. Call `circuit_get` and re-plan. |
 | NOT_FOUND | Unknown component, output port, or `ref`, or an unconnected input for `disconnect`. Re-read. |

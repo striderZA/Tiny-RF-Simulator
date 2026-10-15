@@ -18,6 +18,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -501,6 +503,107 @@ TEST_CASE("modal calls park and time out with the exact BUSY response", "[agent_
     server.stop();
 }
 
+TEST_CASE("AgentServer bounds queued calls by count and frees capacity after pump",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+
+    for (int id = 1; id <= 64; ++id) {
+        REQUIRE(client->sendRawLine(nlohmann::json{
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"method", "call"},
+            {"params", {{"tool", "queued"}, {"arguments", nlohmann::json::object()}}}}
+                                        .dump()));
+    }
+    awaitQueuedCalls(*client);
+    REQUIRE(client->sendRawLine(
+        R"({"jsonrpc":"2.0","id":"over-count","method":"call","params":{"tool":"extra","arguments":{}}})"));
+    const auto rejected = receiveUntil(*client);
+    REQUIRE(rejected.has_value());
+    CHECK(rejected->at("id") == "over-count");
+    CHECK(rejected->at("error").at("data").at("code") == "OVERLOADED");
+
+    server.pump();
+    REQUIRE(client->sendRawLine(
+        R"({"jsonrpc":"2.0","id":"after-pump","method":"call","params":{"tool":"next","arguments":{}}})"));
+    REQUIRE(client->sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
+    bool barrier_seen = false;
+    for (int reply_count = 0; reply_count < 70 && !barrier_seen; ++reply_count) {
+        const auto response = receiveUntil(*client);
+        REQUIRE(response.has_value());
+        barrier_seen = response->value("id", nlohmann::json()) == 99;
+    }
+    REQUIRE(barrier_seen);
+    server.pump();
+    REQUIRE_FALSE(executor.calls.empty());
+    CHECK(executor.calls.back() == "next");
+    server.stop();
+}
+
+TEST_CASE("AgentServer bounds queued call payload bytes", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+
+    const std::string payload(950 * 1024, 'x');
+    for (int id = 1; id <= 8; ++id) {
+        const nlohmann::json request{
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"method", "call"},
+            {"params", {{"tool", "queued"}, {"arguments", {{"payload", payload}}}}}};
+        const std::string line = request.dump();
+        REQUIRE(line.size() < kAgentMaxLineBytes);
+        REQUIRE(client->sendRawLine(line));
+    }
+    awaitQueuedCalls(*client);
+    REQUIRE(client->sendRawLine(
+        nlohmann::json{{"jsonrpc", "2.0"},
+                       {"id", "over-bytes"},
+                       {"method", "call"},
+                       {"params", {{"tool", "extra"}, {"arguments", {{"payload", payload}}}}}}
+            .dump()));
+    const auto rejected = receiveUntil(*client);
+    REQUIRE(rejected.has_value());
+    CHECK(rejected->at("id") == "over-bytes");
+    CHECK(rejected->at("error").at("data").at("code") == "OVERLOADED");
+    server.stop();
+}
+
+TEST_CASE("AgentServer drains queued calls on EOF before completing shutdown", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+    REQUIRE(client->call("queued-before-eof"));
+    awaitQueuedCalls(*client);
+    client->close();
+    server.pump();
+    CHECK((executor.calls == std::vector<std::string>{"queued-before-eof"}));
+    server.stop();
+}
+
 TEST_CASE("stop fails queued calls with SIMULATOR_UNAVAILABLE", "[agent_server]") {
     ScratchDirectory scratch;
     TestExecutor executor;
@@ -705,6 +808,34 @@ TEST_CASE("A call queued behind a long call still runs while the dialog stays cl
     REQUIRE(second_reply->contains("result"));
     CHECK(second_reply->at("result").at("is_error") == false);
     server.stop();
+}
+
+TEST_CASE("AgentServer submit rejects overload immediately and releases slots after pumping",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+    for (int index = 0; index < 64; ++index)
+        server.submit(AgentCall{.tool = "queued"}, {});
+
+    bool rejected = false;
+    server.submit(AgentCall{.tool = "overflow"}, [&](const AgentToolResult &result) {
+        rejected = result.is_error && result.structured.at("error").at("code") == "OVERLOADED";
+    });
+    CHECK(rejected);
+
+    server.pump();
+    CHECK(executor.calls.size() == 64);
+    bool resumed = false;
+    server.submit(AgentCall{.tool = "after-pump"},
+                  [&](const AgentToolResult &result) { resumed = !result.is_error; });
+    server.pump();
+    CHECK(resumed);
+    REQUIRE_FALSE(executor.calls.empty());
+    CHECK(executor.calls.back() == "after-pump");
 }
 
 TEST_CASE("Deferred calls yield across pumps and keep later calls in FIFO order",

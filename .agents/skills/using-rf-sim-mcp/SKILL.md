@@ -1,6 +1,6 @@
 ---
 name: using-rf-sim-mcp
-description: Use when reading or editing an RF Simulator project through the rf-sim MCP tools, saving or loading project files, running port measurements or network-analyzer sweeps, or when a call returns STALE_EPOCH, LINK_REJECTED, PARAM_REJECTED, UNSAVED_CHANGES, BUSY, or SIMULATOR_UNAVAILABLE.
+description: Use when reading or editing an RF Simulator project through the rf-sim MCP tools, saving or loading project files, running port measurements or network-analyzer sweeps, or when a call returns STALE_EPOCH, LINK_REJECTED, PARAM_REJECTED, UNSAVED_CHANGES, BUSY, OVERLOADED, or SIMULATOR_UNAVAILABLE.
 ---
 
 # Using the rf-sim MCP server
@@ -46,4 +46,4 @@ Tools act on the project open in the user's RF Simulator window. Argument shapes
 
 ## Errors
 
-`SIMULATOR_UNAVAILABLE`, `BUSY`, and `UNSAVED_CHANGES` need the user. `STALE_EPOCH` needs `circuit_get`. `NOT_FOUND` and `INVALID_ARGUMENT` need a re-read and a fix to the named argument.
+`SIMULATOR_UNAVAILABLE`, `BUSY`, and `UNSAVED_CHANGES` need the user. `OVERLOADED` means an agent request queue is full; retry after queued work drains. `STALE_EPOCH` needs `circuit_get`. `NOT_FOUND` and `INVALID_ARGUMENT` need a re-read and a fix to the named argument.

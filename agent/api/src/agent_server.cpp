@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -29,6 +30,22 @@ using AgentJson = nlohmann::json;
 using OrderedJson = nlohmann::ordered_json;
 using SteadyClock = std::chrono::steady_clock;
 using TimePoint = SteadyClock::time_point;
+
+constexpr std::size_t kMaxQueuedAgentCalls = 64;
+constexpr std::size_t kMaxQueuedAgentCallBytes = 8 * 1024 * 1024;
+
+std::size_t agentCallPayloadBytes(const AgentCall &call) {
+    return call.tool.size() + call.client.size() + call.arguments.dump().size();
+}
+
+AgentToolResult overloadedResult(std::optional<std::uint64_t> epoch) {
+    return agentErrorResult(AgentError{AgentErrorCode::Overloaded, "Agent request queue is full"},
+                            epoch);
+}
+
+bool queueCapacityAvailable(std::size_t count, std::size_t bytes, std::size_t payload_bytes) {
+    return count < kMaxQueuedAgentCalls && payload_bytes <= kMaxQueuedAgentCallBytes - bytes;
+}
 
 bool validRpcId(const OrderedJson &id) { return id.is_string() || id.is_number(); }
 bool validRpcId(const AgentJson &id) { return id.is_string() || id.is_number(); }
@@ -119,6 +136,7 @@ struct AgentServer::Impl {
         AgentJson id = nullptr;
         std::optional<TimePoint> parked_since;
         std::unique_ptr<IAgentCallTask> task;
+        std::size_t payload_bytes = 0;
     };
 
     struct OutgoingResponse {
@@ -142,6 +160,7 @@ struct AgentServer::Impl {
     std::mutex lifecycle_mutex;
     std::mutex pump_mutex;
     std::deque<PendingCall> inbox;
+    std::size_t inbox_payload_bytes = 0;
     std::optional<PendingCall> active_call;
     std::deque<OutgoingResponse> outbox;
     std::thread listener_thread;
@@ -357,6 +376,7 @@ struct AgentServer::Impl {
             }
             while (!inbox.empty()) {
                 PendingCall pending = std::move(inbox.front());
+                inbox_payload_bytes -= pending.payload_bytes;
                 inbox.pop_front();
                 AgentToolResult result = unavailableResultLocked();
                 if (pending.has_request) {
@@ -392,24 +412,42 @@ struct AgentServer::Impl {
             if (stopping) {
                 rejected = unavailableResultLocked();
             } else {
-                inbox.push_back(
-                    {std::move(call), std::move(done), false, 0, nullptr, std::nullopt});
-                setStatusFromWorkLocked();
+                const std::size_t payload_bytes = agentCallPayloadBytes(call);
+                if (!queueCapacityAvailable(inbox.size(), inbox_payload_bytes, payload_bytes)) {
+                    rejected = ::overloadedResult(epochSnapshotLocked());
+                } else {
+                    inbox_payload_bytes += payload_bytes;
+                    inbox.push_back({std::move(call), std::move(done), false, 0, nullptr,
+                                     std::nullopt, nullptr, payload_bytes});
+                    setStatusFromWorkLocked();
+                }
             }
         }
         if (rejected)
             invokeCompletion(done, *rejected);
     }
 
-    void enqueueNetworkCall(AgentCall call, std::uint64_t session, AgentJson id) {
+    bool enqueueNetworkCall(AgentCall call, std::uint64_t session, AgentJson id) {
         std::lock_guard lock(mutex);
         if (stopping) {
             AgentToolResult result = unavailableResultLocked();
             outbox.push_back(responseForCall(session, id, result, current_epoch));
-            return;
+            return true;
         }
-        inbox.push_back({std::move(call), {}, true, session, std::move(id), std::nullopt});
+        const std::size_t payload_bytes = agentCallPayloadBytes(call) + id.dump().size();
+        if (!queueCapacityAvailable(inbox.size(), inbox_payload_bytes, payload_bytes))
+            return false;
+        inbox_payload_bytes += payload_bytes;
+        inbox.push_back({std::move(call),
+                         {},
+                         true,
+                         session,
+                         std::move(id),
+                         std::nullopt,
+                         nullptr,
+                         payload_bytes});
         setStatusFromWorkLocked();
+        return true;
     }
 
     OutgoingResponse responseForCall(std::uint64_t session, const AgentJson &id,
@@ -551,6 +589,7 @@ struct AgentServer::Impl {
                         if (inbox.empty() || stopping)
                             break;
                         pending = std::move(inbox.front());
+                        inbox_payload_bytes -= pending.payload_bytes;
                         inbox.pop_front();
                     }
                     AgentToolResult result =
@@ -586,6 +625,7 @@ struct AgentServer::Impl {
                         parked = true;
                     } else {
                         pending = std::move(front);
+                        inbox_payload_bytes -= pending.payload_bytes;
                         inbox.pop_front();
                         if (!timed_out) {
                             execution_active = true;
@@ -914,7 +954,10 @@ struct AgentServer::Impl {
         call.tool = params["tool"].get<std::string>();
         call.arguments = params["arguments"];
         call.client = client_name;
-        enqueueNetworkCall(std::move(call), session, id);
+        if (!enqueueNetworkCall(std::move(call), session, id)) {
+            const AgentJson overloaded = rpcError(id, "OVERLOADED", "Agent request queue is full");
+            return writeAgentMessage(channel, overloaded);
+        }
         return true;
     }
 

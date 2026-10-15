@@ -20,6 +20,7 @@ enum class AgentErrorCode {
     NoMeasurement,
     UnsavedChanges,
     Busy,
+    Overloaded,
     SimulatorUnavailable,
     VersionMismatch,
     Internal,
