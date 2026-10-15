@@ -92,6 +92,13 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+# Rewire pass characterization and scaling benchmark; standalone for the
+# MinGW-w64 registration ceiling (see tests/AGENTS.md).
+add_standalone_test(test_node_graph_rewire
+    SOURCES test_node_graph_rewire.cpp
+    LIBS simulator::combiner_engine simulator::node_graph_engine
+)
+
 # Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
 # Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
 add_standalone_test(test_sparam_legacy_key

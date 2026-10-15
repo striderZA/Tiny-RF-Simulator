@@ -47,6 +47,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
+- `ctest --test-dir build -R '^test_node_graph_rewire$' --output-on-failure` covers shared rewire characterization and scaling; its standalone target is required by the MinGW test-registration ceiling.
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit
 - `ctest --test-dir build -j8` must also pass with zero failures; start it with a clean `extensions/` and never run a second `ctest` against the same build tree at the same time (see Local Contracts)
 
