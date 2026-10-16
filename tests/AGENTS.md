@@ -25,7 +25,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - `test_agent_api` stays app/UI-free: its `ApiFixture` uses `CircuitRuntime`, `EditorCommands`, analyzer engines, and a test `IAgentHost`; scratch clones must use `ComponentTypeRegistry`, never a handwritten engine factory.
 - `test_agent_packaged_acceptance` starts a UI-free `AgentServer`, launches the built `rf-sim-mcp` process with an explicit endpoint, and verifies MCP discovery, a stateful `circuit_edit`/`circuit_get` round trip, and reconnection after server restart.
 - Platform-specific tests are gated in `tests/CMakeLists.txt` with `if(WIN32)` or `if(NOT WIN32)`, for example `test_session_state_unicode` and `test_external_tool_launch`.
-- Process-level tests that spawn executables must use platform-specific process APIs with bounded I/O and cleanup; the packaged MCP test uses `fork` on POSIX and `CreateProcessW` on Windows.
+- Process-level tests that spawn executables must use platform-specific process APIs with bounded I/O and cleanup; the packaged MCP test uses `posix_spawn` on POSIX and `CreateProcessW` on Windows.
 
 ## Work Guidance
 
