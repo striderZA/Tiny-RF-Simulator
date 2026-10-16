@@ -2,11 +2,11 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <random>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -29,11 +29,10 @@ struct ImGuiFixture {
 struct TempTree {
     fs::path dir;
     explicit TempTree(const char *stem) {
-        static std::mt19937_64 rng{std::random_device{}()};
-        dir = fs::temp_directory_path() /
-              ("rf_issue224_" + std::string(stem) + "_" + std::to_string(rng()));
+        static unsigned int next_tree = 0;
+        const auto suffix = test_temp_paths::processTag() + "_" + std::to_string(next_tree++);
+        dir = fs::temp_directory_path() / ("rf_issue224_" + std::string(stem) + "_" + suffix);
         std::error_code ec;
-        fs::remove_all(dir, ec);
         fs::create_directories(dir, ec);
     }
     ~TempTree() {
@@ -86,13 +85,10 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a symbolic link at the 
     const std::string original_target = "ORIGINAL TARGET";
     writeText(victim, "KEEP");
     writeText(target, original_target);
-    try {
-        fs::create_symlink(victim, temp);
-    } catch (const fs::filesystem_error &e) {
-        WARN("Symbolic-link test skipped: creating a symlink is unavailable on this system: "
-             << e.what());
-        return;
-    }
+    std::error_code link_ec;
+    fs::create_symlink(victim, temp, link_ec);
+    if (link_ec)
+        SKIP("File symlinks are unavailable: " + link_ec.message());
 
     RfSimulatorApp app;
     app.newProject();
@@ -100,6 +96,30 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a symbolic link at the 
 
     REQUIRE_FALSE(app.saveProject(target.string()));
     REQUIRE(readText(victim) == "KEEP");
+    REQUIRE(readText(target) == original_target);
+    REQUIRE(fs::is_symlink(fs::symlink_status(temp)));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a dangling symbolic link at the temp path",
+                 "[issue224][project]") {
+    TempTree tree("dangling_symbolic_link");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+    const auto missing = tree.file("missing-victim.txt");
+    const std::string original_target = "ORIGINAL TARGET";
+    writeText(target, original_target);
+
+    std::error_code link_ec;
+    fs::create_symlink(missing, temp, link_ec);
+    if (link_ec)
+        SKIP("File symlinks are unavailable: " + link_ec.message());
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22403);
+
+    REQUIRE_FALSE(app.saveProject(target.string()));
+    REQUIRE_FALSE(fs::exists(missing));
     REQUIRE(readText(target) == original_target);
     REQUIRE(fs::is_symlink(fs::symlink_status(temp)));
 }

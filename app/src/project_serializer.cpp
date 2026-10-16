@@ -54,7 +54,7 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path) {
 #ifdef _WIN32
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     if (handle == INVALID_HANDLE_VALUE)
         return nullptr;
 
