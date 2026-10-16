@@ -58,7 +58,7 @@ interaction, schematic symbols), and `rewireComponentInputs()`.
 ## Verification
 
 - `ctest --test-dir build` must pass with zero failures.
-- `tests/test_node_graph_engine.cpp` covers graph add/remove, link topology, probes, id counters, groups, and `themeColor()`; `tests/test_node_graph_rewire.cpp` characterizes empty, unlinked, and graph-only source bindings and benchmarks two-input chains. `tests/test_issue87_flow.cpp` covers shared link policy and flow behavior.
+- `tests/test_node_graph_engine.cpp` covers graph add/remove, link topology, probes, id counters, groups, and `themeColor()`; `tests/test_node_graph_rewire.cpp` characterizes empty, unlinked, and graph-only source bindings plus first-link precedence and dangling-link skipping, and benchmarks two-input chains. `tests/test_issue87_flow.cpp` covers shared link policy and flow behavior.
 - `test_engine/ui_tests.cpp::hover_tooltips_node_link_subcircuit`: node-body, link, and collapsed-subcircuit hovers each raise a tooltip window, and an empty-canvas point raises none. The node-body case asserts the `onNodeHover` summary and `snr_dB`. The test checks window existence only, not tooltip text. The SNR value is asserted in `tests/test_node_hover_snr.cpp` up to the callback's `NodeHoverInfo`. No test asserts the rendered `SNR:` string.
 
 ## Child DOX Index

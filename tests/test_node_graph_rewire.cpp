@@ -47,6 +47,42 @@ TEST_CASE("Rewire clears inputs for empty, lone, and disconnected components",
     }
 }
 
+TEST_CASE("Rewire binds the first source link into a multiply-linked input",
+          "[node_graph][rewire]") {
+    NodeGraphEngine graph;
+    SignalNode source_a;
+    SignalNode source_b;
+    source_a.outputs.resize(1);
+    source_b.outputs.resize(1);
+    graph.addNode("Source A", &source_a, 0, 1);
+    graph.addNode("Source B", &source_b, 0, 1);
+    CombinerEngine target(0, graph);
+    graph.addLink(graph.nodes()[0].output_pin_ids[0], target.inputPinId(0));
+    graph.addLink(graph.nodes()[1].output_pin_ids[0], target.inputPinId(0));
+    IComponentEngine *components[] = {&target};
+
+    rewireComponentInputs(components, graph);
+
+    REQUIRE(target.node().inputs[0] == &source_a.outputs[0]);
+}
+
+TEST_CASE("Rewire skips dangling links before finding a valid source", "[node_graph][rewire]") {
+    NodeGraphEngine graph;
+    SignalNode source_a;
+    source_a.outputs.resize(1);
+    graph.addNode("Source A", &source_a, 0, 1);
+    CombinerEngine target(0, graph);
+    const int target_input = target.inputPinId(0);
+    const int dangling_start = 999999;
+    graph.addLink(dangling_start, target_input);
+    graph.addLink(graph.nodes()[0].output_pin_ids[0], target_input);
+    IComponentEngine *components[] = {&target};
+
+    rewireComponentInputs(components, graph);
+
+    REQUIRE(target.node().inputs[0] == &source_a.outputs[0]);
+}
+
 struct RewireBenchmarkCircuit {
     NodeGraphEngine graph;
     std::vector<std::unique_ptr<CombinerEngine>> owned;
