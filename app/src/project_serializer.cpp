@@ -119,7 +119,8 @@ void discardCreatedTemp(const std::filesystem::path &path, int fd) {
 
 // Creates `path` only if no entry exists there, without following a link. Returns
 // nullptr on failure with `error` set. `name_taken` is set only when the name
-// already exists. A file this call created is removed again if wrapping fails.
+// already exists. A file this call created is removed again if wrapping fails
+// (POSIX: only if the identity check in discardCreatedTemp still matches).
 FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken,
                                std::error_code &error) {
     name_taken = false;
