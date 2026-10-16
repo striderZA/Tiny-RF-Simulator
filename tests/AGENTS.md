@@ -23,7 +23,9 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - **test_session_state_unicode.cpp** — Windows-only standalone `SessionState` persistence coverage under a unique Unicode temp directory: Unicode filesystem-path round-trip plus exact round-trip of a distinguishing non-ASCII legacy ACP value in a pre-existing ANSI `.ini` fixture; this pins legacy ACP bytes, not a UTF-8 setting-value contract; links only `common` and does not construct `RfSimulatorApp`
 - App and serializer fixtures inspect live circuits through const `testGraphEngine()` / `testComponents()` views and set up topology/editor state through explicit app test commands; do not mutate the live graph or registry directly. Those commands forward to the editor's `EditorCommands`, so fixture setup is a real project edit that advances the revision and dirties the project (accepted probe add/remove included; a refused one changes nothing): to prove an operation recorded no edit, compare `projectRevision()` before and after (non-vacuous even from a dirty baseline) rather than asserting a clean `isDirty()`.
 - `test_agent_api` stays app/UI-free: its `ApiFixture` uses `CircuitRuntime`, `EditorCommands`, analyzer engines, and a test `IAgentHost`; scratch clones must use `ComponentTypeRegistry`, never a handwritten engine factory.
+- `test_agent_packaged_acceptance` starts a UI-free `AgentServer`, launches the built `rf-sim-mcp` process with an explicit endpoint, and verifies MCP discovery, a stateful `circuit_edit`/`circuit_get` round trip, and reconnection after server restart.
 - Platform-specific tests are gated in `tests/CMakeLists.txt` with `if(WIN32)` or `if(NOT WIN32)`, for example `test_session_state_unicode` and `test_external_tool_launch`.
+- Process-level tests that spawn executables must use platform-specific process APIs with bounded I/O and cleanup; the packaged MCP test uses `posix_spawn` on POSIX and `CreateProcessW` on Windows.
 
 ## Work Guidance
 
@@ -46,6 +48,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_agent_api_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
+- `ctest --test-dir build -R '^test_agent_packaged_acceptance$' --output-on-failure`
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit
 - `ctest --test-dir build -j8` must also pass with zero failures; start it with a clean `extensions/` and never run a second `ctest` against the same build tree at the same time (see Local Contracts)

@@ -550,6 +550,18 @@ add_standalone_test(test_mcp_bridge
     SOURCES test_mcp_bridge.cpp
     LIBS simulator::mcp_adapter
 )
+# Runs the built bridge as a separate process against an in-process UI-free AgentServer, covering
+# packaged discovery, a stateful edit/read round trip, and reconnection after server restart.
+add_standalone_test(test_agent_packaged_acceptance
+    SOURCES test_agent_packaged_acceptance.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_packaged_acceptance PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+target_compile_definitions(test_agent_packaged_acceptance PRIVATE
+    RFSIM_MCP_EXECUTABLE="$<TARGET_FILE:rf-sim-mcp>"
+)
+add_dependencies(test_agent_packaged_acceptance rf-sim-mcp)
+
 
 # Standalone app-level agent host coverage: checkpoint lifecycle and trimming
 # (newest 20 kept), component auto-layout placement, explicit positions, and

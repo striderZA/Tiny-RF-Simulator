@@ -61,7 +61,7 @@ Keep protocol code transport-neutral and small. Put simulator integration behind
 ## Verification
 
 - `ctest --test-dir build -R 'test_agent_|test_mcp_bridge' --output-on-failure`
-- Automated `test_agent_*` and `test_mcp_bridge` coverage exercises protocol, loopback, and app fixtures; real-client interoperability, minimized-window behavior, and server-restart persistence remain separate manual acceptance.
+- Automated `test_agent_*` and `test_mcp_bridge` coverage exercises protocol, loopback, app fixtures, and packaged MCP-to-GUI acceptance including reconnect after server restart; real-client interoperability, minimized-window behavior, and OS-specific GUI behavior remain separate manual acceptance.
 
 ## Child DOX Index
 
