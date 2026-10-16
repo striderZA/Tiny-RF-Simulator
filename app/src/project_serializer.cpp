@@ -30,6 +30,64 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <fcntl.h>
+#include <io.h>
+#include <stdio.h>
+#include <windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
+
+namespace {
+
+// Creates `path` only if no entry exists there, without following a link. Returns
+// nullptr on failure; `name_taken` is set only when the name already exists.
+FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken) {
+    name_taken = false;
+#ifdef _WIN32
+    const HANDLE handle =
+        CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        name_taken = error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS;
+        return nullptr;
+    }
+
+    const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
+    if (fd == -1) {
+        CloseHandle(handle);
+        return nullptr;
+    }
+    FILE *stream = _fdopen(fd, "wb");
+    if (!stream)
+        _close(fd);
+    return stream;
+#else
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+    if (fd == -1) {
+        name_taken = errno == EEXIST;
+        return nullptr;
+    }
+    FILE *stream = ::fdopen(fd, "wb");
+    if (!stream)
+        ::close(fd);
+    return stream;
+#endif
+}
+
+} // namespace
 
 namespace {
 
@@ -758,37 +816,60 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
         return failSave();
     }
 
-    // Atomic save (issue #113): the previous contents must survive a failed
-    // write so issue #77's retry contract never retries against a truncated
-    // file. Serialize into a sibling "<path>.tmp", flush/close it, and only
-    // then rename it over the target, without a remove+rename fallback.
+    // Atomic save (issue #113): exclusively create the sibling "<path>.tmp"
+    // and write through that handle, then rename it over the target only after
+    // the complete file is flushed and closed.
     const fs::path target(path);
     fs::path temp = target;
     temp += ".tmp";
     const std::string temp_str = temp.string();
 
-    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
-        return failSave();
+    bool name_taken = false;
+    FILE *out = openExclusiveProjectTemp(temp, name_taken);
+    if (!out && name_taken) {
+        std::error_code status_ec;
+        const auto temp_status = fs::symlink_status(temp, status_ec);
+        bool regular_file = !status_ec && fs::is_regular_file(temp_status);
+#ifdef _WIN32
+        const DWORD attributes = GetFileAttributesW(temp.c_str());
+        regular_file =
+            regular_file && attributes != INVALID_FILE_ATTRIBUTES &&
+            (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
+#endif
+        if (!regular_file) {
+            LOG_ERROR("Project temp path %s is a link or folder; refusing to write through it",
+                      temp_str.c_str());
+            return failSave();
+        }
+        std::error_code remove_ec;
+        if (fs::remove(temp, remove_ec) && !remove_ec)
+            out = openExclusiveProjectTemp(temp, name_taken);
     }
-    out << serialized;
-    out.flush();
     if (!out) {
-        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
-        out.close();
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return failSave();
-    }
-    out.close();
-    if (!out) {
-        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
+        LOG_ERROR("Could not create project temp file %s", temp_str.c_str());
         return failSave();
     }
 
+    bool write_ok = true;
+    if (std::fwrite(serialized.data(), 1, serialized.size(), out) != serialized.size()) {
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    const int flush_result = std::fflush(out);
+    const int stream_error = std::ferror(out);
+    if ((flush_result != 0 || stream_error != 0) && write_ok) {
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    if (std::fclose(out) != 0) {
+        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    if (!write_ok) {
+        std::error_code rm_ec;
+        fs::remove(temp, rm_ec);
+        return failSave();
+    }
     // Never remove the target before rename: on failure the previous .rfsim is intact.
     std::error_code ec;
     fs::rename(temp, target, ec);

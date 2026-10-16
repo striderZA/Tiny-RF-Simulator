@@ -300,6 +300,13 @@ add_standalone_test(test_issue77_save_failure
     SOURCES test_issue77_save_failure.cpp
     LIBS simulator::app
 )
+# Standalone issue #224 regression tests: project save refuses temp-path links
+# without modifying their victims; kept outside tests.exe for the MinGW ceiling.
+add_standalone_test(test_issue224_project_temp_links
+    SOURCES test_issue224_project_temp_links.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_issue224_project_temp_links PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #78 coverage: splitter/PFB multi-output pin API reporting
 # and OUT2 link/probe project round trips. Kept outside tests.exe for the
