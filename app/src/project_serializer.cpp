@@ -45,45 +45,194 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
 
 namespace {
 
-// Creates `path` only if no entry exists there, without following a link. Returns
-// nullptr on failure; `name_taken` is set only when the name already exists.
-FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken) {
-    name_taken = false;
+// Outcome of removing a leftover "<target>.tmp" from an earlier save.
+enum class StaleTempOutcome { Removed, Absent, Refused, Failed };
+
 #ifdef _WIN32
-    const HANDLE handle =
-        CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                    CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+// Marks the file opened through `handle` for deletion. The deletion applies to
+// that file object, so a name swapped in afterwards is not what gets deleted.
+bool deleteThroughHandle(HANDLE handle, std::error_code &error) {
+    FILE_DISPOSITION_INFO disposition{};
+    disposition.DeleteFile = TRUE;
+    if (SetFileInformationByHandle(handle, FileDispositionInfo, &disposition,
+                                   sizeof(disposition)) == 0) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        return false;
+    }
+    return true;
+}
+
+// Removes the file this process just created when wrapping its handle failed.
+void discardCreatedTemp(const std::filesystem::path &path, HANDLE handle) {
+    std::error_code error;
+    if (!deleteThroughHandle(handle, error))
+        LOG_ERROR("Could not remove project temp file %s after a failed open: %s",
+                  path.string().c_str(), error.message().c_str());
+}
+#else
+enum class NameCheck { Same, Different, Absent, Failed };
+
+// Checks whether `path` still names the object `fd` refers to, by dev/inode.
+// This is the most POSIX allows before unlink(), since there is no unlink-by-fd.
+NameCheck checkNameMatchesOpened(const std::filesystem::path &path, int fd,
+                                 std::error_code &error) {
+    struct stat opened {};
+    if (::fstat(fd, &opened) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        return NameCheck::Failed;
+    }
+    struct stat named {};
+    if (::lstat(path.c_str(), &named) != 0) {
+        if (errno == ENOENT)
+            return NameCheck::Absent;
+        error = std::error_code(errno, std::generic_category());
+        return NameCheck::Failed;
+    }
+    return named.st_dev == opened.st_dev && named.st_ino == opened.st_ino ? NameCheck::Same
+                                                                          : NameCheck::Different;
+}
+
+// Removes the file this process just created when wrapping its descriptor failed.
+// The unlink runs only while the name still matches; the window between that
+// check and unlink() is a residual POSIX race.
+void discardCreatedTemp(const std::filesystem::path &path, int fd) {
+    std::error_code error;
+    if (checkNameMatchesOpened(path, fd, error) != NameCheck::Same) {
+        if (error)
+            LOG_ERROR("Could not inspect project temp file %s after a failed open: %s",
+                      path.string().c_str(), error.message().c_str());
+        return;
+    }
+    if (::unlink(path.c_str()) != 0)
+        LOG_ERROR("Could not remove project temp file %s after a failed open: %s",
+                  path.string().c_str(),
+                  std::error_code(errno, std::generic_category()).message().c_str());
+}
+#endif
+
+// Creates `path` only if no entry exists there, without following a link. Returns
+// nullptr on failure with `error` set. `name_taken` is set only when the name
+// already exists. A file this call created is removed again if wrapping fails.
+FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken,
+                               std::error_code &error) {
+    name_taken = false;
+    error.clear();
+#ifdef _WIN32
+    const HANDLE handle = CreateFileW(
+        path.c_str(), GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+        CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
-        const DWORD error = GetLastError();
-        name_taken = error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS;
+        const DWORD win_error = GetLastError();
+        name_taken = win_error == ERROR_FILE_EXISTS || win_error == ERROR_ALREADY_EXISTS;
+        error = std::error_code(static_cast<int>(win_error), std::system_category());
         return nullptr;
     }
 
     const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
     if (fd == -1) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, handle);
         CloseHandle(handle);
         return nullptr;
     }
     FILE *stream = _fdopen(fd, "wb");
-    if (!stream)
+    if (!stream) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, handle);
         _close(fd);
+        return nullptr;
+    }
     return stream;
 #else
     const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
     if (fd == -1) {
+        error = std::error_code(errno, std::generic_category());
         name_taken = errno == EEXIST;
         return nullptr;
     }
     FILE *stream = ::fdopen(fd, "wb");
-    if (!stream)
+    if (!stream) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, fd);
         ::close(fd);
+        return nullptr;
+    }
     return stream;
+#endif
+}
+
+// Removes the leftover entry at `path` only if it is still the object that was
+// checked. The entry is opened without following links. Windows deletes through
+// that handle; POSIX confirms identity before unlink(), so a swap between that
+// check and unlink() is a residual POSIX race.
+StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::error_code &error) {
+    error.clear();
+#ifdef _WIN32
+    const HANDLE handle =
+        CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                    FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD win_error = GetLastError();
+        if (win_error == ERROR_FILE_NOT_FOUND || win_error == ERROR_PATH_NOT_FOUND)
+            return StaleTempOutcome::Absent;
+        error = std::error_code(static_cast<int>(win_error), std::system_category());
+        return StaleTempOutcome::Failed;
+    }
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(handle, &info)) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        CloseHandle(handle);
+        return StaleTempOutcome::Failed;
+    }
+    if ((info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0) {
+        CloseHandle(handle);
+        return StaleTempOutcome::Refused;
+    }
+    const bool deleted = deleteThroughHandle(handle, error);
+    CloseHandle(handle);
+    return deleted ? StaleTempOutcome::Removed : StaleTempOutcome::Failed;
+#else
+    const int fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd == -1) {
+        const int open_errno = errno;
+        if (open_errno == ENOENT)
+            return StaleTempOutcome::Absent;
+        if (open_errno == ELOOP)
+            return StaleTempOutcome::Refused;
+        error = std::error_code(open_errno, std::generic_category());
+        return StaleTempOutcome::Failed;
+    }
+    struct stat opened {};
+    if (::fstat(fd, &opened) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        ::close(fd);
+        return StaleTempOutcome::Failed;
+    }
+    if (!S_ISREG(opened.st_mode)) {
+        ::close(fd);
+        return StaleTempOutcome::Refused;
+    }
+    const NameCheck check = checkNameMatchesOpened(path, fd, error);
+    ::close(fd);
+    if (check == NameCheck::Absent)
+        return StaleTempOutcome::Absent;
+    if (check == NameCheck::Different)
+        return StaleTempOutcome::Refused;
+    if (check == NameCheck::Failed)
+        return StaleTempOutcome::Failed;
+    if (::unlink(path.c_str()) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        return StaleTempOutcome::Failed;
+    }
+    return StaleTempOutcome::Removed;
 #endif
 }
 
@@ -824,29 +973,29 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     temp += ".tmp";
     const std::string temp_str = temp.string();
 
+    std::error_code temp_error;
     bool name_taken = false;
-    FILE *out = openExclusiveProjectTemp(temp, name_taken);
+    FILE *out = openExclusiveProjectTemp(temp, name_taken, temp_error);
     if (!out && name_taken) {
-        std::error_code status_ec;
-        const auto temp_status = fs::symlink_status(temp, status_ec);
-        bool regular_file = !status_ec && fs::is_regular_file(temp_status);
-#ifdef _WIN32
-        const DWORD attributes = GetFileAttributesW(temp.c_str());
-        regular_file =
-            regular_file && attributes != INVALID_FILE_ATTRIBUTES &&
-            (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
-#endif
-        if (!regular_file) {
-            LOG_ERROR("Project temp path %s is a link or folder; refusing to write through it",
+        switch (removeStaleProjectTemp(temp, temp_error)) {
+        case StaleTempOutcome::Removed:
+        case StaleTempOutcome::Absent:
+            out = openExclusiveProjectTemp(temp, name_taken, temp_error);
+            break;
+        case StaleTempOutcome::Refused:
+            LOG_ERROR("Project temp path %s is not a regular file (a link, a folder, or replaced "
+                      "during the check); refusing to write through it",
                       temp_str.c_str());
             return failSave();
+        case StaleTempOutcome::Failed:
+            LOG_ERROR("Could not remove stale project temp file %s: %s", temp_str.c_str(),
+                      temp_error.message().c_str());
+            return failSave();
         }
-        std::error_code remove_ec;
-        if (fs::remove(temp, remove_ec) && !remove_ec)
-            out = openExclusiveProjectTemp(temp, name_taken);
     }
     if (!out) {
-        LOG_ERROR("Could not create project temp file %s", temp_str.c_str());
+        LOG_ERROR("Could not create project temp file %s: %s", temp_str.c_str(),
+                  temp_error.message().c_str());
         return failSave();
     }
 
