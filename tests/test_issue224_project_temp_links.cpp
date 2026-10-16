@@ -2,6 +2,12 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -33,6 +39,8 @@ struct TempTree {
         const auto suffix = test_temp_paths::processTag() + "_" + std::to_string(next_tree++);
         dir = fs::temp_directory_path() / ("rf_issue224_" + std::string(stem) + "_" + suffix);
         std::error_code ec;
+        fs::remove_all(dir, ec);
+        ec.clear();
         fs::create_directories(dir, ec);
     }
     ~TempTree() {
@@ -50,6 +58,39 @@ void writeText(const fs::path &path, const std::string &text) {
 std::string readText(const fs::path &path) {
     std::ifstream in(path, std::ios::binary);
     return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+void createFileSymlinkOrSkip(const fs::path &target, const fs::path &link) {
+#ifdef _WIN32
+    constexpr DWORD allow_unprivileged_create = 0x2;
+    if (CreateSymbolicLinkW(link.c_str(), target.c_str(), allow_unprivileged_create))
+        return;
+
+    DWORD error = GetLastError();
+    if (error == ERROR_INVALID_PARAMETER) {
+        if (CreateSymbolicLinkW(link.c_str(), target.c_str(), 0))
+            return;
+        error = GetLastError();
+    }
+    if (error == ERROR_PRIVILEGE_NOT_HELD)
+        SKIP("Windows did not grant permission to create file symlinks");
+    FAIL("CreateSymbolicLinkW failed with error " + std::to_string(error));
+#else
+    std::error_code ec;
+    fs::create_symlink(target, link, ec);
+    if (ec)
+        SKIP("File symlinks are unavailable: " + ec.message());
+#endif
+}
+
+bool isSymlinkPath(const fs::path &path) {
+#ifdef _WIN32
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return fs::is_symlink(fs::symlink_status(path));
+#endif
 }
 
 } // namespace
@@ -85,10 +126,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a symbolic link at the 
     const std::string original_target = "ORIGINAL TARGET";
     writeText(victim, "KEEP");
     writeText(target, original_target);
-    std::error_code link_ec;
-    fs::create_symlink(victim, temp, link_ec);
-    if (link_ec)
-        SKIP("File symlinks are unavailable: " + link_ec.message());
+    createFileSymlinkOrSkip(victim, temp);
 
     RfSimulatorApp app;
     app.newProject();
@@ -97,7 +135,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a symbolic link at the 
     REQUIRE_FALSE(app.saveProject(target.string()));
     REQUIRE(readText(victim) == "KEEP");
     REQUIRE(readText(target) == original_target);
-    REQUIRE(fs::is_symlink(fs::symlink_status(temp)));
+    REQUIRE(isSymlinkPath(temp));
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a dangling symbolic link at the temp path",
@@ -109,10 +147,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a dangling symbolic lin
     const std::string original_target = "ORIGINAL TARGET";
     writeText(target, original_target);
 
-    std::error_code link_ec;
-    fs::create_symlink(missing, temp, link_ec);
-    if (link_ec)
-        SKIP("File symlinks are unavailable: " + link_ec.message());
+    createFileSymlinkOrSkip(missing, temp);
 
     RfSimulatorApp app;
     app.newProject();
@@ -121,5 +156,5 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a dangling symbolic lin
     REQUIRE_FALSE(app.saveProject(target.string()));
     REQUIRE_FALSE(fs::exists(missing));
     REQUIRE(readText(target) == original_target);
-    REQUIRE(fs::is_symlink(fs::symlink_status(temp)));
+    REQUIRE(isSymlinkPath(temp));
 }

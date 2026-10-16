@@ -819,7 +819,14 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     if (!out) {
         std::error_code status_ec;
         const auto temp_status = fs::symlink_status(temp, status_ec);
-        if (!status_ec && fs::is_regular_file(temp_status)) {
+        bool regular_file = !status_ec && fs::is_regular_file(temp_status);
+#ifdef _WIN32
+        const DWORD attributes = GetFileAttributesW(temp.c_str());
+        regular_file =
+            regular_file && attributes != INVALID_FILE_ATTRIBUTES &&
+            (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
+#endif
+        if (regular_file) {
             std::error_code remove_ec;
             if (fs::remove(temp, remove_ec) && !remove_ec)
                 out = openExclusiveProjectTemp(temp);
