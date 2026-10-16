@@ -92,6 +92,11 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+# Issue #238: pins the per-process temp root that tests/test_temp_paths.h installs.
+add_standalone_test(test_issue238_temp_isolation
+    SOURCES test_issue238_temp_isolation.cpp
+)
+
 # Rewire pass characterization and scaling benchmark; standalone for the
 # MinGW-w64 registration ceiling (see tests/AGENTS.md).
 add_standalone_test(test_node_graph_rewire

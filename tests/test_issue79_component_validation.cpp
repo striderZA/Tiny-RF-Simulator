@@ -24,6 +24,7 @@
 #include "circuit_runtime.h"
 #include "component_library.h"
 #include "graph_editor_actions.h"
+#include "test_temp_paths.h"
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>

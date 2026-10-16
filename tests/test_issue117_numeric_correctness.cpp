@@ -6,6 +6,7 @@
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
