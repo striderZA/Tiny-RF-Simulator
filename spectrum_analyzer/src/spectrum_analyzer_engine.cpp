@@ -2,6 +2,7 @@
 #include "logging_core.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <random>
 #include <unordered_set>
 
@@ -331,9 +332,13 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
 
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
-    size_t n = power_W.size();
+    const std::ptrdiff_t n = static_cast<std::ptrdiff_t>(power_W.size());
     if (n == 0) {
         return {};
+    }
+    // A non-finite or non-positive RBW or bin width defines no filter: pass through.
+    if (!std::isfinite(m_rbw) || m_rbw <= 0.0 || !std::isfinite(binWidth) || binWidth <= 0.0) {
+        return power_W;
     }
     // Gaussian RBW filter. Scale sigma so that the discrete sum of the kernel
     // approximates RBW / binWidth. For flat noise density D (W/Hz), each bin
@@ -344,56 +349,75 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &
     double rbw_bins = m_rbw / binWidth;
     constexpr double sqrt_2pi = 2.5066282746310002; // sqrt(2 * pi)
     double sigma = rbw_bins / sqrt_2pi;
-    int kernel_half = std::max(1, static_cast<int>(std::ceil(3.0 * sigma)));
-    int kernel_size = 2 * kernel_half + 1;
+    // Offsets past n-1 never reach a valid bin, so clamping the half-width to n leaves the
+    // output unchanged. Clamp in floating point: an out-of-range double-to-int conversion is
+    // undefined behavior.
+    double half_bins = std::ceil(3.0 * sigma);
+    half_bins = std::min(std::max(1.0, half_bins), static_cast<double>(n));
+    const auto kernel_half = static_cast<std::ptrdiff_t>(half_bins);
+    const std::ptrdiff_t kernel_size = 2 * kernel_half + 1;
 
-    std::vector<double> kernel(kernel_size);
-    for (int i = 0; i < kernel_size; ++i) {
-        int x = i - kernel_half;
-        kernel[i] = std::exp(-0.5 * (x * x) / (sigma * sigma));
+    std::vector<double> kernel(static_cast<size_t>(kernel_size));
+    for (std::ptrdiff_t i = 0; i < kernel_size; ++i) {
+        // Offsets are computed in double: an int square overflows past |x| = 46340.
+        const double x = static_cast<double>(i - kernel_half);
+        // The peak is 1 by definition; it is also the 0/0 entry when sigma underflows to zero.
+        kernel[static_cast<size_t>(i)] =
+            (x == 0.0) ? 1.0 : std::exp(-0.5 * (x * x) / (sigma * sigma));
     }
     // Kernel peaks at 1 (center) — preserves tone peak power.
     // sum(kernel) ≈ RBW / binWidth — integrates noise over RBW, grid-independent.
 
-    std::vector<double> out(n, 0.0);
-    for (size_t i = 0; i < n; ++i) {
+    std::vector<double> out(static_cast<size_t>(n), 0.0);
+    for (std::ptrdiff_t i = 0; i < n; ++i) {
         double acc = 0.0;
-        for (int k = -kernel_half; k <= kernel_half; ++k) {
-            int idx = static_cast<int>(i) + k;
-            if (idx < 0 || idx >= static_cast<int>(n)) {
+        for (std::ptrdiff_t k = -kernel_half; k <= kernel_half; ++k) {
+            const std::ptrdiff_t idx = i + k;
+            if (idx < 0 || idx >= n) {
                 continue;
             }
-            acc += power_W[idx] * kernel[k + kernel_half];
+            acc += power_W[static_cast<size_t>(idx)] * kernel[static_cast<size_t>(k + kernel_half)];
         }
-        out[i] = acc;
+        out[static_cast<size_t>(i)] = acc;
     }
     return out;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::applyVBW(const std::vector<double> &power_dBm,
                                                      double binWidth) const {
-    size_t n = power_dBm.size();
+    const std::ptrdiff_t n = static_cast<std::ptrdiff_t>(power_dBm.size());
 
     if (n == 0) {
         return {};
     }
 
-    int window = std::max(1, static_cast<int>(std::round(m_vbw / binWidth)));
-    std::vector<double> out(n, 0.0);
+    // A non-finite or non-positive VBW or bin width defines no filter: pass through.
+    if (!std::isfinite(m_vbw) || m_vbw <= 0.0 || !std::isfinite(binWidth) || binWidth <= 0.0) {
+        return power_dBm;
+    }
 
-    int half = window / 2;
-    for (size_t i = 0; i < n; ++i) {
+    // A window of 2n reaches every bin from every position, so clamping to it leaves the
+    // output unchanged. Clamp in floating point: an out-of-range double-to-int conversion is
+    // undefined behavior.
+    double window_bins = std::round(m_vbw / binWidth);
+    window_bins = std::min(std::max(1.0, window_bins), 2.0 * static_cast<double>(n));
+    const auto window = static_cast<std::ptrdiff_t>(window_bins);
+    std::vector<double> out(static_cast<size_t>(n), 0.0);
+
+    const std::ptrdiff_t half = window / 2;
+    for (std::ptrdiff_t i = 0; i < n; ++i) {
         double sum = 0.0;
-        int count = 0;
-        for (int k = -half; k <= half; ++k) {
-            int idx = static_cast<int>(i) + k;
-            if (idx < 0 || idx >= static_cast<int>(n)) {
+        std::ptrdiff_t count = 0;
+        for (std::ptrdiff_t k = -half; k <= half; ++k) {
+            const std::ptrdiff_t idx = i + k;
+            if (idx < 0 || idx >= n) {
                 continue;
             }
-            sum += power_dBm[idx];
+            sum += power_dBm[static_cast<size_t>(idx)];
             ++count;
         }
-        out[i] = (count > 0) ? (sum / count) : power_dBm[i];
+        out[static_cast<size_t>(i)] =
+            (count > 0) ? (sum / static_cast<double>(count)) : power_dBm[static_cast<size_t>(i)];
     }
     return out;
 }

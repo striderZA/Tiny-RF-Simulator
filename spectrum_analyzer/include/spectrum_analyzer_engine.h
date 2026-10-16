@@ -41,6 +41,9 @@ class SpectrumAnalyzerEngine {
     void pruneHistory(const std::vector<const Spectrum *> &active_keys) const;
 
     std::vector<double> renderSpectrum(const Spectrum &spec) const;
+    // applyVBW() and applyRBW() return their input unchanged when the RBW or VBW, or the bin
+    // width, is not finite and positive. A kernel half-width is clamped to the grid length and a
+    // VBW window to twice it; the clamped offsets never reach a bin, so the output is unchanged.
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
