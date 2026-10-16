@@ -171,12 +171,29 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_tak
 #endif
 }
 
+// Test seam: announces the temp entry just before a failed save removes it.
+void runBeforeFailureCleanupHook(const std::filesystem::path &temp) {
+    if (ProjectSerializer::testHooks().beforeFailureCleanup)
+        ProjectSerializer::testHooks().beforeFailureCleanup(temp);
+}
+
+// Test seam: runs once a stale entry is open, before it is checked or removed.
+void runAfterStaleOpenHook(const std::filesystem::path &path) {
+    if (ProjectSerializer::testHooks().afterStaleOpen)
+        ProjectSerializer::testHooks().afterStaleOpen(path);
+}
+
 // Removes the leftover entry at `path` only if it is still the object that was
 // checked. The entry is opened without following links. Windows deletes through
 // that handle; POSIX confirms identity before unlink(), so a swap between that
 // check and unlink() is a residual POSIX race.
 StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::error_code &error) {
     error.clear();
+    if (ProjectSerializer::testHooks().failStaleRemoval &&
+        ProjectSerializer::testHooks().failStaleRemoval()) {
+        error = std::make_error_code(std::errc::io_error);
+        return StaleTempOutcome::Failed;
+    }
 #ifdef _WIN32
     // BACKUP_SEMANTICS lets a folder open so it is refused below, not failed with ACCESS_DENIED.
     const HANDLE handle =
@@ -190,6 +207,7 @@ StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::
         error = std::error_code(static_cast<int>(win_error), std::system_category());
         return StaleTempOutcome::Failed;
     }
+    runAfterStaleOpenHook(path);
     BY_HANDLE_FILE_INFORMATION info{};
     if (!GetFileInformationByHandle(handle, &info)) {
         error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
@@ -214,6 +232,7 @@ StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::
         error = std::error_code(open_errno, std::generic_category());
         return StaleTempOutcome::Failed;
     }
+    runAfterStaleOpenHook(path);
     struct stat opened {};
     if (::fstat(fd, &opened) != 0) {
         error = std::error_code(errno, std::generic_category());
@@ -241,6 +260,11 @@ StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::
 }
 
 } // namespace
+
+ProjectSerializer::TestHooks &ProjectSerializer::testHooks() {
+    static TestHooks hooks;
+    return hooks;
+}
 
 namespace {
 
@@ -1004,7 +1028,10 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     }
 
     bool write_ok = true;
-    if (std::fwrite(serialized.data(), 1, serialized.size(), out) != serialized.size()) {
+    const bool injected_write_failure =
+        ProjectSerializer::testHooks().failWrite && ProjectSerializer::testHooks().failWrite();
+    if (injected_write_failure ||
+        std::fwrite(serialized.data(), 1, serialized.size(), out) != serialized.size()) {
         LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
         write_ok = false;
     }
@@ -1019,15 +1046,20 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
         write_ok = false;
     }
     if (!write_ok) {
+        runBeforeFailureCleanupHook(temp);
         std::error_code rm_ec;
         fs::remove(temp, rm_ec);
         return failSave();
     }
     // Never remove the target before rename: on failure the previous .rfsim is intact.
     std::error_code ec;
-    fs::rename(temp, target, ec);
+    if (ProjectSerializer::testHooks().failRename && ProjectSerializer::testHooks().failRename())
+        ec = std::make_error_code(std::errc::io_error);
+    else
+        fs::rename(temp, target, ec);
     if (ec) {
         LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
+        runBeforeFailureCleanupHook(temp);
         std::error_code rm_ec;
         fs::remove(temp, rm_ec);
         return failSave();

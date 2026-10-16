@@ -3,6 +3,7 @@
 #include "imnodes.h"
 #include "implot.h"
 #include "logging_core.h"
+#include "project_serializer.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -286,4 +287,145 @@ TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a folder at the temp pa
             entry.message.find("is not a regular file") != std::string::npos)
             refused = true;
     REQUIRE(refused);
+}
+
+namespace {
+
+// Restores the process-global save seam when the test leaves scope, even on a failed REQUIRE.
+struct SaveSeamGuard {
+    SaveSeamGuard() { ProjectSerializer::testHooks() = {}; }
+    ~SaveSeamGuard() { ProjectSerializer::testHooks() = {}; }
+};
+
+bool hasErrorLog(const std::string &needle) {
+    for (const LogEntry &entry : LoggerCore::instance().entries())
+        if (entry.level == Level::Error && entry.message.find(needle) != std::string::npos)
+            return true;
+    return false;
+}
+
+} // namespace
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #224: a failed temp write keeps the previous project and removes its temp",
+                 "[issue224][project][seam]") {
+    TempTree tree("seam_write");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+
+    RfSimulatorApp previous;
+    previous.newProject();
+    previous.testCreateComponent("generator", 22501);
+    REQUIRE(previous.saveProject(target.string()));
+    const std::string before = readText(target);
+
+    SaveSeamGuard seam;
+    bool temp_present_at_cleanup = false;
+    ProjectSerializer::testHooks().failWrite = [] { return true; };
+    ProjectSerializer::testHooks().beforeFailureCleanup = [&](const fs::path &path) {
+        temp_present_at_cleanup = fs::exists(path);
+    };
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22502);
+    LoggerCore::instance().clear();
+    REQUIRE_FALSE(app.saveProject(target.string()));
+
+    REQUIRE(temp_present_at_cleanup);
+    REQUIRE_FALSE(fs::exists(temp));
+    REQUIRE(readText(target) == before);
+    REQUIRE(hasErrorLog("Failed to write project file"));
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #224: a failed rename keeps the previous project and removes its temp",
+                 "[issue224][project][seam]") {
+    TempTree tree("seam_rename");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+
+    RfSimulatorApp previous;
+    previous.newProject();
+    previous.testCreateComponent("generator", 22503);
+    REQUIRE(previous.saveProject(target.string()));
+    const std::string before = readText(target);
+
+    SaveSeamGuard seam;
+    bool temp_present_at_cleanup = false;
+    ProjectSerializer::testHooks().failRename = [] { return true; };
+    ProjectSerializer::testHooks().beforeFailureCleanup = [&](const fs::path &path) {
+        temp_present_at_cleanup = fs::exists(path);
+    };
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22504);
+    LoggerCore::instance().clear();
+    REQUIRE_FALSE(app.saveProject(target.string()));
+
+    REQUIRE(temp_present_at_cleanup);
+    REQUIRE_FALSE(fs::exists(temp));
+    REQUIRE(readText(target) == before);
+    REQUIRE(hasErrorLog("Failed to replace project file"));
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Issue #224: a failed stale-temp removal keeps the stale entry and the previous "
+                 "project",
+                 "[issue224][project][seam]") {
+    TempTree tree("seam_stale_fail");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+
+    RfSimulatorApp previous;
+    previous.newProject();
+    previous.testCreateComponent("generator", 22505);
+    REQUIRE(previous.saveProject(target.string()));
+    const std::string before = readText(target);
+    writeText(temp, "STALE");
+
+    SaveSeamGuard seam;
+    ProjectSerializer::testHooks().failStaleRemoval = [] { return true; };
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22506);
+    LoggerCore::instance().clear();
+    REQUIRE_FALSE(app.saveProject(target.string()));
+
+    REQUIRE(readText(temp) == "STALE");
+    REQUIRE(readText(target) == before);
+    REQUIRE(hasErrorLog("Could not remove stale project temp file"));
+}
+
+TEST_CASE_METHOD(
+    ImGuiFixture,
+    "Issue #224: a stale temp swapped during its check does not take the foreign entry",
+    "[issue224][project][seam]") {
+    TempTree tree("seam_stale_swap");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+    const auto moved = tree.file("stale-moved.tmp");
+
+    RfSimulatorApp previous;
+    previous.newProject();
+    previous.testCreateComponent("generator", 22507);
+    REQUIRE(previous.saveProject(target.string()));
+    const std::string before = readText(target);
+    writeText(temp, "STALE");
+
+    SaveSeamGuard seam;
+    ProjectSerializer::testHooks().afterStaleOpen = [&](const fs::path &path) {
+        fs::rename(path, moved);
+        writeText(path, "FOREIGN");
+    };
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22508);
+    REQUIRE_FALSE(app.saveProject(target.string()));
+
+    REQUIRE(readText(temp) == "FOREIGN");
+    REQUIRE(readText(target) == before);
 }

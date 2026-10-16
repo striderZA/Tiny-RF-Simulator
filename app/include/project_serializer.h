@@ -3,6 +3,7 @@
 #include "receiver_requirements.h"
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -48,6 +49,19 @@ class ProjectSerializer {
     // it destroys every engine; the app re-syncs component-bound views after
     // reset() and every fromJson() restoration.
     void reset();
+
+    // Test-only fault injection for the save path. Production code never sets
+    // these; an empty function does nothing. Reset all with `testHooks() = {};`.
+    struct TestHooks {
+        std::function<bool()> failWrite;        // true: fail the temp-file write
+        std::function<bool()> failRename;       // true: fail temp-to-target rename
+        std::function<bool()> failStaleRemoval; // true: fail removing a stale <target>.tmp
+        // Observers. afterStaleOpen gets the stale temp path once it is open;
+        // beforeFailureCleanup gets the temp path before a failed save removes it.
+        std::function<void(const std::filesystem::path &)> afterStaleOpen;
+        std::function<void(const std::filesystem::path &)> beforeFailureCleanup;
+    };
+    static TestHooks &testHooks();
 
   private:
     // Canonical `window_state` scalar flags as (JSON key, live member). toJson()
