@@ -12,15 +12,21 @@
 #include "node_graph_widget.h"
 #include "pfb_view_manager.h"
 #include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -108,25 +114,278 @@ void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
         }
     }
 }
-
-// Save boundary: keep the project file portable by persisting data-file paths
-// relative to the project directory. Absolute paths the user configured that
-// stay inside the project dir are re-written relative; anything else is left
-// untouched (load-side containment already guards untrusted project files).
+// Resolve relative engine paths against the process CWD (the engine's open-file
+// behavior) before persisting project-contained references relative to project_dir.
 void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir) {
     if (!params.is_object())
         return;
     for (const char *key : kPathParameterKeys) {
         if (!params.contains(key) || !params[key].is_string())
             continue;
-        const fs::path p(params[key].get<std::string>());
-        if (!p.is_absolute() || !pathWithinRoot(project_dir, p))
+        fs::path path(params[key].get<std::string>());
+        if (path.empty())
             continue;
         std::error_code ec;
-        const fs::path rel = fs::relative(p, project_dir, ec);
-        if (ec)
+        if (!path.is_absolute()) {
+            path = fs::absolute(path, ec);
+            if (ec)
+                continue;
+            params[key] = path.string();
+        }
+        if (!pathWithinRoot(project_dir, path))
             continue;
-        params[key] = rel.generic_string();
+        const fs::path relative = fs::relative(path, project_dir, ec);
+        if (!ec)
+            params[key] = relative.generic_string();
+    }
+}
+
+// Save boundary: package every external model file before writing the project. This
+// keeps agent and GUI saves on the same path and prevents a successful save from
+// referring to data that the load boundary would later reject.
+constexpr std::uintmax_t kMaxProjectDataFileBytes = 256ULL * 1024 * 1024;
+constexpr std::uintmax_t kMaxProjectDataTotalBytes = 512ULL * 1024 * 1024;
+constexpr std::size_t kMaxProjectDataFileCount = 256;
+
+std::optional<std::uint64_t> projectDataHash(const fs::path &path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return std::nullopt;
+    std::uint64_t hash = 14695981039346656037ULL;
+    char buffer[8192];
+    while (in) {
+        in.read(buffer, sizeof(buffer));
+        const auto count = in.gcount();
+        for (std::streamsize i = 0; i < count; ++i) {
+            hash ^= static_cast<unsigned char>(buffer[i]);
+            hash *= 1099511628211ULL;
+        }
+    }
+    if (!in.eof())
+        return std::nullopt;
+    return hash;
+}
+bool projectDataFilesEqual(const fs::path &left, const fs::path &right) {
+    std::error_code ec;
+    const auto left_size = fs::file_size(left, ec);
+    if (ec)
+        return false;
+    const auto right_size = fs::file_size(right, ec);
+    if (ec || left_size != right_size)
+        return false;
+    std::ifstream left_stream(left, std::ios::binary);
+    std::ifstream right_stream(right, std::ios::binary);
+    if (!left_stream || !right_stream)
+        return false;
+    char left_buffer[8192];
+    char right_buffer[8192];
+    while (true) {
+        left_stream.read(left_buffer, sizeof(left_buffer));
+        right_stream.read(right_buffer, sizeof(right_buffer));
+        const std::streamsize left_count = left_stream.gcount();
+        const std::streamsize right_count = right_stream.gcount();
+        if (left_count != right_count ||
+            !std::equal(left_buffer, left_buffer + left_count, right_buffer))
+            return false;
+        if (left_stream.eof() || right_stream.eof())
+            return left_stream.eof() && right_stream.eof();
+        if (!left_stream || !right_stream)
+            return false;
+    }
+}
+
+std::string safeProjectDataName(const fs::path &source) {
+    std::string name = source.filename().string();
+    for (char &ch : name) {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        if (!(std::isalnum(c) || ch == '.' || ch == '_' || ch == '-'))
+            ch = '_';
+    }
+    if (name.empty() || name == "." || name == "..")
+        name = "model.dat";
+    if (name.size() > 120)
+        name.resize(120);
+    return name;
+}
+fs::path uniqueProjectDataTempPath(const fs::path &destination) {
+    static std::atomic<std::uint64_t> sequence{0};
+    fs::path temp = destination;
+    temp += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+            "-" + std::to_string(sequence.fetch_add(1, std::memory_order_relaxed));
+    return temp;
+}
+
+bool packageExternalProjectData(nlohmann::json &root, const fs::path &project_dir,
+                                std::vector<std::string> &saved_files,
+                                std::vector<fs::path> &created_files,
+                                std::vector<fs::path> &created_directories) {
+    if (!root.contains("components") || !root["components"].is_array())
+        return true;
+    std::error_code ec;
+    const fs::path canonical_root = fs::weakly_canonical(project_dir, ec);
+    std::uintmax_t total_external_bytes = 0;
+    std::vector<fs::path> seen_destinations;
+    if (ec) {
+        LOG_ERROR("Could not resolve project directory while packaging RF data: %s",
+                  project_dir.string().c_str());
+        return false;
+    }
+
+    for (auto &component : root["components"]) {
+        if (!component.is_object() || !component.contains("params") ||
+            !component["params"].is_object())
+            continue;
+        auto &params = component["params"];
+        for (const char *key : kPathParameterKeys) {
+            if (!params.contains(key) || !params[key].is_string())
+                continue;
+            const std::string value = params[key].get<std::string>();
+            if (value.empty())
+                continue;
+            const fs::path original(value);
+            const fs::path source = original.is_absolute() ? original : (project_dir / original);
+            const fs::file_status source_status = fs::symlink_status(source, ec);
+            if (ec || fs::is_symlink(source_status) || !fs::is_regular_file(source_status)) {
+                LOG_ERROR("Could not preserve project RF data reference %s: expected a regular, "
+                          "non-symlink file",
+                          value.c_str());
+                return false;
+            }
+            const fs::path resolved = fs::weakly_canonical(source, ec);
+            if (ec) {
+                LOG_ERROR("Could not resolve project RF data reference %s: %s", value.c_str(),
+                          ec.message().c_str());
+                return false;
+            }
+            if (pathWithinRoot(canonical_root, resolved)) {
+                const fs::path relative = fs::relative(resolved, canonical_root, ec);
+                if (ec) {
+                    LOG_ERROR("Could not relativize project RF data reference %s: %s",
+                              value.c_str(), ec.message().c_str());
+                    return false;
+                }
+                params[key] = relative.generic_string();
+                continue;
+            }
+
+            const auto size = fs::file_size(resolved, ec);
+            if (ec || size > kMaxProjectDataFileBytes) {
+                LOG_ERROR("Could not preserve project RF data reference %s: file is missing or "
+                          "exceeds the 256 MiB limit",
+                          value.c_str());
+                return false;
+            }
+            const auto hash = projectDataHash(resolved);
+            if (!hash) {
+                LOG_ERROR("Could not read project RF data reference %s", value.c_str());
+                return false;
+            }
+
+            const fs::path data_dir = project_dir / "rf_data";
+            const auto data_dir_status = fs::symlink_status(data_dir, ec);
+            if (ec && ec != std::errc::no_such_file_or_directory) {
+                LOG_ERROR("Could not inspect project RF data directory: %s", ec.message().c_str());
+                return false;
+            }
+            ec.clear();
+            if (fs::exists(data_dir_status)) {
+                if (fs::is_symlink(data_dir_status) || !fs::is_directory(data_dir_status)) {
+                    LOG_ERROR(
+                        "Could not preserve project RF data: rf_data is not a real directory");
+                    return false;
+                }
+            } else if (!fs::create_directory(data_dir, ec) || ec) {
+                LOG_ERROR("Could not create project RF data directory: %s", ec.message().c_str());
+                return false;
+            } else {
+                created_directories.push_back(data_dir);
+            }
+
+            std::ostringstream filename;
+            filename << std::hex << *hash << "-" << safeProjectDataName(resolved);
+            const fs::path destination = data_dir / filename.str();
+            if (std::find(seen_destinations.begin(), seen_destinations.end(), destination) ==
+                seen_destinations.end()) {
+                if (seen_destinations.size() >= kMaxProjectDataFileCount ||
+                    size > kMaxProjectDataTotalBytes - total_external_bytes) {
+                    LOG_ERROR("Could not preserve project RF data: save exceeds 256 files or "
+                              "512 MiB total");
+                    return false;
+                }
+                seen_destinations.push_back(destination);
+                total_external_bytes += size;
+            }
+            const auto destination_status = fs::symlink_status(destination, ec);
+            if (ec && ec != std::errc::no_such_file_or_directory) {
+                LOG_ERROR("Could not inspect project RF data destination: %s",
+                          ec.message().c_str());
+                return false;
+            }
+            ec.clear();
+            bool copied_now = false;
+            if (fs::exists(destination_status)) {
+                if (fs::is_symlink(destination_status) ||
+                    !fs::is_regular_file(destination_status) ||
+                    projectDataHash(destination) != hash ||
+                    !projectDataFilesEqual(resolved, destination)) {
+                    LOG_ERROR("Could not preserve project RF data: destination collision at %s",
+                              destination.string().c_str());
+                    return false;
+                }
+            } else {
+                const fs::path temp = uniqueProjectDataTempPath(destination);
+                fs::copy_file(resolved, temp, fs::copy_options::none, ec);
+                if (ec) {
+                    const std::string error = ec.message();
+                    std::error_code rm_ec;
+                    fs::remove(temp, rm_ec);
+                    LOG_ERROR("Could not copy project RF data file %s: %s", value.c_str(),
+                              error.c_str());
+                    return false;
+                }
+                if (projectDataHash(temp) != hash) {
+                    fs::remove(temp, ec);
+                    LOG_ERROR("Project RF data changed while it was being copied: %s",
+                              value.c_str());
+                    return false;
+                }
+                fs::create_hard_link(temp, destination, ec);
+                if (ec) {
+                    const std::string error = ec.message();
+                    std::error_code rm_ec;
+                    fs::remove(temp, rm_ec);
+                    LOG_ERROR("Could not install project RF data file %s: %s", value.c_str(),
+                              error.c_str());
+                    return false;
+                }
+                std::error_code rm_ec;
+                fs::remove(temp, rm_ec);
+                created_files.push_back(destination);
+                copied_now = true;
+            }
+
+            const fs::path relative = fs::relative(destination, canonical_root, ec);
+            if (ec) {
+                LOG_ERROR("Could not relativize copied project RF data: %s", ec.message().c_str());
+                return false;
+            }
+            params[key] = relative.generic_string();
+            if (copied_now)
+                saved_files.push_back(relative.generic_string());
+        }
+    }
+    return true;
+}
+
+void removeCreatedProjectData(const std::vector<fs::path> &created_files,
+                              const std::vector<fs::path> &created_directories) {
+    for (const auto &file : created_files) {
+        std::error_code ec;
+        fs::remove(file, ec);
+    }
+    for (auto it = created_directories.rbegin(); it != created_directories.rend(); ++it) {
+        std::error_code ec;
+        fs::remove(*it, ec);
     }
 }
 
@@ -470,7 +729,9 @@ std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
              {"node_editor", &m_show_node_editor}}};
 }
 
-bool ProjectSerializer::save(const std::string &path) {
+bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *copied_data_files) {
+    if (copied_data_files)
+        copied_data_files->clear();
     const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
     nlohmann::json root = toJson({save_project_dir, true});
 
@@ -478,6 +739,24 @@ bool ProjectSerializer::save(const std::string &path) {
     std::string fname = (pos != std::string::npos) ? path.substr(pos + 1) : path;
     auto dot = fname.find_last_of('.');
     root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
+
+    std::vector<std::string> saved_data_files;
+    std::vector<fs::path> created_data_files;
+    std::vector<fs::path> created_data_directories;
+    const auto failSave = [&created_data_files, &created_data_directories]() {
+        removeCreatedProjectData(created_data_files, created_data_directories);
+        return false;
+    };
+    if (!packageExternalProjectData(root, save_project_dir, saved_data_files, created_data_files,
+                                    created_data_directories))
+        return failSave();
+    std::string serialized;
+    try {
+        serialized = root.dump(2);
+    } catch (const std::exception &e) {
+        LOG_ERROR("Could not serialize project %s: %s", path.c_str(), e.what());
+        return failSave();
+    }
 
     // Atomic save (issue #113): the previous contents must survive a failed
     // write so issue #77's retry contract never retries against a truncated
@@ -491,40 +770,39 @@ bool ProjectSerializer::save(const std::string &path) {
     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
     if (!out) {
         LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
-        return false;
+        return failSave();
     }
-    out << root.dump(2);
+    out << serialized;
     out.flush();
     if (!out) {
         LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
         out.close();
         std::error_code rm_ec;
         fs::remove(temp, rm_ec);
-        return false;
+        return failSave();
     }
     out.close();
     if (!out) {
         LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
         std::error_code rm_ec;
         fs::remove(temp, rm_ec);
-        return false;
+        return failSave();
     }
 
-    // std::filesystem::rename atomically replaces an existing target on every
-    // supported platform (POSIX rename / Windows MoveFileEx with
-    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
-    // fallback: deleting the target first would reintroduce the data-loss
-    // window this function exists to close. If the rename fails the original
-    // is still intact — drop the temp and report the failure.
+    // Never remove the target before rename: on failure the previous .rfsim is intact.
     std::error_code ec;
     fs::rename(temp, target, ec);
     if (ec) {
         LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
         std::error_code rm_ec;
         fs::remove(temp, rm_ec);
-        return false;
+        return failSave();
     }
 
+    if (copied_data_files)
+        *copied_data_files = std::move(saved_data_files);
+    for (const auto &copied : created_data_files)
+        LOG_INFO("Copied external project RF data to %s", copied.string().c_str());
     LOG_INFO("Saved project to %s", path.c_str());
     return true;
 }

@@ -199,6 +199,7 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         return m_current_project_path;
     };
     agent_hooks.save_project = [this](const std::string &path) { return saveProject(path); };
+    agent_hooks.saved_project_data_files = [this]() { return m_last_saved_data_files; };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);
@@ -852,10 +853,13 @@ void RfSimulatorApp::drawExtensionTrustPrompt() {
 
 bool RfSimulatorApp::saveProject(const std::string &path) {
     // Only a successful write may clear dirty state or adopt the path: a
-    // failed save must leave the project dirty on its previous path so the
-    // user keeps the chance to retry (issue #77).
-    if (!m_serializer->save(path))
+    // failed save must leave the project dirty on its previous path (issue #77).
+    std::vector<std::string> copied_data_files;
+    if (!m_serializer->save(path, &copied_data_files)) {
+        m_last_saved_data_files.clear();
         return false;
+    }
+    m_last_saved_data_files = std::move(copied_data_files);
     m_current_project_path = path;
     m_editor_commands.markClean();
     return true;

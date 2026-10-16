@@ -107,7 +107,9 @@ AgentToolResult executeProjectSaveTool(const AgentApi &api, const AgentCall &cal
                                            "see the RF Simulator log"},
                                 epoch);
     }
-    return projectResult(api.epoch(), target);
+    AgentToolResult result = projectResult(api.epoch(), target);
+    result.structured["copied_data_files"] = context.host.savedProjectDataFiles();
+    return result;
 }
 
 AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &call) {

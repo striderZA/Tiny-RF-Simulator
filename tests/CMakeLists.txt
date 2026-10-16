@@ -231,16 +231,22 @@ add_standalone_test(test_signal_generator_noise
     LIBS simulator::signal_generator_engine simulator::node_graph_engine
 )
 
-# Standalone for the S1/S2 security-fix tests (S-param path containment at the
-# project-file and library boundaries + touchstone parser size/point guards)
-# plus issue #120 (the component-authoring save path derives a copied data
-# file's name from a sanitized part number and refuses escaping names).
-# Kept out of the main `tests` binary for the same MinGW registration
-# ceiling reason as test_component_authoring above.
+# Standalone for S-param path containment, external project RF data round trips,
+# touchstone parser guards, and component-authoring filename checks. Kept outside
+# tests.exe for the MinGW registration ceiling.
 add_standalone_test(test_path_containment
     SOURCES test_path_containment.cpp
     LIBS simulator::app simulator::touchstone_parser
 )
+set_tests_properties(test_path_containment PROPERTIES RUN_SERIAL TRUE)
+# Separate target keeps the newly added project-data cases below MinGW's per-binary
+# Catch2 registration ceiling while retaining the existing containment suite.
+add_standalone_test(test_external_project_data
+    SOURCES test_path_containment.cpp
+    LIBS simulator::app simulator::touchstone_parser
+)
+target_compile_definitions(test_external_project_data PRIVATE TEST_EXTERNAL_PROJECT_DATA_ONLY=1)
+set_tests_properties(test_external_project_data PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #48 coverage for malformed-but-valid project and component
 # library JSON. Kept outside tests.exe because MinGW silently drops registrations

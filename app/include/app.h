@@ -128,6 +128,7 @@ class RfSimulatorApp {
     // Project save/load
     // Both return true on success. Agent tools call them directly, without a dialog.
     bool saveProject(const std::string &path);
+    const std::vector<std::string> &lastSavedDataFiles() const { return m_last_saved_data_files; }
     bool loadProject(const std::string &path);
     void newProject();
     // Derived from the editor command service's revision: dirty while the
@@ -305,6 +306,7 @@ class RfSimulatorApp {
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
+    std::vector<std::string> m_last_saved_data_files;
     GitStatusMonitor m_git_status_monitor;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
