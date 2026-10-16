@@ -516,7 +516,7 @@ nlohmann::json agentErrorSchema() {
             {{"code", enumSchema({"INVALID_ARGUMENT", "NOT_FOUND", "STALE_EPOCH", "UNKNOWN_TYPE",
                                   "UNKNOWN_PART", "AMBIGUOUS_PART", "PARAM_REJECTED",
                                   "PATH_PARAMS_UNSUPPORTED", "LINK_REJECTED", "NO_MEASUREMENT",
-                                  "UNSAVED_CHANGES", "BUSY", "SIMULATOR_UNAVAILABLE",
+                                  "UNSAVED_CHANGES", "BUSY", "OVERLOADED", "SIMULATOR_UNAVAILABLE",
                                   "VERSION_MISMATCH", "INTERNAL"})},
              {"message", stringSchema("Problem description and recommended next step.")},
              {"hint", stringSchema("Optional recovery guidance.")},

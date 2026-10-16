@@ -108,6 +108,7 @@ TEST_CASE("Every agent error code maps to its protocol name", "[agent_protocol]"
         std::pair{AgentErrorCode::LinkRejected, std::string_view{"LINK_REJECTED"}},
         std::pair{AgentErrorCode::NoMeasurement, std::string_view{"NO_MEASUREMENT"}},
         std::pair{AgentErrorCode::UnsavedChanges, std::string_view{"UNSAVED_CHANGES"}},
+        std::pair{AgentErrorCode::Overloaded, std::string_view{"OVERLOADED"}},
         std::pair{AgentErrorCode::Busy, std::string_view{"BUSY"}},
         std::pair{AgentErrorCode::SimulatorUnavailable, std::string_view{"SIMULATOR_UNAVAILABLE"}},
         std::pair{AgentErrorCode::VersionMismatch, std::string_view{"VERSION_MISMATCH"}},
