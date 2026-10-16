@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <windows.h>
 #else
+#include <cerrno>
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -50,13 +51,19 @@
 
 namespace {
 
-FILE *openExclusiveProjectTemp(const std::filesystem::path &path) {
+// Creates `path` only if no entry exists there, without following a link. Returns
+// nullptr on failure; `name_taken` is set only when the name already exists.
+FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken) {
+    name_taken = false;
 #ifdef _WIN32
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                     CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-    if (handle == INVALID_HANDLE_VALUE)
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        name_taken = error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS;
         return nullptr;
+    }
 
     const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
     if (fd == -1) {
@@ -69,8 +76,10 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path) {
     return stream;
 #else
     const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
-    if (fd == -1)
+    if (fd == -1) {
+        name_taken = errno == EEXIST;
         return nullptr;
+    }
     FILE *stream = ::fdopen(fd, "wb");
     if (!stream)
         ::close(fd);
@@ -815,8 +824,9 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     temp += ".tmp";
     const std::string temp_str = temp.string();
 
-    FILE *out = openExclusiveProjectTemp(temp);
-    if (!out) {
+    bool name_taken = false;
+    FILE *out = openExclusiveProjectTemp(temp, name_taken);
+    if (!out && name_taken) {
         std::error_code status_ec;
         const auto temp_status = fs::symlink_status(temp, status_ec);
         bool regular_file = !status_ec && fs::is_regular_file(temp_status);
@@ -826,15 +836,17 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
             regular_file && attributes != INVALID_FILE_ATTRIBUTES &&
             (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) == 0;
 #endif
-        if (regular_file) {
-            std::error_code remove_ec;
-            if (fs::remove(temp, remove_ec) && !remove_ec)
-                out = openExclusiveProjectTemp(temp);
+        if (!regular_file) {
+            LOG_ERROR("Project temp path %s is a link or folder; refusing to write through it",
+                      temp_str.c_str());
+            return failSave();
         }
+        std::error_code remove_ec;
+        if (fs::remove(temp, remove_ec) && !remove_ec)
+            out = openExclusiveProjectTemp(temp, name_taken);
     }
     if (!out) {
-        LOG_ERROR("Could not create project temp file %s; a link or folder may be in the way",
-                  temp_str.c_str());
+        LOG_ERROR("Could not create project temp file %s", temp_str.c_str());
         return failSave();
     }
 
