@@ -30,7 +30,7 @@
 // Each test process therefore redirects its temp directory to a root of its
 // own (ProcessTempRoot below). Every temp_directory_path() call, including the
 // app's, and every fixed name built on it is then private to that process. The
-// root is removed when the process exits. Include this header directly in each
+// root is removed on normal exit. Include this header directly in each
 // test translation unit that creates temporary files.
 namespace test_temp_paths {
 
@@ -47,7 +47,7 @@ inline std::string processTag() { return "p" + std::to_string(processId()); }
 
 // Redirects this process's temp directory to `<real temp>/rfsim_test_<tag>`.
 // The constructor runs during static initialization, before any test starts;
-// the destructor removes that root at exit. If the root cannot be created, the
+// the destructor removes that root on normal exit. If the root cannot be created, the
 // temp directory is left unchanged and root() stays empty; the regression case
 // in tests/test_issue238_temp_isolation.cpp fails on that state.
 class ProcessTempRoot {
