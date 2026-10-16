@@ -10,6 +10,19 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+// Removes the scratch flow file on every exit path, including a failed REQUIRE.
+struct ScratchFlowFile {
+    std::filesystem::path path;
+    ~ScratchFlowFile() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+};
+
+} // namespace
+
 TEST_CASE("issue87 params: rejects array indices with leading zeros", "[issue87][params]") {
     nlohmann::json snapshot;
     snapshot["tones"] = nlohmann::json::array({
@@ -27,20 +40,24 @@ TEST_CASE("issue87 params: rejects array indices with leading zeros", "[issue87]
     });
     std::string error;
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[00].power_dBm", 1.0, &error));
-    REQUIRE_FALSE(error.empty());
+    REQUIRE(error.find("must not have leading zeros") != std::string::npos);
     error.clear();
     REQUIRE_FALSE(applyConditionValue(snapshot, "tones[01].power_dBm", 1.0, &error));
-    REQUIRE_FALSE(error.empty());
+    REQUIRE(error.find("must not have leading zeros") != std::string::npos);
+    error.clear();
+    REQUIRE_FALSE(applyConditionValue(snapshot, "tones[0a].power_dBm", 1.0, &error));
+    REQUIRE(error.find("non-numeric array index") != std::string::npos);
+    error.clear();
     REQUIRE(applyConditionValue(snapshot, "tones[0].power_dBm", 1.0, &error));
     REQUIRE(applyConditionValue(snapshot, "tones[10].power_dBm", 2.0, &error));
 }
 
 TEST_CASE("issue87 loader: duplicate array targets cannot use leading-zero aliases",
           "[issue87][loader]") {
-    const std::string path =
-        (std::filesystem::temp_directory_path() /
-         ("issue87_leading_zero_duplicate_" + test_temp_paths::processTag() + ".flow.json"))
-            .string();
+    const ScratchFlowFile scratch{
+        std::filesystem::temp_directory_path() /
+        ("issue87_leading_zero_duplicate_" + test_temp_paths::processTag() + ".flow.json")};
+    const std::string path = scratch.path.string();
     {
         std::ofstream out(path);
         REQUIRE(out.is_open());

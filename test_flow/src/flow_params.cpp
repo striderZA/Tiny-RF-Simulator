@@ -48,15 +48,15 @@ bool parsePath(const std::string &path, std::vector<Token> &tokens, std::string 
                 error = "empty array index";
                 return false;
             }
-            if (digits.size() > 1 && digits.front() == '0') {
-                error = "array index must not have leading zeros";
-                return false;
-            }
             for (char c : digits) {
                 if (c < '0' || c > '9') {
                     error = "non-numeric array index";
                     return false;
                 }
+            }
+            if (digits.size() > 1 && digits.front() == '0') {
+                error = "array index must not have leading zeros";
+                return false;
             }
             tokens.push_back(
                 Token{true, {}, static_cast<size_t>(std::strtoull(digits.c_str(), nullptr, 10))});
