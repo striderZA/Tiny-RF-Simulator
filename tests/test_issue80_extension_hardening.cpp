@@ -16,6 +16,7 @@
 #include "app.h"
 #include "extension_manifest.h"
 #include "external_tool_runner.h"
+#include "test_temp_paths.h"
 
 #include <nlohmann/json.hpp>
 

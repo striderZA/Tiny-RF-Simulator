@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <string>

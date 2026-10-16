@@ -19,6 +19,7 @@ extern char **environ;
 
 #include "agent_api_test_support.h"
 #include "agent_server.h"
+#include "test_temp_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>

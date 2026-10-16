@@ -1,3 +1,4 @@
+#include "test_temp_paths.h"
 #include "touchstone_parser.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>

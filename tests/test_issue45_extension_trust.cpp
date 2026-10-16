@@ -25,6 +25,7 @@
 #include "extension_manager.h"
 #include "extension_manifest.h"
 #include "extension_trust_store.h"
+#include "test_temp_paths.h"
 
 #include <nlohmann/json.hpp>
 

@@ -9,6 +9,7 @@
 // following test_issue80_extension_hardening.
 
 #include "extension_manifest.h"
+#include "test_temp_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
 

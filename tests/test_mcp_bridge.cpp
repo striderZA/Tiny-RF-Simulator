@@ -15,6 +15,7 @@
 #include "agent_socket.h"
 #include "agent_wire.h"
 #include "fake_gui.h"
+#include "test_temp_paths.h"
 
 #include <atomic>
 #include <chrono>

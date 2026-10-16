@@ -12,6 +12,7 @@
 #include "imnodes.h"
 #include "implot.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
