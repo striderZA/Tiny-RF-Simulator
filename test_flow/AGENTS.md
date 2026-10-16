@@ -35,7 +35,7 @@ component output ports.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
   (`atten_dB`, not `attenuation_dB`).
 - Condition `path`s are dot-separated keys with optional zero-based array indices, e.g. `gain_dB` or
-  `tones[0].power_dBm`.
+  `tones[0].power_dBm`. Array indices must not have leading zeros.
 - Patches are type-preserving: a signed integer slot requires an integral value; an unsigned slot
   requires a finite, non-negative, integral value and stays unsigned; a float slot requires a finite
   value. Boolean, string, null, object and array slots are rejected. `conditionSlotAccepts()` is

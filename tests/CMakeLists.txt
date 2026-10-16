@@ -368,6 +368,13 @@ add_standalone_test(test_issue87_flow
          simulator::node_graph_engine
 )
 
+# Standalone flow-index coverage stays outside the issue #87 binary for the MinGW-w64
+# registration ceiling.
+add_standalone_test(test_issue130_flow_indices
+    SOURCES test_issue130_flow_indices.cpp
+    LIBS simulator::test_flow simulator::signal_generator_engine
+)
+
 # Standalone coverage for the spectrum-display noise jitter: the cosmetic
 # noise-floor fluctuation must not move deterministic tone peaks. Kept outside
 # tests.exe for the MinGW-w64 registration-ceiling reason above.

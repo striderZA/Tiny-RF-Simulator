@@ -1,6 +1,7 @@
 #include "library_browser_widget.h"
 #include "component_library.h"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <imgui.h>
 #include <map>
@@ -11,10 +12,12 @@ bool LibraryBrowserWidget::matchesFilter(const ComponentDefinition &def) const {
     if (m_filter_buffer[0] == '\0')
         return true;
     std::string filter = m_filter_buffer;
-    std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
+    std::transform(filter.begin(), filter.end(), filter.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     auto contains = [&](const std::string &s) {
         std::string lower = s;
-        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return lower.find(filter) != std::string::npos;
     };
     return contains(def.part_number) || contains(def.manufacturer) || contains(def.description);
