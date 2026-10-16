@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "logging_core.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -252,4 +253,37 @@ TEST_CASE_METHOD(
     retry.testCreateComponent("generator", 22407);
     REQUIRE(retry.saveProject(target.string()));
     REQUIRE_FALSE(fs::exists(temp));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Issue #224: save refuses a folder at the temp path and keeps it",
+                 "[issue224][project][folder]") {
+    TempTree tree("folder_temp");
+    const auto target = tree.file("project.rfsim");
+    const auto temp = fs::path(target.string() + ".tmp");
+
+    RfSimulatorApp previous;
+    previous.newProject();
+    previous.testCreateComponent("generator", 22408);
+    REQUIRE(previous.saveProject(target.string()));
+    const std::string before = readText(target);
+
+    fs::create_directories(temp);
+    writeText(temp / "keep.txt", "KEEP");
+
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 22409);
+    LoggerCore::instance().clear();
+    REQUIRE_FALSE(app.saveProject(target.string()));
+
+    REQUIRE(readText(target) == before);
+    REQUIRE(fs::is_directory(temp));
+    REQUIRE(readText(temp / "keep.txt") == "KEEP");
+
+    bool refused = false;
+    for (const LogEntry &entry : LoggerCore::instance().entries())
+        if (entry.level == Level::Error &&
+            entry.message.find("is not a regular file") != std::string::npos)
+            refused = true;
+    REQUIRE(refused);
 }

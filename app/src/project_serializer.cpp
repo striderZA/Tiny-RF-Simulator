@@ -126,9 +126,11 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_tak
     name_taken = false;
     error.clear();
 #ifdef _WIN32
+    // BACKUP_SEMANTICS makes CREATE_NEW report an existing folder as taken, not ACCESS_DENIED.
     const HANDLE handle = CreateFileW(
         path.c_str(), GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-        CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+        CREATE_NEW,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         const DWORD win_error = GetLastError();
         name_taken = win_error == ERROR_FILE_EXISTS || win_error == ERROR_ALREADY_EXISTS;
@@ -176,10 +178,11 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_tak
 StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::error_code &error) {
     error.clear();
 #ifdef _WIN32
+    // BACKUP_SEMANTICS lets a folder open so it is refused below, not failed with ACCESS_DENIED.
     const HANDLE handle =
         CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES,
                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                    FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+                    FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         const DWORD win_error = GetLastError();
         if (win_error == ERROR_FILE_NOT_FOUND || win_error == ERROR_PATH_NOT_FOUND)
