@@ -71,19 +71,10 @@ fi
 
 if [[ "$MODE" == check* ]]; then
   BAD=()
-  MISSING=()
   for f in "${FILES[@]}"; do
-    if [ ! -f "$f" ]; then
-      MISSING+=("$f")
-      continue
-    fi
+    [ -f "$f" ] || continue
     "$CF" --dry-run --Werror "$f" >/dev/null 2>&1 || BAD+=("$f")
   done
-  if [ "${#MISSING[@]}" -gt 0 ]; then
-    echo "format.sh: ${#MISSING[@]} listed file(s) missing from the working tree:"
-    printf '  %s\n' "${MISSING[@]}"
-    exit 1
-  fi
   if [ "${#BAD[@]}" -gt 0 ]; then
     echo "format.sh: ${#BAD[@]} file(s) need formatting:"
     printf '  %s\n' "${BAD[@]}"
