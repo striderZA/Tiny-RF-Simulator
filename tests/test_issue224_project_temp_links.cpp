@@ -20,6 +20,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
@@ -307,11 +308,13 @@ bool hasErrorLog(const std::string &needle) {
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture,
-                 "Issue #224: a failed temp write keeps the previous project and removes its temp",
-                 "[issue224][project][seam]") {
+                 "Issue #242: a failed temp write leaves a replacement temp entry untouched",
+                 "[issue242][project][seam]") {
     TempTree tree("seam_write");
     const auto target = tree.file("project.rfsim");
     const auto temp = fs::path(target.string() + ".tmp");
+    const auto displaced = tree.file("temp-displaced.tmp");
+    const std::string unrelated = "UNRELATED TEMP";
 
     RfSimulatorApp previous;
     previous.newProject();
@@ -320,10 +323,15 @@ TEST_CASE_METHOD(ImGuiFixture,
     const std::string before = readText(target);
 
     SaveSeamGuard seam;
-    bool temp_present_at_cleanup = false;
+    bool temp_replaced_at_cleanup = false;
     ProjectSerializer::testHooks().failWrite = [] { return true; };
     ProjectSerializer::testHooks().beforeFailureCleanup = [&](const fs::path &path) {
-        temp_present_at_cleanup = fs::exists(path);
+        std::error_code ec;
+        fs::rename(path, displaced, ec);
+        if (!ec) {
+            writeText(path, unrelated);
+            temp_replaced_at_cleanup = readText(path) == unrelated;
+        }
     };
 
     RfSimulatorApp app;
@@ -332,18 +340,22 @@ TEST_CASE_METHOD(ImGuiFixture,
     LoggerCore::instance().clear();
     REQUIRE_FALSE(app.saveProject(target.string()));
 
-    REQUIRE(temp_present_at_cleanup);
-    REQUIRE_FALSE(fs::exists(temp));
+    REQUIRE(temp_replaced_at_cleanup);
+    REQUIRE(fs::exists(temp));
+    REQUIRE(fs::is_regular_file(temp));
+    REQUIRE(readText(temp) == unrelated);
     REQUIRE(readText(target) == before);
-    REQUIRE(hasErrorLog("Failed to write project file"));
+    REQUIRE(hasErrorLog("Failed to write project file: " + temp.string()));
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
-                 "Issue #224: a failed rename keeps the previous project and removes its temp",
-                 "[issue224][project][seam]") {
+                 "Issue #242: a failed rename leaves a replacement temp entry untouched",
+                 "[issue242][project][seam]") {
     TempTree tree("seam_rename");
     const auto target = tree.file("project.rfsim");
+    const auto displaced = tree.file("temp-displaced.tmp");
     const auto temp = fs::path(target.string() + ".tmp");
+    const std::string unrelated = "UNRELATED TEMP";
 
     RfSimulatorApp previous;
     previous.newProject();
@@ -352,10 +364,15 @@ TEST_CASE_METHOD(ImGuiFixture,
     const std::string before = readText(target);
 
     SaveSeamGuard seam;
-    bool temp_present_at_cleanup = false;
+    bool temp_replaced_at_cleanup = false;
     ProjectSerializer::testHooks().failRename = [] { return true; };
     ProjectSerializer::testHooks().beforeFailureCleanup = [&](const fs::path &path) {
-        temp_present_at_cleanup = fs::exists(path);
+        std::error_code remove_error;
+        fs::rename(path, displaced, remove_error);
+        if (!remove_error) {
+            writeText(path, unrelated);
+            temp_replaced_at_cleanup = readText(path) == unrelated;
+        }
     };
 
     RfSimulatorApp app;
@@ -364,10 +381,13 @@ TEST_CASE_METHOD(ImGuiFixture,
     LoggerCore::instance().clear();
     REQUIRE_FALSE(app.saveProject(target.string()));
 
-    REQUIRE(temp_present_at_cleanup);
-    REQUIRE_FALSE(fs::exists(temp));
+    REQUIRE(temp_replaced_at_cleanup);
+    REQUIRE(fs::exists(temp));
+    REQUIRE(fs::is_regular_file(temp));
+    REQUIRE(readText(temp) == unrelated);
     REQUIRE(readText(target) == before);
-    REQUIRE(hasErrorLog("Failed to replace project file"));
+    REQUIRE(hasErrorLog("Failed to replace project file " + target.string() + ": " +
+                        std::make_error_code(std::errc::io_error).message()));
 }
 
 TEST_CASE_METHOD(ImGuiFixture,

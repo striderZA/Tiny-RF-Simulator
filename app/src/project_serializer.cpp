@@ -55,6 +55,25 @@ namespace {
 // Outcome of removing a leftover "<target>.tmp" from an earlier save.
 enum class StaleTempOutcome { Removed, Absent, Refused, Failed };
 
+struct CreatedTempIdentity {
+#ifdef _WIN32
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    ~CreatedTempIdentity() {
+        if (handle != INVALID_HANDLE_VALUE)
+            CloseHandle(handle);
+    }
+#else
+    int fd = -1;
+    ~CreatedTempIdentity() {
+        if (fd != -1)
+            ::close(fd);
+    }
+#endif
+    CreatedTempIdentity() = default;
+    CreatedTempIdentity(const CreatedTempIdentity &) = delete;
+    CreatedTempIdentity &operator=(const CreatedTempIdentity &) = delete;
+};
+
 #ifdef _WIN32
 // Marks the file opened through `handle` for deletion. The deletion applies to
 // that file object, so a name swapped in afterwards is not what gets deleted.
@@ -69,11 +88,12 @@ bool deleteThroughHandle(HANDLE handle, std::error_code &error) {
     return true;
 }
 
-// Removes the file this process just created when wrapping its handle failed.
+// Removes only the file this process created, through its handle on Windows or
+// after a dev/inode identity check on POSIX.
 void discardCreatedTemp(const std::filesystem::path &path, HANDLE handle) {
     std::error_code error;
     if (!deleteThroughHandle(handle, error))
-        LOG_ERROR("Could not remove project temp file %s after a failed open: %s",
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
                   path.string().c_str(), error.message().c_str());
 }
 #else
@@ -99,30 +119,52 @@ NameCheck checkNameMatchesOpened(const std::filesystem::path &path, int fd,
                                                                           : NameCheck::Different;
 }
 
-// Removes the file this process just created when wrapping its descriptor failed.
-// The unlink runs only while the name still matches; the window between that
-// check and unlink() is a residual POSIX race.
+// Removes only the file this process created, after confirming its name still
+// refers to the same dev/inode. The window between that check and unlink() is a
+// residual POSIX race.
 void discardCreatedTemp(const std::filesystem::path &path, int fd) {
     std::error_code error;
     if (checkNameMatchesOpened(path, fd, error) != NameCheck::Same) {
         if (error)
-            LOG_ERROR("Could not inspect project temp file %s after a failed open: %s",
+            LOG_ERROR("Could not inspect project temp file %s after a failed operation: %s",
                       path.string().c_str(), error.message().c_str());
         return;
     }
     if (::unlink(path.c_str()) != 0)
-        LOG_ERROR("Could not remove project temp file %s after a failed open: %s",
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
                   path.string().c_str(),
                   std::error_code(errno, std::generic_category()).message().c_str());
 }
 #endif
 
+void discardCreatedTemp(const std::filesystem::path &path, const CreatedTempIdentity &identity) {
+#ifdef _WIN32
+    // ReOpenFile binds cleanup to this object, not whatever object its old name now refers to.
+    const HANDLE cleanup_handle =
+        ReOpenFile(identity.handle, DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                   FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    if (cleanup_handle == INVALID_HANDLE_VALUE) {
+        const std::error_code error(static_cast<int>(GetLastError()), std::system_category());
+        LOG_ERROR("Could not reopen project temp file %s for cleanup: %s", path.string().c_str(),
+                  error.message().c_str());
+        return;
+    }
+    std::error_code error;
+    if (!deleteThroughHandle(cleanup_handle, error))
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
+                  path.string().c_str(), error.message().c_str());
+    CloseHandle(cleanup_handle);
+#else
+    if (identity.fd != -1)
+        discardCreatedTemp(path, identity.fd);
+#endif
+}
+
 // Creates `path` only if no entry exists there, without following a link. Returns
 // nullptr on failure with `error` set. `name_taken` is set only when the name
-// already exists. A file this call created is removed again if wrapping fails
-// (POSIX: only if the identity check in discardCreatedTemp still matches).
+// already exists. `identity` retains the created object for failure cleanup.
 FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken,
-                               std::error_code &error) {
+                               std::error_code &error, CreatedTempIdentity &identity) {
     name_taken = false;
     error.clear();
 #ifdef _WIN32
@@ -152,6 +194,18 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_tak
         _close(fd);
         return nullptr;
     }
+    // Retain the same object with delete sharing; the writer handle still blocks swaps until
+    // closed.
+    const HANDLE cleanup_handle =
+        ReOpenFile(handle, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                   FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    if (cleanup_handle == INVALID_HANDLE_VALUE) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        discardCreatedTemp(path, handle);
+        std::fclose(stream);
+        return nullptr;
+    }
+    identity.handle = cleanup_handle;
     return stream;
 #else
     const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
@@ -167,6 +221,14 @@ FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_tak
         ::close(fd);
         return nullptr;
     }
+    const int cleanup_fd = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (cleanup_fd == -1) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, fd);
+        std::fclose(stream);
+        return nullptr;
+    }
+    identity.fd = cleanup_fd;
     return stream;
 #endif
 }
@@ -1021,12 +1083,13 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
 
     std::error_code temp_error;
     bool name_taken = false;
-    FILE *out = openExclusiveProjectTemp(temp, name_taken, temp_error);
+    CreatedTempIdentity temp_identity;
+    FILE *out = openExclusiveProjectTemp(temp, name_taken, temp_error, temp_identity);
     if (!out && name_taken) {
         switch (removeStaleProjectTemp(temp, temp_error)) {
         case StaleTempOutcome::Removed:
         case StaleTempOutcome::Absent:
-            out = openExclusiveProjectTemp(temp, name_taken, temp_error);
+            out = openExclusiveProjectTemp(temp, name_taken, temp_error, temp_identity);
             break;
         case StaleTempOutcome::Refused:
             LOG_ERROR("Project temp path %s is not a regular file (a link, a folder, or replaced "
@@ -1065,8 +1128,7 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     }
     if (!write_ok) {
         runBeforeFailureCleanupHook(temp);
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
+        discardCreatedTemp(temp, temp_identity);
         return failSave();
     }
     // Never remove the target before rename: on failure the previous .rfsim is intact.
@@ -1078,8 +1140,7 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
     if (ec) {
         LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
         runBeforeFailureCleanupHook(temp);
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
+        discardCreatedTemp(temp, temp_identity);
         return failSave();
     }
 
