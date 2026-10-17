@@ -87,6 +87,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Skills state only behavior verified against code or tests. A skill's facts come from the code it describes; for `using-rf-sim-mcp`, that is `agent/`, governed by `agent/AGENTS.md`. Update a skill in the same change as the code it describes.
 - Create or revise skills with the `writing-skills` workflow: run a blind baseline without the skill, then re-test with it, using the scenarios that matter.
 - Each `<skill-name>/` folder owns its `SKILL.md` and any reference file beside it.
+- Root `AGENTS.md` may reference OpenWiki. `openwiki/` holds no `AGENTS.md`: it is generated, non-binding content.
 
 ## Child DOX Index
 
