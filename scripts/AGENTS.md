@@ -12,6 +12,7 @@
 
 ## Local Contracts
 - `scripts/format-dirs.sh` is the single definition of the clang-format file set, used by `scripts/format.sh`, `.githooks/pre-commit`, and the release workflow's format job.
+- `scripts/format.sh --all` checks the tracked C++ files under `scripts/format-dirs.sh` (`git ls-files`, not `find`), the same view a clean checkout gets in the release format job. Untracked files are not checked. An empty `--all` scan exits 1, and a listed file missing from the working tree fails check mode.
 - `scripts/release-notes.sh` is the single changelog-section extractor used by `release.yml` and `scripts/release.sh`; it rejects a missing section or one without a bullet.
 - `scripts/release.sh` prepares the branch, version bump, gates, and commit. `--tag` creates and pushes the annotated tag on `master` only.
 - Releases default to a `release/vX.Y.Z` branch merged through a pull request. `scripts/release.sh --on-master` is the sanctioned direct-to-master alternative. The annotated `vX.Y.Z` tag is created only on `master`, after the version bump has landed.
