@@ -1,7 +1,7 @@
 # Scripts
 
 ## Purpose
-- Own release, changelog, format, and OpenWiki boundary scripts and their operational contracts.
+- Own release, changelog, and format scripts and their operational contracts.
 
 ## Ownership
 - `scripts/release.sh`
@@ -9,8 +9,6 @@
 - `scripts/format.sh`
 - `scripts/format-dirs.sh`
 - `scripts/install-clang-format.sh`
-- `scripts/check-openwiki-boundary.sh`
-- `scripts/test-openwiki-boundary.sh`
 
 ## Local Contracts
 - `scripts/format-dirs.sh` is the single definition of the clang-format file set, used by `scripts/format.sh`, `.githooks/pre-commit`, and the release workflow's format job.
@@ -26,7 +24,6 @@
 - A failed tag is retagged as described in `CONTRIBUTING.md` ("Failed release tag"); a published release's tag is never moved.
 - `release.yml` declares top-level `permissions: contents: read`; only the `release` job has `contents: write`.
 - `strict-build` and `package` both run `.github/actions/build-and-test`, which holds each configuration's toolchain install, configure, build, test, and the Windows MinGW TEST_CASE floor check. `MINGW_TEST_CASE_FLOOR` is set in `release.yml`.
-- `scripts/check-openwiki-boundary.sh` restores the HEAD text outside the `OPENWIKI` markers of `AGENTS.md` and fails when the markers are missing, duplicated, or misordered. `openwiki-update.yml` runs its HEAD copy, so the scheduled run cannot alter the check.
 
 ## Work Guidance
 
@@ -38,7 +35,6 @@
 - `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `mkdocs build --strict` for pushes to `master` touching manual/build inputs, published releases, or manual dispatch.
 - Formatting check: `bash scripts/format.sh --check --all`.
-- `bash scripts/test-openwiki-boundary.sh` runs the boundary guard against throwaway git repositories; it needs no network or OpenWiki run.
 
 ## Child DOX Index
 - None.
