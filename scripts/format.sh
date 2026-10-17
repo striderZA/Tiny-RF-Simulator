@@ -4,7 +4,7 @@
 # Usage:
 #   scripts/format.sh              # reformat every changed file (working tree, vs. HEAD)
 #   scripts/format.sh --check      # dry-run + --Werror on every changed file (CI-equivalent)
-#   scripts/format.sh --all        # reformat the full CI-scanned file set, not just changed files
+#   scripts/format.sh --all        # reformat every tracked file in the CI-scanned set, not just changed files
 #   scripts/format.sh file1 file2  # operate on explicit files
 #
 # If clang-format-18 isn't on PATH, run scripts/install-clang-format.sh first.
@@ -51,7 +51,14 @@ done
 if [ "${#EXPLICIT_FILES[@]}" -gt 0 ]; then
   FILES=("${EXPLICIT_FILES[@]}")
 elif [[ "$MODE" == *-all ]]; then
-  mapfile -t FILES < <(find "${FORMAT_DIRS[@]}" -name '*.cpp' -o -name '*.h' 2>/dev/null)
+  # Tracked files only: the view a clean CI checkout gets. Not `find`: on Git for
+  # Windows a bare `find` is C:\Windows\system32\find, which fails on these args.
+  mapfile -t FILES < <(git ls-files -- "${FORMAT_DIRS[@]}" | grep -E '\.(cpp|h)$' || true)
+  # A full scan is never legitimately empty; an empty one means discovery broke.
+  if [ "${#FILES[@]}" -eq 0 ]; then
+    echo "format.sh: --all found no tracked C++ files under FORMAT_DIRS; refusing to pass an empty scan." >&2
+    exit 1
+  fi
 else
   mapfile -t FILES < <(git diff --name-only --diff-filter=ACMR -- "${FORMAT_DIRS[@]}" \
     | grep -E '\.(cpp|h)$' || true)

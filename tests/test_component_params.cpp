@@ -36,6 +36,7 @@ const std::map<std::string, ExpectedTypeFields> &expectedStateFields() {
           {"sparam_mode", {FieldKind::Bool, ""}},
           {"sparam_filepath", {FieldKind::FilePath, ""}},
           {"amp_filepath", {FieldKind::FilePath, ""}},
+          {"ampf_filepath", {FieldKind::FilePath, ""}},
           {"sparam_fwd_idx", {FieldKind::Number, ""}}}},
         {"attenuator",
          {{"atten_dB", {FieldKind::Number, "dB"}},
@@ -241,7 +242,8 @@ TEST_CASE("State metadata describes every scalar engine serialization leaf", "[c
             CHECK(field.help.back() == '.');
             CHECK((std::isinf(field.min) && field.min < 0.0));
             CHECK((std::isinf(field.max) && field.max > 0.0));
-            const bool is_path_key = field.key == "sparam_filepath" || field.key == "amp_filepath";
+            const bool is_path_key = field.key == "sparam_filepath" ||
+                                     field.key == "amp_filepath" || field.key == "ampf_filepath";
             CHECK(field.read_only == is_path_key);
             CHECK((field.kind == FieldKind::FilePath) == is_path_key);
         }
@@ -483,7 +485,8 @@ TEST_CASE("S-parameter paths are rejected before other key validation", "[compon
     auto *engine = fixture.create("amplifier");
     REQUIRE(engine != nullptr);
 
-    for (const std::string key : {"sparam_filepath", "sparam_path", "amp_filepath"}) {
+    for (const std::string key :
+         {"sparam_filepath", "sparam_path", "amp_filepath", "ampf_filepath"}) {
         const auto result =
             applyComponentParams(*engine, paramsDescriptor("amplifier").state_fields, {{key, 123}});
         CHECK(result.status == ParamWriteStatus::PathParamUnsupported);

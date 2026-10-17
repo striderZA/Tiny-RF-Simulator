@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spectrum.h"
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <vector>
@@ -17,8 +18,12 @@ inline double vToDbm(double V) { return 10.0 * std::log10((V * V / 50.0) / 0.001
 class NonlinearModel {
   public:
     using GainFn = std::function<double(double freq_Hz)>;
-    // Output intercept (dBm) at a frequency, for intercepts that vary with frequency.
+    // Output intercepts (dBm) at a frequency, for intercepts that vary with frequency.
     using Oip3Fn = std::function<double(double freq_Hz)>;
+    using Oip2Fn = std::function<double(double freq_Hz)>;
+
+    // While OIP3 is at its default, setting P1dB sets OIP3 this many dB above it.
+    static constexpr double kOip3OverP1dB_dB = 9.6;
 
     void setOIP2_dBm(double oip2) {
         if (oip2 != m_oip2_dBm) {
@@ -51,7 +56,7 @@ class NonlinearModel {
             m_p1db_dBm = p1db;
             // If OIP3 is default (100), derive from P1dB
             if (m_oip3_dBm >= 99.0 && m_p1db_dBm < 90.0) {
-                m_oip3_dBm = m_p1db_dBm + 9.6;
+                m_oip3_dBm = m_p1db_dBm + kOip3OverP1dB_dB;
                 if (m_enabled)
                     recomputeCoefficients();
             }
@@ -63,11 +68,14 @@ class NonlinearModel {
         double compression_dB = 0.0;
     };
 
-    // Products use the scalar OIP3 unless oip3_at_freq is given. With it, each harmonic
-    // uses the intercept at the frequency of the tone it comes from, and each IM3 product
-    // uses the intercept at the fundamental it squares: 2f1 +- f2 uses f1, 2f2 +- f1 uses f2.
+    // Products use the scalar intercepts unless functions are given. With oip3_at_freq, each
+    // harmonic uses the OIP3 at the frequency of the tone it comes from, and each IM3 product
+    // uses the OIP3 at the fundamental it squares: 2f1 +- f2 uses f1, 2f2 +- f1 uses f2. With
+    // oip2_at_freq, each harmonic uses the OIP2 at its own tone, and each IM2 product uses the
+    // lower of its two tones' OIP2, the larger second-order coefficient. A non-finite value from
+    // either function is replaced by the scalar intercept.
     Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq,
-                   const Oip3Fn &oip3_at_freq = {}) const {
+                   const Oip3Fn &oip3_at_freq = {}, const Oip2Fn &oip2_at_freq = {}) const {
         using detail::dbmToV;
         using detail::dbmToW;
         using detail::vToDbm;
@@ -79,9 +87,19 @@ class NonlinearModel {
 
         double total_distortion_mW = 0.0;
 
+        // Second-order coefficient for a fundamental at freq_Hz.
+        const auto k1_at = [&](double freq_Hz) {
+            if (!oip2_at_freq)
+                return m_k1;
+            const double k = k1ForOip2(oip2_at_freq(freq_Hz));
+            return std::isfinite(k) ? k : m_k1;
+        };
         // Third-order coefficient for a fundamental at freq_Hz.
         const auto k2_at = [&](double freq_Hz) {
-            return oip3_at_freq ? k2ForOip3(oip3_at_freq(freq_Hz)) : m_k2;
+            if (!oip3_at_freq)
+                return m_k2;
+            const double k = k2ForOip3(oip3_at_freq(freq_Hz));
+            return std::isfinite(k) ? k : m_k2;
         };
 
         // Harmonics (from each input tone)
@@ -91,7 +109,7 @@ class NonlinearModel {
             double Vp1 = dbmToV(Pout_dBm);
 
             // H2: v_in^2 term -> RMS k1*A^2/(2*sqrt(2)) = k1*Vp1^2/sqrt(2), A = sqrt(2)*Vp1
-            double V_h2 = m_k1 * Vp1 * Vp1 / std::sqrt(2.0);
+            double V_h2 = k1_at(tone.freq_Hz) * Vp1 * Vp1 / std::sqrt(2.0);
             double H2_dBm = vToDbm(V_h2);
             r.extra_tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
             total_distortion_mW += dbmToW(H2_dBm);
@@ -116,7 +134,10 @@ class NonlinearModel {
                 double Vp1 = dbmToV(P1);
                 double Vp2 = dbmToV(P2);
 
-                double V_im2 = m_k1 * Vp1 * Vp2;
+                // IM2 uses the larger of the two second-order coefficients (lower intercept).
+                // Worst case by design: the cross term is not derived from the model.
+                const double k1_im2 = std::max(k1_at(f1), k1_at(f2));
+                double V_im2 = k1_im2 * Vp1 * Vp2;
                 double IM2_dBm = vToDbm(V_im2);
                 r.extra_tones.push_back({std::abs(f1 - f2), IM2_dBm, 0.0});
                 r.extra_tones.push_back({f1 + f2, IM2_dBm, 0.0});
@@ -162,6 +183,9 @@ class NonlinearModel {
     double m_k1 = 0.0;
     double m_k2 = 0.0;
 
+    // Second-order coefficient for an output intercept (dBm).
+    static double k1ForOip2(double oip2_dBm) { return 1.0 / detail::dbmToV(oip2_dBm); }
+
     // Third-order coefficient for an output intercept (dBm).
     static double k2ForOip3(double oip3_dBm) {
         const double V_oip3 = detail::dbmToV(oip3_dBm);
@@ -169,9 +193,7 @@ class NonlinearModel {
     }
 
     void recomputeCoefficients() {
-        using detail::dbmToV;
-        double V_oip2 = dbmToV(m_oip2_dBm);
-        m_k1 = 1.0 / V_oip2;
+        m_k1 = k1ForOip2(m_oip2_dBm);
         m_k2 = k2ForOip3(m_oip3_dBm);
     }
 };

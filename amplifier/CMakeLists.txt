@@ -6,6 +6,7 @@ project(amplifier LANGUAGES CXX)
 add_library(amplifier_engine STATIC
     src/amplifier_engine.cpp
     src/amp_file.cpp
+    src/ampf_file.cpp
 )
 
 target_include_directories(amplifier_engine

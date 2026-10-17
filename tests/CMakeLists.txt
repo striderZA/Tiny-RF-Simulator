@@ -119,11 +119,32 @@ add_standalone_test(test_amp_file
     LIBS simulator::amplifier_engine
 )
 
+# AMP-F v1 reader: file rules, block identity, selection, and interpolation. Standalone for the
+# MinGW-w64 registration ceiling.
+add_standalone_test(test_ampf_file
+    SOURCES test_ampf_file.cpp
+    LIBS simulator::amplifier_engine
+)
+
 # Per-frequency OIP3 in the nonlinear model's third-order products. Standalone for the
 # MinGW-w64 registration ceiling.
 add_standalone_test(test_nonlinear_frequency_oip3
     SOURCES test_nonlinear_frequency_oip3.cpp
     LIBS common
+)
+
+# Per-frequency OIP2 in the nonlinear model's second-order products, the IM2 rule, and the
+# NaN fallback. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_nonlinear_frequency_oip2
+    SOURCES test_nonlinear_frequency_oip2.cpp
+    LIBS common
+)
+
+# AMP-F v1 intercepts reaching the amplifier's nonlinear products through update(), selection,
+# fallback, and save/load. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_ampf
+    SOURCES test_amplifier_ampf.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
 # AMP intercepts reaching the amplifier's nonlinear products through update(). Standalone for

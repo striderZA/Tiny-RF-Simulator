@@ -143,6 +143,9 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
         stateField("amp_filepath", "AMP File", "", FieldKind::FilePath,
                    "Identifies the AMP file that supplies the amplifier's IIP3 or OIP3 intercepts.",
                    {}, true),
+        stateField("ampf_filepath", "AMP-F File", "", FieldKind::FilePath,
+                   "Identifies the amp-f v1 file that supplies per-frequency intercepts.", {},
+                   true),
     };
     amp.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AmplifierEngine>(id, graph));
