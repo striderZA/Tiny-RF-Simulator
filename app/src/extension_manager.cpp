@@ -140,10 +140,15 @@ std::optional<std::string> readManifestId(const fs::path &manifest_path) {
 
 } // namespace
 
+fs::path ExtensionManager::builtInSourceRoot() const {
+    return m_built_in_source_root.empty() ? fs::path(PROJECT_SOURCE_DIR) / "extensions"
+                                          : m_built_in_source_root;
+}
+
 std::vector<ExtensionManager::ScanRoot>
 ExtensionManager::scanRoots(const fs::path &project_root) const {
     std::vector<ScanRoot> roots;
-    roots.push_back({fs::path(PROJECT_SOURCE_DIR) / "extensions", false});
+    roots.push_back({builtInSourceRoot(), false});
     // Installed built-in payloads live next to the executable
     // (<exe_dir>/extensions), matching the install rules and the layout/ +
     // SessionState exe-relative convention. Nonexistent in dev/build-tree

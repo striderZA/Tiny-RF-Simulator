@@ -205,11 +205,31 @@ TEST_CASE("extension manager keeps invalid manifests visible", "[extensions][dis
     REQUIRE_FALSE(record_it->manifest.has_value());
     REQUIRE_FALSE(record_it->issues.empty());
 }
+TEST_CASE("extension manager uses the default built-in root and rescans an override",
+          "[extensions][discovery]") {
+    ExtensionManager mgr;
+    const fs::path default_root = fs::path(PROJECT_SOURCE_DIR) / "extensions";
+    REQUIRE(mgr.builtInSourceRoot() == default_root);
+
+    const fs::path override_root = fs::temp_directory_path() / "rfsim_ext_builtin_override";
+    ScopedRemove cleanup{override_root};
+    const fs::path manifest_path = writeManifest(
+        override_root / "override-pack",
+        R"json({"schema_version":1,"id":"override.pack","name":"Override Pack","version":"1.0.0","kind":"data-pack"})json");
+    mgr.setBuiltInSourceRoot(override_root);
+    mgr.rescan(fs::temp_directory_path() / "rfsim_ext_builtin_override_project");
+
+    REQUIRE(mgr.builtInSourceRoot() == override_root);
+    REQUIRE(std::find_if(mgr.all().begin(), mgr.all().end(), [&](const ExtensionRecord &record) {
+                return record.manifest_path == manifest_path;
+            }) != mgr.all().end());
+}
 
 TEST_CASE("extension manager keeps the built-in copy and flags the project-local duplicate",
           "[extensions][discovery]") {
-    const fs::path builtin_root = fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_shadow_case";
-    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_shadow";
+    const fs::path builtin_root =
+        fs::temp_directory_path() / "rfsim_ext_shadow" / "built-in" / "rfsim_shadow_case";
+    const fs::path project_root = fs::temp_directory_path() / "rfsim_ext_shadow" / "project";
     const fs::path builtin_manifest = writeManifest(builtin_root,
                                                     R"json({
             "schema_version": 1,
@@ -227,11 +247,12 @@ TEST_CASE("extension manager keeps the built-in copy and flags the project-local
             "version": "2.0.0",
             "kind": "data-pack"
         })json");
-    ScopedRemove cleanup{builtin_root};
+    ScopedRemove cleanup{fs::temp_directory_path() / "rfsim_ext_shadow"};
 
     REQUIRE(fs::exists(builtin_manifest));
 
     ExtensionManager mgr;
+    mgr.setBuiltInSourceRoot(builtin_root.parent_path());
     mgr.rescan(project_root);
 
     const auto &records = mgr.all();
