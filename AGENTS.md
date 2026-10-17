@@ -61,7 +61,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 | AGENTS.md (this tree) | Binding subtree contracts and the DOX pass | Humans and agents, through the DOX pass |
 | `.agents/skills/` and `.githooks/` | Not DOX. Skill rules: Agent Rules here. Hook rules: CONTRIBUTING.md | Humans and agents, under those rules |
 | CONTRIBUTING.md | Human conventions: setup, testing, style, git, CI, release | Humans |
-| `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | The scheduled OpenWiki job; regenerate after changing `openwiki/INSTRUCTIONS.md` |
+| `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | Humans, by manual OpenWiki regeneration after changing `openwiki/INSTRUCTIONS.md` |
 | `manual/` | Published user documentation (MkDocs) | Humans |
 | `docs/` | Engineering references | Humans |
 | `WATCHDOG.yml` | Review-advisor config for tooling; not a DOX file | Tooling owner |
