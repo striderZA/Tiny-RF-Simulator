@@ -92,6 +92,18 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+# Issue #238: pins the per-process temp root that tests/test_temp_paths.h installs.
+add_standalone_test(test_issue238_temp_isolation
+    SOURCES test_issue238_temp_isolation.cpp
+)
+
+# Rewire pass characterization and scaling benchmark; standalone for the
+# MinGW-w64 registration ceiling (see tests/AGENTS.md).
+add_standalone_test(test_node_graph_rewire
+    SOURCES test_node_graph_rewire.cpp
+    LIBS simulator::combiner_engine simulator::node_graph_engine
+)
+
 # Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
 # Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
 add_standalone_test(test_sparam_legacy_key
@@ -99,6 +111,47 @@ add_standalone_test(test_sparam_legacy_key
     LIBS simulator::amplifier_engine simulator::equalizer_engine
          simulator::ideal_filter_engine simulator::signal_generator_engine
          simulator::node_graph_engine
+)
+
+# AMP (MathWorks) IIP3/OIP3 reader. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amp_file
+    SOURCES test_amp_file.cpp
+    LIBS simulator::amplifier_engine
+)
+
+# AMP-F v1 reader: file rules, block identity, selection, and interpolation. Standalone for the
+# MinGW-w64 registration ceiling.
+add_standalone_test(test_ampf_file
+    SOURCES test_ampf_file.cpp
+    LIBS simulator::amplifier_engine
+)
+
+# Per-frequency OIP3 in the nonlinear model's third-order products. Standalone for the
+# MinGW-w64 registration ceiling.
+add_standalone_test(test_nonlinear_frequency_oip3
+    SOURCES test_nonlinear_frequency_oip3.cpp
+    LIBS common
+)
+
+# Per-frequency OIP2 in the nonlinear model's second-order products, the IM2 rule, and the
+# NaN fallback. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_nonlinear_frequency_oip2
+    SOURCES test_nonlinear_frequency_oip2.cpp
+    LIBS common
+)
+
+# AMP-F v1 intercepts reaching the amplifier's nonlinear products through update(), selection,
+# fallback, and save/load. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_ampf
+    SOURCES test_amplifier_ampf.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
+)
+
+# AMP intercepts reaching the amplifier's nonlinear products through update(). Standalone for
+# the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_amp_file
+    SOURCES test_amplifier_amp_file.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
 add_standalone_test(test_rf_switch
@@ -211,16 +264,22 @@ add_standalone_test(test_signal_generator_noise
     LIBS simulator::signal_generator_engine simulator::node_graph_engine
 )
 
-# Standalone for the S1/S2 security-fix tests (S-param path containment at the
-# project-file and library boundaries + touchstone parser size/point guards)
-# plus issue #120 (the component-authoring save path derives a copied data
-# file's name from a sanitized part number and refuses escaping names).
-# Kept out of the main `tests` binary for the same MinGW registration
-# ceiling reason as test_component_authoring above.
+# Standalone for S-param path containment, external project RF data round trips,
+# touchstone parser guards, and component-authoring filename checks. Kept outside
+# tests.exe for the MinGW registration ceiling.
 add_standalone_test(test_path_containment
     SOURCES test_path_containment.cpp
     LIBS simulator::app simulator::touchstone_parser
 )
+set_tests_properties(test_path_containment PROPERTIES RUN_SERIAL TRUE)
+# Separate target keeps the newly added project-data cases below MinGW's per-binary
+# Catch2 registration ceiling while retaining the existing containment suite.
+add_standalone_test(test_external_project_data
+    SOURCES test_path_containment.cpp
+    LIBS simulator::app simulator::touchstone_parser
+)
+target_compile_definitions(test_external_project_data PRIVATE TEST_EXTERNAL_PROJECT_DATA_ONLY=1)
+set_tests_properties(test_external_project_data PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #48 coverage for malformed-but-valid project and component
 # library JSON. Kept outside tests.exe because MinGW silently drops registrations
@@ -229,6 +288,14 @@ add_standalone_test(test_issue48_json_loader
     SOURCES test_issue48_json_loader.cpp
     LIBS simulator::app
 )
+# Issue #200 app-level swap side effects: the Network Analyzer and Power Meter pins follow the
+# successor, and a PFB keeps its IQ Plot and Grid visibility. Constructs RfSimulatorApp, which
+# writes the shared exe-relative app.ini, so run it serially.
+add_standalone_test(test_component_swap_app
+    SOURCES test_component_swap_app.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_component_swap_app PROPERTIES RUN_SERIAL TRUE)
 add_standalone_test(test_adc_configuration
     SOURCES test_adc_configuration.cpp
     LIBS simulator::adc_engine simulator::node_graph_engine
@@ -259,6 +326,13 @@ add_standalone_test(test_issue77_save_failure
     SOURCES test_issue77_save_failure.cpp
     LIBS simulator::app
 )
+# Standalone issue #224 regression tests: project save refuses temp-path links
+# without modifying their victims; kept outside tests.exe for the MinGW ceiling.
+add_standalone_test(test_issue224_project_temp_links
+    SOURCES test_issue224_project_temp_links.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_issue224_project_temp_links PROPERTIES RUN_SERIAL TRUE)
 
 # Standalone issue #78 coverage: splitter/PFB multi-output pin API reporting
 # and OUT2 link/probe project round trips. Kept outside tests.exe for the
@@ -287,18 +361,11 @@ add_standalone_test(test_issue45_extension_trust
     LIBS simulator::app
 )
 
-# These two share the source-tree built-in extension root, which
-# ExtensionManager hardcodes as its highest-precedence scan root
-# (app/src/extension_manager.cpp:146) and which every extension scan
-# enumerates: test_issue45 writes external-tool manifests into
-# PROJECT_SOURCE_DIR/extensions, while test_extensions asserts the total
-# external-tool count. Concurrently, test_extensions discovers the other
-# test's tool — reproduced on the first concurrent iteration as
-# `REQUIRE( std::size(tools) == 1 )` -> `2 == 1` at
-# tests/test_extensions.cpp:571. The root is not injectable, so RUN_SERIAL is
-# the fix. (The per-invocation workspaces under <temp>/rf-sim-extension-run are
-# NOT shared: app/src/external_tool_runner.cpp:44-60 gives every run its own
-# run-<stamp>-<seq> directory.)
+# Both targets construct RfSimulatorApp, which writes executable-relative
+# app.ini on destruction and uses the executable-relative extension trust
+# store unless a test redirects it. Keep them serialized; source-tree built-in
+# discovery roots are injectable and fixture writes use each process's temp root.
+# Per-invocation workspaces under <temp>/rf-sim-extension-run are not shared.
 set_tests_properties(test_extensions test_issue45_extension_trust
                      PROPERTIES RUN_SERIAL TRUE)
 
@@ -318,6 +385,13 @@ add_standalone_test(test_issue87_flow
          simulator::amplifier_engine simulator::attenuator_engine
          simulator::adc_engine simulator::pfb_channelizer_engine
          simulator::node_graph_engine
+)
+
+# Standalone flow-index coverage stays outside the issue #87 binary for the MinGW-w64
+# registration ceiling.
+add_standalone_test(test_issue130_flow_indices
+    SOURCES test_issue130_flow_indices.cpp
+    LIBS simulator::test_flow simulator::signal_generator_engine
 )
 
 # Standalone coverage for the spectrum-display noise jitter: the cosmetic
@@ -387,6 +461,14 @@ add_standalone_test(test_spectrum_analyzer_snr
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Standalone coverage for issue #239: the RBW and VBW filters pass invalid widths
+# through and clamp very large width ratios before the int conversion. Kept
+# outside tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_issue239_rbw_vbw_bounds
+    SOURCES test_issue239_rbw_vbw_bounds.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Standalone app-level coverage for the node-hover SNR row: the onNodeHover
 # callback carries the registry summary plus the analyzer's strongest-tone SNR
 # for the node's first output, and reports "unavailable" when that output has no
@@ -414,7 +496,7 @@ add_standalone_test(test_test_flow_widget
 # run would read-modify-write that one file from two processes.
 set_tests_properties(test_test_flow_widget PROPERTIES RUN_SERIAL TRUE)
 
-# UI-free run boundary shared by the Test Flow panel and the agent tool.
+# UI-free coverage for the one-shot Test Flow boundary and the AgentServer's resumable session.
 add_standalone_test(test_flow_boundary
     SOURCES test_flow_boundary.cpp
     LIBS simulator::test_flow simulator::editor_services common
@@ -448,6 +530,13 @@ add_standalone_test(test_editor_services_boundary
     LIBS simulator::editor_services
 )
 set_target_properties(test_editor_services_boundary PROPERTIES FOLDER "Library")
+
+# Standalone, UI-free coverage for the in-place library part swap (issue #200): id and link
+# preservation, port/probe/instrument refusals, group and probe remapping, and the PFB link policy.
+add_standalone_test(test_component_swap
+    SOURCES test_component_swap.cpp
+    LIBS simulator::editor_services
+)
 
 # Standalone UI-free validator/evaluator and draft-application coverage.
 add_standalone_test(test_receiver_requirements
@@ -496,6 +585,13 @@ add_standalone_test(test_agent_api
     LIBS simulator::agent_api
 )
 target_include_directories(test_agent_api PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+# Standalone, UI-free circuit_edit move and editor-space position contracts. Kept apart from
+# test_agent_api.cpp, whose added cases were not registered on the MinGW-w64 build.
+add_standalone_test(test_agent_api_moves
+    SOURCES test_agent_api_moves.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api_moves PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
 # Standalone real-loopback coverage for AgentServer transport, authentication,
 # UI-thread pumping, modal parking, endpoint ownership, and shutdown.
 add_standalone_test(test_agent_server
@@ -508,6 +604,18 @@ add_standalone_test(test_mcp_bridge
     SOURCES test_mcp_bridge.cpp
     LIBS simulator::mcp_adapter
 )
+# Runs the built bridge as a separate process against an in-process UI-free AgentServer, covering
+# packaged discovery, a stateful edit/read round trip, and reconnection after server restart.
+add_standalone_test(test_agent_packaged_acceptance
+    SOURCES test_agent_packaged_acceptance.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_packaged_acceptance PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+target_compile_definitions(test_agent_packaged_acceptance PRIVATE
+    RFSIM_MCP_EXECUTABLE="$<TARGET_FILE:rf-sim-mcp>"
+)
+add_dependencies(test_agent_packaged_acceptance rf-sim-mcp)
+
 
 # Standalone app-level agent host coverage: checkpoint lifecycle and trimming
 # (newest 20 kept), component auto-layout placement, explicit positions, and
@@ -519,3 +627,39 @@ add_standalone_test(test_agent_app
     LIBS simulator::app
 )
 set_tests_properties(test_agent_app PROPERTIES RUN_SERIAL TRUE)
+# Standalone app-level regression for agent-visible node positions: GUI-added and duplicated
+# nodes before their first draw, pan-aware round trips, agent moves, and collapsed-group persistence.
+add_standalone_test(test_agent_position_read
+    SOURCES test_agent_position_read.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_position_read PROPERTIES RUN_SERIAL TRUE)
+
+# Standalone, UI-free contracts for the project_save and project_load tools: path and overwrite
+# rules, the unsaved-changes and epoch guards, the test-flow latch, and host outcome mapping.
+add_standalone_test(test_agent_api_project
+    SOURCES test_agent_api_project.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_api_project PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+
+# Standalone app-level project_save and project_load round trips through RfSimulatorApp: real
+# .rfsim files, the GUI save and load paths, checkpoint clearing, and reset-on-failure.
+add_standalone_test(test_agent_project
+    SOURCES test_agent_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_agent_project PROPERTIES RUN_SERIAL TRUE)
+
+# Standalone tests for the active circuit project's Git branch, commit, and working-tree status.
+add_standalone_test(test_git_status
+    SOURCES test_git_status.cpp
+    LIBS simulator::app
+)
+
+# The fake Git process gives the status timeout regression a deterministic slow child.
+add_executable(test_git_status_hanging_git test_git_status_hanging_git.cpp)
+add_dependencies(test_git_status test_git_status_hanging_git)
+target_compile_definitions(test_git_status PRIVATE
+    GIT_STATUS_HANG_HELPER="$<TARGET_FILE:test_git_status_hanging_git>"
+)

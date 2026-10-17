@@ -55,6 +55,11 @@ IComponentEngine *CircuitRuntime::createComponent(const ComponentFactory &factor
     return factory(m_components, m_graph, reserved_id);
 }
 
+IComponentEngine *CircuitRuntime::createComponentWithId(const ComponentFactory &factory,
+                                                        int component_id) {
+    return factory(m_components, m_graph, component_id);
+}
+
 bool CircuitRuntime::removeComponent(int graph_node_id) {
     if (!m_components.remove(graph_node_id))
         return false;

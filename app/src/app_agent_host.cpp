@@ -104,6 +104,15 @@ void AppAgentHost::placeComponents(const std::vector<AgentPlacement> &placements
         m_graph_widget.setNodeEditorSpacePosition(p.graph_node_id, pos);
     }
 }
+std::array<float, 2> AppAgentHost::nodeEditorSpacePosition(int graph_node_id) const {
+    const ImVec2 position = m_graph_widget.editorPositionForSave(graph_node_id);
+    return {position.x, position.y};
+}
+
+bool AppAgentHost::setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) {
+    return m_graph_widget.setNodeEditorSpacePosition(graph_node_id,
+                                                     ImVec2(position[0], position[1]));
+}
 
 // ======================================================================
 // Modal detection
@@ -119,6 +128,30 @@ std::optional<std::string> AppAgentHost::projectName() const {
     if (m_hooks.project_name)
         return m_hooks.project_name();
     return std::nullopt;
+}
+
+// ======================================================================
+// Project files
+// ======================================================================
+std::optional<std::string> AppAgentHost::projectPath() const {
+    if (m_hooks.project_path)
+        return m_hooks.project_path();
+    return std::nullopt;
+}
+
+bool AppAgentHost::saveProjectFile(const std::string &path) {
+    return m_hooks.save_project && m_hooks.save_project(path);
+}
+std::vector<std::string> AppAgentHost::savedProjectDataFiles() const {
+    if (m_hooks.saved_project_data_files)
+        return m_hooks.saved_project_data_files();
+    return {};
+}
+
+AgentProjectLoadResult AppAgentHost::loadProjectFile(const std::string &path) {
+    if (!m_hooks.load_project)
+        return {};
+    return m_hooks.load_project(path);
 }
 
 // ======================================================================

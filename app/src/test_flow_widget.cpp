@@ -191,9 +191,9 @@ bool TestFlowWidget::run() {
         return false;
     }
 
-    // The shared run boundary snapshots every engine, runs the flow, restores each snapshot
-    // independently, and rewires. Its outcome decides what the panel shows, exactly as it does
-    // for the agent tool.
+    // This one-shot boundary snapshots every engine, runs the flow, restores each snapshot
+    // independently, and rewires. AgentServer's FlowRunSession keeps the same restore invariant
+    // between slices; this outcome decides what the panel shows.
     const BoundaryOutcome outcome = RunFlowWithinBoundary(spec(), m_components.all(), m_graph);
     switch (outcome.status) {
     case BoundaryStatus::SnapshotFailed:

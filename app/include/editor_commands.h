@@ -4,6 +4,7 @@
 #include "component_params.h"
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,6 +16,17 @@ struct ComponentDefinition;
 struct ComponentAddResult {
     IComponentEngine *component = nullptr;
     ParamWriteResult params;
+};
+
+// Outcome of EditorCommands::swapLibraryPart(). On refusal `component` is null, `error` says why,
+// and the circuit is unchanged.
+struct ComponentSwapResult {
+    IComponentEngine *component = nullptr;
+    std::string error;
+    int old_graph_node_id = -1;
+    int new_graph_node_id = -1;
+    // Predecessor pin id -> successor pin id for each port index both parts have.
+    std::map<int, int> pin_map;
 };
 
 // EditorCommands — the single entry point for user-level project edits.
@@ -46,6 +58,14 @@ class EditorCommands {
     ComponentAddResult
     addLibraryPart(ComponentLibrary &library, const ComponentDefinition &definition,
                    const nlohmann::ordered_json &params = nlohmann::ordered_json::object());
+    // In-place replacement of a placed component by another library part (issue #200). The
+    // successor takes the predecessor's component id, keeps each link whose port it has, and
+    // carries groups and probes across. `instrument_pins` lists output pins that app-level
+    // instruments select. Nothing changes when a link, probe, or instrument pin sits on a port
+    // the new part lacks, or when the physical link policy forbids a link.
+    ComponentSwapResult swapLibraryPart(ComponentLibrary &library,
+                                        const ComponentDefinition &definition, int graph_node_id,
+                                        const std::vector<int> &instrument_pins = {});
     ParamWriteResult setComponentParams(int graph_node_id, const nlohmann::ordered_json &params);
     bool removeComponent(int graph_node_id);
     // Adopts components that were created directly through the runtime (e.g.
@@ -55,7 +75,7 @@ class EditorCommands {
     std::optional<int> connect(int start_pin_id, int end_pin_id);
     bool disconnect(int link_id);
 
-    // Probe edits do not advance the revision (pre-existing semantics).
+    // An accepted probe add or remove advances the revision; a refused one does not.
     bool addProbePin(int pin_id);
     bool removeProbePin(int pin_id);
 

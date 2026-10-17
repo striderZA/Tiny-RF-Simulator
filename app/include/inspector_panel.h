@@ -24,6 +24,7 @@ class PFBChannelizerEngine;
 class RFSwitch2to1Engine;
 class RFSwitchEngine;
 class ComponentRegistry;
+struct ComponentDefinition;
 
 struct ViewToggles {
     bool *log = nullptr;
@@ -63,6 +64,12 @@ class InspectorPanel {
     }
 
     std::function<void(int graph_node_id)> onRemoveNode;
+    // Library parts the Part dropdown lists for a placed library component.
+    std::function<std::vector<const ComponentDefinition *>()> libraryParts;
+    // Replaces component `graph_node_id` with `definition` in place. Returns the refusal reason,
+    // or an empty string once the swap has happened.
+    std::function<std::string(int graph_node_id, const ComponentDefinition &definition)>
+        onSwapLibraryPart;
     std::function<void()> onParamChange;
     void setViewToggles(const ViewToggles &t) { m_viewToggles = t; }
     bool m_param_edited = false;
@@ -113,4 +120,14 @@ class InspectorPanel {
     };
     Hit findSelected() const;
     std::string labelForHit(const Hit &hit) const;
+    // Draws the Part dropdown for a placed library component; a manual component has no part.
+    void drawPartPicker(const IComponentEngine &engine);
+    // Runs the part swap picked this frame. It runs after the drawers, because a swap deletes the
+    // engine they draw.
+    void applyPendingPartSwap();
+    const ComponentDefinition *m_pending_part = nullptr;
+    int m_pending_part_node = -1;
+    // Refusal from the last swap, shown under the dropdown while its component stays selected.
+    std::string m_part_swap_error;
+    int m_part_swap_error_node = -1;
 };

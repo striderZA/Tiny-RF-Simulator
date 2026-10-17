@@ -1,5 +1,6 @@
 #include "project_serializer.h"
 #include "circuit_runtime.h"
+#include "component_params.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "graph_editor_actions.h"
@@ -11,18 +12,321 @@
 #include "node_graph_widget.h"
 #include "pfb_view_manager.h"
 #include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <fcntl.h>
+#include <io.h>
+#include <stdio.h>
+#include <windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
+
+namespace {
+
+// Outcome of removing a leftover "<target>.tmp" from an earlier save.
+enum class StaleTempOutcome { Removed, Absent, Refused, Failed };
+
+struct CreatedTempIdentity {
+#ifdef _WIN32
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    ~CreatedTempIdentity() {
+        if (handle != INVALID_HANDLE_VALUE)
+            CloseHandle(handle);
+    }
+#else
+    int fd = -1;
+    ~CreatedTempIdentity() {
+        if (fd != -1)
+            ::close(fd);
+    }
+#endif
+    CreatedTempIdentity() = default;
+    CreatedTempIdentity(const CreatedTempIdentity &) = delete;
+    CreatedTempIdentity &operator=(const CreatedTempIdentity &) = delete;
+};
+
+#ifdef _WIN32
+// Marks the file opened through `handle` for deletion. The deletion applies to
+// that file object, so a name swapped in afterwards is not what gets deleted.
+bool deleteThroughHandle(HANDLE handle, std::error_code &error) {
+    FILE_DISPOSITION_INFO disposition{};
+    disposition.DeleteFile = TRUE;
+    if (SetFileInformationByHandle(handle, FileDispositionInfo, &disposition,
+                                   sizeof(disposition)) == 0) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        return false;
+    }
+    return true;
+}
+
+// Removes only the file this process created, through its handle on Windows or
+// after a dev/inode identity check on POSIX.
+void discardCreatedTemp(const std::filesystem::path &path, HANDLE handle) {
+    std::error_code error;
+    if (!deleteThroughHandle(handle, error))
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
+                  path.string().c_str(), error.message().c_str());
+}
+#else
+enum class NameCheck { Same, Different, Absent, Failed };
+
+// Checks whether `path` still names the object `fd` refers to, by dev/inode.
+// This is the most POSIX allows before unlink(), since there is no unlink-by-fd.
+NameCheck checkNameMatchesOpened(const std::filesystem::path &path, int fd,
+                                 std::error_code &error) {
+    struct stat opened {};
+    if (::fstat(fd, &opened) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        return NameCheck::Failed;
+    }
+    struct stat named {};
+    if (::lstat(path.c_str(), &named) != 0) {
+        if (errno == ENOENT)
+            return NameCheck::Absent;
+        error = std::error_code(errno, std::generic_category());
+        return NameCheck::Failed;
+    }
+    return named.st_dev == opened.st_dev && named.st_ino == opened.st_ino ? NameCheck::Same
+                                                                          : NameCheck::Different;
+}
+
+// Removes only the file this process created, after confirming its name still
+// refers to the same dev/inode. The window between that check and unlink() is a
+// residual POSIX race.
+void discardCreatedTemp(const std::filesystem::path &path, int fd) {
+    std::error_code error;
+    if (checkNameMatchesOpened(path, fd, error) != NameCheck::Same) {
+        if (error)
+            LOG_ERROR("Could not inspect project temp file %s after a failed operation: %s",
+                      path.string().c_str(), error.message().c_str());
+        return;
+    }
+    if (::unlink(path.c_str()) != 0)
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
+                  path.string().c_str(),
+                  std::error_code(errno, std::generic_category()).message().c_str());
+}
+#endif
+
+void discardCreatedTemp(const std::filesystem::path &path, const CreatedTempIdentity &identity) {
+#ifdef _WIN32
+    // ReOpenFile binds cleanup to this object, not whatever object its old name now refers to.
+    const HANDLE cleanup_handle =
+        ReOpenFile(identity.handle, DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                   FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    if (cleanup_handle == INVALID_HANDLE_VALUE) {
+        const std::error_code error(static_cast<int>(GetLastError()), std::system_category());
+        LOG_ERROR("Could not reopen project temp file %s for cleanup: %s", path.string().c_str(),
+                  error.message().c_str());
+        return;
+    }
+    std::error_code error;
+    if (!deleteThroughHandle(cleanup_handle, error))
+        LOG_ERROR("Could not remove project temp file %s after a failed operation: %s",
+                  path.string().c_str(), error.message().c_str());
+    CloseHandle(cleanup_handle);
+#else
+    if (identity.fd != -1)
+        discardCreatedTemp(path, identity.fd);
+#endif
+}
+
+// Creates `path` only if no entry exists there, without following a link. Returns
+// nullptr on failure with `error` set. `name_taken` is set only when the name
+// already exists. `identity` retains the created object for failure cleanup.
+FILE *openExclusiveProjectTemp(const std::filesystem::path &path, bool &name_taken,
+                               std::error_code &error, CreatedTempIdentity &identity) {
+    name_taken = false;
+    error.clear();
+#ifdef _WIN32
+    // BACKUP_SEMANTICS makes CREATE_NEW report an existing folder as taken, not ACCESS_DENIED.
+    const HANDLE handle = CreateFileW(
+        path.c_str(), GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+        CREATE_NEW,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD win_error = GetLastError();
+        name_taken = win_error == ERROR_FILE_EXISTS || win_error == ERROR_ALREADY_EXISTS;
+        error = std::error_code(static_cast<int>(win_error), std::system_category());
+        return nullptr;
+    }
+
+    const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
+    if (fd == -1) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, handle);
+        CloseHandle(handle);
+        return nullptr;
+    }
+    FILE *stream = _fdopen(fd, "wb");
+    if (!stream) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, handle);
+        _close(fd);
+        return nullptr;
+    }
+    // Retain the same object with delete sharing; the writer handle still blocks swaps until
+    // closed.
+    const HANDLE cleanup_handle =
+        ReOpenFile(handle, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                   FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    if (cleanup_handle == INVALID_HANDLE_VALUE) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        discardCreatedTemp(path, handle);
+        std::fclose(stream);
+        return nullptr;
+    }
+    identity.handle = cleanup_handle;
+    return stream;
+#else
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+    if (fd == -1) {
+        error = std::error_code(errno, std::generic_category());
+        name_taken = errno == EEXIST;
+        return nullptr;
+    }
+    FILE *stream = ::fdopen(fd, "wb");
+    if (!stream) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, fd);
+        ::close(fd);
+        return nullptr;
+    }
+    const int cleanup_fd = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (cleanup_fd == -1) {
+        error = std::error_code(errno, std::generic_category());
+        discardCreatedTemp(path, fd);
+        std::fclose(stream);
+        return nullptr;
+    }
+    identity.fd = cleanup_fd;
+    return stream;
+#endif
+}
+
+// Test seam: announces the temp entry just before a failed save removes it.
+void runBeforeFailureCleanupHook(const std::filesystem::path &temp) {
+    if (ProjectSerializer::testHooks().beforeFailureCleanup)
+        ProjectSerializer::testHooks().beforeFailureCleanup(temp);
+}
+
+// Test seam: runs once a stale entry is open, before it is checked or removed.
+void runAfterStaleOpenHook(const std::filesystem::path &path) {
+    if (ProjectSerializer::testHooks().afterStaleOpen)
+        ProjectSerializer::testHooks().afterStaleOpen(path);
+}
+
+// Removes the leftover entry at `path` only if it is still the object that was
+// checked. The entry is opened without following links. Windows deletes through
+// that handle; POSIX confirms identity before unlink(), so a swap between that
+// check and unlink() is a residual POSIX race.
+StaleTempOutcome removeStaleProjectTemp(const std::filesystem::path &path, std::error_code &error) {
+    error.clear();
+    if (ProjectSerializer::testHooks().failStaleRemoval &&
+        ProjectSerializer::testHooks().failStaleRemoval()) {
+        error = std::make_error_code(std::errc::io_error);
+        return StaleTempOutcome::Failed;
+    }
+#ifdef _WIN32
+    // BACKUP_SEMANTICS lets a folder open so it is refused below, not failed with ACCESS_DENIED.
+    const HANDLE handle =
+        CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                    FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD win_error = GetLastError();
+        if (win_error == ERROR_FILE_NOT_FOUND || win_error == ERROR_PATH_NOT_FOUND)
+            return StaleTempOutcome::Absent;
+        error = std::error_code(static_cast<int>(win_error), std::system_category());
+        return StaleTempOutcome::Failed;
+    }
+    runAfterStaleOpenHook(path);
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(handle, &info)) {
+        error = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+        CloseHandle(handle);
+        return StaleTempOutcome::Failed;
+    }
+    if ((info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0) {
+        CloseHandle(handle);
+        return StaleTempOutcome::Refused;
+    }
+    const bool deleted = deleteThroughHandle(handle, error);
+    CloseHandle(handle);
+    return deleted ? StaleTempOutcome::Removed : StaleTempOutcome::Failed;
+#else
+    const int fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd == -1) {
+        const int open_errno = errno;
+        if (open_errno == ENOENT)
+            return StaleTempOutcome::Absent;
+        if (open_errno == ELOOP)
+            return StaleTempOutcome::Refused;
+        error = std::error_code(open_errno, std::generic_category());
+        return StaleTempOutcome::Failed;
+    }
+    runAfterStaleOpenHook(path);
+    struct stat opened {};
+    if (::fstat(fd, &opened) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        ::close(fd);
+        return StaleTempOutcome::Failed;
+    }
+    if (!S_ISREG(opened.st_mode)) {
+        ::close(fd);
+        return StaleTempOutcome::Refused;
+    }
+    const NameCheck check = checkNameMatchesOpened(path, fd, error);
+    ::close(fd);
+    if (check == NameCheck::Absent)
+        return StaleTempOutcome::Absent;
+    if (check == NameCheck::Different)
+        return StaleTempOutcome::Refused;
+    if (check == NameCheck::Failed)
+        return StaleTempOutcome::Failed;
+    if (::unlink(path.c_str()) != 0) {
+        error = std::error_code(errno, std::generic_category());
+        return StaleTempOutcome::Failed;
+    }
+    return StaleTempOutcome::Removed;
+#endif
+}
+
+} // namespace
+
+ProjectSerializer::TestHooks &ProjectSerializer::testHooks() {
+    static TestHooks hooks;
+    return hooks;
+}
 
 namespace {
 
@@ -86,14 +390,14 @@ std::optional<std::string> resolveSparamPath(const fs::path &project_dir,
     return resolved.string();
 }
 
-// Load boundary: rewrite S-param path params in-place. Contained paths are
+// Load boundary: rewrite data-file path params in-place. Contained paths are
 // resolved to their canonical absolute form (the engine loads them, and the
 // save boundary re-relativizes them for round-trip); paths that escape the
 // project dir are neutralized to "" with a warning.
 void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
     if (!params.is_object())
         return;
-    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+    for (const char *key : kPathParameterKeys) {
         if (!params.contains(key) || !params[key].is_string())
             continue;
         const std::string value = params[key].get<std::string>();
@@ -102,30 +406,301 @@ void resolveSparamParams(nlohmann::json &params, const fs::path &project_dir) {
         if (const auto resolved = resolveSparamPath(project_dir, value)) {
             params[key] = *resolved;
         } else {
-            LOG_WARN("Project S-param path rejected (outside project dir): %s", value.c_str());
+            LOG_WARN("Project data-file path rejected (outside project dir): %s", value.c_str());
             params[key] = "";
         }
     }
 }
-
-// Save boundary: keep the project file portable by persisting S-param paths
-// relative to the project directory. Absolute paths the user configured that
-// stay inside the project dir are re-written relative; anything else is left
-// untouched (load-side containment already guards untrusted project files).
+// Resolve relative engine paths against the process CWD (the engine's open-file
+// behavior) before persisting project-contained references relative to project_dir.
 void relativizeSparamParams(nlohmann::json &params, const fs::path &project_dir) {
     if (!params.is_object())
         return;
-    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+    for (const char *key : kPathParameterKeys) {
         if (!params.contains(key) || !params[key].is_string())
             continue;
-        const fs::path p(params[key].get<std::string>());
-        if (!p.is_absolute() || !pathWithinRoot(project_dir, p))
+        fs::path path(params[key].get<std::string>());
+        if (path.empty())
             continue;
         std::error_code ec;
-        const fs::path rel = fs::relative(p, project_dir, ec);
-        if (ec)
+        if (!path.is_absolute()) {
+            path = fs::absolute(path, ec);
+            if (ec)
+                continue;
+            params[key] = path.string();
+        }
+        if (!pathWithinRoot(project_dir, path))
             continue;
-        params[key] = rel.generic_string();
+        const fs::path relative = fs::relative(path, project_dir, ec);
+        if (!ec)
+            params[key] = relative.generic_string();
+    }
+}
+
+// Save boundary: package every external model file before writing the project. This
+// keeps agent and GUI saves on the same path and prevents a successful save from
+// referring to data that the load boundary would later reject.
+constexpr std::uintmax_t kMaxProjectDataFileBytes = 256ULL * 1024 * 1024;
+constexpr std::uintmax_t kMaxProjectDataTotalBytes = 512ULL * 1024 * 1024;
+constexpr std::size_t kMaxProjectDataFileCount = 256;
+
+std::optional<std::uint64_t> projectDataHash(const fs::path &path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return std::nullopt;
+    std::uint64_t hash = 14695981039346656037ULL;
+    char buffer[8192];
+    while (in) {
+        in.read(buffer, sizeof(buffer));
+        const auto count = in.gcount();
+        for (std::streamsize i = 0; i < count; ++i) {
+            hash ^= static_cast<unsigned char>(buffer[i]);
+            hash *= 1099511628211ULL;
+        }
+    }
+    if (!in.eof())
+        return std::nullopt;
+    return hash;
+}
+bool projectDataFilesEqual(const fs::path &left, const fs::path &right) {
+    std::error_code ec;
+    const auto left_size = fs::file_size(left, ec);
+    if (ec)
+        return false;
+    const auto right_size = fs::file_size(right, ec);
+    if (ec || left_size != right_size)
+        return false;
+    std::ifstream left_stream(left, std::ios::binary);
+    std::ifstream right_stream(right, std::ios::binary);
+    if (!left_stream || !right_stream)
+        return false;
+    char left_buffer[8192];
+    char right_buffer[8192];
+    while (true) {
+        left_stream.read(left_buffer, sizeof(left_buffer));
+        right_stream.read(right_buffer, sizeof(right_buffer));
+        const std::streamsize left_count = left_stream.gcount();
+        const std::streamsize right_count = right_stream.gcount();
+        if (left_count != right_count ||
+            !std::equal(left_buffer, left_buffer + left_count, right_buffer))
+            return false;
+        if (left_stream.eof() || right_stream.eof())
+            return left_stream.eof() && right_stream.eof();
+        if (!left_stream || !right_stream)
+            return false;
+    }
+}
+
+std::string safeProjectDataName(const fs::path &source) {
+    std::string name = source.filename().string();
+    for (char &ch : name) {
+        const unsigned char c = static_cast<unsigned char>(ch);
+        if (!(std::isalnum(c) || ch == '.' || ch == '_' || ch == '-'))
+            ch = '_';
+    }
+    if (name.empty() || name == "." || name == "..")
+        name = "model.dat";
+    if (name.size() > 120)
+        name.resize(120);
+    return name;
+}
+fs::path uniqueProjectDataTempPath(const fs::path &destination) {
+    static std::atomic<std::uint64_t> sequence{0};
+    fs::path temp = destination;
+    temp += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+            "-" + std::to_string(sequence.fetch_add(1, std::memory_order_relaxed));
+    return temp;
+}
+
+// True unless `path` is verified as a real directory. Refused: a symbolic link, a Windows reparse
+// point (junction or mount point), and an entry whose attributes cannot be read. std::filesystem
+// reports a junction as an ordinary directory, so is_symlink() alone would let a junction named
+// rf_data send project data to another folder. Verification fails closed.
+bool isUnverifiedProjectDataDirectory([[maybe_unused]] const fs::path &path,
+                                      const fs::file_status &status) {
+    if (fs::is_symlink(status))
+        return true;
+#ifdef _WIN32
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes == INVALID_FILE_ATTRIBUTES ||
+           (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return false;
+#endif
+}
+
+bool packageExternalProjectData(nlohmann::json &root, const fs::path &project_dir,
+                                std::vector<std::string> &saved_files,
+                                std::vector<fs::path> &created_files,
+                                std::vector<fs::path> &created_directories) {
+    if (!root.contains("components") || !root["components"].is_array())
+        return true;
+    std::error_code ec;
+    const fs::path canonical_root = fs::weakly_canonical(project_dir, ec);
+    std::uintmax_t total_external_bytes = 0;
+    std::vector<fs::path> seen_destinations;
+    if (ec) {
+        LOG_ERROR("Could not resolve project directory while packaging RF data: %s",
+                  project_dir.string().c_str());
+        return false;
+    }
+
+    for (auto &component : root["components"]) {
+        if (!component.is_object() || !component.contains("params") ||
+            !component["params"].is_object())
+            continue;
+        auto &params = component["params"];
+        for (const char *key : kPathParameterKeys) {
+            if (!params.contains(key) || !params[key].is_string())
+                continue;
+            const std::string value = params[key].get<std::string>();
+            if (value.empty())
+                continue;
+            const fs::path original(value);
+            const fs::path source = original.is_absolute() ? original : (project_dir / original);
+            const fs::file_status source_status = fs::symlink_status(source, ec);
+            if (ec || fs::is_symlink(source_status) || !fs::is_regular_file(source_status)) {
+                LOG_ERROR("Could not preserve project RF data reference %s: expected a regular, "
+                          "non-symlink file",
+                          value.c_str());
+                return false;
+            }
+            const fs::path resolved = fs::weakly_canonical(source, ec);
+            if (ec) {
+                LOG_ERROR("Could not resolve project RF data reference %s: %s", value.c_str(),
+                          ec.message().c_str());
+                return false;
+            }
+            if (pathWithinRoot(canonical_root, resolved)) {
+                const fs::path relative = fs::relative(resolved, canonical_root, ec);
+                if (ec) {
+                    LOG_ERROR("Could not relativize project RF data reference %s: %s",
+                              value.c_str(), ec.message().c_str());
+                    return false;
+                }
+                params[key] = relative.generic_string();
+                continue;
+            }
+
+            const auto size = fs::file_size(resolved, ec);
+            if (ec || size > kMaxProjectDataFileBytes) {
+                LOG_ERROR("Could not preserve project RF data reference %s: file is missing or "
+                          "exceeds the 256 MiB limit",
+                          value.c_str());
+                return false;
+            }
+            const auto hash = projectDataHash(resolved);
+            if (!hash) {
+                LOG_ERROR("Could not read project RF data reference %s", value.c_str());
+                return false;
+            }
+
+            const fs::path data_dir = project_dir / "rf_data";
+            const auto data_dir_status = fs::symlink_status(data_dir, ec);
+            if (ec && ec != std::errc::no_such_file_or_directory) {
+                LOG_ERROR("Could not inspect project RF data directory: %s", ec.message().c_str());
+                return false;
+            }
+            ec.clear();
+            if (fs::exists(data_dir_status)) {
+                if (isUnverifiedProjectDataDirectory(data_dir, data_dir_status) ||
+                    !fs::is_directory(data_dir_status)) {
+                    LOG_ERROR("Could not preserve project RF data: rf_data is not a verified "
+                              "real directory");
+                    return false;
+                }
+            } else if (!fs::create_directory(data_dir, ec) || ec) {
+                LOG_ERROR("Could not create project RF data directory: %s", ec.message().c_str());
+                return false;
+            } else {
+                created_directories.push_back(data_dir);
+            }
+
+            std::ostringstream filename;
+            filename << std::hex << *hash << "-" << safeProjectDataName(resolved);
+            const fs::path destination = data_dir / filename.str();
+            if (std::find(seen_destinations.begin(), seen_destinations.end(), destination) ==
+                seen_destinations.end()) {
+                if (seen_destinations.size() >= kMaxProjectDataFileCount ||
+                    size > kMaxProjectDataTotalBytes - total_external_bytes) {
+                    LOG_ERROR("Could not preserve project RF data: save exceeds 256 files or "
+                              "512 MiB total");
+                    return false;
+                }
+                seen_destinations.push_back(destination);
+                total_external_bytes += size;
+            }
+            const auto destination_status = fs::symlink_status(destination, ec);
+            if (ec && ec != std::errc::no_such_file_or_directory) {
+                LOG_ERROR("Could not inspect project RF data destination: %s",
+                          ec.message().c_str());
+                return false;
+            }
+            ec.clear();
+            bool copied_now = false;
+            if (fs::exists(destination_status)) {
+                if (fs::is_symlink(destination_status) ||
+                    !fs::is_regular_file(destination_status) ||
+                    projectDataHash(destination) != hash ||
+                    !projectDataFilesEqual(resolved, destination)) {
+                    LOG_ERROR("Could not preserve project RF data: destination collision at %s",
+                              destination.string().c_str());
+                    return false;
+                }
+            } else {
+                const fs::path temp = uniqueProjectDataTempPath(destination);
+                fs::copy_file(resolved, temp, fs::copy_options::none, ec);
+                if (ec) {
+                    const std::string error = ec.message();
+                    std::error_code rm_ec;
+                    fs::remove(temp, rm_ec);
+                    LOG_ERROR("Could not copy project RF data file %s: %s", value.c_str(),
+                              error.c_str());
+                    return false;
+                }
+                if (projectDataHash(temp) != hash) {
+                    fs::remove(temp, ec);
+                    LOG_ERROR("Project RF data changed while it was being copied: %s",
+                              value.c_str());
+                    return false;
+                }
+                fs::create_hard_link(temp, destination, ec);
+                if (ec) {
+                    const std::string error = ec.message();
+                    std::error_code rm_ec;
+                    fs::remove(temp, rm_ec);
+                    LOG_ERROR("Could not install project RF data file %s: %s", value.c_str(),
+                              error.c_str());
+                    return false;
+                }
+                std::error_code rm_ec;
+                fs::remove(temp, rm_ec);
+                created_files.push_back(destination);
+                copied_now = true;
+            }
+
+            const fs::path relative = fs::relative(destination, canonical_root, ec);
+            if (ec) {
+                LOG_ERROR("Could not relativize copied project RF data: %s", ec.message().c_str());
+                return false;
+            }
+            params[key] = relative.generic_string();
+            if (copied_now)
+                saved_files.push_back(relative.generic_string());
+        }
+    }
+    return true;
+}
+
+void removeCreatedProjectData(const std::vector<fs::path> &created_files,
+                              const std::vector<fs::path> &created_directories) {
+    for (const auto &file : created_files) {
+        std::error_code ec;
+        fs::remove(file, ec);
+    }
+    for (auto it = created_directories.rbegin(); it != created_directories.rend(); ++it) {
+        std::error_code ec;
+        fs::remove(*it, ec);
     }
 }
 
@@ -469,7 +1044,9 @@ std::array<ProjectSerializer::WindowFlag, 4> ProjectSerializer::windowFlags() {
              {"node_editor", &m_show_node_editor}}};
 }
 
-bool ProjectSerializer::save(const std::string &path) {
+bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *copied_data_files) {
+    if (copied_data_files)
+        copied_data_files->clear();
     const fs::path save_project_dir = fs::absolute(fs::path(path)).parent_path();
     nlohmann::json root = toJson({save_project_dir, true});
 
@@ -478,52 +1055,99 @@ bool ProjectSerializer::save(const std::string &path) {
     auto dot = fname.find_last_of('.');
     root["name"] = (dot != std::string::npos) ? fname.substr(0, dot) : fname;
 
-    // Atomic save (issue #113): the previous contents must survive a failed
-    // write so issue #77's retry contract never retries against a truncated
-    // file. Serialize into a sibling "<path>.tmp", flush/close it, and only
-    // then rename it over the target, without a remove+rename fallback.
+    std::vector<std::string> saved_data_files;
+    std::vector<fs::path> created_data_files;
+    std::vector<fs::path> created_data_directories;
+    const auto failSave = [&created_data_files, &created_data_directories]() {
+        removeCreatedProjectData(created_data_files, created_data_directories);
+        return false;
+    };
+    if (!packageExternalProjectData(root, save_project_dir, saved_data_files, created_data_files,
+                                    created_data_directories))
+        return failSave();
+    std::string serialized;
+    try {
+        serialized = root.dump(2);
+    } catch (const std::exception &e) {
+        LOG_ERROR("Could not serialize project %s: %s", path.c_str(), e.what());
+        return failSave();
+    }
+
+    // Atomic save (issue #113): exclusively create the sibling "<path>.tmp"
+    // and write through that handle, then rename it over the target only after
+    // the complete file is flushed and closed.
     const fs::path target(path);
     fs::path temp = target;
     temp += ".tmp";
     const std::string temp_str = temp.string();
 
-    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        LOG_ERROR("Failed to open project file for writing: %s", temp_str.c_str());
-        return false;
+    std::error_code temp_error;
+    bool name_taken = false;
+    CreatedTempIdentity temp_identity;
+    FILE *out = openExclusiveProjectTemp(temp, name_taken, temp_error, temp_identity);
+    if (!out && name_taken) {
+        switch (removeStaleProjectTemp(temp, temp_error)) {
+        case StaleTempOutcome::Removed:
+        case StaleTempOutcome::Absent:
+            out = openExclusiveProjectTemp(temp, name_taken, temp_error, temp_identity);
+            break;
+        case StaleTempOutcome::Refused:
+            LOG_ERROR("Project temp path %s is not a regular file (a link, a folder, or replaced "
+                      "during the check); refusing to write through it",
+                      temp_str.c_str());
+            return failSave();
+        case StaleTempOutcome::Failed:
+            LOG_ERROR("Could not remove stale project temp file %s: %s", temp_str.c_str(),
+                      temp_error.message().c_str());
+            return failSave();
+        }
     }
-    out << root.dump(2);
-    out.flush();
     if (!out) {
-        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
-        out.close();
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
-    }
-    out.close();
-    if (!out) {
-        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
+        LOG_ERROR("Could not create project temp file %s: %s", temp_str.c_str(),
+                  temp_error.message().c_str());
+        return failSave();
     }
 
-    // std::filesystem::rename atomically replaces an existing target on every
-    // supported platform (POSIX rename / Windows MoveFileEx with
-    // MOVEFILE_REPLACE_EXISTING), so there is deliberately no remove+rename
-    // fallback: deleting the target first would reintroduce the data-loss
-    // window this function exists to close. If the rename fails the original
-    // is still intact — drop the temp and report the failure.
+    bool write_ok = true;
+    const bool injected_write_failure =
+        ProjectSerializer::testHooks().failWrite && ProjectSerializer::testHooks().failWrite();
+    if (injected_write_failure ||
+        std::fwrite(serialized.data(), 1, serialized.size(), out) != serialized.size()) {
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    const int flush_result = std::fflush(out);
+    const int stream_error = std::ferror(out);
+    if ((flush_result != 0 || stream_error != 0) && write_ok) {
+        LOG_ERROR("Failed to write project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    if (std::fclose(out) != 0) {
+        LOG_ERROR("Failed to close project file: %s", temp_str.c_str());
+        write_ok = false;
+    }
+    if (!write_ok) {
+        runBeforeFailureCleanupHook(temp);
+        discardCreatedTemp(temp, temp_identity);
+        return failSave();
+    }
+    // Never remove the target before rename: on failure the previous .rfsim is intact.
     std::error_code ec;
-    fs::rename(temp, target, ec);
+    if (ProjectSerializer::testHooks().failRename && ProjectSerializer::testHooks().failRename())
+        ec = std::make_error_code(std::errc::io_error);
+    else
+        fs::rename(temp, target, ec);
     if (ec) {
         LOG_ERROR("Failed to replace project file %s: %s", path.c_str(), ec.message().c_str());
-        std::error_code rm_ec;
-        fs::remove(temp, rm_ec);
-        return false;
+        runBeforeFailureCleanupHook(temp);
+        discardCreatedTemp(temp, temp_identity);
+        return failSave();
     }
 
+    if (copied_data_files)
+        *copied_data_files = std::move(saved_data_files);
+    for (const auto &copied : created_data_files)
+        LOG_INFO("Copied external project RF data to %s", copied.string().c_str());
     LOG_INFO("Saved project to %s", path.c_str());
     return true;
 }
@@ -566,10 +1190,9 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
 
-    // Register engine nodes with the imnodes pool before saving, including nodes added without
-    // a prior render frame. Live reads in editorPositionForSave() assert on unregistered IDs.
-    // syncNodesFromEngine() also seeds the grid cache for each node it registers, which hidden
-    // collapsed-group members rely on.
+    // Synchronize engine nodes before saving, including nodes added without a render frame.
+    // editorPositionForSave() gates live reads to registered visible nodes; unregistered nodes
+    // and collapsed members use the grid cache or the origin plus current pan.
     m_graph_widget.syncNodesFromEngine();
 
     // Save components by iterating the registry

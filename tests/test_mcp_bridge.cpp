@@ -15,6 +15,7 @@
 #include "agent_socket.h"
 #include "agent_wire.h"
 #include "fake_gui.h"
+#include "test_temp_paths.h"
 
 #include <atomic>
 #include <chrono>
@@ -142,20 +143,31 @@ class BlockingInputBuffer final : public std::streambuf {
         m_ready.notify_all();
     }
 
+    bool waitForEof(std::chrono::milliseconds timeout) {
+        std::unique_lock lock(m_mutex);
+        return m_ready.wait_for(lock, timeout, [this] { return m_eof_observed; });
+    }
+
   protected:
     int_type underflow() override {
         std::unique_lock lock(m_mutex);
         m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
-        if (m_bytes.empty())
+        if (m_bytes.empty()) {
+            m_eof_observed = true;
+            m_ready.notify_all();
             return traits_type::eof();
+        }
         return traits_type::to_int_type(m_bytes.front());
     }
 
     int_type uflow() override {
         std::unique_lock lock(m_mutex);
         m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
-        if (m_bytes.empty())
+        if (m_bytes.empty()) {
+            m_eof_observed = true;
+            m_ready.notify_all();
             return traits_type::eof();
+        }
         const char byte = m_bytes.front();
         m_bytes.pop_front();
         return traits_type::to_int_type(byte);
@@ -166,6 +178,7 @@ class BlockingInputBuffer final : public std::streambuf {
     std::condition_variable m_ready;
     std::deque<char> m_bytes;
     bool m_closed = false;
+    bool m_eof_observed = false;
 };
 
 class FlushObservingBuffer final : public std::streambuf {
@@ -236,6 +249,51 @@ class FlushObservingBuffer final : public std::streambuf {
     std::string m_text;
     std::string m_flushed_text;
     std::size_t m_flush_count = 0;
+};
+class BlockingOutputBuffer final : public std::streambuf {
+  public:
+    bool waitForWrite(std::chrono::milliseconds timeout) {
+        std::unique_lock lock(m_mutex);
+        return m_changed.wait_for(lock, timeout, [this] { return m_write_started; });
+    }
+
+    void release() {
+        {
+            std::lock_guard lock(m_mutex);
+            m_blocked = false;
+        }
+        m_changed.notify_all();
+    }
+
+    std::string snapshot() const {
+        std::lock_guard lock(m_mutex);
+        return m_text;
+    }
+
+  protected:
+    std::streamsize xsputn(const char *bytes, std::streamsize count) override {
+        std::unique_lock lock(m_mutex);
+        m_write_started = true;
+        m_changed.notify_all();
+        m_changed.wait(lock, [this] { return !m_blocked; });
+        m_text.append(bytes, static_cast<std::size_t>(count));
+        return count;
+    }
+
+    int_type overflow(int_type ch) override {
+        if (traits_type::eq_int_type(ch, traits_type::eof()))
+            return traits_type::not_eof(ch);
+        std::lock_guard lock(m_mutex);
+        m_text.push_back(traits_type::to_char_type(ch));
+        return ch;
+    }
+
+  private:
+    mutable std::mutex m_mutex;
+    std::condition_variable m_changed;
+    std::string m_text;
+    bool m_blocked = true;
+    bool m_write_started = false;
 };
 
 std::vector<Json> parseBridgeOutput(std::string_view text) {
@@ -363,7 +421,7 @@ TEST_CASE("A transcript per protocol version runs against a fake GUI", "[bridge]
         const auto *list = bridgeResponse(run, 2);
         REQUIRE(list != nullptr);
         REQUIRE(list->contains("result"));
-        CHECK(list->at("result").at("tools").size() == 10);
+        CHECK(list->at("result").at("tools").size() == 12);
 
         const auto *success = bridgeResponse(run, 3);
         REQUIRE(success != nullptr);
@@ -540,6 +598,231 @@ TEST_CASE("A bare cancellation from a never-initialized client suppresses its re
     REQUIRE(later_call->contains("result"));
 }
 
+TEST_CASE("The bridge rejects calls beyond its bounded queue without blocking input", "[bridge]") {
+    std::mutex call_mutex;
+    std::condition_variable call_changed;
+    bool first_call_entered = false;
+    bool release_first_call = false;
+    std::atomic<unsigned> call_count{0};
+    auto options = bridgeOptions();
+    options.call_override = [&](const std::string &, const OrderedJson &) {
+        if (call_count.fetch_add(1) == 0) {
+            std::unique_lock lock(call_mutex);
+            first_call_entered = true;
+            call_changed.notify_all();
+            call_changed.wait(lock, [&] { return release_first_call; });
+        }
+        return AgentToolResult{false, Json{{"ok", true}}};
+    };
+
+    BlockingInputBuffer input_buffer;
+    std::istream in(&input_buffer);
+    FlushObservingBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::thread bridge_thread([&] { bridge_status = runBridge(in, out, err, options); });
+
+    std::string first_call;
+    appendBridgeLine(first_call, modernBridgeRequest(1, "tools/call", bridgeCallParams("active")));
+    input_buffer.append(first_call);
+    bool first_call_waiting = false;
+    {
+        std::unique_lock lock(call_mutex);
+        first_call_waiting = call_changed.wait_for(lock, 2s, [&] { return first_call_entered; });
+    }
+
+    for (int id = 2; id <= 65; ++id) {
+        std::string request;
+        appendBridgeLine(request,
+                         modernBridgeRequest(id, "tools/call", bridgeCallParams("queued")));
+        appendBridgeLine(request, modernBridgeRequest(1000 + id, "server/discover"));
+        input_buffer.append(request);
+        if (!output_buffer.waitForResponse(1000 + id, 2s))
+            break;
+    }
+    std::string overloaded_call;
+    appendBridgeLine(overloaded_call,
+                     modernBridgeRequest(66, "tools/call", bridgeCallParams("over-limit")));
+    input_buffer.append(overloaded_call);
+    const bool overload_replied_while_first_call_waited = output_buffer.waitForResponse(66, 2s);
+
+    {
+        std::lock_guard lock(call_mutex);
+        release_first_call = true;
+    }
+    call_changed.notify_all();
+    input_buffer.closeInput();
+    bridge_thread.join();
+
+    const auto stdout_text = output_buffer.snapshot();
+    const BridgeRun run{bridge_status.load(), stdout_text, err.str(),
+                        parseBridgeOutput(stdout_text)};
+    const auto *overloaded = bridgeResponse(run, 66);
+    CHECK(first_call_waiting);
+    CHECK(overload_replied_while_first_call_waited);
+    CHECK(run.status == 0);
+    CHECK(call_count.load() == 65);
+    REQUIRE(overloaded != nullptr);
+    REQUIRE(overloaded->contains("result"));
+    CHECK(overloaded->at("result").at("isError") == true);
+    CHECK(overloaded->at("result").at("structuredContent").at("error").at("code") == "OVERLOADED");
+}
+
+TEST_CASE("Bridge queued calls are bounded by aggregate payload bytes", "[bridge]") {
+    std::mutex call_mutex;
+    std::condition_variable call_changed;
+    bool first_call_entered = false;
+    bool release_first_call = false;
+    std::atomic<unsigned> call_count{0};
+    auto options = bridgeOptions();
+    options.call_override = [&](const std::string &, const OrderedJson &) {
+        if (call_count.fetch_add(1) == 0) {
+            std::unique_lock lock(call_mutex);
+            first_call_entered = true;
+            call_changed.notify_all();
+            call_changed.wait(lock, [&] { return release_first_call; });
+        }
+        return AgentToolResult{false, Json{{"ok", true}}};
+    };
+
+    BlockingInputBuffer input_buffer;
+    std::istream in(&input_buffer);
+    FlushObservingBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::thread bridge_thread([&] { bridge_status = runBridge(in, out, err, options); });
+
+    std::string first_call;
+    appendBridgeLine(first_call, modernBridgeRequest(
+                                     1, "tools/call",
+                                     OrderedJson{{"name", "library_search"},
+                                                 {"arguments", OrderedJson{{"query", "active"}}}}));
+    input_buffer.append(first_call);
+    bool first_call_waiting = false;
+    {
+        std::unique_lock lock(call_mutex);
+        first_call_waiting = call_changed.wait_for(lock, 2s, [&] { return first_call_entered; });
+    }
+
+    const std::string payload(950 * 1024, 'x');
+    for (int id = 2; id <= 9; ++id) {
+        OrderedJson params{{"name", "library_search"},
+                           {"arguments", OrderedJson{{"query", payload}}}};
+        const OrderedJson request = modernBridgeRequest(id, "tools/call", std::move(params));
+        const std::string line = request.dump();
+        CHECK(line.size() < kAgentMaxLineBytes);
+        std::string input;
+        appendBridgeLine(input, request);
+        appendBridgeLine(input, modernBridgeRequest(1000 + id, "server/discover"));
+        input_buffer.append(input);
+        CHECK(output_buffer.waitForResponse(1000 + id, 2s));
+    }
+    const OrderedJson overflow = modernBridgeRequest(
+        10, "tools/call",
+        OrderedJson{{"name", "library_search"}, {"arguments", OrderedJson{{"query", payload}}}});
+    CHECK(overflow.dump().size() < kAgentMaxLineBytes);
+    std::string overflow_input;
+    appendBridgeLine(overflow_input, overflow);
+    input_buffer.append(overflow_input);
+    const bool overload_replied = output_buffer.waitForResponse(10, 2s);
+
+    {
+        std::lock_guard lock(call_mutex);
+        release_first_call = true;
+    }
+    call_changed.notify_all();
+    input_buffer.closeInput();
+    bridge_thread.join();
+
+    const auto stdout_text = output_buffer.snapshot();
+    const BridgeRun run{bridge_status.load(), stdout_text, err.str(),
+                        parseBridgeOutput(stdout_text)};
+    const auto *overloaded = bridgeResponse(run, 10);
+    CHECK(first_call_waiting);
+    CHECK(overload_replied);
+    CHECK(run.status == 0);
+    CHECK(call_count.load() == 9);
+    REQUIRE(overloaded != nullptr);
+    CHECK(overloaded->at("result").at("isError") == true);
+    CHECK(overloaded->at("result").at("structuredContent").at("error").at("code") == "OVERLOADED");
+}
+TEST_CASE("Event overload does not wait for queue capacity, but stdout backpressure can stall EOF",
+          "[bridge]") {
+    std::mutex call_mutex;
+    std::condition_variable call_changed;
+    bool call_entered = false;
+    bool release_call = false;
+    auto options = bridgeOptions();
+    options.call_override = [&](const std::string &, const OrderedJson &) {
+        std::unique_lock lock(call_mutex);
+        call_entered = true;
+        call_changed.notify_all();
+        call_changed.wait(lock, [&] { return release_call; });
+        return AgentToolResult{false, Json{{"completed", true}}};
+    };
+
+    BlockingInputBuffer input_buffer;
+    std::istream in(&input_buffer);
+    BlockingOutputBuffer output_buffer;
+    std::ostream out(&output_buffer);
+    std::ostringstream err;
+    std::atomic<int> bridge_status{-1};
+    std::thread bridge_thread([&] { bridge_status = runBridge(in, out, err, options); });
+
+    std::string first_requests;
+    appendBridgeLine(first_requests,
+                     modernBridgeRequest(1, "tools/call", bridgeCallParams("active")));
+    appendBridgeLine(first_requests, modernBridgeRequest(2, "server/discover"));
+    input_buffer.append(first_requests);
+    bool first_call_waiting = false;
+    {
+        std::unique_lock lock(call_mutex);
+        first_call_waiting = call_changed.wait_for(lock, 2s, [&] { return call_entered; });
+    }
+    const bool output_blocked = output_buffer.waitForWrite(2s);
+
+    std::string queued_notifications;
+    const OrderedJson notification{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}};
+    for (int index = 0; index < 100; ++index)
+        appendBridgeLine(queued_notifications, notification);
+    appendBridgeLine(queued_notifications, OrderedJson{{"jsonrpc", "2.0"},
+                                                       {"method", "notifications/cancelled"},
+                                                       {"params", OrderedJson{{"requestId", 1}}}});
+    appendBridgeLine(queued_notifications, modernBridgeRequest(99, "server/discover"));
+    input_buffer.append(queued_notifications);
+    input_buffer.closeInput();
+    const bool eof_before_output_resumed = input_buffer.waitForEof(100ms);
+
+    output_buffer.release();
+    {
+        std::lock_guard lock(call_mutex);
+        release_call = true;
+    }
+    call_changed.notify_all();
+    const bool eof_after_output_resumed = input_buffer.waitForEof(2s);
+    bridge_thread.join();
+
+    const auto stdout_text = output_buffer.snapshot();
+    const auto messages = parseBridgeOutput(stdout_text);
+    const auto overloaded = std::find_if(messages.begin(), messages.end(), [](const Json &message) {
+        return message.value("id", Json()) == 99;
+    });
+    CHECK(first_call_waiting);
+    CHECK(output_blocked);
+    CHECK_FALSE(eof_before_output_resumed);
+    CHECK(eof_after_output_resumed);
+    CHECK(bridge_status.load() == 0);
+    const auto cancelled_reply =
+        std::find_if(messages.begin(), messages.end(),
+                     [](const Json &message) { return message.value("id", Json()) == 1; });
+    CHECK(cancelled_reply == messages.end());
+    REQUIRE(overloaded != messages.end());
+    CHECK(overloaded->at("error").at("code") == -32000);
+    CHECK(overloaded->at("error").at("data").at("code") == "OVERLOADED");
+}
+
 TEST_CASE("CRLF-terminated input lines parse", "[bridge]") {
     const auto request = modernBridgeRequest(23, "server/discover");
     std::string input;
@@ -709,7 +992,7 @@ TEST_CASE("tools/list works with the GUI closed", "[bridge]") {
     const auto *list = bridgeResponse(run, 2);
     REQUIRE(list != nullptr);
     REQUIRE(list->contains("result"));
-    CHECK(list->at("result").at("tools").size() == 10);
+    CHECK(list->at("result").at("tools").size() == 12);
 }
 
 TEST_CASE("A modern tools/call without clientInfo does not reuse the previous GUI identity",
@@ -814,11 +1097,11 @@ TEST_CASE("Legacy sessions serve ping, tools/list and tools/call", "[mcp]") {
     const auto &list_result = list.replies[0].at("result");
     CHECK_FALSE(list_result.contains("resultType"));
     const auto &tools = list_result.at("tools");
-    constexpr std::array<std::string_view, 10> expected_tools{
+    constexpr std::array<std::string_view, 12> expected_tools{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
         "network_analyzer_sweep", "data_file_read", "test_flow_run",
-        "receiver_measure"};
+        "receiver_measure",       "project_save",   "project_load"};
     REQUIRE(tools.size() == expected_tools.size());
     const auto *catalog_tool = findAgentTool("component_types");
     REQUIRE(catalog_tool != nullptr);
@@ -863,7 +1146,7 @@ TEST_CASE("A legacy initialize does not lock modern per-request protocol selecti
     REQUIRE(modern.replies.size() == 1);
     REQUIRE(modern.replies[0].contains("result"));
     checkModernServerInfo(modern.replies[0].at("result"));
-    CHECK(modern.replies[0].at("result").at("tools").size() == 10);
+    CHECK(modern.replies[0].at("result").at("tools").size() == 12);
 }
 
 TEST_CASE("A modern request does not replace the identity for later legacy calls", "[mcp]") {
@@ -916,12 +1199,12 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     checkModernServerInfo(list_result);
     CHECK(list_result.at("ttlMs") == 3600000);
     CHECK(list_result.at("cacheScope") == "private");
-    REQUIRE(list_result.at("tools").size() == 10);
-    constexpr std::array<std::string_view, 10> expected_tools{
+    REQUIRE(list_result.at("tools").size() == 12);
+    constexpr std::array<std::string_view, 12> expected_tools{
         "component_types",        "library_search", "circuit_get",
         "component_get",          "circuit_edit",   "measure_port",
         "network_analyzer_sweep", "data_file_read", "test_flow_run",
-        "receiver_measure"};
+        "receiver_measure",       "project_save",   "project_load"};
     const auto &tools = list_result.at("tools");
     for (std::size_t i = 0; i < expected_tools.size(); ++i) {
         CHECK(tools[i].at("name") == expected_tools[i]);
@@ -931,6 +1214,29 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     CHECK(list_result.at("tools")[0].at("inputSchema") == catalog_tool->input_schema);
     CHECK(list_result.at("tools")[0].at("outputSchema") == catalog_tool->output_schema);
     CHECK(list_result.at("tools")[0].at("annotations") == catalog_tool->annotations);
+
+    const auto *circuit_get_tool = findAgentTool("circuit_get");
+    REQUIRE(circuit_get_tool != nullptr);
+    CHECK(tools[2].at("outputSchema") == circuit_get_tool->output_schema);
+    const auto &component_schema =
+        tools[2].at("outputSchema").at("anyOf").at(0).at("properties").at("components").at("items");
+    REQUIRE(component_schema.at("properties").contains("position"));
+    CHECK(component_schema.at("properties").at("position").at("required") ==
+          Json::array({"x", "y"}));
+    CHECK(component_schema.at("required") ==
+          Json::array({"id", "type", "label", "inputs", "outputs"}));
+
+    const auto *circuit_edit_tool = findAgentTool("circuit_edit");
+    REQUIRE(circuit_edit_tool != nullptr);
+    CHECK(tools[4].at("inputSchema") == circuit_edit_tool->input_schema);
+    const auto &edit_variants =
+        tools[4].at("inputSchema").at("properties").at("ops").at("items").at("oneOf");
+    bool has_move = false;
+    for (const auto &variant : edit_variants) {
+        if (variant.at("properties").at("op").at("const") == "move")
+            has_move = true;
+    }
+    CHECK(has_move);
 
     OrderedJson call_params{{"name", "library_search"},
                             {"arguments", OrderedJson{{"query", "LNA"}}}};

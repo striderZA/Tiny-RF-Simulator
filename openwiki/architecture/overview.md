@@ -3,14 +3,15 @@ type: Architecture Overview
 title: Architecture Overview
 description: Explains the RF Simulator's platform, UI-free circuit runtime, topology, DSP engines, editor commands, persistence, instrument integrations, and the agent boundary through which MCP clients drive the circuit.
 tags: [architecture, runtime, dsp, persistence, extensions, instruments, agent]
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
 sources:
   - id: openwiki-source-4dd766881eeb1848d297e025
     resource: repo://agent/AGENTS.md
   - id: openwiki-source-b406d12d0f86c2f3bc435e82
     resource: repo://agent/api/include/agent_host.h
+  - id: openwiki-source-efe3f6f9c5f723b0b2c7d63f
+    resource: repo://agent/api/src/tool_circuit_edit.cpp
+  - id: openwiki-source-4ded429cf8787c18dbe1448d
+    resource: repo://agent/api/src/tool_circuit_read.cpp
   - id: openwiki-source-d37ecc0aeb17155d7b54881a
     resource: repo://agent/api/src/tool_measure.cpp
   - id: openwiki-source-594ad266217b9f37cd806391
@@ -25,6 +26,8 @@ sources:
     resource: repo://app/include/component_type_registry.h
   - id: openwiki-source-e81f2756b009d1486dba9b74
     resource: repo://app/include/editor_commands.h
+  - id: openwiki-source-77fe8973b7526a7bc3ecf4c4
+    resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-bc033392c5f8ce0dd75226a2
@@ -61,6 +64,8 @@ sources:
     resource: repo://network_analyzer/include/network_analyzer_engine.h
   - id: openwiki-source-9a250414ad94d8c41379ca9b
     resource: repo://network_analyzer/src/network_analyzer_engine.cpp
+  - id: openwiki-source-9cfe8ddc08d1f0119df291d5
+    resource: repo://node_graph/src/node_graph_widget.cpp
   - id: openwiki-source-7483c8c3ea0d9c325c992db0
     resource: repo://node_graph/src/rewire.cpp
   - id: openwiki-source-d364d949938a433276255c32
@@ -87,7 +92,10 @@ sources:
     resource: repo://tests/test_test_flow_widget.cpp
   - id: openwiki-source-176b6b1095bfaf01d84f5034
     resource: repo://tutorial/include/tutorial_state.h
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
+generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+verified:
+  - by: openwiki/0.7.0
+    at: 2026-10-12T23:09:57.788Z
 ---
 
 # Architecture Overview
@@ -179,7 +187,7 @@ The Receiver Requirements panel is an app-level measurement consumer rather than
 
 ## Agent interface boundary
 
-The `agent/` subsystem is a UI-free protocol and API layer. Its API reaches application behavior only through `IAgentHost`, which `AppAgentHost` implements, and the app pumps queued agent calls at the start of each frame. Agent circuit edits go through `EditorCommands`, and the `test_flow_run` tool runs through the same run boundary as the Test Flow panel. The layers, dependency rules, and security contracts are in [Agent Interface Architecture](agent-interface.md); the per-call path is in [Agent Tool-Call Lifecycle](../workflows/agent-tool-calls.md).
+The `agent/` subsystem is a UI-free protocol and API layer. It uses `IAgentHost`, implemented by `AppAgentHost`, for app-owned behavior such as checkpoints, placement, and editor positions. `circuit_get` reads each component's editor-space position through that host. A `circuit_edit` `move` operation uses the same coordinate space and the host's position setter; it marks the project modified only when the stored position changes. Component, parameter, and topology edits use `EditorCommands`. `RfSimulatorApp` pumps queued agent calls at the start of each frame's `update_dsp()`. The `test_flow_run` tool uses the same run boundary as the Test Flow panel. The layers, dependency rules, and security contracts are in [Agent Interface Architecture](agent-interface.md); the per-call path is in [Agent Tool-Call Lifecycle](../workflows/agent-tool-calls.md).
 
 ## Project persistence and lifecycle
 

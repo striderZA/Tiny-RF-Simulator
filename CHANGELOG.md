@@ -1,3 +1,46 @@
+## [Unreleased]
+
+### Added
+
+- **Agent project save and load (#199)** — the MCP bridge gains `project_save`, which writes the open project to an absolute `.rfsim` path or its current file (replacing a different existing file needs `overwrite`), and `project_load`, which replaces the open circuit with a `.rfsim` file at the current epoch. `project_load` is refused while the project has unsaved changes.
+- **amp-f intercept files (#213)** — an Amplifier can load an amp-f file (`.ampf`) whose intercept columns (OIP2, OIP3, IIP2, IIP3, OP1dB, IP1dB) vary with frequency, and select one block by its VAR and COND values. The file reference and block selection are saved with the project. Gain, NF, and S-parameter columns are read but not applied yet.
+
+### Fixed
+
+- **Probe add and remove mark the project unsaved (#204)** — adding or removing a probe now counts as an unsaved change, so New, Open, and Exit ask before discarding it.
+
+## [0.28.3] - 2026-10-13
+
+### Added
+
+- **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
+
+### Fixed
+
+- **Agent Server test-flow runs yield between UI frames (#208)** — a test-flow run started through the Agent Server advances in bounded slices and restores the circuit before each yield, instead of blocking the UI for the whole run. A resumed run stops with an error if the project is replaced or the circuit changes during the run.
+
+### Testing
+
+- Add regression coverage for sliced Agent Server test-flow runs and a frame-based responsiveness benchmark (#208).
+
+## [0.28.2] - 2026-10-12
+
+### Added
+
+- **Swap placed library components in place (#200)** — the Properties panel's Part dropdown replaces a placed library component with another part, taking its parameters from the new part's library definition. The successor keeps its id, canvas position, selection, links (reattached by port index), probes, group membership, and Network Analyzer and Power Meter pins; a swapped PFB keeps its IQ Plot and Channelizer Grid visibility for the current session. A swap is refused, with the reason shown and the circuit unchanged, when the new part lacks a connected, probed, or instrument port, when a link would break the physical link policy, or when the part cannot be built.
+- **Active project Git status in the header (#206)** — the menu header shows the active circuit project's commit and counts of staged, unstaged, untracked, and conflicted paths; hover for the branch and full status. The status is read from the saved project's repository, or the working directory for an untitled project. Git queries run off the UI thread and fail soft when Git or the status is unavailable.
+- **User manual, part 1 of 3 (#192)** — MkDocs manual source under `manual/pages/` with home, install, and guided tutorial pages, built under a strict gate.
+
+### Changed
+
+- **README download and build sections (#192)** — Quick Start points to the release archives, developer build steps move under their own heading, and the feature list covers receiver requirements and IIP3 checks.
+
+### Testing
+
+- Cover the swap command and its app-level carry-over, including PFB visibility and the Network Analyzer and Power Meter pin remap (`test_component_swap`, `test_component_swap_app`) (#200).
+- Restore the window flags `test_project_json` changes in the shared `app.ini`, so `test_ui` no longer depends on the saved layout (#200).
+- Add Git parsing, process, monitor, and header-width regression coverage (#206).
+
 ## [0.28.1] - 2026-10-12
 
 ### Fixed

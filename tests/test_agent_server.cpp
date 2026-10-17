@@ -18,12 +18,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -56,9 +59,24 @@ class TestHost final : public IAgentHost {
     void commitCheckpoint(const std::string &) override {}
     void discardCheckpoint() override {}
     void placeComponents(const std::vector<AgentPlacement> &) override {}
+    std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const override {
+        const auto position = node_positions.find(graph_node_id);
+        return position == node_positions.end() ? std::array<float, 2>{0.0f, 0.0f}
+                                                : position->second;
+    }
+    bool setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+        if (nodeEditorSpacePosition(graph_node_id) == position)
+            return false;
+        node_positions[graph_node_id] = position;
+        return true;
+    }
     bool appModalOpen() const override { return modal; }
     std::optional<std::string> projectName() const override { return std::nullopt; }
+    std::optional<std::string> projectPath() const override { return std::nullopt; }
+    bool saveProjectFile(const std::string &) override { return false; }
+    AgentProjectLoadResult loadProjectFile(const std::string &) override { return {}; }
     void recordActivity(const AgentActivity &) override {}
+    std::unordered_map<int, std::array<float, 2>> node_positions;
     bool modal = false;
 };
 
@@ -121,6 +139,48 @@ void awaitQueuedCalls(TestBridgeClient &client) {
     REQUIRE(answer.has_value());
     REQUIRE(answer->contains("error"));
 }
+
+class YieldingTask final : public IAgentCallTask {
+  public:
+    YieldingTask(int &advances, bool &cancelled, int completion_step, std::string tool)
+        : m_advances(advances), m_cancelled(cancelled), m_completion_step(completion_step),
+          m_tool(std::move(tool)) {}
+
+    std::optional<AgentToolResult> advance(std::chrono::steady_clock::duration) override {
+        if (++m_advances < m_completion_step)
+            return std::nullopt;
+        return AgentToolResult{false, nlohmann::json{{"tool", m_tool}, {"done", true}}};
+    }
+
+    void cancel() noexcept override { m_cancelled = true; }
+
+  private:
+    int &m_advances;
+    bool &m_cancelled;
+    int m_completion_step;
+    std::string m_tool;
+};
+
+class YieldingExecutor final : public IAgentCallExecutor {
+  public:
+    AgentToolResult execute(const AgentCall &call) override {
+        executed.push_back(call.tool);
+        return {false, nlohmann::json{{"tool", call.tool}}};
+    }
+
+    std::unique_ptr<IAgentCallTask> beginCall(const AgentCall &call) override {
+        if (call.tool == "yield")
+            return std::make_unique<YieldingTask>(advances, cancelled, completion_step, call.tool);
+        return IAgentCallExecutor::beginCall(call);
+    }
+
+    std::uint64_t epoch() const override { return 41; }
+
+    int advances = 0;
+    int completion_step = 2;
+    bool cancelled = false;
+    std::vector<std::string> executed;
+};
 
 } // namespace
 
@@ -443,6 +503,107 @@ TEST_CASE("modal calls park and time out with the exact BUSY response", "[agent_
     server.stop();
 }
 
+TEST_CASE("AgentServer bounds queued calls by count and frees capacity after pump",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+
+    for (int id = 1; id <= 64; ++id) {
+        REQUIRE(client->sendRawLine(nlohmann::json{
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"method", "call"},
+            {"params", {{"tool", "queued"}, {"arguments", nlohmann::json::object()}}}}
+                                        .dump()));
+    }
+    awaitQueuedCalls(*client);
+    REQUIRE(client->sendRawLine(
+        R"({"jsonrpc":"2.0","id":"over-count","method":"call","params":{"tool":"extra","arguments":{}}})"));
+    const auto rejected = receiveUntil(*client);
+    REQUIRE(rejected.has_value());
+    CHECK(rejected->at("id") == "over-count");
+    CHECK(rejected->at("error").at("data").at("code") == "OVERLOADED");
+
+    server.pump();
+    REQUIRE(client->sendRawLine(
+        R"({"jsonrpc":"2.0","id":"after-pump","method":"call","params":{"tool":"next","arguments":{}}})"));
+    REQUIRE(client->sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
+    bool barrier_seen = false;
+    for (int reply_count = 0; reply_count < 70 && !barrier_seen; ++reply_count) {
+        const auto response = receiveUntil(*client);
+        REQUIRE(response.has_value());
+        barrier_seen = response->value("id", nlohmann::json()) == 99;
+    }
+    REQUIRE(barrier_seen);
+    server.pump();
+    REQUIRE_FALSE(executor.calls.empty());
+    CHECK(executor.calls.back() == "next");
+    server.stop();
+}
+
+TEST_CASE("AgentServer bounds queued call payload bytes", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+
+    const std::string payload(950 * 1024, 'x');
+    for (int id = 1; id <= 8; ++id) {
+        const nlohmann::json request{
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"method", "call"},
+            {"params", {{"tool", "queued"}, {"arguments", {{"payload", payload}}}}}};
+        const std::string line = request.dump();
+        REQUIRE(line.size() < kAgentMaxLineBytes);
+        REQUIRE(client->sendRawLine(line));
+    }
+    awaitQueuedCalls(*client);
+    REQUIRE(client->sendRawLine(
+        nlohmann::json{{"jsonrpc", "2.0"},
+                       {"id", "over-bytes"},
+                       {"method", "call"},
+                       {"params", {{"tool", "extra"}, {"arguments", {{"payload", payload}}}}}}
+            .dump()));
+    const auto rejected = receiveUntil(*client);
+    REQUIRE(rejected.has_value());
+    CHECK(rejected->at("id") == "over-bytes");
+    CHECK(rejected->at("error").at("data").at("code") == "OVERLOADED");
+    server.stop();
+}
+
+TEST_CASE("AgentServer drains queued calls on EOF before completing shutdown", "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    std::string error;
+    REQUIRE(server.start(&error));
+    auto client = TestBridgeClient::connect(scratch.endpoint(), &error);
+    REQUIRE(client.has_value());
+    REQUIRE(client->hello());
+    REQUIRE(client->call("queued-before-eof"));
+    awaitQueuedCalls(*client);
+    client->close();
+    server.pump();
+    CHECK((executor.calls == std::vector<std::string>{"queued-before-eof"}));
+    server.stop();
+}
+
 TEST_CASE("stop fails queued calls with SIMULATOR_UNAVAILABLE", "[agent_server]") {
     ScratchDirectory scratch;
     TestExecutor executor;
@@ -647,4 +808,121 @@ TEST_CASE("A call queued behind a long call still runs while the dialog stays cl
     REQUIRE(second_reply->contains("result"));
     CHECK(second_reply->at("result").at("is_error") == false);
     server.stop();
+}
+
+TEST_CASE("AgentServer submit rejects overload immediately and releases slots after pumping",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    TestExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+    for (int index = 0; index < 64; ++index)
+        server.submit(AgentCall{.tool = "queued"}, {});
+
+    bool rejected = false;
+    server.submit(AgentCall{.tool = "overflow"}, [&](const AgentToolResult &result) {
+        rejected = result.is_error && result.structured.at("error").at("code") == "OVERLOADED";
+    });
+    CHECK(rejected);
+
+    server.pump();
+    CHECK(executor.calls.size() == 64);
+    bool resumed = false;
+    server.submit(AgentCall{.tool = "after-pump"},
+                  [&](const AgentToolResult &result) { resumed = !result.is_error; });
+    server.pump();
+    CHECK(resumed);
+    REQUIRE_FALSE(executor.calls.empty());
+    CHECK(executor.calls.back() == "after-pump");
+}
+
+TEST_CASE("Deferred calls yield across pumps and keep later calls in FIFO order",
+          "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    TestHost host;
+    auto config = configFor(scratch);
+    config.pump_budget = 1s;
+    AgentServer server(executor, host, config);
+
+    std::vector<std::string> completions;
+    std::vector<AgentToolResult> results;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &result) {
+        completions.push_back(result.structured.at("tool").get<std::string>());
+        results.push_back(result);
+    });
+    server.submit(AgentCall{.tool = "sync"}, [&](const AgentToolResult &result) {
+        completions.push_back(result.structured.at("tool").get<std::string>());
+        results.push_back(result);
+    });
+    server.pump();
+    CHECK(executor.advances == 1);
+    CHECK(completions.empty());
+    CHECK(server.status().state == AgentServerState::Busy);
+
+    server.pump();
+    CHECK(executor.advances == 2);
+    REQUIRE(results.size() == 2);
+    CHECK_FALSE(results[0].is_error);
+    CHECK_FALSE(results[1].is_error);
+    CHECK(completions == std::vector<std::string>{"yield", "sync"});
+    CHECK(executor.executed == std::vector<std::string>{"sync"});
+}
+
+TEST_CASE("An active deferred call parks and times out while a modal is open", "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    TestHost host;
+    auto now = std::chrono::steady_clock::time_point{};
+    auto config = configFor(scratch);
+    config.park_timeout = 30s;
+    config.now = [&] { return now; };
+    AgentServer server(executor, host, config);
+    bool completed = false;
+    AgentToolResult result;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &value) {
+        completed = true;
+        result = value;
+    });
+
+    server.pump();
+    REQUIRE(executor.advances == 1);
+    host.modal = true;
+    server.pump();
+    CHECK(executor.advances == 1);
+    CHECK_FALSE(completed);
+
+    now += 31s;
+    server.pump();
+    REQUIRE(completed);
+    CHECK(executor.advances == 1);
+    CHECK(executor.cancelled);
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "BUSY");
+}
+
+TEST_CASE("Stopping cancels an active deferred call", "[agent_server]") {
+    ScratchDirectory scratch;
+    YieldingExecutor executor;
+    executor.completion_step = 100;
+    TestHost host;
+    AgentServer server(executor, host, configFor(scratch));
+    bool completed = false;
+    AgentToolResult result;
+    server.submit(AgentCall{.tool = "yield"}, [&](const AgentToolResult &value) {
+        completed = true;
+        result = value;
+    });
+
+    server.pump();
+    REQUIRE(executor.advances == 1);
+    CHECK_FALSE(completed);
+    server.stop();
+
+    REQUIRE(completed);
+    CHECK(executor.cancelled);
+    CHECK(result.is_error);
+    CHECK(result.structured.at("error").at("code") == "SIMULATOR_UNAVAILABLE");
 }

@@ -1,1 +1,3 @@
 A code wiki for this local repository. Prioritize a concise quickstart, architecture overview, source map, key workflows, domain concepts, operations/runbook notes, testing guidance, and integration points. Inspect git history to understand reasoning behind code changes and the progression of the repository. Keep pages grounded in the repository structure and recent code changes. Prefer practical navigation for engineers over generic summaries.
+
+Binding rules live in AGENTS.md files, and contributor conventions live in CONTRIBUTING.md. Describe what the code does and link to those files rather than restating their rules. Link to CONTRIBUTING.md for build, test, and release procedures instead of copying them.

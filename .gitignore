@@ -528,10 +528,16 @@ out/
 graphify-out/
 
 # AI agent session state
-# Tracked agent material: .agents/skills/ and .agents/AGENTS.md
+# Tracked agent material: .agents/skills/ only. DOX excludes .agents/ and
+# .githooks/, so no AGENTS.md is tracked under either. Git cannot re-include a
+# file under an ignored parent, so a new tracked entry directly under .agents/
+# needs its own ! line. Check with `git check-ignore -q <path>` (exit 0 means
+# ignored). Do not use -v for yes/no checks: it prints negated matches with
+# exit 0.
 .agents/*
 !.agents/skills/
-!.agents/AGENTS.md
+.agents/**/AGENTS.md
+.githooks/**/AGENTS.md
 
 # Secret safety
 .env

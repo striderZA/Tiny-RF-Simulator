@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -29,6 +30,22 @@ using AgentJson = nlohmann::json;
 using OrderedJson = nlohmann::ordered_json;
 using SteadyClock = std::chrono::steady_clock;
 using TimePoint = SteadyClock::time_point;
+
+constexpr std::size_t kMaxQueuedAgentCalls = 64;
+constexpr std::size_t kMaxQueuedAgentCallBytes = 8 * 1024 * 1024;
+
+std::size_t agentCallPayloadBytes(const AgentCall &call) {
+    return call.tool.size() + call.client.size() + call.arguments.dump().size();
+}
+
+AgentToolResult overloadedResult(std::optional<std::uint64_t> epoch) {
+    return agentErrorResult(AgentError{AgentErrorCode::Overloaded, "Agent request queue is full"},
+                            epoch);
+}
+
+bool queueCapacityAvailable(std::size_t count, std::size_t bytes, std::size_t payload_bytes) {
+    return count < kMaxQueuedAgentCalls && payload_bytes <= kMaxQueuedAgentCallBytes - bytes;
+}
 
 bool validRpcId(const OrderedJson &id) { return id.is_string() || id.is_number(); }
 bool validRpcId(const AgentJson &id) { return id.is_string() || id.is_number(); }
@@ -118,12 +135,17 @@ struct AgentServer::Impl {
         std::uint64_t session = 0;
         AgentJson id = nullptr;
         std::optional<TimePoint> parked_since;
+        std::unique_ptr<IAgentCallTask> task;
+        std::size_t payload_bytes = 0;
     };
 
     struct OutgoingResponse {
         std::uint64_t session = 0;
-        AgentJson message;
+        AgentJson message = nullptr;
         bool close_connection = false;
+        std::optional<AgentJson> id;
+        std::optional<AgentToolResult> deferred_result;
+        std::optional<std::uint64_t> epoch;
     };
 
     Impl(IAgentCallExecutor &call_executor, IAgentHost &agent_host,
@@ -138,6 +160,8 @@ struct AgentServer::Impl {
     std::mutex lifecycle_mutex;
     std::mutex pump_mutex;
     std::deque<PendingCall> inbox;
+    std::size_t inbox_payload_bytes = 0;
+    std::optional<PendingCall> active_call;
     std::deque<OutgoingResponse> outbox;
     std::thread listener_thread;
     AgentServerStatus current_status;
@@ -147,6 +171,7 @@ struct AgentServer::Impl {
     std::uint64_t authenticated_session = 0;
     std::optional<std::uint64_t> current_epoch;
     bool is_running = false;
+    bool execution_active = false;
     bool stopping = false;
     bool stop_requested = false;
     bool endpoint_written = false;
@@ -188,7 +213,7 @@ struct AgentServer::Impl {
     void setStatusFromWorkLocked() {
         if (stopping)
             return;
-        if (!inbox.empty()) {
+        if (execution_active || !inbox.empty()) {
             current_status.state = AgentServerState::Busy;
             return;
         }
@@ -323,9 +348,35 @@ struct AgentServer::Impl {
         std::vector<std::pair<Completion, AgentToolResult>> completions;
         {
             std::lock_guard pump_lock(pump_mutex);
+            std::optional<PendingCall> active;
+            if (active_call) {
+                active = std::move(active_call);
+                active_call.reset();
+            }
+            std::optional<AgentToolResult> active_result;
+            if (active) {
+                {
+                    std::lock_guard lock(mutex);
+                    active_result = unavailableResultLocked();
+                }
+                if (active->task)
+                    active->task->cancelWithResult(*active_result);
+            }
+
             std::lock_guard lock(mutex);
+            execution_active = false;
+            if (active) {
+                AgentToolResult result = std::move(*active_result);
+                if (active->has_request) {
+                    outbox.push_back(
+                        responseForCall(active->session, active->id, result, current_epoch));
+                }
+                if (active->done)
+                    completions.emplace_back(std::move(active->done), std::move(result));
+            }
             while (!inbox.empty()) {
                 PendingCall pending = std::move(inbox.front());
+                inbox_payload_bytes -= pending.payload_bytes;
                 inbox.pop_front();
                 AgentToolResult result = unavailableResultLocked();
                 if (pending.has_request) {
@@ -337,7 +388,6 @@ struct AgentServer::Impl {
             }
             stop_requested = true;
         }
-
         if (listener_thread.joinable())
             listener_thread.join();
         removeOwnedEndpoint();
@@ -362,24 +412,42 @@ struct AgentServer::Impl {
             if (stopping) {
                 rejected = unavailableResultLocked();
             } else {
-                inbox.push_back(
-                    {std::move(call), std::move(done), false, 0, nullptr, std::nullopt});
-                setStatusFromWorkLocked();
+                const std::size_t payload_bytes = agentCallPayloadBytes(call);
+                if (!queueCapacityAvailable(inbox.size(), inbox_payload_bytes, payload_bytes)) {
+                    rejected = ::overloadedResult(epochSnapshotLocked());
+                } else {
+                    inbox_payload_bytes += payload_bytes;
+                    inbox.push_back({std::move(call), std::move(done), false, 0, nullptr,
+                                     std::nullopt, nullptr, payload_bytes});
+                    setStatusFromWorkLocked();
+                }
             }
         }
         if (rejected)
             invokeCompletion(done, *rejected);
     }
 
-    void enqueueNetworkCall(AgentCall call, std::uint64_t session, AgentJson id) {
+    bool enqueueNetworkCall(AgentCall call, std::uint64_t session, AgentJson id) {
         std::lock_guard lock(mutex);
         if (stopping) {
             AgentToolResult result = unavailableResultLocked();
             outbox.push_back(responseForCall(session, id, result, current_epoch));
-            return;
+            return true;
         }
-        inbox.push_back({std::move(call), {}, true, session, std::move(id), std::nullopt});
+        const std::size_t payload_bytes = agentCallPayloadBytes(call) + id.dump().size();
+        if (!queueCapacityAvailable(inbox.size(), inbox_payload_bytes, payload_bytes))
+            return false;
+        inbox_payload_bytes += payload_bytes;
+        inbox.push_back({std::move(call),
+                         {},
+                         true,
+                         session,
+                         std::move(id),
+                         std::nullopt,
+                         nullptr,
+                         payload_bytes});
         setStatusFromWorkLocked();
+        return true;
     }
 
     OutgoingResponse responseForCall(std::uint64_t session, const AgentJson &id,
@@ -391,18 +459,23 @@ struct AgentServer::Impl {
         return {session, std::move(*message), false};
     }
 
-    void queueResult(const PendingCall &pending, const AgentToolResult &result) {
+    void queueResult(const PendingCall &pending, AgentToolResult result) {
         if (!pending.has_request)
             return;
-        OutgoingResponse response =
-            responseForCall(pending.session, pending.id, result, epochSnapshot());
+        OutgoingResponse response{pending.session, nullptr,           false,
+                                  pending.id,      std::move(result), epochSnapshot()};
         std::lock_guard lock(mutex);
         outbox.push_back(std::move(response));
     }
 
     void finishCall(PendingCall pending, AgentToolResult result,
                     std::vector<std::pair<Completion, AgentToolResult>> &completions) {
-        queueResult(pending, result);
+        if (pending.has_request) {
+            if (pending.done)
+                queueResult(pending, result);
+            else
+                queueResult(pending, std::move(result));
+        }
         if (pending.done)
             completions.emplace_back(std::move(pending.done), std::move(result));
     }
@@ -422,84 +495,195 @@ struct AgentServer::Impl {
         for (;;) {
             if (completed != 0 && now() - pump_started >= config.pump_budget)
                 break;
+
+            PendingCall pending;
+            bool resuming = false;
             {
                 std::lock_guard lock(mutex);
-                if (stopping || inbox.empty())
+                if (stopping)
                     break;
+                if (active_call) {
+                    pending = std::move(*active_call);
+                    active_call.reset();
+                    resuming = true;
+                } else if (inbox.empty()) {
+                    break;
+                }
             }
-            bool modal_open = false;
-            try {
-                modal_open = host.appModalOpen();
-            } catch (...) {
-                PendingCall failed;
+
+            if (resuming) {
+                bool modal_open = false;
+                try {
+                    modal_open = host.appModalOpen();
+                } catch (...) {
+                    AgentToolResult result =
+                        agentErrorResult(AgentError{AgentErrorCode::Internal,
+                                                    "could not inspect simulator dialog state"},
+                                         epochSnapshot());
+                    if (pending.task)
+                        pending.task->cancelWithResult(result);
+                    {
+                        std::lock_guard lock(mutex);
+                        execution_active = false;
+                        setStatusFromWorkLocked();
+                    }
+                    finishCall(std::move(pending), std::move(result), completions);
+                    ++completed;
+                    continue;
+                }
+
+                const TimePoint observed_at = now();
+                bool timed_out = false;
+                bool parked = false;
+                bool server_stopping = false;
                 {
                     std::lock_guard lock(mutex);
-                    if (inbox.empty() || stopping)
-                        break;
-                    failed = std::move(inbox.front());
-                    inbox.pop_front();
-                }
-                AgentToolResult result =
-                    agentErrorResult(AgentError{AgentErrorCode::Internal,
-                                                "could not inspect simulator dialog state"},
-                                     epochSnapshot());
-                finishCall(std::move(failed), std::move(result), completions);
-                ++completed;
-                continue;
-            }
-
-            const TimePoint observed_at = now();
-            PendingCall pending;
-            bool timed_out = false;
-            bool parked = false;
-            {
-                std::lock_guard lock(mutex);
-                if (stopping || inbox.empty())
-                    break;
-                if (modal_open) {
-                    for (PendingCall &queued : inbox) {
-                        if (!queued.parked_since)
-                            queued.parked_since = observed_at;
+                    if (stopping) {
+                        active_call = std::move(pending);
+                        server_stopping = true;
+                    } else if (modal_open) {
+                        if (!pending.parked_since)
+                            pending.parked_since = observed_at;
+                        for (PendingCall &queued : inbox) {
+                            if (!queued.parked_since)
+                                queued.parked_since = observed_at;
+                        }
+                        timed_out = observed_at - *pending.parked_since > config.park_timeout;
+                        parked = !timed_out;
+                    } else {
+                        pending.parked_since.reset();
+                        for (PendingCall &queued : inbox)
+                            queued.parked_since.reset();
                     }
-                } else {
-                    // The park clock runs only while a dialog is open.
-                    for (PendingCall &queued : inbox)
-                        queued.parked_since.reset();
+                    if (parked) {
+                        active_call = std::move(pending);
+                        execution_active = true;
+                        setStatusFromWorkLocked();
+                    } else if (timed_out) {
+                        execution_active = false;
+                        setStatusFromWorkLocked();
+                    }
                 }
-                PendingCall &front = inbox.front();
-                timed_out = modal_open && front.parked_since &&
-                            observed_at - *front.parked_since > config.park_timeout;
-                if (modal_open && !timed_out) {
-                    parked = true;
-                } else {
-                    pending = std::move(front);
-                    inbox.pop_front();
+                if (server_stopping || parked)
+                    break;
+                if (timed_out) {
+                    AgentToolResult result = agentErrorResult(
+                        AgentError{AgentErrorCode::Busy, "RF Simulator is showing a dialog; ask "
+                                                         "the user to close it, then retry"},
+                        epochSnapshot());
+                    if (pending.task)
+                        pending.task->cancelWithResult(result);
+                    finishCall(std::move(pending), std::move(result), completions);
+                    ++completed;
+                    continue;
                 }
             }
 
-            if (parked)
-                break;
-            if (timed_out) {
-                AgentToolResult result = agentErrorResult(
-                    AgentError{
-                        AgentErrorCode::Busy,
-                        "RF Simulator is showing a dialog; ask the user to close it, then retry"},
-                    epochSnapshot());
-                finishCall(std::move(pending), std::move(result), completions);
-                ++completed;
-                continue;
+            if (!resuming) {
+                bool modal_open = false;
+                try {
+                    modal_open = host.appModalOpen();
+                } catch (...) {
+                    {
+                        std::lock_guard lock(mutex);
+                        if (inbox.empty() || stopping)
+                            break;
+                        pending = std::move(inbox.front());
+                        inbox_payload_bytes -= pending.payload_bytes;
+                        inbox.pop_front();
+                    }
+                    AgentToolResult result =
+                        agentErrorResult(AgentError{AgentErrorCode::Internal,
+                                                    "could not inspect simulator dialog state"},
+                                         epochSnapshot());
+                    finishCall(std::move(pending), std::move(result), completions);
+                    ++completed;
+                    continue;
+                }
+
+                const TimePoint observed_at = now();
+                bool timed_out = false;
+                bool parked = false;
+                {
+                    std::lock_guard lock(mutex);
+                    if (stopping || inbox.empty())
+                        break;
+                    if (modal_open) {
+                        for (PendingCall &queued : inbox) {
+                            if (!queued.parked_since)
+                                queued.parked_since = observed_at;
+                        }
+                    } else {
+                        // The park clock runs only while a dialog is open.
+                        for (PendingCall &queued : inbox)
+                            queued.parked_since.reset();
+                    }
+                    PendingCall &front = inbox.front();
+                    timed_out = modal_open && front.parked_since &&
+                                observed_at - *front.parked_since > config.park_timeout;
+                    if (modal_open && !timed_out) {
+                        parked = true;
+                    } else {
+                        pending = std::move(front);
+                        inbox_payload_bytes -= pending.payload_bytes;
+                        inbox.pop_front();
+                        if (!timed_out) {
+                            execution_active = true;
+                            setStatusFromWorkLocked();
+                        }
+                    }
+                }
+
+                if (parked)
+                    break;
+                if (timed_out) {
+                    AgentToolResult result = agentErrorResult(
+                        AgentError{AgentErrorCode::Busy, "RF Simulator is showing a dialog; ask "
+                                                         "the user to close it, then retry"},
+                        epochSnapshot());
+                    finishCall(std::move(pending), std::move(result), completions);
+                    ++completed;
+                    continue;
+                }
             }
 
-            AgentToolResult result;
+            // Reserve most of the 16.7 ms frame for the remaining app update and rendering.
+            const auto task_budget = std::min(config.pump_budget, std::chrono::milliseconds{6});
+            std::optional<AgentToolResult> result;
             try {
-                result = executor.execute(pending.call);
+                if (!pending.task)
+                    pending.task = executor.beginCall(pending.call);
+                if (pending.task)
+                    result = pending.task->advance(task_budget);
+                else
+                    result =
+                        agentErrorResult(AgentError{AgentErrorCode::Internal,
+                                                    "agent executor did not create a call task"},
+                                         epochSnapshot());
             } catch (...) {
                 result = agentErrorResult(AgentError{AgentErrorCode::Internal,
                                                      "internal error while processing agent call"},
                                           epochSnapshot());
+                if (pending.task)
+                    pending.task->cancelWithResult(*result);
             }
+
+            if (!result) {
+                std::lock_guard lock(mutex);
+                active_call = std::move(pending);
+                execution_active = true;
+                setStatusFromWorkLocked();
+                break;
+            }
+
+            pending.task.reset();
             refreshEpoch();
-            finishCall(std::move(pending), std::move(result), completions);
+            {
+                std::lock_guard lock(mutex);
+                execution_active = false;
+                setStatusFromWorkLocked();
+            }
+            finishCall(std::move(pending), std::move(*result), completions);
             ++completed;
         }
 
@@ -770,7 +954,10 @@ struct AgentServer::Impl {
         call.tool = params["tool"].get<std::string>();
         call.arguments = params["arguments"];
         call.client = client_name;
-        enqueueNetworkCall(std::move(call), session, id);
+        if (!enqueueNetworkCall(std::move(call), session, id)) {
+            const AgentJson overloaded = rpcError(id, "OVERLOADED", "Agent request queue is full");
+            return writeAgentMessage(channel, overloaded);
+        }
         return true;
     }
 
@@ -828,8 +1015,16 @@ struct AgentServer::Impl {
                 outbox.pop_front();
                 have_response = true;
             }
-            if (response.close_connection ||
-                (have_response && !writeAgentMessage(*client, response.message)))
+            if (response.deferred_result) {
+                if (!response.id)
+                    return false;
+                const auto message =
+                    boundedRpcCallResult(*response.id, *response.deferred_result, response.epoch);
+                if (!message)
+                    return false;
+                response.message = *message;
+            }
+            if (response.close_connection || !writeAgentMessage(*client, response.message))
                 return false;
         }
     }

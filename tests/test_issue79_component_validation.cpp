@@ -24,6 +24,7 @@
 #include "circuit_runtime.h"
 #include "component_library.h"
 #include "graph_editor_actions.h"
+#include "test_temp_paths.h"
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -323,4 +324,79 @@ TEST_CASE("Library instantiate resolves contained S-param path parameters "
     // data/good.s2p), then loaded.
     REQUIRE(amp->sparamLoaded());
     CHECK(amp->sparamFilepath() == fs::weakly_canonical(dir.root / "data/good.s2p").string());
+}
+
+// AMP intercept files (amp_filepath) follow the same library containment as S-param files.
+namespace {
+void writeAmpFile(const fs::path &path) {
+    fs::create_directories(path.parent_path());
+    std::ofstream ofs(path);
+    ofs << "S RI R 50\nFREQ GHZ\n1.0 0.5 0.0 2.0 0.0 0.0 0.0 0.3 0.0\n"
+           "OIP3 dBm\nFREQ GHZ\n1.0 30.0\n";
+}
+} // namespace
+
+TEST_CASE("Library instantiate neutralizes AMP path parameters that escape the library dir",
+          "[issue79][library][containment]") {
+    TempDir dir("amp_escaping");
+    const auto decoy = dir.root.parent_path() / "issue79_amp_decoy.amp";
+    writeAmpFile(decoy); // valid file OUTSIDE the library dir
+
+    nlohmann::json j;
+    j["schema_version"] = 2;
+    j["type"] = "amplifier";
+    j["part_number"] = "ESCAPE-AMP";
+    j["parameters"]["gain_dB"] = 20.0;
+    j["parameters"]["nf_dB"] = 1.0;
+    j["parameters"]["amp_filepath"] = decoy.string();
+    writeLibraryJson(dir.root / "amp.json", j);
+
+    ComponentLibrary lib;
+    lib.loadFile((dir.root / "amp.json").string());
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
+    REQUIRE(engine != nullptr);
+
+    auto *amp = dynamic_cast<AmplifierEngine *>(engine);
+    REQUIRE(amp != nullptr);
+    CHECK_FALSE(amp->ampLoaded()); // the decoy was never read
+    CHECK(amp->ampFilepath().empty());
+    CHECK(amp->gain_dB() == Catch::Approx(20.0));
+
+    std::error_code ec;
+    fs::remove(decoy, ec);
+}
+
+TEST_CASE("Library instantiate resolves contained AMP path parameters against the library dir",
+          "[issue79][library][containment]") {
+    TempDir dir("amp_contained");
+    writeAmpFile(dir.root / "data/good.amp");
+
+    nlohmann::json j;
+    j["schema_version"] = 2;
+    j["type"] = "amplifier";
+    j["part_number"] = "CONTAINED-AMP";
+    j["parameters"]["gain_dB"] = 20.0;
+    j["parameters"]["amp_filepath"] = "data/good.amp";
+    writeLibraryJson(dir.root / "amp.json", j);
+
+    ComponentLibrary lib;
+    lib.loadFile((dir.root / "amp.json").string());
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
+    REQUIRE(engine != nullptr);
+
+    auto *amp = dynamic_cast<AmplifierEngine *>(engine);
+    REQUIRE(amp != nullptr);
+    // Resolved relative to the library JSON's directory, then loaded.
+    REQUIRE(amp->ampLoaded());
+    CHECK(amp->ampFilepath() == fs::weakly_canonical(dir.root / "data/good.amp").string());
 }

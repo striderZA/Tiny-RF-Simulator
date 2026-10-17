@@ -15,6 +15,7 @@
 #include "extension_manager.h"
 #include "extension_trust_store.h"
 #include "external_tool_runner.h"
+#include "git_status.h"
 #include "graph_editor_actions.h"
 
 #include "help_widget.h"
@@ -125,8 +126,10 @@ class RfSimulatorApp {
     ~RfSimulatorApp();
 
     // Project save/load
-    void saveProject(const std::string &path);
-    void loadProject(const std::string &path);
+    // Both return true on success. Agent tools call them directly, without a dialog.
+    bool saveProject(const std::string &path);
+    const std::vector<std::string> &lastSavedDataFiles() const { return m_last_saved_data_files; }
+    bool loadProject(const std::string &path);
     void newProject();
     // Derived from the editor command service's revision: dirty while the
     // revision differs from the one recorded by the last save/load/New.
@@ -159,6 +162,15 @@ class RfSimulatorApp {
         const std::function<IComponentEngine *(ComponentRegistry &, NodeGraphEngine &, int)>
             &factory,
         int engine_id);
+    // Places a built-in or extension library part through EditorCommands::addLibraryPart().
+    IComponentEngine *testAddLibraryPart(const std::string &part_number);
+    // Calls the canvas insertion path to test editor-position reads before the first draw.
+    IComponentEngine *testAddComponentAtPosition(std::string_view type, ImVec2 position);
+    // Calls the context-menu duplicate path before its first draw.
+    IComponentEngine *testDuplicateComponent(int graph_node_id);
+    // Replaces a placed component through the app's swap path, which also carries the canvas
+    // position, selection, and instrument points over. Returns the refusal, or "" on success.
+    std::string testSwapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
     std::optional<int> testConnectLink(int start_pin_id, int end_pin_id);
     bool testDisconnectLink(int link_id);
     bool testRemoveComponent(int graph_node_id);
@@ -181,6 +193,7 @@ class RfSimulatorApp {
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
     std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
+    PFBViewManager &testPfbViews() { return m_pfb_views; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
     TestFlowWidget &testTestFlowWidget() { return *m_test_flow_widget; }
     ExtensionManager &testExtensionManager() { return m_extension_manager; }
@@ -227,6 +240,10 @@ class RfSimulatorApp {
     // project-local external tool record in the Extensions panel.
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
     bool saveComponentForm();
+    // Replaces a placed library component in place (EditorCommands::swapLibraryPart()) and carries
+    // the canvas position, selection, and instrument points over. Returns the refusal reason, or
+    // an empty string once the swap has happened.
+    std::string swapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
 
     // --- Measurement-chain host adapter ------------------------------------
     // The reusable network-analyzer runner depends only on common and
@@ -289,6 +306,8 @@ class RfSimulatorApp {
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsState m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
+    std::vector<std::string> m_last_saved_data_files;
+    GitStatusMonitor m_git_status_monitor;
     PendingAction m_pending_action = PendingAction::None;
     bool m_show_unsaved_dialog = false;
 

@@ -3,6 +3,7 @@
 #include "agent_host.h"
 #include "node_graph_widget.h"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -34,6 +35,10 @@ class AppAgentHost final : public IAgentHost {
     struct Hooks {
         std::function<nlohmann::json()> capture;
         std::function<std::optional<std::string>()> project_name;
+        std::function<std::optional<std::string>()> project_path;
+        std::function<bool(const std::string &)> save_project;
+        std::function<AgentProjectLoadResult(const std::string &)> load_project;
+        std::function<std::vector<std::string>()> saved_project_data_files;
     };
 
     AppAgentHost(NodeGraphWidget &graph_widget, Hooks hooks);
@@ -52,8 +57,14 @@ class AppAgentHost final : public IAgentHost {
     void commitCheckpoint(const std::string &summary) override;
     void discardCheckpoint() override;
     void placeComponents(const std::vector<AgentPlacement> &placements) override;
+    std::array<float, 2> nodeEditorSpacePosition(int graph_node_id) const override;
+    bool setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override;
     bool appModalOpen() const override;
     std::optional<std::string> projectName() const override;
+    std::optional<std::string> projectPath() const override;
+    bool saveProjectFile(const std::string &path) override;
+    std::vector<std::string> savedProjectDataFiles() const override;
+    AgentProjectLoadResult loadProjectFile(const std::string &path) override;
     void recordActivity(const AgentActivity &activity) override;
 
   private:

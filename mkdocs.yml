@@ -9,6 +9,7 @@ nav:
   - Getting started:
       - Install: install.md
       - Guided tutorial: tutorial.md
+      - Agent (MCP): agent.md
   - Building circuits:
       - Components and ports: circuits/components-and-ports.md
       - Probes: circuits/probes.md
@@ -21,6 +22,8 @@ nav:
       - Receiver Requirements: measurements/receiver-requirements.md
       - Test Flow: measurements/test-flow.md
       - PFB Filter Calculator: measurements/pfb-filter-calculator.md
+  - Components:
+      - Amplifier: amplifier.md
 markdown_extensions:
   - admonition
   - attr_list

@@ -54,6 +54,10 @@ bool parsePath(const std::string &path, std::vector<Token> &tokens, std::string 
                     return false;
                 }
             }
+            if (digits.size() > 1 && digits.front() == '0') {
+                error = "array index must not have leading zeros";
+                return false;
+            }
             tokens.push_back(
                 Token{true, {}, static_cast<size_t>(std::strtoull(digits.c_str(), nullptr, 10))});
             i = close + 1;

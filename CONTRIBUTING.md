@@ -65,6 +65,7 @@ The user manual is built with MkDocs from `manual/pages/` and published to GitHu
 - **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
 - **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
 - **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
+- README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
 - **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
 
 ## CI Pipeline
@@ -73,12 +74,12 @@ Pull requests run **no automated pipeline**. Release validation runs when a rele
 
 - **Format check** — clang-format 18 enforces code style across all source modules
 - **AddressSanitizer** — Linux Debug build and tests with ASan (UI tests excluded)
-- **Packaging builds** — optimized Release Linux and Windows binaries (the artifacts attached to the GitHub release); each package leg runs the test suite against the build it ships (UI tests excluded on Windows)
+- **Packaging builds** — optimized Release Linux GCC 14 and Windows MinGW-w64 binaries, the artifacts attached to the GitHub release. The `package` job is the only place these Release configurations are built, and it tests the build it ships (UI tests excluded on Windows). Build, test, and the MinGW floor check are shared through `.github/actions/build-and-test`.
 
 On top of that, the `strict-build` validation matrix is chosen by tag class:
 
 - **Patch release tags** (`vX.Y.Z` where `Z > 0`) build and test **Linux GCC 14 Debug** only (Xvfb for UI tests).
-- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) run the full **validation matrix**: Linux GCC Debug/Release, Linux Clang 18, and Windows MinGW-w64 builds with unit + UI tests where supported.
+- **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) add **Linux Clang 18 Debug** and **Windows MinGW-w64 Debug** builds to the Linux GCC 14 Debug leg. The Windows leg runs unit tests only; UI tests need a display and run on Linux.
 
 Pushes to master that change the manual or its build files also run a strict docs build in `.github/workflows/docs.yml`. That run never publishes; publishing is covered under [Release Process](#release-process).
 
@@ -93,17 +94,52 @@ NO_MKDOCS_2_WARNING=true mkdocs build --strict   # user manual; needs requiremen
 
 ### Release Process
 
-Releases are prepared through a pull request by default; the tag is created only on `master`, after the version bump has landed. `scripts/release.sh` implements these steps; `--on-master` prepares directly on `master` instead of a release branch:
+Releases are prepared on a `release/vX.Y.Z` branch by default, and the tag is created only on `master`, after the version bump has landed. `--on-master` prepares directly on `master` instead. `scripts/release.sh` runs these steps.
+
+Run it with `bash` on Linux and macOS. On Windows, run it with `sh` instead, from Git for Windows: WSL's `bash` on `PATH` cannot run the script.
+
+```bash
+bash scripts/release.sh X.Y.Z    # Linux and macOS
+sh scripts/release.sh X.Y.Z      # Windows
+```
 
 1. Write the `## [X.Y.Z] - YYYY-MM-DD` section (with at least one bullet) at the top of `CHANGELOG.md`.
-2. Run `bash scripts/release.sh X.Y.Z`. From a clean `master` tree it creates `release/vX.Y.Z`, bumps `CMakeLists.txt`, runs the local gates, and commits `chore: prepare release vX.Y.Z`. Use `--on-master` to commit on `master` instead, or `--dry-run` to preview without changing anything.
-3. If it created a release branch, open a PR against `master` (the script prints the command) and merge after review; `--on-master` skips this step, so push `master` directly.
-4. Once the version bump is on `master`, tag it: `bash scripts/release.sh X.Y.Z --tag`. It verifies the version matches `CMakeLists.txt`, cuts the annotated `vX.Y.Z` tag, and pushes it.
-5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the tag-class build/test matrix, and packages Linux and Windows binaries.
+2. Prepare the release. The script runs these stages in order and changes nothing until the checks pass:
+   - **Checks:** the version is newer than `CMakeLists.txt`; neither the tag nor `release/vX.Y.Z` exists; the working tree holds nothing but `CHANGELOG.md` (untracked files count, and are listed); the changelog section exists.
+   - **Configure:** if `build/CMakeCache.txt` is missing, runs `cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc` (about 90 s the first time). `--skip-gates` skips this stage. A failure stops here.
+   - **Bump:** only the version token on the `project` line of `CMakeLists.txt` changes. The script checks that exactly one line changed and that its line ending is unchanged.
+   - **Gates** on the bumped tree: `scripts/format.sh --check --all`, `cmake --build build`, and `ctest --test-dir build`.
+   - **Commit:** creates `release/vX.Y.Z` (skipped with `--on-master`) and commits `CHANGELOG.md` and `CMakeLists.txt` as `chore: prepare release vX.Y.Z`.
+
+   `--dry-run` prints the plan without changing anything. `--skip-gates` skips configure and the gates, so the tag workflow becomes the first full check, after the tag is pushed.
+
+   If prepare stops, its message names the state:
+   - A refused check or a failed configure changes nothing. A failed gate restores `CMakeLists.txt`. Either way you stay on `master`; fix the cause and re-run.
+   - A failed commit is rolled back: `CMakeLists.txt` is restored and the release branch is removed. `CHANGELOG.md` is left as you had it, staged or not.
+   - A commit that already landed is kept, even if the script stops right after it: nothing is rolled back, and the message names the commit.
+   - A bump left uncommitted by a killed process is reported with the command that discards it. Run that command, then re-run.
+   - Re-running after a successful prepare reports where the release is committed (`release/vX.Y.Z` or `master`) and the next step.
+3. If prepare created a release branch, push it and open a PR against `master` (the script prints the command), then merge after review. With `--on-master`, push `master` directly.
+4. Once the version bump is on `master`, tag it: `sh scripts/release.sh X.Y.Z --tag` on Windows, `bash` elsewhere. It verifies the version matches `CMakeLists.txt`, cuts the annotated `vX.Y.Z` tag, and pushes it.
+5. The release workflow validates the tag against `CMakeLists.txt` and the changelog section, runs the format check, the AddressSanitizer build, and the tag-class build/test matrix, and packages Linux and Windows binaries.
 6. The workflow extracts the matching `CHANGELOG.md` section as the draft release description. `CHANGELOG.md` is the release-note source of truth.
 7. Review and publish the generated GitHub draft after the workflow succeeds.
 
+After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows one insertion and one deletion: the replaced version line.
+
 Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
+
+### Failed release tag
+
+The release workflow starts when `vX.Y.Z` is pushed. When a run fails, retag the same version, as long as that release has not been published:
+
+1. Read the failing job's log, and cancel the run if it is still going.
+2. Fix the cause on `master` through a PR. The version stays `X.Y.Z`.
+3. Delete the draft release if the run created one: `gh release delete vX.Y.Z --yes`.
+4. Delete the tag on the remote and locally: `git push origin :refs/tags/vX.Y.Z`, then `git tag -d vX.Y.Z`.
+5. Once the fix is on `master`, tag again: `sh scripts/release.sh X.Y.Z --tag` on Windows, `bash` elsewhere.
+
+Never move the tag of a published release. Ship the fix as the next patch release (`X.Y.(Z+1)`) instead.
 
 ## Architecture (Quick Reference)
 
@@ -119,6 +155,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 - **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
   Run `bash scripts/format.sh` to reformat changed files, or `bash scripts/format.sh --check` to dry-run (CI-equivalent). The checked directory set lives once in `scripts/format-dirs.sh` (shared with the pre-commit hook and the release workflow). CI will reject PRs with formatting violations.
   Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
+  The pre-commit hook runs the format check only when staged C++ files fall in the checked directories.
 - **DSP engine helpers** for ImGui inputs: `utils::inputDouble(label, ref, min, max)` and `utils::inputFrequency(label, freq_Hz, ...)`. Their limits bound user edits only: a value already outside them is shown as is (flagged, logged once) and kept until the user edits the field, so pass a local copy of the engine value and write it back only when the helper returns `true`.
 - **Spectrum tone struct:** `{double freq_Hz, power_dBm, phase_deg}`.
 - **Test float comparisons** with `Catch::Approx` from `<catch2/catch_approx.hpp>`.
@@ -146,6 +183,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 - **Subject format:** `<type>[(<scope>)][!]: <imperative summary>`, under 70 characters. `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`; `scope` is optional lowercase (e.g. `test(pfb): cover grid invariance`); `!` marks a breaking change. A body is optional — leave a blank line after the subject and wrap it at 72 characters.
 - **Enforced locally** by [`.githooks/commit-msg`](.githooks/commit-msg) on every `git commit`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress (`git merge`). Keep it sensible with `git commit --no-verify` only when the rule genuinely does not apply.
 - **Test the hooks** with `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+- Keep hook files at mode `100755` (`git update-index --chmod=+x <path>`).
 - Commits created by GitHub's squash merge never run local hooks, so **write the PR title in the same format**.
 
 ### Pushing
@@ -159,6 +197,7 @@ Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github
 
 - Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
 - No CI runs on pull requests — verify build, tests, and formatting locally before requesting review (see CI Pipeline).
+- Release workflow changes: run **Release** on the branch with `workflow_dispatch` (inputs: `version` as X.Y.Z, and `matrix` as `patch` or `minor`). The run validates and packages the artifacts but never publishes.
 - Squash-merge or rebase-merge to keep history clean.
 
 ## Where to Get Help

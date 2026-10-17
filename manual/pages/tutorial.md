@@ -18,7 +18,7 @@ In the Node Editor, click an output pin and drag to an input pin, then release t
 
 ## Configure Parameters
 
-Left-click a node to load it into the Properties panel, then adjust a parameter such as gain or frequency. Changes take effect immediately.
+Left-click a node to load it into the Properties panel, then adjust a parameter such as gain or frequency. Changes take effect immediately. To swap a library part for another one, open the **Part** list under the component's name and pick a part. The new part keeps the node's position, links, probes, and group membership, and starts from its own library parameters. If a connected port, probe, or instrument point has no matching port on the new part, the swap is refused and the reason appears under the list.
 
 ## View Results
 

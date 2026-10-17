@@ -48,135 +48,11 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
-namespace {
-
-class TestChainScratch final : public IMeasurementChainScratch {
-  public:
-    IComponentEngine *createClone(std::string_view type, int id) override {
-        const auto *descriptor = ComponentTypeRegistry::instance().find(type);
-        return descriptor ? descriptor->create(m_components, m_graph, id) : nullptr;
-    }
-
-  private:
-    NodeGraphEngine m_graph;
-    ViewManager m_view;
-    ComponentRegistry m_components{m_graph, m_view};
-};
-
-class TestChainHost final : public IMeasurementChainHost {
-  public:
-    explicit TestChainHost(const CircuitRuntime &runtime) : m_runtime(runtime) {}
-
-    IComponentEngine *componentForNode(int graph_node_id) const override {
-        return const_cast<IComponentEngine *>(m_runtime.components().find(graph_node_id));
-    }
-
-    std::unique_ptr<IMeasurementChainScratch> beginScratchPass() const override {
-        return std::make_unique<TestChainScratch>();
-    }
-
-  private:
-    const CircuitRuntime &m_runtime;
-};
-
-class ThrowingHoverEngine final : public ComponentEngineBase {
-  public:
-    ThrowingHoverEngine(int id, NodeGraphEngine &graph)
-        : ComponentEngineBase(id, graph, "Throwing", 1, 1) {}
-    std::string_view type_name() const override { return "agent_api_thrower"; }
-    std::string hoverSummary() const override { throw std::runtime_error("hover failed"); }
-    void update(double) override {}
-};
-
-class FakeAgentHost final : public IAgentHost {
-  public:
-    void beginCheckpoint(const AgentCall &) override { ++checkpoint_begins; }
-    void commitCheckpoint(const std::string &summary) override {
-        ++checkpoint_commits;
-        last_checkpoint_summary = summary;
-    }
-    void discardCheckpoint() override { ++checkpoint_discards; }
-    void placeComponents(const std::vector<AgentPlacement> &placements) override {
-        last_placements = placements;
-    }
-    bool appModalOpen() const override { return modal_open; }
-    std::optional<std::string> projectName() const override { return name; }
-    void recordActivity(const AgentActivity &entry) override {
-        ++activity_attempts;
-        if (throw_on_activity)
-            throw std::runtime_error("activity sink failed");
-        activities.push_back(entry);
-    }
-
-    bool modal_open = false;
-    int activity_attempts = 0;
-    bool throw_on_activity = false;
-    std::optional<std::string> name;
-    int checkpoint_begins = 0;
-    int checkpoint_commits = 0;
-    int checkpoint_discards = 0;
-    std::vector<AgentPlacement> last_placements;
-    std::vector<AgentActivity> activities;
-    std::string last_checkpoint_summary;
-};
-
-struct ApiFixture {
-    CircuitRuntime runtime;
-    GraphEditorActions actions{runtime};
-    EditorCommands commands{runtime, actions};
-    ComponentLibrary library;
-    SpectrumAnalyzerEngine spectrum_analyzer;
-    TestChainHost chain_host{runtime};
-    NetworkAnalyzerEngine network_analyzer{runtime.graph(), chain_host};
-    FakeAgentHost host;
-    AgentApi api{
-        {commands, runtime, library, network_analyzer, chain_host, spectrum_analyzer, host}};
-
-    ApiFixture() { library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library"); }
-
-    template <typename Engine> Engine *add(std::string_view type) {
-        const auto *descriptor = ComponentTypeRegistry::instance().find(type);
-        REQUIRE(descriptor != nullptr);
-        return static_cast<Engine *>(commands.createComponent(descriptor->create));
-    }
-
-    ThrowingHoverEngine *addThrower() {
-        return static_cast<ThrowingHoverEngine *>(
-            commands.createComponent([](ComponentRegistry &components, NodeGraphEngine &graph,
-                                        int id) -> IComponentEngine * {
-                return &components.add<ThrowingHoverEngine>(id, graph);
-            }));
-    }
-
-    bool errorWasLogged(std::string_view tool) const {
-        return std::any_of(LoggerCore::instance().entries().begin(),
-                           LoggerCore::instance().entries().end(), [&](const LogEntry &entry) {
-                               return entry.level == Level::Error &&
-                                      entry.message.find("Agent tool " + std::string(tool) +
-                                                         " failed:") != std::string::npos;
-                           });
-    }
-
-    AgentToolResult call(std::string tool,
-                         nlohmann::ordered_json arguments = nlohmann::ordered_json::object()) {
-        return api.execute({std::move(tool), std::move(arguments), "test-client"});
-    }
-};
-
-const nlohmann::json &errorFor(const AgentToolResult &result) {
-    REQUIRE(result.is_error);
-    REQUIRE(result.structured.contains("error"));
-    return result.structured.at("error");
-}
-
-AgentToolResult editCall(ApiFixture &fixture, nlohmann::ordered_json ops) {
-    return fixture.call("circuit_edit", {{"epoch", fixture.api.epoch()}, {"ops", std::move(ops)}});
-}
-
-} // namespace
+#include "agent_api_test_support.h"
 
 TEST_CASE("circuit_get reports components, ports, links, probes and analyzer points",
           "[agent_api]") {
@@ -830,15 +706,21 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
                       {{"op", "probe_add"}, {"at", {{"component", ids.at("d")}, {"port", 0}}}}}));
     REQUIRE_FALSE(fill.is_error);
     CHECK(fill.structured.at("epoch") == epoch);
-    CHECK(fixture.commands.revision() == revision);
+    // Each accepted probe_add is a project edit (issue #204), so four adds advance it four times.
+    CHECK(fixture.commands.revision() == revision + 4);
+    const auto revision_after_fill = fixture.commands.revision();
     CHECK(fixture.host.checkpoint_commits == 2);
+    const auto commits_before_duplicate = fixture.host.checkpoint_commits;
+    const auto discards_before_duplicate = fixture.host.checkpoint_discards;
     const auto duplicate = editCall(
         fixture, nlohmann::ordered_json::array(
                      {{{"op", "probe_add"}, {"at", {{"component", ids.at("a")}, {"port", 0}}}}}));
     REQUIRE_FALSE(duplicate.is_error);
     CHECK(duplicate.structured.at("epoch") == epoch);
     CHECK(duplicate.structured.at("applied")[0].at("unchanged") == true);
-    CHECK(fixture.commands.revision() == revision);
+    CHECK(fixture.commands.revision() == revision_after_fill);
+    CHECK(fixture.host.checkpoint_commits == commits_before_duplicate);
+    CHECK(fixture.host.checkpoint_discards == discards_before_duplicate + 1);
     const auto fifth = editCall(
         fixture, nlohmann::ordered_json::array(
                      {{{"op", "probe_add"}, {"at", {{"component", ids.at("e")}, {"port", 0}}}}}));
@@ -854,6 +736,8 @@ TEST_CASE("circuit_edit probes enforce capacity and preserve probe revision sema
     REQUIRE(missing.is_error);
     CHECK(missing.structured.at("epoch") == epoch);
     REQUIRE(errorFor(missing).at("code") == "NOT_FOUND");
+    // A refused remove of an absent probe is not a project edit.
+    CHECK(fixture.commands.revision() == revision_after_fill);
 }
 
 TEST_CASE("circuit_edit reports component port counts for a missing port",
@@ -1569,7 +1453,16 @@ TEST_CASE("Every catalog tool input example passes API argument validation", "[a
     for (const auto &tool : agentToolCatalog()) {
         CAPTURE(tool.name);
         REQUIRE_FALSE(tool.input_schema.at("examples").empty());
-        const auto result = fixture.call(tool.name, tool.input_schema.at("examples").front());
+        auto arguments = tool.input_schema.at("examples").front();
+        // The project examples name C:/ paths, which are not absolute on other platforms, and the
+        // save example names a folder that may not exist here. Both use a unique temp path instead;
+        // test_agent_api_project covers the real path rules.
+        if (tool.name == "project_save" || tool.name == "project_load") {
+            arguments["path"] = (std::filesystem::temp_directory_path() /
+                                 ("agent_example_" + test_temp_paths::processTag() + ".rfsim"))
+                                    .string();
+        }
+        const auto result = fixture.call(tool.name, arguments);
         if (result.is_error)
             CHECK(errorFor(result).at("code") != "INVALID_ARGUMENT");
         CHECK(result.structured.contains("epoch"));

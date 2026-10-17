@@ -1,11 +1,14 @@
 #pragma once
 
+#include "amp_file.h"
+#include "ampf_file.h"
 #include "component_engine_base.h"
 #include "node_graph_engine.h"
 #include "nonlinear_model.h"
 #include "s_parameter_data.h"
 #include "signal_node.h"
 #include <algorithm>
+#include <optional>
 
 class AmplifierEngine : public ComponentEngineBase {
   public:
@@ -70,6 +73,32 @@ class AmplifierEngine : public ComponentEngineBase {
     const std::string &sparamFilepath() const { return m_sparam_filepath; }
     const SParameterData &sparamData() const { return m_sparam_data; }
 
+    // AMP intercept file (MathWorks AMP, IIP3/OIP3 sections). While a file is loaded, its
+    // curves replace the scalar OIP3, unless an amp-f block is active. A file that fails to load
+    // keeps its path and error, and the scalar OIP3 applies.
+    void setAmpFilepath(const std::string &path);
+    const std::string &ampFilepath() const { return m_amp_filepath; }
+    bool ampLoaded() const { return m_amp.has_value(); }
+    const AmpFile *ampData() const { return m_amp ? &*m_amp : nullptr; }
+    const std::string &ampError() const { return m_amp_error; }
+
+    // amp-f v1 file: per-frequency OIP2, OIP3, and OP1dB for the block whose VAR and COND values
+    // match the selection. While a block is active, its curves replace the legacy AMP file's
+    // intercepts. A frequency with no finite value uses the scalar. A file that fails to load,
+    // or a selection that does not resolve to one block, keeps its path and error, and no block
+    // is active. Then OIP3 comes from the legacy AMP file if one is loaded, and otherwise from
+    // the scalar. OIP2 comes from the scalar.
+    void setAmpfFilepath(const std::string &path);
+    const std::string &ampfFilepath() const { return m_ampf_filepath; }
+    bool ampfLoaded() const { return m_ampf.has_value(); }
+    const AmpfFile *ampfData() const { return m_ampf ? &*m_ampf : nullptr; }
+    const std::string &ampfError() const { return m_ampf_error; }
+    // Exact VAR and COND values that pick one block. An empty selection matches a file with
+    // one block.
+    void setAmpfSelection(const AmpfValues &wanted);
+    const AmpfValues &ampfSelection() const { return m_ampf_selection; }
+    bool ampfBlockSelected() const { return m_ampf_block >= 0; }
+
   private:
     double m_gain_dB = 0.0;
     double m_nf_dB = 0.0;
@@ -82,4 +111,27 @@ class AmplifierEngine : public ComponentEngineBase {
     int m_sparam_fwd_idx = 0;
     const Spectrum *m_cached_sparam_input = nullptr;
     uint64_t m_cached_sparam_generation = 0;
+
+    // AMP intercept state
+    std::string m_amp_filepath;
+    std::optional<AmpFile> m_amp;
+    std::string m_amp_error;
+
+    // amp-f intercept state
+    std::string m_ampf_filepath;
+    std::optional<AmpfFile> m_ampf;
+    std::string m_ampf_error;
+    AmpfValues m_ampf_selection;
+    int m_ampf_block = -1; // index into m_ampf->blocks; -1 when no block is active
+
+    void loadAmpFile(const std::string &path);
+    void loadAmpfFile(const std::string &path);
+    void resolveAmpfBlock();
+    const AmpfBlock *activeAmpfBlock() const {
+        return ampfBlockSelected() ? &m_ampf->blocks[static_cast<size_t>(m_ampf_block)] : nullptr;
+    }
+    NonlinearModel::Oip3Fn intercept3Function(const NonlinearModel::GainFn &gain) const;
+    NonlinearModel::Oip3Fn ampfOip3Function(const NonlinearModel::GainFn &gain) const;
+    NonlinearModel::Oip2Fn intercept2Function(const NonlinearModel::GainFn &gain) const;
+    NonlinearModel::Oip2Fn ampfOip2Function(const NonlinearModel::GainFn &gain) const;
 };

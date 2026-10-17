@@ -2,141 +2,107 @@
 
 AI coding agent guidance for the RF Simulator codebase.
 
-All project conventions — development setup, build commands, architecture, code style, and git workflow — are documented in [CONTRIBUTING.md](CONTRIBUTING.md). Read that file before making changes.
-
-Additional references:
-
-- [README.md](README.md) — project overview, features, quick start
-- [Architecture overview](openwiki/architecture/overview.md) — full architecture deep-dive (engine+widget pattern, signal chain, subcircuit groups, dirty-flag caching)
-- [`.clang-format`](.clang-format) — code style rules
-- [`.github/workflows/release.yml`](.github/workflows/release.yml) — release-tag validation and packaging configuration (pull requests run no CI pipeline)
+Human conventions (setup, build, testing, style, git, CI, and release) live in [CONTRIBUTING.md](CONTRIBUTING.md). Read it before changing code. Other references: [README.md](README.md) for the overview, [`.clang-format`](.clang-format) for style rules, and [openwiki/architecture/overview.md](openwiki/architecture/overview.md) for the generated architecture reference (retrieval only, not binding).
 
 # DOX framework
 
-- DOX is highly performant AGENTS.md hierarchy installed here
-- Agent must follow DOX instructions across any edits
+DOX is this repository's AGENTS.md hierarchy. Agents follow it on every edit.
 
 ## Core Contract
 
-- AGENTS.md files are binding work contracts for their subtrees
-- Work products, source materials, instructions, records, assets, and durable docs must stay understandable from the nearest applicable AGENTS.md plus every parent AGENTS.md above it
+- Within the DOX hierarchy, AGENTS.md files are binding work contracts for their subtrees. `.agents/` and `.githooks/` are outside DOX and MUST NOT contain AGENTS.md.
+- Work products, source materials, instructions, records, assets, and durable docs must stay understandable from the nearest applicable AGENTS.md plus every parent AGENTS.md above it.
+- Parents hold broad rules and a Child DOX Index. Children hold local rules. A child may tighten a parent rule and never weaken DOX.
 
 ## Read Before Editing
 
-1. Read the root AGENTS.md
-2. Identify every file or folder you expect to touch
-3. Walk from the repository root to each target path
-4. Read every AGENTS.md found along each route
-5. If a parent AGENTS.md lists a child AGENTS.md whose scope contains the path, read that child and continue from there
-6. Use the nearest AGENTS.md as the local contract and parent docs for repo-wide rules
-7. If docs conflict, the closer doc controls local work details, but no child doc may weaken DOX
+1. Read the root AGENTS.md.
+2. List every file and folder you expect to touch.
+3. Walk from the root to each target path, reading every AGENTS.md on the route. When a parent index lists a child whose scope contains the path, read that child and continue.
+4. The nearest AGENTS.md is the local contract. If docs conflict, the closer doc controls local details.
 
-Do not rely on memory. Re-read the applicable DOX chain in the current session before editing.
+Re-read the applicable chain in the current session. Do not rely on memory.
 
 ## Update After Editing
 
-Every meaningful change requires a DOX pass before the task is done.
+Every meaningful change ends with a DOX pass:
 
-Update the closest owning AGENTS.md when a change affects:
+1. Re-check the changed paths against the DOX chain.
+2. Update the nearest owning AGENTS.md when purpose, scope, ownership, structure, contracts, workflows, inputs, outputs, permissions, side effects, artifacts, a user behavior preference, or the AGENTS.md set (creation, deletion, move, rename, index) changes.
+3. Update parents when their structure, ownership, workflow, or child index changes. Update children when a parent change alters their local rules.
+4. Refresh every affected Child DOX Index, and delete stale or contradictory text immediately.
+5. Run existing verification when relevant. Report any doc left unchanged, and why.
 
-- purpose, scope, ownership, or responsibilities
-- durable structure, contracts, workflows, or operating rules
-- required inputs, outputs, permissions, constraints, side effects, or artifacts
-- user preferences about behavior, communication, process, organization, or quality
-- AGENTS.md creation, deletion, move, rename, or index contents
+A change that alters no behavior or contract may leave docs unchanged, but the DOX pass still happens.
 
-Update parent docs when parent-level structure, ownership, workflow, or child index changes. Update child docs when parent changes alter local rules. Remove stale or contradictory text immediately. Small edits that do not change behavior or contracts may leave docs unchanged, but the DOX pass still must happen.
+## Hierarchy and Child Docs
 
-## Hierarchy
-
-- Root AGENTS.md is the DOX rail: project-wide instructions, global preferences, durable workflow rules, and the top-level Child DOX Index
-- Child AGENTS.md files own domain-specific instructions and their own Child DOX Index
-- Each parent explains what its direct children cover and what stays owned by the parent
-- The closer a doc is to the work, the more specific and practical it must be
-
-## Child Doc Shape
-
-- Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards
+- The root is the DOX rail: project-wide rules, global preferences, durable workflow rules, and the top-level Child DOX Index.
+- A child owns its domain rules and its own index. Each parent says what its direct children cover and what stays with the parent.
+- Create a child AGENTS.md when a folder becomes a durable boundary with its own purpose, rules, responsibilities, workflow, materials, or quality standards.
+- DOX excludes `.agents/` and `.githooks/`. They MUST NOT contain AGENTS.md and must not appear in a Child DOX Index. Their rules live in Agent Rules (skills), CONTRIBUTING.md (hooks), and `.gitignore` (agent-folder ignore rules).
+- Sections, in order: Purpose, Ownership, Local Contracts, Work Guidance, Verification, Child DOX Index. Work Guidance names current standards only. Verification names checks that exist. Leave either empty if none exist.
 - Work Guidance must reflect the current standards of the project or user instructions; if there are no specific standards or instructions yet, leave it empty
 - Verification must reflect an existing check; if no verification framework exists yet, leave it empty and update it when one exists
-
-Default section order:
-- Purpose
-- Ownership
-- Local Contracts
-- Work Guidance
-- Verification
-- Child DOX Index
+- The closer a doc is to the work, the more specific and practical it must be
 
 ## Style
 
-- Keep docs concise, current, and operational
-- Document stable contracts, not diary entries
-- Put broad rules in parent docs and concrete details in child docs
-- Prefer direct bullets with explicit names
+- Concise, current, operational. Document stable contracts, not diary entries. Delete stale notes instead of explaining history.
+- Trim obvious statements, repeated rules, misplaced detail, and warnings for risks that no longer exist.
+- Broad rules belong in parents and concrete details in children. Do not copy a rule into several files; point to the owning doc.
 - Do not duplicate rules across many files unless each scope needs a local version
-- Delete stale notes instead of explaining history
-- Trim obvious statements, repeated rules, misplaced detail, and warnings for risks that no longer exist
+- Prefer direct bullets with explicit names.
 
-## Closeout
+## Document Surfaces
 
-1. Re-check changed paths against the DOX chain
-2. Update nearest owning docs and any affected parents or children
-3. Refresh every affected Child DOX Index
-4. Remove stale or contradictory text
-5. Run existing verification when relevant
-6. Report any docs intentionally left unchanged and why
-## User Preferences
+| Surface | Authority | Edited by |
+|---|---|---|
+| AGENTS.md (this tree) | Binding subtree contracts and the DOX pass | Humans and agents, through the DOX pass |
+| `.agents/skills/` and `.githooks/` | Not DOX. Skill rules: Agent Rules here. Hook rules: CONTRIBUTING.md | Humans and agents, under those rules |
+| CONTRIBUTING.md | Human conventions: setup, testing, style, git, CI, release | Humans |
+| `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | Humans, by manual OpenWiki regeneration after changing `openwiki/INSTRUCTIONS.md` |
+| `manual/` | Published user documentation (MkDocs) | Humans |
+| `docs/` | Engineering references | Humans |
+| `WATCHDOG.yml` | Review-advisor config for tooling; not a DOX file | Tooling owner |
 
-- The PFB channelizer is physically downstream of an RF ADC only; direct RF-chain-to-PFB links must be rejected.
+Link to the owning document instead of restating its rules or commands on another surface.
 
-- ADC DDC decimation is configurable as 1/2/4/8 and NCO tuning is stored as a normalized factor of the ADC input sample rate; legacy ADC state defaults to decimation 2 and NCO +0.25×Fs.
-- S-parameter engines (attenuator, combiner, amplifier, equalizer, ideal filter) read the legacy `sparam_path` key when `sparam_filepath` is absent, so legacy-only project and library entries load their file; `sparam_filepath` wins when both are present. A missing `sparam_fwd_idx` selects S21 for a loaded file, as `setSParamFilepath()` does (index 0 when no file is loaded); an explicit index is kept.
-- PFB channelizers default to critical sampling (1x) and support a persisted 2x oversampling ratio; channel output `fs_Hz` is `ratio * input Fs / M`, with channel centers unchanged and usable channel bandwidth scaled by the ratio.
-- The active PFB channel's integrated noise readout is based on the channel response integrated over the current input frequency grid; show its channel noise in dBm with effective ENBW. The PFB node-hover SNR compares its strongest active-channel tone against this integrated noise and is independent of analyzer RBW; ordinary analyzer traces/SNR remain RBW-based.
-- Spectrum-display noise jitter is a cosmetic effect on the noise floor only; it must never perturb deterministic signal tones, so tone peaks stay fixed frame to frame.
-- The spectrum analyzer's RBW and VBW controls span 1 kHz – 100 MHz and are labelled in kHz, so the 1 kHz floor is typeable without fractional MHz values. The range lives at the widget's `utils::inputFrequency()` call (its trailing `displayUnit_Hz` picks the unit); the engine setters stay unclamped so tests and API callers can drive any value.
-- Bounded numeric fields (`utils::inputDouble()`/`utils::inputFrequency()` in `core/include/utils.h`, used by the inspector and the analyzer/generator widgets) limit user edits, not the values they show. A value that reaches an engine outside a field's limits is displayed as is, flagged (amber field, hover tooltip naming the range), logged once rather than every frame, and changes only when the user edits the field. A user edit is clamped into the limits, but one that clamping would reverse (a `+` step on a value above the range) is ignored, and one that clamps back onto the current value reports no change.
-- The network analyzer and the receiver output-power/IIP3 measurements share one discovery: every component on a forward path from Point A's component to Point B's exact output, wired with the exact linked ports, including a switched filter bank whose branches rejoin at an RF SPDT 2:1 switch. Combiners, merges fed from outside the measured circuit, and a Point A component that feeds it through more than one output port report no data.
-- When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
-- Superpowers plan/spec documents are working materials and must not be committed.
-- Never run filesystem-wide searches (`find /`, `dir /s`, global greps from the drive root) — they hang headless agent runs past their watchdog. A fresh git worktree has no local `build/`; dependency *sources* are browsable in the canonical checkout's `build/_deps/<name>-src`, and a fresh checkout can configure deps itself with `cmake -B build -G Ninja` (~90 s). Read `CMakeLists.txt` `FetchContent_Declare` pins for versions.
-- README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
+## Shared UI Input Contract
 
-## Release Contract
+- `utils::inputDouble()` and `utils::inputFrequency()` (`core/include/utils.h`) bound user edits, not displayed values. A value outside the limits is shown as is, flagged (amber field, tooltip naming the range), logged once, and changed only by a user edit.
+- A user edit clamps into the limits. An edit that clamping would reverse (a `+` step on a value above the range) is ignored. An edit that clamps back onto the current value reports no change.
+- Callers pass a local copy and write it back only when the helper returns true.
+- Spectrum-analyzer RBW and VBW span 1 kHz to 100 MHz. The range lives at the widget's `utils::inputFrequency()` call, and its trailing `displayUnit_Hz` picks the unit. Engine setters stay unclamped so tests and API callers can drive any value.
 
-- Releases are prepared by default on a `release/vX.Y.Z` branch merged to `master` via pull request; `scripts/release.sh --on-master` is the sanctioned direct-to-master alternative. Either way the annotated `vX.Y.Z` tag is created only on `master`, after the version bump has landed.
-- `scripts/release.sh <X.Y.Z>` is the standard local path: it prepares (branch, version bump, gates, commit) and, with `--tag`, cuts and pushes the annotated tag on `master`. The `CHANGELOG.md` section for the version must already exist with at least one bullet, or it refuses to run.
-- On this Windows workstation invoke the script as `sh scripts/release.sh …` (Git for Windows MSYS provides the toolchain; WSL `bash` does not). Its `sed -i` normalizes mixed line endings in `CMakeLists.txt`; after prepare, verify `git diff HEAD~1 --stat -- CMakeLists.txt` is the expected two-line version change before pushing. If not, restore `CMakeLists.txt` from `HEAD~1`, reapply the version bump with a byte-preserving edit, then amend the prep commit.
-- Pull requests run no CI pipeline (`.github/workflows/ci.yml` was removed); all automated validation runs in `.github/workflows/release.yml` at tag time: format check and AddressSanitizer on every tag, plus a `strict-build` matrix whose leg list `classify-release` selects from the tag (Linux GCC Debug only on patch tags; the full four-way matrix on minor/major tags).
-- `.github/workflows/release.yml` validates tag versions and requires a matching changelog section before running the release matrix or creating a draft. `scripts/release-notes.sh <X.Y.Z>` is the single changelog-section extractor used by the workflow and the local script; it rejects an empty section.
-- The `package` job builds the Linux/Windows artifacts attached to a GitHub release with `CMAKE_BUILD_TYPE=Release` and validates that Release build configuration with CTest (Linux runs the full suite including `test_ui` under Xvfb; Windows excludes `test_ui` and adds the MinGW `TEST_CASE` registration floor, set once as the workflow's `MINGW_TEST_CASE_FLOOR`); it runs on every tag, so the shipped configuration is always exercised. CI does not launch the packaged GUI executable itself. Debug builds are validation-only and are never shipped.
-- The Linux tarball `rf-simulator-linux-x86_64.tar.gz` contains exactly two root-level regular-file members: `rf-simulator-linux` (copied from `tiny-rf-simulator`) and its sibling `rf-sim-mcp`. Do not package them inside an `rf-simulator-linux/` directory.
-- The clang-format file set is defined once in `scripts/format-dirs.sh` (shared by `scripts/format.sh`, `.githooks/pre-commit`, and the workflow's `format` job).
-- `CHANGELOG.md` is the source of truth for GitHub release descriptions.
+## Agent Rules
 
-## Git Hooks
-
-- `.githooks/` holds the local commit and push gates, enabled per clone with `git config core.hooksPath .githooks`. They run for local git operations only; GitHub-side squash merges and server-side pushes bypass them, so PR titles must carry the same subject format.
-- `.githooks/pre-commit` rejects staged C++ that fails clang-format 18 over the `scripts/format-dirs.sh` directory set; `.githooks/commit-msg` rejects a subject that is not `<type>[(<scope>)][!]: <summary>` under 70 characters, with `type` from `build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test`. Git-generated `Merge …`, `Revert …`, `fixup! …`, and `squash! …` subjects are exempt, as is a merge in progress; an optional body is allowed.
-- `.githooks/pre-push` rejects any push that would update an existing remote ref with a non-fast-forward — the force-push case — since that history is what open PRs and other clones point at. Creating, deleting, and fast-forwarding a ref pass, and a tip whose ancestry cannot be decided locally (shallow or partial clone) is allowed with a notice rather than guessed at. The escape hatch is per invocation: `RFSIM_ALLOW_FORCE_PUSH=1 git push …`, or `git push --no-verify` to skip every hook.
-- `CONTRIBUTING.md` (Clone & Build, Git Workflow > Commits and Pushing) is the human-facing statement of these contracts. `scripts/test-githooks.sh` is the hook regression test; run it after editing anything under `.githooks/`.
-- Hook files must stay mode `100755` in git (`git update-index --chmod=+x <path>`): git skips a non-executable hook on POSIX clones without any error.
+- Durable behavior change requested by the user: record it in the closest owning AGENTS.md, or here for global behavior.
+- Never run filesystem-wide searches (`find /`, `dir /s`, drive-root greps). They hang headless runs past the watchdog. Search within the repository.
+- Planning and spec drafts (`docs/superpowers/`, `docs/specs/`, `.superpowers/`) are gitignored working material. Do not commit them.
+- Releases: follow CONTRIBUTING.md (Release Process). The binding release-script rules live in [scripts/AGENTS.md](scripts/AGENTS.md).
+- Repo skills live in `.agents/skills/<name>/`. The folder name matches the frontmatter `name` (lowercase, hyphenated, verb-first). The `description` starts with "Use when", is third person, and lists triggers and symptoms only, never the workflow.
+- Keep `SKILL.md` under 500 words. Put error tables, field lists, and option matrices in a `reference.md` beside it, linked by relative path. Do not use `@` links, which force-load files.
+- Skills state only behavior verified against code or tests. A skill's facts come from the code it describes; for `using-rf-sim-mcp`, that is `agent/`, governed by `agent/AGENTS.md`. Update a skill in the same change as the code it describes.
+- Create or revise skills with the `writing-skills` workflow: run a blind baseline without the skill, then re-test with it, using the scenarios that matter.
+- Each `<skill-name>/` folder owns its `SKILL.md` and any reference file beside it.
+- Root `AGENTS.md` may reference OpenWiki. `openwiki/` holds no `AGENTS.md`: it is generated, non-binding content.
 
 ## Child DOX Index
 
 - [common/AGENTS.md](common/AGENTS.md) — Header-only data model shared by all modules (`SignalNode`, `Spectrum`, `IComponentEngine`, `Group`, `GroupBoundaryPin`, etc.)
 - [node_graph/AGENTS.md](node_graph/AGENTS.md) — Topology-only graph engine + ImNodes editor widget, schematic symbols, and the shared `rewireComponentInputs()` DSP pass
+- [pfb_channelizer/AGENTS.md](pfb_channelizer/AGENTS.md) — PFB channelizer engine: ADC-only upstream, sampling ratio, and channel noise readout
 - [power_meter/AGENTS.md](power_meter/AGENTS.md) — UI-independent total-power measurement engine and singleton observer panel
 - [app/AGENTS.md](app/AGENTS.md) — UI-free circuit runtime and editor actions plus the application orchestrator (`CircuitRuntime`, `GraphEditorActions`, `RfSimulatorApp`, `ComponentRegistry`, `InspectorPanel`)
-- [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit + benchmark tests
+- [tests/AGENTS.md](tests/AGENTS.md) — Catch2 unit and benchmark tests
 - [help/AGENTS.md](help/AGENTS.md) — Help window widget with data-driven quick reference content
-- [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default + named presets)
+- [layout/AGENTS.md](layout/AGENTS.md) — Exe-relative ImGui layout persistence (default and named presets)
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
 - [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
 - [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
-- [.agents/AGENTS.md](.agents/AGENTS.md) — Repo-local coding-agent skills under `.agents/skills/`, including the rf-sim MCP usage guidance
 - [manual/AGENTS.md](manual/AGENTS.md) — User-facing MkDocs manual: page ownership, publish guard, docs contract
+- [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, and format scripts and the rules that bind them
 
 <!-- OPENWIKI:START -->
 

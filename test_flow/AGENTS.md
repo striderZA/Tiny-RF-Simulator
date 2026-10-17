@@ -20,7 +20,7 @@ component output ports.
 - `include/flow_metrics.h` — `MetricSample`, `MetricDefinition`, `MetricRegistry` (four built-ins)
 - `include/flow_result.h` — `ConditionValue`, `FlowRow`, `FlowResult`, `toJson()`
 - `include/flow_runner.h` — `LoadFlowFile()`, `ValidateFlow()`, `RunFlow()`
-- `include/flow_boundary.h` — `RunFlowWithinBoundary()`, the UI-free run boundary (`BoundaryOutcome`, `BoundaryStatus`) shared by the Test Flow panel and the agent `test_flow_run` tool; implemented in `src/flow_boundary.cpp`
+- `include/flow_boundary.h` — `RunFlowWithinBoundary()` for one-shot callers and `FlowRunSession` for bounded resumable callers; both own all-engine snapshot/restore and rewiring in `src/flow_boundary.cpp`
 - `CMakeLists.txt` — `simulator::test_flow` STATIC target
 
 ## Local Contracts
@@ -29,13 +29,13 @@ component output ports.
 - **Addressing is positional and volatile.** A load re-creates components in saved order from the counter's base of 100 (`ProjectSerializer::reset()`), so ids assigned in save order survive a clean save/load, but any deletion or reorder shifts every later id — and because ids stay dense, a stale flow reference can then *silently bind to a different component* (often the same type, so the path still applies) instead of failing. Only `ValidateFlow()`/`RunFlow()`'s resolution decides; a flow file is not portable across a circuit edit until flows address something stable.
 - `ValidateFlow(spec, components)` is the single pre-flight: every condition's component and path/value compatibility, then every measurement's component, output port and metric, as a `FlowError` list in the order `RunFlow()` checks them. `RunFlow()` runs this same pass and reports the first issue verbatim, so an attached UI can never call a flow runnable that the harness refuses. It strictly reads the circuit. `RunFlow()` takes `const NodeGraphEngine &` and uses topology/order for reads plus the shared const-graph rewire pass; it never mutates graph topology or editor state.
 - `ValidateFlow()` is exhaustive — every value of every condition, not a sample — and stays affordable per frame because it resolves each condition's `path` once with `resolveConditionSlot()` and then checks the values arithmetically with `conditionSlotAccepts()`, with no JSON write per candidate.
-- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, and each row records the applied condition values plus every measurement reading. Neither the loader nor the runner caps the row count, and the product is executed synchronously, so a caller that faces a user must bound it itself (the app panel refuses above `TestFlowWidget::kMaxRunRows`; the agent `test_flow_run` tool refuses above 1000 rows).
+- Execution runs the cartesian product of every condition's `values`; one `FlowRow` is emitted per combination, with the applied values and each measurement. The underlying `RunFlow()` is synchronous and unbounded. `FlowRunSession` runs bounded row slices, restores every original engine state and rewires after each row before it can yield, and leaves a single row indivisible. The Test Flow panel still uses the synchronous boundary and refuses above `TestFlowWidget::kMaxRunRows`; the Agent Server uses the resumable session and caps requests at 1000 rows.
 - This library must not link `simulator::app`, ImGui, implot, or imnodes. It takes
   `std::span<IComponentEngine *const>` rather than `ComponentRegistry`, which lives in `app/`.
 - Condition `path`s address the target engine's **`serialize()` keys**, not inspector field keys
   (`atten_dB`, not `attenuation_dB`).
 - Condition `path`s are dot-separated keys with optional zero-based array indices, e.g. `gain_dB` or
-  `tones[0].power_dBm`.
+  `tones[0].power_dBm`. Array indices must not have leading zeros.
 - Patches are type-preserving: a signed integer slot requires an integral value; an unsigned slot
   requires a finite, non-negative, integral value and stays unsigned; a float slot requires a finite
   value. Boolean, string, null, object and array slots are rejected. `conditionSlotAccepts()` is
@@ -69,7 +69,8 @@ component output ports.
   never leaks partially parsed conditions.
 - `RunFlow()` converts component `deserialize()` exceptions into `DeserializeFailed`, attempts to restore
   targeted baseline snapshots, reports rollback failure details, and returns no rows.
-- `RunFlowWithinBoundary()` is the run path a UI or agent uses. It snapshots every engine first (a failure returns `SnapshotFailed` before anything runs), runs `RunFlow()` (an exception becomes `ExecutionFailed`), restores each snapshot independently by id (a failure never stops later restores; a missing id is reported as no longer present), then always rewires. A restore failure outranks the run: it returns `RestoreFailed` and discards the result, and the caller owns the latch that follows. A `Completed` outcome restores every engine's `serialize()` state and every link, and a flow error inside it is the run's own diagnostic; the boundary never touches the project revision.
+- `RunFlowWithinBoundary()` is the one-shot boundary for synchronous callers. It snapshots every engine before execution (snapshot failure refuses the run), runs `RunFlow()` (exceptions become `ExecutionFailed`), restores snapshots independently by id (including missing-id diagnostics), and always rewires. `RestoreFailed` outranks the run outcome and discards rows; the caller owns the latch.
+- `FlowRunSession` is the resumable form: it prevalidates the complete spec, runs each row from the captured baseline, and restores every engine plus wiring before returning from an advance. Advances obey the caller's row/time budget; a single row is indivisible. A caller must cancel while the captured circuit is still current, or abandon after an epoch/revision change without touching stale state.
 - `test_flow` is one of the mirrored format-check directory lists in `scripts/format.sh`,
   `.githooks/pre-commit`, and `.github/workflows/release.yml`; keep all three in lockstep when
   directories are added or removed.

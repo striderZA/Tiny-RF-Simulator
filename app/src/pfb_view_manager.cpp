@@ -76,3 +76,20 @@ void PFBViewManager::saveVisibility(const ComponentRegistry &components,
         state.saveBool("WindowState", key.c_str(), m_show_pfb_grids[i]);
     }
 }
+
+std::optional<PFBViewManager::Visibility> PFBViewManager::visibilityFor(int node_id) const {
+    const auto it = std::find(m_node_ids.begin(), m_node_ids.end(), node_id);
+    if (it == m_node_ids.end())
+        return std::nullopt;
+    const auto i = static_cast<std::size_t>(std::distance(m_node_ids.begin(), it));
+    return Visibility{m_show_iq_pfbs[i], m_show_pfb_grids[i]};
+}
+
+void PFBViewManager::setVisibilityFor(int node_id, Visibility visibility) {
+    const auto it = std::find(m_node_ids.begin(), m_node_ids.end(), node_id);
+    if (it == m_node_ids.end())
+        return;
+    const auto i = static_cast<std::size_t>(std::distance(m_node_ids.begin(), it));
+    m_show_iq_pfbs[i] = visibility.iq;
+    m_show_pfb_grids[i] = visibility.grid;
+}

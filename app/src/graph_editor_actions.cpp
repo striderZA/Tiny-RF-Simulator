@@ -63,3 +63,8 @@ void GraphEditorActions::topologyChanged() {
     for (const auto &group : m_runtime.m_graph.groups())
         m_runtime.m_graph.rebuildGroupBoundaryPins(group.id);
 }
+
+void GraphEditorActions::replaceNodeReferences(int old_node_id, int new_node_id,
+                                               const std::map<int, int> &pin_map) {
+    m_runtime.m_graph.remapNodeReferences(old_node_id, new_node_id, pin_map);
+}

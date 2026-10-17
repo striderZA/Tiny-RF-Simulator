@@ -4,6 +4,7 @@
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
+#include "component_params.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -133,6 +134,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
         (void)m_editor_commands.removeComponent(graph_node_id);
     };
+    m_inspector_panel->libraryParts = [this]() { return m_library.all(); };
+    m_inspector_panel->onSwapLibraryPart = [this](int graph_node_id,
+                                                  const ComponentDefinition &definition) {
+        return swapLibraryPart(graph_node_id, definition);
+    };
 
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
                                        nullptr, // iq_plot (per-PFB toggles used instead)
@@ -186,6 +192,20 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         if (m_current_project_path.empty())
             return std::nullopt;
         return std::filesystem::path(m_current_project_path).stem().string();
+    };
+    agent_hooks.project_path = [this]() -> std::optional<std::string> {
+        if (m_current_project_path.empty())
+            return std::nullopt;
+        return m_current_project_path;
+    };
+    agent_hooks.save_project = [this](const std::string &path) { return saveProject(path); };
+    agent_hooks.saved_project_data_files = [this]() { return m_last_saved_data_files; };
+    agent_hooks.load_project = [this](const std::string &path) {
+        AgentProjectLoadResult result;
+        result.loaded = loadProject(path);
+        // A failed load that reset the serializer still replaced the open circuit.
+        result.cleared = !result.loaded && m_serializer->lastLoadReset();
+        return result;
     };
     m_agent_host = std::make_unique<AppAgentHost>(*m_graph_widget, std::move(agent_hooks));
 
@@ -315,8 +335,7 @@ void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 po
     IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
     if (!comp)
         return;
-    ImNodes::EditorContextSet(m_graph_widget->context());
-    ImNodes::SetNodeEditorSpacePos(comp->graphNodeId(), pos);
+    m_graph_widget->setNodeEditorSpacePosition(comp->graphNodeId(), pos);
 }
 
 void RfSimulatorApp::syncComponentViews() {
@@ -375,13 +394,46 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
         return false;
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
-    ImNodes::EditorContextSet(m_graph_widget->context());
-    ImNodes::SetNodeEditorSpacePos(new_nid, ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
+    m_graph_widget->setNodeEditorSpacePosition(new_nid,
+                                               ImVec2(src_pos.x + OFFSET, src_pos.y + OFFSET));
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
     return true;
 }
+
+std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
+                                            const ComponentDefinition &definition) {
+    if (!m_circuit_runtime.components().find(graph_node_id))
+        return "The component is no longer in the circuit.";
+    // The replacement takes the predecessor's canvas spot and keeps its instrument points. The
+    // Network Analyzer Point A/B and the Power Meter source are app state the command cannot see.
+    const ImVec2 position = m_graph_widget->editorPositionForSave(graph_node_id);
+    const std::vector<int> instrument_pins = {m_na_engine.pointAPin(), m_na_engine.pointBPin(),
+                                              m_power_meter_widget->sourcePin()};
+    // The successor is a new engine under a new graph node, so sync() builds its views with the
+    // defaults for a new PFB. Read the IQ Plot and Grid visibility set on the predecessor first.
+    const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
+    const ComponentSwapResult swap =
+        m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
+    if (!swap.component)
+        return swap.error;
+
+    if (visibility)
+        m_pfb_views.setVisibilityFor(swap.new_graph_node_id, *visibility);
+
+    const auto moved = [&swap](int pin) {
+        const auto it = swap.pin_map.find(pin);
+        return it == swap.pin_map.end() ? pin : it->second;
+    };
+    m_na_engine.setPointA(moved(m_na_engine.pointAPin()));
+    m_na_engine.setPointB(moved(m_na_engine.pointBPin()));
+    m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
+    m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
+    m_graph_widget->selectNode(swap.new_graph_node_id);
+    return {};
+}
+
 void RfSimulatorApp::newProject() {
     m_power_meter_widget->clearSource();
     m_serializer->reset();
@@ -444,6 +496,38 @@ void RfSimulatorApp::testMakeDirty() { markDirty(); }
 IComponentEngine *RfSimulatorApp::testCreateComponent(std::string_view type, int engine_id) {
     const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
     return descriptor ? testCreateComponent(descriptor->create, engine_id) : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testAddComponentAtPosition(std::string_view type,
+                                                             ImVec2 position) {
+    const ComponentTypeDescriptor *descriptor = ComponentTypeRegistry::instance().find(type);
+    if (!descriptor)
+        return nullptr;
+    const std::size_t component_count = m_circuit_runtime.components().all().size();
+    addComponent(descriptor, position);
+    const auto components = m_circuit_runtime.components().all();
+    return components.size() == component_count + 1 ? components.back() : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testDuplicateComponent(int graph_node_id) {
+    const std::size_t component_count = m_circuit_runtime.components().all().size();
+    if (!duplicateComponent(graph_node_id))
+        return nullptr;
+    const auto components = m_circuit_runtime.components().all();
+    return components.size() == component_count + 1 ? components.back() : nullptr;
+}
+
+IComponentEngine *RfSimulatorApp::testAddLibraryPart(const std::string &part_number) {
+    for (const ComponentDefinition *definition : m_library.all()) {
+        if (definition && definition->part_number == part_number)
+            return m_editor_commands.addLibraryPart(m_library, *definition).component;
+    }
+    return nullptr;
+}
+
+std::string RfSimulatorApp::testSwapLibraryPart(int graph_node_id,
+                                                const ComponentDefinition &definition) {
+    return swapLibraryPart(graph_node_id, definition);
 }
 
 IComponentEngine *RfSimulatorApp::testCreateComponent(
@@ -767,17 +851,21 @@ void RfSimulatorApp::drawExtensionTrustPrompt() {
     ImGui::EndPopup();
 }
 
-void RfSimulatorApp::saveProject(const std::string &path) {
+bool RfSimulatorApp::saveProject(const std::string &path) {
     // Only a successful write may clear dirty state or adopt the path: a
-    // failed save must leave the project dirty on its previous path so the
-    // user keeps the chance to retry (issue #77).
-    if (!m_serializer->save(path))
-        return;
+    // failed save must leave the project dirty on its previous path (issue #77).
+    std::vector<std::string> copied_data_files;
+    if (!m_serializer->save(path, &copied_data_files)) {
+        m_last_saved_data_files.clear();
+        return false;
+    }
+    m_last_saved_data_files = std::move(copied_data_files);
     m_current_project_path = path;
     m_editor_commands.markClean();
+    return true;
 }
 
-void RfSimulatorApp::loadProject(const std::string &path) {
+bool RfSimulatorApp::loadProject(const std::string &path) {
     const bool loaded = m_serializer->load(path);
     // Every outcome re-syncs component-bound views: a successful or resetting
     // load replaced the components, and an intact failure leaves them as-is.
@@ -808,7 +896,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
             m_agent_host->clearCheckpoints();
             m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
         }
-        return;
+        return false;
     }
     m_power_meter_widget->clearSource();
     m_current_project_path = path;
@@ -823,6 +911,7 @@ void RfSimulatorApp::loadProject(const std::string &path) {
 
     m_agent_host->clearCheckpoints();
     m_agent_api->noteProjectReplaced(AgentReplacementCause::OpenedProject);
+    return true;
 }
 
 void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {
@@ -1034,7 +1123,7 @@ bool RfSimulatorApp::saveComponentForm() {
                         break;
                     }
                 }
-                for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                for (const char *key : kPathParameterKeys) {
                     const auto path = model.parameter(key);
                     if (path.is_string() &&
                         path_references_destination(path.get<std::string>(), model.sourcePath())) {
@@ -1058,7 +1147,7 @@ bool RfSimulatorApp::saveComponentForm() {
                     }
                     if (referenced_by_another_component || !other->parameters.is_object())
                         continue;
-                    for (const char *key : {"sparam_filepath", "sparam_path"}) {
+                    for (const char *key : kPathParameterKeys) {
                         if (!other->parameters.contains(key))
                             continue;
                         const auto &path = other->parameters[key];
@@ -1477,21 +1566,62 @@ void RfSimulatorApp::draw_ui() {
         }
         if (!agent_indicator.empty() && ImGui::MenuItem(agent_indicator.c_str()))
             m_show_agent = true;
-        // Title / project name on the right
-        {
-            float tw = ImGui::GetContentRegionAvail().x;
-            ImGui::SameLine(tw - 300.0f);
-            if (!m_current_project_path.empty()) {
-                auto p = m_current_project_path.find_last_of("\\/");
-                std::string fname = (p != std::string::npos) ? m_current_project_path.substr(p + 1)
-                                                             : m_current_project_path;
-                ImGui::Text("%s%s", isDirty() ? "* " : "", fname.c_str());
-            } else if (isDirty()) {
-                ImGui::Text("*Untitled");
-            }
-            ImGui::SameLine();
-            ImGui::TextDisabled("%.1f FPS", io.Framerate);
+        // Track the repository containing the active circuit, or the launch
+        // directory while the project is untitled.
+        std::filesystem::path git_working_directory;
+        if (!m_current_project_path.empty())
+            git_working_directory = std::filesystem::path(m_current_project_path).parent_path();
+        if (git_working_directory.empty()) {
+            std::error_code error;
+            git_working_directory = std::filesystem::current_path(error);
+            if (error)
+                git_working_directory.clear();
         }
+        m_git_status_monitor.update(git_working_directory);
+
+        std::string project_title;
+        if (!m_current_project_path.empty()) {
+            const auto p = m_current_project_path.find_last_of("\\/");
+            const std::string filename = p != std::string::npos
+                                             ? m_current_project_path.substr(p + 1)
+                                             : m_current_project_path;
+            project_title = (isDirty() ? "* " : "") + filename;
+        } else if (isDirty()) {
+            project_title = "*Untitled";
+        }
+        char fps_title[32];
+        std::snprintf(fps_title, sizeof(fps_title), "%.1f FPS", io.Framerate);
+
+        const auto measure_text = [](std::string_view text) {
+            return ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
+        };
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float current_x = ImGui::GetCursorPosX();
+        const float available_width = ImGui::GetContentRegionAvail().x;
+        const float fps_width = measure_text(fps_title);
+        const auto &git_status = m_git_status_monitor.status();
+        const GitStatusHeaderLabels header_labels = fitGitHeaderLabels(
+            project_title, git_status, available_width, fps_width, spacing, measure_text);
+        const std::string &visible_project_title = header_labels.project_title;
+        const std::string &git_title = header_labels.git_title;
+        const bool show_project_title = !visible_project_title.empty();
+        const float gap_count = show_project_title ? 2.0f : 1.0f;
+        const float right_width = fps_width + measure_text(git_title) + spacing * gap_count +
+                                  (show_project_title ? measure_text(visible_project_title) : 0.0f);
+        ImGui::SameLine(std::max(current_x, current_x + available_width - right_width));
+        if (show_project_title) {
+            ImGui::Text("%s", visible_project_title.c_str());
+            if (visible_project_title != project_title && ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", project_title.c_str());
+            ImGui::SameLine();
+        }
+        ImGui::TextDisabled("%s", git_title.c_str());
+        if (ImGui::IsItemHovered()) {
+            const std::string tooltip = m_git_status_monitor.details();
+            ImGui::SetTooltip("%s", tooltip.c_str());
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", fps_title);
         ImGui::EndMainMenuBar();
     }
 

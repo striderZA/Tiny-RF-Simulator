@@ -1,6 +1,8 @@
 index.md
 install.md
 tutorial.md
+agent.md
+amplifier.md
 circuits/components-and-ports.md
 circuits/probes.md
 circuits/subcircuits.md

@@ -6,6 +6,7 @@ Engineering references and design specs that support the codebase.
 
 | Document | Description |
 |----------|-------------|
+| [ampf_v1_spec.md](resources/ampf_v1_spec.md) | amp-f v1 file format spec — parser reference for `.ampf` intercept files |
 | [amplifier_nonlinear_model.md](resources/amplifier_nonlinear_model.md) | Nonlinear amplifier model (gain compression, harmonics, IMD) — engineering reference for the amplifier module |
 | [pfb_channelizer_info.md](resources/pfb_channelizer_info.md) | Polyphase filter bank channelizer — theory, design notes, and the simulator's 1x/2x oversampling contract |
 | [rf_adc_info.md](resources/rf_adc_info.md) | RF ADC software twin — semi-idealized sampling model (aliasing, Nyquist zones, NSD) |

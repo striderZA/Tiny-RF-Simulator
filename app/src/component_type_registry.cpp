@@ -140,6 +140,12 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
                    "Identifies the Touchstone file loaded by the component.", {}, true),
         stateField("sparam_fwd_idx", "Forward S-Parameter Index", "", FieldKind::Number,
                    "Selects the forward S-parameter used for signal transfer."),
+        stateField("amp_filepath", "AMP File", "", FieldKind::FilePath,
+                   "Identifies the AMP file that supplies the amplifier's IIP3 or OIP3 intercepts.",
+                   {}, true),
+        stateField("ampf_filepath", "AMP-F File", "", FieldKind::FilePath,
+                   "Identifies the amp-f v1 file that supplies per-frequency intercepts.", {},
+                   true),
     };
     amp.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<AmplifierEngine>(id, graph));

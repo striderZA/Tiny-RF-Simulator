@@ -5,6 +5,7 @@
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
 #include "common.h"
+#include "component_library.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "imgui.h"
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <map>
 #include <portable-file-dialogs.h>
+#include <sstream>
 
 #include "component_registry.h"
 
@@ -133,6 +135,55 @@ std::string InspectorPanel::labelForHit(const Hit &hit) const {
     return hit.desc->display_name + " " + std::to_string(hit.engine->id());
 }
 
+void InspectorPanel::drawPartPicker(const IComponentEngine &engine) {
+    const int node_id = engine.graphNodeId();
+    std::string current;
+    for (const GraphNode &node : m_graph.nodes()) {
+        if (node.node_id == node_id)
+            current = node.part_number;
+    }
+    // Only a library component has a part to change; a manual component shows no picker.
+    if (current.empty() || !libraryParts || !onSwapLibraryPart)
+        return;
+
+    if (ImGui::BeginCombo("Part", current.c_str())) {
+        for (const ComponentDefinition *definition : libraryParts()) {
+            if (!definition)
+                continue;
+            const bool is_current =
+                definition->part_number == current && definition->type == engine.type_name();
+            std::string label = definition->part_number;
+            if (!definition->description.empty())
+                label += "  " + definition->description;
+            if (ImGui::Selectable(label.c_str(), is_current) && !is_current) {
+                m_pending_part = definition;
+                m_pending_part_node = node_id;
+            }
+            if (is_current)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Replaces this part in place. Its position, links, probes, and group "
+                          "membership are kept; the new part starts from its library parameters.");
+    if (!m_part_swap_error.empty() && m_part_swap_error_node == node_id)
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_part_swap_error.c_str());
+}
+
+void InspectorPanel::applyPendingPartSwap() {
+    if (!m_pending_part)
+        return;
+    const ComponentDefinition *definition = m_pending_part;
+    const int node_id = m_pending_part_node;
+    m_pending_part = nullptr;
+    m_pending_part_node = -1;
+    m_part_swap_error = onSwapLibraryPart(node_id, *definition);
+    m_part_swap_error_node = node_id;
+}
+
 void InspectorPanel::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -197,6 +248,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     }
 
     ImGui::SeparatorText(labelForHit(Hit{hit.desc, edit_engine}).c_str());
+    drawPartPicker(*edit_engine);
 
     if (hit.desc->type == "pfb" && !m_pfb_ptrs.empty()) {
         std::string combo_label = "PFB##selector";
@@ -222,7 +274,22 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
     if (m_param_edited && onParamChange)
         onParamChange();
 
+    applyPendingPartSwap();
     ImGui::End();
+}
+
+// The block's identity in key order, such as "TEMP=-40 VG=2.5": its VAR and COND values
+// and any DEVICE defaults it inherits. A block with no identity reads "(no VAR or COND)".
+static std::string ampfBlockLabel(const AmpfBlock &block) {
+    if (block.identity.empty())
+        return "(no VAR or COND)";
+    std::ostringstream label;
+    bool first = true;
+    for (const auto &[key, value] : block.identity) {
+        label << (first ? "" : " ") << key << '=' << value;
+        first = false;
+    }
+    return label.str();
 }
 
 void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index) {
@@ -289,16 +356,98 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
             m_param_edited = true;
         }
 
+        // An AMP file in use sets OIP3 from its frequency table, so this scalar is inactive.
+        // An active amp-f block replaces the AMP file; the scalar fills any gap in its values.
+        ImGui::BeginDisabled(engine.ampLoaded() && !engine.ampfBlockSelected());
         double oip3 = engine.oip3_dBm();
         if (utils::inputDouble("OIP3 (dBm)", oip3, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setOIP3_dBm(oip3);
             m_param_edited = true;
         }
+        ImGui::EndDisabled();
 
         double p1db = engine.p1db_dBm();
         if (utils::inputDouble("P1dB (dBm)", p1db, 1, 10, "%.1f", -100.0, 200.0)) {
             engine.setP1dB_dBm(p1db);
             m_param_edited = true;
+        }
+
+        ImGui::SeparatorText("AMP Intercepts");
+        ImGui::TextWrapped("File: %s",
+                           engine.ampFilepath().empty() ? "none" : engine.ampFilepath().c_str());
+        if (ImGui::Button("Browse##amp_intercepts")) {
+            auto result = pfd::open_file("Select AMP file", "", {"AMP Files", "*.amp"}).result();
+            if (!result.empty()) {
+                engine.setAmpFilepath(result[0]);
+                LOG_INFO("Amplifier AMP file: %s", result[0].c_str());
+                m_param_edited = true;
+            }
+        }
+        if (!engine.ampFilepath().empty()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Clear##amp_intercepts")) {
+                engine.setAmpFilepath("");
+                m_param_edited = true;
+            }
+        }
+        if (engine.ampLoaded() && engine.ampfBlockSelected()) {
+            ImGui::TextDisabled("Replaced by the amp-f block below.");
+        } else if (engine.ampLoaded()) {
+            ImGui::TextDisabled("Intercepts from AMP file: %s",
+                                engine.ampData()->oip3 ? "OIP3 table" : "IIP3 plus gain");
+        } else if (!engine.ampError().empty()) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", engine.ampError().c_str());
+        }
+
+        ImGui::SeparatorText("amp-f File");
+        ImGui::TextWrapped("File: %s",
+                           engine.ampfFilepath().empty() ? "none" : engine.ampfFilepath().c_str());
+        if (ImGui::Button("Browse##ampf_intercepts")) {
+            auto result =
+                pfd::open_file("Select amp-f file", "", {"amp-f Files", "*.ampf *.txt"}).result();
+            if (!result.empty()) {
+                engine.setAmpfFilepath(result[0]);
+                LOG_INFO("Amplifier amp-f file: %s", result[0].c_str());
+                m_param_edited = true;
+            }
+        }
+        if (!engine.ampfFilepath().empty()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Clear##ampf_intercepts")) {
+                engine.setAmpfFilepath("");
+                m_param_edited = true;
+            }
+        }
+        if (const AmpfFile *file = engine.ampfData()) {
+            const AmpfSelection selection = selectAmpfBlock(*file, engine.ampfSelection());
+            const std::string preview = selection.match == AmpfMatch::One
+                                            ? ampfBlockLabel(*selection.block)
+                                            : std::string("(none selected)");
+            if (ImGui::BeginCombo("Block##ampf_block", preview.c_str())) {
+                const bool automatic = engine.ampfSelection().empty();
+                if (ImGui::Selectable("(automatic)##ampf_block", automatic)) {
+                    engine.setAmpfSelection({});
+                    m_param_edited = true;
+                }
+                for (size_t i = 0; i < file->blocks.size(); ++i) {
+                    const AmpfBlock &block = file->blocks[i];
+                    const bool chosen =
+                        selection.match == AmpfMatch::One && selection.block == &block;
+                    const std::string label =
+                        ampfBlockLabel(block) + "##ampf_block_" + std::to_string(i);
+                    if (ImGui::Selectable(label.c_str(), chosen)) {
+                        engine.setAmpfSelection(block.identity);
+                        m_param_edited = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+        if (engine.ampfBlockSelected()) {
+            ImGui::TextDisabled("OIP2 and OIP3 come from the selected block; the scalar fields "
+                                "apply where it has no value.");
+        } else if (!engine.ampfError().empty()) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", engine.ampfError().c_str());
         }
     }
 

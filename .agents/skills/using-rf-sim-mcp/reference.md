@@ -8,10 +8,14 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 
 - `{op:"add", type, ref?, params?, position?:{x,y}}`, or `{op:"add", library_part:{part_number, type?}, ref?, params?, position?}`.
 - `{op:"remove", component}`
+- `{op:"move", component, position:{x,y}}` moves an existing node to an absolute editor-space position. `circuit_get.components[].position` reports the current `{x,y}` in the same coordinates.
+- Editor-space positions include the current canvas pan. A pan does not change `epoch`; call `circuit_get` again after a pan before a move.
+- A move can target only components that existed before the current `circuit_edit` call. Set a new component's position in its `add` operation.
 - `{op:"set_params", component | ref, params}`
 - `{op:"connect", from, to}`: `from` is an output port and `to` is an input port. Each endpoint is `{component, port}` or `{ref, port}`.
 - `{op:"disconnect", to}`: the input side only. An unconnected input returns `NOT_FOUND`.
 - `{op:"probe_add" | "probe_remove", at}`: `at` names a port. `direction` is `"output"` (the default) or `"input"`. `circuit_get` lists each probe as `{component, port, direction}`, and that endpoint can be passed back as `at`.
+- A changed move advances `revision`, marks the project dirty, and creates a checkpoint. A no-op move that differs only by pan-related float rounding returns `unchanged: true` without advancing `revision` or creating a checkpoint. **Revert to before this call** in the Agent panel discards later changes, including user edits, after confirmation. Invalid component ids return `NOT_FOUND`; non-finite coordinates, and finite ones outside the 32-bit float range, return `INVALID_ARGUMENT`.
 - Ports are zero-based. A batch holds 1 to 64 ops.
 - `ref`: a letter, then letters, digits, or underscores, at most 32 characters. It names a component added earlier in the same call and is unusable outside that call.
 - Success returns `epoch`, `revision`, `applied`, and `refs` (name to id). Each `applied` entry has `op_index` and `op`, plus `component`, `ref`, `label`, `params`, `also_changed` (`{path, old_value, new_value}` records), and `unchanged` where relevant.
@@ -36,6 +40,7 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 |---|---|
 | SIMULATOR_UNAVAILABLE | RF Simulator is not reachable. Ask the user to open it and turn on View > Agent > Agent Server, then retry. |
 | BUSY | "showing a dialog": ask the user to close it, then retry. "another agent is connected": RF Simulator admits one agent client; ask the user to stop the other agent. |
+| OVERLOADED | An MCP bridge or GUI request queue reached its count or payload-byte bound. Retry after queued work drains. Event-queue rejection is a JSON-RPC error (`error.data.code`); bridge call-queue and GUI inbox rejection are MCP tool results (`result.structuredContent.error.code`). Each echoes the request id when present. |
 | VERSION_MISMATCH | Bridge and GUI catalog versions differ. Ask the user to install the same release of both. |
 | STALE_EPOCH | The project was replaced. `details.cause` is `new_project`, `opened_project`, `tutorial`, or `reverted`; `details.undone` lists reverted edits; `details.epoch` is current. Call `circuit_get` and re-plan. |
 | NOT_FOUND | Unknown component, output port, or `ref`, or an unconnected input for `disconnect`. Re-read. |
@@ -46,7 +51,19 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 | UNKNOWN_TYPE | Unknown component type. Check `component_types`. |
 | UNKNOWN_PART, AMBIGUOUS_PART | Library lookup failed. `details.candidates` lists up to five matches; pass `type` to disambiguate. |
 | NO_MEASUREMENT | `details.reason` is `NO_PATH` (no forward path between the points) or `NO_VALID_POINTS` (the sweep has no valid points). |
+| UNSAVED_CHANGES | The open project has unsaved changes, so `project_load` did not run. Save with `project_save` (with `path` if the project is untitled), or ask the user to save or discard the changes in RF Simulator. |
 | INTERNAL | Unexpected failure, or a reply over the 1 MiB protocol limit. Re-read with `circuit_get`, then report it. |
+
+## Projects
+
+- `project_save {path?, overwrite?}` writes the open project to `path`, or to the file it already has when `path` is omitted. An untitled project needs `path`. `path` must be absolute, end in `.rfsim`, contain no byte below 0x20 and, on Windows, no `:` after its root name, not name a folder, and have an existing parent folder (`INVALID_ARGUMENT` at `/path`). A different existing project file needs `overwrite: true` (`INVALID_ARGUMENT` at `/overwrite`).
+- Success returns `{epoch, path, name, copied_data_files}`. The array lists each project-relative file copied into `rf_data/` to preserve an external component reference; it is empty when no copy was needed. Existing destinations are reused only when they are regular non-symlink files with identical bytes. The save takes no checkpoint and changes neither `epoch` nor `revision`. The project becomes clean, so `UNSAVED_CHANGES` clears.
+- GUI and agent saves both copy external `sparam_filepath`, legacy `sparam_path`, `amp_filepath`, and `ampf_filepath` data into `rf_data/`. Sources must be regular non-symlink files up to 256 MiB each; a save copies at most 256 unique files and 512 MiB total. Missing, non-regular, symlink, oversize, or colliding data files fail the save with `INTERNAL`; the prior `.rfsim` remains intact. Agents may write only the selected `.rfsim` and these save-triggered data copies, not arbitrary files.
+- `project_load {epoch, path}` needs `epoch` from the latest read, or it returns `STALE_EPOCH`. `path` must be an absolute `.rfsim` file with no byte below 0x20 and, on Windows, no `:` after its root name (`INVALID_ARGUMENT` at `/path`). A missing file is `NOT_FOUND`, and a folder is `INVALID_ARGUMENT`.
+- `project_load` returns `UNSAVED_CHANGES` without loading anything while the project has unsaved changes. Save first with `project_save`, or ask the user to save or discard the changes. After a test-flow latch, `project_save` is refused too, so ask the user.
+- A file that cannot be parsed leaves the circuit as it was (`INVALID_ARGUMENT` at `/path`). A restore failure that already cleared the circuit returns `INTERNAL` at the new epoch, so call `circuit_get`.
+- Success returns `{epoch, path, name}` at the new epoch. The load clears checkpoints, so `revert` cannot undo it, and the project is clean. Older epochs then return `STALE_EPOCH` with `details.cause` `opened_project`.
+- A test-flow restore failure marks the project unsaved and latches `project_save` (`INTERNAL`) until RF Simulator replaces the project (open, new, revert, or a successful `project_load`). A GUI save clears the unsaved flag but not the latch, so after the user saves, `project_load` can replace the project.
 
 ## Measurements
 
@@ -77,6 +94,6 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 
 ## Limits
 
-- You cannot open, save, name, or revert projects, or read and write files. `data_file_read` reads only files that a component or library part already references.
+- You cannot open file dialogs or revert projects. Project files are read and written only by `project_save` and `project_load`; `data_file_read` reads only files that a component or library part already references.
 - RF Simulator admits one agent client at a time.
 - Each reply is capped at 1 MiB. An oversized result becomes `INTERNAL`; request fewer points.

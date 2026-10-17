@@ -4,6 +4,7 @@
 #include "pfb_channelizer_engine.h"
 #include "pfb_channelizer_widget.h"
 #include <memory>
+#include <optional>
 #include <vector>
 
 class ComponentRegistry;
@@ -30,6 +31,15 @@ class PFBViewManager {
     std::size_t size() const { return m_node_ids.size(); }
     std::vector<bool> &iqVisibility() { return m_show_iq_pfbs; }
     std::vector<bool> &gridVisibility() { return m_show_pfb_grids; }
+
+    // In-session IQ Plot and Grid visibility of the views built for one PFB node, or nullopt when
+    // the node has no views. A swap moves the PFB to a new node, so the app carries these over.
+    struct Visibility {
+        bool iq = true;
+        bool grid = true;
+    };
+    std::optional<Visibility> visibilityFor(int node_id) const;
+    void setVisibilityFor(int node_id, Visibility visibility);
 
   private:
     // Graph node id of each view's PFB. Node ids are monotonic and are reset

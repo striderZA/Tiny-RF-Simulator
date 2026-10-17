@@ -1,0 +1,109 @@
+name: Build and test (CI configuration)
+description: >-
+  Install the toolchain for one CI configuration, then configure, build, and
+  test it. On Windows, also check the MinGW TEST_CASE registration floor. The
+  release workflow's strict-build and package jobs both call this action, so
+  each configuration is defined in one place.
+
+inputs:
+  shell:
+    description: Shell for the run steps (bash on Linux, msys2 on Windows).
+    required: true
+  cxx-compiler:
+    description: C++ compiler (g++-14, clang++-18, or g++ for MinGW-w64).
+    required: true
+  c-compiler:
+    description: C compiler matching cxx-compiler.
+    required: true
+  build-type:
+    description: CMAKE_BUILD_TYPE (Debug or Release).
+    required: true
+  cmake-flags:
+    description: Extra configure flags, word-split onto the cmake command line.
+    required: false
+    default: ""
+  mingw-test-case-floor:
+    description: Minimum registered TEST_CASE count for tests.exe. Required on Windows.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        CXX_COMPILER: ${{ inputs.cxx-compiler }}
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq ninja-build cmake pkg-config xvfb \
+          libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+        case "$CXX_COMPILER" in
+          g++-14) sudo apt-get install -y -qq g++-14 ;;
+          clang++-18) sudo apt-get install -y -qq clang-18 ;;
+          *) echo "::error::unsupported Linux C++ compiler: $CXX_COMPILER"; exit 1 ;;
+        esac
+
+    - name: Install Windows dependencies (MSYS2 + MinGW-w64)
+      if: runner.os == 'Windows'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          git
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-pkg-config
+          mingw-w64-x86_64-python
+
+    - name: Configure
+      shell: ${{ inputs.shell }}
+      env:
+        CXX_COMPILER: ${{ inputs.cxx-compiler }}
+        C_COMPILER: ${{ inputs.c-compiler }}
+        BUILD_TYPE: ${{ inputs.build-type }}
+        EXTRA_FLAGS: ${{ inputs.cmake-flags }}
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_CXX_COMPILER="$CXX_COMPILER" \
+          -DCMAKE_C_COMPILER="$C_COMPILER" \
+          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          $EXTRA_FLAGS
+
+    - name: Build
+      shell: ${{ inputs.shell }}
+      run: cmake --build build
+
+    - name: Test
+      shell: ${{ inputs.shell }}
+      run: |
+        if [ "${{ runner.os }}" = "Linux" ]; then
+          xvfb-run --auto-servernum ctest --test-dir build --output-on-failure -E "Benchmark"
+        else
+          # test_ui drives an interactive ImGui window and needs a display, so
+          # it cannot run headless on Windows.
+          ctest --test-dir build --output-on-failure -E "Benchmark|test_ui"
+        fi
+
+    - name: Verify MinGW TEST_CASE registration count
+      if: runner.os == 'Windows'
+      shell: ${{ inputs.shell }}
+      env:
+        FLOOR: ${{ inputs.mingw-test-case-floor }}
+      run: |
+        # The MinGW-w64 toolchain silently drops TEST_CASEs registered beyond a
+        # ceiling in the main `tests` binary (see tests/AGENTS.md). Count the
+        # registered cases (each emits one indented tag line) and fail if the
+        # count falls below the verified floor, so a silent drop is caught here
+        # instead of shipping unrun tests. New coverage that must run on Windows
+        # goes in a standalone executable (e.g. test_signal_domain).
+        : "${FLOOR:?mingw-test-case-floor input is required on Windows}"
+        COUNT=$(build/bin/tests.exe --list-tests | grep -c '^      \[' || true)
+        echo "registered TEST_CASEs: $COUNT (expected >= $FLOOR)"
+        if [ "$COUNT" -lt "$FLOOR" ]; then
+          echo "ERROR: tests.exe registered $COUNT TEST_CASEs, below the verified floor of $FLOOR"
+          exit 1
+        fi

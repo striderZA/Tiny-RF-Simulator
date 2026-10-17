@@ -2,6 +2,8 @@
 
 This document summarises the nonlinear amplifier model from the reference PDF. It is intended as a specification for an agent to implement nonlinear behaviour into an existing amplifier model.
 
+> **Scope:** this note describes the scalar-intercept model, with one OIP2 and one OIP3 for every tone and product. Per-frequency intercepts from an amp-f file replace those scalars for each tone and product that has a value. The file format is in `docs/resources/ampf_v1_spec.md`, and the model rules are in the Local Contracts of `common/AGENTS.md`.
+
 ---
 
 ## 1. Model Architecture

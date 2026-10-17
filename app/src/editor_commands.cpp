@@ -1,6 +1,8 @@
 #include "editor_commands.h"
 #include "component_library.h"
 #include "graph_editor_actions.h"
+#include "graph_link_policy.h"
+#include <algorithm>
 #include <utility>
 
 namespace {
@@ -31,6 +33,14 @@ ComponentAddResult finishComponentAdd(CircuitRuntime &runtime, EditorCommands &c
     return result;
 }
 
+const GraphNode *findGraphNode(const NodeGraphEngine &graph, int node_id) {
+    for (const GraphNode &node : graph.nodes()) {
+        if (node.node_id == node_id)
+            return &node;
+    }
+    return nullptr;
+}
+
 } // namespace
 
 EditorCommands::EditorCommands(CircuitRuntime &runtime, GraphEditorActions &editor_actions)
@@ -55,6 +65,144 @@ ComponentAddResult EditorCommands::addLibraryPart(ComponentLibrary &library,
                                                   const nlohmann::ordered_json &params) {
     return finishComponentAdd(m_runtime, *this,
                               library.instantiate(definition, m_runtime, m_editor_actions), params);
+}
+
+ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
+                                                    const ComponentDefinition &definition,
+                                                    int graph_node_id,
+                                                    const std::vector<int> &instrument_pins) {
+    ComponentSwapResult result;
+    const IComponentEngine *predecessor = m_runtime.components().find(graph_node_id);
+    const GraphNode *node = findGraphNode(m_runtime.graph(), graph_node_id);
+    if (!predecessor || !node) {
+        result.error = "The component is no longer in the circuit.";
+        return result;
+    }
+
+    // Copy what the swap reads from the graph: instantiating the successor appends to the node
+    // vector, which invalidates `node`.
+    const int component_id = predecessor->id();
+    const std::vector<int> old_inputs = node->input_pin_ids;
+    const std::vector<int> old_outputs = node->output_pin_ids;
+    const auto owns = [&](int pin) {
+        return std::find(old_inputs.begin(), old_inputs.end(), pin) != old_inputs.end() ||
+               std::find(old_outputs.begin(), old_outputs.end(), pin) != old_outputs.end();
+    };
+    const auto describe = [&](int pin) -> std::string {
+        for (size_t i = 0; i < old_inputs.size(); ++i) {
+            if (old_inputs[i] == pin)
+                return "input " + std::to_string(i + 1);
+        }
+        for (size_t i = 0; i < old_outputs.size(); ++i) {
+            if (old_outputs[i] == pin)
+                return "output " + std::to_string(i + 1);
+        }
+        return "a port";
+    };
+    std::vector<GraphLink> old_links;
+    for (const GraphLink &link : m_runtime.graph().links()) {
+        if (owns(link.start_pin_id) || owns(link.end_pin_id))
+            old_links.push_back(link);
+    }
+
+    IComponentEngine *successor =
+        library.instantiate(definition, m_runtime, m_editor_actions, component_id);
+    const std::string part = definition.part_number;
+    if (!successor) {
+        result.error = "Could not create " + part + "; see the log for details.";
+        return result;
+    }
+    const int successor_node_id = successor->graphNodeId();
+    const auto refuse = [&](std::string reason) {
+        // Nothing is linked or synced yet, so discarding the successor restores the circuit.
+        (void)m_runtime.removeComponent(successor_node_id);
+        result.error = std::move(reason);
+        return result;
+    };
+    const GraphNode *created = findGraphNode(m_runtime.graph(), successor_node_id);
+    if (!created)
+        return refuse("Could not create " + part + "; see the log for details.");
+
+    // Ports pair by index; a port the successor lacks has no counterpart in pin_map.
+    std::map<int, int> pin_map;
+    for (size_t i = 0; i < std::min(old_inputs.size(), created->input_pin_ids.size()); ++i)
+        pin_map[old_inputs[i]] = created->input_pin_ids[i];
+    for (size_t i = 0; i < std::min(old_outputs.size(), created->output_pin_ids.size()); ++i)
+        pin_map[old_outputs[i]] = created->output_pin_ids[i];
+
+    for (const GraphLink &link : old_links) {
+        for (const int pin : {link.start_pin_id, link.end_pin_id}) {
+            if (owns(pin) && pin_map.count(pin) == 0)
+                return refuse("Cannot change to " + part + ": " + describe(pin) +
+                              " is connected, and " + part + " has no such port.");
+        }
+    }
+    for (const int pin : m_runtime.graph().probePins()) {
+        if (owns(pin) && pin_map.count(pin) == 0)
+            return refuse("Cannot change to " + part + ": " + describe(pin) + " is probed, and " +
+                          part + " has no such port.");
+    }
+    for (const int pin : instrument_pins) {
+        if (owns(pin) && pin_map.count(pin) == 0)
+            return refuse("Cannot change to " + part + ": " + describe(pin) +
+                          " is selected by an instrument, and " + part + " has no such port.");
+    }
+
+    const auto mapped = [&pin_map](int pin) {
+        const auto it = pin_map.find(pin);
+        return it == pin_map.end() ? pin : it->second;
+    };
+    const auto componentForPin = [this](int pin) -> const IComponentEngine * {
+        const int owner = m_runtime.graph().nodeIdForPin(pin);
+        return owner < 0 ? nullptr : m_runtime.components().find(owner);
+    };
+    struct PlannedLink {
+        int start_pin;
+        int end_pin;
+    };
+    std::vector<PlannedLink> planned;
+    planned.reserve(old_links.size());
+    for (const GraphLink &link : old_links) {
+        const int start = mapped(link.start_pin_id);
+        const int end = mapped(link.end_pin_id);
+        if (!graphLinkAllowed(componentForPin(start), componentForPin(end), start, end))
+            return refuse("Cannot change to " + part +
+                          ": the physical link policy does not allow one of its connections.");
+        planned.push_back({start, end});
+    }
+
+    // The successor's pins are fresh, but downstream inputs still hold the predecessor's links,
+    // so detach every old link before attaching the successor's.
+    for (const GraphLink &link : old_links)
+        (void)m_runtime.disconnect(link.link_id);
+    std::vector<int> attached;
+    for (const PlannedLink &link : planned) {
+        if (const auto link_id = m_runtime.connect(link.start_pin, link.end_pin)) {
+            attached.push_back(*link_id);
+            continue;
+        }
+        // The checks above make this unreachable. Restore the predecessor's wiring rather than
+        // leave the circuit half-rewired.
+        for (const int id : attached)
+            (void)m_runtime.disconnect(id);
+        for (const GraphLink &old : old_links)
+            (void)m_runtime.connect(old.start_pin_id, old.end_pin_id);
+        return refuse("Cannot change to " + part + ": a connection was rejected.");
+    }
+
+    // Re-point probes and group membership before retiring the predecessor: removing a node drops
+    // every probe and group membership still referring to its pins.
+    m_editor_actions.replaceNodeReferences(graph_node_id, successor_node_id, pin_map);
+    (void)m_runtime.removeComponent(graph_node_id);
+    componentsChanged();
+    m_editor_actions.topologyChanged();
+    markModified();
+
+    result.component = successor;
+    result.old_graph_node_id = graph_node_id;
+    result.new_graph_node_id = successor_node_id;
+    result.pin_map = std::move(pin_map);
+    return result;
 }
 
 ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,
@@ -108,12 +256,21 @@ bool EditorCommands::disconnect(int link_id) {
     return true;
 }
 
-// Probe edits keep their pre-EditorCommands semantics: they are saved in
-// .rfsim but do not, by themselves, mark the project dirty. Whether they
-// should is a separate product decision, not part of this command extraction.
-bool EditorCommands::addProbePin(int pin_id) { return m_editor_actions.addProbePin(pin_id); }
+// Probe add and remove are project edits: they are saved in .rfsim, so an accepted one advances
+// the revision and the project reads as unsaved until the next save.
+bool EditorCommands::addProbePin(int pin_id) {
+    if (!m_editor_actions.addProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
 
-bool EditorCommands::removeProbePin(int pin_id) { return m_editor_actions.removeProbePin(pin_id); }
+bool EditorCommands::removeProbePin(int pin_id) {
+    if (!m_editor_actions.removeProbePin(pin_id))
+        return false;
+    markModified();
+    return true;
+}
 
 int EditorCommands::createGroup(std::string name, std::vector<int> member_node_ids) {
     const int group_id = m_editor_actions.createGroup(std::move(name), std::move(member_node_ids));

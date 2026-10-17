@@ -3,10 +3,12 @@
 #include "receiver_requirements.h"
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 class CircuitRuntime;
 class GraphEditorActions;
@@ -37,7 +39,9 @@ class ProjectSerializer {
     bool fromJson(nlohmann::json root, const ProjectJsonOptions &options,
                   const std::string &source_label);
 
-    bool save(const std::string &path); // false on open/write/flush/close failure (logged)
+    // False on serialization, data-preservation, or write failure (logged); on
+    // success, copied_data_files receives newly copied project-relative files.
+    bool save(const std::string &path, std::vector<std::string> *copied_data_files = nullptr);
     bool load(const std::string &path); // false on file/parse/restoration failure (logged)
     // True when the latest restoration reset project state before returning.
     bool lastLoadReset() const { return m_last_load_reset; }
@@ -45,6 +49,19 @@ class ProjectSerializer {
     // it destroys every engine; the app re-syncs component-bound views after
     // reset() and every fromJson() restoration.
     void reset();
+
+    // Test-only fault injection for the save path. Production code never sets
+    // these; an empty function does nothing. Reset all with `testHooks() = {};`.
+    struct TestHooks {
+        std::function<bool()> failWrite;        // true: fail the temp-file write
+        std::function<bool()> failRename;       // true: fail temp-to-target rename
+        std::function<bool()> failStaleRemoval; // true: fail removing a stale <target>.tmp
+        // Observers. afterStaleOpen gets the stale temp path once it is open;
+        // beforeFailureCleanup gets the temp path before a failed save removes it.
+        std::function<void(const std::filesystem::path &)> afterStaleOpen;
+        std::function<void(const std::filesystem::path &)> beforeFailureCleanup;
+    };
+    static TestHooks &testHooks();
 
   private:
     // Canonical `window_state` scalar flags as (JSON key, live member). toJson()
