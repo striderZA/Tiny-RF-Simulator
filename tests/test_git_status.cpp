@@ -393,7 +393,10 @@ TEST_CASE("Git status query stops when Git exceeds its process deadline", "[git_
 
     HANDLE child_process = OpenProcess(SYNCHRONIZE, FALSE, child_pid);
     if (child_process != nullptr) {
-        CHECK(WaitForSingleObject(child_process, 0) == WAIT_OBJECT_0);
+        // TerminateJobObject only requests termination and can return before the grandchild
+        // has exited, so allow a bounded wait. The helper sleeps 5 s by itself, so a
+        // grandchild that is never terminated is still alive after this bound.
+        CHECK(WaitForSingleObject(child_process, 2000) == WAIT_OBJECT_0);
         CloseHandle(child_process);
     } else {
         CHECK(GetLastError() == ERROR_INVALID_PARAMETER);
