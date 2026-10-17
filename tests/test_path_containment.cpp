@@ -34,6 +34,19 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <winioctl.h>
+#endif
+#include <cstddef>
+#include <cstring>
+#include <vector>
 
 namespace {
 
@@ -1155,4 +1168,108 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save refuses an oversized external RF da
     std::filesystem::remove_all(base);
     std::filesystem::remove(external);
 }
+
+#ifdef _WIN32
+// Junction fixture for the RF data test below. Unlike a symbolic link, a junction needs no
+// privilege, so the test runs where Windows denies symbolic links.
+namespace {
+
+// Creates the empty directory `link` as a junction to `target`. Returns false, leaving nothing
+// at `link`, when Windows refuses the junction.
+bool createDirectoryJunction(const std::filesystem::path &link,
+                             const std::filesystem::path &target) {
+    if (!CreateDirectoryW(link.c_str(), nullptr))
+        return false;
+    const HANDLE handle =
+        CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        RemoveDirectoryW(link.c_str());
+        return false;
+    }
+
+    // REPARSE_DATA_BUFFER for a mount point: an 8-byte header (tag, data length, reserved), four
+    // USHORT name offsets and lengths, then the NUL-terminated substitute name (the NT path, with
+    // the \??\ prefix) and print name.
+    const std::wstring print_name = std::filesystem::absolute(target).wstring();
+    const std::wstring substitute_name = L"\\??\\" + print_name;
+    const std::size_t substitute_len = substitute_name.size() * sizeof(wchar_t);
+    const std::size_t print_len = print_name.size() * sizeof(wchar_t);
+    const std::size_t path_bytes = substitute_len + sizeof(wchar_t) + print_len + sizeof(wchar_t);
+    const std::size_t data_length = 8 + path_bytes;
+    std::vector<unsigned char> buffer(8 + data_length, 0);
+    const DWORD tag = IO_REPARSE_TAG_MOUNT_POINT;
+    const WORD data_length_field = static_cast<WORD>(data_length);
+    const WORD name_fields[4] = {0, static_cast<WORD>(substitute_len),
+                                 static_cast<WORD>(substitute_len + sizeof(wchar_t)),
+                                 static_cast<WORD>(print_len)};
+    std::memcpy(buffer.data(), &tag, sizeof(tag));
+    std::memcpy(buffer.data() + 4, &data_length_field, sizeof(data_length_field));
+    std::memcpy(buffer.data() + 8, name_fields, sizeof(name_fields));
+    std::memcpy(buffer.data() + 16, substitute_name.c_str(), substitute_len + sizeof(wchar_t));
+    std::memcpy(buffer.data() + 16 + substitute_len + sizeof(wchar_t), print_name.c_str(),
+                print_len + sizeof(wchar_t));
+
+    DWORD returned = 0;
+    const BOOL ok =
+        DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, buffer.data(),
+                        static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr);
+    CloseHandle(handle);
+    if (!ok) {
+        RemoveDirectoryW(link.c_str());
+        return false;
+    }
+    return true;
+}
+
+// Removes the junction at `link` only. The target and its contents are left alone.
+void removeDirectoryJunction(const std::filesystem::path &link) { RemoveDirectoryW(link.c_str()); }
+
+// Removes a junction when it leaves scope. Declare it after the junction's parent so the
+// junction is gone before that parent's remove_all() can run.
+struct JunctionGuard {
+    std::filesystem::path link;
+    ~JunctionGuard() { removeDirectoryJunction(link); }
+};
+
+} // namespace
+
+TEST_CASE_METHOD(ImGuiFixture, "Issue #222: project save refuses an RF data junction",
+                 "[containment][project][external][junction]") {
+    const auto tag = test_temp_paths::processTag();
+    const auto base = scratchDir("containment_rf_data_junction_" + tag);
+    const auto foreign = scratchDir("containment_rf_data_junction_target_" + tag);
+    const auto external = base.parent_path() / ("junction_" + tag + ".s2p");
+    const auto project_path = base / "project.rfsim";
+    writeS2p(external);
+    const std::string original_external = readFile(external);
+    REQUIRE(createDirectoryJunction(base / "rf_data", foreign));
+    JunctionGuard junction{base / "rf_data"};
+
+    const std::string previous = R"({"previous":"intact"})";
+    {
+        std::ofstream out(project_path, std::ios::binary | std::ios::trunc);
+        out << previous;
+    }
+    {
+        RfSimulatorApp app;
+        app.newProject();
+        auto *amp = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9911));
+        REQUIRE(amp != nullptr);
+        amp->setSParamFilepath(external.string());
+        amp->setSParamMode(true);
+        REQUIRE(amp->sparamLoaded());
+        CHECK_FALSE(app.saveProject(project_path.string()));
+        CHECK(app.lastSavedDataFiles().empty());
+    }
+    CHECK(readFile(project_path) == previous);
+    CHECK(std::filesystem::is_empty(foreign));
+    CHECK(readFile(external) == original_external);
+    // Remove the junction link first: remove_all() on the base would follow it into `foreign`.
+    removeDirectoryJunction(base / "rf_data");
+    std::filesystem::remove_all(base);
+    std::filesystem::remove_all(foreign);
+    std::filesystem::remove(external);
+}
+#endif
 #endif // TEST_EXTERNAL_PROJECT_DATA_ONLY
