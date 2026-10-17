@@ -450,6 +450,23 @@ fs::path uniqueProjectDataTempPath(const fs::path &destination) {
     return temp;
 }
 
+// True unless `path` is verified as a real directory. Refused: a symbolic link, a Windows reparse
+// point (junction or mount point), and an entry whose attributes cannot be read. std::filesystem
+// reports a junction as an ordinary directory, so is_symlink() alone would let a junction named
+// rf_data send project data to another folder. Verification fails closed.
+bool isUnverifiedProjectDataDirectory([[maybe_unused]] const fs::path &path,
+                                      const fs::file_status &status) {
+    if (fs::is_symlink(status))
+        return true;
+#ifdef _WIN32
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes == INVALID_FILE_ATTRIBUTES ||
+           (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    return false;
+#endif
+}
+
 bool packageExternalProjectData(nlohmann::json &root, const fs::path &project_dir,
                                 std::vector<std::string> &saved_files,
                                 std::vector<fs::path> &created_files,
@@ -524,9 +541,10 @@ bool packageExternalProjectData(nlohmann::json &root, const fs::path &project_di
             }
             ec.clear();
             if (fs::exists(data_dir_status)) {
-                if (fs::is_symlink(data_dir_status) || !fs::is_directory(data_dir_status)) {
-                    LOG_ERROR(
-                        "Could not preserve project RF data: rf_data is not a real directory");
+                if (isUnverifiedProjectDataDirectory(data_dir, data_dir_status) ||
+                    !fs::is_directory(data_dir_status)) {
+                    LOG_ERROR("Could not preserve project RF data: rf_data is not a verified "
+                              "real directory");
                     return false;
                 }
             } else if (!fs::create_directory(data_dir, ec) || ec) {

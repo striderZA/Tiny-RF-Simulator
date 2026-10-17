@@ -52,7 +52,7 @@ Select **Revert** only if you want to discard those changes.
 `project_save` writes the open project to a file. Without a path, it saves to the file that is already open.
 A path must be absolute and end in `.rfsim`. Replacing a different existing file needs `overwrite` set to `true`.
 An untitled project needs a path. Saving copies referenced RF data files outside the project folder into `rf_data/` beside the project, so GUI and agent saves include the models needed on reload. The result lists each copied project-relative path in `copied_data_files`; no copies are listed when every reference is already inside the project.
-The save fails if a referenced file cannot be copied or if its destination would overwrite a different file or symlink. Failed saves keep the existing `.rfsim` file intact.
+The save fails if a referenced file cannot be copied, if its destination would overwrite a different file or symlink, or, when a referenced file lies outside the project folder, if `rf_data/` is a symbolic link or Windows junction. Failed saves keep the existing `.rfsim` file intact.
 
 `project_load` replaces the open circuit with a `.rfsim` file. Send the `epoch` from the latest circuit read.
 The load is refused while the project has unsaved changes. Save first, or ask the user to save or discard the changes in the GUI.
