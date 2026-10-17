@@ -340,18 +340,11 @@ add_standalone_test(test_issue45_extension_trust
     LIBS simulator::app
 )
 
-# These two share the source-tree built-in extension root, which
-# ExtensionManager hardcodes as its highest-precedence scan root
-# (app/src/extension_manager.cpp:146) and which every extension scan
-# enumerates: test_issue45 writes external-tool manifests into
-# PROJECT_SOURCE_DIR/extensions, while test_extensions asserts the total
-# external-tool count. Concurrently, test_extensions discovers the other
-# test's tool — reproduced on the first concurrent iteration as
-# `REQUIRE( std::size(tools) == 1 )` -> `2 == 1` at
-# tests/test_extensions.cpp:571. The root is not injectable, so RUN_SERIAL is
-# the fix. (The per-invocation workspaces under <temp>/rf-sim-extension-run are
-# NOT shared: app/src/external_tool_runner.cpp:44-60 gives every run its own
-# run-<stamp>-<seq> directory.)
+# Both targets construct RfSimulatorApp, which writes executable-relative
+# app.ini on destruction and uses the executable-relative extension trust
+# store unless a test redirects it. Keep them serialized; source-tree built-in
+# discovery roots are injectable and fixture writes use each process's temp root.
+# Per-invocation workspaces under <temp>/rf-sim-extension-run are not shared.
 set_tests_properties(test_extensions test_issue45_extension_trust
                      PROPERTIES RUN_SERIAL TRUE)
 

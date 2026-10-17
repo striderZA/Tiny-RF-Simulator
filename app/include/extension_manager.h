@@ -22,6 +22,11 @@ struct ExtensionRecord {
 
 class ExtensionManager {
   public:
+    // Test-only scan-root override. An empty path restores the production
+    // source-tree root; changes apply to the next rescan.
+    void setBuiltInSourceRoot(const std::filesystem::path &root) { m_built_in_source_root = root; }
+    std::filesystem::path builtInSourceRoot() const;
+
     void rescan(const std::filesystem::path &project_root);
 
     const std::vector<ExtensionRecord> &all() const { return m_records; }
@@ -64,4 +69,5 @@ class ExtensionManager {
 
     std::vector<ExtensionRecord> m_records;
     std::filesystem::path m_project_extension_root;
+    std::filesystem::path m_built_in_source_root;
 };

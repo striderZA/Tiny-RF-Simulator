@@ -612,8 +612,8 @@ TEST_CASE_METHOD(ImGuiFixture, "a trust decision that could not be saved does no
 
 TEST_CASE_METHOD(ImGuiFixture, "untrusted tools stay out of the Tools menu payload",
                  "[issue45][app-gate][tools-menu]") {
-    const fs::path builtin_dir =
-        fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_ext45_menu_builtin";
+    const fs::path builtin_root = fs::temp_directory_path() / "rfsim_ext45_menu_root";
+    const fs::path builtin_dir = builtin_root / "rfsim_ext45_menu_builtin";
     const fs::path builtin_manifest = writeManifest(
         builtin_dir, {{"schema_version", 1},
                       {"id", "builtin.menu45"},
@@ -623,13 +623,13 @@ TEST_CASE_METHOD(ImGuiFixture, "untrusted tools stay out of the Tools menu paylo
                       {"capabilities", {"generator"}},
                       {"entry", "bin/builtin.py"},
                       {"menus", {{{"location", "tools"}, {"label", "Built-in Menu Tool"}}}}});
-    ScopedRemove cleanup_builtin{builtin_dir};
+    ScopedRemove cleanup_builtin{builtin_root};
     REQUIRE(fs::exists(builtin_manifest));
-
     const ToolFixture fixture = makeProjectTool("rfsim_ext45_menu", "project.echo45menu");
     ScopedRemove cleanup{fixture.project_root};
 
     RfSimulatorApp app;
+    app.testExtensionManager().setBuiltInSourceRoot(builtin_root);
     app.m_extension_trust.setStorePath(fixture.project_root / "extension_trust.json");
     app.m_current_project_path = (fixture.project_root / "demo.rfsim").string();
     app.refreshExtensions();
@@ -652,8 +652,8 @@ TEST_CASE_METHOD(ImGuiFixture, "untrusted tools stay out of the Tools menu paylo
 
 TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
           "[issue45][discovery]") {
-    const fs::path builtin_root =
-        fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_shadow_tool_case";
+    const fs::path builtin_root = fs::temp_directory_path() / "rfsim_ext45_shadow_tool" /
+                                  "built-in" / "rfsim_shadow_tool_case";
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext45_shadow_tool";
     const fs::path builtin_manifest = writeManifest(builtin_root, {{"schema_version", 1},
                                                                    {"id", "shared.tool45"},
@@ -675,6 +675,7 @@ TEST_CASE("extension manager flags a duplicate external-tool id as shadowed",
     REQUIRE(fs::exists(builtin_manifest));
 
     ExtensionManager mgr;
+    mgr.setBuiltInSourceRoot(builtin_root.parent_path());
     mgr.rescan(project_root);
 
     const ExtensionRecord *builtin = nullptr;
@@ -783,8 +784,8 @@ TEST_CASE("an incompatible incumbent still reserves the id", "[issue45][discover
     // the incumbent's status, so a duplicate can never impersonate a known
     // id even while the higher-precedence manifest is unusable. Both records
     // stay visible; nothing is launchable until the incumbent is fixed.
-    const fs::path builtin_root =
-        fs::path(PROJECT_SOURCE_DIR) / "extensions" / "rfsim_ext45_compat_incumbent";
+    const fs::path builtin_root = fs::temp_directory_path() / "rfsim_ext45_compat_incumbent" /
+                                  "built-in" / "rfsim_ext45_compat_incumbent";
     const fs::path project_root = fs::temp_directory_path() / "rfsim_ext45_compat_incumbent";
     const fs::path builtin_manifest =
         writeManifest(builtin_root, {{"schema_version", 1},
@@ -807,6 +808,7 @@ TEST_CASE("an incompatible incumbent still reserves the id", "[issue45][discover
     REQUIRE(fs::exists(builtin_manifest));
 
     ExtensionManager mgr;
+    mgr.setBuiltInSourceRoot(builtin_root.parent_path());
     mgr.rescan(project_root);
 
     const ExtensionRecord *incumbent = nullptr;
