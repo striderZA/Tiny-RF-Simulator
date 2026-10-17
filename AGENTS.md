@@ -61,8 +61,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 | AGENTS.md (this tree) | Binding subtree contracts and the DOX pass | Humans and agents, through the DOX pass |
 | `.agents/skills/` and `.githooks/` | Not DOX. Skill rules: Agent Rules here. Hook rules: CONTRIBUTING.md | Humans and agents, under those rules |
 | CONTRIBUTING.md | Human conventions: setup, testing, style, git, CI, release | Humans |
-| `openwiki/` | Generated, optional, non-binding evidence index | Humans, by manual OpenWiki regeneration after changing `openwiki/INSTRUCTIONS.md` |
-| `OPENWIKI.md` | Non-binding guide to the OpenWiki index and its retrieval tools | Humans |
+| `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | Humans, by manual OpenWiki regeneration after changing `openwiki/INSTRUCTIONS.md` |
 | `manual/` | Published user documentation (MkDocs) | Humans |
 | `docs/` | Engineering references | Humans |
 | `WATCHDOG.yml` | Review-advisor config for tooling; not a DOX file | Tooling owner |
@@ -104,3 +103,20 @@ Link to the owning document instead of restating its rules or commands on anothe
 - [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
 - [manual/AGENTS.md](manual/AGENTS.md) — User-facing MkDocs manual: page ownership, publish guard, docs contract
 - [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, and format scripts and the rules that bind them
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository has a generated `openwiki/` evidence index. It is optional just-in-time context, not required startup reading.
+
+- Do not enumerate, preload, or search wikis at task start. Use retrieval when the user asks for it, when unfamiliar architecture or dependency behavior materially affects the task, or when source inspection leaves an important uncertainty. Stop once the question is grounded.
+- When those conditions apply and OpenWiki retrieval tools are available, use `openwiki_search` for just-in-time context and `openwiki_read` for the relevant complete sections. If search returns `workspace_required`, ask which listed workspace to use and retry with its ID.
+- Use `openwiki_list_workspaces` or `openwiki_list_wikis` when workspace membership itself needs to be discovered.
+- If the retrieval tools are unavailable, read `openwiki/quickstart.md` and follow its links to the relevant pages.
+- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+
+The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->
