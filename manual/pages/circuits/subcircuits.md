@@ -4,7 +4,7 @@ A subcircuit groups several components into one labelled block. Use it to keep a
 
 ## Create a subcircuit
 
-Drag a rectangle across empty canvas to select the components you want to group. This is a rubber-band select. When you release the mouse button, a dialog asks for a name.
+Hold left **Shift**, then press and drag a rectangle across empty canvas to select the components you want to group. This is a rubber-band select. When you release the mouse button, a dialog asks for a name, if the rectangle encloses at least two components that are not already in a subcircuit.
 
 Type a name, then choose **Create**. To leave the components ungrouped, choose **Cancel**.
 

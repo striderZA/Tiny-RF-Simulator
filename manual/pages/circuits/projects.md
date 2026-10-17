@@ -1,6 +1,6 @@
 # Projects
 
-A project is a single `.rfsim` file. It holds the circuit: components, links, probes, subcircuits, Network Analyzer settings, and Receiver Requirements.
+A project is a `.rfsim` file. It holds the circuit: components, links, probes, subcircuits, Network Analyzer settings, and Receiver Requirements. When you save, an external data file that a component uses (for example an S-parameter file) is copied into an `rf_data/` folder beside the project, and the component is pointed at the copy.
 
 ## New, open, and save
 
@@ -13,4 +13,4 @@ A project is a single `.rfsim` file. It holds the circuit: components, links, pr
 
 If the project has unsaved changes, **New**, **Open...**, and **Exit** first ask: "You have unsaved changes. Save before continuing?" Choose **Save** to save first, **Discard** to continue without saving, or **Cancel** to stay where you are.
 
-Adding or removing a probe does not mark the project as unsaved. If a probe is your only change, **New**, **Open...**, and **Exit** continue without asking, and the probe change is lost. Save the project after you change probes.
+Adding or removing a probe marks the project as unsaved, so **New**, **Open...**, and **Exit** ask before they discard it. Save the project to keep probe changes.
