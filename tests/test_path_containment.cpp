@@ -680,30 +680,56 @@ nlohmann::json ampComponent(const std::string &amp_filepath) {
     return cj;
 }
 
+// A valid amp-f file: one DEVICE line, one COLUMNS comment, and one block with no VAR or COND.
+const char *kMinimalAmpf = "# amp-f v1\nDEVICE TEST\n# COLUMNS: OIP3_dBm\n"
+                           "BEGIN\n1000 30.0\n2000 31.0\nEND\n";
+
+void writeAmpf(const std::filesystem::path &path) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream ofs(path);
+    ofs << kMinimalAmpf;
+}
+
+nlohmann::json ampfComponent(const std::string &ampf_filepath) {
+    nlohmann::json cj;
+    cj["type"] = "Amplifier";
+    cj["params"]["gain_dB"] = 20.0;
+    cj["params"]["ampf_filepath"] = ampf_filepath;
+    return cj;
+}
+
 } // namespace
 
 #ifndef TEST_EXTERNAL_PROJECT_DATA_ONLY
-TEST_CASE_METHOD(ImGuiFixture, "Project load neutralizes AMP paths outside the project dir",
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project load neutralizes AMP and AMP-F paths outside the project dir",
                  "[containment][project][amp]") {
     auto base = scratchDir("containment_amp_project_test");
     const auto project_path = base / "proj.rfsim";
     const auto decoy = base.parent_path() / "containment_amp_decoy.amp";
     writeAmp(decoy); // valid file OUTSIDE the project dir
     writeAmp(base / "data/good.amp");
+    const auto decoy_f = base.parent_path() / "containment_ampf_decoy.ampf";
+    writeAmpf(decoy_f); // valid amp-f file OUTSIDE the project dir
+    writeAmpf(base / "data/good.ampf");
 
     nlohmann::json comps = nlohmann::json::array();
-    comps.push_back(ampComponent(decoy.string()));     // absolute, outside project dir
-    comps.push_back(ampComponent("../../escape.amp")); // '..' traversal
-    comps.push_back(ampComponent("data/good.amp"));    // contained relative path
+    comps.push_back(ampComponent(decoy.string()));       // absolute, outside project dir
+    comps.push_back(ampComponent("../../escape.amp"));   // '..' traversal
+    comps.push_back(ampComponent("data/good.amp"));      // contained relative path
+    comps.push_back(ampfComponent(decoy_f.string()));    // amp-f: absolute, outside project
+    comps.push_back(ampfComponent("../../escape.ampf")); // amp-f: '..' traversal
+    comps.push_back(ampfComponent("data/good.ampf"));    // amp-f: contained relative path
+    comps.push_back(ampfComponent("data/missing.ampf")); // amp-f: contained, but absent
     writeProject(project_path, comps);
 
     {
         RfSimulatorApp app;
         app.loadProject(project_path.string());
-        REQUIRE(app.componentCount() == 3);
+        REQUIRE(app.componentCount() == 7);
 
         auto amps = app.testComponents().byType<AmplifierEngine>();
-        REQUIRE(amps.size() == 3);
+        REQUIRE(amps.size() == 7);
 
         // Absolute path outside the project dir: neutralized, nothing loaded.
         CHECK_FALSE(amps[0]->ampLoaded());
@@ -717,28 +743,56 @@ TEST_CASE_METHOD(ImGuiFixture, "Project load neutralizes AMP paths outside the p
         CHECK(amps[2]->ampLoaded());
         const auto expected = std::filesystem::weakly_canonical(base / "data/good.amp").string();
         CHECK(amps[2]->ampFilepath() == expected);
+
+        // amp-f: the same boundary applies to ampf_filepath.
+        CHECK_FALSE(amps[3]->ampfLoaded());
+        CHECK(amps[3]->ampfFilepath().empty());
+        CHECK_FALSE(amps[4]->ampfLoaded());
+        CHECK(amps[4]->ampfFilepath().empty());
+        CHECK(amps[5]->ampfLoaded());
+        const auto expected_f = std::filesystem::weakly_canonical(base / "data/good.ampf").string();
+        CHECK(amps[5]->ampfFilepath() == expected_f);
+
+        // A missing file keeps its path and error, and nothing is loaded.
+        CHECK_FALSE(amps[6]->ampfLoaded());
+        CHECK(amps[6]->ampfFilepath().find("missing.ampf") != std::string::npos);
+        CHECK_FALSE(amps[6]->ampfError().empty());
     }
     std::filesystem::remove_all(base);
     std::filesystem::remove(decoy);
+    std::filesystem::remove(decoy_f);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project AMP paths as relative",
+TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project AMP and AMP-F paths as relative",
                  "[containment][project][amp]") {
     auto base = scratchDir("containment_amp_roundtrip_test");
     const auto project_path = base / "proj.rfsim";
     writeAmp(base / "data/good.amp");
+    {
+        std::ofstream ofs(base / "data/good.ampf");
+        ofs << "# amp-f v1\nDEVICE TEST\n# COLUMNS: OIP3_dBm\n"
+               "VAR VG=2\nBEGIN\n1000 30.0\n2000 31.0\nEND\n"
+               "VAR VG=3\nBEGIN\n1000 40.0\n2000 41.0\nEND\n";
+    }
 
     nlohmann::json comps = nlohmann::json::array();
     comps.push_back(
         ampComponent(std::filesystem::weakly_canonical(base / "data/good.amp").string()));
+    comps.push_back(
+        ampfComponent(std::filesystem::weakly_canonical(base / "data/good.ampf").string()));
+    comps[1]["params"]["ampf_block"]["VG"] = 3.0; // select VG=3 before the save
     writeProject(project_path, comps);
 
     {
         RfSimulatorApp app;
         app.loadProject(project_path.string());
         auto amps = app.testComponents().byType<AmplifierEngine>();
-        REQUIRE(amps.size() == 1);
+        REQUIRE(amps.size() == 2);
         REQUIRE(amps[0]->ampLoaded());
+        REQUIRE(amps[1]->ampfLoaded());
+        REQUIRE(amps[1]->ampfSelection().count("VG") == 1);
+        REQUIRE(amps[1]->ampfBlockSelected());
+        CHECK(amps[1]->ampfSelection().at("VG") == Catch::Approx(3.0));
 
         // Re-saving writes the path relative to the project dir, so the file stays portable.
         app.saveProject(project_path.string());
@@ -750,13 +804,21 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save persists in-project AMP paths as re
         ifs >> saved;
     }
     REQUIRE(saved["components"][0]["params"]["amp_filepath"] == "data/good.amp");
+    REQUIRE(saved["components"][1]["params"]["ampf_filepath"] == "data/good.ampf");
+    REQUIRE(saved["components"][1]["params"]["ampf_block"]["VG"] == 3.0);
 
     {
         RfSimulatorApp app;
         app.loadProject(project_path.string());
         auto amps = app.testComponents().byType<AmplifierEngine>();
-        REQUIRE(amps.size() == 1);
+        REQUIRE(amps.size() == 2);
         CHECK(amps[0]->ampLoaded());
+        CHECK(amps[1]->ampfLoaded());
+        REQUIRE(amps[1]->ampfBlockSelected());
+        const auto chosen = selectAmpfBlock(*amps[1]->ampfData(), amps[1]->ampfSelection());
+        REQUIRE(chosen.block != nullptr);
+        REQUIRE(chosen.block->identity.count("VG") == 1);
+        CHECK(chosen.block->identity.at("VG") == Catch::Approx(3.0));
     }
     std::filesystem::remove_all(base);
 }
@@ -808,13 +870,15 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external S-param file and
     std::filesystem::remove(external);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external AMP file and reloads its model",
+TEST_CASE_METHOD(ImGuiFixture, "Project save copies external AMP and AMP-F files and reloads them",
                  "[containment][project][external][amp]") {
     const auto tag = test_temp_paths::processTag();
     const auto base = scratchDir("containment_external_amp_" + tag);
     const auto external = base.parent_path() / ("external_" + tag + ".amp");
+    const auto external_f = base.parent_path() / ("external_" + tag + ".ampf");
     const auto project_path = base / "project.rfsim";
     writeAmp(external);
+    writeAmpf(external_f);
 
     {
         RfSimulatorApp app;
@@ -823,11 +887,16 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external AMP file and rel
         REQUIRE(amp != nullptr);
         amp->setAmpFilepath(external.string());
         REQUIRE(amp->ampLoaded());
+        auto *ampf = dynamic_cast<AmplifierEngine *>(app.testCreateComponent("amplifier", 9903));
+        REQUIRE(ampf != nullptr);
+        ampf->setAmpfFilepath(external_f.string());
+        REQUIRE(ampf->ampfLoaded());
         REQUIRE(app.saveProject(project_path.string()));
         CHECK(app.testComponents().byType<AmplifierEngine>().front()->ampLoaded());
-        CHECK(app.lastSavedDataFiles().size() == 1);
+        CHECK(app.lastSavedDataFiles().size() == 2);
         REQUIRE(app.loadProject(project_path.string()));
         CHECK(app.testComponents().byType<AmplifierEngine>().front()->ampLoaded());
+        CHECK(app.testComponents().byType<AmplifierEngine>().back()->ampfLoaded());
     }
     const auto saved = nlohmann::json::parse(readFile(project_path));
     const auto relative = saved["components"][0]["params"].value("amp_filepath", "");
@@ -835,8 +904,14 @@ TEST_CASE_METHOD(ImGuiFixture, "Project save copies an external AMP file and rel
     const auto copied = base / relative;
     CHECK(std::filesystem::exists(copied));
     CHECK(readFile(copied) == readFile(external));
+    const auto relative_f = saved["components"][1]["params"].value("ampf_filepath", "");
+    REQUIRE_FALSE(relative_f.empty());
+    const auto copied_f = base / relative_f;
+    CHECK(std::filesystem::exists(copied_f));
+    CHECK(readFile(copied_f) == readFile(external_f));
     std::filesystem::remove_all(base);
     std::filesystem::remove(external);
+    std::filesystem::remove(external_f);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Failed external data copy preserves the previous project file",

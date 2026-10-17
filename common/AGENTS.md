@@ -14,7 +14,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 - `common/view_manager.h` — `ViewManager` (registry of `SignalNode*`)
 - `common/include/group.h` — `Group` and `GroupBoundaryPin` (subcircuit grouping data)
 - `common/iq_stream.h` — `IQStream` (used by the digital chain)
-- `common/nonlinear_model.h` — Amplifier nonlinear model helpers: compression, harmonics, IMD, and the optional per-frequency OIP3 function on `process()`
+- `common/nonlinear_model.h` — Amplifier nonlinear model helpers: compression, harmonics, IMD, and the optional per-frequency OIP3 and OIP2 functions on `process()`
 - `common/session_state.h` — Windows `app.ini` persistence
 - `common/CMakeLists.txt` — `simulator::common` INTERFACE library exposing all of the above
 
@@ -24,7 +24,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 - Engines (in other modules) include `signal_node.h` and `component_interface.h`. Widgets additionally include nothing from `common/` directly; they receive `SignalNode&` references via `IComponentEngine`.
 - `Group` is consumed by `NodeGraphEngine` and `NodeGraphWidget`. It is *not* consumed by any DSP engine — groups are a visual layer.
 - `SessionState` defaults to `<exe_dir>/app.ini` on Windows, accepts an explicit `std::filesystem::path`, and uses wide Win32 path/profile APIs. Narrow section/key/value/default strings preserve the legacy active-Windows-ACP byte semantics (`CP_ACP`) when converted to and from UTF-16; they are not UTF-8. Profile reads grow dynamically from 256 to a 32,768-wide-character cap. Persistence remains a no-op off Windows, where `load()` returns the caller's default. Existing ANSI `app.ini` files are not migrated.
-- `NonlinearModel::process()` uses the scalar OIP3 for every product unless it receives an `Oip3Fn`. With one, each harmonic uses the intercept at the frequency of the tone it comes from, and each IM3 product uses the intercept at the fundamental it squares (`2f1 ± f2` uses `f1`, `2f2 ± f1` uses `f2`). Without the function, the scalar path is unchanged.
+- `NonlinearModel::process()` uses the scalar intercepts for every product unless it receives an `Oip3Fn` or an `Oip2Fn`. With `Oip3Fn`, each harmonic uses the OIP3 at the frequency of the tone it comes from, and each IM3 product uses the OIP3 at the fundamental it squares (`2f1 ± f2` uses `f1`, `2f2 ± f1` uses `f2`). With `Oip2Fn`, each harmonic uses the OIP2 at its own tone. Each IM2 product uses the lower of its two tones' OIP2 (the larger second-order coefficient): the worst case, a design choice rather than a derivation from the model. A non-finite value from either function falls back to the scalar. Without the functions, the scalar path is unchanged.
 
 ## Work Guidance
 

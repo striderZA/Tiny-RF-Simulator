@@ -11,7 +11,7 @@ class IComponentEngine;
 // resolve and containment-check them, component authoring protects their files, and
 // agent and inspector writes never set them.
 inline constexpr const char *kPathParameterKeys[] = {"sparam_filepath", "sparam_path",
-                                                     "amp_filepath"};
+                                                     "amp_filepath", "ampf_filepath"};
 
 enum class ParamWriteStatus {
     Applied,

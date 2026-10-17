@@ -3,6 +3,7 @@
 ### Added
 
 - **Agent project save and load (#199)** — the MCP bridge gains `project_save`, which writes the open project to an absolute `.rfsim` path or its current file (replacing a different existing file needs `overwrite`), and `project_load`, which replaces the open circuit with a `.rfsim` file at the current epoch. `project_load` is refused while the project has unsaved changes.
+- **amp-f intercept files (#213)** — an Amplifier can load an amp-f file (`.ampf`) whose intercept columns (OIP2, OIP3, IIP2, IIP3, OP1dB, IP1dB) vary with frequency, and select one block by its VAR and COND values. The file reference and block selection are saved with the project. Gain, NF, and S-parameter columns are read but not applied yet.
 
 ### Fixed
 
