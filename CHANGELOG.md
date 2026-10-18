@@ -1,23 +1,27 @@
-## [Unreleased]
+## [0.29.0] - 2026-10-18
 
 ### Added
 
 - **Agent project save and load (#199)** — the MCP bridge gains `project_save`, which writes the open project to an absolute `.rfsim` path or its current file (replacing a different existing file needs `overwrite`), and `project_load`, which replaces the open circuit with a `.rfsim` file at the current epoch. `project_load` is refused while the project has unsaved changes.
 - **amp-f intercept files (#213)** — an Amplifier can load an amp-f file (`.ampf`) whose intercept columns (OIP2, OIP3, IIP2, IIP3, OP1dB, IP1dB) vary with frequency, and select one block by its VAR and COND values. The file reference and block selection are saved with the project. Gain, NF, and S-parameter columns are read but not applied yet.
+- **MathWorks AMP intercept files (#220)** — an Amplifier can load a MathWorks AMP file as its intercept source. Its IIP3 and OIP3 sections set the third-order intercept as a scalar or per frequency, and an IIP3-only file converts to OIP3 with the small-signal gain at each frequency. A file with both sections uses its OIP3 section. The file reference is saved with the project. A failed load keeps the path and error, and the scalar OIP3 applies. The inspector adds Browse and Clear controls, and the scalar OIP3 field is disabled while AMP intercepts apply.
+- **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
+
+### Changed
+
+- **External RF data is copied into the project on save (#227)** — saving copies each external S-parameter and AMP file that a project references into `rf_data/` beside the `.rfsim`, and points the reference at the copy. A save fails and keeps the previous `.rfsim` if a copy fails. Each source must be a regular, non-symlink file of at most 256 MiB, and one save copies at most 256 files and 512 MiB.
+- **Agent requests are bounded (#226)** — the MCP bridge queues and the Agent Server inbox each hold at most 64 entries and 8 MiB of payload. A call over either bound gets an immediate `OVERLOADED` error that echoes its request id.
+- **Circuit rewiring uses lookup tables (#231)** — rewiring builds its output-pin, input-link, and span lookups once per pass instead of scanning every component and link for each input. Bindings are unchanged.
 
 ### Fixed
 
 - **Probe add and remove mark the project unsaved (#204)** — adding or removing a probe now counts as an unsaved change, so New, Open, and Exit ask before discarding it.
-
-## [0.28.3] - 2026-10-13
-
-### Added
-
-- **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
-
-### Fixed
-
 - **Agent Server test-flow runs yield between UI frames (#208)** — a test-flow run started through the Agent Server advances in bounded slices and restores the circuit before each yield, instead of blocking the UI for the whole run. A resumed run stops with an error if the project is replaced or the circuit changes during the run.
+- **Save refuses a linked `rf_data` folder (#222)** — an `rf_data` folder that is a symbolic link, junction, or other reparse point is refused, so copies no longer land in another folder. The save fails and keeps the previous `.rfsim`.
+- **Project save no longer deletes an unrelated temp file (#224, #252)** — a save creates its temp file exclusively and refuses a symbolic link, folder, or other non-regular entry at that path. A failed save removes only the temp object it created.
+- **Spectrum RBW and VBW filters handle extreme settings (#243)** — RBW and VBW values large relative to the bin width no longer hit an out-of-range integer conversion, and a non-finite or non-positive RBW, VBW, or bin width leaves the trace unfiltered.
+- **Test flow rejects leading-zero condition indices (#130)** — an index such as `tones[01]` is refused with `array index must not have leading zeros`, so it can no longer alias a slot and bypass duplicate-condition detection.
+- **Library filtering has no undefined behavior on non-ASCII text (#130)** — each character is passed to `std::tolower` as `unsigned char`.
 
 ### Testing
 
