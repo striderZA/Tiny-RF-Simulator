@@ -153,6 +153,7 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     };
 
     m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
+    m_library_browser->onRefresh = [this]() { refreshExtensions(); };
     m_library_browser->onEditComponent = [this](const ComponentDefinition &def) {
         openEditComponentForm(def);
     };

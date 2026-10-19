@@ -6,6 +6,7 @@
 - **amp-f intercept files (#213)** — an Amplifier can load an amp-f file (`.ampf`) whose intercept columns (OIP2, OIP3, IIP2, IIP3, OP1dB, IP1dB) vary with frequency, and select one block by its VAR and COND values. The file reference and block selection are saved with the project. Gain, NF, and S-parameter columns are read but not applied yet.
 - **MathWorks AMP intercept files (#220)** — an Amplifier can load a MathWorks AMP file as its intercept source. Its IIP3 and OIP3 sections set the third-order intercept as a scalar or per frequency, and an IIP3-only file converts to OIP3 with the small-signal gain at each frequency. A file with both sections uses its OIP3 section. The file reference is saved with the project. A failed load keeps the path and error, and the scalar OIP3 applies. The inspector adds Browse and Clear controls, and the scalar OIP3 field is disabled while AMP intercepts apply.
 - **MCP component positions and moves (#207)** — `circuit_get` reports each component's editor-space position. `circuit_edit` moves existing components to absolute positions. Positions include the current canvas pan. A no-op move does not change the revision or add a checkpoint.
+- **Live component-library refresh (#256)** — click **Refresh** in the Component Library to reload definitions so added or edited parts are available without restarting.
 
 ### Changed
 
@@ -26,6 +27,7 @@
 ### Testing
 
 - Add regression coverage for sliced Agent Server test-flow runs and a frame-based responsiveness benchmark (#208).
+- Add a UI regression test that edits a library definition on disk and refreshes it through the open Component Library.
 
 ## [0.28.2] - 2026-10-12
 

@@ -32,6 +32,11 @@ void LibraryBrowserWidget::draw(const char *title, bool *p_open) {
         if (onNewComponent)
             onNewComponent();
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Refresh")) {
+        if (onRefresh)
+            onRefresh();
+    }
     ImGui::Separator();
 
     ImGui::InputTextWithHint("##filter", "Filter by part number, manufacturer, or description",

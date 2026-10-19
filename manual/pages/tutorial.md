@@ -10,7 +10,9 @@ This short walkthrough covers adding a component, connecting it, configuring it,
 
 ## Add a Component
 
-Click a component in the highlighted Component Library panel to insert it into the canvas. You can also right-click empty canvas in the Node Editor to pick from a context menu.
+Click a component in the highlighted Component Library panel to insert it into the canvas. To pick
+up library changes made while the simulator is open, click **Refresh** at the top of the panel. You
+can also right-click empty canvas in the Node Editor to pick from a context menu.
 
 ## Connect Pins
 
