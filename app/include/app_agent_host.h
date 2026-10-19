@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // -----------------------------------------------------------------------
@@ -62,6 +63,7 @@ class AppAgentHost final : public IAgentHost {
     bool appModalOpen() const override;
     std::optional<std::string> projectName() const override;
     std::optional<std::string> projectPath() const override;
+    std::optional<std::string> componentLibraryRoot(std::string_view scope) const override;
     bool saveProjectFile(const std::string &path) override;
     std::vector<std::string> savedProjectDataFiles() const override;
     AgentProjectLoadResult loadProjectFile(const std::string &path) override;

@@ -114,6 +114,13 @@ class FakeAgentHost final : public IAgentHost {
     }
     bool appModalOpen() const override { return modal_open; }
     std::optional<std::string> projectName() const override { return name; }
+    std::optional<std::string> componentLibraryRoot(std::string_view scope) const override {
+        if (scope == "project")
+            return project_library_root;
+        if (scope == "global")
+            return global_library_root;
+        return std::nullopt;
+    }
     std::optional<std::string> projectPath() const override { return open_path; }
     bool saveProjectFile(const std::string &path) override {
         saved_paths.push_back(path);
@@ -134,6 +141,8 @@ class FakeAgentHost final : public IAgentHost {
     }
 
     bool modal_open = false;
+    std::string project_library_root;
+    std::string global_library_root;
     int activity_attempts = 0;
     bool throw_on_activity = false;
     std::optional<std::string> name;
@@ -164,7 +173,17 @@ struct ApiFixture {
     AgentApi api{
         {commands, runtime, library, network_analyzer, chain_host, spectrum_analyzer, host}};
 
-    ApiFixture() { library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library"); }
+    ApiFixture() {
+        static unsigned long long root_sequence = 0;
+        const auto root =
+            std::filesystem::temp_directory_path() /
+            ("agent_api_library_" + test_temp_paths::processTag() + "_" +
+             std::to_string(root_sequence++));
+        std::filesystem::create_directories(root);
+        host.project_library_root = (root / "project" / "rf-sim-libraries").string();
+        host.global_library_root = (root / "global" / "libraries").string();
+        library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    }
 
     template <typename Engine> Engine *add(std::string_view type) {
         const auto *descriptor = ComponentTypeRegistry::instance().find(type);

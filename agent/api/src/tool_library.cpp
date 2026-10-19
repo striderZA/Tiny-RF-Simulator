@@ -49,6 +49,38 @@ std::string lowercase(std::string_view value) {
     return result;
 }
 
+std::string libraryFieldKind(FieldKind kind) {
+    switch (kind) {
+    case FieldKind::Number:
+        return "number";
+    case FieldKind::String:
+        return "string";
+    case FieldKind::Enum:
+        return "enum";
+    case FieldKind::FilePath:
+        return "file_path";
+    case FieldKind::Bool:
+        return "boolean";
+    }
+    return "string";
+}
+
+Json libraryFields(const ComponentTypeDescriptor &descriptor) {
+    Json result = Json::array();
+    for (const auto &field : descriptor.fields) {
+        const bool numeric = field.kind == FieldKind::Number;
+        result.push_back({{"key", field.key},
+                          {"label", field.label},
+                          {"kind", libraryFieldKind(field.kind)},
+                          {"required", field.required},
+                          {"minimum", numeric ? agentNumber(field.min) : Json(nullptr)},
+                          {"maximum", numeric ? agentNumber(field.max) : Json(nullptr)},
+                          {"enum_values", field.enum_values},
+                          {"default_value", field.default_value}});
+    }
+    return result;
+}
+
 } // namespace
 
 AgentToolResult executeComponentTypesTool(const AgentApi &api, const AgentCall &call) {
@@ -71,11 +103,13 @@ AgentToolResult executeComponentTypesTool(const AgentApi &api, const AgentCall &
         Json type{{"type", descriptor->type},
                   {"display_name", descriptor->display_name},
                   {"label_prefix", descriptor->label_prefix},
+                  {"authorable", descriptor->authorable},
                   {"inputs", ports(api.m_type_graph, *engine, true)},
                   {"outputs", ports(api.m_type_graph, *engine, false)}};
         if (has_type) {
             type["default_params"] = engine->serialize();
             type["param_info"] = agent_api_detail::parameterInfo(*descriptor);
+            type["library_fields"] = libraryFields(*descriptor);
         }
         types.push_back(std::move(type));
     }

@@ -51,6 +51,15 @@ struct ComponentDefinition {
     std::vector<ValidationIssue> issues;
 };
 
+enum class ComponentLibraryCreateStatus { Created, InvalidDefinition, AlreadyExists, IoError };
+
+struct ComponentLibraryCreateResult {
+    ComponentLibraryCreateStatus status = ComponentLibraryCreateStatus::IoError;
+    std::filesystem::path path;
+    std::vector<ValidationIssue> issues;
+    std::string message;
+};
+
 // Containment-checked absolute path of the first data_files entry of `data_type`, resolved
 // against the directory of definition.source_path. Returns nullopt when source_path is empty,
 // no entry matches, or the entry escapes that directory.
@@ -71,6 +80,9 @@ class ComponentLibrary {
     std::vector<ValidationIssue> validate(const std::string &type,
                                           const nlohmann::json &parameters) const;
     void upsert(const ComponentDefinition &def);
+    // Validates and atomically creates a new JSON-only user-library entry, then indexes it live.
+    ComponentLibraryCreateResult createUserEntry(ComponentDefinition definition,
+                                                 const std::filesystem::path &library_root);
 
   private:
     std::vector<ComponentDefinition> m_definitions;

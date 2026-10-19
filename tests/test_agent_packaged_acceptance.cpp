@@ -299,7 +299,7 @@ Json request(int id, std::string method, Json params = Json::object()) {
 
 } // namespace
 
-TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after restart",
+TEST_CASE("packaged rf-sim-mcp creates and places a library entry, then reconnects after restart",
           "[agent][mcp][packaged]") {
     ScratchDirectory scratch;
     ApiFixture fixture;
@@ -331,8 +331,7 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
     std::vector<std::string> names;
     for (const auto &tool : listed->at("result").at("tools"))
         names.push_back(tool.at("name").get<std::string>());
-    CHECK(std::find(names.begin(), names.end(), "circuit_edit") != names.end());
-    CHECK(std::find(names.begin(), names.end(), "circuit_get") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "library_create") != names.end());
 
     const auto callTool = [&](int id, std::string name, Json arguments) -> std::optional<Json> {
         if (!bridge.send(request(id, "tools/call",
@@ -340,36 +339,56 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
             return std::nullopt;
         return bridge.receive(id, pump);
     };
+    auto created = callTool(
+        3, "library_create",
+        {{"type", "attenuator"},
+         {"part_number", "MCP-PACKAGED-ATT"},
+         {"manufacturer", "MCP Acceptance"},
+         {"parameters", {{"attenuation_dB", 7.5}}}});
+    REQUIRE(created.has_value());
+    REQUIRE(created->contains("result"));
+    CHECK(created->at("result").at("isError") == false);
+    CHECK(created->at("result").at("structuredContent").at("part_number") == "MCP-PACKAGED-ATT");
+
+    auto found = callTool(4, "library_search", {{"query", "MCP-PACKAGED-ATT"}});
+    REQUIRE(found.has_value());
+    REQUIRE(found->contains("result"));
+    REQUIRE(found->at("result").at("structuredContent").at("parts").size() == 1);
+    CHECK(found->at("result").at("structuredContent").at("parts")[0].at("type") == "attenuator");
+
     auto edited = callTool(
-        3, "circuit_edit",
+        5, "circuit_edit",
         {{"epoch", fixture.api.epoch()},
-         {"ops", Json::array({{{"op", "add"}, {"ref", "from_mcp"}, {"type", "generator"}}})}});
+         {"ops", Json::array({{{"op", "add"},
+                               {"ref", "from_mcp"},
+                               {"library_part", {{"part_number", "MCP-PACKAGED-ATT"},
+                                                 {"type", "attenuator"}}}}})}});
     REQUIRE(edited.has_value());
     REQUIRE(edited->contains("result"));
     REQUIRE(edited->at("result").at("structuredContent").at("refs").contains("from_mcp"));
-    CHECK(edited->at("id") == 3);
+    CHECK(edited->at("id") == 5);
     const int component_id =
         edited->at("result").at("structuredContent").at("refs").at("from_mcp").get<int>();
 
-    auto read_back = callTool(4, "circuit_get", Json::object());
+    auto read_back = callTool(6, "circuit_get", Json::object());
     REQUIRE(read_back.has_value());
     REQUIRE(read_back->contains("result"));
-    CHECK(read_back->at("id") == 4);
+    CHECK(read_back->at("id") == 6);
     const auto &components = read_back->at("result").at("structuredContent").at("components");
     REQUIRE(components.size() == 1);
     CHECK(components[0].at("id") == component_id);
-    CHECK(components[0].at("type") == "generator");
+    CHECK(components[0].at("type") == "attenuator");
 
     server.stop();
     AgentServer restarted(fixture.api, fixture.host, config);
     REQUIRE(restarted.start(&error));
     active_server = &restarted;
-    // GuiLink does not resend a call after a failed read; blindly retrying circuit_edit could
-    // duplicate a non-idempotent edit. The next call verifies reconnect either way.
-    const auto first_after_restart = callTool(5, "circuit_get", Json::object());
+    // GuiLink does not resend a call after a failed read; blindly retrying a non-idempotent write
+    // could duplicate it. The next call verifies reconnect either way.
+    const auto first_after_restart = callTool(7, "circuit_get", Json::object());
     REQUIRE(first_after_restart.has_value());
     REQUIRE(first_after_restart->contains("result"));
-    CHECK(first_after_restart->at("id") == 5);
+    CHECK(first_after_restart->at("id") == 7);
     const auto &first_result = first_after_restart->at("result");
     if (first_result.at("isError") == true) {
         CHECK(first_result.at("structuredContent").at("error").at("code") ==
@@ -377,15 +396,15 @@ TEST_CASE("packaged rf-sim-mcp reaches the GUI agent server and reconnects after
     } else {
         CHECK(first_result.at("isError") == false);
     }
-    auto after_restart = callTool(6, "circuit_get", Json::object());
+    auto after_restart = callTool(8, "circuit_get", Json::object());
     REQUIRE(after_restart.has_value());
     REQUIRE(after_restart->contains("result"));
-    CHECK(after_restart->at("id") == 6);
+    CHECK(after_restart->at("id") == 8);
     const auto &restarted_components =
         after_restart->at("result").at("structuredContent").at("components");
     REQUIRE(restarted_components.size() == 1);
     CHECK(restarted_components[0].at("id") == component_id);
-    CHECK(restarted_components[0].at("type") == "generator");
+    CHECK(restarted_components[0].at("type") == "attenuator");
 
     bridge.stop();
     restarted.stop();

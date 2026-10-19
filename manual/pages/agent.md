@@ -3,12 +3,46 @@
 The local `rf-sim-mcp` bridge connects an MCP client to the project that is open in Tiny RF Simulator.
 For installation details, see [Install](install.md). For client configuration examples, see the [README](https://github.com/striderZA/Tiny-RF-Simulator/blob/master/README.md).
 
-The bridge can read the circuit, edit its components, run measurements, and save or load `.rfsim` project files. It cannot open file dialogs. Both project tools take absolute paths to `.rfsim` files.
+The bridge can read and edit the circuit, run measurements, save or load `.rfsim` project files, and create reusable component-library entries. Library authoring is separate from circuit editing and does not place an instance. The bridge cannot open file dialogs. Both project tools take absolute paths to `.rfsim` files.
 
 ## Connect an agent
 
 Keep Tiny RF Simulator open. Select **View > Agent**, then enable **Agent Server**.
 The MCP client can connect while **Agent Server** is on.
+
+## Create a reusable library entry
+
+Call `component_types` with a `type` to check `authorable` and read `library_fields`. Use non-file fields only when `authorable` is true; runtime `param_info` may use different serialized keys.
+
+```json
+{
+  "type": "attenuator",
+  "part_number": "ATT-10DB",
+  "manufacturer": "Example",
+  "parameters": { "attenuation_dB": 10.0 },
+  "scope": "project"
+}
+```
+
+`scope` is `project` by default or `global`. Project entries persist under `./rf-sim-libraries`, relative to the simulator process's current working directory. Global entries persist under `$HOME/.rf-sim/libraries` on POSIX or `%USERPROFILE%/.rf-sim/libraries` on Windows. Successful entries are available immediately to `library_search` and can be placed with `circuit_edit`.
+
+Creation writes only a validated JSON definition. Invalid definitions are rejected without publishing an entry; existing type/part-number pairs and destination files are never overwritten. The tool does not accept arbitrary paths, file references, `data_files`, asset uploads, or `.rflib` imports. It does not change circuit epoch, revision, or dirty state, and it does not create an Agent checkpoint; checkpoint reverts cannot undo library creation.
+
+To place the reusable part, use `circuit_edit` with an `add` operation and its `library_part`. Send the latest `epoch` from `circuit_get`:
+
+```json
+{
+  "epoch": 12,
+  "ops": [
+    {
+      "op": "add",
+      "library_part": { "part_number": "ATT-10DB", "type": "attenuator" }
+    }
+  ]
+}
+```
+
+This adds an instance to the open circuit; `library_create` itself does not. Moving an existing instance remains the separate `move` operation below.
 
 ## Move a component
 

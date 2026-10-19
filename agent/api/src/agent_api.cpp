@@ -214,6 +214,9 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "library_search") {
             result = executeLibrarySearchTool(*this, call);
             summary = "Search component library";
+        } else if (call.tool == "library_create") {
+            result = executeLibraryCreateTool(*this, call);
+            summary = "Create component-library entry";
         } else if (call.tool == "circuit_get") {
             result = executeCircuitReadTool(*this, call);
             summary = "Read circuit";

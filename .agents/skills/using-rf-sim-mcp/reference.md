@@ -81,9 +81,31 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 - A changed setting is recorded as a checkpoint the user can revert in the Agent panel. Repeating the same call changes nothing.
 - Result: `summary` (`gain_dB` and `nf_dB`, each with `min`, `max`, `mean`, `at_start`, `at_center`, `at_stop`) and optional `arrays`.
 
+## Library authoring
+
+Use `component_types {type}` first. Its `library_fields` list registered keys and constraints; use them only when `authorable` is true and omit fields whose kind is `file_path`. `param_info` describes serialized engine state and can use different keys (`attenuation_dB` in a library definition versus `atten_dB` at runtime).
+
+`library_create {type, part_number, parameters, manufacturer?, description?, notes?, scope?}` creates a new reusable JSON definition. `type` must be authorable. `parameters` may contain only registered non-file library fields and must pass required, type, enum, and range validation. `data_files` are refused.
+
+```json
+{
+  "type": "attenuator",
+  "part_number": "ATT-10DB",
+  "manufacturer": "Example",
+  "parameters": { "attenuation_dB": 10.0 },
+  "scope": "project"
+}
+```
+
+- `scope` is `project` by default or `global`. Project writes under `./rf-sim-libraries` relative to the simulator process's current working directory, the same root the app scans. Global writes under `$HOME/.rf-sim/libraries` (POSIX) or `%USERPROFILE%/.rf-sim/libraries` (Windows).
+- Success returns `{epoch, scope, library_path, part_number, type, manufacturer}`. `library_path` is relative to the selected root. The completed JSON is indexed immediately, so `library_search` and `circuit_edit` placement can use it in the same session; future app scans load it from disk.
+- Invalid definitions return `INVALID_ARGUMENT` with `details.path` and publish no definition. A duplicate type/part number or destination collision is refused; existing entries are never overwritten.
+- Creation does not add or move a circuit instance, change circuit epoch/revision/dirty state, or create a checkpoint. Agent-panel checkpoint reverts cannot undo library creation.
+- This tool cannot accept arbitrary paths, upload or copy assets, edit existing entries, or import/export `.rflib` files.
+
 ## Other tools
 
-- `component_types {type?}`: registered types and their ports. With `type`, also `default_params` and `param_info`.
+- `component_types {type?}`: registered types and their ports. With `type`, also `authorable`, `default_params`, runtime `param_info`, and `library_fields`; `library_create` accepts only non-file fields on authorable types.
 - `library_search {query?, type?, limit?}`: case-insensitive substring match on part number, manufacturer, and description. `limit` is 1 to 50 (default 20); `total` counts every match.
 - `data_file_read`: summarizes an S-parameter file; it takes no paths and never writes. Use exactly one route:
   - `{component, epoch}`: the file a component references. `epoch` is required and must match the current epoch, or the call returns `STALE_EPOCH`.
@@ -94,6 +116,6 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 
 ## Limits
 
-- You cannot open file dialogs or revert projects. Project files are read and written only by `project_save` and `project_load`; `data_file_read` reads only files that a component or library part already references.
+- You cannot open file dialogs or revert projects. `.rfsim` project files are read and written only by `project_save` and `project_load`; `library_create` writes only a validated JSON definition under an existing library root, and `data_file_read` reads only files that a component or library part already references.
 - RF Simulator admits one agent client at a time.
 - Each reply is capped at 1 MiB. An oversized result becomes `INTERNAL`; request fewer points.

@@ -159,6 +159,29 @@ Json libraryPartInputSchema() {
                                     {"type", stringSchema("Optional component type filter.")}}),
                         {"part_number"});
 }
+Json libraryCreateInputSchema() {
+    Json parameters = paramsSchema();
+    parameters["description"] =
+        "Component-library authoring fields from component_types {type}. File-path fields are "
+        "not supported.";
+    return inputSchema(
+        properties({{"type", stringSchema("Authorable component type key.")},
+                    {"part_number", stringSchema("New reusable library part number.")},
+                    {"manufacturer", stringSchema("Optional manufacturer name.")},
+                    {"description", stringSchema("Optional component description.")},
+                    {"notes", stringSchema("Optional component notes.")},
+                    {"parameters", std::move(parameters)},
+                    {"scope",
+                     withDefault(enumSchema({"project", "global"}),
+                                 "project")}}),
+        {"type", "part_number", "parameters"},
+        Json{{"type", "attenuator"},
+             {"part_number", "ATT-10"},
+             {"manufacturer", "Example"},
+             {"parameters", {{"attenuation_dB", 10.0}}},
+             {"scope", "project"}});
+}
+
 
 Json addOperationSchema(bool use_library_part) {
     Json fields =
@@ -278,16 +301,33 @@ Json parameterInfoSchema() {
                         {"path", "kind", "unit", "help", "read_only"});
 }
 
+Json libraryFieldSchema() {
+    return objectSchema(properties({{"key", stringSchema()},
+                                    {"label", stringSchema()},
+                                    {"kind", enumSchema({"number", "string", "enum", "file_path",
+                                                         "boolean"})},
+                                    {"required", booleanSchema()},
+                                    {"minimum", nullableSchema(numberSchema())},
+                                    {"maximum", nullableSchema(numberSchema())},
+                                    {"enum_values", arraySchema(stringSchema())},
+                                    {"default_value", Json::object()}}),
+                        {"key", "label", "kind", "required", "minimum", "maximum", "enum_values",
+                         "default_value"});
+}
+
 Json typeDescriptorSchema() {
     return objectSchema(properties({{"type", stringSchema()},
                                     {"display_name", stringSchema()},
                                     {"label_prefix", stringSchema()},
+                                    {"authorable", booleanSchema()},
                                     {"inputs", arraySchema(portLabelSchema())},
                                     {"outputs", arraySchema(portLabelSchema())},
                                     {"default_params", paramsSchema()},
-                                    {"param_info", arraySchema(parameterInfoSchema())}}),
-                        {"type", "display_name", "label_prefix", "inputs", "outputs"});
+                                    {"param_info", arraySchema(parameterInfoSchema())},
+                                    {"library_fields", arraySchema(libraryFieldSchema())}}),
+                        {"type", "display_name", "label_prefix", "authorable", "inputs", "outputs"});
 }
+
 
 Json circuitComponentSchema(bool include_params) {
     Json fields = properties({{"id", integerSchema("Component id.", 0)},
@@ -497,6 +537,17 @@ Json projectFileSuccessSchema(bool include_copied_data_files = false) {
                         {"epoch", "path", "name"});
 }
 
+Json libraryCreateSuccessSchema() {
+    return objectSchema(
+        properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
+                    {"scope", enumSchema({"project", "global"})},
+                    {"library_path", stringSchema("Path relative to the selected library root.")},
+                    {"part_number", stringSchema()},
+                    {"type", stringSchema()},
+                    {"manufacturer", stringSchema()}}),
+        {"epoch", "scope", "library_path", "part_number", "type", "manufacturer"});
+}
+
 Json outputSchema(Json success) {
     return Json{{"type", "object"},
                 {"anyOf", Json::array({std::move(success), agentErrorSchema()})}};
@@ -561,8 +612,8 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
     static const std::vector<AgentToolDefinition> catalog{
         tool(
             "component_types", "Component Types",
-            "List registered component types and their ports; for a selected type, include its "
-            "default parameters and parameter metadata.",
+            "List registered component types and their ports. With a selected type, include "
+            "runtime parameter metadata, authorability, and library authoring fields.",
             inputSchema(properties({{"type", stringSchema("Optional component type to inspect.")}}),
                         {}, Json::object()),
             objectSchema(properties({{"epoch", integerSchema("Current circuit epoch.", 0)},
@@ -593,6 +644,15 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                             {"total", integerSchema("Total matching loaded definitions.", 0)}}),
                 {"epoch", "parts", "total"}),
             readOnlyAnnotations()),
+        tool(
+            "library_create", "Create Library Entry",
+            "Create a reusable JSON component-library definition in the existing Project or Global "
+            "user library. The Project root is the default. Uses authoring fields from "
+            "component_types; rejects invalid definitions and never overwrites an entry. This "
+            "does not add or move a circuit component. File-path parameters, asset uploads, "
+            "arbitrary paths, and .rflib import/export are not supported.",
+            libraryCreateInputSchema(),
+            libraryCreateSuccessSchema(), destructiveAnnotations()),
         tool(
             "circuit_get", "Get Circuit",
             "Read the current project circuit, component ids, topology, and editor-space positions "
@@ -824,7 +884,9 @@ const std::string &agentServerInstructions() {
         "STALE_EPOCH, call circuit_get again. Positions include the current canvas pan; after "
         "panning, call circuit_get again before moving a component. Use add.position for a new "
         "component; move only targets components that existed before the current edit call. "
-        "Parameter units are encoded in key suffixes (_Hz, _dB, _dBm, _dBm_per_Hz). Save and load "
+        "Use component_types {type} to read authorable and library_fields before library_create. "
+        "Library creation writes validated JSON to the existing Project or Global user-library root "
+        "(Project default), never changes the circuit, and accepts no file paths. Save and load "
         "projects with project_save and project_load; loads need no unsaved changes. Other file "
         "access is unavailable.";
     return instructions;

@@ -23,6 +23,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -177,6 +178,28 @@ struct AppFixture : ImGuiFixture {
 };
 
 } // namespace
+TEST_CASE("AppAgentHost exposes only the existing component-library roots", "[agent_app]") {
+    AgentFixture fixture;
+
+    const auto project_root = fixture.host.componentLibraryRoot("project");
+    REQUIRE(project_root.has_value());
+    CHECK(fs::path(*project_root) == fs::current_path() / "rf-sim-libraries");
+
+#ifdef _WIN32
+    const char *home = std::getenv("USERPROFILE");
+#else
+    const char *home = std::getenv("HOME");
+#endif
+    const auto global_root = fixture.host.componentLibraryRoot("global");
+    if (home && *home) {
+        REQUIRE(global_root.has_value());
+        CHECK(fs::path(*global_root) == fs::path(home) / ".rf-sim" / "libraries");
+    } else {
+        CHECK_FALSE(global_root.has_value());
+    }
+    CHECK_FALSE(fixture.host.componentLibraryRoot("external").has_value());
+}
+
 
 // ======================================================================
 // Test: Checkpoint lifetime and removal

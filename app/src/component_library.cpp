@@ -2,13 +2,27 @@
 #include "component_params.h"
 #include "component_type_registry.h"
 #include "logging_core.h"
+#include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <chrono>
 #include <exception>
 #include <filesystem>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <system_error>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #include "amplifier_engine.h"
 #include "circuit_runtime.h"
@@ -124,6 +138,107 @@ void appendFilterCutoffIssues(const nlohmann::json &parameters,
         parameters["fc_high_Hz"].is_number() &&
         parameters["fc_low_Hz"].get<double>() >= parameters["fc_high_Hz"].get<double>())
         issues.push_back({"fc_high_Hz", "'High Cutoff' must be greater than 'Low Cutoff'"});
+}
+
+std::string normalizedPartNumber(std::string_view part_number) {
+    std::string normalized;
+    normalized.reserve(part_number.size());
+    for (const unsigned char character : part_number)
+        normalized.push_back(static_cast<char>(std::tolower(character)));
+    return normalized;
+}
+
+std::string partNumberFileSegment(std::string_view normalized_part_number) {
+    constexpr char kHex[] = "0123456789abcdef";
+    std::string segment = "part-";
+    if (normalized_part_number.size() <= (segment.max_size() - segment.size()) / 3)
+        segment.reserve(segment.size() + normalized_part_number.size() * 3);
+    for (const unsigned char character : normalized_part_number) {
+        if ((character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') ||
+            character == '-' || character == '_') {
+            segment.push_back(static_cast<char>(character));
+        } else {
+            segment.push_back('~');
+            segment.push_back(kHex[character >> 4]);
+            segment.push_back(kHex[character & 0x0f]);
+        }
+    }
+    return segment;
+}
+
+bool isUnsafeLibraryDirectory(const fs::path &path, const fs::file_status &status) {
+    if (fs::is_symlink(status))
+        return true;
+
+    // Check every prefix: a final-component-only check follows POSIX symlink ancestors, while
+    // Windows junctions can appear as ordinary directories.
+    const auto isUnsafePrefix = [](const fs::path &prefix) {
+#ifdef _WIN32
+        const DWORD attributes = GetFileAttributesW(prefix.c_str());
+        return attributes == INVALID_FILE_ATTRIBUTES ||
+               (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
+               (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+#else
+        std::error_code ec;
+        const fs::file_status prefix_status = fs::symlink_status(prefix, ec);
+        return ec || fs::is_symlink(prefix_status) || !fs::is_directory(prefix_status);
+#endif
+    };
+
+    fs::path prefix = path.root_path();
+    if (prefix.empty() || isUnsafePrefix(prefix))
+        return true;
+    for (const auto &component : path.relative_path()) {
+        prefix /= component;
+        if (prefix == path) {
+#ifdef _WIN32
+            if (isUnsafePrefix(prefix))
+                return true;
+#endif
+            continue;
+        }
+        if (isUnsafePrefix(prefix))
+            return true;
+    }
+    return false;
+}
+
+bool ensureLibraryDirectory(const fs::path &path, std::string &error) {
+    if (path.empty()) {
+        error = "component library directory is empty";
+        return false;
+    }
+
+    std::error_code ec;
+    fs::file_status status = fs::symlink_status(path, ec);
+    if (ec == std::errc::no_such_file_or_directory ||
+        (!ec && status.type() == fs::file_type::not_found)) {
+        ec.clear();
+        const fs::path parent = path.parent_path();
+        const fs::file_status parent_status = fs::symlink_status(parent, ec);
+        if (ec || isUnsafeLibraryDirectory(parent, parent_status) ||
+            !fs::is_directory(parent_status)) {
+            error = "component library parent is not a real directory: " + parent.string();
+            return false;
+        }
+        ec.clear();
+        fs::create_directory(path, ec);
+        if (ec && ec != std::errc::file_exists) {
+            error = "could not create component library directory: " + ec.message();
+            return false;
+        }
+        ec.clear();
+        status = fs::symlink_status(path, ec);
+    }
+    if (ec) {
+        error = "could not inspect component library directory: " + ec.message();
+        return false;
+    }
+    if (isUnsafeLibraryDirectory(path, status) || !fs::is_directory(status)) {
+        error = "component library path is not a real directory: " + path.string();
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -244,6 +359,209 @@ void ComponentLibrary::upsert(const ComponentDefinition &def) {
     }
     m_definitions.push_back(def);
 }
+ComponentLibraryCreateResult
+ComponentLibrary::createUserEntry(ComponentDefinition definition, const fs::path &library_root) {
+    ComponentLibraryCreateResult result;
+    const auto invalidDefinition = [](std::vector<ValidationIssue> issues) {
+        ComponentLibraryCreateResult invalid;
+        invalid.status = ComponentLibraryCreateStatus::InvalidDefinition;
+        invalid.issues = std::move(issues);
+        return invalid;
+    };
+    const auto ioFailure = [](std::string message) {
+        ComponentLibraryCreateResult failure;
+        failure.status = ComponentLibraryCreateStatus::IoError;
+        failure.message = std::move(message);
+        LOG_WARN("ComponentLibrary: %s", failure.message.c_str());
+        return failure;
+    };
+
+    std::vector<ValidationIssue> issues;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(definition.type);
+    if (!descriptor || !descriptor->authorable) {
+        issues.push_back({"type", "Component type is unknown or not authorable"});
+        return invalidDefinition(std::move(issues));
+    }
+    if (definition.part_number.find_first_not_of(" \t\r\n") == std::string::npos)
+        issues.push_back({"part_number", "Part number is required"});
+    if (!definition.parameters.is_object())
+        issues.push_back({"parameters", "Parameters must be an object"});
+    if (!definition.data_files.empty())
+        issues.push_back({"data_files", "Agent-created entries cannot include data files"});
+
+    if (definition.parameters.is_object()) {
+        for (const auto &[key, value] : definition.parameters.items()) {
+            static_cast<void>(value);
+            bool path_parameter = false;
+            for (const char *path_key : kPathParameterKeys)
+                path_parameter = path_parameter || key == path_key;
+            if (path_parameter) {
+                issues.push_back({key, "File-path parameters are not supported"});
+                continue;
+            }
+
+            const auto field = std::find_if(
+                descriptor->fields.begin(), descriptor->fields.end(),
+                [&key](const ParameterField &candidate) { return candidate.key == key; });
+            if (field == descriptor->fields.end()) {
+                issues.push_back({key, "Unknown component-library parameter"});
+            } else if (field->kind == FieldKind::FilePath) {
+                issues.push_back({key, "File-path parameters are not supported"});
+            }
+        }
+    }
+
+    auto parameter_issues = validate(definition.type, definition.parameters);
+    issues.insert(issues.end(), std::make_move_iterator(parameter_issues.begin()),
+                  std::make_move_iterator(parameter_issues.end()));
+    if (!issues.empty())
+        return invalidDefinition(std::move(issues));
+
+    const std::string wanted_part = normalizedPartNumber(definition.part_number);
+    for (const auto &existing : m_definitions) {
+        if (existing.type == definition.type &&
+            normalizedPartNumber(existing.part_number) == wanted_part) {
+            result.status = ComponentLibraryCreateStatus::AlreadyExists;
+            result.message = "A component with this type and part number already exists";
+            return result;
+        }
+    }
+
+    nlohmann::json serialized{{"schema_version", 2},
+                              {"type", definition.type},
+                              {"part_number", definition.part_number},
+                              {"manufacturer", definition.manufacturer},
+                              {"description", definition.description},
+                              {"parameters", definition.parameters},
+                              {"notes", definition.notes}};
+    const std::string contents = serialized.dump(2);
+
+    m_definitions.reserve(m_definitions.size() + 1);
+
+    // Inspect the supplied path before absolute() may normalize `..` on Windows.
+    for (const auto &component : library_root) {
+        if (component == "..")
+            return ioFailure("component library root contains parent traversal");
+    }
+
+    std::error_code ec;
+    const fs::path absolute_root = fs::absolute(library_root, ec);
+    if (ec)
+        return ioFailure("could not resolve component library root: " + ec.message());
+    for (const auto &component : absolute_root) {
+        if (component == "..")
+            return ioFailure("component library root contains parent traversal");
+    }
+    const fs::path root = absolute_root.lexically_normal();
+    std::string directory_error;
+    if (!ensureLibraryDirectory(root.parent_path(), directory_error) ||
+        !ensureLibraryDirectory(root, directory_error))
+        return ioFailure(std::move(directory_error));
+
+    const fs::path type_directory = root / definition.type;
+    if (!ensureLibraryDirectory(type_directory, directory_error))
+        return ioFailure(std::move(directory_error));
+
+    const fs::path agent_directory = type_directory / ".mcp";
+    if (!ensureLibraryDirectory(agent_directory, directory_error))
+        return ioFailure(std::move(directory_error));
+
+    // A normalized, escaped part-number filename makes the no-replace hard link below reject
+    // concurrent duplicate MCP creations even when their manufacturers differ.
+    const fs::path destination =
+        agent_directory / (partNumberFileSegment(wanted_part) + ".json");
+
+    const fs::file_status destination_status = fs::symlink_status(destination, ec);
+    if (ec == std::errc::no_such_file_or_directory) {
+        ec.clear();
+    } else if (ec) {
+        return ioFailure("could not inspect component destination: " + ec.message());
+    } else if (destination_status.type() != fs::file_type::not_found) {
+        result.status = ComponentLibraryCreateStatus::AlreadyExists;
+        result.message = "A component file already exists at the destination";
+        return result;
+    }
+
+    static std::atomic<unsigned long long> staging_sequence{0};
+    const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    fs::path staging_directory;
+    bool staging_directory_created = false;
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        staging_directory =
+            type_directory /
+            (".component-create-" + std::to_string(timestamp) + "-" +
+             std::to_string(staging_sequence.fetch_add(1)));
+        ec.clear();
+        staging_directory_created = fs::create_directory(staging_directory, ec);
+        if (staging_directory_created)
+            break;
+        if (ec && ec != std::errc::file_exists)
+            return ioFailure("could not reserve component staging directory: " + ec.message());
+    }
+    if (!staging_directory_created)
+        return ioFailure("could not reserve a unique component staging directory");
+
+    const fs::path staging_file = staging_directory / "definition.tmp";
+    const auto cleanupStaging = [&] {
+        std::error_code cleanup_error;
+        fs::remove(staging_file, cleanup_error);
+        cleanup_error.clear();
+        fs::remove(staging_directory, cleanup_error);
+        if (cleanup_error)
+            LOG_WARN("ComponentLibrary: could not remove staging directory %s: %s",
+                     staging_directory.string().c_str(), cleanup_error.message().c_str());
+    };
+
+    std::ofstream output(staging_file, std::ios::binary);
+    if (!output) {
+        cleanupStaging();
+        return ioFailure("could not open temporary component definition");
+    }
+    output << contents;
+    output.flush();
+    if (!output) {
+        output.close();
+        cleanupStaging();
+        return ioFailure("could not write temporary component definition");
+    }
+    output.close();
+    if (!output) {
+        cleanupStaging();
+        return ioFailure("could not close temporary component definition");
+    }
+
+    ec.clear();
+    fs::create_hard_link(staging_file, destination, ec);
+    if (ec) {
+        std::error_code status_error;
+        const fs::file_status current_status = fs::symlink_status(destination, status_error);
+        cleanupStaging();
+        if (!status_error && current_status.type() != fs::file_type::not_found) {
+            result.status = ComponentLibraryCreateStatus::AlreadyExists;
+            result.message = "A component file already exists at the destination";
+            return result;
+        }
+        return ioFailure("could not publish component definition: " + ec.message());
+    }
+
+    definition.schema_version = 2;
+    definition.source_path = destination.string();
+    definition.issues.clear();
+    try {
+        m_definitions.push_back(std::move(definition));
+    } catch (...) {
+        std::error_code remove_error;
+        fs::remove(destination, remove_error);
+        cleanupStaging();
+        throw;
+    }
+    cleanupStaging();
+
+    result.status = ComponentLibraryCreateStatus::Created;
+    result.path = destination;
+    return result;
+}
+
 
 void ComponentLibrary::loadFile(const std::string &filepath) {
     std::ifstream ifs(filepath);

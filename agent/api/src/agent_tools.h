@@ -8,6 +8,7 @@ AgentToolResult executeCircuitReadTool(const AgentApi &api, const AgentCall &cal
 AgentToolResult executeComponentReadTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeComponentTypesTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeLibrarySearchTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeLibraryCreateTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeMeasurePortTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const AgentCall &call);
