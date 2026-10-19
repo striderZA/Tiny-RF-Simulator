@@ -254,6 +254,107 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         restore_library_visibility();
     };
+    t = IM_REGISTER_TEST(e, "rf_simulator", "component_library_refreshes_live_contents");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->SetRef("");
+        namespace fs = std::filesystem;
+        struct TestState {
+            RfSimulatorApp &app;
+            fs::path original_cwd;
+            std::string original_project_path;
+            fs::path root;
+
+            ~TestState() {
+                std::error_code ec;
+                fs::current_path(original_cwd, ec);
+                app.m_current_project_path = original_project_path;
+                app.refreshExtensions();
+                fs::remove_all(root, ec);
+            }
+        };
+
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        const fs::path root =
+            fs::temp_directory_path() / ("rf_sim_issue256_" + std::to_string(stamp));
+        TestState state{*s_app, fs::current_path(), s_app->m_current_project_path, root};
+        const fs::path definition_path =
+            root / "rf-sim-libraries" / "attenuators" / "issue256.json";
+        fs::create_directories(definition_path.parent_path());
+
+        const auto write_definition = [&](const std::string &part_number, double attenuation_dB) {
+            std::ofstream file(definition_path);
+            if (!file)
+                return false;
+            file << "{\n"
+                 << "  \"schema_version\": 1,\n"
+                 << "  \"type\": \"attenuator\",\n"
+                 << "  \"part_number\": \"" << part_number << "\",\n"
+                 << "  \"manufacturer\": \"Issue 256\",\n"
+                 << "  \"parameters\": { \"attenuation_dB\": " << attenuation_dB << " }\n"
+                 << "}\n";
+            file.close();
+            return file.good();
+        };
+        IM_CHECK(write_definition("ISSUE256-OLD", 6.0));
+
+        fs::current_path(root);
+        s_app->m_current_project_path = (root / "issue256.rfsim").string();
+        s_app->refreshExtensions();
+
+        const auto has_part = [](const std::vector<const ComponentDefinition *> &definitions,
+                                 const std::string &part_number) {
+            return std::any_of(definitions.begin(), definitions.end(), [&](const auto *definition) {
+                return definition->part_number == part_number;
+            });
+        };
+        IM_CHECK(has_part(s_app->testComponentLibrary().all(), "ISSUE256-OLD"));
+        if (!write_definition("ISSUE256-NEW", 8.0))
+            return;
+        IM_CHECK(has_part(s_app->testComponentLibrary().all(), "ISSUE256-OLD"));
+
+        ctx->Yield(2);
+        ImGuiWindow *library_window = ImGui::FindWindowByName("Component Library");
+        const bool library_was_visible = library_window && library_window->Active;
+        bool library_opened_by_test = false;
+        const auto restore_library_visibility = [&]() {
+            if (!library_opened_by_test)
+                return;
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Component Library");
+            ctx->SetRef("");
+            ctx->Yield(2);
+            library_opened_by_test = false;
+        };
+        if (!library_was_visible) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Component Library");
+            ctx->SetRef("");
+            library_opened_by_test = true;
+        }
+        ctx->WindowFocus("Component Library");
+        ctx->Yield(2);
+        ctx->SetRef("Component Library");
+        const bool refresh_exists = ctx->ItemExists("Refresh");
+        IM_CHECK(refresh_exists);
+        if (!refresh_exists) {
+            restore_library_visibility();
+            ctx->SetRef("");
+            return;
+        }
+        ctx->ItemClick("Refresh");
+        ctx->Yield(2);
+        restore_library_visibility();
+        ctx->SetRef("");
+
+        const auto definitions = s_app->testComponentLibrary().all();
+        IM_CHECK(!has_part(definitions, "ISSUE256-OLD"));
+        IM_CHECK(has_part(definitions, "ISSUE256-NEW"));
+        const auto updated =
+            std::find_if(definitions.begin(), definitions.end(),
+                         [](const auto *def) { return def->part_number == "ISSUE256-NEW"; });
+        if (updated != definitions.end())
+            IM_CHECK((*updated)->parameters.at("attenuation_dB").get<double>() == 8.0);
+    };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "canvas_context_menu");
     t->TestFunc = [](ImGuiTestContext *ctx) {
