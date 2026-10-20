@@ -6,6 +6,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct AgentCall {
@@ -54,6 +55,10 @@ class IAgentHost {
     // Project files use the GUI's save and load paths without dialogs. saveProjectFile returns
     // false when the file cannot be written; the previous path and dirty state are kept.
     virtual std::optional<std::string> projectPath() const = 0;
+    // Existing user-library roots only; implementations do not accept caller-selected paths.
+    virtual std::optional<std::string> componentLibraryRoot(std::string_view) const {
+        return std::nullopt;
+    }
     virtual bool saveProjectFile(const std::string &path) = 0;
     // Project-relative external RF data files preserved by the most recent successful save.
     virtual std::vector<std::string> savedProjectDataFiles() const { return {}; }

@@ -77,6 +77,7 @@ class AgentApi final : public IAgentCallExecutor {
     friend AgentToolResult executeComponentReadTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeComponentTypesTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeLibrarySearchTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeLibraryCreateTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeCircuitEditTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeMeasurePortTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &, const AgentCall &);

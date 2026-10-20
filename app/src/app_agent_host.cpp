@@ -4,6 +4,8 @@
 
 #include <imgui.h>
 #include <imgui_internal.h> // GetTopMostPopupModal
+#include <cstdlib>
+#include <filesystem>
 #include <unordered_set>
 
 namespace {
@@ -137,6 +139,28 @@ std::optional<std::string> AppAgentHost::projectPath() const {
     if (m_hooks.project_path)
         return m_hooks.project_path();
     return std::nullopt;
+}
+
+std::optional<std::string> AppAgentHost::componentLibraryRoot(std::string_view scope) const {
+    namespace fs = std::filesystem;
+    if (scope == "project") {
+        std::error_code ec;
+        const fs::path root = fs::current_path(ec);
+        if (ec)
+            return std::nullopt;
+        return (root / "rf-sim-libraries").string();
+    }
+    if (scope != "global")
+        return std::nullopt;
+
+#ifdef _WIN32
+    const char *home = std::getenv("USERPROFILE");
+#else
+    const char *home = std::getenv("HOME");
+#endif
+    if (!home || !*home)
+        return std::nullopt;
+    return (fs::path(home) / ".rf-sim" / "libraries").string();
 }
 
 bool AppAgentHost::saveProjectFile(const std::string &path) {

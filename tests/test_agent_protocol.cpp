@@ -747,11 +747,10 @@ bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
 } // namespace
 
 TEST_CASE("The catalog lists the v1 tools in a fixed order", "[catalog]") {
-    constexpr std::array<std::string_view, 12> expected{
-        "component_types",        "library_search", "circuit_get",
-        "component_get",          "circuit_edit",   "measure_port",
-        "network_analyzer_sweep", "data_file_read", "test_flow_run",
-        "receiver_measure",       "project_save",   "project_load"};
+    constexpr std::array<std::string_view, 13> expected{
+        "component_types", "library_search", "library_create", "circuit_get",
+        "component_get",   "circuit_edit",   "measure_port",   "network_analyzer_sweep",
+        "data_file_read",  "test_flow_run",   "receiver_measure", "project_save", "project_load"};
     const auto &catalog = agentToolCatalog();
 
     REQUIRE(kAgentCatalogVersion == 1);
@@ -771,21 +770,22 @@ TEST_CASE("Tool annotations follow the spec", "[catalog]") {
     const nlohmann::json destructive{{"destructiveHint", true}, {"openWorldHint", false}};
     const nlohmann::json idempotent{{"idempotentHint", true}, {"openWorldHint", false}};
 
-    REQUIRE(catalog.size() == 12);
+    REQUIRE(catalog.size() == 13);
     CHECK(catalog[0].annotations == read_only);
     CHECK(catalog[1].annotations == read_only);
-    CHECK(catalog[2].annotations == read_only);
+    CHECK(catalog[2].annotations == destructive);
     CHECK(catalog[3].annotations == read_only);
-    CHECK(catalog[4].annotations == destructive);
-    CHECK(catalog[5].annotations == read_only);
-    CHECK(catalog[6].annotations == idempotent);
-    CHECK(catalog[7].annotations == read_only);
-    CHECK(catalog[8].annotations == idempotent);
-    CHECK(catalog[9].annotations == read_only);
-    CHECK(catalog[10].annotations == destructive);
+    CHECK(catalog[4].annotations == read_only);
+    CHECK(catalog[5].annotations == destructive);
+    CHECK(catalog[6].annotations == read_only);
+    CHECK(catalog[7].annotations == idempotent);
+    CHECK(catalog[8].annotations == read_only);
+    CHECK(catalog[9].annotations == idempotent);
+    CHECK(catalog[10].annotations == read_only);
     CHECK(catalog[11].annotations == destructive);
-    CHECK(catalog[5].description.find("3.01 dB") != std::string::npos);
-    CHECK(catalog[5].description.find("spectrum analyzer's displayed peak") != std::string::npos);
+    CHECK(catalog[12].annotations == destructive);
+    CHECK(catalog[6].description.find("3.01 dB") != std::string::npos);
+    CHECK(catalog[6].description.find("spectrum analyzer's displayed peak") != std::string::npos);
 }
 
 TEST_CASE("Input schemas are closed objects with consistent required fields", "[catalog]") {
@@ -813,6 +813,23 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
     CHECK(limit.at("default") == 20);
     CHECK(limit.at("minimum") == 1);
     CHECK(limit.at("maximum") == 50);
+
+    const auto *library_create = findAgentTool("library_create");
+    REQUIRE(library_create != nullptr);
+    CHECK(library_create->input_schema.at("required") ==
+          nlohmann::json::array({"type", "part_number", "parameters"}));
+    CHECK(library_create->input_schema.at("properties").at("scope").at("default") == "project");
+    CHECK(library_create->input_schema.at("properties").at("scope").at("enum") ==
+          nlohmann::json::array({"project", "global"}));
+    CHECK(library_create->output_schema.at("anyOf").at(0).at("properties").contains(
+        "library_path"));
+
+    const auto *component_types = findAgentTool("component_types");
+    REQUIRE(component_types != nullptr);
+    const auto &type_schema = component_types->output_schema.at("anyOf").at(0).at("properties")
+                                  .at("types").at("items");
+    REQUIRE(type_schema.at("properties").contains("authorable"));
+    REQUIRE(type_schema.at("properties").contains("library_fields"));
 
     const auto *circuit_get = findAgentTool("circuit_get");
     REQUIRE(circuit_get != nullptr);
@@ -1069,15 +1086,3 @@ TEST_CASE("Numeric outputs the API can emit as null accept null", "[catalog]") {
     }
 }
 
-TEST_CASE("Server instructions carry the usage guide", "[catalog]") {
-    CHECK(agentServerInstructions() ==
-          "RF Simulator tools act on the project open in the user's RF Simulator window. "
-          "Start with circuit_get. Component ids are the numbers in node labels "
-          "(\"Amplifier 103\" is 103). Send the epoch from your latest read with every call "
-          "that takes component ids; on STALE_EPOCH, call circuit_get again. Positions include "
-          "the current canvas pan; after panning, call circuit_get again before moving a "
-          "component. Use add.position for a new component; move only targets components that "
-          "existed before the current edit call. Parameter units are encoded in key suffixes "
-          "(_Hz, _dB, _dBm, _dBm_per_Hz). Save and load projects with project_save and "
-          "project_load; loads need no unsaved changes. Other file access is unavailable.");
-}

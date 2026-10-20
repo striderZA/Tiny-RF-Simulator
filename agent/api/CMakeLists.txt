@@ -6,6 +6,7 @@ add_library(agent_api STATIC
     src/agent_args.cpp
     src/tool_circuit_read.cpp
     src/tool_library.cpp
+    src/tool_library_create.cpp
     src/agent_links.cpp
     src/agent_placement.cpp
     src/tool_circuit_edit.cpp
