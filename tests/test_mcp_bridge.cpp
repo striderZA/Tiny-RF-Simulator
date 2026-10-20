@@ -1098,9 +1098,10 @@ TEST_CASE("Legacy sessions serve ping, tools/list and tools/call", "[mcp]") {
     CHECK_FALSE(list_result.contains("resultType"));
     const auto &tools = list_result.at("tools");
     constexpr std::array<std::string_view, 13> expected_tools{
-        "component_types", "library_search", "library_create", "circuit_get",
-        "component_get",   "circuit_edit",   "measure_port",   "network_analyzer_sweep",
-        "data_file_read",  "test_flow_run",   "receiver_measure", "project_save", "project_load"};
+        "component_types", "library_search", "library_create",   "circuit_get",
+        "component_get",   "circuit_edit",   "measure_port",     "network_analyzer_sweep",
+        "data_file_read",  "test_flow_run",  "receiver_measure", "project_save",
+        "project_load"};
     REQUIRE(tools.size() == expected_tools.size());
     const auto *catalog_tool = findAgentTool("component_types");
     REQUIRE(catalog_tool != nullptr);
@@ -1200,9 +1201,10 @@ TEST_CASE("Modern results carry resultType, serverInfo and caching hints", "[mcp
     CHECK(list_result.at("cacheScope") == "private");
     REQUIRE(list_result.at("tools").size() == 13);
     constexpr std::array<std::string_view, 13> expected_tools{
-        "component_types", "library_search", "library_create", "circuit_get",
-        "component_get",   "circuit_edit",   "measure_port",   "network_analyzer_sweep",
-        "data_file_read",  "test_flow_run",   "receiver_measure", "project_save", "project_load"};
+        "component_types", "library_search", "library_create",   "circuit_get",
+        "component_get",   "circuit_edit",   "measure_port",     "network_analyzer_sweep",
+        "data_file_read",  "test_flow_run",  "receiver_measure", "project_save",
+        "project_load"};
     const auto &tools = list_result.at("tools");
     for (std::size_t i = 0; i < expected_tools.size(); ++i) {
         CHECK(tools[i].at("name") == expected_tools[i]);

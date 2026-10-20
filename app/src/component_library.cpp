@@ -359,8 +359,8 @@ void ComponentLibrary::upsert(const ComponentDefinition &def) {
     }
     m_definitions.push_back(def);
 }
-ComponentLibraryCreateResult
-ComponentLibrary::createUserEntry(ComponentDefinition definition, const fs::path &library_root) {
+ComponentLibraryCreateResult ComponentLibrary::createUserEntry(ComponentDefinition definition,
+                                                               const fs::path &library_root) {
     ComponentLibraryCreateResult result;
     const auto invalidDefinition = [](std::vector<ValidationIssue> issues) {
         ComponentLibraryCreateResult invalid;
@@ -468,8 +468,7 @@ ComponentLibrary::createUserEntry(ComponentDefinition definition, const fs::path
 
     // A normalized, escaped part-number filename makes the no-replace hard link below reject
     // concurrent duplicate MCP creations even when their manufacturers differ.
-    const fs::path destination =
-        agent_directory / (partNumberFileSegment(wanted_part) + ".json");
+    const fs::path destination = agent_directory / (partNumberFileSegment(wanted_part) + ".json");
 
     const fs::file_status destination_status = fs::symlink_status(destination, ec);
     if (ec == std::errc::no_such_file_or_directory) {
@@ -487,10 +486,8 @@ ComponentLibrary::createUserEntry(ComponentDefinition definition, const fs::path
     fs::path staging_directory;
     bool staging_directory_created = false;
     for (int attempt = 0; attempt < 16; ++attempt) {
-        staging_directory =
-            type_directory /
-            (".component-create-" + std::to_string(timestamp) + "-" +
-             std::to_string(staging_sequence.fetch_add(1)));
+        staging_directory = type_directory / (".component-create-" + std::to_string(timestamp) +
+                                              "-" + std::to_string(staging_sequence.fetch_add(1)));
         ec.clear();
         staging_directory_created = fs::create_directory(staging_directory, ec);
         if (staging_directory_created)
@@ -561,7 +558,6 @@ ComponentLibrary::createUserEntry(ComponentDefinition definition, const fs::path
     result.path = destination;
     return result;
 }
-
 
 void ComponentLibrary::loadFile(const std::string &filepath) {
     std::ifstream ifs(filepath);

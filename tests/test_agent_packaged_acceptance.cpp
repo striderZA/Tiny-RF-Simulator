@@ -339,12 +339,11 @@ TEST_CASE("packaged rf-sim-mcp creates and places a library entry, then reconnec
             return std::nullopt;
         return bridge.receive(id, pump);
     };
-    auto created = callTool(
-        3, "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "MCP-PACKAGED-ATT"},
-         {"manufacturer", "MCP Acceptance"},
-         {"parameters", {{"attenuation_dB", 7.5}}}});
+    auto created = callTool(3, "library_create",
+                            {{"type", "attenuator"},
+                             {"part_number", "MCP-PACKAGED-ATT"},
+                             {"manufacturer", "MCP Acceptance"},
+                             {"parameters", {{"attenuation_dB", 7.5}}}});
     REQUIRE(created.has_value());
     REQUIRE(created->contains("result"));
     CHECK(created->at("result").at("isError") == false);
@@ -359,10 +358,11 @@ TEST_CASE("packaged rf-sim-mcp creates and places a library entry, then reconnec
     auto edited = callTool(
         5, "circuit_edit",
         {{"epoch", fixture.api.epoch()},
-         {"ops", Json::array({{{"op", "add"},
-                               {"ref", "from_mcp"},
-                               {"library_part", {{"part_number", "MCP-PACKAGED-ATT"},
-                                                 {"type", "attenuator"}}}}})}});
+         {"ops",
+          Json::array({{{"op", "add"},
+                        {"ref", "from_mcp"},
+                        {"library_part",
+                         {{"part_number", "MCP-PACKAGED-ATT"}, {"type", "attenuator"}}}}})}});
     REQUIRE(edited.has_value());
     REQUIRE(edited->contains("result"));
     REQUIRE(edited->at("result").at("structuredContent").at("refs").contains("from_mcp"));

@@ -748,9 +748,10 @@ bool schemaUsesOnlyAllowedKeywords(const nlohmann::json &schema) {
 
 TEST_CASE("The catalog lists the v1 tools in a fixed order", "[catalog]") {
     constexpr std::array<std::string_view, 13> expected{
-        "component_types", "library_search", "library_create", "circuit_get",
-        "component_get",   "circuit_edit",   "measure_port",   "network_analyzer_sweep",
-        "data_file_read",  "test_flow_run",   "receiver_measure", "project_save", "project_load"};
+        "component_types", "library_search", "library_create",   "circuit_get",
+        "component_get",   "circuit_edit",   "measure_port",     "network_analyzer_sweep",
+        "data_file_read",  "test_flow_run",  "receiver_measure", "project_save",
+        "project_load"};
     const auto &catalog = agentToolCatalog();
 
     REQUIRE(kAgentCatalogVersion == 1);
@@ -821,13 +822,13 @@ TEST_CASE("Input schemas are closed objects with consistent required fields", "[
     CHECK(library_create->input_schema.at("properties").at("scope").at("default") == "project");
     CHECK(library_create->input_schema.at("properties").at("scope").at("enum") ==
           nlohmann::json::array({"project", "global"}));
-    CHECK(library_create->output_schema.at("anyOf").at(0).at("properties").contains(
-        "library_path"));
+    CHECK(
+        library_create->output_schema.at("anyOf").at(0).at("properties").contains("library_path"));
 
     const auto *component_types = findAgentTool("component_types");
     REQUIRE(component_types != nullptr);
-    const auto &type_schema = component_types->output_schema.at("anyOf").at(0).at("properties")
-                                  .at("types").at("items");
+    const auto &type_schema =
+        component_types->output_schema.at("anyOf").at(0).at("properties").at("types").at("items");
     REQUIRE(type_schema.at("properties").contains("authorable"));
     REQUIRE(type_schema.at("properties").contains("library_fields"));
 
@@ -1085,4 +1086,3 @@ TEST_CASE("Numeric outputs the API can emit as null accept null", "[catalog]") {
         }
     }
 }
-

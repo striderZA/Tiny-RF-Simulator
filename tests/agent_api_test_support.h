@@ -175,10 +175,9 @@ struct ApiFixture {
 
     ApiFixture() {
         static unsigned long long root_sequence = 0;
-        const auto root =
-            std::filesystem::temp_directory_path() /
-            ("agent_api_library_" + test_temp_paths::processTag() + "_" +
-             std::to_string(root_sequence++));
+        const auto root = std::filesystem::temp_directory_path() /
+                          ("agent_api_library_" + test_temp_paths::processTag() + "_" +
+                           std::to_string(root_sequence++));
         std::filesystem::create_directories(root);
         host.project_library_root = (root / "project" / "rf-sim-libraries").string();
         host.global_library_root = (root / "global" / "libraries").string();

@@ -63,9 +63,9 @@ AgentToolResult internalWriteError(const AgentApi &api, std::string_view message
 } // namespace
 
 AgentToolResult executeLibraryCreateTool(const AgentApi &api, const AgentCall &call) {
-    AgentArgs args{call.arguments,
-                   {"type", "part_number", "manufacturer", "description", "notes", "parameters",
-                    "scope"}};
+    AgentArgs args{
+        call.arguments,
+        {"type", "part_number", "manufacturer", "description", "notes", "parameters", "scope"}};
     const std::string type = requiredString(call.arguments, "type");
     const std::string part_number = requiredString(call.arguments, "part_number");
     const std::string scope = args.optionalString("scope", "project");
