@@ -1,3 +1,10 @@
+## [0.29.1] - 2026-10-20
+
+### Added
+
+- **Create reusable component definitions through MCP (#257)** — use `library_create` to add JSON-only definitions to the Project or Global component library. Required fields, types, enum values and ranges are checked before writing; path/data-file inputs and duplicates are refused, and new entries are available to search and placement immediately.
+- **Discover component-library authoring fields (#257)** — `component_types` identifies authorable types and reports their library fields, including keys that differ from runtime parameter names.
+
 ## [0.29.0] - 2026-10-18
 
 ### Added
