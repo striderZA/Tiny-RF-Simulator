@@ -2,10 +2,10 @@
 
 #include "logging_core.h"
 
-#include <imgui.h>
-#include <imgui_internal.h> // GetTopMostPopupModal
 #include <cstdlib>
 #include <filesystem>
+#include <imgui.h>
+#include <imgui_internal.h> // GetTopMostPopupModal
 #include <unordered_set>
 
 namespace {

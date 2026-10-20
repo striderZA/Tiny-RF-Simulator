@@ -21,13 +21,12 @@ TEST_CASE("library_create persists a definition for search and circuit placement
     const std::uint64_t initial_revision = fixture.commands.revision();
     const std::uint64_t initial_epoch = fixture.api.epoch();
 
-    const AgentToolResult created = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "MCP-ATT-10"},
-         {"manufacturer", "MCP Test"},
-         {"description", "MCP-created attenuator"},
-         {"parameters", {{"attenuation_dB", 10.0}}}});
+    const AgentToolResult created =
+        fixture.call("library_create", {{"type", "attenuator"},
+                                        {"part_number", "MCP-ATT-10"},
+                                        {"manufacturer", "MCP Test"},
+                                        {"description", "MCP-created attenuator"},
+                                        {"parameters", {{"attenuation_dB", 10.0}}}});
 
     REQUIRE_FALSE(created.is_error);
     CHECK(created.structured.at("epoch") == initial_epoch);
@@ -35,8 +34,7 @@ TEST_CASE("library_create persists a definition for search and circuit placement
     CHECK(created.structured.at("scope") == "project");
     CHECK(created.structured.at("part_number") == "MCP-ATT-10");
     CHECK(created.structured.at("type") == "attenuator");
-    CHECK(created.structured.at("library_path") ==
-          "attenuator/.mcp/part-mcp-att-10.json");
+    CHECK(created.structured.at("library_path") == "attenuator/.mcp/part-mcp-att-10.json");
     const fs::path project_root(fixture.host.project_library_root);
     const fs::path persisted =
         project_root / created.structured.at("library_path").get<std::string>();
@@ -65,10 +63,9 @@ TEST_CASE("library_create persists a definition for search and circuit placement
           nlohmann::json{{"attenuation_dB", 10.0}});
 
     const AgentToolResult placed = editCall(
-        fixture,
-        OrderedJson::array({{{"op", "add"},
-                             {"library_part", {{"part_number", "MCP-ATT-10"},
-                                                {"type", "attenuator"}}}}}));
+        fixture, OrderedJson::array({{{"op", "add"},
+                                      {"library_part",
+                                       {{"part_number", "MCP-ATT-10"}, {"type", "attenuator"}}}}}));
     REQUIRE_FALSE(placed.is_error);
     const auto attenuators = fixture.runtime.components().byType<AttenuatorEngine>();
     REQUIRE(attenuators.size() == 1);
@@ -119,8 +116,7 @@ TEST_CASE("library_create rejects invalid definitions without publishing an entr
             {"part_number", "BAD-FILE-PATH"},
             {"parameters", {{"attenuation_dB", 10.0}, {"sparam_filepath", "/tmp/input.s2p"}}}},
            "/parameters/sparam_filepath");
-    reject({{"type", "generator"}, {"part_number", "NOT-AUTHORABLE"}, {"parameters", {}}},
-           "/type");
+    reject({{"type", "generator"}, {"part_number", "NOT-AUTHORABLE"}, {"parameters", {}}}, "/type");
     reject({{"type", "attenuator"}, {"part_number", "BAD-SHAPE"}, {"parameters", "10"}},
            "/parameters");
     reject({{"type", "attenuator"},
@@ -133,28 +129,24 @@ TEST_CASE("library_create rejects invalid definitions without publishing an entr
 TEST_CASE("library_create rejects duplicates without replacing the original entry",
           "[agent_library_create]") {
     ApiFixture fixture;
-    const auto first = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "MCP-DUP-ATT"},
-         {"manufacturer", "First Vendor"},
-         {"parameters", {{"attenuation_dB", 8.0}}}});
+    const auto first = fixture.call("library_create", {{"type", "attenuator"},
+                                                       {"part_number", "MCP-DUP-ATT"},
+                                                       {"manufacturer", "First Vendor"},
+                                                       {"parameters", {{"attenuation_dB", 8.0}}}});
     REQUIRE_FALSE(first.is_error);
 
-    const fs::path first_file =
-        fs::path(fixture.host.project_library_root) /
-        first.structured.at("library_path").get<std::string>();
+    const fs::path first_file = fs::path(fixture.host.project_library_root) /
+                                first.structured.at("library_path").get<std::string>();
     std::ifstream original_input(first_file, std::ios::binary);
     REQUIRE(original_input.good());
     const std::string original((std::istreambuf_iterator<char>(original_input)),
                                std::istreambuf_iterator<char>());
 
-    const auto duplicate = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "mcp-dup-att"},
-         {"manufacturer", "Second Vendor"},
-         {"parameters", {{"attenuation_dB", 18.0}}}});
+    const auto duplicate =
+        fixture.call("library_create", {{"type", "attenuator"},
+                                        {"part_number", "mcp-dup-att"},
+                                        {"manufacturer", "Second Vendor"},
+                                        {"parameters", {{"attenuation_dB", 18.0}}}});
     REQUIRE(duplicate.is_error);
     CHECK(errorFor(duplicate).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(duplicate).at("details").at("path") == "/part_number");
@@ -215,13 +207,11 @@ TEST_CASE("library_create rejects cross-view duplicates but preserves distinct p
 TEST_CASE("library_create persists entries in the selected Global user library",
           "[agent_library_create]") {
     ApiFixture fixture;
-    const auto created = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "GLOBAL-ATT"},
-         {"manufacturer", "Global Vendor"},
-         {"parameters", {{"attenuation_dB", 4.0}}},
-         {"scope", "global"}});
+    const auto created = fixture.call("library_create", {{"type", "attenuator"},
+                                                         {"part_number", "GLOBAL-ATT"},
+                                                         {"manufacturer", "Global Vendor"},
+                                                         {"parameters", {{"attenuation_dB", 4.0}}},
+                                                         {"scope", "global"}});
 
     REQUIRE_FALSE(created.is_error);
     CHECK(created.structured.at("scope") == "global");
@@ -249,11 +239,9 @@ TEST_CASE("library_create leaves an existing non-directory destination unchanged
     }
     fixture.host.project_library_root = blocked_root.string();
 
-    const auto result = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "IO-FAIL-ATT"},
-         {"parameters", {{"attenuation_dB", 4.0}}}});
+    const auto result = fixture.call("library_create", {{"type", "attenuator"},
+                                                        {"part_number", "IO-FAIL-ATT"},
+                                                        {"parameters", {{"attenuation_dB", 4.0}}}});
     REQUIRE(result.is_error);
     CHECK(errorFor(result).at("code") == "INTERNAL");
 
@@ -270,8 +258,7 @@ TEST_CASE("library_create leaves an existing non-directory destination unchanged
 TEST_CASE("library_create checks symlink ancestors before creating library directories",
           "[agent_library_create]") {
     ApiFixture fixture;
-    const fs::path base =
-        fs::path(fixture.host.project_library_root).parent_path().parent_path();
+    const fs::path base = fs::path(fixture.host.project_library_root).parent_path().parent_path();
     const fs::path target = base / "outside";
     const fs::path link = base / "project";
     fs::create_directories(target / "existing");
@@ -282,11 +269,9 @@ TEST_CASE("library_create checks symlink ancestors before creating library direc
     fixture.host.project_library_root =
         (link / "existing" / "nested" / "rf-sim-libraries").string();
 
-    const auto result = fixture.call(
-        "library_create",
-        {{"type", "attenuator"},
-         {"part_number", "SYMLINK-PARENT"},
-         {"parameters", {{"attenuation_dB", 4.0}}}});
+    const auto result = fixture.call("library_create", {{"type", "attenuator"},
+                                                        {"part_number", "SYMLINK-PARENT"},
+                                                        {"parameters", {{"attenuation_dB", 4.0}}}});
     REQUIRE(result.is_error);
     CHECK(errorFor(result).at("code") == "INTERNAL");
     CHECK_FALSE(fs::exists(target / "existing" / "nested"));
@@ -295,8 +280,7 @@ TEST_CASE("library_create checks symlink ancestors before creating library direc
 TEST_CASE("library_create rejects parent traversal before normalizing its library root",
           "[agent_library_create]") {
     ApiFixture fixture;
-    const fs::path base =
-        fs::path(fixture.host.project_library_root).parent_path().parent_path();
+    const fs::path base = fs::path(fixture.host.project_library_root).parent_path().parent_path();
     fs::create_directories(base / "existing");
 
     ComponentDefinition definition;

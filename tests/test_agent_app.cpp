@@ -200,7 +200,6 @@ TEST_CASE("AppAgentHost exposes only the existing component-library roots", "[ag
     CHECK_FALSE(fixture.host.componentLibraryRoot("external").has_value());
 }
 
-
 // ======================================================================
 // Test: Checkpoint lifetime and removal
 // ======================================================================
