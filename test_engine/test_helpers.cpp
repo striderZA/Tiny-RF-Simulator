@@ -4,33 +4,46 @@
 #undef Yield
 #include "imnodes.h"
 
-int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel) {
+int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel,
+                             ImVec2 screenPosition) {
     auto &nodes = app.testGraphEngine().nodes();
-    size_t count_before = nodes.size();
+    const size_t count_before = nodes.size();
 
+    ctx->SetRef("");
     ctx->WindowFocus("Node Editor");
-    auto info = ctx->WindowInfo("Node Editor");
-    ctx->MouseMoveToPos(info.RectFull.GetCenter());
+    ctx->SetRef("Node Editor"); // MouseMoveToPos must target the editor's platform viewport.
+    ctx->MouseMoveToPos(screenPosition);
+    ctx->Yield(2);
     ctx->MouseClick(ImGuiMouseButton_Right);
     ctx->Yield(2);
 
     IM_CHECK_RETV(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup), -1);
-    ctx->SetRef("canvas_context_menu");
+    ctx->SetRef("//$FOCUSED");
+    IM_CHECK_RETV(ctx->ItemExists(menuLabel), -1);
     ctx->ItemClick(menuLabel);
+    ctx->SetRef("");
     ctx->Yield(2);
 
     IM_CHECK_RETV(nodes.size() == count_before + 1, -1);
     return nodes.back().node_id;
 }
-void NodeHelper::selectNode(ImGuiTestContext *ctx, int nodeId) {
+void NodeHelper::selectNode(ImGuiTestContext *ctx, RfSimulatorApp &app, int nodeId) {
+    const NodeGraphEngine &graph = app.testGraphEngine();
+    const int group_id = graph.groupIdForNode(nodeId);
+    const auto *group = graph.groupById(group_id);
+    if (group && group->collapsed)
+        IM_CHECK(app.testSetGroupCollapsed(group_id, false));
+
     // The Node Editor is a top-level window: address it from the root ref, since callers
     // often leave a window ref such as "Properties" set from an earlier inspector check.
     ctx->SetRef("");
     ctx->WindowFocus("Node Editor");
     ctx->Yield(4); // Let imnodes draw and register nodes in object pool
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
     ImNodes::ClearNodeSelection();
     ImNodes::SelectNode(nodeId);
     ctx->Yield(2);
+    ImNodes::EditorContextSet(app.testGraphWidget().context());
 
     IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);
     int selected = -1;

@@ -335,39 +335,86 @@ TEST_CASE("Amplifier scales noise density correctly", "[amplifier]") {
     }
 }
 
-TEST_CASE("Spectrum analyzer noise floor depends on RBW not grid spacing", "[spectrum]") {
+TEST_CASE("Spectrum analyzer noise floor tracks effective RBW", "[spectrum]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
 
-    AmplifierEngine amp(0, graph);
-    amp.setGain_dB(20.0);
-    amp.setNF_dB(5.0);
-    amp.node().inputs[0] = &gen.node().outputs[0];
-    amp.update(0.0);
-
+    const Spectrum &spec = gen.node().outputs[0];
+    const std::vector<const Spectrum *> specs = {&spec};
     SpectrumAnalyzerEngine sa;
-    sa.setStartFrequency(MIN_FREQ);
-    sa.setStopFrequency(MAX_FREQ);
-    sa.setResBw(50e6);
     sa.setNoiseJitterEnabled(false);
 
-    std::vector<const Spectrum *> specs = {&amp.node().outputs[0]};
-    auto display1 = sa.renderCombinedSpectrum(specs);
+    const size_t mid = spec.frequencies.size() / 2;
+    for (double rbw : {1e3, 1e6, 10e6, 50e6, 100e6}) {
+        sa.setResBw(rbw);
+        const double expected_dBm = 10.0 * std::log10(k * T * rbw) + 30.0;
 
-    // Re-run with same settings; noise floor should remain consistent
-    amp.node().inputs[0] = &gen.node().outputs[0];
-    amp.update(0.0);
+        const auto trace = sa.renderSpectrum(spec);
+        const auto combined = sa.renderCombinedSpectrum(specs);
+        const double average_noise_dBm = sa.computeAverageNoiseLevel(specs);
 
-    auto display2 = sa.renderCombinedSpectrum(specs);
+        INFO("RBW: " << rbw);
+        REQUIRE(trace.front() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(trace[mid] == Approx(expected_dBm).margin(0.02));
+        REQUIRE(trace.back() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(combined.front() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(combined[mid] == Approx(expected_dBm).margin(0.02));
+        REQUIRE(combined.back() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(average_noise_dBm == Approx(expected_dBm).margin(0.005));
+    }
+}
 
-    size_t mid = std::min(display1.size(), display2.size()) / 2;
-    REQUIRE(display1[mid] == Approx(display2[mid]).epsilon(1.0));
+TEST_CASE("Spectrum analyzer RBW filtering preserves tone peak power", "[spectrum]") {
+    Spectrum spec;
+    spec.frequencies = {-10e6, 0.0, 10e6};
+    spec.tones = {{0.0, -20.0, 0.0}};
 
-    sa.setResBw(100e6);
-    auto display3 = sa.renderCombinedSpectrum(specs);
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setVideoBw(1e6);
 
-    REQUIRE(display3[mid] > display2[mid]);
+    for (double rbw : {1e3, 100e6}) {
+        sa.setResBw(rbw);
+        const auto trace = sa.renderSpectrum(spec);
+        REQUIRE(trace[1] == Approx(-20.0).margin(0.01));
+    }
+}
+
+TEST_CASE("Spectrum analyzer RBW changes reset held traces", "[spectrum][trace]") {
+    Spectrum spec;
+    for (size_t i = 0; i <= 100; ++i) {
+        spec.frequencies.push_back((static_cast<double>(i) - 50.0) * 10e6);
+    }
+    spec.noise_total_W.assign(spec.frequencies.size(), k * T);
+    const size_t mid = spec.frequencies.size() / 2;
+    const auto expected_dBm = [](double rbw) { return 10.0 * std::log10(k * T * rbw) + 30.0; };
+
+    const auto check_change = [&](TraceMode mode, double initial_rbw, double changed_rbw) {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setVideoBw(1e6);
+        sa.setVideoAvgCount(5);
+        sa.setTraceMode(mode);
+        sa.setResBw(initial_rbw);
+
+        const auto first = sa.renderSpectrum(spec);
+        REQUIRE(first[mid] == Approx(expected_dBm(initial_rbw)).margin(0.02));
+
+        sa.setResBw(changed_rbw);
+        const auto changed = sa.renderSpectrum(spec);
+        REQUIRE(changed[mid] == Approx(expected_dBm(changed_rbw)).margin(0.02));
+    };
+
+    SECTION("Max Hold drops the old wider-band maximum") {
+        check_change(TraceMode::MaxHold, 100e6, 20e6);
+    }
+    SECTION("Min Hold drops the old narrower-band minimum") {
+        check_change(TraceMode::MinHold, 20e6, 100e6);
+    }
+    SECTION("Video Average starts with the new RBW") {
+        check_change(TraceMode::VideoAverage, 100e6, 20e6);
+    }
 }
 
 TEST_CASE("findPeaks detects single tone peak", "[spectrum]") {

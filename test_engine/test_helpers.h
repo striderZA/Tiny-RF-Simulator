@@ -8,8 +8,9 @@
 class RfSimulatorApp;
 
 struct NodeHelper {
-    static int addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel);
-    static void selectNode(ImGuiTestContext *ctx, int nodeId);
+    static int addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel,
+                            ImVec2 screenPosition);
+    static void selectNode(ImGuiTestContext *ctx, RfSimulatorApp &app, int nodeId);
     static void deleteSelectedNode(ImGuiTestContext *ctx);
     template <typename T> static int findComponentNodeId(RfSimulatorApp &app) {
         auto comps = app.testComponents().byType<T>();
