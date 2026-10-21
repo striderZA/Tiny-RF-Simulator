@@ -4,19 +4,24 @@
 #undef Yield
 #include "imnodes.h"
 
-int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel) {
+int NodeHelper::addComponent(ImGuiTestContext *ctx, RfSimulatorApp &app, const char *menuLabel,
+                             ImVec2 screenPosition) {
     auto &nodes = app.testGraphEngine().nodes();
-    size_t count_before = nodes.size();
+    const size_t count_before = nodes.size();
 
+    ctx->SetRef("");
     ctx->WindowFocus("Node Editor");
-    auto info = ctx->WindowInfo("Node Editor");
-    ctx->MouseMoveToPos(info.RectFull.GetCenter());
+    ctx->SetRef("Node Editor"); // MouseMoveToPos must target the editor's platform viewport.
+    ctx->MouseMoveToPos(screenPosition);
+    ctx->Yield(2);
     ctx->MouseClick(ImGuiMouseButton_Right);
     ctx->Yield(2);
 
     IM_CHECK_RETV(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup), -1);
-    ctx->SetRef("canvas_context_menu");
+    ctx->SetRef("//$FOCUSED");
+    IM_CHECK_RETV(ctx->ItemExists(menuLabel), -1);
     ctx->ItemClick(menuLabel);
+    ctx->SetRef("");
     ctx->Yield(2);
 
     IM_CHECK_RETV(nodes.size() == count_before + 1, -1);

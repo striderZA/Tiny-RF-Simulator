@@ -862,13 +862,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         auto info = ctx->WindowInfo("Node Editor");
         ImVec2 center = info.RectFull.GetCenter();
 
-        ctx->MouseMoveToPos(center);
-        ctx->MouseClick(ImGuiMouseButton_Right);
-        ctx->Yield(2);
-        ctx->SetRef("//$FOCUSED");
-        ctx->ItemClick("Add Splitter");
-        ctx->SetRef("");
-        ctx->Yield(2);
+        const int splitter_node = NodeHelper::addComponent(ctx, *s_app, "Add Splitter", center);
+        IM_CHECK(splitter_node >= 0);
 
         // -- Rubber band: Shift+drag a generous rectangle covering most of the
         //    Node Editor canvas area to enclose all nodes --
@@ -912,25 +907,18 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
 
         auto info = ctx->WindowInfo("Node Editor");
-        ImVec2 center = info.RectFull.GetCenter();
 
         // Add two new nodes via context menu so we have a set of at least 2
         // ungrouped nodes (nodes from previous tests are already grouped)
-        ctx->MouseMoveToPos(center);
-        ctx->MouseClick(ImGuiMouseButton_Right);
-        ctx->Yield(2);
-        ctx->SetRef("//$FOCUSED");
-        ctx->ItemClick("Add Mixer");
-        ctx->SetRef("");
-        ctx->Yield(2);
-
-        ctx->MouseMoveToPos(center + ImVec2(0, 80));
-        ctx->MouseClick(ImGuiMouseButton_Right);
-        ctx->Yield(2);
-        ctx->SetRef("//$FOCUSED");
-        ctx->ItemClick("Add Coax Cable");
-        ctx->SetRef("");
-        ctx->Yield(2);
+        // Add each new component to known empty canvas space. The test helper verifies the
+        // canvas context menu, avoiding a focus-dependent popup lookup when group blocks exist.
+        const ImVec2 mixer_menu_pos = info.RectFull.Min + ImVec2(650.0f, 520.0f);
+        const int mixer_node = NodeHelper::addComponent(ctx, *s_app, "Add Mixer", mixer_menu_pos);
+        IM_CHECK(mixer_node >= 0);
+        const ImVec2 coax_menu_pos = info.RectFull.Min + ImVec2(650.0f, 350.0f);
+        const int coax_node =
+            NodeHelper::addComponent(ctx, *s_app, "Add Coax Cable", coax_menu_pos);
+        IM_CHECK(coax_node >= 0);
 
         // Rubber band across most of the canvas to enclose all ungrouped nodes
         ImVec2 rb_start = info.RectFull.Min + ImVec2(10, 30);
@@ -1142,11 +1130,37 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_multi_fanout");
     t->TestFunc = [](ImGuiTestContext *ctx) {
-        const auto &graph = s_app->testGraphEngine();
-        size_t initial_links = graph.links().size();
-        int split_out = graph.outputPinId(3);
-        int amp_in = graph.inputPinId(2);
-        int mixer_in = graph.inputPinId(4);
+        struct ComponentCleanup {
+            RfSimulatorApp &app;
+            std::vector<int> graph_node_ids;
+
+            explicit ComponentCleanup(RfSimulatorApp &app) : app(app) {}
+
+            ~ComponentCleanup() {
+                for (auto node = graph_node_ids.rbegin(); node != graph_node_ids.rend(); ++node)
+                    app.testRemoveComponent(*node);
+            }
+        } cleanup(*s_app);
+
+        IComponentEngine *splitter =
+            s_app->testAddComponentAtPosition("splitter", ImVec2(300.0f, 100.0f));
+        IM_CHECK(splitter != nullptr);
+        const int splitter_node = splitter->graphNodeId();
+        cleanup.graph_node_ids.push_back(splitter_node);
+
+        IComponentEngine *mixer =
+            s_app->testAddComponentAtPosition("mixer", ImVec2(500.0f, 100.0f));
+        IM_CHECK(mixer != nullptr);
+        const int mixer_node = mixer->graphNodeId();
+        cleanup.graph_node_ids.push_back(mixer_node);
+
+        const NodeGraphEngine &graph = s_app->testGraphEngine();
+        const size_t initial_links = graph.links().size();
+        const int amp_node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
+        IM_CHECK(amp_node >= 0);
+        const int split_out = graph.outputPinId(splitter_node);
+        const int amp_in = graph.inputPinId(amp_node);
+        const int mixer_in = graph.inputPinId(mixer_node);
         IM_CHECK(split_out >= 0);
         IM_CHECK(amp_in >= 0);
         IM_CHECK(mixer_in >= 0);
