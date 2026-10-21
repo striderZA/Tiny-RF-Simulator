@@ -1,3 +1,9 @@
+## [0.29.2] - 2026-10-21
+
+### Fixed
+
+- **Spectrum Analyzer noise floor follows RBW** — noise power now integrates over the selected effective RBW, including sweep edges and RBWs below source-bin spacing. Tone peaks remain unchanged; changing RBW resets Max Hold, Min Hold, and Video Average history.
+
 ## [0.29.1] - 2026-10-20
 
 ### Added
