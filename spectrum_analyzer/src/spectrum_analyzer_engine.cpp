@@ -351,9 +351,9 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBWImpl(const std::vector<doubl
     if (!std::isfinite(m_rbw) || m_rbw <= 0.0 || !std::isfinite(binWidth) || binWidth <= 0.0) {
         return power_W;
     }
-    // Gaussian RBW filter. Its width follows RBW / binWidth, while the noise-only
-    // path normalizes the discrete kernel area to RBW / binWidth. The tone path
-    // leaves its center gain at one to preserve peak power.
+    // Gaussian RBW filter. Its width follows RBW / binWidth. Noise-only convolution
+    // normalizes its in-range discrete area at each output bin to the requested ENBW;
+    // tone convolution keeps its center gain at one to preserve peak power.
     double rbw_bins = m_rbw / binWidth;
     constexpr double sqrt_2pi = 2.5066282746310002; // sqrt(2 * pi)
     double sigma = rbw_bins / sqrt_2pi;
@@ -366,31 +366,32 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBWImpl(const std::vector<doubl
     const std::ptrdiff_t kernel_size = 2 * kernel_half + 1;
 
     std::vector<double> kernel(static_cast<size_t>(kernel_size));
-    double kernel_sum = 0.0;
     for (std::ptrdiff_t i = 0; i < kernel_size; ++i) {
         // Offsets are computed in double: an int square overflows past |x| = 46340.
         const double x = static_cast<double>(i - kernel_half);
         // The peak is 1 by definition; it is also the 0/0 entry when sigma underflows to zero.
-        const double weight = (x == 0.0) ? 1.0 : std::exp(-0.5 * (x * x) / (sigma * sigma));
-        kernel[static_cast<size_t>(i)] = weight;
-        kernel_sum += weight;
-    }
-    if (normalizeNoiseBandwidth && std::isfinite(rbw_bins) && kernel_sum > 0.0) {
-        const double scale = rbw_bins / kernel_sum;
-        for (double &weight : kernel) {
-            weight *= scale;
-        }
+        kernel[static_cast<size_t>(i)] =
+            (x == 0.0) ? 1.0 : std::exp(-0.5 * (x * x) / (sigma * sigma));
     }
 
+    const bool normalize_noise = normalizeNoiseBandwidth && std::isfinite(rbw_bins);
     std::vector<double> out(static_cast<size_t>(n), 0.0);
     for (std::ptrdiff_t i = 0; i < n; ++i) {
         double acc = 0.0;
+        double available_kernel_sum = 0.0;
         for (std::ptrdiff_t k = -kernel_half; k <= kernel_half; ++k) {
             const std::ptrdiff_t idx = i + k;
             if (idx < 0 || idx >= n) {
                 continue;
             }
-            acc += power_W[static_cast<size_t>(idx)] * kernel[static_cast<size_t>(k + kernel_half)];
+            const double weight = kernel[static_cast<size_t>(k + kernel_half)];
+            acc += power_W[static_cast<size_t>(idx)] * weight;
+            if (normalize_noise) {
+                available_kernel_sum += weight;
+            }
+        }
+        if (normalize_noise && available_kernel_sum > 0.0) {
+            acc *= rbw_bins / available_kernel_sum;
         }
         out[static_cast<size_t>(i)] = acc;
     }

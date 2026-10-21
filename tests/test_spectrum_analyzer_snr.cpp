@@ -59,6 +59,23 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR follows the RBW filter width", "
     REQUIRE(*snr_5MHz == Catch::Approx(63.0).margin(0.5));
 }
 
+TEST_CASE("SpectrumAnalyzer: strongest-tone SNR keeps the RBW at sweep edges", "[spectrum][snr]") {
+    Spectrum spec;
+    for (size_t i = 0; i <= 10; ++i) {
+        spec.frequencies.push_back(static_cast<double>(i) * 1e6);
+    }
+    spec.noise_total_W.assign(spec.frequencies.size(), 1e-18);
+    spec.tones = {{0.0, kStrongestTone_dBm, 0.0}};
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    sa.setResBw(10e6);
+
+    std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
+    REQUIRE(snr.has_value());
+    REQUIRE(*snr == Catch::Approx(60.0).margin(1e-6));
+}
+
 TEST_CASE("SpectrumAnalyzer: strongest-tone SNR uses full stored tone power on a "
           "real-domain spectrum",
           "[spectrum][snr]") {

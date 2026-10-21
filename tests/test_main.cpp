@@ -355,9 +355,13 @@ TEST_CASE("Spectrum analyzer noise floor tracks effective RBW", "[spectrum]") {
         const double average_noise_dBm = sa.computeAverageNoiseLevel(specs);
 
         INFO("RBW: " << rbw);
+        REQUIRE(trace.front() == Approx(expected_dBm).margin(0.02));
         REQUIRE(trace[mid] == Approx(expected_dBm).margin(0.02));
+        REQUIRE(trace.back() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(combined.front() == Approx(expected_dBm).margin(0.02));
         REQUIRE(combined[mid] == Approx(expected_dBm).margin(0.02));
-        REQUIRE(average_noise_dBm == Approx(expected_dBm).margin(0.03));
+        REQUIRE(combined.back() == Approx(expected_dBm).margin(0.02));
+        REQUIRE(average_noise_dBm == Approx(expected_dBm).margin(0.005));
     }
 }
 
