@@ -16,7 +16,8 @@ int main() {
     if (!glfwInit())
         return 1;
 
-    GLFWwindow *window = glfwCreateWindow(800, 600, "RF Simulator UI Tests", nullptr, nullptr);
+    // UI cases resize the Node Editor to 900x700; keep the test viewport large enough for docking.
+    GLFWwindow *window = glfwCreateWindow(1280, 960, "RF Simulator UI Tests", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;

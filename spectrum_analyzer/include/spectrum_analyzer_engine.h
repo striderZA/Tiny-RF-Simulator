@@ -18,7 +18,12 @@ class SpectrumAnalyzerEngine {
     void setMinPower(double v) { m_min_power = v; }
     void setMaxPower(double v) { m_max_power = v; }
     void setVideoBw(double v) { m_vbw = v; }
-    void setResBw(double v) { m_rbw = v; }
+    void setResBw(double v) {
+        if (m_rbw != v) {
+            m_rbw = v;
+            resetTraceHistory();
+        }
+    }
     void setNoiseJitterEnabled(bool v) { m_noise_jitter_enabled = v; }
     void setNoiseJitterSigmaDb(double v) { m_noise_jitter_sigma_dB = v; }
 
@@ -44,6 +49,8 @@ class SpectrumAnalyzerEngine {
     // applyVBW() and applyRBW() return their input unchanged when the RBW or VBW, or the bin
     // width, is not finite and positive. A kernel half-width is clamped to the grid length and a
     // VBW window to twice it; the clamped offsets never reach a bin, so the output is unchanged.
+    // The generic applyRBW() kernel remains unit-peak for tones; internal noise paths normalize
+    // its sampled area to the requested RBW.
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
@@ -84,6 +91,10 @@ class SpectrumAnalyzerEngine {
     // deterministic tone peaks never wander; a non-positive sigma disables it.
     std::vector<double> toJitteredPower_dBm(const std::vector<double> &noise_W,
                                             const std::vector<double> &tone_W) const;
+    std::vector<double> applyRBWForNoise(const std::vector<double> &power_W, double binWidth) const;
+    std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
+                                     bool normalizeNoiseBandwidth) const;
+
     std::vector<double> applyTraceMode(const Spectrum &spec,
                                        const std::vector<double> &after_vbw) const;
 

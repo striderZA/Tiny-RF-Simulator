@@ -101,7 +101,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     } else {
         std::vector<double> noise_W, tone_W;
         this->binPowerComponents(spec, noise_W, tone_W);
-        rbw_noise_W = this->applyRBW(noise_W, bin_width);
+        rbw_noise_W = this->applyRBWForNoise(noise_W, bin_width);
         rbw_tone_W = this->applyRBW(tone_W, bin_width);
         m_cache_spectrum = &spec;
         m_cache_spec_gen = spec.generation;
@@ -160,7 +160,7 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
         }
     }
 
-    std::vector<double> rbw_noise_W = this->applyRBW(sum_noise_W, bin_width);
+    std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
     std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
     // Jitter the noise floor only, then add the deterministic tone power back.
@@ -206,7 +206,7 @@ SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectru
         }
     }
 
-    std::vector<double> rbw_noise_W = this->applyRBW(sum_noise_W, bin_width);
+    std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
     if (rbw_noise_W.empty()) {
         return -174.0;
     }
@@ -305,10 +305,10 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
     }
 
     // Noise exactly as renderSpectrum() builds it: density (W/Hz) times bin width,
-    // then the same RBW filter. Only the selected tone bin is read.
+    // then the noise-normalized RBW filter. Only the selected tone bin is read.
     std::vector<double> noise_W, tone_W;
     this->binPowerComponents(spec, noise_W, tone_W);
-    std::vector<double> rbw_noise_W = this->applyRBW(noise_W, bin_width);
+    std::vector<double> rbw_noise_W = this->applyRBWForNoise(noise_W, bin_width);
     if (rbw_noise_W.size() != n) {
         return std::nullopt;
     }
@@ -332,6 +332,17 @@ SpectrumAnalyzerEngine::computeStrongestToneSNRdB(const Spectrum &spec) const {
 
 std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &power_W,
                                                      double binWidth) const {
+    return applyRBWImpl(power_W, binWidth, false);
+}
+
+std::vector<double> SpectrumAnalyzerEngine::applyRBWForNoise(const std::vector<double> &power_W,
+                                                             double binWidth) const {
+    return applyRBWImpl(power_W, binWidth, true);
+}
+
+std::vector<double> SpectrumAnalyzerEngine::applyRBWImpl(const std::vector<double> &power_W,
+                                                         double binWidth,
+                                                         bool normalizeNoiseBandwidth) const {
     const std::ptrdiff_t n = static_cast<std::ptrdiff_t>(power_W.size());
     if (n == 0) {
         return {};
@@ -340,12 +351,9 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &
     if (!std::isfinite(m_rbw) || m_rbw <= 0.0 || !std::isfinite(binWidth) || binWidth <= 0.0) {
         return power_W;
     }
-    // Gaussian RBW filter. Scale sigma so that the discrete sum of the kernel
-    // approximates RBW / binWidth. For flat noise density D (W/Hz), each bin
-    // holds D * binWidth (W). After convolution: output = D * binWidth * sum(kernel)
-    //                          ≈ D * binWidth * (RBW / binWidth) = D * RBW
-    // This makes the displayed noise floor independent of the internal grid spacing.
-    // For a tone (single-bin impulse), peak power is preserved because kernel[center]=1.
+    // Gaussian RBW filter. Its width follows RBW / binWidth, while the noise-only
+    // path normalizes the discrete kernel area to RBW / binWidth. The tone path
+    // leaves its center gain at one to preserve peak power.
     double rbw_bins = m_rbw / binWidth;
     constexpr double sqrt_2pi = 2.5066282746310002; // sqrt(2 * pi)
     double sigma = rbw_bins / sqrt_2pi;
@@ -358,15 +366,21 @@ std::vector<double> SpectrumAnalyzerEngine::applyRBW(const std::vector<double> &
     const std::ptrdiff_t kernel_size = 2 * kernel_half + 1;
 
     std::vector<double> kernel(static_cast<size_t>(kernel_size));
+    double kernel_sum = 0.0;
     for (std::ptrdiff_t i = 0; i < kernel_size; ++i) {
         // Offsets are computed in double: an int square overflows past |x| = 46340.
         const double x = static_cast<double>(i - kernel_half);
         // The peak is 1 by definition; it is also the 0/0 entry when sigma underflows to zero.
-        kernel[static_cast<size_t>(i)] =
-            (x == 0.0) ? 1.0 : std::exp(-0.5 * (x * x) / (sigma * sigma));
+        const double weight = (x == 0.0) ? 1.0 : std::exp(-0.5 * (x * x) / (sigma * sigma));
+        kernel[static_cast<size_t>(i)] = weight;
+        kernel_sum += weight;
     }
-    // Kernel peaks at 1 (center) — preserves tone peak power.
-    // sum(kernel) ≈ RBW / binWidth — integrates noise over RBW, grid-independent.
+    if (normalizeNoiseBandwidth && std::isfinite(rbw_bins) && kernel_sum > 0.0) {
+        const double scale = rbw_bins / kernel_sum;
+        for (double &weight : kernel) {
+            weight *= scale;
+        }
+    }
 
     std::vector<double> out(static_cast<size_t>(n), 0.0);
     for (std::ptrdiff_t i = 0; i < n; ++i) {

@@ -189,15 +189,16 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR picks the nearest grid entry on 
         spec.is_complex_baseband = true;
 
         SpectrumAnalyzerEngine sa;
-        // RBW far below the bin spacing -> the Gaussian kernel collapses to the
-        // identity, so the measured floor is exactly the selected entry's power.
+
+        // RBW=1 Hz is 1/100 of the 100 Hz bin spacing. Even when the sampled
+        // kernel collapses to one bin, its noise contribution must integrate to 1 Hz.
         sa.setResBw(1.0);
 
         std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
         REQUIRE(snr.has_value());
-        // 1e-5 W against 1e-13 W.
-        REQUIRE(*snr == Catch::Approx(80.0).margin(1e-6));
-        REQUIRE(std::fabs(*snr - 110.0) > 1.0); // index 1 would have read this
+        // 1e-5 W against 1e-15 W.
+        REQUIRE(*snr == Catch::Approx(100.0).margin(1e-6));
+        REQUIRE(std::fabs(*snr - 130.0) > 1.0); // index 1 would have read this
     }
 
     SECTION("an exact tie resolves to the lower index") {
@@ -209,12 +210,12 @@ TEST_CASE("SpectrumAnalyzer: strongest-tone SNR picks the nearest grid entry on 
         spec.is_complex_baseband = true;
 
         SpectrumAnalyzerEngine sa;
-        sa.setResBw(1e-3); // kernel collapses to the identity
+        sa.setResBw(1e-3); // 0.001 Hz effective bandwidth on a 1 Hz grid
 
         std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
         REQUIRE(snr.has_value());
-        REQUIRE(*snr == Catch::Approx(130.0).margin(1e-6)); // lower index (1e-18 W)
-        REQUIRE(std::fabs(*snr - 100.0) > 1.0);             // the upper index's value
+        REQUIRE(*snr == Catch::Approx(160.0).margin(1e-6)); // lower index (1e-21 W)
+        REQUIRE(std::fabs(*snr - 130.0) > 1.0);             // the upper index's value
     }
 }
 
@@ -246,21 +247,21 @@ TEST_CASE("SpectrumAnalyzer: SNR preserves finite extreme tone dBm values", "[sp
     spec.is_complex_baseband = true;
 
     SpectrumAnalyzerEngine sa;
-    // The 1 Hz bins with a very narrow RBW leave the center-bin noise at 1e-200 W.
+    // The 1 Hz-bin noise is normalized to the 0.01 Hz effective bandwidth.
     sa.setResBw(0.01);
 
     SECTION("signal conversion does not underflow") {
         spec.tones = {{1.0, -4000.0, 0.0}};
         std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
         REQUIRE(snr.has_value());
-        REQUIRE(*snr == Catch::Approx(-2030.0).margin(1e-6));
+        REQUIRE(*snr == Catch::Approx(-2010.0).margin(1e-6));
     }
 
     SECTION("signal conversion does not overflow") {
         spec.tones = {{1.0, 4000.0, 0.0}};
         std::optional<double> snr = sa.computeStrongestToneSNRdB(spec);
         REQUIRE(snr.has_value());
-        REQUIRE(*snr == Catch::Approx(5970.0).margin(1e-6));
+        REQUIRE(*snr == Catch::Approx(5990.0).margin(1e-6));
     }
 }
 

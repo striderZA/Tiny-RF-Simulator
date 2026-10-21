@@ -74,6 +74,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - A user edit clamps into the limits. An edit that clamping would reverse (a `+` step on a value above the range) is ignored. An edit that clamps back onto the current value reports no change.
 - Callers pass a local copy and write it back only when the helper returns true.
 - Spectrum-analyzer RBW and VBW span 1 kHz to 100 MHz. The range lives at the widget's `utils::inputFrequency()` call, and its trailing `displayUnit_Hz` picks the unit. Engine setters stay unclamped so tests and API callers can drive any value.
+- The analyzer reports noise power integrated over its effective RBW: the sampled noise kernel is normalized to RBW even below the source-bin spacing, while the tone kernel remains peak-normalized. Changing RBW clears Max Hold, Min Hold, and Video Average history.
 
 ## Agent Rules
 

@@ -189,8 +189,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
         ImGui::TextUnformatted("Resolution bandwidth: Gaussian filter width applied to\n"
                                "the spectrum. A narrower RBW lowers the displayed noise\n"
-                               "floor, down to the spectrum's bin spacing - below that it\n"
-                               "can no longer resolve.");
+                               "floor even below the bin spacing, but frequency detail\n"
+                               "below that spacing cannot be resolved.");
         ImGui::EndTooltip();
     }
 
