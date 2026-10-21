@@ -526,6 +526,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t = IM_REGISTER_TEST(e, "rf_simulator", "link_context_menu_remove");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
+        ctx->WindowMove("Node Editor", ImVec2(20.0f, 40.0f));
         ctx->WindowResize("Node Editor", ImVec2(900, 700));
         ctx->Yield(2);
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
@@ -640,22 +641,32 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // True once the mouse sits on `node_id`. A pin never counts: imnodes
         // reports the pin instead of the node, which is the case the node
         // tooltip is deliberately suppressed for.
+        ImNodesEditorContext *editor_context = s_app->testGraphWidget().context();
+        auto node_is_hovered = [&](int node_id) {
+            ImNodes::EditorContextSet(editor_context);
+            int hovered = -1;
+            return ImNodes::IsNodeHovered(&hovered) && hovered == node_id;
+        };
         auto hover_node = [&](int node_id, ImVec2 pos, ImVec2 dim) {
             for (float fy = 0.25f; fy <= 0.8f; fy += 0.25f) {
                 for (float fx = 0.25f; fx <= 0.8f; fx += 0.25f) {
+                    ctx->SetRef("");
                     ctx->MouseMoveToPos(ImVec2(pos.x + dim.x * fx, pos.y + dim.y * fy));
-                    ctx->Yield(1);
-                    int hovered = -1;
-                    if (ImNodes::IsNodeHovered(&hovered) && hovered == node_id)
-                        return true;
+                    for (int frame = 0; frame < 4; ++frame) {
+                        ctx->Yield();
+                        if (node_is_hovered(node_id))
+                            return true;
+                    }
                 }
             }
             return false;
         };
-
+        ctx->SetRef("");
         ctx->WindowFocus("Node Editor");
+        ctx->WindowMove("Node Editor", ImVec2(20.0f, 40.0f));
         ctx->WindowResize("Node Editor", ImVec2(900, 700));
         ctx->Yield(2);
+        ImNodes::EditorContextSet(editor_context);
         ImNodes::EditorContextResetPanning(ImVec2(0, 0));
         ctx->Yield(2);
 
@@ -669,6 +680,37 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(gen_out >= 0);
         IM_CHECK(amp_in >= 0);
 
+        // IM_CHECK returns from this test; restore temporary graph state on every exit.
+        struct GraphUiCleanup {
+            RfSimulatorApp &app;
+            ImNodesEditorContext *editor_context;
+            int gen_node;
+            int amp_node;
+            int link_id = -1;
+            int group_id = -1;
+            bool done = false;
+
+            GraphUiCleanup(RfSimulatorApp &app, ImNodesEditorContext *editor_context, int gen_node,
+                           int amp_node)
+                : app(app), editor_context(editor_context), gen_node(gen_node), amp_node(amp_node) {
+            }
+
+            void run() {
+                if (done)
+                    return;
+                if (link_id >= 0)
+                    app.testDisconnectLink(link_id);
+                if (group_id >= 0)
+                    app.testRemoveGroup(group_id);
+                ImNodes::EditorContextSet(editor_context);
+                ImNodes::SetNodeGridSpacePos(gen_node, ImVec2(0, 0));
+                ImNodes::SetNodeGridSpacePos(amp_node, ImVec2(0, 0));
+                done = true;
+            }
+
+            ~GraphUiCleanup() { run(); }
+        } cleanup(*s_app, editor_context, gen_node, amp_node);
+
         // Separate the two seeded nodes (they start stacked at the canvas origin)
         // inside the window's visible top-left region so both, and the link
         // between them, can be reached by the mouse.
@@ -679,6 +721,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ImVec2(std::min(info.RectFull.Max.x, vp.x), std::min(info.RectFull.Max.y, vp.y));
         float anchor_x = std::min(vis_min.x + 180.0f, vis_max.x - 120.0f);
         float anchor_y = std::min(vis_min.y + 120.0f, vis_max.y - 120.0f);
+        ImNodes::EditorContextSet(editor_context);
         ImNodes::SetNodeScreenSpacePos(gen_node, ImVec2(anchor_x - 140.0f, anchor_y - 60.0f));
         ImNodes::SetNodeScreenSpacePos(amp_node, ImVec2(anchor_x + 140.0f, anchor_y + 40.0f));
         ctx->Yield(4);
@@ -693,8 +736,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(gen_hover.snr_dB.has_value());
 
         // -- node body --
-        IM_CHECK(hover_node(gen_node, ImNodes::GetNodeScreenSpacePos(gen_node),
-                            ImNodes::GetNodeDimensions(gen_node)));
+        ImNodes::EditorContextSet(editor_context);
+        const ImVec2 gen_pos = ImNodes::GetNodeScreenSpacePos(gen_node);
+        const ImVec2 gen_dim = ImNodes::GetNodeDimensions(gen_node);
+        IM_CHECK(info.RectFull.Contains(gen_pos + gen_dim * 0.5f));
+        IM_CHECK(hover_node(gen_node, gen_pos, gen_dim));
         ctx->Yield(3);
         IM_CHECK(tooltip_visible());
 
@@ -707,8 +753,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         for (const ImVec2 &c : {ImVec2(vis_min.x + 20.0f, vis_max.y - 20.0f),
                                 ImVec2(vis_max.x - 20.0f, vis_max.y - 20.0f),
                                 ImVec2(vis_max.x - 20.0f, vis_min.y + 20.0f)}) {
+            ctx->SetRef("");
             ctx->MouseMoveToPos(c);
             ctx->Yield(2);
+            ImNodes::EditorContextSet(editor_context);
             int h = -1;
             if (!ImNodes::IsNodeHovered(&h)) {
                 found_empty = true;
@@ -725,7 +773,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const auto created_link = s_app->testConnectLink(gen_out, amp_in);
         IM_CHECK(created_link.has_value());
         const int link_id = created_link.value_or(-1);
+        cleanup.link_id = link_id;
         ctx->Yield(4);
+        ImNodes::EditorContextSet(editor_context);
         ImVec2 c1 =
             ImNodes::GetNodeScreenSpacePos(gen_node) + ImNodes::GetNodeDimensions(gen_node) * 0.5f;
         ImVec2 c2 =
@@ -734,8 +784,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         bool link_hovered = false;
         for (float dy = 40.0f; dy >= -40.0f && !link_hovered; dy -= 4.0f) {
             for (float dx = -60.0f; dx <= 60.0f && !link_hovered; dx += 4.0f) {
+                ctx->SetRef("");
                 ctx->MouseMoveToPos(ImVec2(mid.x + dx, mid.y + dy));
                 ctx->Yield(1);
+                ImNodes::EditorContextSet(editor_context);
                 int hovered = -1;
                 link_hovered = ImNodes::IsLinkHovered(&hovered) && hovered == link_id;
             }
@@ -745,11 +797,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(tooltip_visible());
 
         IM_CHECK(s_app->testDisconnectLink(link_id));
+        cleanup.link_id = -1;
         ctx->Yield(2);
 
         // -- collapsed subcircuit block (block ids live in 50000..99999) --
         const int group_id = s_app->testCreateGroup("Tooltip Subcircuit", {gen_node, amp_node});
         IM_CHECK(group_id > 0);
+        cleanup.group_id = group_id;
         IM_CHECK(s_app->testSetGroupCollapsed(group_id, true));
         ctx->Yield(4);
         // The link was removed above, so this block has no cross-boundary link —
@@ -758,18 +812,16 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const Group *group = graph.groupById(group_id);
         IM_CHECK(group != nullptr);
         IM_CHECK(group->boundary_pins.empty());
-        IM_CHECK(hover_node(group_id, ImNodes::GetNodeScreenSpacePos(group_id),
-                            ImNodes::GetNodeDimensions(group_id)));
+        ImNodes::EditorContextSet(editor_context);
+        const ImVec2 group_pos = ImNodes::GetNodeScreenSpacePos(group_id);
+        const ImVec2 group_dim = ImNodes::GetNodeDimensions(group_id);
+        IM_CHECK(hover_node(group_id, group_pos, group_dim));
         ctx->Yield(3);
         IM_CHECK(tooltip_visible());
 
         IM_CHECK(s_app->testRemoveGroup(group_id));
-        ctx->Yield(2);
-
-        // Restore the seeded nodes to their default origin positions so the
-        // subcircuit tests' "stacked at canvas origin" assumptions hold.
-        ImNodes::SetNodeGridSpacePos(gen_node, ImVec2(0, 0));
-        ImNodes::SetNodeGridSpacePos(amp_node, ImVec2(0, 0));
+        cleanup.group_id = -1;
+        cleanup.run();
         ctx->Yield(2);
     };
 
@@ -943,7 +995,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t->TestFunc = [](ImGuiTestContext *ctx) {
         int node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
         IM_CHECK(node >= 0);
-        NodeHelper::selectNode(ctx, node);
+        NodeHelper::selectNode(ctx, *s_app, node);
         InspectorHelper::waitForPopulated(ctx, node);
         InspectorHelper::setInputDouble(ctx, "Gain (dB)", 15.0);
         auto *amp = dynamic_cast<AmplifierEngine *>(s_app->testComponents().find(node));
@@ -955,7 +1007,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t->TestFunc = [](ImGuiTestContext *ctx) {
         int node = NodeHelper::findComponentNodeId<AmplifierEngine>(*s_app);
         IM_CHECK(node >= 0);
-        NodeHelper::selectNode(ctx, node);
+        NodeHelper::selectNode(ctx, *s_app, node);
         InspectorHelper::waitForPopulated(ctx, node);
         InspectorHelper::setInputDouble(ctx, "NF (dB)", 3.5);
         auto *amp = dynamic_cast<AmplifierEngine *>(s_app->testComponents().find(node));
@@ -1020,7 +1072,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             }
         }
         IM_CHECK(manual_node >= 0);
-        NodeHelper::selectNode(ctx, manual_node);
+        NodeHelper::selectNode(ctx, *s_app, manual_node);
         InspectorHelper::waitForPopulated(ctx, manual_node);
         ctx->SetRef("Properties");
         IM_CHECK(!ctx->ItemExists("Part"));
@@ -1029,7 +1081,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(placed != nullptr);
         const int component_id = placed->id();
         const int old_node = placed->graphNodeId();
-        NodeHelper::selectNode(ctx, old_node);
+        NodeHelper::selectNode(ctx, *s_app, old_node);
         InspectorHelper::waitForPopulated(ctx, old_node);
         ctx->SetRef("Properties");
         IM_CHECK(ctx->ItemExists("Part"));
