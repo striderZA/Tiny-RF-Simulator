@@ -124,7 +124,8 @@ TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
 }
 
 TEST_CASE("Combiner: non-reciprocal 3-port S31 drives the first path", "[combiner][sparam]") {
-    const auto path = std::filesystem::temp_directory_path() / "non_reciprocal.s3p";
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("non_reciprocal_" + test_temp_paths::processTag() + ".s3p");
     {
         std::ofstream file(path);
         file << "# GHz S RI R 50\n1";

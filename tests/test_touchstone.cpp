@@ -171,5 +171,6 @@ TEST_CASE("TouchstoneParser stores 3-port and 4-port matrices in row-major order
                 REQUIRE(result->parameters[0][pair].imag() == Approx(0.0));
             }
         }
+        std::filesystem::remove(tmpfile);
     }
 }

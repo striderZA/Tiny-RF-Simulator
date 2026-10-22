@@ -550,7 +550,7 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     CHECK(generator->serialize() == generator_before);
 
     int frames = 1;
-    // A row is indivisible and may exceed the pump budget, so allow one update per remaining row.
+    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow yields.
     while (!completed && frames <= flow_rows) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
@@ -562,7 +562,6 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     CHECK(result.structured.at("row_count") == flow_rows);
     CHECK(result.structured.at("rows").size() == flow_rows);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames <= flow_rows + 1);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",
