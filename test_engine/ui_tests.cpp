@@ -5,6 +5,7 @@
 #include "app.h"
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
@@ -2650,6 +2651,46 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(3);
         IM_CHECK(agentPanelVisible());
+    };
+
+    // Issue #299: the inspector refuses a Low cutoff that would invert a BPF band. The typed
+    // value is not written, and the band keeps its last valid cutoffs.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_filter_inverted_band_refused");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *placed = s_app->testCreateComponent("filter", 9299);
+        IM_CHECK(placed != nullptr);
+        auto *filter = dynamic_cast<IdealFilterEngine *>(placed);
+        IM_CHECK(filter != nullptr);
+        const int node = placed->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        InspectorHelper::waitForPopulated(ctx, node);
+
+        // LPF 50 MHz, then Type BPF: the band is 50/50 MHz.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Cutoff", "50");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 50e6);
+        InspectorHelper::selectComboItem(ctx, "Type", "BPF");
+        IM_CHECK(filter->filterType() == FilterType::BPF);
+
+        // Low 100 MHz over High 50 MHz would invert the band: refused, nothing written.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Low Cutoff", "100");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 50e6);
+        IM_CHECK_EQ(filter->fcHigh_Hz(), 50e6);
+
+        // Raising High first makes the same Low edit valid.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("High Cutoff", "200");
+        ctx->Yield(2);
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Low Cutoff", "100");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 100e6);
+        IM_CHECK_EQ(filter->fcHigh_Hz(), 200e6);
+
+        s_app->testRemoveComponent(node);
     };
 
     // Issue #184: the amplifier form exposes the S-parameter file picker.

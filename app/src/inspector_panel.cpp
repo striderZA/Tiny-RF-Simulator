@@ -758,8 +758,14 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
     const char *type_names[] = {"LPF", "HPF", "BPF", "BSF"};
     int current = static_cast<int>(engine.filterType());
     if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
-        engine.setFilterType(static_cast<FilterType>(current));
-        m_param_edited = true;
+        // setFilterType() refuses a band type over an inverted stored pair (reachable from an
+        // LPF with a stray fc_high); the stored type is then left as it was.
+        try {
+            engine.setFilterType(static_cast<FilterType>(current));
+            m_param_edited = true;
+        } catch (const std::invalid_argument &e) {
+            LOG_WARN("Ideal filter type not changed: %s", e.what());
+        }
     }
 
     FilterType ft = engine.filterType();
@@ -780,8 +786,12 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
             changed = true;
         }
         if (changed) {
-            engine.setCutoffs_Hz(low, high);
-            m_param_edited = true;
+            try {
+                engine.setCutoffs_Hz(low, high);
+                m_param_edited = true;
+            } catch (const std::invalid_argument &e) {
+                LOG_WARN("Ideal filter cutoff rejected: %s", e.what());
+            }
         }
     }
 

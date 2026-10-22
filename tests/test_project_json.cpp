@@ -1,5 +1,6 @@
 #include "amplifier_engine.h"
 #include "app.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -170,4 +171,51 @@ TEST_CASE_METHOD(ImGuiFixture, "fromJson replaces the project like a load", "[pr
     CHECK(restored[0]->tones()[0].power_dBm == -9.0);
     CHECK(app.testComponents().byType<AmplifierEngine>().empty());
     CHECK(app.componentCount() == 1);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project load refuses an inverted ideal filter band and keeps the open project",
+                 "[project_json]") {
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 10101);
+    const auto before = app.testProjectSerializer().toJson({std::nullopt, false});
+    const auto epoch_before = app.testProjectEpoch();
+
+    // A file holding a valid generator and an inverted BPF. Skipping the filter would
+    // drop it and its links from the next save, so the whole file must be refused.
+    json snapshot = before;
+    snapshot["components"].push_back(
+        {{"type", "IdealFilter"},
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}});
+    CHECK_FALSE(
+        app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+
+    CHECK_FALSE(app.testProjectSerializer().lastLoadReset());
+    CHECK(app.testProjectEpoch() == epoch_before);
+    CHECK(app.componentCount() == 1);
+    CHECK(app.testProjectSerializer().toJson({std::nullopt, false}).at("components") ==
+          before.at("components"));
+    CHECK(app.testComponents().byType<IdealFilterEngine>().empty());
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project load refuses an inverted filter record under its registry key",
+                 "[project_json]") {
+    // The registry accepts "filter" as well as "IdealFilter" for the same descriptor. Both
+    // spellings must hit the refusal, or the record is skipped and its links are lost.
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 10101);
+    const auto before = app.testProjectSerializer().toJson({std::nullopt, false});
+
+    json snapshot = before;
+    snapshot["components"].push_back(
+        {{"type", "filter"},
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}});
+    CHECK_FALSE(
+        app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+    CHECK(app.componentCount() == 1);
+    CHECK(app.testProjectSerializer().toJson({std::nullopt, false}).at("components") ==
+          before.at("components"));
 }
