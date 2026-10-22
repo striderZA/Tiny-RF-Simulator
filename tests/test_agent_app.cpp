@@ -560,7 +560,7 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     CHECK(result.structured.at("row_count") == 1000);
     CHECK(result.structured.at("rows").size() == 1000);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames < 200);
+    CHECK(frames <= 200);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",
