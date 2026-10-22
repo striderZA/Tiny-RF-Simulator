@@ -198,3 +198,24 @@ TEST_CASE_METHOD(ImGuiFixture,
           before.at("components"));
     CHECK(app.testComponents().byType<IdealFilterEngine>().empty());
 }
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project load refuses an inverted filter record under its registry key",
+                 "[project_json]") {
+    // The registry accepts "filter" as well as "IdealFilter" for the same descriptor. Both
+    // spellings must hit the refusal, or the record is skipped and its links are lost.
+    RfSimulatorApp app;
+    app.newProject();
+    app.testCreateComponent("generator", 10101);
+    const auto before = app.testProjectSerializer().toJson({std::nullopt, false});
+
+    json snapshot = before;
+    snapshot["components"].push_back(
+        {{"type", "filter"},
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}});
+    CHECK_FALSE(
+        app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+    CHECK(app.componentCount() == 1);
+    CHECK(app.testProjectSerializer().toJson({std::nullopt, false}).at("components") ==
+          before.at("components"));
+}

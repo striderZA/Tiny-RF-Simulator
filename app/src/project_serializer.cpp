@@ -1463,11 +1463,16 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
         const auto ideal_filter_bands_ok = [&]() -> bool {
             if (!root.contains("components") || !root["components"].is_array())
                 return true;
+            const auto *filter_descriptor = ComponentTypeRegistry::instance().find("filter");
             size_t index = 0;
             for (const auto &cj : root["components"]) {
-                const bool is_filter = cj.is_object() && cj.contains("type") &&
-                                       cj["type"].is_string() &&
-                                       cj["type"].get<std::string>() == "IdealFilter";
+                // Resolve the record the way the loader does: any name findByProjectType()
+                // accepts for the filter descriptor, not only the project-type spelling.
+                const bool is_filter =
+                    filter_descriptor && cj.is_object() && cj.contains("type") &&
+                    cj["type"].is_string() &&
+                    ComponentTypeRegistry::instance().findByProjectType(
+                        cj["type"].get<std::string>()) == filter_descriptor;
                 if (is_filter && cj.contains("params") && cj["params"].is_object()) {
                     // Same deserialize() the loader runs, on a scratch engine that is discarded.
                     NodeGraphEngine scratch_graph;
