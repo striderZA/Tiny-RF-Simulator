@@ -135,7 +135,7 @@ std::optional<nlohmann::json> pumpUntilReply(AgentServer &server, TestBridgeClie
 // order. Receiving that answer therefore proves every call sent before it is already queued.
 void awaitQueuedCalls(TestBridgeClient &client) {
     REQUIRE(client.sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
-    const auto answer = client.receive();
+    const auto answer = client.receive(10s);
     REQUIRE(answer.has_value());
     REQUIRE(answer->contains("error"));
 }

@@ -302,12 +302,22 @@ TEST_CASE("Receiver IIP3 preserves the analytic estimate with 1 Hz tone spacing"
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
 
     ReceiverPerformanceMeasurementEngine ordinary_spacing(c.graph, c.host);
-    ordinary_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    for (int updates = 0; updates < 1000; ++updates) {
+        ordinary_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+        if (!ordinary_spacing.isInProgress())
+            break;
+    }
     REQUIRE(isFinite(ordinary_spacing.measurements().iip3_dBm[0]));
 
     settings.measurement_conditions.iip3->tone_spacing_Hz = 1.0;
     ReceiverPerformanceMeasurementEngine one_hz_spacing(c.graph, c.host);
-    one_hz_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    // update() stops at a 4 ms wall-clock budget; loop until the sweep completes so the
+    // result does not depend on machine load (see tests/AGENTS.md).
+    for (int updates = 0; updates < 1000; ++updates) {
+        one_hz_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+        if (!one_hz_spacing.isInProgress())
+            break;
+    }
     REQUIRE(isFinite(one_hz_spacing.measurements().iip3_dBm[0]));
     CHECK(one_hz_spacing.measurements().iip3_dBm[0] == Catch::Approx(30.0).margin(1.5));
     CHECK(one_hz_spacing.measurements().iip3_dBm[0] ==
