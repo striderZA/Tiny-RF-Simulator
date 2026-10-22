@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixed
+
+- **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
