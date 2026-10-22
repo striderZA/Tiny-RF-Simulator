@@ -97,9 +97,10 @@ void AdcEngine::update(double /*dt*/) {
     out.is_complex_baseband = true;
 
     // -- Noise mapping + NSD --
-    double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
+    const double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
+    const double real_input_noise_scale = input->is_complex_baseband ? 1.0 : 0.5;
     out.noise_W.assign(N, 0.0);
-    out.noise_added_W.assign(N, nsd_W_per_Hz);
+    out.noise_added_W.assign(N, nsd_W_per_Hz * real_input_noise_scale);
     out.noise_total_W.resize(N, 0.0);
     out.phase_deg.assign(N, 0.0);
 
@@ -126,7 +127,7 @@ void AdcEngine::update(double /*dt*/) {
             }
             noise_psd = input->noise_total_W[best_j];
         }
-        out.noise_W[i] += noise_psd;
+        out.noise_W[i] += noise_psd * real_input_noise_scale;
     }
 
     out.computeTotalNoise();
