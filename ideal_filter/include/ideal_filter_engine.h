@@ -3,6 +3,7 @@
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
 #include "signal_node.h"
+#include <stdexcept>
 
 enum class FilterType { LPF, HPF, BPF, BSF };
 
@@ -24,7 +25,12 @@ class IdealFilterEngine : public ComponentEngineBase {
         m_fc_high_Hz = fc_Hz;
         m_dirty = true;
     }
+    // A band (BPF/BSF) with low > high is rejected with std::invalid_argument and keeps the
+    // stored cutoffs. LPF/HPF use only fc_low, so their fc_high is stored unchecked. An equal
+    // pair is accepted: LPF -> BPF leaves both at the same value.
     void setCutoffs_Hz(double low, double high) {
+        if ((m_type == FilterType::BPF || m_type == FilterType::BSF) && low > high)
+            throw std::invalid_argument("ideal filter band: low cutoff exceeds high cutoff");
         m_fc_low_Hz = low;
         m_fc_high_Hz = high;
         m_dirty = true;
