@@ -150,6 +150,35 @@ TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
     }
 }
 
+TEST_CASE("ADC DDC folds noise from every Nyquist zone like tones", "[adc][nyquist]") {
+    // Issue #303: a zone-2 noise bump at 750 MHz must alias to -250 MHz (from +750 MHz)
+    // and +250 MHz (from its mirror -750 MHz), matching the tone fold.
+    NodeGraphEngine graph;
+    AdcEngine adc(20, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.0);
+    adc.setNsd_dBm_per_Hz(-200.0);
+
+    Spectrum in = makeInput(2001, 0.0, 2e9); // 1 MHz grid over 0..2 GHz, 1e-20 W/Hz baseline
+    in.noise_total_W[750] = 1e-12;           // 750 MHz bump
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    auto nearest_index = [&](double f_Hz) {
+        size_t best = 0;
+        for (size_t i = 0; i < out.frequencies.size(); ++i) {
+            if (std::abs(out.frequencies[i] - f_Hz) < std::abs(out.frequencies[best] - f_Hz))
+                best = i;
+        }
+        return best;
+    };
+    REQUIRE(out.noise_total_W[nearest_index(250e6)] == Approx(1e-12).margin(1e-14));
+    REQUIRE(out.noise_total_W[nearest_index(-250e6)] == Approx(1e-12).margin(1e-14));
+}
+
 TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(6, graph);

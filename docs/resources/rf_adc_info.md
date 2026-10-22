@@ -51,6 +51,8 @@ f_low  = (Z-1) · Fs/2
 f_high =  Z    · Fs/2
 ```
 
+The simulator applies no anti-alias band in the engine: tones and input noise both fold from every Nyquist zone. Noise is the input PSD summed over all zones that alias onto each output bin; the input grid defines the noise band, and zero noise is assumed beyond its span.
+
 The real sampled waveform's magnitude alias can be described by:
 
 ```python
