@@ -293,6 +293,8 @@ TEST_CASE("IdealFilter rejects inverted BPF/BSF cutoffs through deserialize", "[
         const nlohmann::json inverted = {
             {"filter_type", type}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}};
         CHECK_THROWS_AS(filt.deserialize(inverted), std::invalid_argument);
+        // Rejected before any member changes: the default LPF type and cutoffs remain.
+        CHECK(filt.filterType() == FilterType::LPF);
         CHECK(filt.fcLow_Hz() == 100e6);
         CHECK(filt.fcHigh_Hz() == 200e6);
     }
@@ -305,4 +307,39 @@ TEST_CASE("IdealFilter accepts a band whose cutoffs are equal", "[filter][edge]"
     filt.setCutoffs_Hz(100e6, 100e6);
     CHECK(filt.fcLow_Hz() == 100e6);
     CHECK(filt.fcHigh_Hz() == 100e6);
+}
+
+TEST_CASE("IdealFilter setFilterType refuses a band type over an inverted stored pair",
+          "[filter][edge]") {
+    // An LPF stores fc_high unchecked, so it can hold an inverted pair. Switching it to a
+    // band type must fail and leave the type as it was.
+    NodeGraphEngine graph;
+    IdealFilterEngine filt(0, graph);
+    filt.deserialize({{"filter_type", "LPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}});
+    REQUIRE(filt.filterType() == FilterType::LPF);
+
+    for (FilterType type : {FilterType::BPF, FilterType::BSF}) {
+        CHECK_THROWS_AS(filt.setFilterType(type), std::invalid_argument);
+        CHECK(filt.filterType() == FilterType::LPF);
+    }
+    // The LPF itself stays usable: a single cutoff needs no ordering.
+    filt.setFilterType(FilterType::HPF);
+    CHECK(filt.filterType() == FilterType::HPF);
+}
+
+TEST_CASE("IdealFilter inspector route keeps an inverted Low edit out of the band",
+          "[filter][edge]") {
+    // Issue #299 route: LPF 50 MHz -> Type BPF -> Low 100 MHz with High still 50 MHz.
+    // The inspector writes setCutoffs_Hz(low, high) only after the edit; the refused
+    // write must leave the band at 50/50 and the field re-reads it.
+    NodeGraphEngine graph;
+    IdealFilterEngine filt(0, graph);
+    filt.setCutoff_Hz(50e6);
+    filt.setFilterType(FilterType::BPF);
+    CHECK(filt.fcLow_Hz() == 50e6);
+    CHECK(filt.fcHigh_Hz() == 50e6);
+
+    CHECK_THROWS_AS(filt.setCutoffs_Hz(100e6, 50e6), std::invalid_argument);
+    CHECK(filt.fcLow_Hz() == 50e6);
+    CHECK(filt.fcHigh_Hz() == 50e6);
 }

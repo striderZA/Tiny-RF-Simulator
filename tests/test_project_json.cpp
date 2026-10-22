@@ -1,5 +1,6 @@
 #include "amplifier_engine.h"
 #include "app.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
@@ -169,5 +170,28 @@ TEST_CASE_METHOD(ImGuiFixture, "fromJson replaces the project like a load", "[pr
     CHECK(restored[0]->tones()[0].freq_Hz == 250.0e6);
     CHECK(restored[0]->tones()[0].power_dBm == -9.0);
     CHECK(app.testComponents().byType<AmplifierEngine>().empty());
+    CHECK(app.componentCount() == 1);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Project load skips an inverted ideal filter band and keeps siblings",
+                 "[project_json]") {
+    RfSimulatorApp app;
+    app.newProject();
+
+    json snapshot = app.testProjectSerializer().toJson({std::nullopt, false});
+    snapshot["components"] = json::array({
+        {{"type", "IdealFilter"},
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}},
+        {{"type", "IdealFilter"},
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 50e6}, {"fc_high_Hz", 100e6}}}},
+    });
+    REQUIRE(app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+
+    const auto filters = app.testComponents().byType<IdealFilterEngine>();
+    REQUIRE(filters.size() == 1);
+    CHECK(filters[0]->filterType() == FilterType::BPF);
+    CHECK(filters[0]->fcLow_Hz() == 50e6);
+    CHECK(filters[0]->fcHigh_Hz() == 100e6);
     CHECK(app.componentCount() == 1);
 }

@@ -15,6 +15,8 @@ class IdealFilterEngine : public ComponentEngineBase {
     std::string hoverSummary() const override;
 
     void setFilterType(FilterType type) {
+        if (!isValidCutoffPair(type, m_fc_low_Hz, m_fc_high_Hz))
+            throw std::invalid_argument(kInvertedBandError);
         m_type = type;
         m_dirty = true;
     }
@@ -25,12 +27,16 @@ class IdealFilterEngine : public ComponentEngineBase {
         m_fc_high_Hz = fc_Hz;
         m_dirty = true;
     }
-    // A band (BPF/BSF) with low > high is rejected with std::invalid_argument and keeps the
-    // stored cutoffs. LPF/HPF use only fc_low, so their fc_high is stored unchecked. An equal
-    // pair is accepted: LPF -> BPF leaves both at the same value.
+    // Refuses inverted cutoffs for band types: LPF/HPF read only fc_low, so their fc_high
+    // is not checked. An equal pair is accepted, since LPF -> BPF leaves both at one value.
+    static constexpr const char *kInvertedBandError =
+        "ideal filter band: low cutoff exceeds high cutoff";
+    static bool isValidCutoffPair(FilterType type, double low, double high) {
+        return !((type == FilterType::BPF || type == FilterType::BSF) && low > high);
+    }
     void setCutoffs_Hz(double low, double high) {
-        if ((m_type == FilterType::BPF || m_type == FilterType::BSF) && low > high)
-            throw std::invalid_argument("ideal filter band: low cutoff exceeds high cutoff");
+        if (!isValidCutoffPair(m_type, low, high))
+            throw std::invalid_argument(kInvertedBandError);
         m_fc_low_Hz = low;
         m_fc_high_Hz = high;
         m_dirty = true;
