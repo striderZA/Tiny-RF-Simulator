@@ -469,6 +469,14 @@ add_standalone_test(test_issue239_rbw_vbw_bounds
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Issue #271: a VBW window must not reduce a CW tone peak (tone level is set by
+# RBW; VBW smooths only the noise floor). Standalone for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_issue271_vbw_tone
+    SOURCES test_issue271_vbw_tone.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Standalone app-level coverage for the node-hover SNR row: the onNodeHover
 # callback carries the registry summary plus the analyzer's strongest-tone SNR
 # for the node's first output, and reports "unavailable" when that output has no

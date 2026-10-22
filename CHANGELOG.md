@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
