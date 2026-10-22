@@ -174,24 +174,27 @@ TEST_CASE_METHOD(ImGuiFixture, "fromJson replaces the project like a load", "[pr
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
-                 "Project load skips an inverted ideal filter band and keeps siblings",
+                 "Project load refuses an inverted ideal filter band and keeps the open project",
                  "[project_json]") {
     RfSimulatorApp app;
     app.newProject();
+    app.testCreateComponent("generator", 10101);
+    const auto before = app.testProjectSerializer().toJson({std::nullopt, false});
+    const auto epoch_before = app.testProjectEpoch();
 
-    json snapshot = app.testProjectSerializer().toJson({std::nullopt, false});
-    snapshot["components"] = json::array({
+    // A file holding a valid generator and an inverted BPF. Skipping the filter would
+    // drop it and its links from the next save, so the whole file must be refused.
+    json snapshot = before;
+    snapshot["components"].push_back(
         {{"type", "IdealFilter"},
-         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}},
-        {{"type", "IdealFilter"},
-         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 50e6}, {"fc_high_Hz", 100e6}}}},
-    });
-    REQUIRE(app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
+         {"params", {{"filter_type", "BPF"}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}}}});
+    CHECK_FALSE(
+        app.testProjectSerializer().fromJson(snapshot, {std::nullopt, false}, "checkpoint"));
 
-    const auto filters = app.testComponents().byType<IdealFilterEngine>();
-    REQUIRE(filters.size() == 1);
-    CHECK(filters[0]->filterType() == FilterType::BPF);
-    CHECK(filters[0]->fcLow_Hz() == 50e6);
-    CHECK(filters[0]->fcHigh_Hz() == 100e6);
+    CHECK_FALSE(app.testProjectSerializer().lastLoadReset());
+    CHECK(app.testProjectEpoch() == epoch_before);
     CHECK(app.componentCount() == 1);
+    CHECK(app.testProjectSerializer().toJson({std::nullopt, false}).at("components") ==
+          before.at("components"));
+    CHECK(app.testComponents().byType<IdealFilterEngine>().empty());
 }
