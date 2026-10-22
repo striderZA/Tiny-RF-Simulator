@@ -634,3 +634,19 @@ TEST_CASE("Components without state metadata reject all parameter keys", "[compo
     CHECK(result.status == ParamWriteStatus::UnknownKey);
     CHECK(fixture.commands.revision() == revision);
 }
+
+TEST_CASE("Agent writes refuse an inverted ideal filter band and keep the engine state",
+          "[component_params][filter]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("filter");
+    REQUIRE(engine != nullptr);
+    const nlohmann::json before = engine->serialize();
+    const std::vector<ParameterField> fields = {testField("filter_type"), testField("fc_low_Hz"),
+                                                testField("fc_high_Hz")};
+
+    const auto result = applyComponentParams(
+        *engine, fields, {{"filter_type", 2}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}});
+    CHECK(result.status == ParamWriteStatus::DeserializeFailed);
+    CHECK(result.error.find("low cutoff exceeds high cutoff") != std::string::npos);
+    CHECK(engine->serialize() == before);
+}
