@@ -48,14 +48,14 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
         expanded_tones = conjugateSymmetricExpand(spec.tones);
         display_tones = &expanded_tones;
     }
-    for (const auto &t : *display_tones) {
-        if (n < 2) {
-            continue;
-        }
+    if (n < 2) {
+        return;
+    }
+    for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
         int bin_idx =
-            static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
+            static_cast<int>(std::round((freq_Hz - spec.frequencies.front()) / bin_width));
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
-            tone_W[bin_idx] += std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
+            tone_W[bin_idx] += watts;
         }
     }
 }
