@@ -333,7 +333,7 @@ If the NCO frequency is not an exact integer multiple of the FFT bin (when doing
 
 | Source | Cause | Prevention in twin |
 |---|---|---|
-| Nyquist zone fold | `f_RF > Fs/2` | Ideal BPF before sampler; correct NCO sign for zone |
+| Nyquist zone fold | `f_RF > Fs/2` | Not prevented in the engine (all zones fold); band-limit upstream if needed; correct NCO sign for zone |
 | Decimation alias | LPF cutoff > `Fs/(2D)` | Assert cutoff ≤ `1/D` (normalised); use sufficient filter order |
 | Spectral inversion | Even Nyquist zone | Negate NCO frequency or conjugate output |
 
