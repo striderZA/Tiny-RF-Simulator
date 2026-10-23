@@ -534,33 +534,41 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
         {"measure", ordered_json::array(
                         {{{"component", amplifier->id()}, {"port", 0}, {"metric", "power_dBm"}}})}};
 
-    bool completed = false;
-    AgentToolResult result;
-    app.testAgentServer()->submit(call, [&](const AgentToolResult &r) {
-        completed = true;
-        result = r;
+    // The server holds this callback until the flow finishes, which can outlive a failed REQUIRE.
+    // Share the state so the callback never writes to a destroyed stack frame.
+    struct FlowOutcome {
+        bool completed = false;
+        AgentToolResult result;
+    };
+    auto outcome = std::make_shared<FlowOutcome>();
+    app.testAgentServer()->submit(call, [outcome](const AgentToolResult &r) {
+        outcome->completed = true;
+        outcome->result = r;
     });
 
     // One application update must advance only a bounded slice; rendering still proceeds before
     // the whole request completes.
     app.update_dsp();
     runFrame([&] { app.draw_ui(); });
-    CHECK_FALSE(completed);
+    CHECK_FALSE(outcome->completed);
     CHECK(generator->serialize() == generator_before);
 
+    // Slices are wall-clock budgeted, so the frame count varies with machine load. Bound the wait
+    // by time instead, and require that the flow spanned several frames.
     int frames = 1;
-    while (!completed && frames < 200) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (!outcome->completed && std::chrono::steady_clock::now() < deadline) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
         ++frames;
     }
 
-    REQUIRE(completed);
-    CHECK_FALSE(result.is_error);
-    CHECK(result.structured.at("row_count") == 1000);
-    CHECK(result.structured.at("rows").size() == 1000);
+    REQUIRE(outcome->completed);
+    CHECK_FALSE(outcome->result.is_error);
+    CHECK(outcome->result.structured.at("row_count") == 1000);
+    CHECK(outcome->result.structured.at("rows").size() == 1000);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames < 200);
+    CHECK(frames > 1);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",
