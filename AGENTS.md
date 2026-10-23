@@ -82,6 +82,10 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
 
+## S-parameter Contract
+
+- `SParameterData::interpolate()` evaluates negative frequencies at `|f|` and returns the conjugate response, matching a real-valued network's frequency symmetry.
+
 ## Passive Coax Noise
 
 - Coax cable models a passive lossy stage at 290 K: each output bin is input noise times power gain plus `kT(1−gain)`.
