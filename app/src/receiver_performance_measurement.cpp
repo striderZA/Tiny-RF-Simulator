@@ -52,16 +52,16 @@ tonePower(const Spectrum *spectrum, double frequency_Hz,
     // adding RMS-voltage phasors. Power ratios become voltage ratios in dB.
     double in_phase = 0.0;
     double quadrature = 0.0;
+    double amplitude_sum = 0.0;
     for (const auto *tone : matches) {
         const double amplitude = std::pow(10.0, (tone->power_dBm - reference_dBm) / 20.0);
         const double phase = tone->phase_deg * (std::acos(-1.0) / 180.0);
         in_phase += amplitude * std::cos(phase);
         quadrature += amplitude * std::sin(phase);
+        amplitude_sum += amplitude;
     }
     const double resultant = std::hypot(in_phase, quadrature);
-    const double cancellation_tolerance =
-        std::numeric_limits<double>::epsilon() * static_cast<double>(matches.size());
-    if (!(resultant > cancellation_tolerance) || !std::isfinite(resultant))
+    if (!(resultant > kCoherentCancelRelTol * amplitude_sum) || !std::isfinite(resultant))
         return std::nullopt;
     const double power_dBm = reference_dBm + 20.0 * std::log10(resultant);
     return std::isfinite(power_dBm) ? std::optional<double>(power_dBm) : std::nullopt;

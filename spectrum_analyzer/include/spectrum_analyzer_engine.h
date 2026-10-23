@@ -86,11 +86,14 @@ class SpectrumAnalyzerEngine {
     // may filter or jitter them independently before recombining.
     void binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                             std::vector<double> &tone_W) const;
-    // Combines RBW-filtered per-bin noise and tone power (W) into a dBm display
-    // trace. The cosmetic noise-floor jitter scales only the noise component, so
-    // deterministic tone peaks never wander; a non-positive sigma disables it.
-    std::vector<double> toJitteredPower_dBm(const std::vector<double> &noise_W,
-                                            const std::vector<double> &tone_W) const;
+    // Jittered noise floor (dBm per bin) from RBW-filtered noise power (W). The cosmetic
+    // jitter scales only this component; a non-positive sigma disables it.
+    std::vector<double> toJitteredNoise_dBm(const std::vector<double> &noise_W) const;
+    // Builds the dBm display trace: VBW smooths the jittered noise floor only, then the
+    // RBW-filtered tone power is added in linear watts, so tone peaks are never averaged.
+    std::vector<double> toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                           const std::vector<double> &tone_W,
+                                           double binWidth) const;
     std::vector<double> applyRBWForNoise(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;

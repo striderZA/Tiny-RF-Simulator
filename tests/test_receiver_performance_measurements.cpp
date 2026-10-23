@@ -29,7 +29,7 @@ enum class DroppedTone {
     LowerFundamental,
     DuplicateSamePhase,
     DuplicateQuadrature,
-    DuplicateOppositePhase
+    DuplicateOpposite
 };
 
 class TestAmplifier final : public AmplifierEngine {
@@ -41,10 +41,9 @@ class TestAmplifier final : public AmplifierEngine {
         if (node().inputs.empty() || !node().inputs[0] || node().outputs.empty())
             return;
         const auto &tones = node().inputs[0]->tones;
-        if (tones.size() == 1 &&
-            (m_dropped == DroppedTone::DuplicateSamePhase ||
-             m_dropped == DroppedTone::DuplicateQuadrature ||
-             m_dropped == DroppedTone::DuplicateOppositePhase)) {
+        if (tones.size() == 1 && (m_dropped == DroppedTone::DuplicateSamePhase ||
+                                  m_dropped == DroppedTone::DuplicateQuadrature ||
+                                  m_dropped == DroppedTone::DuplicateOpposite)) {
             auto &output_tones = node().outputs[0].tones;
             const auto fundamental = std::find_if(
                 output_tones.begin(), output_tones.end(), [&tones](const Spectrum::Tone &tone) {
@@ -54,7 +53,7 @@ class TestAmplifier final : public AmplifierEngine {
                 auto duplicate = *fundamental;
                 if (m_dropped == DroppedTone::DuplicateQuadrature)
                     duplicate.phase_deg += 90.0;
-                else if (m_dropped == DroppedTone::DuplicateOppositePhase)
+                if (m_dropped == DroppedTone::DuplicateOpposite)
                     duplicate.phase_deg += 180.0;
                 output_tones.push_back(duplicate);
             }
@@ -206,11 +205,11 @@ TEST_CASE("Receiver output power coherently combines duplicate-frequency tones b
     quadrature.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(quadrature.measurements().output_power_dBm[0] ==
           Catch::Approx(single_power + 3.010299957).margin(1e-6));
-    Host opposite_phase_host{{&c.generator, &c.attenuator, &c.amplifier},
-                             DroppedTone::DuplicateOppositePhase};
-    ReceiverPerformanceMeasurementEngine opposite_phase(c.graph, opposite_phase_host);
-    opposite_phase.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
-    CHECK(std::isnan(opposite_phase.measurements().output_power_dBm[0]));
+
+    Host opposite_host{{&c.generator, &c.attenuator, &c.amplifier}, DroppedTone::DuplicateOpposite};
+    ReceiverPerformanceMeasurementEngine opposite(c.graph, opposite_host);
+    opposite.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK_FALSE(isFinite(opposite.measurements().output_power_dBm[0]));
 }
 
 TEST_CASE("Receiver source resolves one tone automatically and explicit selection among tones",
@@ -312,12 +311,22 @@ TEST_CASE("Receiver IIP3 preserves the analytic estimate with 1 Hz tone spacing"
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
 
     ReceiverPerformanceMeasurementEngine ordinary_spacing(c.graph, c.host);
-    ordinary_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    for (int updates = 0; updates < 1000; ++updates) {
+        ordinary_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+        if (!ordinary_spacing.isInProgress())
+            break;
+    }
     REQUIRE(isFinite(ordinary_spacing.measurements().iip3_dBm[0]));
 
     settings.measurement_conditions.iip3->tone_spacing_Hz = 1.0;
     ReceiverPerformanceMeasurementEngine one_hz_spacing(c.graph, c.host);
-    one_hz_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    // update() stops at a 4 ms wall-clock budget; loop until the sweep completes so the
+    // result does not depend on machine load (see tests/AGENTS.md).
+    for (int updates = 0; updates < 1000; ++updates) {
+        one_hz_spacing.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+        if (!one_hz_spacing.isInProgress())
+            break;
+    }
     REQUIRE(isFinite(one_hz_spacing.measurements().iip3_dBm[0]));
     CHECK(one_hz_spacing.measurements().iip3_dBm[0] == Catch::Approx(30.0).margin(1.5));
     CHECK(one_hz_spacing.measurements().iip3_dBm[0] ==
