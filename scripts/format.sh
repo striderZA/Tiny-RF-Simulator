@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Format (or check) C++ sources with the same clang-format-18 CI uses.
+# Format (or check) C++ sources with clang-format 18 or newer (CI uses 18).
 #
 # Usage:
 #   scripts/format.sh              # reformat every changed file (working tree, vs. HEAD)
@@ -7,34 +7,18 @@
 #   scripts/format.sh --all        # reformat every tracked file in the CI-scanned set, not just changed files
 #   scripts/format.sh file1 file2  # operate on explicit files
 #
-# If clang-format-18 isn't on PATH, run scripts/install-clang-format.sh first.
+# If no clang-format >= 18 is on PATH, run scripts/install-clang-format.sh first.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 # The checked directory set is defined once in scripts/format-dirs.sh, shared
 # with .githooks/pre-commit and the release workflow's format job.
 source scripts/format-dirs.sh
-
-resolve_clang_format() {
-  for candidate in clang-format-18 clang-format; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      if "$candidate" --version 2>/dev/null | grep -q "version 18\."; then
-        echo "$candidate"
-        return 0
-      fi
-    fi
-  done
-  local pip_bin="$HOME/.cache/clang-format-18/clang_format/data/bin/clang-format"
-  [ -f "${pip_bin}.exe" ] && pip_bin="${pip_bin}.exe"
-  if [ -x "$pip_bin" ] || [ -f "$pip_bin" ]; then
-    echo "$pip_bin"
-    return 0
-  fi
-  return 1
-}
+# clang-format discovery is shared with .githooks/pre-commit.
+source scripts/clang-format-resolve.sh
 
 CF="$(resolve_clang_format)" || {
-  echo "format.sh: clang-format 18 not found. Run scripts/install-clang-format.sh first." >&2
+  echo "format.sh: clang-format ${CLANG_FORMAT_MIN_MAJOR}+ not found. Run scripts/install-clang-format.sh first." >&2
   exit 1
 }
 
