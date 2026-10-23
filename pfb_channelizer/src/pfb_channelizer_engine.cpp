@@ -177,14 +177,15 @@ void PFBChannelizerEngine::update(double) {
         m_cached_sampling_ratio = m_cfg.sampling_ratio;
     }
 
-    double bin_width =
-        (in_ptr->frequencies.size() > 1) ? in_ptr->frequencies[1] - in_ptr->frequencies[0] : 1.0;
     const double channel_spacing = m_cfg.Fs_Hz / m_cfg.M;
     const double channel_bw = channel_spacing * static_cast<double>(m_cfg.sampling_ratio);
 
     for (auto &ch : m_channels) {
-        ch.noise_W = 0.0;
-        ch.enbw_Hz = 0.0;
+        // Channel noise = continuous ENBW x |H|^2-weighted mean input PSD over the
+        // channel's grid support. A flat input gives kT*ENBW on any grid. A channel
+        // with fewer than two bins has no usable estimate and reads NaN (unavailable).
+        double weight_sum = 0.0;
+        double weighted_psd_sum = 0.0;
         ch.tones.clear();
 
         for (size_t i = 0; i < ch.bin_indices.size(); ++i) {
@@ -194,10 +195,13 @@ void PFBChannelizerEngine::update(double) {
             double psd = (idx < static_cast<int>(in_ptr->noise_total_W.size()))
                              ? in_ptr->noise_total_W[idx]
                              : 0.0;
-            const double weighted_bin_width = weight * weight * bin_width;
-            ch.enbw_Hz += weighted_bin_width;
-            ch.noise_W += psd * weighted_bin_width;
+            const double weight_sq = weight * weight;
+            weight_sum += weight_sq;
+            weighted_psd_sum += psd * weight_sq;
         }
+        ch.noise_W = (ch.bin_indices.size() >= 2 && weight_sum > 0.0)
+                         ? ch.enbw_Hz * (weighted_psd_sum / weight_sum)
+                         : std::numeric_limits<double>::quiet_NaN();
 
         for (const auto &tone : in_ptr->tones) {
             double offset = tone.freq_Hz - ch.center_freq_Hz;
@@ -252,16 +256,24 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
     m_overlap_counts.assign(n_full, 0);
+    m_covered_bins.assign(n_full, 0);
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
+    // A channel without a usable estimate (NaN) contributes nothing, but still
+    // covers its bins; a bin left with no usable channel is unavailable (NaN),
+    // not zero, so PowerMeter reports it as unavailable.
     for (const auto &ch : m_channels) {
-        double density = ch.noise_W / channel_bw;
+        const bool usable = std::isfinite(ch.noise_W);
+        const double density = usable ? ch.noise_W / channel_bw : 0.0;
         for (int bin_idx : ch.bin_indices) {
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
-                out_full.noise_W[bin_idx] += density;
-                out_full.noise_total_W[bin_idx] += density;
-                ++m_overlap_counts[bin_idx];
+                m_covered_bins[bin_idx] = 1;
+                if (usable) {
+                    out_full.noise_W[bin_idx] += density;
+                    out_full.noise_total_W[bin_idx] += density;
+                    ++m_overlap_counts[bin_idx];
+                }
             }
         }
     }
@@ -269,6 +281,9 @@ void PFBChannelizerEngine::update(double) {
         if (m_overlap_counts[i] > 1) {
             out_full.noise_W[i] /= static_cast<double>(m_overlap_counts[i]);
             out_full.noise_total_W[i] /= static_cast<double>(m_overlap_counts[i]);
+        } else if (m_overlap_counts[i] == 0 && m_covered_bins[i]) {
+            out_full.noise_W[i] = std::numeric_limits<double>::quiet_NaN();
+            out_full.noise_total_W[i] = std::numeric_limits<double>::quiet_NaN();
         }
     }
     out_full.phase_deg = in_ptr->phase_deg;
@@ -311,6 +326,7 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
     m_design = PfbFilterDesign(m_cfg.M, m_cfg.K, m_cfg.beta);
     double channel_spacing = m_cfg.Fs_Hz / m_cfg.M;
     double channel_bw = channel_spacing * static_cast<double>(m_cfg.sampling_ratio);
+    const double enbw_Hz = channel_bw * m_design.normalizedNoiseBandwidth();
     double nyquist = m_cfg.Fs_Hz / 2.0;
     m_channels.resize(m_cfg.M);
 
@@ -319,6 +335,7 @@ void PFBChannelizerEngine::recomputeChannels(const std::vector<double> &freqs) {
         ch.channel_index = k;
         ch.center_freq_Hz = -nyquist + channel_spacing / 2.0 + k * channel_spacing;
         ch.bandwidth_Hz = channel_bw;
+        ch.enbw_Hz = enbw_Hz;
         ch.bin_indices.clear();
         ch.bin_weights.clear();
 
