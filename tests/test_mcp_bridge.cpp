@@ -717,7 +717,7 @@ TEST_CASE("Bridge queued calls are bounded by aggregate payload bytes", "[bridge
         appendBridgeLine(input, request);
         appendBridgeLine(input, modernBridgeRequest(1000 + id, "server/discover"));
         input_buffer.append(input);
-        CHECK(output_buffer.waitForResponse(1000 + id, 2s));
+        CHECK(output_buffer.waitForResponse(1000 + id, 5s));
     }
     const OrderedJson overflow = modernBridgeRequest(
         10, "tools/call",

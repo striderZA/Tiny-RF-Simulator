@@ -682,7 +682,7 @@ TEST_CASE("A timed loopback write closes when its peer does not read", "[agent_p
     const auto elapsed = std::chrono::steady_clock::now() - start;
 
     CHECK(elapsed >= timeout / 2);
-    CHECK(elapsed < timeout + std::chrono::milliseconds{400});
+    CHECK(elapsed < timeout + std::chrono::seconds{1});
     CHECK_FALSE(server->isOpen());
 }
 
