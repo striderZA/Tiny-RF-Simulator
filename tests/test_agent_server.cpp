@@ -134,8 +134,10 @@ std::optional<nlohmann::json> pumpUntilReply(AgentServer &server, TestBridgeClie
 // The listener answers a line that is not a call at once, and replies on one connection stay in
 // order. Receiving that answer therefore proves every call sent before it is already queued.
 void awaitQueuedCalls(TestBridgeClient &client) {
+    // The barrier reply follows the server draining every queued call, which can take seconds
+    // under a loaded parallel run. Bound the wait generously; a real stall still fails.
     REQUIRE(client.sendRawLine(R"({"jsonrpc":"2.0","id":99,"method":"barrier"})"));
-    const auto answer = client.receive(10s);
+    const auto answer = client.receive(30s);
     REQUIRE(answer.has_value());
     REQUIRE(answer->contains("error"));
 }

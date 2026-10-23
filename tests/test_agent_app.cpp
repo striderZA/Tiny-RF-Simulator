@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -535,32 +536,38 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
         {"measure", ordered_json::array(
                         {{{"component", amplifier->id()}, {"port", 0}, {"metric", "power_dBm"}}})}};
 
-    bool completed = false;
-    AgentToolResult result;
-    app.testAgentServer()->submit(call, [&](const AgentToolResult &r) {
-        completed = true;
-        result = r;
+    // The server holds this callback until the flow finishes, which can outlive a failed REQUIRE.
+    // Share the state so the callback never writes to a destroyed stack frame.
+    struct FlowOutcome {
+        bool completed = false;
+        AgentToolResult result;
+    };
+    auto outcome = std::make_shared<FlowOutcome>();
+    app.testAgentServer()->submit(call, [outcome](const AgentToolResult &r) {
+        outcome->completed = true;
+        outcome->result = r;
     });
 
     // One application update must advance only a bounded slice; rendering still proceeds before
     // the whole request completes.
     app.update_dsp();
     runFrame([&] { app.draw_ui(); });
-    CHECK_FALSE(completed);
+    CHECK_FALSE(outcome->completed);
     CHECK(generator->serialize() == generator_before);
 
     int frames = 1;
-    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow yields.
-    while (!completed && frames <= flow_rows) {
+    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow
+    // yields.
+    while (!outcome->completed && frames <= flow_rows) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
         ++frames;
     }
 
-    REQUIRE(completed);
-    CHECK_FALSE(result.is_error);
-    CHECK(result.structured.at("row_count") == flow_rows);
-    CHECK(result.structured.at("rows").size() == flow_rows);
+    REQUIRE(outcome->completed);
+    CHECK_FALSE(outcome->result.is_error);
+    CHECK(outcome->result.structured.at("row_count") == flow_rows);
+    CHECK(outcome->result.structured.at("rows").size() == flow_rows);
     CHECK(generator->serialize() == generator_before);
 }
 
