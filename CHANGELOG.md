@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
