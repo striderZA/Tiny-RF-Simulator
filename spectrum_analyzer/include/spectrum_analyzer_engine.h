@@ -63,9 +63,14 @@ class SpectrumAnalyzerEngine {
     // its sampled area to the requested RBW.
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
-    // renderCombinedSpectrum() and computeAverageNoiseLevel() resample every trace onto the
-    // grid of the first trace with a frequency grid, and return values on that grid.
-    // Traces are never summed by index across different grids (issue #293).
+    // combinedReadoutAxis() is the common axis that renderCombinedSpectrum() and
+    // computeAverageNoiseLevel() return values on: from the lowest start to the highest stop
+    // of the traces, at the coarsest bin spacing among them. Each trace is sampled onto it
+    // (noise density at the nearest source bin, scaled to the axis step; tone power to the
+    // nearest axis bin), so traces on different grids are never added by index (issue #293).
+    // Limits: a trace finer than the axis step contributes one sample per axis bin, so its
+    // noise is an estimate; a single-bin trace puts its tone on the nearest axis bin.
+    std::vector<double> combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const;
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;

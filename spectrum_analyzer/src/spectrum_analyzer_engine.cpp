@@ -24,17 +24,6 @@ double gridBinWidth(const std::vector<double> &freqs) {
     return freqs.size() >= 2 ? freqs[1] - freqs[0] : 1.0;
 }
 
-// First trace with a frequency grid. Combined readouts and the widget's marker and
-// peak use this grid as their axis.
-const Spectrum *readoutGrid(const std::vector<const Spectrum *> &specs) {
-    for (const Spectrum *s : specs) {
-        if (s && !s->frequencies.empty()) {
-            return s;
-        }
-    }
-    return nullptr;
-}
-
 // Whether x lies within a grid's span, padded by half a bin on each side.
 bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
     return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
@@ -54,11 +43,10 @@ size_t nearestGridIndex(const std::vector<double> &freqs, double x) {
     return (x - freqs[lo] <= freqs[hi] - x) ? lo : hi;
 }
 
-// Adds one trace's per-bin noise (W) and tone (W) onto readout-grid bins. Noise is a
-// density, so each readout bin samples the nearest source bin and is rescaled to the
-// readout bin width. A tone is an impulse, so its power moves to the nearest readout
-// bin. Energy outside the readout span is dropped. On an identical grid this is the
-// identity. A null sum_tone_W skips tones.
+// Adds one trace's per-bin noise (W) and tone (W) onto readout-axis bins. Noise is a
+// density, so each axis bin samples the nearest source bin and is rescaled to the axis bin
+// width. A tone is an impulse, so its power moves to the nearest axis bin. On an identical
+// grid this is the identity. A null sum_tone_W skips tones.
 void accumulateOntoGrid(const std::vector<double> &src_freqs,
                         const std::vector<double> &src_noise_W,
                         const std::vector<double> &src_tone_W, const std::vector<double> &grid,
@@ -85,6 +73,44 @@ void accumulateOntoGrid(const std::vector<double> &src_freqs,
 }
 
 } // namespace
+
+std::vector<double>
+SpectrumAnalyzerEngine::combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const {
+    // Common axis for every trace: from the lowest start to the highest stop, at the coarsest
+    // bin spacing among the traces. Each trace is sampled onto it, so no trace's bins fall
+    // outside the axis and the result does not depend on trace order.
+    double start = 0.0;
+    double stop = 0.0;
+    double step = 0.0;
+    bool found = false;
+    for (const Spectrum *s : specs) {
+        if (!s || s->frequencies.empty()) {
+            continue;
+        }
+        const std::vector<double> &f = s->frequencies;
+        start = found ? std::min(start, f.front()) : f.front();
+        stop = found ? std::max(stop, f.back()) : f.back();
+        found = true;
+        if (f.size() >= 2 && gridBinWidth(f) > step) {
+            step = gridBinWidth(f);
+        }
+    }
+    if (!found) {
+        return {};
+    }
+    if (!(step > 0.0) || !std::isfinite(step)) {
+        step = 1.0;
+    }
+    if (!(stop > start)) {
+        return {start};
+    }
+    const size_t n = static_cast<size_t>(std::floor((stop - start) / step + 1e-9)) + 1;
+    std::vector<double> axis(n);
+    for (size_t i = 0; i < n; ++i) {
+        axis[i] = start + static_cast<double>(i) * step;
+    }
+    return axis;
+}
 
 void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                                                 std::vector<double> &tone_W) const {
@@ -203,14 +229,12 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
-    const Spectrum *readout = readoutGrid(specs);
-    if (!readout) {
+    // Every trace is resampled onto the common readout axis before summing, so bins from
+    // different grids are never added by index (issue #293).
+    const std::vector<double> grid = this->combinedReadoutAxis(specs);
+    if (grid.empty()) {
         return {};
     }
-
-    // Every trace is resampled onto the readout grid before summing, so bins from
-    // different grids are never added by index (issue #293).
-    const std::vector<double> &grid = readout->frequencies;
     const double bin_width = gridBinWidth(grid);
 
     // Sum per-bin noise and tone power (W) separately so jitter can be applied
@@ -236,11 +260,10 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
 
 double
 SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const {
-    const Spectrum *readout = readoutGrid(specs);
-    if (!readout) {
+    const std::vector<double> grid = this->combinedReadoutAxis(specs);
+    if (grid.empty()) {
         return -174.0;
     }
-    const std::vector<double> &grid = readout->frequencies;
     const double bin_width = gridBinWidth(grid);
 
     // Sum noise power per bin (W) on the readout grid across all spectra, excluding tones

@@ -260,23 +260,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
-    // The combined readout is resampled onto the first visible trace's grid, so the
-    // marker and peak axis follow it. Falls back to the first grid when none is visible.
     const std::vector<double> *freq_axis = nullptr;
-    for (size_t i = 0; i < active_nodes.size() && !freq_axis; ++i) {
-        if (!active_nodes[i] || !m_trace_visible[i])
-            continue;
-        const auto &spec = outputSpectrumFor(active_nodes[i]);
-        if (!spec.frequencies.empty())
-            freq_axis = &spec.frequencies;
-    }
     for (auto *node : active_nodes) {
-        if (freq_axis)
-            break;
         if (!node)
             continue;
         const auto &spec = outputSpectrumFor(node);
-        if (!spec.frequencies.empty())
+        if (!freq_axis && !spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
 
@@ -306,7 +295,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
     m_engine.pruneHistory(all_active);
 
-    // Render combined spectrum from VISIBLE traces only (for marker + noise readout)
+    // Combined trace and its marker/peak axis share the common readout axis.
+    const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
+    freq_axis = &combined_axis;
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
     if (combined_dBm.empty()) {
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
