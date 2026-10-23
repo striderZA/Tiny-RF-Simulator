@@ -489,6 +489,70 @@ TEST_CASE("Spectrum analyzer RBW changes reset held traces", "[spectrum][trace]"
     }
 }
 
+TEST_CASE("Spectrum analyzer VBW and average-count changes reset held traces",
+          "[spectrum][trace]") {
+    Spectrum spec;
+    for (size_t i = 0; i <= 100; ++i) {
+        spec.frequencies.push_back((static_cast<double>(i) - 50.0) * 10e6);
+    }
+    spec.noise_total_W.assign(spec.frequencies.size(), k * T);
+    const decltype(spec.tones) tones = {{0.0, -20.0, 0.0}};
+
+    // Frame 1 uses tone0 and frame 2 uses tone1. After the setting change, the held trace
+    // must equal a fresh engine's trace at the new setting.
+    const auto check_change = [&](TraceMode mode, double vbw0, double vbw1, int avg0, int avg1,
+                                  bool tone0, bool tone1) {
+        spec.tones = tone0 ? tones : decltype(spec.tones){};
+        spec.generation = 1;
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(vbw0);
+        sa.setVideoAvgCount(avg0);
+        sa.setTraceMode(mode);
+        sa.renderSpectrum(spec);
+
+        sa.setVideoBw(vbw1);
+        sa.setVideoAvgCount(avg1);
+        spec.tones = tone1 ? tones : decltype(spec.tones){};
+        spec.generation = 2;
+        const auto held = sa.renderSpectrum(spec);
+
+        SpectrumAnalyzerEngine fresh;
+        fresh.setNoiseJitterEnabled(false);
+        fresh.setResBw(1e6);
+        fresh.setVideoBw(vbw1);
+        fresh.setVideoAvgCount(avg1);
+        fresh.setTraceMode(mode);
+        spec.generation = 3;
+        const auto expected = fresh.renderSpectrum(spec);
+
+        REQUIRE(held.size() == expected.size());
+        for (size_t i = 0; i < expected.size(); ++i) {
+            REQUIRE(held[i] == Approx(expected[i]).margin(0.01));
+        }
+    };
+
+    SECTION("VBW change drops Max Hold's old peak") {
+        check_change(TraceMode::MaxHold, 10e6, 100e6, 10, 10, true, true);
+    }
+    SECTION("VBW change drops Min Hold's old low") {
+        check_change(TraceMode::MinHold, 100e6, 10e6, 10, 10, true, true);
+    }
+    SECTION("VBW change restarts Video Average") {
+        check_change(TraceMode::VideoAverage, 10e6, 100e6, 10, 10, true, true);
+    }
+    SECTION("Avg Count change drops Max Hold's old peak") {
+        check_change(TraceMode::MaxHold, 10e6, 10e6, 2, 50, true, false);
+    }
+    SECTION("Avg Count change drops Min Hold's old low") {
+        check_change(TraceMode::MinHold, 10e6, 10e6, 2, 50, false, true);
+    }
+    SECTION("Avg Count change restarts Video Average") {
+        check_change(TraceMode::VideoAverage, 10e6, 10e6, 2, 50, true, false);
+    }
+}
+
 TEST_CASE("findPeaks detects single tone peak", "[spectrum]") {
     SpectrumAnalyzerEngine sa;
     std::vector<double> freq = {0, 1e6, 2e6, 3e6, 4e6};
