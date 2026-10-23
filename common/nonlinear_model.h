@@ -114,8 +114,8 @@ class NonlinearModel {
             r.extra_tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
             total_distortion_mW += dbmToW(H2_dBm);
 
-            // H3: v_in^3 term -> RMS k2*A^3/(4*sqrt(2)) = k2*Vp1^3/2, A = sqrt(2)*Vp1
-            double V_h3 = k2_at(tone.freq_Hz) * Vp1 * Vp1 * Vp1 / 2.0;
+            // H3: one third the amplitude of equal-power IM3 for a cubic term.
+            double V_h3 = k2_at(tone.freq_Hz) * Vp1 * Vp1 * Vp1 / 4.0;
             double H3_dBm = vToDbm(V_h3);
             r.extra_tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
             total_distortion_mW += dbmToW(H3_dBm);

@@ -1,5 +1,6 @@
 #include "amplifier_engine.h"
 #include "common.h"
+#include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
@@ -282,23 +283,68 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     REQUIRE(out.tones[1].phase_deg == 45.0);
 }
 
-TEST_CASE("Mixer scales noise by conversion gain", "[mixer]") {
+TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     NodeGraphEngine graph;
-    SignalGeneratorEngine gen(0, graph);
-    gen.update(0.0);
+    Spectrum input;
+    for (int i = 0; i <= 40; ++i)
+        input.frequencies.push_back(i * 10e6);
+    input.noise_total_W.assign(input.frequencies.size(), 0.0);
+    input.noise_total_W[10] = 1e-12;
 
     MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
     mix.setConversionGain_dB(-6.0);
-    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.node().inputs[0] = &input;
     mix.update(0.0);
 
-    double G = dbToLinear(-6.0);
-    double expected_density = k * T * G;
     const auto &out = mix.node().outputs[0];
-    REQUIRE(!out.noise_total_W.empty());
-    for (double density : out.noise_total_W) {
-        REQUIRE(density == Approx(expected_density).epsilon(1e-30));
+    const double translated_density = 1e-12 * dbToLinear(-6.0);
+    REQUIRE(out.noise_total_W[0] == Approx(translated_density));
+    REQUIRE(out.noise_total_W[20] == Approx(translated_density));
+    REQUIRE(out.noise_total_W[10] == 0.0);
+}
+
+TEST_CASE("Mixer preserves RF noise SNR through an IF filter", "[mixer][domain]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, -10.0);
+    gen.update(0.0);
+
+    IdealFilterEngine rf_filter(1, graph);
+    rf_filter.setFilterType(FilterType::BPF);
+    rf_filter.setCutoffs_Hz(950e6, 1050e6);
+    rf_filter.node().inputs[0] = &gen.node().outputs[0];
+    rf_filter.update(0.0);
+
+    MixerEngine mix(2, graph);
+    mix.setLoFreq_Hz(900e6);
+    mix.setConversionGain_dB(0.0);
+    mix.node().inputs[0] = &rf_filter.node().outputs[0];
+    mix.update(0.0);
+
+    IdealFilterEngine if_filter(3, graph);
+    if_filter.setFilterType(FilterType::LPF);
+    if_filter.setCutoff_Hz(150e6);
+    if_filter.node().inputs[0] = &mix.node().outputs[0];
+    if_filter.update(0.0);
+
+    const auto &rf = rf_filter.node().outputs[0];
+    const auto &if_out = if_filter.node().outputs[0];
+    double rf_noise_W = 0.0;
+    double if_noise_W = 0.0;
+    for (size_t i = 0; i < rf.frequencies.size(); ++i) {
+        if (rf.frequencies[i] >= 950e6 && rf.frequencies[i] <= 1050e6)
+            rf_noise_W += rf.noise_total_W[i] * 10e6;
     }
+    for (size_t i = 0; i < if_out.frequencies.size(); ++i) {
+        if (if_out.frequencies[i] >= 50e6 && if_out.frequencies[i] <= 150e6)
+            if_noise_W += if_out.noise_total_W[i] * 10e6;
+    }
+
+    const double rf_snr_dB = -10.0 - (10.0 * std::log10(rf_noise_W) + 30.0);
+    const double if_snr_dB = -10.0 - (10.0 * std::log10(if_noise_W) + 30.0);
+    REQUIRE(10.0 * std::log10(if_noise_W / (k * T * 100e6)) == Approx(0.0).margin(0.5));
+    REQUIRE(if_snr_dB == Approx(rf_snr_dB).margin(0.5));
 }
 
 TEST_CASE("Mixer with no input produces no tones", "[mixer]") {
@@ -378,6 +424,32 @@ TEST_CASE("Spectrum analyzer RBW filtering preserves tone peak power", "[spectru
         sa.setResBw(rbw);
         const auto trace = sa.renderSpectrum(spec);
         REQUIRE(trace[1] == Approx(-20.0).margin(0.01));
+    }
+}
+
+TEST_CASE("Spectrum analyzer combines same-frequency tone copies coherently", "[spectrum]") {
+    Spectrum spec;
+    spec.frequencies = {-10e6, 0.0, 10e6};
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setVideoBw(1e6);
+
+    for (double rbw : {1e3, 100e6}) {
+        sa.setResBw(rbw);
+
+        spec.tones.clear();
+        spec.bumpGeneration();
+        const double floor_dBm = sa.renderSpectrum(spec)[1];
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 0.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(-20.0 + 6.0205999132).margin(0.01));
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 180.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(floor_dBm).margin(0.01));
     }
 }
 
@@ -785,21 +857,23 @@ TEST_CASE("Amplifier generates 2nd and 3rd harmonics", "[amplifier][nonlinear]")
 
     // Expected harmonics from the corrected formulas (see nonlinear_model.h):
     //   H2 (RMS) = k1 * Vp1^2 / sqrt(2)   (v_in^2 term: peak k1*A^2/2 at 2w, A = sqrt(2)*Vp1)
-    //   H3 (RMS) = k2 * Vp1^3 / 2         (v_in^3 term: peak k2*A^3/4 at 3w, A = sqrt(2)*Vp1)
+    //   H3 (RMS) = k2 * Vp1^3 / 4         (one third the amplitude of the equal-power IM3,
+    //                                      which is (3/4)*k2*Vp1^3)
     // with k1 = 1/V_oip2, k2 = 4/(3*V_oip3^2) and Vp1 the output-referred RMS voltage.
     const double Vp1 = std::sqrt(std::pow(10.0, -20.0 / 10.0) * 0.001 * 50.0);
     const double V_oip2 = std::sqrt(std::pow(10.0, 40.0 / 10.0) * 0.001 * 50.0);
     const double V_oip3 = std::sqrt(std::pow(10.0, 30.0 / 10.0) * 0.001 * 50.0);
     const double h2_v = (1.0 / V_oip2) * Vp1 * Vp1 / std::sqrt(2.0);
-    const double h3_v = (4.0 / (3.0 * V_oip3 * V_oip3)) * Vp1 * Vp1 * Vp1 / 2.0;
+    const double h3_v = (4.0 / (3.0 * V_oip3 * V_oip3)) * Vp1 * Vp1 * Vp1 / 4.0;
     const double h2_expected = 10.0 * std::log10((h2_v * h2_v / 50.0) / 0.001);
     const double h3_expected = 10.0 * std::log10((h3_v * h3_v / 50.0) / 0.001);
 
     REQUIRE(out.tones[1].freq_Hz == 200e6);
     REQUIRE(out.tones[1].power_dBm == Approx(h2_expected).epsilon(0.01));
 
+    // A 0.05 dB margin: the 6.02 dB error of a /2 H3 must fail this check.
     REQUIRE(out.tones[2].freq_Hz == 300e6);
-    REQUIRE(out.tones[2].power_dBm == Approx(h3_expected).epsilon(0.1));
+    REQUIRE(out.tones[2].power_dBm == Approx(h3_expected).margin(0.05));
 }
 
 TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]") {

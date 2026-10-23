@@ -8,6 +8,7 @@
 #include "node_graph_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_filter_design.h"
+#include "power_meter_engine.h"
 
 using Catch::Approx;
 
@@ -125,7 +126,29 @@ TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filt
     REQUIRE(mean > 0.5e-20);
     REQUIRE(mean < 1.5e-20);
 }
-TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
+namespace {
+constexpr double kBoltzmannT_W_per_Hz = 1.380649e-23 * 290.0;
+
+// Continuous ENBW in Hz: D * int_{-1}^{1} |H(x)|^2 dx, with D the channel width.
+double continuousEnbwHz(const PfbFilterDesign &design, double channel_bw_Hz) {
+    constexpr int steps = 8000;
+    double acc = 0.0;
+    for (int i = 0; i < steps; ++i) {
+        const double h = design.responseAt(-1.0 + (i + 0.5) * 2.0 / steps);
+        acc += h * h;
+    }
+    return channel_bw_Hz * acc * 2.0 / steps;
+}
+
+// 10 MHz input grid spanning -500..+500 MHz (101 bins), flat kT noise.
+void loadTenMhzKtGrid(Spectrum &in) {
+    for (int i = 0; i <= 100; ++i)
+        in.frequencies.push_back(-500e6 + i * 10e6);
+    in.noise_total_W.assign(in.frequencies.size(), kBoltzmannT_W_per_Hz);
+}
+} // namespace
+
+TEST_CASE("PFB channel ENBW matches continuous noise integration on a fine grid",
           "[pfb_filter_design][enbw]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
@@ -142,11 +165,9 @@ TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
     pfb.update(0.0);
 
     const auto &critical = pfb.channels().at(16);
-    double expected_enbw_Hz = 0.0;
-    for (double weight : critical.bin_weights)
-        expected_enbw_Hz += weight * weight * 1e6;
-    REQUIRE(critical.enbw_Hz == Approx(expected_enbw_Hz).epsilon(1e-12));
-    REQUIRE(critical.noise_W == Approx(input_psd_W_per_Hz * expected_enbw_Hz).epsilon(1e-12));
+    const double expected_enbw_Hz = continuousEnbwHz(PfbFilterDesign(32, 8, 8.0), 400e6 / 32.0);
+    REQUIRE(critical.enbw_Hz == Approx(expected_enbw_Hz).epsilon(1e-3));
+    REQUIRE(critical.noise_W == Approx(input_psd_W_per_Hz * critical.enbw_Hz).epsilon(1e-12));
     const double critical_enbw_Hz = critical.enbw_Hz;
 
     pfb.setSamplingRatio(2);
@@ -154,6 +175,70 @@ TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
     const auto &oversampled = pfb.channels().at(16);
     REQUIRE(oversampled.enbw_Hz > 1.8 * critical_enbw_Hz);
     REQUIRE(oversampled.noise_W == Approx(input_psd_W_per_Hz * oversampled.enbw_Hz).epsilon(1e-12));
+}
+
+TEST_CASE("PFB channel ENBW is grid-independent at M=64 on a 10 MHz grid",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(64);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const double expected_enbw_Hz = continuousEnbwHz(PfbFilterDesign(64, 8, 8.0), 1e9 / 64.0);
+    REQUIRE(pfb.channels().size() == 64);
+    for (const auto &ch : pfb.channels())
+        REQUIRE(ch.enbw_Hz == Approx(expected_enbw_Hz).epsilon(0.01));
+}
+
+TEST_CASE("PFB centre-channel noise at M=128 on a 10 MHz grid tracks kT*Fs/M",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(128);
+    pfb.setActiveChannel(64);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &active = pfb.channels().at(64);
+    const double ideal_dBm = 10.0 * std::log10(kBoltzmannT_W_per_Hz * 1e9 / 128.0) + 30.0;
+    REQUIRE(active.noise_W > 0.0);
+    REQUIRE(10.0 * std::log10(active.noise_W) + 30.0 == Approx(ideal_dBm).margin(1.0));
+}
+
+TEST_CASE("PFB M=256 channel readout is finite only when PowerMeter accepts it",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(256);
+    pfb.setActiveChannel(128);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const double noise_W = pfb.channels().at(128).noise_W;
+    const bool readout_finite = std::isfinite(noise_W) && noise_W > 0.0;
+    const PowerMeasurement pm = PowerMeterEngine{}.measure(&pfb.node().outputs[0]);
+    REQUIRE(readout_finite == pm.valid);
+
+    // Full-band output must not silently read zero: where no channel has a usable
+    // estimate, every bin is unavailable (NaN) and PowerMeter rejects the spectrum.
+    const auto &full_band = pfb.node().outputs[1];
+    REQUIRE(full_band.noise_total_W.size() == in.frequencies.size());
+    for (double density : full_band.noise_total_W)
+        REQUIRE(std::isnan(density));
+    REQUIRE_FALSE(PowerMeterEngine{}.measure(&full_band).valid);
 }
 
 TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_design]") {

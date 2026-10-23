@@ -1,4 +1,5 @@
 #include "mixer_engine.h"
+#include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
 
@@ -61,9 +62,30 @@ void MixerEngine::update(double dt) {
     double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, G);
 
     out.noise_W.assign(N, 0.0);
-    for (size_t i = 0; i < N; ++i) {
-        double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
-        out.noise_W[i] = G * nin;
+    if (in_ptr) {
+        const auto addTranslatedNoise = [&](double frequency_Hz, double density_W_per_Hz) {
+            const auto bin =
+                std::lower_bound(out.frequencies.begin(), out.frequencies.end(), frequency_Hz);
+            if (bin == out.frequencies.end() || frequency_Hz < out.frequencies.front())
+                return;
+
+            size_t index = static_cast<size_t>(bin - out.frequencies.begin());
+            if (index > 0 &&
+                frequency_Hz - out.frequencies[index - 1] <= out.frequencies[index] - frequency_Hz)
+                --index;
+            out.noise_W[index] += density_W_per_Hz;
+        };
+
+        for (size_t i = 0; i < in_ptr->frequencies.size() && i < in_ptr->noise_total_W.size();
+             ++i) {
+            const double density_W_per_Hz = G * in_ptr->noise_total_W[i];
+            const double input_frequency_Hz = in_ptr->frequencies[i];
+            const double difference_frequency_Hz =
+                in_ptr->is_complex_baseband ? input_frequency_Hz - m_lo_freq_Hz
+                                            : std::abs(input_frequency_Hz - m_lo_freq_Hz);
+            addTranslatedNoise(difference_frequency_Hz, density_W_per_Hz);
+            addTranslatedNoise(input_frequency_Hz + m_lo_freq_Hz, density_W_per_Hz);
+        }
     }
 
     out.noise_added_W.resize(N);
