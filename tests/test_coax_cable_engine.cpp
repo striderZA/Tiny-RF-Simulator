@@ -98,7 +98,6 @@ TEST_CASE("Coax cable noise follows passive thermal model", "[coax][noise]") {
     equivalent_stage.update(0.0);
     REQUIRE(second_stage.node().outputs[0].noise_total_W[0] / kT ==
             Approx(equivalent_stage.node().outputs[0].noise_total_W[0] / kT).epsilon(1e-10));
-
 }
 
 TEST_CASE("Coax cable preserves input noise and records added thermal noise", "[coax][noise]") {

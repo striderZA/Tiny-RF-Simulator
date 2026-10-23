@@ -76,7 +76,11 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Spectrum-analyzer RBW and VBW span 1 kHz to 100 MHz. The range lives at the widget's `utils::inputFrequency()` call, and its trailing `displayUnit_Hz` picks the unit. Engine setters stay unclamped so tests and API callers can drive any value.
 - The analyzer reports noise power integrated over its effective RBW. Its sampled noise kernel is normalized per
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
-  changing RBW clears Max Hold, Min Hold, and Video Average history.
+  changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
+
+## Touchstone Parsing Contract
+
+- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
 
 ## S-parameter Contract
 

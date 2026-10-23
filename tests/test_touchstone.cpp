@@ -147,12 +147,54 @@ TEST_CASE("TouchstoneParser returns nullopt for file without option line", "[tou
     REQUIRE(!result.has_value());
     std::filesystem::remove(tmpfile);
 }
-TEST_CASE("TouchstoneParser stores 3-port and 4-port matrices in row-major order",
-          "[touchstone]") {
+TEST_CASE("TouchstoneParser honors v2.0 two-port data order", "[touchstone]") {
+    const auto parse_v2 = [](const std::string &filename, const std::string &order) {
+        const auto path = std::filesystem::temp_directory_path() / filename;
+        {
+            std::ofstream file(path);
+            file << "[Version] 2.0\n";
+            file << "[Two-Port Data Order] " << order << "\n";
+            file << "# Hz S RI R 50\n";
+            file << "[Network Data]\n";
+            if (order == "12_21")
+                file << "1e9 1 0 0.1 0 2 0 1 0\n";
+            else
+                file << "1e9 1 0 2 0 0.1 0 1 0\n";
+            file << "[End]\n";
+        }
+        return std::pair{path, TouchstoneParser::parse(path.string())};
+    };
+
+    auto [path_12_21, result_12_21] = parse_v2("test_touchstone_12_21.s2p", "12_21");
+    REQUIRE(result_12_21.has_value());
+    REQUIRE(result_12_21->parameters[0][2].real() == Approx(2.0));
+    REQUIRE(result_12_21->parameters[0][2].imag() == Approx(0.0));
+    std::filesystem::remove(path_12_21);
+
+    auto [path_21_12, result_21_12] = parse_v2("test_touchstone_21_12.s2p", "21_12");
+    REQUIRE(result_21_12.has_value());
+    REQUIRE(result_21_12->parameters[0][2].real() == Approx(2.0));
+    std::filesystem::remove(path_21_12);
+
+    const auto path_missing =
+        std::filesystem::temp_directory_path() / "test_touchstone_missing_order.s2p";
+    {
+        std::ofstream file(path_missing);
+        file << "[Version] 2.0\n";
+        file << "# Hz S RI R 50\n";
+        file << "[Network Data]\n";
+        file << "1e9 1 0 0.1 0 2 0 1 0\n";
+        file << "[End]\n";
+    }
+    REQUIRE_FALSE(TouchstoneParser::parse(path_missing.string()).has_value());
+    std::filesystem::remove(path_missing);
+}
+
+TEST_CASE("TouchstoneParser stores 3-port and 4-port matrices in row-major order", "[touchstone]") {
     for (const int ports : {3, 4}) {
-        const auto tmpfile = std::filesystem::temp_directory_path() /
-                             ("test_row_major_" + std::to_string(ports) + "port.s" +
-                              std::to_string(ports) + "p");
+        const auto tmpfile =
+            std::filesystem::temp_directory_path() /
+            ("test_row_major_" + std::to_string(ports) + "port.s" + std::to_string(ports) + "p");
         {
             std::ofstream ofs(tmpfile);
             ofs << "# GHz S RI R 50\n1.0";
