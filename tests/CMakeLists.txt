@@ -402,6 +402,13 @@ add_standalone_test(test_spectrum_jitter
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Regression coverage for issue #293: the combined readout must resample traces
+# on different grids onto one axis instead of adding them by index.
+add_standalone_test(test_spectrum_combined_grid
+    SOURCES test_spectrum_combined_grid.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.

@@ -295,7 +295,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
     m_engine.pruneHistory(all_active);
 
-    // Render combined spectrum from VISIBLE traces only (for marker + noise readout)
+    // Combined trace and its marker/peak axis share the common readout axis.
+    const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
+    freq_axis = &combined_axis;
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
     if (combined_dBm.empty()) {
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
