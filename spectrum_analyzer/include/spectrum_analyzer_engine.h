@@ -17,7 +17,12 @@ class SpectrumAnalyzerEngine {
     void setStopFrequency(double v) { m_stop_freq = v; }
     void setMinPower(double v) { m_min_power = v; }
     void setMaxPower(double v) { m_max_power = v; }
-    void setVideoBw(double v) { m_vbw = v; }
+    void setVideoBw(double v) {
+        if (m_vbw != v) {
+            m_vbw = v;
+            resetTraceHistory();
+        }
+    }
     void setResBw(double v) {
         if (m_rbw != v) {
             m_rbw = v;
@@ -38,7 +43,12 @@ class SpectrumAnalyzerEngine {
     double rbw() const { return m_rbw; }
 
     void setTraceMode(TraceMode m);
-    void setVideoAvgCount(int n) { m_video_avg_count = n; }
+    void setVideoAvgCount(int n) {
+        if (m_video_avg_count != n) {
+            m_video_avg_count = n;
+            resetTraceHistory();
+        }
+    }
 
     TraceMode traceMode() const { return m_trace_mode; }
     int videoAvgCount() const { return m_video_avg_count; }
