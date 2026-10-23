@@ -256,18 +256,24 @@ void PFBChannelizerEngine::update(double) {
     out_full.noise_total_W.assign(n_full, 0.0);
     out_full.noise_added_W.assign(n_full, 0.0);
     m_overlap_counts.assign(n_full, 0);
+    m_covered_bins.assign(n_full, 0);
     // Accumulate PSD (W/Hz), not per-bin power. Each channel's noise density
     // is total channel noise power divided by the channel bandwidth, then
     // averaged across overlapping channels to produce a flat combined band.
+    // A channel without a usable estimate (NaN) contributes nothing, but still
+    // covers its bins; a bin left with no usable channel is unavailable (NaN),
+    // not zero, so PowerMeter reports it as unavailable.
     for (const auto &ch : m_channels) {
-        if (!std::isfinite(ch.noise_W))
-            continue;
-        double density = ch.noise_W / channel_bw;
+        const bool usable = std::isfinite(ch.noise_W);
+        const double density = usable ? ch.noise_W / channel_bw : 0.0;
         for (int bin_idx : ch.bin_indices) {
             if (bin_idx >= 0 && bin_idx < static_cast<int>(n_full)) {
-                out_full.noise_W[bin_idx] += density;
-                out_full.noise_total_W[bin_idx] += density;
-                ++m_overlap_counts[bin_idx];
+                m_covered_bins[bin_idx] = 1;
+                if (usable) {
+                    out_full.noise_W[bin_idx] += density;
+                    out_full.noise_total_W[bin_idx] += density;
+                    ++m_overlap_counts[bin_idx];
+                }
             }
         }
     }
@@ -275,6 +281,9 @@ void PFBChannelizerEngine::update(double) {
         if (m_overlap_counts[i] > 1) {
             out_full.noise_W[i] /= static_cast<double>(m_overlap_counts[i]);
             out_full.noise_total_W[i] /= static_cast<double>(m_overlap_counts[i]);
+        } else if (m_overlap_counts[i] == 0 && m_covered_bins[i]) {
+            out_full.noise_W[i] = std::numeric_limits<double>::quiet_NaN();
+            out_full.noise_total_W[i] = std::numeric_limits<double>::quiet_NaN();
         }
     }
     out_full.phase_deg = in_ptr->phase_deg;

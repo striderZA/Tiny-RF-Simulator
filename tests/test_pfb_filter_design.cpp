@@ -231,6 +231,14 @@ TEST_CASE("PFB M=256 channel readout is finite only when PowerMeter accepts it",
     const bool readout_finite = std::isfinite(noise_W) && noise_W > 0.0;
     const PowerMeasurement pm = PowerMeterEngine{}.measure(&pfb.node().outputs[0]);
     REQUIRE(readout_finite == pm.valid);
+
+    // Full-band output must not silently read zero: where no channel has a usable
+    // estimate, every bin is unavailable (NaN) and PowerMeter rejects the spectrum.
+    const auto &full_band = pfb.node().outputs[1];
+    REQUIRE(full_band.noise_total_W.size() == in.frequencies.size());
+    for (double density : full_band.noise_total_W)
+        REQUIRE(std::isnan(density));
+    REQUIRE_FALSE(PowerMeterEngine{}.measure(&full_band).valid);
 }
 
 TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_design]") {

@@ -98,6 +98,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     std::vector<PFBChannel> m_channels;
     std::vector<double> m_cached_freqs;
     std::vector<int> m_overlap_counts;
+    std::vector<char> m_covered_bins; // 1 where any channel's support includes the bin.
     std::vector<ToneIndexSlot> m_tone_index;
     size_t m_tone_index_mask = 0;
     uint64_t m_tone_index_generation = 0;
