@@ -57,11 +57,10 @@ void CoaxCableEngine::update(double dt) {
     const double max_f_Hz = p.max_freq_GHz * 1e9;
     for (auto &t : out.tones) {
         const double f_Hz_raw = std::abs(t.freq_Hz);
-        const double f_Hz = std::clamp(f_Hz_raw, 1.0, max_f_Hz);
+        const double f_Hz = std::max(f_Hz_raw, 1.0);
         if (f_Hz_raw > max_f_Hz && !m_warned_above_max) {
-            LOG_WARN(
-                "Coax cable %d: tone at %.3e Hz exceeds preset %s max freq (%.3e Hz); clamping.",
-                m_id, f_Hz_raw, p.name, max_f_Hz);
+            LOG_WARN("Coax cable %d: tone %.3e Hz above %s max %.3e Hz; extrapolating K1/K2 law.",
+                     m_id, f_Hz_raw, p.name, max_f_Hz);
             m_warned_above_max = true;
         }
         const double f_MHz = f_Hz / 1e6;
@@ -81,7 +80,7 @@ void CoaxCableEngine::update(double dt) {
     }
     for (size_t i = 0; i < N; ++i) {
         const double f_Hz = std::abs(out.frequencies[i]);
-        const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
+        const double f_Hz_c = std::max(f_Hz, 1.0);
         const double phase_shift_deg = -360.0 * (f_Hz_c / 1e9) * m_length_m * p.delay_ns_per_m;
         out.phase_deg[i] += phase_shift_deg;
     }
@@ -93,7 +92,7 @@ void CoaxCableEngine::update(double dt) {
     out.noise_total_W.assign(N, 0.0);
     for (size_t i = 0; i < N; ++i) {
         const double f_Hz = std::abs(out.frequencies[i]);
-        const double f_Hz_c = std::clamp(f_Hz, 1.0, p.max_freq_GHz * 1e9);
+        const double f_Hz_c = std::max(f_Hz, 1.0);
         const double f_MHz = f_Hz_c / 1e6;
         const double loss_dB =
             (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m +
