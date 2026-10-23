@@ -304,7 +304,7 @@ add_standalone_test(test_adc_configuration
 # test_component_authoring: new TEST_CASEs must not join the main `tests` binary.
 add_standalone_test(test_pfb_filter_design
     SOURCES test_pfb_filter_design.cpp
-    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
+    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine simulator::power_meter_engine
 )
 add_standalone_test(test_pfb_calculator
     SOURCES test_pfb_calculator.cpp
@@ -473,6 +473,14 @@ add_standalone_test(test_spectrum_analyzer_snr
 # outside tests.exe for the MinGW-w64 registration-ceiling reason above.
 add_standalone_test(test_issue239_rbw_vbw_bounds
     SOURCES test_issue239_rbw_vbw_bounds.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
+# Issue #271: a VBW window must not reduce a CW tone peak (tone level is set by
+# RBW; VBW smooths only the noise floor). Standalone for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_issue271_vbw_tone
+    SOURCES test_issue271_vbw_tone.cpp
     LIBS simulator::spectrum_analyzer_engine
 )
 

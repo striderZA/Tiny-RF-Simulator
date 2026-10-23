@@ -117,33 +117,50 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
         expanded_tones = conjugateSymmetricExpand(spec.tones);
         display_tones = &expanded_tones;
     }
-    for (const auto &t : *display_tones) {
-        if (n < 2) {
-            continue;
-        }
+    if (n < 2) {
+        return;
+    }
+    for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
         int bin_idx =
-            static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
+            static_cast<int>(std::round((freq_Hz - spec.frequencies.front()) / bin_width));
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
-            tone_W[bin_idx] += std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
+            tone_W[bin_idx] += watts;
         }
     }
 }
 
 std::vector<double>
-SpectrumAnalyzerEngine::toJitteredPower_dBm(const std::vector<double> &noise_W,
-                                            const std::vector<double> &tone_W) const {
-    std::vector<double> power_dBm(noise_W.size());
+SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W) const {
+    std::vector<double> noise_dBm(noise_W.size());
     // Constructing the distribution is only defined for a positive sigma, so
     // guard it: a disabled or invalid setting stays a pure no-op.
     if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
         std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
-        for (size_t i = 0; i < power_dBm.size(); ++i) {
-            double noise_W_i = noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0);
-            power_dBm[i] = W_to_dBm(noise_W_i + tone_W[i]);
+        for (size_t i = 0; i < noise_dBm.size(); ++i) {
+            noise_dBm[i] = W_to_dBm(noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0));
         }
     } else {
-        for (size_t i = 0; i < power_dBm.size(); ++i) {
-            power_dBm[i] = W_to_dBm(noise_W[i] + tone_W[i]);
+        for (size_t i = 0; i < noise_dBm.size(); ++i) {
+            noise_dBm[i] = W_to_dBm(noise_W[i]);
+        }
+    }
+    return noise_dBm;
+}
+
+std::vector<double>
+SpectrumAnalyzerEngine::toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                           const std::vector<double> &tone_W,
+                                           double binWidth) const {
+    // VBW smooths the noise floor only: the moving average runs on noise dBm, and tone
+    // power is added back in linear watts afterwards so a tone peak is never averaged.
+    const std::vector<double> noise_dBm =
+        this->applyVBW(this->toJitteredNoise_dBm(noise_W), binWidth);
+    std::vector<double> power_dBm(noise_dBm.size());
+    for (size_t i = 0; i < power_dBm.size(); ++i) {
+        if (tone_W[i] > 0.0) {
+            power_dBm[i] = W_to_dBm(std::pow(10.0, (noise_dBm[i] - 30.0) / 10.0) + tone_W[i]);
+        } else {
+            power_dBm[i] = noise_dBm[i];
         }
     }
     return power_dBm;
@@ -180,9 +197,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         m_cache_rbw_tone_W = rbw_tone_W;
     }
 
-    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
-
-    std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
+    std::vector<double> vbw_out = this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width);
     return this->applyTraceMode(spec, vbw_out);
 }
 
@@ -215,11 +230,8 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
     std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
-    // Jitter the noise floor only, then add the deterministic tone power back.
-    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
-
-    std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
-    return vbw_out;
+    // Jitter and VBW act on the noise floor only; tone power is added back in linear watts.
+    return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width);
 }
 
 double

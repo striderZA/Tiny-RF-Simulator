@@ -17,6 +17,7 @@
 #include "network_analyzer_engine.h"
 #include "network_analyzer_widget.h"
 #include "node_graph_engine.h"
+#include "nonlinear_model.h"
 #include "rf_switch_2to1_engine.h"
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
@@ -140,48 +141,6 @@ double dbmToW(double dBm) { return std::pow(10.0, dBm / 10.0) * 0.001; }
 double dbmToV(double dBm) { return std::sqrt(dbmToW(dBm) * 50.0); }
 double vToDbm(double V) { return 10.0 * std::log10((V * V / 50.0) / 0.001); }
 } // namespace
-
-// Replicates NonlinearModel::process() for a single gain stage (same math,
-// same order: per-tone harmonics first, then IMD pairs among the first 3
-// tones), returning the compression_dB the engine would apply. Used to verify
-// that the configured stimulus power — not some fixed level — actually reaches
-// the isolated chain: gain through a compressed amplifier is
-// gain_dB + compression(P_stim).
-double expectedCompressionDb(const std::vector<Spectrum::Tone> &input_tones, double gain_dB,
-                             double oip2_dBm, double oip3_dBm) {
-    const double gain_linear = std::pow(10.0, gain_dB / 20.0);
-    const double k1 = 1.0 / dbmToV(oip2_dBm);
-    const double k2 = 4.0 / (3.0 * dbmToV(oip3_dBm) * dbmToV(oip3_dBm));
-
-    double total_distortion = 0.0; // W (model accumulates W despite the name)
-    for (const auto &tone : input_tones) {
-        const double Pout_dBm = tone.power_dBm + 20.0 * std::log10(gain_linear);
-        const double Vp1 = dbmToV(Pout_dBm);
-        total_distortion += dbmToW(vToDbm(k1 * Vp1 * Vp1 / std::sqrt(2.0))); // H2
-        total_distortion += dbmToW(vToDbm(k2 * Vp1 * Vp1 * Vp1 / 2.0));      // H3
-    }
-    const int n = std::min(static_cast<int>(input_tones.size()), 3);
-    for (int i = 0; i < n; ++i) {
-        for (int j = i + 1; j < n; ++j) {
-            const double P1 =
-                input_tones[static_cast<size_t>(i)].power_dBm + 20.0 * std::log10(gain_linear);
-            const double P2 =
-                input_tones[static_cast<size_t>(j)].power_dBm + 20.0 * std::log10(gain_linear);
-            const double Vp1 = dbmToV(P1);
-            const double Vp2 = dbmToV(P2);
-            total_distortion += 2.0 * dbmToW(vToDbm(k1 * Vp1 * Vp2));                     // IM2
-            total_distortion += 2.0 * dbmToW(vToDbm((3.0 / 4.0) * k2 * Vp1 * Vp1 * Vp2)); // IM3
-            total_distortion += 2.0 * dbmToW(vToDbm((3.0 / 4.0) * k2 * Vp1 * Vp2 * Vp2)); // IM3
-        }
-    }
-    double pfund = 0.0; // W
-    for (const auto &tone : input_tones)
-        pfund += dbmToW(tone.power_dBm + 20.0 * std::log10(gain_linear));
-
-    if (total_distortion >= pfund || pfund <= 0.0)
-        return -1e9;
-    return 10.0 * std::log10(1.0 - total_distortion / pfund);
-}
 
 } // namespace
 
@@ -503,6 +462,30 @@ TEST_CASE("NetworkAnalyzer: sweep frequencies are evenly spaced start to stop",
         REQUIRE_THAT(freqs[i] - freqs[i - 1], WithinAbs(step, 1.0));
 }
 
+TEST_CASE("Nonlinear third harmonic is 9.54 dB below equal-power IM3",
+          "[network_analyzer][nonlinear]") {
+    NonlinearModel model;
+    model.setEnabled(true);
+    model.setOIP3_dBm(20.0);
+    const NonlinearModel::GainFn unit_gain = [](double) { return 1.0; };
+
+    const auto h3 = model.process({{1.0e9, -10.0, 0.0}}, unit_gain);
+    const auto im3 = model.process({{1.0e9, -10.0, 0.0}, {1.1e9, -10.0, 0.0}}, unit_gain);
+    const auto product_power = [](const NonlinearModel::Result &result, double frequency) {
+        for (const auto &tone : result.extra_tones) {
+            if (std::abs(tone.freq_Hz - frequency) < 1.0)
+                return tone.power_dBm;
+        }
+        return std::numeric_limits<double>::quiet_NaN();
+    };
+
+    const double h3_dBm = product_power(h3, 3.0e9);
+    const double im3_dBm = product_power(im3, 0.9e9);
+    REQUIRE(std::isfinite(h3_dBm));
+    REQUIRE(std::isfinite(im3_dBm));
+    CHECK_THAT(h3_dBm - im3_dBm, WithinAbs(-9.54, 0.05));
+}
+
 TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain",
           "[network_analyzer]") {
     NodeGraphEngine graph;
@@ -521,30 +504,34 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
     na.setPointA(gen.outputPinId());
     na.setPointB(amp.outputPinId());
 
-    // The measured gain through a compressed amplifier is
-    // gain_dB + compression(P_stim); expectedCompressionDb() replicates the
-    // model's voltage-gain convention, so matching it pins the ABSOLUTE
-    // stimulus power — a fixed-level stimulus would produce a different gain
-    // at a different configured power.
-    const auto run_and_check = [&](double stim_dBm) {
+    // Closed form for the two equal tones (1 and 2 GHz) at output power Pout, OIP3 = 0 dBm,
+    // OIP2 = 100 dBm (its products are below -100 dBm, so they are dropped). Each IM3 product
+    // is 3*Pout - 2*OIP3 (intercept rule); each third harmonic is one third the amplitude of
+    // an IM3, a power ratio of 1/9. The model sums 2 H3 tones and 4 IM3 products, and each
+    // fundamental is compressed by 10*log10(1 - D/P_fund).
+    const auto expected_gain_dB = [](double stim_dBm) {
+        const double pout_W = dbmToW(stim_dBm + 20.0);
+        const double oip3_W = dbmToW(0.0);
+        const double im3_W = pout_W * pout_W * pout_W / (oip3_W * oip3_W);
+        const double distortion_W = 4.0 * im3_W + 2.0 * im3_W / 9.0;
+        const double fundamental_W = 2.0 * pout_W;
+        return 20.0 + 10.0 * std::log10(1.0 - distortion_W / fundamental_W);
+    };
+    const auto check_gain = [&](double stim_dBm) {
         na.setStimulusPower(stim_dBm);
         na.update();
-        std::vector<Spectrum::Tone> input;
-        for (double f : na.sweepFrequencies())
-            input.push_back({f, stim_dBm, 0.0});
-        const double expected = 20.0 + expectedCompressionDb(input, 20.0, 100.0, 0.0);
         REQUIRE(na.gainDb().size() == 2);
         for (double g : na.gainDb())
-            REQUIRE_THAT(g, WithinAbs(expected, 0.01));
-        return expected;
+            REQUIRE_THAT(g, WithinAbs(expected_gain_dB(stim_dBm), 0.01));
+        return expected_gain_dB(stim_dBm);
     };
 
-    // -40 dBm: near-linear regime, gain ~= 20 dB.
-    run_and_check(-40.0);
-    // -30 dBm: measurably compressed — a clearly different gain than above,
-    // exactly per the model, proving the sweep runs at the configured power.
-    const double compressed = run_and_check(-30.0);
-    REQUIRE_THAT(compressed, WithinAbs(19.8925, 0.01));
+    // -40 dBm: linear regime, gain equals the configured 20 dB.
+    const double near_linear = check_gain(-40.0);
+    REQUIRE_THAT(near_linear, WithinAbs(20.0, 0.01));
+    // -30 dBm: compressed, measured gain matches the closed form and is lower.
+    const double compressed = check_gain(-30.0);
+    REQUIRE(compressed < near_linear);
 
     // Deeply into compression the model saturates (MIN_POWER) -> no data.
     na.setStimulusPower(30.0);
@@ -1094,8 +1081,12 @@ TEST_CASE("NetworkAnalyzer: mixer LO translation is reproduced on the clone chai
     REQUIRE(na.gainDb().size() == 11);
     for (double g : na.gainDb())
         REQUIRE_THAT(g, WithinAbs(0.0, 0.05));
-    for (double nf : na.noiseFigureDb())
-        REQUIRE_THAT(nf, WithinAbs(3.0, 0.1));
+    const auto &nf = na.noiseFigureDb();
+    for (size_t i = 0; i < nf.size(); ++i) {
+        // The sweep endpoints lack one RF image; interior points receive both.
+        const double expected_nf_dB = (i == 0 || i + 1 == nf.size()) ? 3.0 : 10.0 * std::log10(3.0);
+        REQUIRE_THAT(nf[i], WithinAbs(expected_nf_dB, 0.1));
+    }
 
     // Misaligned LO: translated tones land between grid points -> no match.
     mixer.setLoFreq_Hz(99e6);

@@ -56,8 +56,9 @@ PowerMeasurement PowerMeterEngine::measure(const Spectrum *source) const {
         if (!std::isfinite(tone.freq_Hz) || !std::isfinite(tone.power_dBm) ||
             !std::isfinite(tone.phase_deg))
             return invalid(PowerMeterError::InvalidTone);
-
-        total_watts += std::pow(10.0, (tone.power_dBm - 30.0) / 10.0);
+    }
+    for (const auto &group : coherentToneWatts(source->tones)) {
+        total_watts += group.second;
         if (!std::isfinite(total_watts))
             return invalid(PowerMeterError::InvalidTone);
     }

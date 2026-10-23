@@ -126,7 +126,7 @@ TEST_CASE("ADC DDC output fs_Hz is Fs/2", "[adc]") {
     REQUIRE(adc.node().outputs[0].fs_Hz == Approx(Fs / 2.0));
 }
 
-TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
+TEST_CASE("ADC DDC maps real-input noise at half density", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(5, graph);
     adc.setFs_Hz(Fs);
@@ -142,12 +142,71 @@ TEST_CASE("ADC DDC adds NSD noise", "[adc]") {
     const double in_noise = 1e-20;
     double nsd_W_per_Hz =
         0.001 * std::pow(10.0, -150.0 / 10.0); // matches setNsd_dBm_per_Hz(-150.0)
-    double expected_noise_per_bin = in_noise + nsd_W_per_Hz;
+    double expected_noise_per_bin = (in_noise + nsd_W_per_Hz) / 2.0;
     for (size_t i = 0; i < out.noise_total_W.size(); ++i) {
-        REQUIRE(out.noise_total_W[i] > in_noise);
+        REQUIRE(out.noise_total_W[i] > in_noise / 2.0);
         REQUIRE(out.noise_total_W[i] ==
                 Approx(expected_noise_per_bin).margin(expected_noise_per_bin * 0.1));
     }
+}
+
+TEST_CASE("ADC DDC conserves real-input flat noise power", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(6, graph);
+    adc.setFs_Hz(Fs);
+    adc.setNsd_dBm_per_Hz(-150.0);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.0);
+
+    Spectrum in = makeInput(101, 0.0, Fs / 2.0);
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    const double df = out.fs_Hz / out.frequencies.size();
+    double output_noise = 0.0;
+    for (double noise : out.noise_W)
+        output_noise += noise * df;
+    const double input_noise = 1e-20 * (Fs / 2.0);
+    REQUIRE(output_noise == Approx(input_noise).margin(input_noise * 0.01));
+
+    double output_nsd = 0.0;
+    for (double noise : out.noise_added_W)
+        output_nsd += noise * df;
+    const double nsd_W_per_Hz = 0.001 * std::pow(10.0, -150.0 / 10.0);
+    REQUIRE(out.noise_added_W.front() == Approx(nsd_W_per_Hz / 2.0));
+    REQUIRE(output_nsd ==
+            Approx(nsd_W_per_Hz * (Fs / 2.0)).margin(nsd_W_per_Hz * (Fs / 2.0) * 0.01));
+}
+
+TEST_CASE("ADC DDC folds noise from every Nyquist zone like tones", "[adc][nyquist]") {
+    // Issue #303: a zone-2 noise bump at 750 MHz must alias to -250 MHz (from +750 MHz)
+    // and +250 MHz (from its mirror -750 MHz), matching the tone fold. Real-input noise is
+    // half density (#264), so the 1e-12 bump appears as 0.5e-12 at each image.
+    NodeGraphEngine graph;
+    AdcEngine adc(20, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.0);
+    adc.setNsd_dBm_per_Hz(-200.0);
+
+    Spectrum in = makeInput(2001, 0.0, 2e9); // 1 MHz grid over 0..2 GHz, 1e-20 W/Hz baseline
+    in.noise_total_W[750] = 1e-12;           // 750 MHz bump
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    auto nearest_index = [&](double f_Hz) {
+        size_t best = 0;
+        for (size_t i = 0; i < out.frequencies.size(); ++i) {
+            if (std::abs(out.frequencies[i] - f_Hz) < std::abs(out.frequencies[best] - f_Hz))
+                best = i;
+        }
+        return best;
+    };
+    REQUIRE(out.noise_total_W[nearest_index(250e6)] == Approx(0.5e-12).margin(1e-14));
+    REQUIRE(out.noise_total_W[nearest_index(-250e6)] == Approx(0.5e-12).margin(1e-14));
 }
 
 TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
