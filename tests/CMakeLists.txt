@@ -304,7 +304,7 @@ add_standalone_test(test_adc_configuration
 # test_component_authoring: new TEST_CASEs must not join the main `tests` binary.
 add_standalone_test(test_pfb_filter_design
     SOURCES test_pfb_filter_design.cpp
-    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
+    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine simulator::power_meter_engine
 )
 add_standalone_test(test_pfb_calculator
     SOURCES test_pfb_calculator.cpp
