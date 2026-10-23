@@ -34,10 +34,16 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     int total = m_num_ports * m_num_ports;
     if (param_idx < 0 || param_idx >= total)
         return {1.0, 0.0};
-    if (freq_Hz <= m_freqs.front())
-        return m_params.front()[param_idx];
-    if (freq_Hz >= m_freqs.back())
-        return m_params.back()[param_idx];
+    const bool negative_frequency = freq_Hz < 0.0;
+    freq_Hz = std::abs(freq_Hz);
+    if (freq_Hz <= m_freqs.front()) {
+        auto response = m_params.front()[param_idx];
+        return negative_frequency ? std::conj(response) : response;
+    }
+    if (freq_Hz >= m_freqs.back()) {
+        auto response = m_params.back()[param_idx];
+        return negative_frequency ? std::conj(response) : response;
+    }
 
     auto it = std::lower_bound(m_freqs.begin(), m_freqs.end(), freq_Hz);
     size_t i =
@@ -46,7 +52,8 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     double t = (freq_Hz - f0) / (f1 - f0);
     auto p0 = m_params[i][param_idx];
     auto p1 = m_params[i + 1][param_idx];
-    return p0 + t * (p1 - p0);
+    auto response = p0 + t * (p1 - p0);
+    return negative_frequency ? std::conj(response) : response;
 }
 
 void SParameterData::applyToSpectrum(const Spectrum &in, Spectrum &out, int param_idx) const {
