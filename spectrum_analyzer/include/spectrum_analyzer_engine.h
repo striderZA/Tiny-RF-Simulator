@@ -53,6 +53,9 @@ class SpectrumAnalyzerEngine {
     // its sampled area to the requested RBW.
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
+    // renderCombinedSpectrum() and computeAverageNoiseLevel() resample every trace onto the
+    // grid of the first trace with a frequency grid, and return values on that grid.
+    // Traces are never summed by index across different grids (issue #293).
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;

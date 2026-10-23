@@ -260,12 +260,23 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         return;
     }
 
+    // The combined readout is resampled onto the first visible trace's grid, so the
+    // marker and peak axis follow it. Falls back to the first grid when none is visible.
     const std::vector<double> *freq_axis = nullptr;
+    for (size_t i = 0; i < active_nodes.size() && !freq_axis; ++i) {
+        if (!active_nodes[i] || !m_trace_visible[i])
+            continue;
+        const auto &spec = outputSpectrumFor(active_nodes[i]);
+        if (!spec.frequencies.empty())
+            freq_axis = &spec.frequencies;
+    }
     for (auto *node : active_nodes) {
+        if (freq_axis)
+            break;
         if (!node)
             continue;
         const auto &spec = outputSpectrumFor(node);
-        if (!freq_axis && !spec.frequencies.empty())
+        if (!spec.frequencies.empty())
             freq_axis = &spec.frequencies;
     }
 

@@ -17,6 +17,75 @@ static double W_to_dBm(double w) {
     return 10.0 * std::log10(w) + 30.0;
 }
 
+namespace {
+
+// Bin width of a grid: its first spacing, or 1 for a single-bin grid.
+double gridBinWidth(const std::vector<double> &freqs) {
+    return freqs.size() >= 2 ? freqs[1] - freqs[0] : 1.0;
+}
+
+// First trace with a frequency grid. Combined readouts and the widget's marker and
+// peak use this grid as their axis.
+const Spectrum *readoutGrid(const std::vector<const Spectrum *> &specs) {
+    for (const Spectrum *s : specs) {
+        if (s && !s->frequencies.empty()) {
+            return s;
+        }
+    }
+    return nullptr;
+}
+
+// Whether x lies within a grid's span, padded by half a bin on each side.
+bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
+    return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
+}
+
+// Index of the grid entry nearest x; ties resolve to the lower index.
+size_t nearestGridIndex(const std::vector<double> &freqs, double x) {
+    auto hi_it = std::lower_bound(freqs.begin(), freqs.end(), x);
+    if (hi_it == freqs.begin()) {
+        return 0;
+    }
+    if (hi_it == freqs.end()) {
+        return freqs.size() - 1;
+    }
+    size_t hi = static_cast<size_t>(hi_it - freqs.begin());
+    size_t lo = hi - 1;
+    return (x - freqs[lo] <= freqs[hi] - x) ? lo : hi;
+}
+
+// Adds one trace's per-bin noise (W) and tone (W) onto readout-grid bins. Noise is a
+// density, so each readout bin samples the nearest source bin and is rescaled to the
+// readout bin width. A tone is an impulse, so its power moves to the nearest readout
+// bin. Energy outside the readout span is dropped. On an identical grid this is the
+// identity. A null sum_tone_W skips tones.
+void accumulateOntoGrid(const std::vector<double> &src_freqs,
+                        const std::vector<double> &src_noise_W,
+                        const std::vector<double> &src_tone_W, const std::vector<double> &grid,
+                        double grid_bin_width, std::vector<double> &sum_noise_W,
+                        std::vector<double> *sum_tone_W) {
+    const double src_bin_width = gridBinWidth(src_freqs);
+    const double noise_scale = grid_bin_width / src_bin_width;
+    for (size_t j = 0; j < grid.size(); ++j) {
+        if (!withinGrid(src_freqs, src_bin_width, grid[j])) {
+            continue;
+        }
+        sum_noise_W[j] += src_noise_W[nearestGridIndex(src_freqs, grid[j])] * noise_scale;
+    }
+
+    if (!sum_tone_W) {
+        return;
+    }
+    for (size_t i = 0; i < src_freqs.size(); ++i) {
+        if (src_tone_W[i] == 0.0 || !withinGrid(grid, grid_bin_width, src_freqs[i])) {
+            continue;
+        }
+        (*sum_tone_W)[nearestGridIndex(grid, src_freqs[i])] += src_tone_W[i];
+    }
+}
+
+} // namespace
+
 void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                                                 std::vector<double> &tone_W) const {
     size_t n = spec.frequencies.size();
@@ -119,45 +188,28 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
-    if (specs.empty()) {
+    const Spectrum *readout = readoutGrid(specs);
+    if (!readout) {
         return {};
     }
 
-    // Determine target length (use largest frequency vector among inputs)
-    size_t n = 0;
-    for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() > n) {
-            n = s->frequencies.size();
-        }
-    }
-    if (n == 0) {
-        return {};
-    }
+    // Every trace is resampled onto the readout grid before summing, so bins from
+    // different grids are never added by index (issue #293).
+    const std::vector<double> &grid = readout->frequencies;
+    const double bin_width = gridBinWidth(grid);
 
     // Sum per-bin noise and tone power (W) separately so jitter can be applied
     // to the noise floor without disturbing tone peaks.
-    std::vector<double> sum_noise_W(n, 0.0);
-    std::vector<double> sum_tone_W(n, 0.0);
+    std::vector<double> sum_noise_W(grid.size(), 0.0);
+    std::vector<double> sum_tone_W(grid.size(), 0.0);
     for (const Spectrum *s : specs) {
-        if (!s) {
+        if (!s || s->frequencies.empty()) {
             continue;
         }
         std::vector<double> noise_W, tone_W;
         this->binPowerComponents(*s, noise_W, tone_W);
-        size_t m = std::min(n, noise_W.size());
-        for (size_t i = 0; i < m; ++i) {
-            sum_noise_W[i] += noise_W[i];
-            sum_tone_W[i] += tone_W[i];
-        }
-    }
-
-    // Pick a sensible bin width from the first non-empty frequency vector
-    double bin_width = 1.0;
-    for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() >= 2) {
-            bin_width = s->frequencies[1] - s->frequencies.front();
-            break;
-        }
+        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W,
+                           &sum_tone_W);
     }
 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
@@ -172,38 +224,22 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
 
 double
 SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const {
-    if (specs.empty()) {
+    const Spectrum *readout = readoutGrid(specs);
+    if (!readout) {
         return -174.0;
     }
+    const std::vector<double> &grid = readout->frequencies;
+    const double bin_width = gridBinWidth(grid);
 
-    size_t n = 0;
+    // Sum noise power per bin (W) on the readout grid across all spectra, excluding tones
+    std::vector<double> sum_noise_W(grid.size(), 0.0);
     for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() > n) {
-            n = s->frequencies.size();
-        }
-    }
-    if (n == 0) {
-        return -174.0;
-    }
-
-    double bin_width = 1.0;
-    for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() >= 2) {
-            bin_width = s->frequencies[1] - s->frequencies.front();
-            break;
-        }
-    }
-
-    // Sum noise power per bin (W) across all spectra, excluding tones
-    std::vector<double> sum_noise_W(n, 0.0);
-    for (const Spectrum *s : specs) {
-        if (!s) {
+        if (!s || s->frequencies.empty()) {
             continue;
         }
-        size_t m = std::min(n, s->noise_total_W.size());
-        for (size_t i = 0; i < m; ++i) {
-            sum_noise_W[i] += s->noise_total_W[i] * bin_width;
-        }
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(*s, noise_W, tone_W);
+        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W, nullptr);
     }
 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
