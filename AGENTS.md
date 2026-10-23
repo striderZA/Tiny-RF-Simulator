@@ -78,6 +78,10 @@ Link to the owning document instead of restating its rules or commands on anothe
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW clears Max Hold, Min Hold, and Video Average history.
 
+## Touchstone Parsing Contract
+
+- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`.
+
 ## Agent Rules
 
 - Durable behavior change requested by the user: record it in the closest owning AGENTS.md, or here for global behavior.

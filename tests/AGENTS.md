@@ -38,7 +38,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - Matched perf runs: `cmake --build build --target perf_app`, then `build/bin/perf_app <scenario>` from the repo root on each tag. Delete `build/bin/app.ini` first so both trees start from defaults, and interleave tags.
 - Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark
 - Node graph tests must verify probe routing, link topology, and topological sort
-- Touchstone parser tests must cover all format variants (DB, MA, RI) and frequency units
+- Touchstone parser tests must cover all format variants (DB, MA, RI), frequency units, and both required v2.0 two-port data orders.
 - AMP parser tests must cover scalar and per-frequency IP3 sections, default and explicit units, empty or non-numeric S/Y/Z/POUT sections, and file:line diagnostics (`tests/test_amp_file.cpp`)
 - amp-f v1 reader tests must cover every rule in the spec, block identity and DEVICE inheritance, `FREQ_UNITS`, NaN cells, and `<path>:<line>` diagnostics (`tests/test_ampf_file.cpp`). Amplifier tests cover per-frequency intercepts, selection, fallback, and save/load (`tests/test_amplifier_ampf.cpp`).
 
