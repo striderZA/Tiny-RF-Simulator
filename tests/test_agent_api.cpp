@@ -1575,6 +1575,33 @@ TEST_CASE("data_file_read summarizes a component's S-parameter file",
     CHECK(samples[0].at("magnitude_dB").get<double>() == Catch::Approx(s21_dB));
 }
 
+TEST_CASE("data_file_read reports the non-reciprocal S31 sample", "[agent_api][data_file_read]") {
+    ApiFixture fixture;
+    const auto path = dataFileScratch("nonreciprocal") / "nonreciprocal.s3p";
+    {
+        std::ofstream file(path);
+        file << "# GHz S RI R 50\n1";
+        for (int pair = 0; pair < 9; ++pair) {
+            const double magnitude = pair == 2 ? 0.1 : (pair == 6 ? 0.5 : 1.0);
+            file << ' ' << magnitude << " 0";
+        }
+        file << '\n';
+    }
+    auto *amplifier = fixture.add<AmplifierEngine>("amplifier");
+    REQUIRE(amplifier != nullptr);
+    amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", path.string()}});
+
+    const auto result = fixture.call("data_file_read",
+                                     {{"epoch", fixture.api.epoch()},
+                                      {"component", amplifier->id()},
+                                      {"s_row", 2},
+                                      {"s_col", 0}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(result.structured.at("samples").size() == 1);
+    CHECK(result.structured.at("samples")[0].at("magnitude_dB").get<double>() ==
+          Catch::Approx(-6.0206).margin(0.001));
+}
+
 TEST_CASE("data_file_read library route matches the component route on the same file",
           "[agent_api][data_file_read]") {
     ApiFixture fixture;
