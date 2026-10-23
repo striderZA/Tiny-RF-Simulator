@@ -59,7 +59,9 @@ tonePower(const Spectrum *spectrum, double frequency_Hz,
         quadrature += amplitude * std::sin(phase);
     }
     const double resultant = std::hypot(in_phase, quadrature);
-    if (!(resultant > 0.0) || !std::isfinite(resultant))
+    const double cancellation_tolerance =
+        std::numeric_limits<double>::epsilon() * static_cast<double>(matches.size());
+    if (!(resultant > cancellation_tolerance) || !std::isfinite(resultant))
         return std::nullopt;
     const double power_dBm = reference_dBm + 20.0 * std::log10(resultant);
     return std::isfinite(power_dBm) ? std::optional<double>(power_dBm) : std::nullopt;
