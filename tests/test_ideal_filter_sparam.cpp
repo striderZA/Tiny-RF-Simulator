@@ -27,7 +27,8 @@ static std::filesystem::path write_sparam_file(const std::string &name, int port
         file << frequency;
         const int pairs = ports * ports;
         for (int pair = 0; pair < pairs; ++pair) {
-            const bool transfer = ports == 2 ? pair == 1 : (pair == 2 || pair == 5);
+            // 2-port is column-major (S21 at pair 1); 3-port is row-major (S31, S32 at pairs 6, 7).
+            const bool transfer = ports == 2 ? pair == 1 : (pair == 6 || pair == 7);
             file << (transfer ? " " + std::to_string(real) + " " + std::to_string(imag) : " 0 0");
         }
         file << '\n';
@@ -98,7 +99,8 @@ TEST_CASE("S-parameter engines use conjugate responses on symmetric frequencies"
     const auto s3p = write_sparam_file("issue266_slope.s3p", 3);
     const auto input = symmetric_spectrum();
 
-    auto check_response = [](const Spectrum &output, size_t offset = 0) {
+    auto check_response = [](const char *engine, const Spectrum &output, size_t offset = 0) {
+        INFO(engine);
         REQUIRE(output.tones.size() >= offset + 2);
         REQUIRE(output.tones[offset].power_dBm == Approx(output.tones[offset + 1].power_dBm));
         REQUIRE(output.tones[offset].phase_deg == Approx(-output.tones[offset + 1].phase_deg));
@@ -116,21 +118,21 @@ TEST_CASE("S-parameter engines use conjugate responses on symmetric frequencies"
     filter.setSParamFilepath(s2p.string());
     filter.node().inputs[0] = &input;
     filter.update(0.0);
-    check_response(filter.node().outputs[0]);
+    check_response("filter", filter.node().outputs[0]);
 
     NodeGraphEngine equalizer_graph;
     EqualizerEngine equalizer(0, equalizer_graph);
     equalizer.setSParamFilepath(s2p.string());
     equalizer.node().inputs[0] = &input;
     equalizer.update(0.0);
-    check_response(equalizer.node().outputs[0]);
+    check_response("equalizer", equalizer.node().outputs[0]);
 
     NodeGraphEngine attenuator_graph;
     AttenuatorEngine attenuator(0, attenuator_graph);
     attenuator.setSParamFilepath(s2p.string());
     attenuator.node().inputs[0] = &input;
     attenuator.update(0.0);
-    check_response(attenuator.node().outputs[0]);
+    check_response("attenuator", attenuator.node().outputs[0]);
 
     NodeGraphEngine combiner_graph;
     CombinerEngine combiner(0, combiner_graph);
@@ -139,6 +141,6 @@ TEST_CASE("S-parameter engines use conjugate responses on symmetric frequencies"
     combiner.node().inputs[0] = &input;
     combiner.node().inputs[1] = &input;
     combiner.update(0.0);
-    check_response(combiner.node().outputs[0], 0);
-    check_response(combiner.node().outputs[0], 2);
+    check_response("combiner0", combiner.node().outputs[0], 0);
+    check_response("combiner2", combiner.node().outputs[0], 2);
 }

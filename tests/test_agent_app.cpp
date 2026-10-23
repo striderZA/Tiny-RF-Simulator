@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -520,8 +521,9 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     std::string error;
     REQUIRE(app.testStartAgentServer(serverConfig(), &error));
 
+    constexpr int flow_rows = 1000;
     ordered_json values = ordered_json::array();
-    for (int i = 0; i < 1000; ++i)
+    for (int i = 0; i < flow_rows; ++i)
         values.push_back(-30.0 + static_cast<double>(i) * 0.01);
 
     AgentCall call;
@@ -553,11 +555,10 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     CHECK_FALSE(outcome->completed);
     CHECK(generator->serialize() == generator_before);
 
-    // Slices are wall-clock budgeted, so the frame count varies with machine load. Bound the wait
-    // by time instead, and require that the flow spanned several frames.
     int frames = 1;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-    while (!outcome->completed && std::chrono::steady_clock::now() < deadline) {
+    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow
+    // yields.
+    while (!outcome->completed && frames <= flow_rows) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
         ++frames;
@@ -565,10 +566,9 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
 
     REQUIRE(outcome->completed);
     CHECK_FALSE(outcome->result.is_error);
-    CHECK(outcome->result.structured.at("row_count") == 1000);
-    CHECK(outcome->result.structured.at("rows").size() == 1000);
+    CHECK(outcome->result.structured.at("row_count") == flow_rows);
+    CHECK(outcome->result.structured.at("rows").size() == flow_rows);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames > 1);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",

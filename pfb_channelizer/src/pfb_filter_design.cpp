@@ -84,17 +84,21 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
         }
     }
 
-    // Flat-noise tilt: integral of H(x)^2 over the |x| <= 1 slice the engine
-    // integrates. ~ -0.6 dB for the corrected model (old narrow model: -9 dB).
-    const int steps = 400; // H^2 is a smooth bell; 0.005-ch sampling is ample
+    // Flat-noise tilt: normalized noise bandwidth in dB (~ -0.6 dB for the corrected model).
+    m.flat_noise_tilt_db = 10.0 * std::log10(std::max(design.normalizedNoiseBandwidth(), 1e-300));
+    return m;
+}
+
+double PfbFilterDesign::normalizedNoiseBandwidth() const {
+    // int_{-1}^{1} |H(x)|^2 dx, the channel-width-normalized noise bandwidth. H^2 is a
+    // smooth bell, so 400 trapezoid steps are ample.
+    const int steps = 400;
     double acc = 0.0;
     for (int i = 0; i <= steps; ++i) {
-        const double h = design.responseAt(-1.0 + 2.0 * i / steps);
+        const double h = responseAt(-1.0 + 2.0 * i / steps);
         acc += h * h;
     }
-    acc *= 2.0 / steps;
-    m.flat_noise_tilt_db = 10.0 * std::log10(std::max(acc, 1e-300));
-    return m;
+    return acc * 2.0 / steps;
 }
 
 RejectionStatus compareRejection(double rejection_db, double target_db) {
