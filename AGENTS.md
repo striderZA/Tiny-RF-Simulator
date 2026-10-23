@@ -78,6 +78,10 @@ Link to the owning document instead of restating its rules or commands on anothe
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
 
+## Touchstone Parsing Contract
+
+- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
+
 ## S-parameter Contract
 
 - `SParameterData::interpolate()` evaluates negative frequencies at `|f|` and returns the conjugate response, matching a real-valued network's frequency symmetry.
