@@ -4,6 +4,10 @@
 
 - **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
 
+### Changed
+
+- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
