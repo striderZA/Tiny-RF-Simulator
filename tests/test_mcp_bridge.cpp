@@ -130,7 +130,7 @@ class BlockingInputBuffer final : public std::streambuf {
     void append(std::string_view bytes) {
         {
             std::lock_guard lock(m_mutex);
-            m_bytes.insert(m_bytes.end(), bytes.begin(), bytes.end());
+            m_chunks.emplace_back(bytes);
         }
         m_ready.notify_all();
     }
@@ -151,32 +151,26 @@ class BlockingInputBuffer final : public std::streambuf {
   protected:
     int_type underflow() override {
         std::unique_lock lock(m_mutex);
-        m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
-        if (m_bytes.empty()) {
+        m_ready.wait(lock, [this] { return !m_chunks.empty() || m_closed; });
+        while (!m_chunks.empty() && m_chunks.front().empty())
+            m_chunks.pop_front();
+        if (m_chunks.empty()) {
             m_eof_observed = true;
             m_ready.notify_all();
             return traits_type::eof();
         }
-        return traits_type::to_int_type(m_bytes.front());
-    }
-
-    int_type uflow() override {
-        std::unique_lock lock(m_mutex);
-        m_ready.wait(lock, [this] { return !m_bytes.empty() || m_closed; });
-        if (m_bytes.empty()) {
-            m_eof_observed = true;
-            m_ready.notify_all();
-            return traits_type::eof();
-        }
-        const char byte = m_bytes.front();
-        m_bytes.pop_front();
-        return traits_type::to_int_type(byte);
+        m_current = std::move(m_chunks.front());
+        m_chunks.pop_front();
+        char *begin = m_current.data();
+        setg(begin, begin, begin + m_current.size());
+        return traits_type::to_int_type(*gptr());
     }
 
   private:
     std::mutex m_mutex;
     std::condition_variable m_ready;
-    std::deque<char> m_bytes;
+    std::deque<std::string> m_chunks;
+    std::string m_current;
     bool m_closed = false;
     bool m_eof_observed = false;
 };

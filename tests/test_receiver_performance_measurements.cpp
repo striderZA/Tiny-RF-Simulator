@@ -282,6 +282,9 @@ TEST_CASE("Receiver IIP3 estimates single and cascaded nonlinear stages on both 
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -80.0, -50.0, 2.0};
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
     engine.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    for (int update = 0; engine.isInProgress() && update < 1000; ++update)
+        engine.update(settings, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    REQUIRE_FALSE(engine.isInProgress());
     REQUIRE(isFinite(engine.measurements().iip3_dBm[0]));
     CHECK(engine.measurements().iip3_dBm[0] == Catch::Approx(30.0).margin(1.5));
 
@@ -294,6 +297,10 @@ TEST_CASE("Receiver IIP3 estimates single and cascaded nonlinear stages on both 
     Host cascade_host{{&c.generator, &c.attenuator, &c.amplifier, cascade.get()}};
     ReceiverPerformanceMeasurementEngine cascade_engine(c.graph, cascade_host);
     cascade_engine.update(settings, c.generator.outputPinId(), cascade->outputPinId(), {1.0e9});
+    for (int update = 0; cascade_engine.isInProgress() && update < 1000; ++update)
+        cascade_engine.update(settings, c.generator.outputPinId(), cascade->outputPinId(),
+                              {1.0e9});
+    REQUIRE_FALSE(cascade_engine.isInProgress());
     REQUIRE(isFinite(cascade_engine.measurements().iip3_dBm[0]));
     const double expected =
         -10.0 * std::log10(std::pow(10.0, -30.0 / 10.0) + std::pow(10.0, -21.0 / 10.0));
