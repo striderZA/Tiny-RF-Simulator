@@ -7,6 +7,7 @@
 #include "flow_params.h"
 #include "graph_editor_actions.h"
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
 #include "view_manager.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -240,8 +241,16 @@ TEST_CASE("State metadata describes every scalar engine serialization leaf", "[c
             CHECK(field.unit == expected_type->second.at(field.key).second);
             CHECK_FALSE(field.help.empty());
             CHECK(field.help.back() == '.');
-            CHECK((std::isinf(field.min) && field.min < 0.0));
-            CHECK((std::isinf(field.max) && field.max > 0.0));
+            if (descriptor->type == "equalizer" && field.key == "ref_gain_dB") {
+                CHECK(field.min == -40.0);
+                CHECK(field.max == 40.0);
+            } else if (descriptor->type == "equalizer" && field.key == "slope_dB_per_decade") {
+                CHECK(field.min == -100.0);
+                CHECK(field.max == 100.0);
+            } else {
+                CHECK((std::isinf(field.min) && field.min < 0.0));
+                CHECK((std::isinf(field.max) && field.max > 0.0));
+            }
             const bool is_path_key = field.key == "sparam_filepath" ||
                                      field.key == "amp_filepath" || field.key == "ampf_filepath";
             CHECK(field.read_only == is_path_key);
@@ -633,4 +642,38 @@ TEST_CASE("Components without state metadata reject all parameter keys", "[compo
         fixture.commands.setComponentParams(engine->graphNodeId(), {{"gain_dB", 2.0}});
     CHECK(result.status == ParamWriteStatus::UnknownKey);
     CHECK(fixture.commands.revision() == revision);
+}
+
+TEST_CASE("Agent slope write outside the inspector range is rejected", "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("equalizer");
+    REQUIRE(engine != nullptr);
+    const auto &fields = paramsDescriptor("equalizer").state_fields;
+    applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e9}});
+    REQUIRE(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+
+    const auto rejected = applyComponentParams(*engine, fields, {{"slope_dB_per_decade", -400.0}});
+    CHECK(rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(rejected.path == "slope_dB_per_decade");
+    CHECK(rejected.expected == "number from -100 to 100");
+    CHECK(engine->serialize().at("slope_dB_per_decade").get<double>() == 0.0);
+
+    const auto gain_rejected = applyComponentParams(*engine, fields, {{"ref_gain_dB", 41.0}});
+    CHECK(gain_rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(engine->serialize().at("ref_gain_dB").get<double>() == 0.0);
+
+    const auto edge = applyComponentParams(*engine, fields, {{"slope_dB_per_decade", 100.0}});
+    CHECK(edge.status == ParamWriteStatus::Applied);
+
+    SignalGeneratorEngine gen(900, fixture.graph);
+    gen.addTone(0.0, -20.0);
+    gen.update(0.0);
+    engine->node().inputs[0] = &gen.node().outputs[0];
+    engine->update(0.0);
+
+    const auto &out = engine->node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    CHECK(std::isfinite(out.tones[0].power_dBm));
+    for (const double noise : out.noise_total_W)
+        CHECK(std::isfinite(noise));
 }

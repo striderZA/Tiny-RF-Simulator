@@ -9,6 +9,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string_view>
 #include <utility>
 
@@ -272,19 +273,31 @@ bool integerFromJson(const Json &input, bool unsigned_slot, Json &converted) {
     return true;
 }
 
+bool withinBounds(const ParameterField &field, double value, std::string &expected) {
+    if (value >= field.min && value <= field.max)
+        return true;
+    std::ostringstream range;
+    range << "number from " << field.min << " to " << field.max;
+    expected = range.str();
+    return false;
+}
+
 bool convertValue(const ParameterField &field, const Json &input, const Json *current,
                   Json &converted, std::string &expected) {
     switch (field.kind) {
     case FieldKind::Number:
         if (current && isInteger(*current)) {
             expected = "integer";
-            return integerFromJson(input, current->is_number_unsigned(), converted);
+            if (!integerFromJson(input, current->is_number_unsigned(), converted))
+                return false;
+            return withinBounds(field, converted.get<double>(), expected);
         }
         expected = "number";
         if (!input.is_number())
             return false;
         converted = input.get<double>();
-        return std::isfinite(converted.get<double>());
+        return std::isfinite(converted.get<double>()) &&
+               withinBounds(field, converted.get<double>(), expected);
     case FieldKind::Bool:
         expected = "boolean";
         if (!input.is_boolean())

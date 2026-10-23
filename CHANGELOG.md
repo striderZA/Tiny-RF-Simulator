@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **Agent writes respect equalizer bounds (#301)** — agent writes to the equalizer's reference gain (±40 dB) and slope (±100 dB/decade) are rejected outside the inspector ranges, so an out-of-range slope can no longer drive the output to infinite noise.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
