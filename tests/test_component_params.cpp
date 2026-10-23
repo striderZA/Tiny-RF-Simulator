@@ -244,6 +244,9 @@ TEST_CASE("State metadata describes every scalar engine serialization leaf", "[c
             if (descriptor->type == "equalizer" && field.key == "ref_gain_dB") {
                 CHECK(field.min == -40.0);
                 CHECK(field.max == 40.0);
+            } else if (descriptor->type == "equalizer" && field.key == "ref_freq_Hz") {
+                CHECK(field.min == 1.0);
+                CHECK(field.max == 100e9);
             } else if (descriptor->type == "equalizer" && field.key == "slope_dB_per_decade") {
                 CHECK(field.min == -100.0);
                 CHECK(field.max == 100.0);
@@ -644,13 +647,13 @@ TEST_CASE("Components without state metadata reject all parameter keys", "[compo
     CHECK(fixture.commands.revision() == revision);
 }
 
-TEST_CASE("Agent slope write outside the inspector range is rejected", "[component_params]") {
+TEST_CASE("Agent equalizer writes outside the inspector ranges are rejected",
+          "[component_params]") {
     ParamsEngineFixture fixture;
     auto *engine = fixture.create("equalizer");
     REQUIRE(engine != nullptr);
     const auto &fields = paramsDescriptor("equalizer").state_fields;
-    applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e9}});
-    REQUIRE(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+    REQUIRE(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e9}}).ok());
 
     const auto rejected = applyComponentParams(*engine, fields, {{"slope_dB_per_decade", -400.0}});
     CHECK(rejected.status == ParamWriteStatus::TypeMismatch);
@@ -662,8 +665,23 @@ TEST_CASE("Agent slope write outside the inspector range is rejected", "[compone
     CHECK(gain_rejected.status == ParamWriteStatus::TypeMismatch);
     CHECK(engine->serialize().at("ref_gain_dB").get<double>() == 0.0);
 
-    const auto edge = applyComponentParams(*engine, fields, {{"slope_dB_per_decade", 100.0}});
-    CHECK(edge.status == ParamWriteStatus::Applied);
+    const auto freq_rejected = applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e30}});
+    CHECK(freq_rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(freq_rejected.expected == "number from 1 to 1e+11");
+    CHECK(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e13}}).status ==
+          ParamWriteStatus::TypeMismatch);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 0.0}}).status ==
+          ParamWriteStatus::TypeMismatch);
+    CHECK(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+
+    // Largest gain: negative slope, high reference frequency, top reference gain.
+    CHECK(applyComponentParams(*engine, fields, {{"slope_dB_per_decade", -100.0}}).status ==
+          ParamWriteStatus::Applied);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_gain_dB", 40.0}}).status ==
+          ParamWriteStatus::Applied);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 100e9}}).status ==
+          ParamWriteStatus::Applied);
 
     SignalGeneratorEngine gen(900, fixture.graph);
     gen.addTone(0.0, -20.0);
