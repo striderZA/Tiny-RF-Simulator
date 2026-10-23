@@ -189,3 +189,30 @@ TEST_CASE("TouchstoneParser honors v2.0 two-port data order", "[touchstone]") {
     REQUIRE_FALSE(TouchstoneParser::parse(path_missing.string()).has_value());
     std::filesystem::remove(path_missing);
 }
+
+TEST_CASE("TouchstoneParser stores 3-port and 4-port matrices in row-major order", "[touchstone]") {
+    for (const int ports : {3, 4}) {
+        const auto tmpfile =
+            std::filesystem::temp_directory_path() /
+            ("test_row_major_" + std::to_string(ports) + "port.s" + std::to_string(ports) + "p");
+        {
+            std::ofstream ofs(tmpfile);
+            ofs << "# GHz S RI R 50\n1.0";
+            for (int pair = 0; pair < ports * ports; ++pair)
+                ofs << ' ' << pair + 1 << " 0";
+            ofs << '\n';
+        }
+
+        const auto result = TouchstoneParser::parse(tmpfile.string());
+        REQUIRE(result.has_value());
+        REQUIRE(result->parameters[0].size() == ports * ports);
+        for (int row = 0; row < ports; ++row) {
+            for (int col = 0; col < ports; ++col) {
+                const int pair = row * ports + col;
+                REQUIRE(result->parameters[0][pair].real() == Approx(pair + 1));
+                REQUIRE(result->parameters[0][pair].imag() == Approx(0.0));
+            }
+        }
+        std::filesystem::remove(tmpfile);
+    }
+}

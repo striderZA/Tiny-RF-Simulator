@@ -1094,8 +1094,12 @@ TEST_CASE("NetworkAnalyzer: mixer LO translation is reproduced on the clone chai
     REQUIRE(na.gainDb().size() == 11);
     for (double g : na.gainDb())
         REQUIRE_THAT(g, WithinAbs(0.0, 0.05));
-    for (double nf : na.noiseFigureDb())
-        REQUIRE_THAT(nf, WithinAbs(3.0, 0.1));
+    const auto &nf = na.noiseFigureDb();
+    for (size_t i = 0; i < nf.size(); ++i) {
+        // The sweep endpoints lack one RF image; interior points receive both.
+        const double expected_nf_dB = (i == 0 || i + 1 == nf.size()) ? 3.0 : 10.0 * std::log10(3.0);
+        REQUIRE_THAT(nf[i], WithinAbs(expected_nf_dB, 0.1));
+    }
 
     // Misaligned LO: translated tones land between grid points -> no match.
     mixer.setLoFreq_Hz(99e6);

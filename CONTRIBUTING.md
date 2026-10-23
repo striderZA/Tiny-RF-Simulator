@@ -36,7 +36,7 @@ The first build takes 60-90s while FetchContent clones dependencies. Subsequent 
 git config core.hooksPath .githooks
 ```
 
-If `clang-format-18` isn't available via your system package manager (e.g. Windows, older macOS), install a pinned copy: `scripts/install-clang-format.sh` (requires Python/pip; installs to `~/.cache/clang-format-18`, auto-detected by the hook and `scripts/format.sh`).
+CI checks formatting with clang-format 18, and that is the version to use for a clean `scripts/format.sh --check --all`. The resolver accepts any major >= 18, but newer majors reformat some existing files differently (clang-format 21 flags 11 tracked files that 18 accepts), so a newer binary can fail the check on code CI accepts. If no clang-format 18 is available via your system package manager (e.g. Windows, older macOS), install a pinned 18.1.8 copy: `scripts/install-clang-format.sh` (requires Python/pip; installs to `~/.cache/clang-format-18`, used by the hook and `scripts/format.sh` only when no clang-format >= 18 is on `PATH`). Majors below 18 are rejected. The discovery logic lives in `scripts/clang-format-resolve.sh`; check it with `bash scripts/test-format-version.sh`.
 
 > **See also:** [Build & Operations guide](openwiki/operations/build-runbook.md) for release builds, clean builds, CI/CD, and troubleshooting.
 
@@ -152,7 +152,7 @@ Never move the tag of a published release. Ship the fix as the next patch releas
 
 ## Code Style
 
-- **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`).
+- **Format:** LLVM-based via [`.clang-format`](.clang-format) (4-space indent, 100 cols, `PointerAlignment: Right`); CI checks with clang-format 18, so use 18 for a clean check (see Clone & Build).
   Run `bash scripts/format.sh` to reformat changed files, or `bash scripts/format.sh --check` to dry-run (CI-equivalent). The checked directory set lives once in `scripts/format-dirs.sh` (shared with the pre-commit hook and the release workflow). CI will reject PRs with formatting violations.
   Enable `git config core.hooksPath .githooks` once per clone to catch this automatically on `git commit` — see Clone & Build above.
   The pre-commit hook runs the format check only when staged C++ files fall in the checked directories.

@@ -80,7 +80,11 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 ## Touchstone Parsing Contract
 
-- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`.
+- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
+
+## Mixer Noise Contract
+
+- `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
 
 ## Agent Rules
 
