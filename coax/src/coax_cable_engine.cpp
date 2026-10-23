@@ -86,6 +86,8 @@ void CoaxCableEngine::update(double dt) {
         out.phase_deg[i] += phase_shift_deg;
     }
 
+    constexpr double k = 1.3806e-23;
+    constexpr double T = 290.0;
     out.noise_W.assign(N, 0.0);
     out.noise_added_W.assign(N, 0.0);
     out.noise_total_W.assign(N, 0.0);
@@ -96,11 +98,12 @@ void CoaxCableEngine::update(double dt) {
         const double loss_dB =
             (p.K1_dB_per_m * std::sqrt(f_MHz) + p.K2_dB_per_m * f_MHz) * m_length_m +
             m_connectors_loss_dB;
-        const double L_lin = dbToLinear(loss_dB);
+        const double gain = dbToLinear(-loss_dB);
         const double nin =
             (in_ptr && i < in_ptr->noise_total_W.size()) ? in_ptr->noise_total_W[i] : 0.0;
-        out.noise_W[i] = nin / L_lin;
-        out.noise_total_W[i] = out.noise_W[i]; // noise_added_W is 0
+        out.noise_W[i] = nin * gain;
+        out.noise_added_W[i] = k * T * (1.0 - gain);
+        out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
 
     out.bumpGeneration();

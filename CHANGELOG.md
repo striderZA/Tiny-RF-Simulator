@@ -3,6 +3,13 @@
 ### Fixed
 
 - **Agent writes respect equalizer bounds (#301)** — agent writes to the equalizer's reference gain (±40 dB) and slope (±100 dB/decade) are rejected outside the inspector ranges, so an out-of-range slope can no longer drive the output to infinite noise.
+- **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
+- **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
+- **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
+
+### Changed
+
+- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
 
 ## [0.29.2] - 2026-10-21
 

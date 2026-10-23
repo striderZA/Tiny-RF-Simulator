@@ -17,7 +17,12 @@ class SpectrumAnalyzerEngine {
     void setStopFrequency(double v) { m_stop_freq = v; }
     void setMinPower(double v) { m_min_power = v; }
     void setMaxPower(double v) { m_max_power = v; }
-    void setVideoBw(double v) { m_vbw = v; }
+    void setVideoBw(double v) {
+        if (m_vbw != v) {
+            m_vbw = v;
+            resetTraceHistory();
+        }
+    }
     void setResBw(double v) {
         if (m_rbw != v) {
             m_rbw = v;
@@ -38,7 +43,12 @@ class SpectrumAnalyzerEngine {
     double rbw() const { return m_rbw; }
 
     void setTraceMode(TraceMode m);
-    void setVideoAvgCount(int n) { m_video_avg_count = n; }
+    void setVideoAvgCount(int n) {
+        if (m_video_avg_count != n) {
+            m_video_avg_count = n;
+            resetTraceHistory();
+        }
+    }
 
     TraceMode traceMode() const { return m_trace_mode; }
     int videoAvgCount() const { return m_video_avg_count; }
@@ -86,11 +96,14 @@ class SpectrumAnalyzerEngine {
     // may filter or jitter them independently before recombining.
     void binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                             std::vector<double> &tone_W) const;
-    // Combines RBW-filtered per-bin noise and tone power (W) into a dBm display
-    // trace. The cosmetic noise-floor jitter scales only the noise component, so
-    // deterministic tone peaks never wander; a non-positive sigma disables it.
-    std::vector<double> toJitteredPower_dBm(const std::vector<double> &noise_W,
-                                            const std::vector<double> &tone_W) const;
+    // Jittered noise floor (dBm per bin) from RBW-filtered noise power (W). The cosmetic
+    // jitter scales only this component; a non-positive sigma disables it.
+    std::vector<double> toJitteredNoise_dBm(const std::vector<double> &noise_W) const;
+    // Builds the dBm display trace: VBW smooths the jittered noise floor only, then the
+    // RBW-filtered tone power is added in linear watts, so tone peaks are never averaged.
+    std::vector<double> toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                           const std::vector<double> &tone_W,
+                                           double binWidth) const;
     std::vector<double> applyRBWForNoise(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;
