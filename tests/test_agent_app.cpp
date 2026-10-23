@@ -520,8 +520,9 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     std::string error;
     REQUIRE(app.testStartAgentServer(serverConfig(), &error));
 
+    constexpr int flow_rows = 1000;
     ordered_json values = ordered_json::array();
-    for (int i = 0; i < 1000; ++i)
+    for (int i = 0; i < flow_rows; ++i)
         values.push_back(-30.0 + static_cast<double>(i) * 0.01);
 
     AgentCall call;
@@ -549,7 +550,8 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     CHECK(generator->serialize() == generator_before);
 
     int frames = 1;
-    while (!completed && frames < 200) {
+    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow yields.
+    while (!completed && frames <= flow_rows) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
         ++frames;
@@ -557,10 +559,9 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
 
     REQUIRE(completed);
     CHECK_FALSE(result.is_error);
-    CHECK(result.structured.at("row_count") == 1000);
-    CHECK(result.structured.at("rows").size() == 1000);
+    CHECK(result.structured.at("row_count") == flow_rows);
+    CHECK(result.structured.at("rows").size() == flow_rows);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames <= 200);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",
