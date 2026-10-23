@@ -82,6 +82,10 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 - `SParameterData::interpolate()` evaluates negative frequencies at `|f|` and returns the conjugate response, matching a real-valued network's frequency symmetry.
 
+## Mixer Noise Contract
+
+- `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
+
 ## Agent Rules
 
 - Durable behavior change requested by the user: record it in the closest owning AGENTS.md, or here for global behavior.
