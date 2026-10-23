@@ -427,6 +427,32 @@ TEST_CASE("Spectrum analyzer RBW filtering preserves tone peak power", "[spectru
     }
 }
 
+TEST_CASE("Spectrum analyzer combines same-frequency tone copies coherently", "[spectrum]") {
+    Spectrum spec;
+    spec.frequencies = {-10e6, 0.0, 10e6};
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setVideoBw(1e6);
+
+    for (double rbw : {1e3, 100e6}) {
+        sa.setResBw(rbw);
+
+        spec.tones.clear();
+        spec.bumpGeneration();
+        const double floor_dBm = sa.renderSpectrum(spec)[1];
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 0.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(-20.0 + 6.0205999132).margin(0.01));
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 180.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(floor_dBm).margin(0.01));
+    }
+}
+
 TEST_CASE("Spectrum analyzer RBW changes reset held traces", "[spectrum][trace]") {
     Spectrum spec;
     for (size_t i = 0; i <= 100; ++i) {
