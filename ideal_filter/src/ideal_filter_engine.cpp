@@ -170,34 +170,45 @@ nlohmann::json IdealFilterEngine::serialize() const {
 }
 
 void IdealFilterEngine::deserialize(const nlohmann::json &j) {
+    // Parse into locals and validate before any member changes, so a rejected band
+    // leaves the engine exactly as it was.
+    FilterType type = m_type;
     if (j.contains("filter_type")) {
         if (j["filter_type"].is_string()) {
             const std::string ft = j["filter_type"].get<std::string>();
             if (ft == "LPF")
-                m_type = FilterType::LPF;
+                type = FilterType::LPF;
             else if (ft == "HPF")
-                m_type = FilterType::HPF;
+                type = FilterType::HPF;
             else if (ft == "BPF")
-                m_type = FilterType::BPF;
+                type = FilterType::BPF;
             else if (ft == "BSF")
-                m_type = FilterType::BSF;
+                type = FilterType::BSF;
         } else {
             int ft = j.value("filter_type", 0);
             if (ft < 0)
                 ft = 0;
             if (ft > 3)
                 ft = 3;
-            m_type = static_cast<FilterType>(ft);
+            type = static_cast<FilterType>(ft);
         }
     }
     // Preserve the old registry factory's conditional cutoff semantics:
-    // both present -> setCutoffs; only fc_low -> setCutoff (mirrors high);
-    // neither -> keep constructor defaults.
+    // both present -> both cutoffs; only fc_low -> fc_low mirrored to high;
+    // neither -> keep current cutoffs.
+    double low = m_fc_low_Hz;
+    double high = m_fc_high_Hz;
     if (j.contains("fc_low_Hz") && j.contains("fc_high_Hz")) {
-        setCutoffs_Hz(j["fc_low_Hz"].get<double>(), j["fc_high_Hz"].get<double>());
+        low = j["fc_low_Hz"].get<double>();
+        high = j["fc_high_Hz"].get<double>();
     } else if (j.contains("fc_low_Hz")) {
-        setCutoff_Hz(j["fc_low_Hz"].get<double>());
+        low = high = j["fc_low_Hz"].get<double>();
     }
+    if (!isValidCutoffPair(type, low, high))
+        throw std::invalid_argument(kInvertedBandError);
+    m_type = type;
+    m_fc_low_Hz = low;
+    m_fc_high_Hz = high;
     m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
         m_sparam_data.load(m_sparam_filepath);

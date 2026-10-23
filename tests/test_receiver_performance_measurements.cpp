@@ -28,7 +28,8 @@ enum class DroppedTone {
     UpperIm3,
     LowerFundamental,
     DuplicateSamePhase,
-    DuplicateQuadrature
+    DuplicateQuadrature,
+    DuplicateOpposite
 };
 
 class TestAmplifier final : public AmplifierEngine {
@@ -41,7 +42,8 @@ class TestAmplifier final : public AmplifierEngine {
             return;
         const auto &tones = node().inputs[0]->tones;
         if (tones.size() == 1 && (m_dropped == DroppedTone::DuplicateSamePhase ||
-                                  m_dropped == DroppedTone::DuplicateQuadrature)) {
+                                  m_dropped == DroppedTone::DuplicateQuadrature ||
+                                  m_dropped == DroppedTone::DuplicateOpposite)) {
             auto &output_tones = node().outputs[0].tones;
             const auto fundamental = std::find_if(
                 output_tones.begin(), output_tones.end(), [&tones](const Spectrum::Tone &tone) {
@@ -51,6 +53,8 @@ class TestAmplifier final : public AmplifierEngine {
                 auto duplicate = *fundamental;
                 if (m_dropped == DroppedTone::DuplicateQuadrature)
                     duplicate.phase_deg += 90.0;
+                if (m_dropped == DroppedTone::DuplicateOpposite)
+                    duplicate.phase_deg += 180.0;
                 output_tones.push_back(duplicate);
             }
             return;
@@ -201,6 +205,11 @@ TEST_CASE("Receiver output power coherently combines duplicate-frequency tones b
     quadrature.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(quadrature.measurements().output_power_dBm[0] ==
           Catch::Approx(single_power + 3.010299957).margin(1e-6));
+
+    Host opposite_host{{&c.generator, &c.attenuator, &c.amplifier}, DroppedTone::DuplicateOpposite};
+    ReceiverPerformanceMeasurementEngine opposite(c.graph, opposite_host);
+    opposite.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK_FALSE(isFinite(opposite.measurements().output_power_dBm[0]));
 }
 
 TEST_CASE("Receiver source resolves one tone automatically and explicit selection among tones",
