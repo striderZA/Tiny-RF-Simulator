@@ -232,16 +232,18 @@ TEST_CASE("ADC DDC folds noise from every Nyquist zone like tones", "[adc][nyqui
     adc.update(0.0);
 
     const auto &out = adc.node().outputs[0];
-    auto nearest_index = [&](double f_Hz) {
-        size_t best = 0;
-        for (size_t i = 0; i < out.frequencies.size(); ++i) {
-            if (std::abs(out.frequencies[i] - f_Hz) < std::abs(out.frequencies[best] - f_Hz))
-                best = i;
-        }
-        return best;
+    // Output labels sit at bin centres, so ±250 MHz falls between two labels. The image
+    // lands in one of them; sum the bins within one bin width of each image frequency.
+    const double df = out.frequencies[1] - out.frequencies[0];
+    auto image_power = [&](double f_Hz) {
+        double sum = 0.0;
+        for (size_t i = 0; i < out.frequencies.size(); ++i)
+            if (std::abs(out.frequencies[i] - f_Hz) <= df)
+                sum += out.noise_total_W[i];
+        return sum;
     };
-    REQUIRE(out.noise_total_W[nearest_index(250e6)] == Approx(0.5e-12).margin(1e-14));
-    REQUIRE(out.noise_total_W[nearest_index(-250e6)] == Approx(0.5e-12).margin(1e-14));
+    REQUIRE(image_power(250e6) == Approx(0.5e-12).margin(1e-14));
+    REQUIRE(image_power(-250e6) == Approx(0.5e-12).margin(1e-14));
 }
 
 TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
