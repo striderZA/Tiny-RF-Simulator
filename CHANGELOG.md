@@ -6,6 +6,7 @@
 - **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
 - **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
 - **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
+- **Passive filter and equalizer noise keeps the thermal term (#297)** — noise through an S-parameter filter or equalizer is `|S21|² × noise_in + kT(1 − |S21|²)`, and the ideal equalizer uses `G × noise_in + kT(1 − G)`, matching the attenuator. Gain (|S21| or G > 1) adds no thermal term. A flat −3 dB S-parameter file, or −10 dB ideal equalizer gain, on a kT input now returns kT.
 
 ### Changed
 

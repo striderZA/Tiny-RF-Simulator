@@ -1,4 +1,5 @@
 #include "ideal_filter_engine.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <nlohmann/json.hpp>
@@ -83,16 +84,22 @@ void IdealFilterEngine::update(double dt) {
             return;
         }
 
-        // Filter noise by |S21|^2, no added noise
+        // Passive two-port: noise_total = |S21|^2 * noise_in + kT * max(0, 1 - |S21|^2).
+        // Gain (|S21| > 1) adds no thermal term; clamping is the chosen rule for gain.
+        const double k = 1.3806e-23;
+        const double T = 290.0;
         out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], idx);
+            double mag_sq = std::norm(S);
             double nin =
                 (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
-            out.noise_W[i] = std::norm(S) * nin;
+            out.noise_W[i] = mag_sq * nin;
+            out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - mag_sq);
+            out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
         }
-        out.noise_added_W.assign(N, 0.0);
-        out.noise_total_W = out.noise_W;
 
         out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
         out.bumpGeneration();
