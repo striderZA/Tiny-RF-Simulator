@@ -32,7 +32,10 @@ void MixerEngine::update(double dt) {
             lower.freq_Hz = in_ptr->is_complex_baseband ? (tone.freq_Hz - m_lo_freq_Hz)
                                                         : std::abs(tone.freq_Hz - m_lo_freq_Hz);
             lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
-            lower.phase_deg = tone.phase_deg;
+            // Real A·cos(2πft+φ)·cos(2π·LO·t): the difference term cos(2π(f−LO)t+φ)
+            // has phase −φ when f < LO. Complex input shifts without conjugation.
+            const bool conjugates = !in_ptr->is_complex_baseband && tone.freq_Hz < m_lo_freq_Hz;
+            lower.phase_deg = conjugates ? -tone.phase_deg : tone.phase_deg;
             out.tones.push_back(lower);
 
             Spectrum::Tone upper;
