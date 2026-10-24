@@ -1,7 +1,51 @@
 #include "mixer_engine.h"
 #include <algorithm>
 #include <cmath>
+#include <complex>
+#include <map>
 #include <nlohmann/json.hpp>
+#include <numbers>
+#include <vector>
+
+// Sums tones that share a frequency as phasors, so coincident images add coherently. Frequencies
+// are compared within a relative tolerance: tone ± LO rounds separately per term, so equal
+// results can differ by a few ulps. First-seen order is kept; a cancelled sum is dropped.
+static std::vector<Spectrum::Tone>
+sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
+    double scale_Hz = 1.0;
+    for (const auto &t : tones)
+        scale_Hz = std::max(scale_Hz, std::abs(t.freq_Hz));
+    const double merge_tol_Hz = scale_Hz * 1e-12;
+
+    std::map<double, size_t> slot_by_freq;
+    std::vector<double> freqs;
+    std::vector<std::complex<double>> sums;
+    for (const auto &t : tones) {
+        const double amp = std::sqrt(0.001 * std::pow(10.0, t.power_dBm / 10.0));
+        const double phase_rad = t.phase_deg * std::numbers::pi / 180.0;
+        const auto it = slot_by_freq.lower_bound(t.freq_Hz - merge_tol_Hz);
+        size_t idx = freqs.size();
+        if (it != slot_by_freq.end() && it->first <= t.freq_Hz + merge_tol_Hz) {
+            idx = it->second;
+        } else {
+            freqs.push_back(t.freq_Hz);
+            sums.emplace_back(0.0, 0.0);
+            slot_by_freq.emplace(t.freq_Hz, idx);
+        }
+        sums[idx] += std::polar(amp, phase_rad);
+    }
+
+    std::vector<Spectrum::Tone> result;
+    result.reserve(freqs.size());
+    for (size_t i = 0; i < freqs.size(); ++i) {
+        const double power_W = std::norm(sums[i]);
+        if (power_W <= 0.0)
+            continue;
+        result.push_back({freqs[i], 10.0 * std::log10(power_W / 0.001),
+                          std::atan2(sums[i].imag(), sums[i].real()) * 180.0 / std::numbers::pi});
+    }
+    return result;
+}
 
 MixerEngine::MixerEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "Mixer", 1, 1) {}
@@ -27,6 +71,8 @@ void MixerEngine::update(double dt) {
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     if (in_ptr) {
+        std::vector<Spectrum::Tone> sidebands;
+        sidebands.reserve(2 * in_ptr->tones.size());
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
             lower.freq_Hz = in_ptr->is_complex_baseband ? (tone.freq_Hz - m_lo_freq_Hz)
@@ -36,14 +82,15 @@ void MixerEngine::update(double dt) {
             // has phase −φ when f < LO. Complex input shifts without conjugation.
             const bool conjugates = !in_ptr->is_complex_baseband && tone.freq_Hz < m_lo_freq_Hz;
             lower.phase_deg = conjugates ? -tone.phase_deg : tone.phase_deg;
-            out.tones.push_back(lower);
+            sidebands.push_back(lower);
 
             Spectrum::Tone upper;
             upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
             upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
             upper.phase_deg = tone.phase_deg;
-            out.tones.push_back(upper);
+            sidebands.push_back(upper);
         }
+        out.tones = sumCoincidentTonesCoherently(sidebands);
     }
 
     if (in_ptr && !in_ptr->phase_deg.empty()) {
