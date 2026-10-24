@@ -721,6 +721,51 @@ TEST_CASE("pruneHistory removes stale entries", "[spectrum][trace]") {
     REQUIRE(out[1] < -50.0);
 }
 
+TEST_CASE("Spectrum reusing a removed spectrum's address renders as a fresh engine",
+          "[spectrum][trace][regression]") {
+    // Issue #294: render cache and hold maps are keyed by Spectrum address. A removed
+    // spectrum A and a new spectrum B at the same address must not share state.
+    // Placement new reuses the storage deterministically.
+    auto makeSpec = [](Spectrum *slot, double tone_dBm, uint64_t gen) {
+        new (slot) Spectrum;
+        slot->frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+        slot->tones = {{2e6, tone_dBm, 0.0}};
+        slot->generation = gen;
+    };
+    alignas(Spectrum) std::byte storage[sizeof(Spectrum)];
+    auto *slot = reinterpret_cast<Spectrum *>(storage);
+
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    makeSpec(slot, 0.0, 1);
+    sa.renderSpectrum(*slot);
+    slot->~Spectrum();
+
+    makeSpec(slot, -30.0, 1);
+    SpectrumAnalyzerEngine fresh;
+    fresh.setNoiseJitterEnabled(false);
+    fresh.setResBw(1e6);
+    fresh.setVideoBw(1e6);
+    fresh.setTraceMode(TraceMode::MaxHold);
+
+    auto got = sa.renderSpectrum(*slot);
+    auto want = fresh.renderSpectrum(*slot);
+    REQUIRE(got.size() == want.size());
+    for (size_t i = 0; i < got.size(); ++i)
+        REQUIRE(got[i] == Approx(want[i]));
+
+    slot->generation = 2;
+    got = sa.renderSpectrum(*slot);
+    want = fresh.renderSpectrum(*slot);
+    for (size_t i = 0; i < got.size(); ++i)
+        REQUIRE(got[i] == Approx(want[i]));
+    slot->~Spectrum();
+}
+
 TEST_CASE("Size mismatch resets history", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);
