@@ -839,6 +839,45 @@ TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
     REQUIRE(out2[4] > out2[1] + 5.0); // bin 4 now high (tone moved)
 }
 
+TEST_CASE("Combined MaxHold holds the peak after a decreasing tone", "[spectrum][trace]") {
+    // Regression for #291: the Peak readout and marker use renderCombinedSpectrum.
+    // It must hold the per-bin maximum like renderSpectrum does, not show the current frame.
+    auto make_engine = [] {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(TraceMode::MaxHold);
+        return sa;
+    };
+
+    Spectrum spec;
+    spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    spec.tones = {{0.0, 0.0, 0.0}}; // 0 dBm tone at bin 0
+    spec.generation = 1;
+
+    Spectrum spec_ref = spec;
+    SpectrumAnalyzerEngine ref = make_engine();
+    ref.renderSpectrum(spec_ref);
+
+    SpectrumAnalyzerEngine sa = make_engine();
+    std::vector<const Spectrum *> specs = {&spec};
+    sa.renderCombinedSpectrum(specs);
+
+    // Second frame: tone drops to -30 dBm at the same bin.
+    spec.tones = {{0.0, -30.0, 0.0}};
+    spec.generation = 2;
+    spec_ref.tones = spec.tones;
+    spec_ref.generation = 2;
+
+    const auto held = ref.renderSpectrum(spec_ref);
+    const auto combined = sa.renderCombinedSpectrum(specs);
+
+    REQUIRE(combined.size() == held.size());
+    REQUIRE(held[0] == Approx(0.0).margin(0.5));
+    REQUIRE(combined[0] == Approx(held[0]).margin(1e-6));
+}
+
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);

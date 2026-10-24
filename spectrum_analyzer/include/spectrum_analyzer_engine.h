@@ -125,7 +125,8 @@ class SpectrumAnalyzerEngine {
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;
 
-    std::vector<double> applyTraceMode(const Spectrum &spec,
+    // key == nullptr selects the combined-trace history (see renderCombinedTrace()).
+    std::vector<double> applyTraceMode(const Spectrum *key, uint64_t identity,
                                        const std::vector<double> &after_vbw) const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
@@ -152,6 +153,8 @@ class SpectrumAnalyzerEngine {
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_max_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_min_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_video_avg;
+    // Spectra summed into the combined trace; its hold history restarts when this changes.
+    mutable std::vector<const Spectrum *> m_combined_members;
 
     mutable int m_video_avg_count = 10;
 };

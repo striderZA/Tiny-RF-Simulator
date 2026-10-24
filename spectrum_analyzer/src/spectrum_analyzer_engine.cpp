@@ -236,7 +236,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
 
     std::vector<double> vbw_out =
         this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, true);
-    return this->applyTraceMode(spec, vbw_out);
+    return this->applyTraceMode(&spec, spec.identity.value, vbw_out);
 }
 
 std::vector<double>
@@ -278,7 +278,24 @@ SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> 
     std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
     // Jitter and VBW act on the noise floor only; tone power is added back in linear watts.
-    return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
+    std::vector<double> display_dBm =
+        this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
+
+    // The combined trace has no single Spectrum key: its hold history lives under nullptr and
+    // restarts whenever the set of summed spectra changes, so a hidden trace stops contributing.
+    std::vector<const Spectrum *> members;
+    for (const Spectrum *s : specs) {
+        if (s) {
+            members.push_back(s);
+        }
+    }
+    if (members != m_combined_members) {
+        m_combined_members = std::move(members);
+        m_max_hold.erase(nullptr);
+        m_min_hold.erase(nullptr);
+        m_video_avg.erase(nullptr);
+    }
+    return this->applyTraceMode(nullptr, 0, display_dBm);
 }
 
 double
@@ -532,7 +549,7 @@ std::vector<double> SpectrumAnalyzerEngine::applyVBW(const std::vector<double> &
 }
 
 std::vector<double>
-SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
+SpectrumAnalyzerEngine::applyTraceMode(const Spectrum *key, uint64_t identity,
                                        const std::vector<double> &after_vbw) const {
     if (m_trace_mode == TraceMode::ClearWrite) {
         return after_vbw;
@@ -547,11 +564,11 @@ SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
     if (!history)
         return after_vbw;
 
-    auto &entry = (*history)[&spec];
+    auto &entry = (*history)[key];
     auto &h = entry.values;
 
-    if (entry.identity != spec.identity.value || h.size() != after_vbw.size()) {
-        entry.identity = spec.identity.value;
+    if (entry.identity != identity || h.size() != after_vbw.size()) {
+        entry.identity = identity;
         h = after_vbw;
         return after_vbw;
     }
@@ -583,6 +600,7 @@ void SpectrumAnalyzerEngine::resetTraceHistory() const {
 
 void SpectrumAnalyzerEngine::pruneHistory(const std::vector<const Spectrum *> &active_keys) const {
     std::unordered_set<const Spectrum *> active(active_keys.begin(), active_keys.end());
+    active.insert(nullptr); // combined-trace history, see renderCombinedTrace()
     for (auto *map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
         for (auto it = map->begin(); it != map->end();) {
             if (active.find(it->first) == active.end()) {
