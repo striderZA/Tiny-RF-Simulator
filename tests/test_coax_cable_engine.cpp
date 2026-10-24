@@ -158,7 +158,7 @@ TEST_CASE("Coax cable applies per-bin phase shift", "[coax][phase]") {
     const auto &out = cable.node().outputs[0];
     REQUIRE(out.phase_deg.size() == out.frequencies.size());
     for (size_t i = 0; i < out.frequencies.size(); ++i) {
-        const double f_Hz_c = std::clamp(std::abs(out.frequencies[i]), 1.0, 18.5e9);
+        const double f_Hz_c = std::max(std::abs(out.frequencies[i]), 1.0);
         const double expected_shift = -360.0 * (f_Hz_c / 1e9) * 2.0 * 4.76;
         REQUIRE(out.phase_deg[i] == Approx(expected_shift).epsilon(1e-9));
     }
@@ -211,12 +211,29 @@ TEST_CASE("Coax cable clamps length to 1000 m", "[coax][edge]") {
     REQUIRE(cable.lengthM() == 1000.0);
 }
 
-TEST_CASE("Coax cable tone above max_freq clamps loss", "[coax][edge]") {
-    // 25 GHz exceeds MT 340's 18.5 GHz max
-    const double at_max = runOneTone(18.5e9, 0.0, 1.0, 4, 0.0);
-    const double above_max = runOneTone(25e9, 0.0, 1.0, 4, 0.0);
-    // Both should compute loss at clamped f=18.5 GHz, so equal
-    REQUIRE(above_max == Approx(at_max).margin(0.01));
+TEST_CASE("Coax cable extends K1/K2 loss law above preset max freq", "[coax][edge]") {
+    // 25 GHz is above MT 340's 18.5 GHz max. The loss keeps the K1*sqrt(f) + K2*f law:
+    // (0.004710*sqrt(25000) + 0.000004*25000) dB/m * 100 m = 84.47 dB.
+    const double out_power = runOneTone(25e9, 0.0, 100.0, 4, 0.0);
+    REQUIRE(out_power == Approx(-84.47).margin(0.01));
+}
+
+TEST_CASE("Coax cable applies linear delay phase above preset max freq", "[coax][phase][edge]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(25e9, 0.0, 0.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.setPresetIndex(4); // MT 340, delay 4.76 ns/m, max 18.5 GHz
+    cable.setLengthM(100.0);
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+
+    const auto &out = cable.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    // Linear delay: -360 * 25 GHz * 100 m * 4.76 ns/m = -4.284e6 deg.
+    REQUIRE(out.tones[0].phase_deg == Approx(-4.284e6).epsilon(1e-9));
 }
 
 TEST_CASE("Coax cable refuses uncalibrated presets", "[coax][calibration]") {
