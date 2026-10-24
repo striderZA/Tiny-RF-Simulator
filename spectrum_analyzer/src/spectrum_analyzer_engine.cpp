@@ -281,19 +281,21 @@ SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> 
     std::vector<double> display_dBm =
         this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
 
-    // The combined trace has no single Spectrum key: its hold history lives under nullptr and
-    // restarts whenever the set of summed spectra changes, so a hidden trace stops contributing.
-    std::vector<const Spectrum *> members;
-    for (const Spectrum *s : specs) {
-        if (s) {
-            members.push_back(s);
-        }
+    // A visible source whose address now holds a different Spectrum was replaced: clear the hold.
+    const bool replaced = std::any_of(
+        m_combined_sources.begin(), m_combined_sources.end(), [&](const CombinedSource &src) {
+            return std::any_of(specs.begin(), specs.end(), [&](const Spectrum *s) {
+                return s == src.first && s->identity.value != src.second;
+            });
+        });
+    if (replaced) {
+        this->dropCombinedHistory();
     }
-    if (members != m_combined_members) {
-        m_combined_members = std::move(members);
-        m_max_hold.erase(nullptr);
-        m_min_hold.erase(nullptr);
-        m_video_avg.erase(nullptr);
+    for (const Spectrum *s : specs) {
+        if (s && std::none_of(m_combined_sources.begin(), m_combined_sources.end(),
+                              [&](const CombinedSource &src) { return src.first == s; })) {
+            m_combined_sources.emplace_back(s, s->identity.value);
+        }
     }
     return this->applyTraceMode(nullptr, 0, display_dBm);
 }
@@ -598,7 +600,30 @@ void SpectrumAnalyzerEngine::resetTraceHistory() const {
     m_video_avg.clear();
 }
 
+void SpectrumAnalyzerEngine::dropCombinedHistory() const {
+    m_max_hold.erase(nullptr);
+    m_min_hold.erase(nullptr);
+    m_video_avg.erase(nullptr);
+    m_combined_sources.clear();
+}
+
 void SpectrumAnalyzerEngine::pruneHistory(const std::vector<const Spectrum *> &active_keys) const {
+    // A source that is no longer active, or is now a different Spectrum at its address, was
+    // removed. Hiding a trace keeps it active, so it keeps its share of the held value.
+    std::unordered_map<const Spectrum *, uint64_t> live;
+    for (const Spectrum *s : active_keys) {
+        if (s) {
+            live[s] = s->identity.value;
+        }
+    }
+    const bool gone = std::any_of(m_combined_sources.begin(), m_combined_sources.end(),
+                                  [&](const CombinedSource &src) {
+                                      auto it = live.find(src.first);
+                                      return it == live.end() || it->second != src.second;
+                                  });
+    if (gone) {
+        this->dropCombinedHistory();
+    }
     std::unordered_set<const Spectrum *> active(active_keys.begin(), active_keys.end());
     active.insert(nullptr); // combined-trace history, see renderCombinedTrace()
     for (auto *map : {&m_max_hold, &m_min_hold, &m_video_avg}) {

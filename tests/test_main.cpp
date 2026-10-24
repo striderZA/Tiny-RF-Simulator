@@ -878,6 +878,92 @@ TEST_CASE("Combined MaxHold holds the peak after a decreasing tone", "[spectrum]
     REQUIRE(combined[0] == Approx(held[0]).margin(1e-6));
 }
 
+TEST_CASE("Combined MaxHold drops held values when its spectrum is replaced at the same address",
+          "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    std::optional<Spectrum> slot;
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    slot->generation = 1;
+    const Spectrum *old_ptr = &*slot;
+    std::vector<const Spectrum *> specs = {old_ptr};
+    sa.renderCombinedSpectrum(specs);
+
+    // The old spectrum is removed and a new one is built at the same address.
+    slot.reset();
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, -30.0, 0.0}};
+    slot->generation = 1;
+    REQUIRE(&*slot == old_ptr);
+
+    // The new spectrum's own peak is -30 dBm; the old 0 dBm must not be held.
+    const auto combined = sa.renderCombinedSpectrum(specs);
+    REQUIRE(combined[0] == Approx(-30.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold keeps held values while a trace is hidden", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}}; // far from bin 0
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+
+    // Frame 1: both visible. Both spectra are still active when B is hidden.
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // Frame 2: B hidden (still active), A drops to -30 dBm.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(both);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(0.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold restarts when a contributing trace is removed", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}};
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}};
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // B is removed from the active set; A's new lower value is the only contributor.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(only_a);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(-30.0).margin(0.5));
+}
+
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);

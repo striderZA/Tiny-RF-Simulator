@@ -73,8 +73,9 @@ class SpectrumAnalyzerEngine {
     std::vector<double> combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const;
     // Display trace: the combined spectrum with cosmetic noise jitter applied.
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
-    // Same readout-axis and RBW/VBW chain without jitter. Peak and marker readouts use this
-    // trace so their values are not biased or frame-variant (issue #292).
+    // Same readout-axis and RBW/VBW chain without jitter, then the same trace-mode hold as the
+    // display trace. Peak and marker readouts use this trace so their values are not biased or
+    // frame-variant (issue #292).
     std::vector<double>
     renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs) const;
 
@@ -128,6 +129,8 @@ class SpectrumAnalyzerEngine {
     // key == nullptr selects the combined-trace history (see renderCombinedTrace()).
     std::vector<double> applyTraceMode(const Spectrum *key, uint64_t identity,
                                        const std::vector<double> &after_vbw) const;
+    // Clears the combined-trace hold and its source list (see m_combined_sources).
+    void dropCombinedHistory() const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
@@ -153,8 +156,11 @@ class SpectrumAnalyzerEngine {
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_max_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_min_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_video_avg;
-    // Spectra summed into the combined trace; its hold history restarts when this changes.
-    mutable std::vector<const Spectrum *> m_combined_members;
+    // Combined-trace hold, stored under the nullptr key above. The sources are the
+    // (Spectrum, identity) pairs that fed it. Replacing or removing a source clears the hold;
+    // hiding a trace does not.
+    using CombinedSource = std::pair<const Spectrum *, uint64_t>;
+    mutable std::vector<CombinedSource> m_combined_sources;
 
     mutable int m_video_avg_count = 10;
 };
