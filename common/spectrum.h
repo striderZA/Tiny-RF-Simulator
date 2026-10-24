@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <map>
@@ -8,6 +9,22 @@
 #include <utility>
 #include <cstdint>
 #include <vector>
+
+// Identity of one Spectrum object, for caches keyed on its address. Storage can be reused by
+// a later object at the same address, so an address alone does not identify an object.
+// Construction and copy-construction take a new value; assignment keeps this object's value,
+// so state keyed on it survives upstream recomputes that assign new contents.
+struct SpectrumIdentity {
+    static inline std::atomic<uint64_t> s_next{1};
+    uint64_t value = s_next.fetch_add(1, std::memory_order_relaxed);
+
+    SpectrumIdentity() = default;
+    SpectrumIdentity(const SpectrumIdentity &)
+        : value(s_next.fetch_add(1, std::memory_order_relaxed)) {}
+    SpectrumIdentity(SpectrumIdentity &&) : value(s_next.fetch_add(1, std::memory_order_relaxed)) {}
+    SpectrumIdentity &operator=(const SpectrumIdentity &) { return *this; }
+    SpectrumIdentity &operator=(SpectrumIdentity &&) { return *this; }
+};
 
 struct Spectrum {
     struct Tone {
@@ -44,6 +61,9 @@ struct Spectrum {
     // Generation counter for dirty-flag tracking. Producers increment after
     // recomputation so consumers can detect upstream changes.
     uint64_t generation = 0;
+
+    // Per-object identity; see SpectrumIdentity.
+    SpectrumIdentity identity;
 
     void bumpGeneration() { ++generation; }
 
