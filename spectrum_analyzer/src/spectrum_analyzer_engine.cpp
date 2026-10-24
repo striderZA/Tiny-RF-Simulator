@@ -147,8 +147,10 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
         return;
     }
     for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
+        // A bin covers [label - bw/2, label + bw/2). floor(x + 0.5) keeps the lower edge
+        // (x = -0.5) in its bin; std::round sent it to the bin below the grid.
         int bin_idx =
-            static_cast<int>(std::round((freq_Hz - spec.frequencies.front()) / bin_width));
+            static_cast<int>(std::floor((freq_Hz - spec.frequencies.front()) / bin_width + 0.5));
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
             tone_W[bin_idx] += watts;
         }

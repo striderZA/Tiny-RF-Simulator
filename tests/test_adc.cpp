@@ -148,6 +148,33 @@ TEST_CASE("ADC DDC top-half-bin tone survives analyzer binning", "[adc]") {
     REQUIRE(trace_dBm[near] > -40.0);
 }
 
+TEST_CASE("ADC DDC lower-edge tone survives analyzer binning", "[adc]") {
+    // Default NCO (+0.25 Fs), D=2: RF 0 Hz and RF 1 GHz both alias to exactly -Fs/4.
+    // The ADC keeps them at the lower output edge; the analyzer must show them in bin 0.
+    for (double rf : {0.0, 1e9}) {
+        INFO("rf=" << rf);
+        NodeGraphEngine graph;
+        AdcEngine adc(rf == 0.0 ? 22 : 23, graph);
+        adc.setFs_Hz(Fs);
+        adc.setDecimation(2);
+
+        Spectrum in = makeInput(101, 0.0, 500e6);
+        in.tones.push_back({rf, -10.0, 0.0});
+
+        adc.node().inputs[0] = &in;
+        adc.update(0.0);
+
+        const auto &out = adc.node().outputs[0];
+        REQUIRE(out.tones.size() == 1);
+        REQUIRE(out.tones[0].freq_Hz == Approx(-Fs / 4.0).margin(1.0));
+
+        SpectrumAnalyzerEngine analyzer;
+        const std::vector<double> trace_dBm = analyzer.renderSpectrum(out);
+        REQUIRE(trace_dBm.size() == out.frequencies.size());
+        REQUIRE(trace_dBm.front() > -40.0);
+    }
+}
+
 TEST_CASE("ADC DDC output fs_Hz is Fs/2", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(4, graph);
