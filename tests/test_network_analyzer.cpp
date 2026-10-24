@@ -533,11 +533,12 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
     const double compressed = check_gain(-30.0);
     REQUIRE(compressed < near_linear);
 
-    // Deeply into compression the model saturates (MIN_POWER) -> no data.
+    // Deeply into compression the output saturates at half the linear output: the fundamental
+    // sits 3.01 dB below the linear 50 dBm, so the gain is 20 dB - 3.01 dB.
     na.setStimulusPower(30.0);
     na.update();
     for (double g : na.gainDb())
-        REQUIRE(std::isnan(g));
+        REQUIRE_THAT(g, WithinAbs(20.0 + 10.0 * std::log10(0.5), 0.01));
 }
 
 // ---------------------------------------------------------------------------
@@ -1401,4 +1402,27 @@ TEST_CASE("NetworkAnalyzerEngine: finite extreme sweep bounds generate a finite 
     CHECK(frequencies[0] == -largest);
     CHECK(frequencies[1] == 0.0);
     CHECK(frequencies[2] == largest);
+}
+
+TEST_CASE("NonlinearModel: 0.01 dB sweep across deep compression stays finite and bounded",
+          "[nonlinear][issue274]") {
+    NonlinearModel model;
+    model.setOIP3_dBm(20.0);
+    model.setEnabled(true);
+    const NonlinearModel::GainFn unity = [](double) { return 1.0; };
+    double prev_fund_dBm = 0.0;
+    for (int i = 0; i <= 700; ++i) { // 19.00 .. 26.00 dBm: crosses the old sentinel near 24.8 dBm
+        const double in_dBm = 19.0 + 0.01 * i;
+        const auto r = model.process({{1e9, in_dBm, 0.0}}, unity);
+        const double fund_dBm = in_dBm + r.compression_dB;
+        REQUIRE(std::isfinite(fund_dBm));
+        REQUIRE(fund_dBm > -174.0);
+        if (i > 0)
+            REQUIRE(std::abs(fund_dBm - prev_fund_dBm) <= 3.0);
+        double spur_mW = 0.0;
+        for (const auto &tone : r.extra_tones)
+            spur_mW += std::pow(10.0, tone.power_dBm / 10.0);
+        REQUIRE(spur_mW <= std::pow(10.0, fund_dBm / 10.0) * (1.0 + 1e-9));
+        prev_fund_dBm = fund_dBm;
+    }
 }
