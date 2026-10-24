@@ -93,6 +93,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 ## Mixer Noise Contract
 
 - `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
+- `MixerEngine` sums sidebands that land on the same frequency as phasors (coherent, within a relative 1e-12 tolerance), so in-phase images add in amplitude; a sum that cancels to rounding noise is dropped. At LO = 0 the lower and upper sidebands are one term and only one image is emitted. Network-analyzer comb readouts see the coherent sum from other comb tones.
 
 ## Agent Rules
 

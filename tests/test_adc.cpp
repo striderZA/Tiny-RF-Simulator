@@ -1,9 +1,12 @@
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <optional>
 
 #include "adc_engine.h"
 #include "node_graph_engine.h"
+#include "spectrum_analyzer_engine.h"
 
 using Catch::Approx;
 static constexpr double Fs = 1e9;
@@ -245,6 +248,25 @@ TEST_CASE("ADC DDC coherently combines coincident images at a rounding-sensitive
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
     REQUIRE(out.tones[1].freq_Hz == Approx(750e6).margin(1.0));
     REQUIRE(out.tones[1].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
+
+    // Analyzer readout: the coherent tone reads -16.99 dBm at its peak, not a half-power split.
+    // Search only near 150 MHz: the equal-power 750 MHz tone ties the global maximum. Bins are
+    // labelled by left edge (TRS-18 F6), so the peak sits one bin above 150 MHz.
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(out);
+    REQUIRE(trace.size() == out.frequencies.size());
+    const double bin_Hz = out.frequencies[1] - out.frequencies[0];
+    std::optional<size_t> peak;
+    for (size_t i = 0; i < trace.size(); ++i) {
+        if (out.frequencies[i] < 100e6 || out.frequencies[i] > 200e6)
+            continue;
+        if (!peak || trace[i] > trace[*peak])
+            peak = i;
+    }
+    REQUIRE(peak.has_value());
+    REQUIRE(trace[*peak] == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.05));
+    REQUIRE(out.frequencies[*peak] >= 150e6 - bin_Hz / 2.0);
+    REQUIRE(out.frequencies[*peak] <= 150e6 + bin_Hz * 1.5);
 }
 
 TEST_CASE("ADC DDC coincident-image control at an exact NCO", "[adc][issue305]") {

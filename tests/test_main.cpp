@@ -313,6 +313,43 @@ TEST_CASE("Mixer sums coincident in-phase sidebands coherently", "[mixer][issue3
     }
 }
 
+TEST_CASE("Mixer at LO 0 emits one image at the conversion gain", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(50e6, -20.0, 0.0);
+    gen.update(0.0);
+
+    // Lower and upper sidebands are the same term at LO = 0: one tone, -6 dB applied once.
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(0.0);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    REQUIRE(out.tones[0].freq_Hz == Approx(50e6).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-26.0).margin(0.01));
+}
+
+TEST_CASE("Mixer drops sidebands that cancel exactly", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(50e6, -20.0, 0.0);
+    gen.addTone(150e6, -20.0, 180.0);
+    gen.update(0.0);
+
+    // Both images land at 50 MHz with opposite phase: the coherent sum is zero, so no tone.
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    for (const auto &t : out.tones)
+        REQUIRE(std::abs(t.freq_Hz - 50e6) > 1.0);
+}
+
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     NodeGraphEngine graph;
     Spectrum input;

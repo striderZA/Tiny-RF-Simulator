@@ -9,7 +9,8 @@
 
 // Sums tones that share a frequency as phasors, so coincident images add coherently. Frequencies
 // are compared within a relative tolerance: tone ± LO rounds separately per term, so equal
-// results can differ by a few ulps. First-seen order is kept; a cancelled sum is dropped.
+// results can differ by a few ulps. First-seen order is kept. A sum that cancels to rounding
+// noise (|sum| <= 1e-12 of the summed magnitudes) is dropped.
 static std::vector<Spectrum::Tone>
 sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
     double scale_Hz = 1.0;
@@ -20,6 +21,7 @@ sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
     std::map<double, size_t> slot_by_freq;
     std::vector<double> freqs;
     std::vector<std::complex<double>> sums;
+    std::vector<double> magnitude_sums;
     for (const auto &t : tones) {
         const double amp = std::sqrt(0.001 * std::pow(10.0, t.power_dBm / 10.0));
         const double phase_rad = t.phase_deg * std::numbers::pi / 180.0;
@@ -30,17 +32,19 @@ sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
         } else {
             freqs.push_back(t.freq_Hz);
             sums.emplace_back(0.0, 0.0);
+            magnitude_sums.push_back(0.0);
             slot_by_freq.emplace(t.freq_Hz, idx);
         }
         sums[idx] += std::polar(amp, phase_rad);
+        magnitude_sums[idx] += amp;
     }
 
     std::vector<Spectrum::Tone> result;
     result.reserve(freqs.size());
     for (size_t i = 0; i < freqs.size(); ++i) {
-        const double power_W = std::norm(sums[i]);
-        if (power_W <= 0.0)
+        if (std::abs(sums[i]) <= 1e-12 * magnitude_sums[i])
             continue;
+        const double power_W = std::norm(sums[i]);
         result.push_back({freqs[i], 10.0 * std::log10(power_W / 0.001),
                           std::atan2(sums[i].imag(), sums[i].real()) * 180.0 / std::numbers::pi});
     }
@@ -84,11 +88,15 @@ void MixerEngine::update(double dt) {
             lower.phase_deg = conjugates ? -tone.phase_deg : tone.phase_deg;
             sidebands.push_back(lower);
 
-            Spectrum::Tone upper;
-            upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
-            upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
-            upper.phase_deg = tone.phase_deg;
-            sidebands.push_back(upper);
+            // At LO = 0 the difference and sum terms are one term: emit it once, so the
+            // conversion gain is applied once and the coherent sum does not double it.
+            if (m_lo_freq_Hz != 0.0) {
+                Spectrum::Tone upper;
+                upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
+                upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
+                upper.phase_deg = tone.phase_deg;
+                sidebands.push_back(upper);
+            }
         }
         out.tones = sumCoincidentTonesCoherently(sidebands);
     }
