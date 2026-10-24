@@ -31,6 +31,30 @@ TEST_CASE("PowerMeter sums multiple tones in watts", "[power_meter]") {
     REQUIRE(result.power_dBm == Catch::Approx(3.0102999566));
 }
 
+TEST_CASE("PowerMeter combines same-frequency tone copies coherently", "[power_meter]") {
+    Spectrum spec = spectrumWithGrid();
+    spec.noise_total_W.clear();
+    SECTION("in-phase copies add 6.02 dB") {
+        spec.tones = {{1e6, 0.0, 0.0}, {1e6, 0.0, 0.0}};
+        const auto result = PowerMeterEngine{}.measure(&spec);
+        REQUIRE(result.valid);
+        REQUIRE(result.power_dBm == Catch::Approx(2.0 * 3.0102999566));
+    }
+    SECTION("quadrature copies add 3.01 dB") {
+        spec.tones = {{1e6, 0.0, 0.0}, {1e6, 0.0, 90.0}};
+        const auto result = PowerMeterEngine{}.measure(&spec);
+        REQUIRE(result.valid);
+        REQUIRE(result.power_dBm == Catch::Approx(3.0102999566));
+    }
+    SECTION("opposite-phase copies cancel to zero power") {
+        spec.tones = {{1e6, 0.0, 0.0}, {1e6, 0.0, 180.0}};
+        const auto result = PowerMeterEngine{}.measure(&spec);
+        REQUIRE(result.valid);
+        REQUIRE(std::isinf(result.power_dBm));
+        REQUIRE(result.power_dBm < 0.0);
+    }
+}
+
 TEST_CASE("PowerMeter integrates noise density over all bins", "[power_meter]") {
     Spectrum spec = spectrumWithGrid();
     spec.noise_total_W = {1e-12, 1e-12, 1e-12};

@@ -27,6 +27,9 @@ struct ParameterField {
     nlohmann::json default_value;                          // optional
     std::string help;                                      // optional tooltip
     bool read_only = false; // State metadata only; ignored by authoring.
+    // Optional engine-side value check, run on the converted value. A value it
+    // rejects is refused by the write path, not handed to the engine.
+    std::function<bool(const nlohmann::json &)> accepts;
 };
 
 struct ComponentTypeDescriptor {

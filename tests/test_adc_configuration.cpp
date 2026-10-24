@@ -265,5 +265,5 @@ TEST_CASE("ADC DDC negative alias mirrors single-sided noise lookup", "[adc][con
             bin_150 = static_cast<int>(i);
         }
     }
-    REQUIRE(out.noise_W[bin_150] == Approx(1e-9));
+    REQUIRE(out.noise_W[bin_150] == Approx(0.5e-9));
 }

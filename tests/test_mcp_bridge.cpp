@@ -700,10 +700,14 @@ TEST_CASE("Bridge queued calls are bounded by aggregate payload bytes", "[bridge
                                      OrderedJson{{"name", "library_search"},
                                                  {"arguments", OrderedJson{{"query", "active"}}}}));
     input_buffer.append(first_call);
+    // These waits prove a reply arrives while the first call is blocked, not how fast it does.
+    // They are generous so a loaded parallel CTest run does not fail on latency alone.
+    constexpr auto kReplyWait = 30s;
     bool first_call_waiting = false;
     {
         std::unique_lock lock(call_mutex);
-        first_call_waiting = call_changed.wait_for(lock, 2s, [&] { return first_call_entered; });
+        first_call_waiting =
+            call_changed.wait_for(lock, kReplyWait, [&] { return first_call_entered; });
     }
 
     const std::string payload(950 * 1024, 'x');
@@ -717,7 +721,7 @@ TEST_CASE("Bridge queued calls are bounded by aggregate payload bytes", "[bridge
         appendBridgeLine(input, request);
         appendBridgeLine(input, modernBridgeRequest(1000 + id, "server/discover"));
         input_buffer.append(input);
-        CHECK(output_buffer.waitForResponse(1000 + id, 2s));
+        CHECK(output_buffer.waitForResponse(1000 + id, kReplyWait));
     }
     const OrderedJson overflow = modernBridgeRequest(
         10, "tools/call",
@@ -726,7 +730,7 @@ TEST_CASE("Bridge queued calls are bounded by aggregate payload bytes", "[bridge
     std::string overflow_input;
     appendBridgeLine(overflow_input, overflow);
     input_buffer.append(overflow_input);
-    const bool overload_replied = output_buffer.waitForResponse(10, 2s);
+    const bool overload_replied = output_buffer.waitForResponse(10, kReplyWait);
 
     {
         std::lock_guard lock(call_mutex);

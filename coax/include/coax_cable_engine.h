@@ -31,5 +31,6 @@ class CoaxCableEngine : public ComponentEngineBase {
     int m_preset_index = 4; // default to MT 340
     double m_length_m = 1.0;
     double m_connectors_loss_dB = 0.0;
-    bool m_warned_above_max = false; // rate-limit flag for over-max_freq warning
+    bool m_warned_above_max = false;    // rate-limit flag for over-max_freq warning
+    bool m_warned_uncalibrated = false; // rate-limit flag for uncalibrated-refusal warning
 };
