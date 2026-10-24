@@ -13,7 +13,7 @@ Own the UI-independent total-power measurement engine and its optional ImGui ins
 ## Local Contracts
 
 - The engine depends only on `Spectrum`; it must not include ImGui, graph, or app headers.
-- Tones at one exact frequency combine coherently (phasor sum via `coherentToneWatts()`, `common/spectrum.h`); distinct frequencies sum linearly. Real-domain tone mirroring is not applied.
+- Tones within a relative 1e-12 frequency tolerance combine coherently (phasor sum via `coherentToneWatts()`, `common/spectrum.h`); distinct frequencies sum linearly. Real-domain tone mirroring is not applied.
 - `noise_total_W` is W/Hz on a finite, increasing, uniformly spaced frequency grid; an empty noise vector means zero noise.
 - Invalid or missing inputs return `PowerMeasurement::valid == false`, a `PowerMeterError`, and NaN dBm.
 - The meter is an observer instrument, not an `IComponentEngine`, registry entry, graph node, or project-serialized source.

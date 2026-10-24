@@ -1,23 +1,7 @@
 #include "mixer_engine.h"
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <nlohmann/json.hpp>
-
-// Snaps a sideband frequency to a grid of 2^-40 of its binade. Sidebands formed as tone ± LO round
-// separately, so copies of one frequency can differ by an ulp. Snapping makes such copies
-// bit-identical, and the analyzer's exact-frequency grouping (coherentToneWatts) then sums them
-// coherently. A frequency moves by at most 2^-41 of its binade. Copies that straddle a grid
-// boundary stay separate and are summed in power.
-static double snapSidebandFrequency(double f_Hz) {
-    if (f_Hz == 0.0 || !std::isfinite(f_Hz))
-        return f_Hz;
-    const double grid_Hz = std::ldexp(1.0, std::ilogb(f_Hz) - 40);
-    // Below the normal range the grid underflows toward zero; such frequencies stay unsnapped.
-    if (!(grid_Hz >= std::numeric_limits<double>::min()))
-        return f_Hz;
-    return std::nearbyint(f_Hz / grid_Hz) * grid_Hz;
-}
 
 MixerEngine::MixerEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "Mixer", 1, 1) {}
@@ -45,9 +29,8 @@ void MixerEngine::update(double dt) {
     if (in_ptr) {
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
-            lower.freq_Hz = snapSidebandFrequency(in_ptr->is_complex_baseband
-                                                      ? (tone.freq_Hz - m_lo_freq_Hz)
-                                                      : std::abs(tone.freq_Hz - m_lo_freq_Hz));
+            lower.freq_Hz = in_ptr->is_complex_baseband ? (tone.freq_Hz - m_lo_freq_Hz)
+                                                        : std::abs(tone.freq_Hz - m_lo_freq_Hz);
             lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
             // Real A·cos(2πft+φ)·cos(2π·LO·t): the difference term cos(2π(f−LO)t+φ)
             // has phase −φ when f < LO. Complex input shifts without conjugation.
@@ -56,7 +39,7 @@ void MixerEngine::update(double dt) {
             out.tones.push_back(lower);
 
             Spectrum::Tone upper;
-            upper.freq_Hz = snapSidebandFrequency(tone.freq_Hz + m_lo_freq_Hz);
+            upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
             upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
             upper.phase_deg = tone.phase_deg;
             out.tones.push_back(upper);

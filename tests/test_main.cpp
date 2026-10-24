@@ -333,11 +333,12 @@ TEST_CASE("Mixer at LO 0 sums the two identical images coherently", "[mixer][iss
     REQUIRE(dBm_50 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
 }
 
-TEST_CASE("Mixer sidebands split by rounding read coherently (snap path)", "[mixer][issue305]") {
+TEST_CASE("Mixer sidebands split by rounding read coherently in the analyzer",
+          "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     // Both lower sidebands are 740032354.775 Hz in exact decimal, but the two subtractions round
-    // differently: the keys differ by 1.19e-7 Hz, so an exact-key analyzer sums them in power.
+    // differently: the keys differ by 1.19e-7 Hz, so exact-frequency grouping would sum in power.
     gen.addTone(259967645.225, -20.0, 0.0);
     gen.addTone(1740032354.775, -20.0, 0.0);
     gen.update(0.0);
@@ -349,10 +350,37 @@ TEST_CASE("Mixer sidebands split by rounding read coherently (snap path)", "[mix
 
     const auto &out = mix.node().outputs[0];
     REQUIRE(out.tones.size() == 4);
-    // Three distinct frequencies after analyzer grouping: the 740 MHz pair shares one key.
+    // Three distinct tones after grouping: the 740 MHz pair is one tone.
     REQUIRE(coherentToneWatts(out.tones).size() == 3);
     const double dBm_740 = 10.0 * std::log10(analyzerWattsNear(out.tones, 740032354.775) / 1e-3);
     REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
+}
+
+TEST_CASE("Mixer rounding split straddling a grid midpoint reads coherently", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // Lower sidebands 740000000.000244140625 and 740000000.00048828125 Hz (2^-22 Hz apart).
+    gen.addTone(1740000000.000244140625, -20.0, 0.0);
+    gen.addTone(1740000000.00048828125, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 4);
+    const double dBm_740 = 10.0 * std::log10(analyzerWattsNear(out.tones, 740000000.0) / 1e-3);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
+}
+
+TEST_CASE("Analyzer groups only copies within the frequency tolerance", "[mixer][issue305]") {
+    // One part in 1e12 at 1 GHz is 1 mHz: copies 1e-4 Hz apart are one tone, 1 Hz apart are not.
+    const std::vector<Spectrum::Tone> near = {{1e9, -20.0, 0.0}, {1e9 + 1e-4, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(near).size() == 1);
+    const std::vector<Spectrum::Tone> far = {{1e9, -20.0, 0.0}, {1e9 + 1.0, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(far).size() == 2);
 }
 
 TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[mixer][issue305]") {
@@ -370,23 +398,6 @@ TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[
 
     const auto &out = mix.node().outputs[0];
     REQUIRE(analyzerWattsNear(out.tones, 50e6) == 0.0);
-}
-
-TEST_CASE("Mixer keeps subnormal sideband frequencies finite", "[mixer][issue305]") {
-    NodeGraphEngine graph;
-    SignalGeneratorEngine gen(0, graph);
-    gen.addTone(1e-320, -20.0, 0.0);
-    gen.update(0.0);
-
-    MixerEngine mix(0, graph);
-    mix.setLoFreq_Hz(0.0);
-    mix.node().inputs[0] = &gen.node().outputs[0];
-    mix.update(0.0);
-
-    const auto &out = mix.node().outputs[0];
-    REQUIRE(!out.tones.empty());
-    for (const auto &t : out.tones)
-        REQUIRE(std::isfinite(t.freq_Hz));
 }
 
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
