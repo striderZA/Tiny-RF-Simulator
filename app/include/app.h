@@ -187,6 +187,7 @@ class RfSimulatorApp {
         return m_receiver_performance_engine;
     }
     SpectrumAnalyzerEngine &testSpectrumAnalyzerEngine() { return m_spectrum_engine; }
+    const SpectrumAnalyzerWidget &testSpectrumWidget() const { return *m_spectrum_widget; }
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }

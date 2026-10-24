@@ -3,6 +3,10 @@
 #include "common.h"
 #include <atomic>
 #include <cmath>
+#include <complex>
+#include <map>
+#include <numbers>
+#include <utility>
 #include <cstdint>
 #include <vector>
 
@@ -76,6 +80,39 @@ struct Spectrum {
         }
     }
 };
+
+// Relative cancellation tolerance for coherent tone sums: a resultant within this fraction of the
+// summed amplitudes is exact cancellation, not a residue from rounding (e.g. cos/sin of 180 deg).
+inline constexpr double kCoherentCancelRelTol = 1e-12;
+
+// Combines tones into (freq_Hz, watts) pairs, one per distinct exact frequency. Copies at one
+// frequency are coherent: their RMS-voltage phasors (sqrt(W) at phase_deg) add, so in-phase
+// copies give +6.02 dB and opposite-phase copies cancel to zero. Distinct frequencies add as
+// power. Shared by the analyzer and power meter so both use one duplicate-tone model.
+inline std::vector<std::pair<double, double>>
+coherentToneWatts(const std::vector<Spectrum::Tone> &tones) {
+    struct Group {
+        std::complex<double> phasor{0.0, 0.0};
+        double amplitude_sum = 0.0;
+    };
+    std::map<double, Group> groups;
+    for (const auto &t : tones) {
+        const double amplitude = std::sqrt(std::pow(10.0, (t.power_dBm - 30.0) / 10.0));
+        const double phase = t.phase_deg * std::numbers::pi / 180.0;
+        Group &group = groups[t.freq_Hz];
+        group.phasor +=
+            std::complex<double>(amplitude * std::cos(phase), amplitude * std::sin(phase));
+        group.amplitude_sum += amplitude;
+    }
+    std::vector<std::pair<double, double>> out;
+    out.reserve(groups.size());
+    for (const auto &[freq, group] : groups) {
+        const double resultant = std::abs(group.phasor);
+        const bool cancelled = resultant <= kCoherentCancelRelTol * group.amplitude_sum;
+        out.emplace_back(freq, cancelled ? 0.0 : resultant * resultant);
+    }
+    return out;
+}
 
 // Expands real-domain tones into their conjugate-symmetric (+-fc) representation per Euler's
 // formula: cos(2*pi*fc*t) = 0.5*(exp(j*2*pi*fc*t) + exp(-j*2*pi*fc*t)). Each non-DC tone becomes

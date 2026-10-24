@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <limits>
+#include <cstddef>
 #include <map>
 #include <numbers>
 
@@ -52,6 +52,42 @@ static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, d
     return result;
 }
 
+// Nearest-bin input noise PSD at |f_Hz|. Real-domain noise is conjugate-symmetric, so
+// S(f) = S(|f|). Requires |f_Hz| <= the grid's largest magnitude; the grid is sorted ascending.
+static double nearest_noise_psd(const Spectrum &input, size_t n, double f_Hz) {
+    const auto first = input.frequencies.begin();
+    const auto last = first + static_cast<std::ptrdiff_t>(n);
+    const double t = std::abs(f_Hz);
+    const auto it = std::lower_bound(first, last, t);
+    size_t j = n - 1;
+    if (it == first) {
+        j = 0;
+    } else if (it != last) {
+        const size_t hi = static_cast<size_t>(it - first);
+        j = (t - *(it - 1) <= *it - t) ? hi - 1 : hi;
+    }
+    return input.noise_total_W[j];
+}
+
+// Output noise PSD at complex frequency f_base_Hz (= f_out + f_NCO). Noise folds from every
+// Nyquist zone exactly as tones do: each integer zone m contributes the input PSD at
+// f_base + m*Fs, and zero beyond the input grid span.
+static double folded_noise_psd(const Spectrum &input, double f_base_Hz, double Fs) {
+    const size_t n = std::min(input.frequencies.size(), input.noise_total_W.size());
+    if (n == 0)
+        return 0.0;
+    const double f_limit =
+        std::max(std::abs(input.frequencies.front()), std::abs(input.frequencies[n - 1]));
+    const int m_max = static_cast<int>(std::ceil((f_limit + std::abs(f_base_Hz)) / Fs));
+    double sum = 0.0;
+    for (int m = -m_max; m <= m_max; ++m) {
+        const double f_real = f_base_Hz + m * Fs;
+        if (std::abs(f_real) <= f_limit)
+            sum += nearest_noise_psd(input, n, f_real);
+    }
+    return sum;
+}
+
 // ---- Engine methods ----
 
 AdcEngine::AdcEngine(int id, NodeGraphEngine &graph) : ComponentEngineBase(id, graph, "ADC", 1, 1) {
@@ -82,7 +118,10 @@ void AdcEngine::update(double /*dt*/) {
         return;
     }
 
-    // -- Compute output grid: N bins on [-output_edge, output_edge) --
+    // -- Output grid: N bins of width df_out. Labels are bin centres, so bin k covers
+    // [label - df/2, label + df/2) and the lower output edge -Fs/(2D) lies in bin 0. The
+    // analyzer maps tones with the same cell rule. For even N, DC (0 Hz) is a half-bin
+    // tie and the analyzer puts it on the bin above (+df/2). --
     int N = 201;
     if (input->frequencies.size() >= 2) {
         double span = input->frequencies.back() - input->frequencies.front();
@@ -92,42 +131,22 @@ void AdcEngine::update(double /*dt*/) {
     double df_out = output_fs / N;
     out.frequencies.resize(N);
     for (int i = 0; i < N; ++i)
-        out.frequencies[i] = -output_edge + i * df_out;
+        out.frequencies[i] = -output_edge + (i + 0.5) * df_out;
     out.fs_Hz = output_fs;
     out.is_complex_baseband = true;
 
     // -- Noise mapping + NSD --
-    double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
+    const double nsd_W_per_Hz = 0.001 * dbToLinear(m_nsd_dBm_per_Hz);
+    const double real_input_noise_scale = input->is_complex_baseband ? 1.0 : 0.5;
     out.noise_W.assign(N, 0.0);
-    out.noise_added_W.assign(N, nsd_W_per_Hz);
+    out.noise_added_W.assign(N, nsd_W_per_Hz * real_input_noise_scale);
     out.noise_total_W.resize(N, 0.0);
     out.phase_deg.assign(N, 0.0);
 
     const double nco_Hz = m_nco_fs_fraction * m_fs_Hz;
-    for (int i = 0; i < N; ++i) {
-        double f_out = out.frequencies[i];
-        double f_a = alias_frequency(f_out + nco_Hz, m_fs_Hz);
-        // Input noise grid is single-sided [0, Fs/2); real-input noise is
-        // conjugate-symmetric, so sample the mirrored |f_a| bin when negative.
-        if (f_a < 0.0)
-            f_a = -f_a;
-
-        double noise_psd = 0.0;
-        if (!input->noise_total_W.empty() && !input->frequencies.empty()) {
-            size_t best_j = 0;
-            double best_dist = std::numeric_limits<double>::max();
-            for (size_t j = 0; j < input->frequencies.size() && j < input->noise_total_W.size();
-                 ++j) {
-                double dist = std::abs(input->frequencies[j] - f_a);
-                if (dist < best_dist) {
-                    best_dist = dist;
-                    best_j = j;
-                }
-            }
-            noise_psd = input->noise_total_W[best_j];
-        }
-        out.noise_W[i] += noise_psd;
-    }
+    for (int i = 0; i < N; ++i)
+        out.noise_W[i] =
+            folded_noise_psd(*input, out.frequencies[i] + nco_Hz, m_fs_Hz) * real_input_noise_scale;
 
     out.computeTotalNoise();
 
