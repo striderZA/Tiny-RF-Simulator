@@ -215,7 +215,8 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     // Cache the expensive split + RBW step. Jitter + VBW still run every frame
     // so the display keeps its instrument-like live feel.
     std::vector<double> rbw_noise_W, rbw_tone_W;
-    if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
+    if (&spec == m_cache_spectrum && spec.identity.value == m_cache_identity &&
+        spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
         bin_width == m_cache_bin_width) {
         rbw_noise_W = m_cache_rbw_noise_W;
         rbw_tone_W = m_cache_rbw_tone_W;
@@ -225,6 +226,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         rbw_noise_W = this->applyRBWForNoise(noise_W, bin_width);
         rbw_tone_W = this->applyRBW(tone_W, bin_width);
         m_cache_spectrum = &spec;
+        m_cache_identity = spec.identity.value;
         m_cache_spec_gen = spec.generation;
         m_cache_rbw = m_rbw;
         m_cache_bin_width = bin_width;
@@ -535,7 +537,7 @@ SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
     if (m_trace_mode == TraceMode::ClearWrite) {
         return after_vbw;
     }
-    std::unordered_map<const Spectrum *, std::vector<double>> *history = nullptr;
+    std::unordered_map<const Spectrum *, TraceHistory> *history = nullptr;
     if (m_trace_mode == TraceMode::MaxHold)
         history = &m_max_hold;
     else if (m_trace_mode == TraceMode::MinHold)
@@ -545,9 +547,11 @@ SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
     if (!history)
         return after_vbw;
 
-    auto &h = (*history)[&spec];
+    auto &entry = (*history)[&spec];
+    auto &h = entry.values;
 
-    if (h.size() != after_vbw.size()) {
+    if (entry.identity != spec.identity.value || h.size() != after_vbw.size()) {
+        entry.identity = spec.identity.value;
         h = after_vbw;
         return after_vbw;
     }
