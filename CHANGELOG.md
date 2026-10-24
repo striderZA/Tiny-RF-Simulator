@@ -2,6 +2,7 @@
 
 ### Fixed
 
+- **Uncalibrated coax presets are refused (#280)** — MT 210, 230, 265, 300 and 480 have no datasheet model (K1 = K2 = 0, zero delay) and used to act as a lossless wire. They can no longer be selected from the Properties panel or agent writes, and a saved project using one keeps its index but outputs nothing, with the reason shown in the hover text and inspector tooltip. MT 340 is unaffected.
 - **Agent writes respect equalizer bounds (#301)** — agent writes to the equalizer's reference gain (±40 dB), reference frequency (1 Hz–100 GHz) and slope (±100 dB/decade) are rejected outside the inspector ranges, so an out-of-range value can no longer drive the output to infinite noise.
 - **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
 - **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
