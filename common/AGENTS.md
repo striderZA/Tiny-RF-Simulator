@@ -8,7 +8,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 
 - `common/common.h` — `MIN_FREQ`, `MAX_FREQ`, `MIN_POWER`, `MAX_POWER`, `DEFAULT_VBW`, `DEFAULT_RBW`, physical constants (`k`, `T`, `R`), `dbToLinear`, `calculateNoiseTemp`, `addedNoiseDensity_W_per_Hz`, `addedNoisePerBin_W`, `buildDefaultFrequencyGrid`
 - `common/signal_node.h` — `SignalNode` (input + output spectra + view_enabled)
-- `common/spectrum.h` — `Spectrum` (frequencies, tones, noise vectors, phase, generation counter, `fs_Hz`, `is_complex_baseband`) and `Peak`; also the free helper `conjugateSymmetricExpand()` for expanding real-domain tones into +-fc conjugate-symmetric pairs
+- `common/spectrum.h` — `Spectrum` (frequencies, tones, noise vectors, phase, generation counter, per-object `identity`, `fs_Hz`, `is_complex_baseband`) and `Peak`; also the free helper `conjugateSymmetricExpand()` for expanding real-domain tones into +-fc conjugate-symmetric pairs
 - `common/component_interface.h` — `IComponentEngine` (DSP engine contract; pure-virtual `type_name()` returns the canonical lowercase type key used by registry dispatch)
 - `common/graph_link_policy.h` — the single physical link rule (currently PFB channelizers accept RF ADC outputs only), shared by app canvas creation, project-load restoration, and the `test_flow` runner; the DSP rewire pass that applies it lives in `node_graph/src/rewire.cpp`
 - `common/view_manager.h` — `ViewManager` (registry of `SignalNode*`)
@@ -29,6 +29,7 @@ Own the header-only data model shared by all RF Simulator modules: `SignalNode`,
 ## Work Guidance
 
 - Changes to `SignalNode` or `Spectrum` affect every engine. Update all engines' `update()` and tests.
+- `Spectrum::identity` changes on construction and copy-construction and is kept on assignment. Caches or history keyed by a `Spectrum` must also record `identity`, because an address can be reused by a new object.
 - `Spectrum::is_complex_baseband` (default `false`) marks spectra downstream of an ADC's DDC (complex baseband/IQ); every pass-through engine propagates it from its input exactly like `fs_Hz`. Only `AdcEngine`'s output sets it to `true`. `conjugateSymmetricExpand()` is used for real-domain rendering and at the real-to-complex ADC boundary; other interior DSP (generator, `nonlinear_model.h`, gain/filter/S-param stages, mixer) must keep operating on the collapsed single-entry-per-tone representation.
 - `IComponentEngine::type_name()` is an intentional pure virtual returning the canonical lowercase type key (e.g. `"amplifier"`); every engine — including new ones — MUST implement it, and the key must match the `ComponentTypeRegistry` row's `type`.
 - New virtual members on `IComponentEngine` (other than `type_name()`, which is intentionally pure) must keep a default implementation that preserves backward compat for all existing engines.
