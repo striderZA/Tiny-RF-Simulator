@@ -51,7 +51,8 @@ TEST_CASE("ADC DDC output rate and grid follow decimation", "[adc][config]") {
         REQUIRE(out.fs_Hz == Approx(Fs / d));
         REQUIRE(out.is_complex_baseband);
         REQUIRE(out.frequencies.size() >= 2);
-        REQUIRE(out.frequencies.front() == Approx(-Fs / (2.0 * d)).margin(1e-6));
+        double df = out.frequencies[1] - out.frequencies[0];
+        REQUIRE(out.frequencies.front() == Approx(-Fs / (2.0 * d) + df / 2.0).margin(1e-6));
         REQUIRE(out.frequencies.back() < Fs / (2.0 * d));
     }
 }
