@@ -167,13 +167,10 @@ TEST_CASE("SpectrumAnalyzer: peak readout over jittered noise tracks the un-jitt
     sa.setNoiseJitterEnabled(false);
     std::vector<double> clean = sa.renderCombinedSpectrum(specs);
     double clean_peak = *std::max_element(clean.begin(), clean.end());
-
+    // The readout trace draws no jitter, so one frame with jitter enabled is the
+    // same as every frame; the peak must equal the un-jittered maximum.
     sa.setNoiseJitterEnabled(true);
-    double peak_sum = 0.0;
-    for (int frame = 0; frame < 200; ++frame) {
-        std::vector<double> trace = sa.renderCombinedReadoutSpectrum(specs);
-        peak_sum += *std::max_element(trace.begin(), trace.end());
-    }
-    double mean_peak = peak_sum / 200.0;
-    REQUIRE(std::abs(mean_peak - clean_peak) < 0.5);
+    std::vector<double> readout = sa.renderCombinedReadoutSpectrum(specs);
+    double readout_peak = *std::max_element(readout.begin(), readout.end());
+    REQUIRE(std::abs(readout_peak - clean_peak) < 0.5);
 }

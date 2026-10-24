@@ -141,6 +141,7 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
 }
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
+    m_readout_dBm.clear();
     // First-use size gives the plot a useful working area; the minimum stops at
     // the width the labelled inputs need and a modest height so a docked panel
     // never forces its dock node to grow and squeeze neighbouring panels
@@ -298,10 +299,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     // Combined trace and its marker/peak axis share the common readout axis.
     const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
     freq_axis = &combined_axis;
-    std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
     // Marker and peak readouts use the jitter-free trace on the same axis (issue #292).
-    const std::vector<double> readout_dBm = m_engine.renderCombinedReadoutSpectrum(visible_specs);
-    if (combined_dBm.empty()) {
+    m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(visible_specs);
+    const std::vector<double> &readout_dBm = m_readout_dBm;
+    if (readout_dBm.empty()) {
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
         ImGui::End();
         return;
