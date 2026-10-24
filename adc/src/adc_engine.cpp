@@ -124,7 +124,10 @@ void AdcEngine::update(double /*dt*/) {
         return;
     }
 
-    // -- Compute output grid: N bins on [-output_edge, output_edge) --
+    // -- Output grid: N bins of width df_out. Labels are bin centres, so bin k covers
+    // [label - df/2, label + df/2) and the lower output edge -Fs/(2D) lies in bin 0. The
+    // analyzer maps tones with the same cell rule. For even N, DC (0 Hz) is a half-bin
+    // tie and the analyzer puts it on the bin above (+df/2). --
     int N = 201;
     if (input->frequencies.size() >= 2) {
         double span = input->frequencies.back() - input->frequencies.front();
@@ -134,7 +137,7 @@ void AdcEngine::update(double /*dt*/) {
     double df_out = output_fs / N;
     out.frequencies.resize(N);
     for (int i = 0; i < N; ++i)
-        out.frequencies[i] = -output_edge + i * df_out;
+        out.frequencies[i] = -output_edge + (i + 0.5) * df_out;
     out.fs_Hz = output_fs;
     out.is_complex_baseband = true;
 
