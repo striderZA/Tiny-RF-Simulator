@@ -93,7 +93,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 ## Mixer Noise Contract
 
 - `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
-- `MixerEngine` merges sidebands whose frequencies agree within a relative 1e-12 tolerance (rounding splits from `tone ± LO`) by summing them as phasors, so in-phase images add in amplitude; a sum that cancels to rounding noise is dropped. Sidebands at bit-identical frequencies were already summed coherently by the analyzer (`coherentToneWatts`). At LO = 0 both images coincide and sum coherently (+6.02 dB over one image). Network-analyzer comb readouts take the merged entry: gain reads the coherent sum from neighbouring comb tones.
+- `MixerEngine` emits one tone per sideband and snaps each sideband frequency to a grid of 2^-40 of its binade, so copies formed as `tone ± LO` that differ only by rounding become bit-identical. The analyzer's exact-frequency grouping (`coherentToneWatts`) then sums them as phasors. Copies that straddle a grid boundary stay separate and are summed in power. The engine does not merge sidebands; network-analyzer comb readouts are unchanged.
 
 ## ADC Output Grid Contract
 

@@ -1,50 +1,18 @@
 #include "mixer_engine.h"
 #include <algorithm>
 #include <cmath>
-#include <complex>
-#include <map>
 #include <nlohmann/json.hpp>
-#include <numbers>
-#include <vector>
 
-// Sums tones that share a frequency as phasors, so coincident images add coherently. Frequencies
-// are compared within a relative tolerance of each candidate's own magnitude: tone ± LO rounds
-// separately per term, so equal results can differ by a few ulps. First-seen order is kept. A
-// sum that cancels to rounding noise (|sum| <= 1e-12 of the summed magnitudes) is dropped.
-static std::vector<Spectrum::Tone>
-sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
-    std::map<double, size_t> slot_by_freq;
-    std::vector<double> freqs;
-    std::vector<std::complex<double>> sums;
-    std::vector<double> magnitude_sums;
-    for (const auto &t : tones) {
-        const double amp = std::sqrt(0.001 * std::pow(10.0, t.power_dBm / 10.0));
-        const double phase_rad = t.phase_deg * std::numbers::pi / 180.0;
-        const double tol_Hz = std::abs(t.freq_Hz) * 1e-12;
-        const auto it = slot_by_freq.lower_bound(t.freq_Hz - tol_Hz);
-        size_t idx = freqs.size();
-        if (it != slot_by_freq.end() && it->first <= t.freq_Hz + tol_Hz) {
-            idx = it->second;
-        } else {
-            freqs.push_back(t.freq_Hz);
-            sums.emplace_back(0.0, 0.0);
-            magnitude_sums.push_back(0.0);
-            slot_by_freq.emplace(t.freq_Hz, idx);
-        }
-        sums[idx] += std::polar(amp, phase_rad);
-        magnitude_sums[idx] += amp;
-    }
-
-    std::vector<Spectrum::Tone> result;
-    result.reserve(freqs.size());
-    for (size_t i = 0; i < freqs.size(); ++i) {
-        if (std::abs(sums[i]) <= 1e-12 * magnitude_sums[i])
-            continue;
-        const double power_W = std::norm(sums[i]);
-        result.push_back({freqs[i], 10.0 * std::log10(power_W / 0.001),
-                          std::atan2(sums[i].imag(), sums[i].real()) * 180.0 / std::numbers::pi});
-    }
-    return result;
+// Snaps a sideband frequency to a grid of 2^-40 of its binade. Sidebands formed as tone ± LO round
+// separately, so copies of one frequency can differ by an ulp. Snapping makes such copies
+// bit-identical, and the analyzer's exact-frequency grouping (coherentToneWatts) then sums them
+// coherently. A frequency moves by at most 2^-41 of its binade. Copies that straddle a grid
+// boundary stay separate and are summed in power.
+static double snapSidebandFrequency(double f_Hz) {
+    if (f_Hz == 0.0 || !std::isfinite(f_Hz))
+        return f_Hz;
+    const double grid_Hz = std::ldexp(1.0, std::ilogb(f_Hz) - 40);
+    return std::nearbyint(f_Hz / grid_Hz) * grid_Hz;
 }
 
 MixerEngine::MixerEngine(int id, NodeGraphEngine &graph)
@@ -71,26 +39,24 @@ void MixerEngine::update(double dt) {
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     if (in_ptr) {
-        std::vector<Spectrum::Tone> sidebands;
-        sidebands.reserve(2 * in_ptr->tones.size());
         for (const auto &tone : in_ptr->tones) {
             Spectrum::Tone lower;
-            lower.freq_Hz = in_ptr->is_complex_baseband ? (tone.freq_Hz - m_lo_freq_Hz)
-                                                        : std::abs(tone.freq_Hz - m_lo_freq_Hz);
+            lower.freq_Hz = snapSidebandFrequency(in_ptr->is_complex_baseband
+                                                      ? (tone.freq_Hz - m_lo_freq_Hz)
+                                                      : std::abs(tone.freq_Hz - m_lo_freq_Hz));
             lower.power_dBm = tone.power_dBm + m_conv_gain_dB;
             // Real A·cos(2πft+φ)·cos(2π·LO·t): the difference term cos(2π(f−LO)t+φ)
             // has phase −φ when f < LO. Complex input shifts without conjugation.
             const bool conjugates = !in_ptr->is_complex_baseband && tone.freq_Hz < m_lo_freq_Hz;
             lower.phase_deg = conjugates ? -tone.phase_deg : tone.phase_deg;
-            sidebands.push_back(lower);
+            out.tones.push_back(lower);
 
             Spectrum::Tone upper;
-            upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
+            upper.freq_Hz = snapSidebandFrequency(tone.freq_Hz + m_lo_freq_Hz);
             upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
             upper.phase_deg = tone.phase_deg;
-            sidebands.push_back(upper);
+            out.tones.push_back(upper);
         }
-        out.tones = sumCoincidentTonesCoherently(sidebands);
     }
 
     if (in_ptr && !in_ptr->phase_deg.empty()) {

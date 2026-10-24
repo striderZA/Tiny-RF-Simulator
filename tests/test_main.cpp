@@ -283,34 +283,35 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     REQUIRE(out.tones[1].phase_deg == 45.0);
 }
 
-TEST_CASE("Mixer sums coincident in-phase sidebands coherently", "[mixer][issue305]") {
+// Analyzer power (W) at a frequency, as the analyzer and power meter read it: copies at one
+// exact frequency are summed as phasors by coherentToneWatts.
+static double analyzerWattsNear(const std::vector<Spectrum::Tone> &tones, double f_Hz) {
+    double watts = 0.0;
+    for (const auto &[freq, w] : coherentToneWatts(tones))
+        if (std::abs(freq - f_Hz) < 1.0)
+            watts += w;
+    return watts;
+}
+
+TEST_CASE("Mixer coincident in-phase sidebands read coherently in the analyzer",
+          "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(50e6, -20.0, 0.0);
     gen.addTone(150e6, -20.0, 0.0);
     gen.update(0.0);
 
-    // LO 100 MHz, default -6 dB conversion gain: each image is -26.00 dBm. Both lower
-    // sidebands land at 50 MHz in phase, so the coherent sum is +6.02 dB over one image.
+    // LO 100 MHz, default -6 dB conversion gain: each image is -26.00 dBm. Both lower sidebands
+    // land at 50 MHz in phase, so the coherent sum is +6.02 dB over one image.
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(100e6);
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     const auto &out = mix.node().outputs[0];
-    REQUIRE(out.tones.size() == 3);
-    const double single_dBm = -26.0;
-    const double coherent_dBm = single_dBm + 10.0 * std::log10(4.0);
-    for (const auto &t : out.tones) {
-        if (std::abs(t.freq_Hz - 50e6) < 1.0) {
-            REQUIRE(t.power_dBm == Approx(coherent_dBm).margin(0.01));
-            REQUIRE(t.phase_deg == Approx(0.0).margin(1e-9));
-        } else if (std::abs(t.freq_Hz - 150e6) < 1.0 || std::abs(t.freq_Hz - 250e6) < 1.0) {
-            REQUIRE(t.power_dBm == Approx(single_dBm).margin(0.01));
-        } else {
-            FAIL("unexpected sideband at " << t.freq_Hz << " Hz");
-        }
-    }
+    REQUIRE(out.tones.size() == 4);
+    const double dBm_50 = 10.0 * std::log10(analyzerWattsNear(out.tones, 50e6) / 1e-3);
+    REQUIRE(dBm_50 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
 }
 
 TEST_CASE("Mixer at LO 0 sums the two identical images coherently", "[mixer][issue305]") {
@@ -320,24 +321,23 @@ TEST_CASE("Mixer at LO 0 sums the two identical images coherently", "[mixer][iss
     gen.update(0.0);
 
     // At LO = 0 the difference and sum images are the same term at 50 MHz. Each carries the
-    // -6 dB conversion gain, so the coherent sum is +6.02 dB over one image: -19.98 dBm, the
-    // same reading as before the merge. Physically x*cos(0) = x keeps the input power.
+    // -6 dB conversion gain, so the coherent sum is +6.02 dB over one image: -19.98 dBm.
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(0.0);
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     const auto &out = mix.node().outputs[0];
-    REQUIRE(out.tones.size() == 1);
-    REQUIRE(out.tones[0].freq_Hz == Approx(50e6).margin(1.0));
-    REQUIRE(out.tones[0].power_dBm == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
+    REQUIRE(out.tones.size() == 2);
+    const double dBm_50 = 10.0 * std::log10(analyzerWattsNear(out.tones, 50e6) / 1e-3);
+    REQUIRE(dBm_50 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
 }
 
-TEST_CASE("Mixer merges sidebands split by rounding (tolerance path)", "[mixer][issue305]") {
+TEST_CASE("Mixer sidebands split by rounding read coherently (snap path)", "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
-    // Both lower sidebands are 740032354.775 Hz in exact arithmetic, but the two subtractions
-    // round differently, so the keys differ by a few ulps and only a tolerant merge joins them.
+    // Both lower sidebands are 740032354.775 Hz in exact decimal, but the two subtractions round
+    // differently: the keys differ by 1.19e-7 Hz, so an exact-key analyzer sums them in power.
     gen.addTone(259967645.225, -20.0, 0.0);
     gen.addTone(1740032354.775, -20.0, 0.0);
     gen.update(0.0);
@@ -348,37 +348,28 @@ TEST_CASE("Mixer merges sidebands split by rounding (tolerance path)", "[mixer][
     mix.update(0.0);
 
     const auto &out = mix.node().outputs[0];
-    REQUIRE(out.tones.size() == 3);
-    const double single_dBm = -26.0;
-    for (const auto &t : out.tones) {
-        if (std::abs(t.freq_Hz - 740032354.775) < 1.0) {
-            REQUIRE(t.power_dBm == Approx(single_dBm + 10.0 * std::log10(4.0)).margin(0.01));
-        } else if (std::abs(t.freq_Hz - 1259967645.225) < 1.0 ||
-                   std::abs(t.freq_Hz - 2740032354.775) < 1.0) {
-            REQUIRE(t.power_dBm == Approx(single_dBm).margin(0.01));
-        } else {
-            FAIL("unexpected sideband at " << t.freq_Hz << " Hz");
-        }
-    }
+    REQUIRE(out.tones.size() == 4);
+    // Three distinct frequencies after analyzer grouping: the 740 MHz pair shares one key.
+    REQUIRE(coherentToneWatts(out.tones).size() == 3);
+    const double dBm_740 = 10.0 * std::log10(analyzerWattsNear(out.tones, 740032354.775) / 1e-3);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
 }
 
-TEST_CASE("Mixer drops sidebands that cancel exactly", "[mixer][issue305]") {
+TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(50e6, -20.0, 0.0);
     gen.addTone(150e6, -20.0, 180.0);
     gen.update(0.0);
 
-    // Both images land at 50 MHz with opposite phase: the coherent sum is zero, so no tone.
+    // Both images land at 50 MHz with opposite phase: the analyzer's coherent sum is zero.
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(100e6);
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
     const auto &out = mix.node().outputs[0];
-    REQUIRE(out.tones.size() == 2);
-    for (const auto &t : out.tones)
-        REQUIRE(std::abs(t.freq_Hz - 50e6) > 1.0);
+    REQUIRE(analyzerWattsNear(out.tones, 50e6) == 0.0);
 }
 
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
