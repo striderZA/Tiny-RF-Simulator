@@ -1,3 +1,22 @@
+## [Unreleased]
+
+### Fixed
+
+- **Uncalibrated coax presets are refused (#280)** — MT 210, 230, 265, 300 and 480 have no datasheet model (K1 = K2 = 0, zero delay) and used to act as a lossless wire. They can no longer be selected from the Properties panel or agent writes, and a saved project using one keeps its index but outputs nothing, with the reason shown in the hover text and inspector tooltip. MT 340 is unaffected.
+- **Agent writes respect equalizer bounds (#301)** — agent writes to the equalizer's reference gain (±40 dB), reference frequency (1 Hz–100 GHz) and slope (±100 dB/decade) are rejected outside the inspector ranges, so an out-of-range value can no longer drive the output to infinite noise.
+- **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
+- **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
+- **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
+- **Passive filter and equalizer noise keeps the thermal term (#297)** — noise through an S-parameter filter or equalizer is `|S21|² × noise_in + kT(1 − |S21|²)`, and the ideal equalizer uses `G × noise_in + kT(1 − G)`, matching the attenuator. Gain (|S21| or G > 1) adds no thermal term. A flat −3 dB S-parameter file, or −10 dB ideal equalizer gain, on a kT input now returns kT.
+
+### Changed
+
+- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
+
+### Changed
+
+- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed

@@ -1,12 +1,16 @@
+#include "test_temp_paths.h"
 #include "combiner_engine.h"
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
 #include "spectrum.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <numbers>
 #include <string>
+#include <filesystem>
+#include <fstream>
 
 using Catch::Matchers::WithinAbs;
 
@@ -169,4 +173,32 @@ TEST_CASE("Combiner: S-param mode adds S21 phase to IN0 per-bin phase",
     const auto &output = combiner.node().outputs[0];
     REQUIRE(output.phase_deg.size() == 3);
     REQUIRE_THAT(output.phase_deg[0], WithinAbs(30.0 + expected_shift_deg, 1e-6));
+}
+
+TEST_CASE("Combiner: non-reciprocal 3-port S31 drives the first path", "[combiner][sparam]") {
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("non_reciprocal_" + test_temp_paths::processTag() + ".s3p");
+    {
+        std::ofstream file(path);
+        file << "# GHz S RI R 50\n1";
+        for (int pair = 0; pair < 9; ++pair) {
+            const double magnitude = pair == 2 ? 0.1 : (pair == 6 ? 0.5 : 1.0);
+            file << ' ' << magnitude << " 0";
+        }
+        file << '\n';
+    }
+
+    NodeGraphEngine graph;
+    CombinerEngine combiner(1, graph);
+    combiner.setSParamFilepath(path.string());
+    REQUIRE(combiner.sparamMode());
+
+    Spectrum input0 = buildTestSpectrum(1e9, -10.0, 0.0);
+    combiner.node().inputs[0] = &input0;
+    combiner.node().inputs[1] = nullptr;
+    combiner.update(0.016);
+
+    const auto &output = combiner.node().outputs[0];
+    REQUIRE(output.tones.size() == 1);
+    REQUIRE_THAT(output.tones[0].power_dBm, WithinAbs(-16.0206, 0.001));
 }

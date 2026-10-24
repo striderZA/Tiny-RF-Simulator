@@ -100,6 +100,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     TouchstoneData data;
     bool option_line_found = false;
     bool has_version_keyword = false;
+    bool has_two_port_data_order = false;
+    bool two_port_data_order_is_12_21 = false;
     std::string line;
     std::vector<double> raw_values; // all numeric values from data lines
 
@@ -107,11 +109,22 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     // .s1p -> 1 port, .s2p -> 2 ports, etc. (Hoisted ahead of the read loop
     // so the in-loop frequency-point cap below knows the values per point.)
     size_t dot = filepath.rfind('.');
-    if (dot != std::string::npos && dot + 2 < filepath.size() && filepath[dot + 1] == 's') {
-        char port_char = filepath[dot + 2];
-        if (port_char >= '1' && port_char <= '9') {
-            data.num_ports = port_char - '0';
+    if (dot != std::string::npos && dot + 1 < filepath.size() &&
+        (filepath[dot + 1] == 's' || filepath[dot + 1] == 'S')) {
+        // Exact .sNp / .SNP extension: N is 1-4 digits (ports 1-9999 keeps the
+        // int port math below overflow-free) and the extension ends after 'p'.
+        const size_t digits_begin = dot + 2;
+        size_t pos = digits_begin;
+        int ports = 0;
+        while (pos < filepath.size() && pos - digits_begin < 4 && filepath[pos] >= '0' &&
+               filepath[pos] <= '9') {
+            ports = ports * 10 + (filepath[pos] - '0');
+            ++pos;
         }
+        const bool p_terminates =
+            pos + 1 == filepath.size() && (filepath[pos] == 'p' || filepath[pos] == 'P');
+        if (pos > digits_begin && p_terminates && ports >= 1)
+            data.num_ports = ports;
     }
     if (data.num_ports == 0) {
         // Try to infer from data density
@@ -156,7 +169,7 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         if (stripped.empty())
             continue;
 
-        // Detect version 2.0 keyword
+        // Detect version 2.0 keywords
         if (stripped.size() > 10 && stripped[0] == '[') {
             std::string lower = stripped;
             for (char &c : lower)
@@ -164,7 +177,19 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             if (lower.find("[version] 2.0") != std::string::npos) {
                 has_version_keyword = true;
             }
-            // For now, skip all v2.0 keywords; we'll handle them later
+            if (has_version_keyword && lower.find("[two-port data order]") != std::string::npos) {
+                const size_t value_start = stripped.find(']') + 1;
+                std::istringstream order_stream(stripped.substr(value_start));
+                std::string order;
+                if (!(order_stream >> order))
+                    return std::nullopt;
+                for (char &c : order)
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (order != "12_21" && order != "21_12")
+                    return std::nullopt;
+                has_two_port_data_order = true;
+                two_port_data_order_is_12_21 = order == "12_21";
+            }
             if (has_version_keyword)
                 continue;
         }
@@ -191,6 +216,9 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     if (!option_line_found)
         return std::nullopt;
 
+    if (has_version_keyword && data.num_ports == 2 && !has_two_port_data_order)
+        return std::nullopt;
+
     if (raw_values.size() % values_per_freq != 0) {
         // Mismatch: try to be lenient or return null
         return std::nullopt;
@@ -211,23 +239,31 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         double freq = raw_values[base];
         data.frequencies.push_back(data.freqToHz(freq));
 
-        // Parse in Touchstone order (column-major)
-        std::vector<std::complex<double>> cm_params;
-        cm_params.reserve(pairs_per_freq);
+        // Touchstone 2-port order is column-major; 3-port and larger is row-major.
+        std::vector<std::complex<double>> file_params;
+        file_params.reserve(pairs_per_freq);
         for (int p = 0; p < pairs_per_freq; ++p) {
             double a = raw_values[base + 1 + p * 2];
             double b = raw_values[base + 1 + p * 2 + 1];
-            cm_params.push_back(parsePair(a, b, data.format));
+            file_params.push_back(parsePair(a, b, data.format));
         }
 
-        // Reorder to row-major: col-major idx = col*N + row -> row-major idx = row*N + col
-        std::vector<std::complex<double>> rm_params(pairs_per_freq);
-        for (int p = 0; p < pairs_per_freq; ++p) {
-            int r = p % data.num_ports;
-            int c = p / data.num_ports;
-            rm_params[r * data.num_ports + c] = cm_params[p];
+        if (data.num_ports == 2) {
+            if (has_version_keyword && two_port_data_order_is_12_21) {
+                data.parameters.push_back(std::move(file_params));
+            } else {
+                // Touchstone's 2-port exception is S11, S21, S12, S22.
+                std::vector<std::complex<double>> rm_params(pairs_per_freq);
+                for (int p = 0; p < pairs_per_freq; ++p) {
+                    const int row = p % data.num_ports;
+                    const int col = p / data.num_ports;
+                    rm_params[row * data.num_ports + col] = file_params[p];
+                }
+                data.parameters.push_back(std::move(rm_params));
+            }
+        } else {
+            data.parameters.push_back(std::move(file_params));
         }
-        data.parameters.push_back(std::move(rm_params));
     }
 
     // R1: Validate frequencies — reject NaN, infinity, negative, non-monotonic
