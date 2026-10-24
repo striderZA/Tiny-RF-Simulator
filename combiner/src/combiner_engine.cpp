@@ -1,9 +1,38 @@
 #include "combiner_engine.h"
 #include "common.h"
+#include "logging_core.h"
 #include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
 #include <numbers>
+
+namespace {
+
+// Empty when the inputs may combine. An ADC (complex-baseband) output cannot
+// combine with an RF output, and inputs on different grids are refused, not resampled.
+std::string combineRefusal(const Spectrum *a, const Spectrum *b) {
+    if (!a || !b)
+        return {};
+    if (a->is_complex_baseband != b->is_complex_baseband)
+        return "ADC (complex-baseband) output cannot combine with RF output";
+    if (a->frequencies != b->frequencies)
+        return "inputs are on different frequency grids";
+    return {};
+}
+
+// Output carries no tones and no noise. Grid and domain metadata follow the success path.
+void refuseCombine(Spectrum &out, size_t N, const Spectrum *a, const Spectrum *b) {
+    out.tones.clear();
+    out.noise_W.assign(N, 0.0);
+    out.noise_added_W.assign(N, 0.0);
+    out.noise_total_W.assign(N, 0.0);
+    out.phase_deg.assign(N, 0.0);
+    out.is_complex_baseband = (a && a->is_complex_baseband) || (b && b->is_complex_baseband);
+    out.fs_Hz = a ? a->fs_Hz : (b ? b->fs_Hz : 0.0);
+    out.bumpGeneration();
+}
+
+} // namespace
 
 CombinerEngine::CombinerEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "Combiner", 2, 1) {}
@@ -52,7 +81,11 @@ void CombinerEngine::setSParamFilepath(const std::string &path) {
     m_dirty = true;
 }
 
-std::string CombinerEngine::hoverSummary() const { return "Combiner: 2→1, -3 dB"; }
+std::string CombinerEngine::hoverSummary() const {
+    if (!m_refusal_reason.empty())
+        return "Combiner: REFUSED, " + m_refusal_reason;
+    return "Combiner: 2→1, -3 dB";
+}
 
 nlohmann::json CombinerEngine::serialize() const {
     return {{"manual_mode", m_manual_mode},
@@ -106,6 +139,9 @@ void CombinerEngine::update(double dt) {
 
         const size_t N = out.frequencies.size();
 
+        m_refusal_reason = combineRefusal(in0, in1);
+        if (!m_refusal_reason.empty())
+            LOG_WARN("Combiner: %s; output refused.", m_refusal_reason.c_str());
         if (N < 2) {
             out.tones.clear();
             out.noise_W.assign(N, 0.0);
@@ -113,6 +149,10 @@ void CombinerEngine::update(double dt) {
             out.noise_total_W.assign(N, 0.0);
             out.phase_deg.assign(N, 0.0);
             out.bumpGeneration();
+            return;
+        }
+        if (!m_refusal_reason.empty()) {
+            refuseCombine(out, N, in0, in1);
             return;
         }
 
@@ -208,6 +248,9 @@ void CombinerEngine::update(double dt) {
 
     const size_t N = out.frequencies.size();
 
+    m_refusal_reason = combineRefusal(in0, in1);
+    if (!m_refusal_reason.empty())
+        LOG_WARN("Combiner: %s; output refused.", m_refusal_reason.c_str());
     if (N < 2) {
         out.tones.clear();
         out.noise_W.assign(N, 0.0);
@@ -215,6 +258,10 @@ void CombinerEngine::update(double dt) {
         out.noise_total_W.assign(N, 0.0);
         out.phase_deg.assign(N, 0.0);
         out.bumpGeneration();
+        return;
+    }
+    if (!m_refusal_reason.empty()) {
+        refuseCombine(out, N, in0, in1);
         return;
     }
 
