@@ -1,6 +1,7 @@
 #include "mixer_engine.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 // Snaps a sideband frequency to a grid of 2^-40 of its binade. Sidebands formed as tone ± LO round
@@ -12,6 +13,9 @@ static double snapSidebandFrequency(double f_Hz) {
     if (f_Hz == 0.0 || !std::isfinite(f_Hz))
         return f_Hz;
     const double grid_Hz = std::ldexp(1.0, std::ilogb(f_Hz) - 40);
+    // Below the normal range the grid underflows toward zero; such frequencies stay unsnapped.
+    if (!(grid_Hz >= std::numeric_limits<double>::min()))
+        return f_Hz;
     return std::nearbyint(f_Hz / grid_Hz) * grid_Hz;
 }
 

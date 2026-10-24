@@ -372,6 +372,23 @@ TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[
     REQUIRE(analyzerWattsNear(out.tones, 50e6) == 0.0);
 }
 
+TEST_CASE("Mixer keeps subnormal sideband frequencies finite", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e-320, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(0.0);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(!out.tones.empty());
+    for (const auto &t : out.tones)
+        REQUIRE(std::isfinite(t.freq_Hz));
+}
+
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     NodeGraphEngine graph;
     Spectrum input;
