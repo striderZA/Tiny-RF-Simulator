@@ -132,3 +132,39 @@ TEST_CASE("No S-parameter key leaves the engine on its manual model", "[sparam][
     SECTION("equalizer") { requireNoKeyStaysManual<EqualizerEngine>(); }
     SECTION("ideal filter") { requireNoKeyStaysManual<IdealFilterEngine>(); }
 }
+
+// An index outside the 2-port matrix (valid 0..3) must not pass the signal
+// through at unity. It loads as the S21 default, as a missing index does.
+template <typename Engine> void requireOutOfRangeFwdIdxLoadsS21() {
+    NodeGraphEngine graph;
+    Engine ref(0, graph);
+    ref.deserialize(nlohmann::json{{"sparam_mode", true}, {"sparam_path", s2p_path()}});
+    REQUIRE(ref.sparamLoaded());
+    const auto S21 = ref.sparamData().interpolate(1e9, 2);
+    const double expected_dBm = -20.0 + 20.0 * std::log10(std::abs(S21));
+    REQUIRE(std::abs(expected_dBm + 20.0) > 1.0); // S21 is not unity, so the check can fail
+
+    for (int bad_index : {4, 99, -1}) {
+        CAPTURE(bad_index);
+        Engine engine(0, graph);
+        engine.deserialize(nlohmann::json{
+            {"sparam_mode", true}, {"sparam_path", s2p_path()}, {"sparam_fwd_idx", bad_index}});
+        REQUIRE(engine.sparamLoaded());
+        REQUIRE(engine.serialize()["sparam_fwd_idx"] == 2);
+
+        SignalGeneratorEngine gen(1, graph);
+        gen.addTone(1e9, -20.0);
+        gen.update(0.0);
+        engine.node().inputs[0] = &gen.node().outputs[0];
+        engine.update(0.0);
+
+        const auto &out = engine.node().outputs[0];
+        REQUIRE(out.tones.size() == 1);
+        REQUIRE(out.tones[0].power_dBm == Approx(expected_dBm).margin(0.5));
+    }
+}
+
+TEST_CASE("Out-of-range sparam_fwd_idx falls back to S21, never unity", "[sparam][legacy]") {
+    SECTION("equalizer") { requireOutOfRangeFwdIdxLoadsS21<EqualizerEngine>(); }
+    SECTION("ideal filter") { requireOutOfRangeFwdIdxLoadsS21<IdealFilterEngine>(); }
+}
