@@ -1,3 +1,4 @@
+#include "coax_cable_engine.h"
 #include "coax_presets.h"
 #include "component_engine_base.h"
 #include "component_params.h"
@@ -710,4 +711,19 @@ TEST_CASE("Agent writes refuse an inverted ideal filter band and keep the engine
     CHECK(result.status == ParamWriteStatus::DeserializeFailed);
     CHECK(result.error.find("low cutoff exceeds high cutoff") != std::string::npos);
     CHECK(engine->serialize() == before);
+}
+
+TEST_CASE("Coax preset writes refuse uncalibrated presets", "[component_params][coax]") {
+    const auto *coax = ComponentTypeRegistry::instance().find("coax");
+    REQUIRE(coax != nullptr);
+    NodeGraphEngine graph;
+    CoaxCableEngine engine(0, graph);
+    const int MT340 = 4;
+
+    const auto by_label =
+        applyComponentParams(engine, coax->state_fields, {{"preset_index", "MT 210"}});
+    CHECK(by_label.status == ParamWriteStatus::TypeMismatch);
+    const auto by_index = applyComponentParams(engine, coax->state_fields, {{"preset_index", 0}});
+    CHECK(by_index.status == ParamWriteStatus::TypeMismatch);
+    REQUIRE(engine.serialize()["preset_index"] == MT340);
 }

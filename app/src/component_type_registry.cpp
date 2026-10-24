@@ -499,10 +499,16 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     std::vector<std::string> preset_labels;
     for (const auto &preset : kCoaxCablePresets)
         preset_labels.emplace_back(preset.name);
+    auto preset_field = stateField("preset_index", "Cable Preset", "", FieldKind::Enum,
+                                   "Selects the cable model used for attenuation and delay.",
+                                   std::move(preset_labels));
+    preset_field.accepts = [](const nlohmann::json &index) {
+        const auto i = index.get<std::int64_t>();
+        return i >= 0 && static_cast<std::size_t>(i) < kCoaxCablePresets.size() &&
+               kCoaxCablePresets[static_cast<std::size_t>(i)].calibrated;
+    };
     coax.state_fields = {
-        stateField("preset_index", "Cable Preset", "", FieldKind::Enum,
-                   "Selects the cable model used for attenuation and delay.",
-                   std::move(preset_labels)),
+        std::move(preset_field),
         stateField("length_m", "Length", "m", FieldKind::Number, "Sets the physical cable length."),
         stateField("connectors_loss_dB", "Connector Loss", "dB", FieldKind::Number,
                    "Sets the total loss of the cable connectors."),
