@@ -212,6 +212,11 @@ void CombinerEngine::update(double dt) {
         }
 
         out.phase_deg.assign(N, 0.0);
+        for (size_t i = 0; i < N; ++i) {
+            auto S21 = m_sparam_data.interpolate(out.frequencies[i], idx_S21);
+            const double base = (in0 && i < in0->phase_deg.size()) ? in0->phase_deg[i] : 0.0;
+            out.phase_deg[i] = base + std::arg(S21) * 180.0 / std::numbers::pi;
+        }
         out.fs_Hz = in0 ? in0->fs_Hz : (in1 ? in1->fs_Hz : 0.0);
         out.bumpGeneration();
         return;
@@ -298,7 +303,10 @@ void CombinerEngine::update(double dt) {
     out.noise_added_W.assign(N, 0.0);
     out.noise_total_W = out.noise_W;
 
-    out.phase_deg.assign(N, 0.0);
+    if (in0 && !in0->phase_deg.empty())
+        out.phase_deg = in0->phase_deg;
+    else
+        out.phase_deg.assign(N, 0.0);
     out.fs_Hz = in0 ? in0->fs_Hz : (in1 ? in1->fs_Hz : 0.0);
     out.bumpGeneration();
 }

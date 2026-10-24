@@ -1,11 +1,14 @@
 #include "test_temp_paths.h"
 #include "combiner_engine.h"
 #include "node_graph_engine.h"
+#include "s_parameter_data.h"
 #include "spectrum.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <numbers>
+#include <string>
 #include <filesystem>
 #include <fstream>
 
@@ -121,6 +124,55 @@ TEST_CASE("Combiner: S-param mode", "[combiner][sparam]") {
     // Verify S-parameters are applied (tones should be modified by S21/S31)
     REQUIRE(output.tones[0].power_dBm != -10.0);
     REQUIRE(output.tones[1].power_dBm != -20.0);
+}
+
+TEST_CASE("Combiner: manual mode preserves IN0 per-bin phase", "[combiner][phase]") {
+    NodeGraphEngine graph;
+    CombinerEngine combiner(1, graph);
+
+    Spectrum input0 = buildTestSpectrum(1e9, -10.0, 30.0);
+    input0.phase_deg.assign(3, 30.0);
+    Spectrum input1 = buildTestSpectrum(2e9, -20.0, 0.0);
+    combiner.node().inputs[0] = &input0;
+    combiner.node().inputs[1] = &input1;
+
+    combiner.update(0.016);
+
+    const auto &output = combiner.node().outputs[0];
+    REQUIRE(output.phase_deg.size() == 3);
+    for (double p : output.phase_deg) {
+        REQUIRE_THAT(p, WithinAbs(30.0, 1e-9));
+    }
+}
+
+TEST_CASE("Combiner: S-param mode adds S21 phase to IN0 per-bin phase",
+          "[combiner][phase][sparam]") {
+    NodeGraphEngine graph;
+    CombinerEngine combiner(1, graph);
+
+    const std::string path = std::string(PROJECT_SOURCE_DIR) +
+                             "/component_data/splitters/mpd-0226ch/MPD-0226CH_CH_25C_F.s3p";
+    combiner.setSParamFilepath(path);
+    REQUIRE(combiner.sparamMode());
+
+    SParameterData data;
+    REQUIRE(data.load(path));
+    const int idx_S21 = 2 * data.numPorts() + 0;
+    const double expected_shift_deg =
+        std::arg(data.interpolate(1e9, idx_S21)) * 180.0 / std::numbers::pi;
+    REQUIRE(std::abs(expected_shift_deg) > 1.0);
+
+    Spectrum input0 = buildTestSpectrum(1e9, -10.0, 30.0);
+    input0.phase_deg.assign(3, 30.0);
+    Spectrum input1 = buildTestSpectrum(2e9, -20.0, 0.0);
+    combiner.node().inputs[0] = &input0;
+    combiner.node().inputs[1] = &input1;
+
+    combiner.update(0.016);
+
+    const auto &output = combiner.node().outputs[0];
+    REQUIRE(output.phase_deg.size() == 3);
+    REQUIRE_THAT(output.phase_deg[0], WithinAbs(30.0 + expected_shift_deg, 1e-6));
 }
 
 TEST_CASE("Combiner: non-reciprocal 3-port S31 drives the first path", "[combiner][sparam]") {
