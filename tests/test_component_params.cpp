@@ -5,8 +5,10 @@
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "editor_commands.h"
+#include "equalizer_engine.h"
 #include "flow_params.h"
 #include "graph_editor_actions.h"
+#include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
 #include "view_manager.h"
@@ -726,4 +728,37 @@ TEST_CASE("Coax preset writes refuse uncalibrated presets", "[component_params][
     const auto by_index = applyComponentParams(engine, coax->state_fields, {{"preset_index", 0}});
     CHECK(by_index.status == ParamWriteStatus::TypeMismatch);
     REQUIRE(engine.serialize()["preset_index"] == MT340);
+}
+
+TEST_CASE("Out-of-range sparam_fwd_idx is refused as an engine adjustment", "[component_params]") {
+    const std::string s2p = std::string(PROJECT_SOURCE_DIR) +
+                            "/component_data/amplifiers/adm-3844psm/"
+                            "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    for (const std::string type : {"filter", "equalizer"}) {
+        CAPTURE(type);
+        ParamsEngineFixture fixture;
+        auto *engine = fixture.create(type);
+        REQUIRE(engine != nullptr);
+        if (auto *filter = dynamic_cast<IdealFilterEngine *>(engine))
+            filter->setSParamFilepath(s2p);
+        else if (auto *equalizer = dynamic_cast<EqualizerEngine *>(engine))
+            equalizer->setSParamFilepath(s2p);
+        REQUIRE(engine->serialize()["sparam_fwd_idx"] == 2);
+
+        const auto &fields = paramsDescriptor(type).state_fields;
+        for (const int bad_index : {4, 99, -1}) {
+            CAPTURE(bad_index);
+            const auto result =
+                applyComponentParams(*engine, fields, {{"sparam_fwd_idx", bad_index}});
+            CHECK(result.status == ParamWriteStatus::EngineAdjusted);
+            CHECK(result.path == "sparam_fwd_idx");
+            CHECK(result.requested == bad_index);
+            CHECK(result.stored == 2);
+            CHECK(engine->serialize()["sparam_fwd_idx"] == 2);
+        }
+
+        const auto in_range = applyComponentParams(*engine, fields, {{"sparam_fwd_idx", 0}});
+        CHECK(in_range.status == ParamWriteStatus::Applied);
+        CHECK(engine->serialize()["sparam_fwd_idx"] == 0);
+    }
 }
