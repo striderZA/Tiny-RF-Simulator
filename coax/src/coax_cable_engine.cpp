@@ -10,6 +10,11 @@ CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine &graph)
 void CoaxCableEngine::setPresetIndex(int idx) {
     if (idx < 0 || static_cast<size_t>(idx) >= kCoaxCablePresets.size())
         return;
+    if (!kCoaxCablePresets[idx].calibrated) {
+        LOG_WARN("Coax cable: preset %s is uncalibrated; request refused.",
+                 kCoaxCablePresets[idx].name);
+        return;
+    }
     if (idx != m_preset_index) {
         m_preset_index = idx;
         m_dirty = true;
@@ -121,6 +126,11 @@ void CoaxCableEngine::deserialize(const nlohmann::json &j) {
     // kCoaxCablePresets[] indexing (OOB/UB).
     m_preset_index =
         std::clamp(j.value("preset_index", 4), 0, static_cast<int>(kCoaxCablePresets.size()) - 1);
+    if (!kCoaxCablePresets[m_preset_index].calibrated) {
+        LOG_WARN("Coax cable: saved preset %s is uncalibrated; using MT 340.",
+                 kCoaxCablePresets[m_preset_index].name);
+        m_preset_index = 4; // MT 340
+    }
     m_length_m = std::clamp(j.value("length_m", 1.0), 0.0, 1000.0);
     m_connectors_loss_dB = std::clamp(j.value("connectors_loss_dB", 0.0), 0.0, 30.0);
     m_dirty = true;

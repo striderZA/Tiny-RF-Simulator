@@ -599,13 +599,16 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index)
         if (ImGui::BeginCombo("Model", preview)) {
             for (int i = 0; i < static_cast<int>(kCoaxCablePresets.size()); ++i) {
                 bool selected = (i == engine.presetIndex());
+                const bool calibrated = kCoaxCablePresets[i].calibrated;
+                ImGui::BeginDisabled(!calibrated);
                 if (ImGui::Selectable(kCoaxCablePresets[i].name, selected)) {
                     engine.setPresetIndex(i);
                     m_param_edited = true;
                 }
+                ImGui::EndDisabled();
                 if (selected)
                     ImGui::SetItemDefaultFocus();
-                if (ImGui::IsItemHovered()) {
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", kCoaxCablePresets[i].name);
                     ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
