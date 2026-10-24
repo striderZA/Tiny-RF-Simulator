@@ -219,10 +219,40 @@ TEST_CASE("Coax cable tone above max_freq clamps loss", "[coax][edge]") {
     REQUIRE(above_max == Approx(at_max).margin(0.01));
 }
 
-TEST_CASE("Coax cable zero-K preset produces no loss", "[coax][edge]") {
-    // Index 0 = MT 210, K1=K2=0 (stub)
-    const double out_power = runOneTone(2e9, -10.0, 5.0, 0, 0.0);
-    REQUIRE(out_power == Approx(-10.0).margin(0.001));
+TEST_CASE("Coax cable refuses uncalibrated presets", "[coax][calibration]") {
+    // MT 210/230/265/300/480 have no datasheet K1/K2/delay; they must not be selectable.
+    NodeGraphEngine graph;
+    CoaxCableEngine cable(0, graph);
+    const int MT340 = 4;
+    REQUIRE(cable.presetIndex() == MT340);
+    for (int idx : {0, 1, 2, 3, 5}) {
+        cable.setPresetIndex(idx);
+        REQUIRE(cable.presetIndex() == MT340);
+    }
+}
+
+TEST_CASE("Coax cable keeps saved uncalibrated preset and refuses output", "[coax][calibration]") {
+    // A saved project must round-trip unchanged, and the cable must not pass signal as a wire.
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(2e9, -10.0);
+    gen.update(0.0);
+
+    CoaxCableEngine cable(0, graph);
+    cable.deserialize({{"preset_index", 0}, {"length_m", 100.0}, {"connectors_loss_dB", 0.0}});
+    REQUIRE(cable.presetIndex() == 0);
+    REQUIRE(cable.serialize()["preset_index"] == 0);
+
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+    REQUIRE(cable.node().outputs[0].tones.empty());
+    REQUIRE(cable.hoverSummary().find("UNCALIBRATED") != std::string::npos);
+}
+
+TEST_CASE("Coax cable uncalibrated preset request still attenuates", "[coax][calibration]") {
+    // A refused MT 210 request must not leave a lossless wire: output stays MT 340 loss.
+    const double out_power = runOneTone(2e9, -10.0, 100.0, 0, 0.0);
+    REQUIRE(out_power == Approx(-31.86).margin(0.1));
 }
 
 TEST_CASE("Coax cable with no input produces empty tones and bumps generation", "[coax][edge]") {

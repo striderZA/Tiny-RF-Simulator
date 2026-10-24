@@ -10,10 +10,16 @@ CoaxCableEngine::CoaxCableEngine(int id, NodeGraphEngine &graph)
 void CoaxCableEngine::setPresetIndex(int idx) {
     if (idx < 0 || static_cast<size_t>(idx) >= kCoaxCablePresets.size())
         return;
+    if (!kCoaxCablePresets[idx].calibrated) {
+        LOG_WARN("Coax cable: preset %s is uncalibrated; request refused.",
+                 kCoaxCablePresets[idx].name);
+        return;
+    }
     if (idx != m_preset_index) {
         m_preset_index = idx;
         m_dirty = true;
-        m_warned_above_max = false; // reset warn flag on preset change
+        m_warned_above_max = false; // reset warn flags on preset change
+        m_warned_uncalibrated = false;
     }
 }
 
@@ -52,6 +58,22 @@ void CoaxCableEngine::update(double dt) {
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
+
+    if (!preset().calibrated) {
+        // Refused: a cable with no datasheet model must not pass signal as a wire.
+        if (!m_warned_uncalibrated) {
+            LOG_WARN("Coax cable: preset %s is uncalibrated; output refused.", preset().name);
+            m_warned_uncalibrated = true;
+        }
+        const size_t N = out.frequencies.size();
+        out.tones.clear();
+        out.phase_deg.assign(N, 0.0);
+        out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.assign(N, 0.0);
+        out.bumpGeneration();
+        return;
+    }
 
     const CableSpec &p = preset();
     const double max_f_Hz = p.max_freq_GHz * 1e9;
@@ -123,12 +145,17 @@ void CoaxCableEngine::deserialize(const nlohmann::json &j) {
         std::clamp(j.value("preset_index", 4), 0, static_cast<int>(kCoaxCablePresets.size()) - 1);
     m_length_m = std::clamp(j.value("length_m", 1.0), 0.0, 1000.0);
     m_connectors_loss_dB = std::clamp(j.value("connectors_loss_dB", 0.0), 0.0, 30.0);
+    m_warned_uncalibrated = false;
     m_dirty = true;
 }
 
 std::string CoaxCableEngine::hoverSummary() const {
     std::string summary =
         "Coax Cable: " + std::string(preset().name) + " | L=" + std::to_string(m_length_m) + " m";
+    if (!preset().calibrated) {
+        summary += " | UNCALIBRATED: output refused";
+        return summary;
+    }
 
     if (!m_node.inputs.empty() && m_node.inputs[0] && !m_node.inputs[0]->frequencies.empty()) {
         const auto &freqs = m_node.inputs[0]->frequencies;

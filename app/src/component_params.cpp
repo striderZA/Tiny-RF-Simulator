@@ -218,9 +218,13 @@ std::vector<std::string> suggestions(const std::vector<ParameterField> &fields,
 
 std::string enumExpected(const ParameterField &field) {
     std::string expected = "one of ";
+    bool first = true;
     for (std::size_t index = 0; index < field.enum_values.size(); ++index) {
-        if (index != 0)
+        if (field.accepts && !field.accepts(Json(static_cast<std::int64_t>(index))))
+            continue;
+        if (!first)
             expected += ", ";
+        first = false;
         expected += field.enum_values[index];
     }
     return expected;
@@ -478,6 +482,8 @@ ParamWriteResult applyComponentParams(IComponentEngine &engine,
         std::string expected;
         if (!convertValue(*field, input_value, current, converted, expected))
             return failure(ParamWriteStatus::TypeMismatch, key, std::move(expected));
+        if (field->accepts && !field->accepts(converted))
+            return failure(ParamWriteStatus::TypeMismatch, key, enumExpected(*field));
         merged[key] = converted;
         requested_scalars.push_back({key, input_value, converted, converted.is_number_float()});
     }
