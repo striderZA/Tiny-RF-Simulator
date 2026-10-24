@@ -109,11 +109,22 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     // .s1p -> 1 port, .s2p -> 2 ports, etc. (Hoisted ahead of the read loop
     // so the in-loop frequency-point cap below knows the values per point.)
     size_t dot = filepath.rfind('.');
-    if (dot != std::string::npos && dot + 2 < filepath.size() && filepath[dot + 1] == 's') {
-        char port_char = filepath[dot + 2];
-        if (port_char >= '1' && port_char <= '9') {
-            data.num_ports = port_char - '0';
+    if (dot != std::string::npos && dot + 1 < filepath.size() &&
+        (filepath[dot + 1] == 's' || filepath[dot + 1] == 'S')) {
+        // Exact .sNp / .SNP extension: N is 1-4 digits (ports 1-9999 keeps the
+        // int port math below overflow-free) and the extension ends after 'p'.
+        const size_t digits_begin = dot + 2;
+        size_t pos = digits_begin;
+        int ports = 0;
+        while (pos < filepath.size() && pos - digits_begin < 4 && filepath[pos] >= '0' &&
+               filepath[pos] <= '9') {
+            ports = ports * 10 + (filepath[pos] - '0');
+            ++pos;
         }
+        const bool p_terminates =
+            pos + 1 == filepath.size() && (filepath[pos] == 'p' || filepath[pos] == 'P');
+        if (pos > digits_begin && p_terminates && ports >= 1)
+            data.num_ports = ports;
     }
     if (data.num_ports == 0) {
         // Try to infer from data density
