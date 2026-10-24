@@ -181,15 +181,17 @@ is included when `|f_bin − f_k| <= channel_bw` and is weighted by
 fall inside each channel and the reported output rate/bandwidth grow. A full-band output that
 averages overlapping channel contributions keeps its flat PSD.
 
-The engine also reports per-channel integrated noise power as
-`sum(input PSD × |H|² × input-bin width)`, and its effective noise bandwidth
-(`ENBW`) as `sum(|H|² × input-bin width)` over the same finite channel support.
-These are discrete quantities on the current input frequency grid, including
-the configured sampling ratio; for flat input noise density, channel noise
-power equals that density times the effective ENBW. The PFB properties
-inspector displays the active channel's integrated noise in dBm and its ENBW
-in MHz. Both PFB Spectrum outputs remain spectral densities (W/Hz), so the
-Spectrum Analyzer continues to display them integrated over its configured RBW.
+The engine also reports per-channel effective noise bandwidth as
+`ENBW = channel_bw × ∫_{-1}^{1} |H(x)|² dx`, the continuous integral of the
+prototype response over the channel. It does not depend on the input grid, and it
+includes the configured sampling ratio. Channel noise power is `ENBW × P̄`, where
+`P̄` is the `|H|²`-weighted mean input PSD over the channel's grid support. For flat
+input noise density, channel noise power equals that density times the effective ENBW
+on any grid. A channel with fewer than two input bins has no usable estimate: its
+noise is NaN and reads as unavailable. The PFB properties inspector displays the
+active channel's integrated noise in dBm and its ENBW in MHz. Both PFB Spectrum
+outputs remain spectral densities (W/Hz), so the Spectrum Analyzer continues to
+display them integrated over its configured RBW.
 
 The PFB node-hover SNR uses the strongest tone on the active-channel output and
 compares it with that channel's integrated noise power. It is therefore

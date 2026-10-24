@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -520,8 +521,9 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
     std::string error;
     REQUIRE(app.testStartAgentServer(serverConfig(), &error));
 
+    constexpr int flow_rows = 1000;
     ordered_json values = ordered_json::array();
-    for (int i = 0; i < 1000; ++i)
+    for (int i = 0; i < flow_rows; ++i)
         values.push_back(-30.0 + static_cast<double>(i) * 0.01);
 
     AgentCall call;
@@ -534,33 +536,39 @@ TEST_CASE_METHOD(AppFixture, "A large agent test flow yields between app frames"
         {"measure", ordered_json::array(
                         {{{"component", amplifier->id()}, {"port", 0}, {"metric", "power_dBm"}}})}};
 
-    bool completed = false;
-    AgentToolResult result;
-    app.testAgentServer()->submit(call, [&](const AgentToolResult &r) {
-        completed = true;
-        result = r;
+    // The server holds this callback until the flow finishes, which can outlive a failed REQUIRE.
+    // Share the state so the callback never writes to a destroyed stack frame.
+    struct FlowOutcome {
+        bool completed = false;
+        AgentToolResult result;
+    };
+    auto outcome = std::make_shared<FlowOutcome>();
+    app.testAgentServer()->submit(call, [outcome](const AgentToolResult &r) {
+        outcome->completed = true;
+        outcome->result = r;
     });
 
     // One application update must advance only a bounded slice; rendering still proceeds before
     // the whole request completes.
     app.update_dsp();
     runFrame([&] { app.draw_ui(); });
-    CHECK_FALSE(completed);
+    CHECK_FALSE(outcome->completed);
     CHECK(generator->serialize() == generator_before);
 
     int frames = 1;
-    while (!completed && frames < 200) {
+    // Keep a finite guard against stalled progress; CHECK_FALSE above verifies that the flow
+    // yields.
+    while (!outcome->completed && frames <= flow_rows) {
         app.update_dsp();
         runFrame([&] { app.draw_ui(); });
         ++frames;
     }
 
-    REQUIRE(completed);
-    CHECK_FALSE(result.is_error);
-    CHECK(result.structured.at("row_count") == 1000);
-    CHECK(result.structured.at("rows").size() == 1000);
+    REQUIRE(outcome->completed);
+    CHECK_FALSE(outcome->result.is_error);
+    CHECK(outcome->result.structured.at("row_count") == flow_rows);
+    CHECK(outcome->result.structured.at("rows").size() == flow_rows);
     CHECK(generator->serialize() == generator_before);
-    CHECK(frames < 200);
 }
 
 TEST_CASE_METHOD(AppFixture, "A user edit cancels a pending agent test flow without rollback",

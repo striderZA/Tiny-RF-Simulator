@@ -16,9 +16,9 @@ struct PFBChannel {
 
     std::vector<int> bin_indices;
     std::vector<double> bin_weights;
-    double noise_W = 0.0; // Integrated channel noise power (W).
-    // Discrete ENBW on the current input grid: sum(|H|^2 * bin_width) over
-    // this channel's finite modeled support.
+    // Integrated channel noise power (W). NaN when the channel has fewer than two input bins.
+    double noise_W = 0.0;
+    // Continuous ENBW (Hz): channel width x int_{-1}^{1} |H|^2 dx. Independent of the input grid.
     double enbw_Hz = 0.0;
     std::vector<Spectrum::Tone> tones;
 };
@@ -98,6 +98,7 @@ class PFBChannelizerEngine : public ComponentEngineBase {
     std::vector<PFBChannel> m_channels;
     std::vector<double> m_cached_freqs;
     std::vector<int> m_overlap_counts;
+    std::vector<char> m_covered_bins; // 1 where any channel's support includes the bin.
     std::vector<ToneIndexSlot> m_tone_index;
     size_t m_tone_index_mask = 0;
     uint64_t m_tone_index_generation = 0;

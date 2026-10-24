@@ -8,10 +8,11 @@
 - `scripts/release-notes.sh`
 - `scripts/format.sh`
 - `scripts/format-dirs.sh`
-- `scripts/install-clang-format.sh`
+- `scripts/clang-format-resolve.sh`
+- `scripts/test-format-version.sh`
 
 ## Local Contracts
-- `scripts/format-dirs.sh` is the single definition of the clang-format file set, used by `scripts/format.sh`, `.githooks/pre-commit`, and the release workflow's format job.
+- `scripts/clang-format-resolve.sh` is the single clang-format discovery and version check, sourced by `scripts/format.sh` and `.githooks/pre-commit`. It accepts only major >= 18 (`CLANG_FORMAT_MIN_MAJOR`), prefers the lowest accepted installed major, and falls back to the pinned `scripts/install-clang-format.sh` 18.1.8 copy only when no PATH binary qualifies.
 - `scripts/format.sh --all` checks the tracked C++ files under `scripts/format-dirs.sh` (`git ls-files`, not `find`), the same view a clean checkout gets in the release format job. Untracked files are not checked. An empty `--all` scan exits 1.
 - `scripts/release-notes.sh` is the single changelog-section extractor used by `release.yml` and `scripts/release.sh`; it rejects a missing section or one without a bullet.
 - `scripts/release.sh` prepares the branch, version bump, gates, and commit. `--tag` creates and pushes the annotated tag on `master` only.
@@ -35,7 +36,7 @@
 - The Windows package job fails when `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, or `libwinpthread-1.dll` is missing from `/mingw64/bin`.
 - `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `mkdocs build --strict` for pushes to `master` touching manual/build inputs, published releases, or manual dispatch.
-- Formatting check: `bash scripts/format.sh --check --all`.
+- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`.
 
 ## Child DOX Index
 - None.
