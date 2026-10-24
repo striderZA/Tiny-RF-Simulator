@@ -223,6 +223,52 @@ TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
     REQUIRE(out.noise_total_W.empty());
 }
 
+TEST_CASE("ADC DDC coherently combines coincident images at a rounding-sensitive NCO",
+          "[adc][issue305]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(10, graph);
+    adc.setFs_Hz(3e9);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.35);
+
+    Spectrum in = makeInput(101, 0.0, 2e9);
+    in.tones.push_back({1.2e9, -20.0, 0.0});
+    in.tones.push_back({1.8e9, -20.0, 0.0}); // = Fs - 1.2 GHz: samples coincide
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    // Each coincident pair must merge into one tone: +3.01 dB over -20 dBm.
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    REQUIRE(out.tones[0].freq_Hz == Approx(150e6).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
+    REQUIRE(out.tones[1].freq_Hz == Approx(750e6).margin(1.0));
+    REQUIRE(out.tones[1].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
+}
+
+TEST_CASE("ADC DDC coincident-image control at an exact NCO", "[adc][issue305]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(11, graph);
+    adc.setFs_Hz(3e9);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.25);
+
+    Spectrum in = makeInput(101, 0.0, 2e9);
+    in.tones.push_back({1.2e9, -20.0, 0.0});
+    in.tones.push_back({1.8e9, -20.0, 0.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    REQUIRE(out.tones[0].freq_Hz == Approx(450e6).margin(1.0));
+    REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
+    REQUIRE(out.tones[1].freq_Hz == Approx(1050e6).margin(1.0));
+    REQUIRE(out.tones[1].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
+}
+
 TEST_CASE("ADC DDC retains selected real tone phase with physical half-power", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(7, graph);

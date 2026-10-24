@@ -29,13 +29,19 @@ static std::vector<Spectrum::Tone> map_tones_to_complex(const Spectrum &input, d
     std::map<double, std::complex<double>> accumulated;
     const double nco_Hz = nco_fs_fraction * Fs;
     const double output_edge = Fs / (2.0 * decimation);
+    // nco_Hz and each alias are rounded separately, so coincident images can differ by a few
+    // ulps. Merge keys within a tolerance far below any tone spacing the simulator resolves.
+    const double merge_tol_Hz = Fs * 1e-12;
     for (const auto &tone : source_tones) {
-        const double f_complex = alias_frequency(tone.freq_Hz - nco_Hz, Fs);
-        if (f_complex < -output_edge || f_complex >= output_edge)
+        const double f_alias = alias_frequency(tone.freq_Hz - nco_Hz, Fs);
+        if (f_alias < -output_edge || f_alias >= output_edge)
             continue;
 
         const double power_W = 0.001 * std::pow(10.0, tone.power_dBm / 10.0);
         const double phase_rad = tone.phase_deg * std::numbers::pi / 180.0;
+        auto it = accumulated.lower_bound(f_alias - merge_tol_Hz);
+        const double f_complex =
+            (it != accumulated.end() && it->first <= f_alias + merge_tol_Hz) ? it->first : f_alias;
         accumulated[f_complex] += std::polar(std::sqrt(power_W), phase_rad);
     }
 
@@ -142,8 +148,8 @@ void AdcEngine::update(double /*dt*/) {
 
     const double nco_Hz = m_nco_fs_fraction * m_fs_Hz;
     for (int i = 0; i < N; ++i)
-        out.noise_W[i] = folded_noise_psd(*input, out.frequencies[i] + nco_Hz, m_fs_Hz) *
-                         real_input_noise_scale;
+        out.noise_W[i] =
+            folded_noise_psd(*input, out.frequencies[i] + nco_Hz, m_fs_Hz) * real_input_noise_scale;
 
     out.computeTotalNoise();
 
