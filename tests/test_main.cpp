@@ -283,6 +283,36 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     REQUIRE(out.tones[1].phase_deg == 45.0);
 }
 
+TEST_CASE("Mixer sums coincident in-phase sidebands coherently", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(50e6, -20.0, 0.0);
+    gen.addTone(150e6, -20.0, 0.0);
+    gen.update(0.0);
+
+    // LO 100 MHz, default -6 dB conversion gain: each image is -26.00 dBm. Both lower
+    // sidebands land at 50 MHz in phase, so the coherent sum is +6.02 dB over one image.
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 3);
+    const double single_dBm = -26.0;
+    const double coherent_dBm = single_dBm + 10.0 * std::log10(4.0);
+    for (const auto &t : out.tones) {
+        if (std::abs(t.freq_Hz - 50e6) < 1.0) {
+            REQUIRE(t.power_dBm == Approx(coherent_dBm).margin(0.01));
+            REQUIRE(t.phase_deg == Approx(0.0).margin(1e-9));
+        } else if (std::abs(t.freq_Hz - 150e6) < 1.0 || std::abs(t.freq_Hz - 250e6) < 1.0) {
+            REQUIRE(t.power_dBm == Approx(single_dBm).margin(0.01));
+        } else {
+            FAIL("unexpected sideband at " << t.freq_Hz << " Hz");
+        }
+    }
+}
+
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     NodeGraphEngine graph;
     Spectrum input;
