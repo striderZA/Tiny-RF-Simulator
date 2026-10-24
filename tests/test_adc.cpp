@@ -4,6 +4,7 @@
 
 #include "adc_engine.h"
 #include "node_graph_engine.h"
+#include "spectrum_analyzer_engine.h"
 
 using Catch::Approx;
 static constexpr double Fs = 1e9;
@@ -99,9 +100,9 @@ TEST_CASE("ADC DDC output grid spans from -Fs/4 to Fs/4", "[adc]") {
 
     const auto &out = adc.node().outputs[0];
     REQUIRE(out.frequencies.size() >= 2);
-    REQUIRE(out.frequencies.front() == Approx(-Fs / 4.0).margin(1e-6));
     double df = out.frequencies[1] - out.frequencies[0];
-    double expected_last = -Fs / 4.0 + (out.frequencies.size() - 1) * df;
+    REQUIRE(out.frequencies.front() == Approx(-Fs / 4.0 + df / 2.0).margin(1e-6));
+    double expected_last = -Fs / 4.0 + df / 2.0 + (out.frequencies.size() - 1) * df;
     REQUIRE(out.frequencies.back() == Approx(expected_last).margin(df / 2.0));
     REQUIRE(out.frequencies.back() > -Fs / 4.0);
 
@@ -111,6 +112,40 @@ TEST_CASE("ADC DDC output grid spans from -Fs/4 to Fs/4", "[adc]") {
         double d = out.frequencies[i] - out.frequencies[i - 1];
         REQUIRE(d == Approx(df).margin(1e-6));
     }
+}
+
+TEST_CASE("ADC DDC top-half-bin tone survives analyzer binning", "[adc]") {
+    NodeGraphEngine graph;
+    AdcEngine adc(6, graph);
+    adc.setFs_Hz(Fs);
+    adc.setDecimation(2);
+    adc.setNcoFsFraction(0.0);
+
+    Spectrum in = makeInput(101, 0.0, 500e6);
+    in.tones.push_back({249e6, -10.0, 0.0});
+
+    adc.node().inputs[0] = &in;
+    adc.update(0.0);
+
+    const auto &out = adc.node().outputs[0];
+    REQUIRE(!out.tones.empty());
+    REQUIRE(out.frequencies.size() >= 2);
+
+    // binPowerComponents is private; renderSpectrum is the analyzer's public
+    // bin mapping. A surviving +249 MHz tone must dominate the trace; a dropped
+    // one leaves only the noise floor everywhere.
+    SpectrumAnalyzerEngine analyzer;
+    const std::vector<double> trace_dBm = analyzer.renderSpectrum(out);
+    REQUIRE(trace_dBm.size() == out.frequencies.size());
+    // The -249 MHz image lands in bin 0 at the same power, so a global-peak
+    // search is a coin flip. Check the bin whose label is nearest +249 MHz.
+    size_t near = 0;
+    for (size_t i = 1; i < out.frequencies.size(); ++i)
+        if (std::abs(out.frequencies[i] - 249e6) < std::abs(out.frequencies[near] - 249e6))
+            near = i;
+    double df = out.frequencies[1] - out.frequencies[0];
+    REQUIRE(std::abs(out.frequencies[near] - 249e6) <= df);
+    REQUIRE(trace_dBm[near] > -40.0);
 }
 
 TEST_CASE("ADC DDC output fs_Hz is Fs/2", "[adc]") {
@@ -197,16 +232,18 @@ TEST_CASE("ADC DDC folds noise from every Nyquist zone like tones", "[adc][nyqui
     adc.update(0.0);
 
     const auto &out = adc.node().outputs[0];
-    auto nearest_index = [&](double f_Hz) {
-        size_t best = 0;
-        for (size_t i = 0; i < out.frequencies.size(); ++i) {
-            if (std::abs(out.frequencies[i] - f_Hz) < std::abs(out.frequencies[best] - f_Hz))
-                best = i;
-        }
-        return best;
+    // Output labels sit at bin centres, so ±250 MHz falls between two labels. The image
+    // lands in one of them; sum the bins within one bin width of each image frequency.
+    const double df = out.frequencies[1] - out.frequencies[0];
+    auto image_power = [&](double f_Hz) {
+        double sum = 0.0;
+        for (size_t i = 0; i < out.frequencies.size(); ++i)
+            if (std::abs(out.frequencies[i] - f_Hz) <= df)
+                sum += out.noise_total_W[i];
+        return sum;
     };
-    REQUIRE(out.noise_total_W[nearest_index(250e6)] == Approx(0.5e-12).margin(1e-14));
-    REQUIRE(out.noise_total_W[nearest_index(-250e6)] == Approx(0.5e-12).margin(1e-14));
+    REQUIRE(image_power(250e6) == Approx(0.5e-12).margin(1e-14));
+    REQUIRE(image_power(-250e6) == Approx(0.5e-12).margin(1e-14));
 }
 
 TEST_CASE("ADC DDC empty input produces empty output", "[adc]") {
