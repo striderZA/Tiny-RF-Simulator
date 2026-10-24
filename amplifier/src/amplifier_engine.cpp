@@ -266,13 +266,8 @@ void AmplifierEngine::update(double dt) {
                                               intercept2Function(gain));
             for (const auto &t : result.extra_tones)
                 out.tones.push_back(t);
-            if (result.compression_dB < -1e8) {
-                for (size_t i = 0; i < n_fund; ++i)
-                    out.tones[i].power_dBm = MIN_POWER;
-            } else {
-                for (size_t i = 0; i < n_fund; ++i)
-                    out.tones[i].power_dBm += result.compression_dB;
-            }
+            for (size_t i = 0; i < n_fund; ++i)
+                out.tones[i].power_dBm += result.compression_dB;
         }
 
         if (in_ptr && !in_ptr->phase_deg.empty())
@@ -342,13 +337,8 @@ void AmplifierEngine::update(double dt) {
         for (const auto &t : result.extra_tones)
             out.tones.push_back(t);
 
-        if (result.compression_dB < -1e8) {
-            for (size_t i = 0; i < n_fund; ++i)
-                out.tones[i].power_dBm = MIN_POWER;
-        } else {
-            for (size_t i = 0; i < n_fund; ++i)
-                out.tones[i].power_dBm += result.compression_dB;
-        }
+        for (size_t i = 0; i < n_fund; ++i)
+            out.tones[i].power_dBm += result.compression_dB;
     }
 
     const size_t N = out.frequencies.size();
