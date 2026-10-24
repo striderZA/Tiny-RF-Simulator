@@ -40,6 +40,7 @@ class CombinerEngine : public ComponentEngineBase {
     bool m_sparam_mode = false;
     std::string m_sparam_filepath;
     SParameterData m_sparam_data;
+    std::string m_refusal_reason; // empty when the last combine was accepted
 
     const Spectrum *m_cached_input0_ptr = nullptr;
     const Spectrum *m_cached_input1_ptr = nullptr;
