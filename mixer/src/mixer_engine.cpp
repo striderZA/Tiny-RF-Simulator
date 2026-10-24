@@ -8,16 +8,11 @@
 #include <vector>
 
 // Sums tones that share a frequency as phasors, so coincident images add coherently. Frequencies
-// are compared within a relative tolerance: tone ± LO rounds separately per term, so equal
-// results can differ by a few ulps. First-seen order is kept. A sum that cancels to rounding
-// noise (|sum| <= 1e-12 of the summed magnitudes) is dropped.
+// are compared within a relative tolerance of each candidate's own magnitude: tone ± LO rounds
+// separately per term, so equal results can differ by a few ulps. First-seen order is kept. A
+// sum that cancels to rounding noise (|sum| <= 1e-12 of the summed magnitudes) is dropped.
 static std::vector<Spectrum::Tone>
 sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
-    double scale_Hz = 1.0;
-    for (const auto &t : tones)
-        scale_Hz = std::max(scale_Hz, std::abs(t.freq_Hz));
-    const double merge_tol_Hz = scale_Hz * 1e-12;
-
     std::map<double, size_t> slot_by_freq;
     std::vector<double> freqs;
     std::vector<std::complex<double>> sums;
@@ -25,9 +20,10 @@ sumCoincidentTonesCoherently(const std::vector<Spectrum::Tone> &tones) {
     for (const auto &t : tones) {
         const double amp = std::sqrt(0.001 * std::pow(10.0, t.power_dBm / 10.0));
         const double phase_rad = t.phase_deg * std::numbers::pi / 180.0;
-        const auto it = slot_by_freq.lower_bound(t.freq_Hz - merge_tol_Hz);
+        const double tol_Hz = std::abs(t.freq_Hz) * 1e-12;
+        const auto it = slot_by_freq.lower_bound(t.freq_Hz - tol_Hz);
         size_t idx = freqs.size();
-        if (it != slot_by_freq.end() && it->first <= t.freq_Hz + merge_tol_Hz) {
+        if (it != slot_by_freq.end() && it->first <= t.freq_Hz + tol_Hz) {
             idx = it->second;
         } else {
             freqs.push_back(t.freq_Hz);
@@ -88,15 +84,11 @@ void MixerEngine::update(double dt) {
             lower.phase_deg = conjugates ? -tone.phase_deg : tone.phase_deg;
             sidebands.push_back(lower);
 
-            // At LO = 0 the difference and sum terms are one term: emit it once, so the
-            // conversion gain is applied once and the coherent sum does not double it.
-            if (m_lo_freq_Hz != 0.0) {
-                Spectrum::Tone upper;
-                upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
-                upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
-                upper.phase_deg = tone.phase_deg;
-                sidebands.push_back(upper);
-            }
+            Spectrum::Tone upper;
+            upper.freq_Hz = tone.freq_Hz + m_lo_freq_Hz;
+            upper.power_dBm = tone.power_dBm + m_conv_gain_dB;
+            upper.phase_deg = tone.phase_deg;
+            sidebands.push_back(upper);
         }
         out.tones = sumCoincidentTonesCoherently(sidebands);
     }

@@ -313,13 +313,15 @@ TEST_CASE("Mixer sums coincident in-phase sidebands coherently", "[mixer][issue3
     }
 }
 
-TEST_CASE("Mixer at LO 0 emits one image at the conversion gain", "[mixer][issue305]") {
+TEST_CASE("Mixer at LO 0 sums the two identical images coherently", "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.addTone(50e6, -20.0, 0.0);
     gen.update(0.0);
 
-    // Lower and upper sidebands are the same term at LO = 0: one tone, -6 dB applied once.
+    // At LO = 0 the difference and sum images are the same term at 50 MHz. Each carries the
+    // -6 dB conversion gain, so the coherent sum is +6.02 dB over one image: -19.98 dBm, the
+    // same reading as before the merge. Physically x*cos(0) = x keeps the input power.
     MixerEngine mix(0, graph);
     mix.setLoFreq_Hz(0.0);
     mix.node().inputs[0] = &gen.node().outputs[0];
@@ -328,7 +330,36 @@ TEST_CASE("Mixer at LO 0 emits one image at the conversion gain", "[mixer][issue
     const auto &out = mix.node().outputs[0];
     REQUIRE(out.tones.size() == 1);
     REQUIRE(out.tones[0].freq_Hz == Approx(50e6).margin(1.0));
-    REQUIRE(out.tones[0].power_dBm == Approx(-26.0).margin(0.01));
+    REQUIRE(out.tones[0].power_dBm == Approx(-26.0 + 10.0 * std::log10(4.0)).margin(0.01));
+}
+
+TEST_CASE("Mixer merges sidebands split by rounding (tolerance path)", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // Both lower sidebands are 740032354.775 Hz in exact arithmetic, but the two subtractions
+    // round differently, so the keys differ by a few ulps and only a tolerant merge joins them.
+    gen.addTone(259967645.225, -20.0, 0.0);
+    gen.addTone(1740032354.775, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    REQUIRE(out.tones.size() == 3);
+    const double single_dBm = -26.0;
+    for (const auto &t : out.tones) {
+        if (std::abs(t.freq_Hz - 740032354.775) < 1.0) {
+            REQUIRE(t.power_dBm == Approx(single_dBm + 10.0 * std::log10(4.0)).margin(0.01));
+        } else if (std::abs(t.freq_Hz - 1259967645.225) < 1.0 ||
+                   std::abs(t.freq_Hz - 2740032354.775) < 1.0) {
+            REQUIRE(t.power_dBm == Approx(single_dBm).margin(0.01));
+        } else {
+            FAIL("unexpected sideband at " << t.freq_Hz << " Hz");
+        }
+    }
 }
 
 TEST_CASE("Mixer drops sidebands that cancel exactly", "[mixer][issue305]") {

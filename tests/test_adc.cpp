@@ -357,8 +357,8 @@ TEST_CASE("ADC DDC coherently combines coincident images at a rounding-sensitive
     REQUIRE(out.tones[1].power_dBm == Approx(-20.0 + 10.0 * std::log10(2.0)).margin(0.01));
 
     // Analyzer readout: the coherent tone reads -16.99 dBm at its peak, not a half-power split.
-    // Search only near 150 MHz: the equal-power 750 MHz tone ties the global maximum. Bins are
-    // labelled by left edge (TRS-18 F6), so the peak sits one bin above 150 MHz.
+    // Search only near 150 MHz: the equal-power 750 MHz tone ties the global maximum. The
+    // analyzer's peak bin can sit one bin off the tone's frequency; the window below allows that.
     const SpectrumAnalyzerEngine analyzer;
     const auto trace = analyzer.renderSpectrum(out);
     REQUIRE(trace.size() == out.frequencies.size());

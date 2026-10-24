@@ -1090,11 +1090,10 @@ TEST_CASE("NetworkAnalyzer: mixer LO translation is reproduced on the clone chai
     }
     const auto &nf = na.noiseFigureDb();
     for (size_t i = 0; i < nf.size(); ++i) {
-        // The sweep endpoints lack one RF image; interior points receive both. Their noise adds
-        // in power, but NF divides by the coherent tone gain (+6.02 dB), so interior NF is
-        // 10*log10(3) - 10*log10(4).
-        const double expected_nf_dB =
-            (i == 0 || i + 1 == nf.size()) ? 3.0 : 10.0 * std::log10(3.0) - 10.0 * std::log10(4.0);
+        // The sweep endpoints lack one RF image; interior points receive both. OPEN: with the
+        // coherent gain (+6.02 dB) the NF estimate (noise / gain) drops below 0 dB at interior
+        // points. This expectation is the base value and fails until the NF readout is decided.
+        const double expected_nf_dB = (i == 0 || i + 1 == nf.size()) ? 3.0 : 10.0 * std::log10(3.0);
         REQUIRE_THAT(nf[i], WithinAbs(expected_nf_dB, 0.1));
     }
 
