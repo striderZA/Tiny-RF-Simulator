@@ -195,3 +195,26 @@ TEST_CASE("Equalizer S-param noise keeps the passive thermal term", "[equalizer]
     for (size_t i = 0; i < out.noise_total_W.size(); ++i)
         REQUIRE(out.noise_total_W[i] == Approx(in.noise_total_W[i]).epsilon(1e-6));
 }
+
+TEST_CASE("Equalizer ideal noise keeps the passive thermal term", "[equalizer][noise]") {
+    // Ideal -10 dB flat gain on a kT input: G*kT + kT*(1-G) = kT, matching the attenuator at 10 dB.
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.setRefGain_dB(-10.0);
+    eq.setSlope_dBPerDecade(0.0);
+
+    SignalGeneratorEngine gen(1, graph);
+    gen.addTone(1e9, -30.0); // a tone makes the generator dirty; noise is kT regardless
+    gen.update(0.0);
+    const auto &in = gen.node().outputs[0];
+    constexpr double kT = 1.3806e-23 * 290.0;
+    REQUIRE(in.noise_total_W[0] == Approx(kT).epsilon(1e-6));
+
+    eq.node().inputs[0] = &in;
+    eq.update(0.0);
+
+    const auto &out = eq.node().outputs[0];
+    REQUIRE(out.noise_total_W.size() == in.noise_total_W.size());
+    for (size_t i = 0; i < out.noise_total_W.size(); ++i)
+        REQUIRE(out.noise_total_W[i] == Approx(kT).epsilon(1e-6));
+}
