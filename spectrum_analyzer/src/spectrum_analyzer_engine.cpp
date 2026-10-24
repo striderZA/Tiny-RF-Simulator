@@ -155,12 +155,12 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
     }
 }
 
-std::vector<double>
-SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W) const {
+std::vector<double> SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W,
+                                                                bool apply_jitter) const {
     std::vector<double> noise_dBm(noise_W.size());
     // Constructing the distribution is only defined for a positive sigma, so
     // guard it: a disabled or invalid setting stays a pure no-op.
-    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
+    if (apply_jitter && m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
         std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
         for (size_t i = 0; i < noise_dBm.size(); ++i) {
             noise_dBm[i] = W_to_dBm(noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0));
@@ -173,14 +173,14 @@ SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W) 
     return noise_dBm;
 }
 
-std::vector<double>
-SpectrumAnalyzerEngine::toDisplayPower_dBm(const std::vector<double> &noise_W,
-                                           const std::vector<double> &tone_W,
-                                           double binWidth) const {
+std::vector<double> SpectrumAnalyzerEngine::toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                                               const std::vector<double> &tone_W,
+                                                               double binWidth,
+                                                               bool apply_jitter) const {
     // VBW smooths the noise floor only: the moving average runs on noise dBm, and tone
     // power is added back in linear watts afterwards so a tone peak is never averaged.
     const std::vector<double> noise_dBm =
-        this->applyVBW(this->toJitteredNoise_dBm(noise_W), binWidth);
+        this->applyVBW(this->toJitteredNoise_dBm(noise_W, apply_jitter), binWidth);
     std::vector<double> power_dBm(noise_dBm.size());
     for (size_t i = 0; i < power_dBm.size(); ++i) {
         if (tone_W[i] > 0.0) {
@@ -223,12 +223,24 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         m_cache_rbw_tone_W = rbw_tone_W;
     }
 
-    std::vector<double> vbw_out = this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width);
+    std::vector<double> vbw_out =
+        this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, true);
     return this->applyTraceMode(spec, vbw_out);
 }
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
+    return this->renderCombinedTrace(specs, true);
+}
+
+std::vector<double> SpectrumAnalyzerEngine::renderCombinedReadoutSpectrum(
+    const std::vector<const Spectrum *> &specs) const {
+    return this->renderCombinedTrace(specs, false);
+}
+
+std::vector<double>
+SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> &specs,
+                                            bool apply_jitter) const {
     // Every trace is resampled onto the common readout axis before summing, so bins from
     // different grids are never added by index (issue #293).
     const std::vector<double> grid = this->combinedReadoutAxis(specs);
@@ -255,7 +267,7 @@ SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum 
     std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
     // Jitter and VBW act on the noise floor only; tone power is added back in linear watts.
-    return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width);
+    return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
 }
 
 double
