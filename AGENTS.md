@@ -94,6 +94,12 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 - `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
 
+## ADC Output Grid Contract
+
+- `AdcEngine` output labels are bin centres: `label_k = -Fs/(2D) + (k + 0.5)·df_out`, bin k covers `[label_k - df/2, label_k + df/2)`. The lower output edge `-Fs/(2D)` lies in bin 0.
+- `SpectrumAnalyzerEngine::binPowerComponents` maps tones into the same cells. A tone on a negative half-bin edge goes to the bin above (`floor(x + 0.5)`, with a 1e-9-bin float tolerance at the lower edge).
+- Even N puts DC on a half-bin tie, so a 0 Hz tone shows at +df/2. This is the accepted trade-off of the bin-centre convention.
+
 ## Agent Rules
 
 - Durable behavior change requested by the user: record it in the closest owning AGENTS.md, or here for global behavior.
