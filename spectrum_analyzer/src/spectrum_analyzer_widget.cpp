@@ -299,6 +299,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
     freq_axis = &combined_axis;
     std::vector<double> combined_dBm = m_engine.renderCombinedSpectrum(visible_specs);
+    // Marker and peak readouts use the jitter-free trace on the same axis (issue #292).
+    const std::vector<double> readout_dBm = m_engine.renderCombinedReadoutSpectrum(visible_specs);
     if (combined_dBm.empty()) {
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
         ImGui::End();
@@ -412,11 +414,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
 
         // Marker display (no drag)
-        if (m_marker.enabled && !combined_dBm.empty()) {
-            int idx = resolveMarkerIdx(*freq_axis, combined_dBm);
-            if (idx >= 0 && idx < static_cast<int>(combined_dBm.size())) {
+        if (m_marker.enabled && !readout_dBm.empty()) {
+            int idx = resolveMarkerIdx(*freq_axis, readout_dBm);
+            if (idx >= 0 && idx < static_cast<int>(readout_dBm.size())) {
                 double mf = (*freq_axis)[static_cast<size_t>(idx)];
-                double mp = combined_dBm[static_cast<size_t>(idx)];
+                double mp = readout_dBm[static_cast<size_t>(idx)];
                 drawMarkerOnPlot(mf, mp);
             }
         }
@@ -459,10 +461,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         // Find peak in combined display
         double peak_val = -174.0;
         double peak_freq = 0.0;
-        if (!combined_dBm.empty() && !freq_axis->empty()) {
-            for (size_t i = 0; i < combined_dBm.size() && i < freq_axis->size(); ++i) {
-                if (combined_dBm[i] > peak_val) {
-                    peak_val = combined_dBm[i];
+        if (!readout_dBm.empty() && !freq_axis->empty()) {
+            for (size_t i = 0; i < readout_dBm.size() && i < freq_axis->size(); ++i) {
+                if (readout_dBm[i] > peak_val) {
+                    peak_val = readout_dBm[i];
                     peak_freq = (*freq_axis)[i];
                 }
             }
@@ -475,7 +477,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_engine.setStopFrequency(MAX_FREQ);
     }
 
-    drawMarkerControls(*freq_axis, combined_dBm);
+    drawMarkerControls(*freq_axis, readout_dBm);
 
     ImGui::End();
 }
