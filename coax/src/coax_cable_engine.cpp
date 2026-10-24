@@ -58,6 +58,19 @@ void CoaxCableEngine::update(double dt) {
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
 
+    if (!preset().calibrated) {
+        // Refused: a cable with no datasheet model must not pass signal as a wire.
+        LOG_WARN("Coax cable: preset %s is uncalibrated; output refused.", preset().name);
+        const size_t N = out.frequencies.size();
+        out.tones.clear();
+        out.phase_deg.assign(N, 0.0);
+        out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.assign(N, 0.0);
+        out.bumpGeneration();
+        return;
+    }
+
     const CableSpec &p = preset();
     const double max_f_Hz = p.max_freq_GHz * 1e9;
     for (auto &t : out.tones) {
@@ -126,11 +139,6 @@ void CoaxCableEngine::deserialize(const nlohmann::json &j) {
     // kCoaxCablePresets[] indexing (OOB/UB).
     m_preset_index =
         std::clamp(j.value("preset_index", 4), 0, static_cast<int>(kCoaxCablePresets.size()) - 1);
-    if (!kCoaxCablePresets[m_preset_index].calibrated) {
-        LOG_WARN("Coax cable: saved preset %s is uncalibrated; using MT 340.",
-                 kCoaxCablePresets[m_preset_index].name);
-        m_preset_index = 4; // MT 340
-    }
     m_length_m = std::clamp(j.value("length_m", 1.0), 0.0, 1000.0);
     m_connectors_loss_dB = std::clamp(j.value("connectors_loss_dB", 0.0), 0.0, 30.0);
     m_dirty = true;
@@ -139,6 +147,8 @@ void CoaxCableEngine::deserialize(const nlohmann::json &j) {
 std::string CoaxCableEngine::hoverSummary() const {
     std::string summary =
         "Coax Cable: " + std::string(preset().name) + " | L=" + std::to_string(m_length_m) + " m";
+    if (!preset().calibrated)
+        summary += " | UNCALIBRATED: output refused";
 
     if (!m_node.inputs.empty() && m_node.inputs[0] && !m_node.inputs[0]->frequencies.empty()) {
         const auto &freqs = m_node.inputs[0]->frequencies;

@@ -611,10 +611,16 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index)
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", kCoaxCablePresets[i].name);
-                    ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
-                    ImGui::Text("K2 = %.6f dB/m", kCoaxCablePresets[i].K2_dB_per_m);
-                    ImGui::Text("Max freq: %.2f GHz", kCoaxCablePresets[i].max_freq_GHz);
-                    ImGui::Text("Delay: %.3f ns/m", kCoaxCablePresets[i].delay_ns_per_m);
+                    if (!kCoaxCablePresets[i].calibrated) {
+                        ImGui::TextUnformatted("Uncalibrated: no datasheet model.");
+                        ImGui::TextUnformatted(
+                            "Selection refused; a cable on this preset outputs nothing.");
+                    } else {
+                        ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
+                        ImGui::Text("K2 = %.6f dB/m", kCoaxCablePresets[i].K2_dB_per_m);
+                        ImGui::Text("Max freq: %.2f GHz", kCoaxCablePresets[i].max_freq_GHz);
+                        ImGui::Text("Delay: %.3f ns/m", kCoaxCablePresets[i].delay_ns_per_m);
+                    }
                     ImGui::EndTooltip();
                 }
             }

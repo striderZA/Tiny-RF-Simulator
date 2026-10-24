@@ -231,11 +231,22 @@ TEST_CASE("Coax cable refuses uncalibrated presets", "[coax][calibration]") {
     }
 }
 
-TEST_CASE("Coax cable deserialize falls back from uncalibrated preset", "[coax][calibration]") {
+TEST_CASE("Coax cable keeps saved uncalibrated preset and refuses output", "[coax][calibration]") {
+    // A saved project must round-trip unchanged, and the cable must not pass signal as a wire.
     NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(2e9, -10.0);
+    gen.update(0.0);
+
     CoaxCableEngine cable(0, graph);
     cable.deserialize({{"preset_index", 0}, {"length_m", 100.0}, {"connectors_loss_dB", 0.0}});
-    REQUIRE(cable.presetIndex() == 4);
+    REQUIRE(cable.presetIndex() == 0);
+    REQUIRE(cable.serialize()["preset_index"] == 0);
+
+    cable.node().inputs[0] = &gen.node().outputs[0];
+    cable.update(0.0);
+    REQUIRE(cable.node().outputs[0].tones.empty());
+    REQUIRE(cable.hoverSummary().find("UNCALIBRATED") != std::string::npos);
 }
 
 TEST_CASE("Coax cable uncalibrated preset request still attenuates", "[coax][calibration]") {
