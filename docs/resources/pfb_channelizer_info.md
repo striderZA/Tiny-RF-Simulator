@@ -57,7 +57,7 @@ Input stream x[n]  (rate Fs)
 
 ### 4. Why the FFT Appears
 
-By the Noble identity, decimation commutes with filtering when the filter is polyphase-decomposed. After decomposition, each branch runs at the output rate (`Fs/M`). The DFT then simultaneously computes all `M` channel center frequencies — equivalent to multiplying by `M` complex exponentials `exp(j·2π·k·n/M)` for `k = 0 … M-1`, but at the cost of a single FFT.
+By the Noble identity, decimation commutes with filtering when the filter is polyphase-decomposed. After decomposition, each branch runs at the output rate (`Fs/M`). The DFT then simultaneously computes the `M` branch outputs — equivalent to multiplying by `M` complex exponentials `exp(j·2π·k·n/M)` for `k = 0 … M-1`, but at the cost of a single FFT. The RF Simulator channel centres are offset by half a channel (see Frequency Channel Mapping).
 
 ---
 
@@ -134,20 +134,19 @@ Each column of `channels` is one output time step; each row is one subband.
 | `np.fft.fft` | Channel `k` maps to positive-frequency bin `k` (standard analysis) |
 | `np.fft.ifft` | Flips frequency order; common in some DSP textbook derivations |
 
-Pick one and verify: inject a tone at exactly `k·Fs/M` Hz and confirm it peaks in channel `k`.
+Pick one and verify: inject a tone at a channel centre, `-Fs/2 + (k + 1/2)·Fs/M` Hz, and confirm it peaks in channel `k`.
 
 ---
 
 ## Frequency Channel Mapping
 
-Channel `k` is centered at:
+The RF Simulator channel grid is offset by half a channel from DFT bin mapping. Channel `k` is centred at
 
 ```
-f_k = k · Fs / M        (for k = 0, 1, ..., M/2)
-f_k = (k - M) · Fs / M  (for k = M/2+1, ..., M-1)
+f_k = -Fs/2 + (k + 1/2) · Fs/M        (for k = 0, 1, ..., M-1)
 ```
 
-This is the same as standard DFT bin mapping. Use `np.fft.fftfreq(M, d=1.0/Fs)` to get center frequencies.
+See [RF Simulator Contract](#rf-simulator-contract-1x--2x-oversampling). Do not use `np.fft.fftfreq(M, d=1.0/Fs)` for these centres: it gives the DFT grid `k · Fs/M`, which lies on the boundary between two channels.
 
 ---
 
@@ -169,6 +168,10 @@ For an input stream at `Fs` split into `M` channels with spacing `Fs/M`:
 General form: `outputFs_Hz = ratio · Fs / M` and `channel_bw = ratio · Fs / M`, while every channel
 center stays at `-Fs/2 + Fs/(2M) + k · Fs/M`. The ratio scales the usable bandwidth and output rate,
 not the channel grid; wider per-channel inclusion supports overlap more at higher ratios.
+
+### DC and DFT-bin tones
+
+At 1x, a DC or other DFT-bin tone `k·Fs/M` lands on a channel edge when M is even, so its reported level depends on the parity of M. For odd M, DC is a channel centre: a −30 dBm tone reads −30.00 dBm. For even M, DC is shared by the two channels either side. At the default K=8, β=8 each reads H(1/2) = −6.02 dB, so −36.02 dBm. Other K and β give a different edge level (K=1 gives about −0.4 to −3.4 dB; K=2 at β=0 gives −8.3 dB). The centres above are the contract; the grid is not moved to `k·Fs/M` to remove this effect.
 
 ### Implementation model and limitation
 
@@ -217,7 +220,7 @@ unsupported, and polyphase synthesis/reconstruction remains out of scope (tracke
 
 ## Validation Checklist
 
-1. **Single tone test**: Input `exp(j·2π·f0·n/Fs)` with `f0 = k·Fs/M`. Channel `k` should have near-unity power; all others near zero.
+1. **Single tone test**: Input `exp(j·2π·f0·n/Fs)` with `f0` at the centre of channel `k`, `-Fs/2 + (k + 1/2)·Fs/M`. Channel `k` should have near-unity power; all others near zero. A tone at `k·Fs/M` (a DFT bin) lies on a channel edge for even M; at the default K=8, β=8 it reads −6.02 dB in each of the two adjacent channels at 1x (see the RF Simulator Contract).
 2. **White noise test**: All `M` channel powers should be approximately equal.
 3. **Reconstruction test** (if implementing synthesis PFB): Sum all channel outputs through the synthesis bank; verify the round-trip signal matches the original (up to group delay).
 4. **Spectral leakage**: Check that a tone does not leak more than `−stopband_dB` into non-adjacent channels. Increase `K` if leakage is excessive.
