@@ -29,6 +29,10 @@ bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
     return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
 }
 
+// Bin-cell lower-edge slack, in bins. Float error in (f - front)/bw can leave a tone on the
+// lower cell edge a few ulp below it; this covers that without moving real tones.
+constexpr double kCellEdgeTolerance = 1e-9;
+
 // Index of the grid entry nearest x; ties resolve to the lower index.
 size_t nearestGridIndex(const std::vector<double> &freqs, double x) {
     auto hi_it = std::lower_bound(freqs.begin(), freqs.end(), x);
@@ -147,10 +151,13 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
         return;
     }
     for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
-        // A bin covers [label - bw/2, label + bw/2). floor(x + 0.5) keeps the lower edge
-        // (x = -0.5) in its bin; std::round sent it to the bin below the grid.
-        int bin_idx =
-            static_cast<int>(std::floor((freq_Hz - spec.frequencies.front()) / bin_width + 0.5));
+        // A bin covers [label - bw/2, label + bw/2). A tone exactly on the lower edge gives
+        // a cell value of 0 in exact arithmetic, but rounding can leave it a hair below 0;
+        // that tone still belongs to the bin above, not the bin below the grid.
+        const double cell = (freq_Hz - spec.frequencies.front()) / bin_width + 0.5;
+        int bin_idx = static_cast<int>(std::floor(cell));
+        if (bin_idx == -1 && cell > -kCellEdgeTolerance)
+            bin_idx = 0;
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
             tone_W[bin_idx] += watts;
         }

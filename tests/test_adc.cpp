@@ -175,6 +175,49 @@ TEST_CASE("ADC DDC lower-edge tone survives analyzer binning", "[adc]") {
     }
 }
 
+TEST_CASE("ADC DDC lower-edge tone survives analyzer binning across grids", "[adc]") {
+    // Real tone placed so the ADC keeps it exactly at -Fs/(2D). Output grids include
+    // N=13 at Fs=100 MHz, where the edge sits on a half-bin tie in floating point.
+    int id = 40;
+    for (double Fs_test : {1e9, 1e8}) {
+        for (int D : {2, 4, 8}) {
+            for (double nco_frac : {0.0, 0.25}) {
+                for (double span_frac : {0.1, 0.12, 0.24, 0.5}) {
+                    for (int n_in : {13, 101}) {
+                        const double edge = Fs_test / (2.0 * D);
+                        const double nco_Hz = nco_frac * Fs_test;
+                        const double rf = std::fmod(nco_Hz - edge + 2.0 * Fs_test, Fs_test);
+                        INFO("Fs=" << Fs_test << " D=" << D << " nco=" << nco_frac
+                                   << " span=" << span_frac << " n=" << n_in << " rf=" << rf);
+                        NodeGraphEngine graph;
+                        AdcEngine adc(id++, graph);
+                        adc.setFs_Hz(Fs_test);
+                        adc.setDecimation(D);
+                        adc.setNcoFsFraction(nco_frac);
+
+                        Spectrum in = makeInput(n_in, 0.0, span_frac * Fs_test);
+                        in.tones.push_back({rf, -10.0, 0.0});
+
+                        adc.node().inputs[0] = &in;
+                        adc.update(0.0);
+
+                        const auto &out = adc.node().outputs[0];
+                        bool kept = false;
+                        for (const auto &t : out.tones)
+                            kept = kept || std::abs(t.freq_Hz + edge) <= 1.0;
+                        REQUIRE(kept);
+
+                        SpectrumAnalyzerEngine analyzer;
+                        const std::vector<double> trace_dBm = analyzer.renderSpectrum(out);
+                        REQUIRE(trace_dBm.size() == out.frequencies.size());
+                        REQUIRE(trace_dBm.front() > -40.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
 TEST_CASE("ADC DDC output fs_Hz is Fs/2", "[adc]") {
     NodeGraphEngine graph;
     AdcEngine adc(4, graph);
@@ -260,12 +303,13 @@ TEST_CASE("ADC DDC folds noise from every Nyquist zone like tones", "[adc][nyqui
 
     const auto &out = adc.node().outputs[0];
     // Output labels sit at bin centres, so ±250 MHz falls between two labels. The image
-    // lands in one of them; sum the bins within one bin width of each image frequency.
+    // lands in one of them. Sum the labels strictly within one bin width of the image
+    // frequency: the two labels that straddle it, and no others.
     const double df = out.frequencies[1] - out.frequencies[0];
     auto image_power = [&](double f_Hz) {
         double sum = 0.0;
         for (size_t i = 0; i < out.frequencies.size(); ++i)
-            if (std::abs(out.frequencies[i] - f_Hz) <= df)
+            if (std::abs(out.frequencies[i] - f_Hz) < df)
                 sum += out.noise_total_W[i];
         return sum;
     };
