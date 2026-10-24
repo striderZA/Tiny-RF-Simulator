@@ -12,7 +12,7 @@ PFB channelizer engine: splits an input into channels and reports each channel's
 ## Local Contracts
 
 - The PFB channelizer is physically downstream of an RF ADC only. Direct RF-chain-to-PFB links must be rejected.
-- Critical sampling (1x) is the default. A persisted 2x oversampling ratio is supported. Channel output `fs_Hz` is `ratio * input Fs / M`. Channel centers stay at `-Fs/2 + (k + 1/2) * Fs/M` (half-bin grid, not DFT bins), and usable channel bandwidth scales by the ratio. At 1x with the default K=8, β=8, a DC or DFT-bin tone on an even-M channel edge reads -6.02 dB in each of the two adjacent channels; other K and β give other edge levels.
+- Critical sampling (1x) is the default. A persisted 2x oversampling ratio is supported. Channel output `fs_Hz` is `ratio * input Fs / M`. Channel centers stay at `-Fs/2 + (k + 1/2) * Fs/M`, which is half a channel off DFT bins for even M and coincides with them for odd M. Usable channel bandwidth scales by the ratio. At 1x with the default K=8, β=8, a DC or DFT-bin tone on an even-M channel edge reads -6.02 dB in each of the two adjacent channels; other K and β give other edge levels.
 - The active channel's integrated noise readout is `ENBW × P̄` in dBm, with ENBW the continuous channel-response integral (grid-independent) and `P̄` the `|H|²`-weighted mean input PSD over the channel's grid support. Channels with fewer than two input bins read unavailable (NaN).
 - The PFB node-hover SNR compares the strongest active-channel tone against that integrated noise. It is independent of analyzer RBW. Ordinary analyzer traces and SNR remain RBW-based.
 

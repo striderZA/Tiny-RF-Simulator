@@ -57,7 +57,7 @@ Input stream x[n]  (rate Fs)
 
 ### 4. Why the FFT Appears
 
-By the Noble identity, decimation commutes with filtering when the filter is polyphase-decomposed. After decomposition, each branch runs at the output rate (`Fs/M`). The DFT then simultaneously computes the `M` branch outputs — equivalent to multiplying by `M` complex exponentials `exp(j·2π·k·n/M)` for `k = 0 … M-1`, but at the cost of a single FFT. The RF Simulator channel centres are offset by half a channel (see Frequency Channel Mapping).
+By the Noble identity, decimation commutes with filtering when the filter is polyphase-decomposed. After decomposition, each branch runs at the output rate (`Fs/M`). The DFT then simultaneously computes the `M` branch outputs — equivalent to multiplying by `M` complex exponentials `exp(j·2π·k·n/M)` for `k = 0 … M-1`, but at the cost of a single FFT. For even M the RF Simulator channel centres are offset by half a channel from these DFT bins; for odd M they coincide (see Frequency Channel Mapping).
 
 ---
 
@@ -140,13 +140,13 @@ Pick one and verify: inject a tone at a channel centre, `-Fs/2 + (k + 1/2)·Fs/M
 
 ## Frequency Channel Mapping
 
-The RF Simulator channel grid is offset by half a channel from DFT bin mapping. Channel `k` is centred at
+The RF Simulator channel centres sit at `(k - (M-1)/2) · Fs/M`, which is the same as the formula below. For even M this is half a channel off the DFT bins `k · Fs/M`, so each DFT bin lies on a channel edge. For odd M the centres coincide with the DFT bins, so DC is a channel centre. Channel `k` is centred at
 
 ```
 f_k = -Fs/2 + (k + 1/2) · Fs/M        (for k = 0, 1, ..., M-1)
 ```
 
-See [RF Simulator Contract](#rf-simulator-contract-1x--2x-oversampling). Do not use `np.fft.fftfreq(M, d=1.0/Fs)` for these centres: it gives the DFT grid `k · Fs/M`, which lies on the boundary between two channels.
+See [RF Simulator Contract](#rf-simulator-contract-1x--2x-oversampling). Do not use `np.fft.fftfreq(M, d=1.0/Fs)` as the centre list: it gives the DFT bins `k · Fs/M` in DFT order, which match the centres only for odd M. For even M they are edges.
 
 ---
 
