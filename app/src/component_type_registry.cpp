@@ -42,6 +42,12 @@ ParameterField stateField(std::string key, std::string label, std::string unit, 
     field.read_only = read_only;
     return field;
 }
+
+ParameterField bounded(ParameterField field, double min, double max) {
+    field.min = min;
+    field.max = max;
+    return field;
+}
 } // namespace
 
 ComponentTypeRegistry &ComponentTypeRegistry::instance() {
@@ -304,12 +310,15 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
          ""},
     };
     eq.state_fields = {
-        stateField("ref_gain_dB", "Reference Gain", "dB", FieldKind::Number,
-                   "Sets the equalizer gain at its reference frequency."),
-        stateField("ref_freq_Hz", "Reference Frequency", "Hz", FieldKind::Number,
-                   "Sets the frequency where the equalizer's reference gain applies."),
-        stateField("slope_dB_per_decade", "Slope", "dB/decade", FieldKind::Number,
-                   "Sets the equalizer gain change per frequency decade."),
+        bounded(stateField("ref_gain_dB", "Reference Gain", "dB", FieldKind::Number,
+                           "Sets the equalizer gain at its reference frequency."),
+                -40.0, 40.0),
+        bounded(stateField("ref_freq_Hz", "Reference Frequency", "Hz", FieldKind::Number,
+                           "Sets the frequency where the equalizer's reference gain applies."),
+                1.0, 100e9),
+        bounded(stateField("slope_dB_per_decade", "Slope", "dB/decade", FieldKind::Number,
+                           "Sets the equalizer gain change per frequency decade."),
+                -100.0, 100.0),
         stateField("sparam_mode", "S-Parameter Mode", "", FieldKind::Bool,
                    "Uses the loaded S-parameter model instead of the ideal equalizer."),
         stateField("sparam_filepath", "S-Parameter File", "", FieldKind::FilePath,
