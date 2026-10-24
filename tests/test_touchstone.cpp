@@ -216,3 +216,42 @@ TEST_CASE("TouchstoneParser stores 3-port and 4-port matrices in row-major order
         std::filesystem::remove(tmpfile);
     }
 }
+
+TEST_CASE("TouchstoneParser matches the .S1P extension case-insensitively", "[touchstone]") {
+    // Issue #287: an upper-case extension was ignored, so this 1-port file loaded as 2 ports.
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/ONEPORT.S1P";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "# GHz S MA R 50\n";
+        ofs << "1.0 0.5 0.0\n";
+        ofs << "2.0 0.5 0.0\n";
+        ofs << "3.0 0.5 0.0\n";
+    }
+
+    auto result = TouchstoneParser::parse(tmpfile);
+    std::filesystem::remove(tmpfile);
+    REQUIRE(result.has_value());
+    REQUIRE(result->num_ports == 1);
+    REQUIRE(result->frequencies.size() == 3);
+    REQUIRE(result->parameters[0].size() == 1);
+}
+
+TEST_CASE("TouchstoneParser reads a multi-digit port count from the extension", "[touchstone]") {
+    // Issue #287: ".s10p" was read as 1 port. One point of a 10-port file has 1 + 10*10*2 values.
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/TEN.s10p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "# GHz S RI R 50\n";
+        ofs << "1.0";
+        for (int i = 0; i < 200; ++i)
+            ofs << " 0.0";
+        ofs << "\n";
+    }
+
+    auto result = TouchstoneParser::parse(tmpfile);
+    std::filesystem::remove(tmpfile);
+    REQUIRE(result.has_value());
+    REQUIRE(result->num_ports == 10);
+    REQUIRE(result->frequencies.size() == 1);
+    REQUIRE(result->parameters[0].size() == 100);
+}
