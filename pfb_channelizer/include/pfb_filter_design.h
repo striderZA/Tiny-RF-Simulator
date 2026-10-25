@@ -36,9 +36,8 @@ class PfbFilterDesign {
 struct PfbFilterMetrics {
     double passband_halfwidth_ch = 0.0; // -3 dB half width, in channel units
     double edge_loss_db = 0.0;          // |H(0.5)| in dB (~ -6 for all designs)
-    double adjacent_rejection_db = 0.0; // |H(1.0)| in dB; shown, not the verdict alone
-    double worst_rejection_db = 0.0;    // max(adjacent, far floor) in dB; the verdict basis
-    double far_floor_db = 0.0;          // max |H(x)| over x in [1.0, 1.5], dB
+    double adjacent_rejection_db = 0.0; // |H(1.0)| in dB; the x = 1.0 point of the alias band
+    double far_floor_db = 0.0;          // max |H(x)| over x in [1.0, 1.5], dB; the verdict basis
     int total_taps = 0;                 // N = M*K
     double flat_noise_tilt_db = 0.0;    // 10*log10( int_{-1..1} H(x)^2 dx )
 };
@@ -53,17 +52,18 @@ RejectionStatus compareRejection(double rejection_db, double target_db);
 
 // Suggested single-parameter change for a missed rejection target. At most one field
 // is set. Each candidate is evaluated with the other parameter unchanged, so the
-// suggested setting is exactly the one whose worst-case rejection was checked. A candidate
-// is shown only when it lowers that worst case (the verdict metric) below the current design.
+// suggested setting is exactly the one whose far_floor_db was checked. A candidate is shown
+// only when it lowers far_floor_db (the verdict metric) below the current design.
 struct PfbRecommendation {
     bool searched = false;              // false: M*K above kPfbRecommendMaxTaps, no search run
     std::optional<int> taps_per_branch; // K+1 or 64 (slider max), at the current beta
     std::optional<double> beta;         // best of beta 0, 4, ..., 20, at the current K
 };
 
-// Tap budget (M*K) above which the search is skipped. Measured at the budget: the search
-// adds 35-95 ms per refresh (1.9x-4.1x the base refresh, M=2048 K=4 worst). Above the
-// budget no search runs (0 ms), so large designs keep the pre-#289 refresh cost.
+// Tap budget (M*K) above which the search is skipped. Measured at the budget (M=2048 K=4,
+// g++ -O2, best of 3): the search takes about 140-160 ms per refresh with the far-floor
+// verdict, against about 95 ms on the H(1.0)-only search. Above the budget no search runs
+// (0 ms), so large designs keep the pre-#289 refresh cost.
 inline constexpr int kPfbRecommendMaxTaps = 8192;
 
 // Evaluates the candidate single changes above. Synthesizes one prototype per candidate,

@@ -120,7 +120,8 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     // frame after release so only the settled value pays the cost.
     if (!ImGui::IsAnyItemActive())
         refreshDesignCache();
-    const RejectionStatus st = compareRejection(m_cached_metrics.worst_rejection_db, m_target_db);
+    const RejectionStatus st = compareRejection(m_cached_metrics.far_floor_db, m_target_db);
+    m_verdict = st;
     const std::string hint =
         pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db, m_cached_rec);
 
@@ -205,15 +206,13 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
 
     ImGui::Separator();
     ImGui::TextColored(statusColor(st),
-                       "Worst rejection (H(1.0), far floor): %.1f dB (target %.0f dB)",
-                       -m_cached_metrics.worst_rejection_db, m_target_db);
+                       "Far-band rejection (x in 1.0..1.5): %.1f dB (target %.0f dB)",
+                       -m_cached_metrics.far_floor_db, m_target_db);
 
     ImGui::Text("-3 dB half-width:  %.3f channel", m_cached_metrics.passband_halfwidth_ch);
     ImGui::SameLine(250.0f);
     ImGui::Text("Band-edge loss: %.1f dB", m_cached_metrics.edge_loss_db);
 
-    ImGui::Text("Far floor (x in 1.0..1.5): %.1f dB", m_cached_metrics.far_floor_db);
-    ImGui::SameLine(250.0f);
     ImGui::Text("Taps N = M*K: %d", m_cached_metrics.total_taps);
 
     ImGui::Text("Flat-noise tilt: %.2f dB", m_cached_metrics.flat_noise_tilt_db);

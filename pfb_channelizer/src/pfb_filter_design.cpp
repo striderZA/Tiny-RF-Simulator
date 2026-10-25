@@ -15,16 +15,13 @@ double kaiserWindowAt(double index, int N, double beta) {
 }
 double sincP(double v) { return std::abs(v) < 1e-12 ? 1.0 : std::sin(M_PI * v) / (M_PI * v); }
 double toDb(double v) { return 20.0 * std::log10(std::max(v, 1e-300)); }
-// Verdict basis: the least-suppressed |H| over the alias band, max over x in [1.0, 1.5], dB.
+// Verdict basis: max |H(x)| over x in [1.0, 1.5], dB. The loop starts at x = 1.0, so this is
+// never below |H(1.0)|.
 double farFloorDb(const PfbFilterDesign &design) {
     double floor_db = -1e300;
     for (int i = 0; i <= 50; ++i)
         floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
     return floor_db;
-}
-// Worst (least-suppressed) rejection over the alias band: max(|H(1.0)|, far floor), dB.
-double worstRejectionDb(const PfbFilterDesign &design) {
-    return std::max(toDb(design.responseAt(1.0)), farFloorDb(design));
 }
 } // namespace
 
@@ -76,9 +73,8 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
     m.edge_loss_db = toDb(design.responseAt(0.5));
     m.adjacent_rejection_db = toDb(design.responseAt(1.0));
 
-    // Far-adjacent floor and worst-case verdict basis (see farFloorDb / worstRejectionDb).
+    // Verdict basis: the far floor over [1.0, 1.5], which includes H(1.0).
     m.far_floor_db = farFloorDb(design);
-    m.worst_rejection_db = std::max(m.adjacent_rejection_db, m.far_floor_db);
 
     // -3 dB half width: first crossing scanning outward from DC. The response
     // is monotonically decreasing through the main lobe, so the first sample
@@ -126,14 +122,14 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
         return rec;
     rec.searched = true;
 
-    // Verdict metric is the worst case over the alias band (metrics.worst_rejection_db).
-    // Each candidate changes one parameter and keeps the other, so the shown setting is
-    // the one that was evaluated.
-    double best_db = metrics.worst_rejection_db;
+    // Verdict metric is the far floor over the alias band (metrics.far_floor_db). Each
+    // candidate changes one parameter and keeps the other, so the shown setting is the one
+    // that was evaluated.
+    double best_db = metrics.far_floor_db;
     for (int b = 0; b <= 20; b += 4) {
         if (static_cast<double>(b) == design.beta())
             continue;
-        const double db = worstRejectionDb(PfbFilterDesign(M, K, b));
+        const double db = farFloorDb(PfbFilterDesign(M, K, b));
         if (db < best_db) {
             best_db = db;
             rec.beta = b;
@@ -143,7 +139,7 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
     for (int k : {K + 1, 64}) {
         if (k <= K || k > 64)
             continue;
-        const double db = worstRejectionDb(PfbFilterDesign(M, k, design.beta()));
+        const double db = farFloorDb(PfbFilterDesign(M, k, design.beta()));
         if (db < best_db) {
             best_db = db;
             rec.taps_per_branch = k;
@@ -155,11 +151,11 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
 
 std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
                             double target_db, const PfbRecommendation &rec) {
-    if (compareRejection(metrics.worst_rejection_db, target_db) == RejectionStatus::Meets)
+    if (compareRejection(metrics.far_floor_db, target_db) == RejectionStatus::Meets)
         return {};
     char buf[256];
     std::snprintf(buf, sizeof(buf), "Worst-case rejection %.1f dB is short of the %.0f dB target.",
-                  -metrics.worst_rejection_db, target_db);
+                  -metrics.far_floor_db, target_db);
     std::string text = buf;
     if (!rec.searched) {
         std::snprintf(buf, sizeof(buf),

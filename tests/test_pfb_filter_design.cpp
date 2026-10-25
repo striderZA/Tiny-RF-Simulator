@@ -84,54 +84,50 @@ TEST_CASE("PfbFilterMetrics verdict covers the far alias band", "[pfb_filter_des
     auto m = computePfbMetrics(PfbFilterDesign(32, 16, 8.0));
     REQUIRE(m.adjacent_rejection_db == Approx(-109.9).margin(0.2));
     REQUIRE(m.far_floor_db == Approx(-93.3).margin(0.2));
-    REQUIRE(m.worst_rejection_db == Approx(m.far_floor_db).margin(1e-12));
-    REQUIRE(compareRejection(m.worst_rejection_db, 100.0) != RejectionStatus::Meets);
+    REQUIRE(compareRejection(m.far_floor_db, 100.0) != RejectionStatus::Meets);
     REQUIRE(!pfbGuidanceText(PfbFilterDesign(32, 16, 8.0), m, 100.0, PfbRecommendation{}).empty());
 }
 
 TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_design]") {
     PfbFilterDesign d(32, 8, 8.0);
     auto m = computePfbMetrics(d);
-    const double achieved = -m.worst_rejection_db; // positive magnitude
+    const double achieved = -m.far_floor_db; // positive magnitude
 
-    REQUIRE(compareRejection(m.worst_rejection_db, achieved) == RejectionStatus::Meets);
+    REQUIRE(compareRejection(m.far_floor_db, achieved) == RejectionStatus::Meets);
     REQUIRE(pfbGuidanceText(d, m, achieved, PfbRecommendation{}).empty());
 
     // A much harder target must produce a non-empty hint.
-    REQUIRE(compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Misses);
+    REQUIRE(compareRejection(m.far_floor_db, 140.0) == RejectionStatus::Misses);
     const PfbRecommendation rec = pfbRecommend(d, m);
     REQUIRE(!pfbGuidanceText(d, m, 140.0, rec).empty());
 
     // Issue #289: at K=8, beta=8 the hint must not send the user to a beta that
-    // lowers the worst-case rejection (beta=20 puts H(1) at -55.9 dB against -83.2 dB).
-    // The single suggested change must lower the worst case, and its beta must be the
+    // lowers the far-floor rejection (beta=20 puts H(1) at -55.9 dB against -83.2 dB).
+    // The single suggested change must lower the far floor, and its beta must be the
     // best of the checked values 0, 4, ..., 20 at K=8.
-    auto worst_db = [](const PfbFilterDesign &x) {
-        return computePfbMetrics(x).worst_rejection_db;
-    };
+    auto far_db = [](const PfbFilterDesign &x) { return computePfbMetrics(x).far_floor_db; };
     REQUIRE(rec.searched);
     REQUIRE(rec.beta.has_value());
     REQUIRE(!rec.taps_per_branch.has_value());
-    const double suggested_db = worst_db(PfbFilterDesign(32, 8, *rec.beta));
-    REQUIRE(suggested_db < m.worst_rejection_db);
+    const double suggested_db = far_db(PfbFilterDesign(32, 8, *rec.beta));
+    REQUIRE(suggested_db < m.far_floor_db);
     for (int b = 0; b <= 20; b += 4)
-        REQUIRE(worst_db(PfbFilterDesign(32, 8, b)) >= suggested_db - 1e-9);
+        REQUIRE(far_db(PfbFilterDesign(32, 8, b)) >= suggested_db - 1e-9);
     REQUIRE(pfbGuidanceText(d, m, 140.0, rec).find("beta (8.0 -> 12.0)") != std::string::npos);
 
     // A target 6 dB above achieved is Within10Db.
-    REQUIRE(compareRejection(m.worst_rejection_db, achieved + 6.0) == RejectionStatus::Within10Db);
+    REQUIRE(compareRejection(m.far_floor_db, achieved + 6.0) == RejectionStatus::Within10Db);
 
     // Exact lower boundary: achieved == target_db - 10 is still Within10Db.
-    REQUIRE(compareRejection(m.worst_rejection_db, achieved + 10.0) == RejectionStatus::Within10Db);
+    REQUIRE(compareRejection(m.far_floor_db, achieved + 10.0) == RejectionStatus::Within10Db);
 }
-TEST_CASE("PFB guidance never suggests a change that worsens worst-case rejection",
+
+TEST_CASE("PFB guidance never suggests a change that worsens far-floor rejection",
           "[pfb_filter_design]") {
-    // Sweep: any single change shown must lower the worst-case rejection when applied alone,
+    // Sweep: any single change shown must lower the far-floor rejection when applied alone,
     // and the text must say "None of the checked" exactly when nothing is shown. The text
     // never claims that larger K values fail, since only the checked candidates were evaluated.
-    auto worst_db = [](const PfbFilterDesign &x) {
-        return computePfbMetrics(x).worst_rejection_db;
-    };
+    auto far_db = [](const PfbFilterDesign &x) { return computePfbMetrics(x).far_floor_db; };
     for (int M : {4, 8, 32})
         for (int K = 1; K <= 16; ++K)
             for (double beta : {0.0, 8.0, 9.0, 20.0}) {
@@ -139,17 +135,17 @@ TEST_CASE("PFB guidance never suggests a change that worsens worst-case rejectio
                 const auto m = computePfbMetrics(d);
                 const auto rec = pfbRecommend(d, m);
                 const std::string text = pfbGuidanceText(d, m, 140.0, rec);
-                if (compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Meets) {
+                if (compareRejection(m.far_floor_db, 140.0) == RejectionStatus::Meets) {
                     REQUIRE(text.empty()); // target met: no hint at all
                     continue;
                 }
                 REQUIRE(rec.searched);
                 REQUIRE(!(rec.taps_per_branch.has_value() && rec.beta.has_value()));
                 if (rec.taps_per_branch.has_value()) {
-                    REQUIRE(worst_db(PfbFilterDesign(M, *rec.taps_per_branch, beta)) <
-                            m.worst_rejection_db);
+                    REQUIRE(far_db(PfbFilterDesign(M, *rec.taps_per_branch, beta)) <
+                            m.far_floor_db);
                 } else if (rec.beta.has_value()) {
-                    REQUIRE(worst_db(PfbFilterDesign(M, K, *rec.beta)) < m.worst_rejection_db);
+                    REQUIRE(far_db(PfbFilterDesign(M, K, *rec.beta)) < m.far_floor_db);
                 } else {
                     REQUIRE(text.find("None of the checked") != std::string::npos);
                 }
@@ -161,7 +157,7 @@ TEST_CASE("PFB guidance clamps K suggestion to the slider maximum", "[pfb_filter
     // K=64 is the slider maximum: no "more K" suggestion, and the text never says "more".
     PfbFilterDesign top(32, 64, 0.0);
     auto m = computePfbMetrics(top);
-    REQUIRE(compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Misses);
+    REQUIRE(compareRejection(m.far_floor_db, 140.0) == RejectionStatus::Misses);
     const PfbRecommendation rec = pfbRecommend(top, m);
     REQUIRE(!rec.taps_per_branch.has_value());
     const std::string hint = pfbGuidanceText(top, m, 140.0, rec);

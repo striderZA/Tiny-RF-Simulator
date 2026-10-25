@@ -71,3 +71,23 @@ TEST_CASE_METHOD(PfbCalculatorImGuiFixture, "PFB calculator explicit target surv
     REQUIRE(calculator.resolveTarget(pfbs) == &second);
     (void)first;
 }
+
+TEST_CASE_METHOD(PfbCalculatorImGuiFixture, "PFB calculator verdict uses the far-band floor",
+                 "[pfb_calculator]") {
+    // Regression (issue #290): with K=16, beta=8 the verdict must come from the far floor
+    // (-93.3 dB over x in [1.0, 1.5]), not H(1.0) (-109.9 dB). Against a 100 dB target the
+    // far floor is 6.7 dB short, which is Within10Db, never Meets.
+    NodeGraphEngine graph;
+    ViewManager views;
+    ComponentRegistry components(graph, views);
+    auto &pfb = components.add<PFBChannelizerEngine>(100, graph);
+    pfb.setTapsPerBranch(16);
+    pfb.setKaiserBeta(8.0);
+    PfbCalculatorWidget calculator(components);
+    calculator.m_target_db = 100.0f;
+
+    ImGui::NewFrame();
+    calculator.draw("Filter Calculator");
+    ImGui::Render();
+    REQUIRE(calculator.verdict() == RejectionStatus::Within10Db);
+}
