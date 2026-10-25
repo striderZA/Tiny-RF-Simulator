@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.29.3] - 2026-10-25
 
 ### Fixed
 
@@ -11,10 +11,6 @@
 - **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
 - **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
 - **Passive filter and equalizer noise keeps the thermal term (#297)** — noise through an S-parameter filter or equalizer is `|S21|² × noise_in + kT(1 − |S21|²)`, and the ideal equalizer uses `G × noise_in + kT(1 − G)`, matching the attenuator. Gain (|S21| or G > 1) adds no thermal term. A flat −3 dB S-parameter file, or −10 dB ideal equalizer gain, on a kT input now returns kT.
-
-### Changed
-
-- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
 
 ### Changed
 
