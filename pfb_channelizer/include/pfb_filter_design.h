@@ -15,6 +15,9 @@ class PfbFilterDesign {
     // |H(x)| at normalized offset x in channel-width units (x = offset/(Fs/M)).
     // Negative x is allowed; the response is symmetric about 0. O(K*M) per call.
     double responseAt(double x) const;
+    // Continuous noise bandwidth in channel-width units: int_{-1}^{1} |H(x)|^2 dx.
+    // Multiply by the channel width to get the channel ENBW in Hz.
+    double normalizedNoiseBandwidth() const;
     const std::vector<double> &taps() const { return m_taps; }
     int tapCount() const { return static_cast<int>(m_taps.size()); }
     int channelCount() const { return m_M; }

@@ -5,6 +5,7 @@
 #include "app.h"
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
@@ -476,6 +477,40 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
         IM_CHECK(ctx->GetWindowByRef("Spectrum Analyzer")->Size.y <= 241.0f);
 
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
+    // Issue #292: Peak, snap-to-peak and marker read the widget's jitter-free readout
+    // trace. It must hold the same values on every frame, while the jittered plot
+    // trace changes. A widget that reads the jittered trace again fails here.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_readout_ignores_display_jitter");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const bool jitter_was_enabled = sa.noiseJitterEnabled();
+        const double sigma_before = sa.noiseJitterSigmaDb();
+        const bool spectrum_was_open = s_app->m_show_spectrum;
+        sa.setNoiseJitterEnabled(true);
+        sa.setNoiseJitterSigmaDb(3.0);
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(3);
+
+        const std::vector<double> first = s_app->testSpectrumWidget().readoutTrace();
+        IM_CHECK(!first.empty());
+        for (int frame = 0; frame < 20; ++frame) {
+            ctx->Yield(1);
+            IM_CHECK(s_app->testSpectrumWidget().readoutTrace() == first);
+        }
+
+        sa.setNoiseJitterEnabled(jitter_was_enabled);
+        sa.setNoiseJitterSigmaDb(sigma_before);
+        s_app->m_show_spectrum = spectrum_was_open;
         IM_CHECK(s_app->testRemoveProbePin(gen_out));
         ctx->Yield(2);
     };
@@ -2650,6 +2685,46 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(3);
         IM_CHECK(agentPanelVisible());
+    };
+
+    // Issue #299: the inspector refuses a Low cutoff that would invert a BPF band. The typed
+    // value is not written, and the band keeps its last valid cutoffs.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_filter_inverted_band_refused");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *placed = s_app->testCreateComponent("filter", 9299);
+        IM_CHECK(placed != nullptr);
+        auto *filter = dynamic_cast<IdealFilterEngine *>(placed);
+        IM_CHECK(filter != nullptr);
+        const int node = placed->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        InspectorHelper::waitForPopulated(ctx, node);
+
+        // LPF 50 MHz, then Type BPF: the band is 50/50 MHz.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Cutoff", "50");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 50e6);
+        InspectorHelper::selectComboItem(ctx, "Type", "BPF");
+        IM_CHECK(filter->filterType() == FilterType::BPF);
+
+        // Low 100 MHz over High 50 MHz would invert the band: refused, nothing written.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Low Cutoff", "100");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 50e6);
+        IM_CHECK_EQ(filter->fcHigh_Hz(), 50e6);
+
+        // Raising High first makes the same Low edit valid.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("High Cutoff", "200");
+        ctx->Yield(2);
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Low Cutoff", "100");
+        ctx->Yield(2);
+        IM_CHECK_EQ(filter->fcLow_Hz(), 100e6);
+        IM_CHECK_EQ(filter->fcHigh_Hz(), 200e6);
+
+        s_app->testRemoveComponent(node);
     };
 
     // Issue #184: the amplifier form exposes the S-parameter file picker.

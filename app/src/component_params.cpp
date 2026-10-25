@@ -9,6 +9,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string_view>
 #include <utility>
 
@@ -217,9 +218,13 @@ std::vector<std::string> suggestions(const std::vector<ParameterField> &fields,
 
 std::string enumExpected(const ParameterField &field) {
     std::string expected = "one of ";
+    bool first = true;
     for (std::size_t index = 0; index < field.enum_values.size(); ++index) {
-        if (index != 0)
+        if (field.accepts && !field.accepts(Json(static_cast<std::int64_t>(index))))
+            continue;
+        if (!first)
             expected += ", ";
+        first = false;
         expected += field.enum_values[index];
     }
     return expected;
@@ -272,19 +277,31 @@ bool integerFromJson(const Json &input, bool unsigned_slot, Json &converted) {
     return true;
 }
 
+bool withinBounds(const ParameterField &field, double value, std::string &expected) {
+    if (value >= field.min && value <= field.max)
+        return true;
+    std::ostringstream range;
+    range << "number from " << field.min << " to " << field.max;
+    expected = range.str();
+    return false;
+}
+
 bool convertValue(const ParameterField &field, const Json &input, const Json *current,
                   Json &converted, std::string &expected) {
     switch (field.kind) {
     case FieldKind::Number:
         if (current && isInteger(*current)) {
             expected = "integer";
-            return integerFromJson(input, current->is_number_unsigned(), converted);
+            if (!integerFromJson(input, current->is_number_unsigned(), converted))
+                return false;
+            return withinBounds(field, converted.get<double>(), expected);
         }
         expected = "number";
         if (!input.is_number())
             return false;
         converted = input.get<double>();
-        return std::isfinite(converted.get<double>());
+        return std::isfinite(converted.get<double>()) &&
+               withinBounds(field, converted.get<double>(), expected);
     case FieldKind::Bool:
         expected = "boolean";
         if (!input.is_boolean())
@@ -465,6 +482,8 @@ ParamWriteResult applyComponentParams(IComponentEngine &engine,
         std::string expected;
         if (!convertValue(*field, input_value, current, converted, expected))
             return failure(ParamWriteStatus::TypeMismatch, key, std::move(expected));
+        if (field->accepts && !field->accepts(converted))
+            return failure(ParamWriteStatus::TypeMismatch, key, enumExpected(*field));
         merged[key] = converted;
         requested_scalars.push_back({key, input_value, converted, converted.is_number_float()});
     }

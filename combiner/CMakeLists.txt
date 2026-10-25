@@ -10,5 +10,5 @@ target_include_directories(combiner_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(combiner_engine PUBLIC common simulator::node_graph_engine simulator::touchstone_parser)
+target_link_libraries(combiner_engine PUBLIC common simulator::node_graph_engine simulator::touchstone_parser simulator::logging_core)
 add_library(simulator::combiner_engine ALIAS combiner_engine)
