@@ -73,11 +73,13 @@ class SpectrumAnalyzerEngine {
     std::vector<double> combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const;
     // Display trace: the combined spectrum with cosmetic noise jitter applied.
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
-    // Same readout-axis and RBW/VBW chain without jitter, then the same trace-mode hold as the
-    // display trace. Peak and marker readouts use this trace so their values are not biased or
-    // frame-variant (issue #292).
-    std::vector<double>
-    renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs) const;
+    // Peak and marker readout trace, jitter-free, on the same readout axis as the display trace
+    // (issue #292). `specs` lists every active spectrum and `visible` marks the shown ones
+    // (parallel, empty = all shown). Max/Min Hold: the pointwise max/min of each shown source's
+    // own jitter-free held trace, so a hidden source keeps its history and re-showing it resumes
+    // the plotted value (issue #291). Other modes: the current-frame sum.
+    std::vector<double> renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs,
+                                                      const std::vector<bool> &visible = {}) const;
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
     std::vector<Peak> findPeaks(const std::vector<double> &power_dBm,
@@ -126,11 +128,17 @@ class SpectrumAnalyzerEngine {
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;
 
-    // key == nullptr selects the combined-trace history (see renderCombinedTrace()).
-    std::vector<double> applyTraceMode(const Spectrum *key, uint64_t identity,
+    // Max/Min-holds each shown source's trace on its own grid, then takes the pointwise max/min
+    // on the readout axis. Bins no shown source covers keep `fallback_dBm`.
+    std::vector<double> combineHeldTraces(const std::vector<const Spectrum *> &shown,
+                                          const std::vector<std::vector<double>> &held,
+                                          const std::vector<double> &grid,
+                                          std::vector<double> fallback_dBm) const;
+    // Jitter-free trace of one spectrum on its own grid, held in the readout history (Max/Min
+    // only; empty otherwise).
+    std::vector<double> readoutSourceTrace(const Spectrum &spec) const;
+    std::vector<double> applyTraceMode(const Spectrum &spec,
                                        const std::vector<double> &after_vbw) const;
-    // Clears the combined-trace hold and its source list (see m_combined_sources).
-    void dropCombinedHistory() const;
 
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
@@ -156,11 +164,10 @@ class SpectrumAnalyzerEngine {
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_max_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_min_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_video_avg;
-    // Combined-trace hold, stored under the nullptr key above. The sources are the
-    // (Spectrum, identity) pairs that fed it. Replacing or removing a source clears the hold;
-    // hiding a trace does not.
-    using CombinedSource = std::pair<const Spectrum *, uint64_t>;
-    mutable std::vector<CombinedSource> m_combined_sources;
+    // Readout history: same hold rules as above, kept apart from the display history so the
+    // readout never advances the plotted trace and the reverse.
+    mutable std::unordered_map<const Spectrum *, TraceHistory> m_readout_max_hold;
+    mutable std::unordered_map<const Spectrum *, TraceHistory> m_readout_min_hold;
 
     mutable int m_video_avg_count = 10;
 };
