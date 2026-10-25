@@ -159,9 +159,16 @@ void NetworkAnalyzerEngine::computeMeasurement() {
             }
         }
 
+        // A tone or bin an S-parameter block flagged out of band carries a held edge value,
+        // not a measurement: leave the point NaN (gain and NF).
+        if (response->tones[*tone_idx].out_of_band)
+            continue;
+
         m_gain_dB[i] = gain_dB;
 
-        if (noise_idx && *noise_idx < response->noise_total_W.size()) {
+        const bool noise_held = noise_idx && *noise_idx < response->out_of_band.size() &&
+                                response->out_of_band[*noise_idx];
+        if (noise_idx && !noise_held && *noise_idx < response->noise_total_W.size()) {
             const double gain_linear = dbToLinear(gain_dB);
             const double noise_out_W = response->noise_total_W[*noise_idx];
             const double nf_linear = (noise_out_W / gain_linear) / (k * T);

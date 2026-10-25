@@ -598,6 +598,41 @@ TEST_CASE("NetworkAnalyzer: noise figure accuracy against a real amplifier chain
         REQUIRE_THAT(g, WithinAbs(20.0, 0.05));
 }
 
+// Points outside an S-parameter file's band hold the edge value, so the analyzer must not
+// report them as measured gain or NF: they stay NaN. Band of the shipped amp S2P: 10 MHz-26.5 GHz.
+TEST_CASE("NetworkAnalyzer: out-of-band S-parameter sweep points read NaN",
+          "[network_analyzer][issue285]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    AmplifierEngine amp(2, graph);
+    amp.setSParamFilepath(std::string(PROJECT_SOURCE_DIR) +
+                          "/component_data/amplifiers/adm-3844psm/"
+                          "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
+    REQUIRE(amp.sparamLoaded());
+    graph.addLink(gen.outputPinId(), amp.inputPinId());
+    TestNaHost host({&gen, &amp});
+    NetworkAnalyzerEngine na(graph, host);
+    na.setStartFrequency(20e9);
+    na.setStopFrequency(30e9);
+    na.setPoints(11);
+    na.setStimulusPower(-30.0);
+    na.setPointA(gen.outputPinId());
+    na.setPointB(amp.outputPinId());
+    na.update();
+
+    REQUIRE(na.gainDb().size() == 11);
+    REQUIRE(na.noiseFigureDb().size() == 11);
+    for (size_t i = 0; i < 11; ++i) {
+        const double f = na.sweepFrequencies()[i];
+        if (f <= 26.5e9) {
+            REQUIRE(std::isfinite(na.gainDb()[i]));
+        } else {
+            REQUIRE(std::isnan(na.gainDb()[i]));
+            REQUIRE(std::isnan(na.noiseFigureDb()[i]));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 4. Non-invasiveness — a real second consumer already reads a component's
 //    output; probing that same output as Point A leaves the real consumer's

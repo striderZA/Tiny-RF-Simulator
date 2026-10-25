@@ -58,9 +58,9 @@ class NetworkAnalyzerEngine {
     int points() const { return m_points; }
     double stimulusPower() const { return m_stimulus_power_dBm; }
 
-    // Results for the widget. NaN at an index = no path, an unsupported
-    // topology, no matching tone found at Point B on the isolated clones, or a
-    // first matching tone more than 100 dB below the stimulus.
+    // Results for the widget. NaN at an index = no path, an unsupported topology, no matching tone
+    // found at Point B on the isolated clones, a first matching tone more than 100 dB below the
+    // stimulus, or a tone/bin an S-parameter block flagged out of band (its value is a held edge).
     const std::vector<double> &sweepFrequencies() const { return m_stimulus_freqs; }
     const std::vector<double> &gainDb() const { return m_gain_dB; }
     const std::vector<double> &noiseFigureDb() const { return m_nf_dB; }

@@ -70,6 +70,7 @@ void IdealFilterEngine::update(double dt) {
             t.power_dBm += 20.0 * std::log10(std::abs(S));
             t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
         }
+        m_sparam_data.markOutOfBand(in_ptr, out);
 
         // Phase
         if (in_ptr && !in_ptr->phase_deg.empty())
@@ -124,6 +125,7 @@ void IdealFilterEngine::update(double dt) {
 
     out.tones.clear();
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.out_of_band = in_ptr ? in_ptr->out_of_band : std::vector<bool>{};
     if (in_ptr) {
         for (const auto &t : in_ptr->tones) {
             if (isInPassband(t.freq_Hz))
