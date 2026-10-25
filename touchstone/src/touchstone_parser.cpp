@@ -4,6 +4,18 @@
 #include <numbers>
 #include <sstream>
 
+namespace {
+
+// Appends every numeric token in s to out.
+void appendNumbers(const std::string &s, std::vector<double> &out) {
+    std::istringstream iss(s);
+    double v;
+    while (iss >> v)
+        out.push_back(v);
+}
+
+} // namespace
+
 std::string TouchstoneParser::stripComment(const std::string &line) {
     size_t pos = line.find('!');
     if (pos == std::string::npos)
@@ -102,6 +114,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     bool has_version_keyword = false;
     std::string line;
     std::vector<double> raw_values; // all numeric values from data lines
+    bool in_reference = false;
+    std::vector<double> reference_values; // v2.0 [Reference] values, in file order
 
     // Infer port count from file extension if not explicitly known
     // .s1p -> 1 port, .s2p -> 2 ports, etc. (Hoisted ahead of the read loop
@@ -164,15 +178,24 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             if (lower.find("[version] 2.0") != std::string::npos) {
                 has_version_keyword = true;
             }
-            // For now, skip all v2.0 keywords; we'll handle them later
-            if (has_version_keyword)
+            if (has_version_keyword) {
+                // [Reference] values may continue on following lines until the next keyword.
+                in_reference = lower.rfind("[reference]", 0) == 0;
+                if (in_reference)
+                    appendNumbers(stripped.substr(stripped.find(']') + 1), reference_values);
                 continue;
+            }
         }
 
         if (stripped[0] == '#') {
             if (!parseOptionLine(stripped, data))
                 return std::nullopt;
             option_line_found = true;
+            continue;
+        }
+
+        if (in_reference) {
+            appendNumbers(stripped, reference_values);
             continue;
         }
 
@@ -186,6 +209,15 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         // R2 in-loop: bail out as soon as the cap is provably exceeded.
         if (raw_values.size() > max_raw_values)
             return std::nullopt;
+    }
+
+    // v2.0 [Reference] overrides R. Per-port references are not renormalised, so a
+    // list with differing values is rejected rather than read as one reference.
+    if (!reference_values.empty()) {
+        for (double r : reference_values)
+            if (r != reference_values.front())
+                return std::nullopt;
+        data.reference_impedance = reference_values.front();
     }
 
     if (!option_line_found)
