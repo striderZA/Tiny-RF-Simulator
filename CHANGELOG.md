@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Changed
+
+- **CPack runs in the release package jobs** — the Linux and Windows `package` jobs run `cpack` on their Release build tree, verify the archive contains the installed executable, `component_data/`, `extensions/` and the README, and upload it as the `cpack-linux` / `cpack-windows` workflow artifact. The release assets are still built as before; CPack output is not yet published, and it is not yet a full replacement: the Windows archive omits the MinGW runtime DLLs and both archives include GLFW development files.
+
 ## [0.29.3] - 2026-10-25
 
 ### Fixed
