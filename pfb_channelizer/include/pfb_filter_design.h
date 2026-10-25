@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,6 +47,18 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design);
 enum class RejectionStatus { Meets, Within10Db, Misses };
 RejectionStatus compareRejection(double rejection_db, double target_db);
 
+// Suggested parameter changes for a missed rejection target. A field is set only
+// when that change lowers |H(1)| (the verdict metric) from the current design.
+struct PfbRecommendation {
+    std::optional<int> taps_per_branch; // K+1, only when K < 64 and |H(1)| improves
+    std::optional<double>
+        beta; // beta maximising |H(1)| at the current K, when it beats the current beta
+};
+
+// Synthesizes candidate prototypes (beta 0..20 in steps of 1, and K+1), so cache it
+// per design rather than calling it every frame.
+PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMetrics &metrics);
+
 // Short manual-guidance string. Empty when the rejection target is met.
 std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
-                            double target_db);
+                            double target_db, const PfbRecommendation &rec);

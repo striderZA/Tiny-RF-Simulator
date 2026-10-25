@@ -36,6 +36,8 @@ class PfbCalculatorWidget {
     int m_bound_pfb_id = -1;   // graph node ID the controls were pulled from
     PfbFilterDesign m_cached_design;
     PfbFilterMetrics m_cached_metrics;
+    PfbRecommendation
+        m_cached_rec; // recomputed with the design: it synthesizes candidate prototypes
     int m_cached_M = 0;
     int m_cached_K = 0;
     double m_cached_beta = -1.0;

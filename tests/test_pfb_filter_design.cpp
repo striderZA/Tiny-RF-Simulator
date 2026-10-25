@@ -82,14 +82,28 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
     const double achieved = -m.adjacent_rejection_db; // positive magnitude
 
     REQUIRE(compareRejection(m.adjacent_rejection_db, achieved) == RejectionStatus::Meets);
-    REQUIRE(pfbGuidanceText(d, m, achieved).empty());
+    REQUIRE(pfbGuidanceText(d, m, achieved, PfbRecommendation{}).empty());
 
-    // A much harder target must produce a non-empty, K/beta-referencing hint.
+    // A much harder target must produce a non-empty hint.
     REQUIRE(compareRejection(m.adjacent_rejection_db, 140.0) == RejectionStatus::Misses);
-    std::string hint = pfbGuidanceText(d, m, 140.0);
-    REQUIRE(!hint.empty());
-    REQUIRE(hint.find("K") != std::string::npos);
-    REQUIRE(hint.find("beta") != std::string::npos);
+    const PfbRecommendation rec = pfbRecommend(d, m);
+    REQUIRE(!pfbGuidanceText(d, m, 140.0, rec).empty());
+
+    // Issue #289: at K=8, beta=8 the hint must not send the user to a beta that
+    // lowers adjacent rejection (beta=20 gives H(1) = -55.9 dB against -83.2 dB).
+    // The suggested beta must beat the current one and be the grid maximiser.
+    auto h1_db = [](const PfbFilterDesign &x) { return 20.0 * std::log10(x.responseAt(1.0)); };
+    REQUIRE(rec.beta.has_value());
+    const double suggested_db = h1_db(PfbFilterDesign(32, 8, *rec.beta));
+    REQUIRE(suggested_db < m.adjacent_rejection_db);
+    for (int b = 0; b <= 20; ++b)
+        REQUIRE(h1_db(PfbFilterDesign(32, 8, b)) >= suggested_db - 1e-9);
+
+    // A suggested K must also lower adjacent rejection.
+    if (rec.taps_per_branch.has_value()) {
+        REQUIRE(*rec.taps_per_branch > 8);
+        REQUIRE(h1_db(PfbFilterDesign(32, *rec.taps_per_branch, 8.0)) < m.adjacent_rejection_db);
+    }
 
     // A target 6 dB above achieved is Within10Db.
     REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 6.0) ==
@@ -100,6 +114,17 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
             RejectionStatus::Within10Db);
 }
 
+TEST_CASE("PFB guidance clamps K suggestion to the slider maximum", "[pfb_filter_design]") {
+    // K=64 is the slider maximum: no "more K" suggestion, and the text never says "more".
+    PfbFilterDesign top(32, 64, 0.0);
+    auto m = computePfbMetrics(top);
+    REQUIRE(compareRejection(m.adjacent_rejection_db, 140.0) == RejectionStatus::Misses);
+    const PfbRecommendation rec = pfbRecommend(top, m);
+    REQUIRE(!rec.taps_per_branch.has_value());
+    const std::string hint = pfbGuidanceText(top, m, 140.0, rec);
+    REQUIRE(!hint.empty());
+    REQUIRE(hint.find("more") == std::string::npos);
+}
 TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filter_design]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);

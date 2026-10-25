@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **PFB calculator hint no longer recommends a beta that lowers rejection (#289)** — the "raise beta" suggestion is now the beta that maximises adjacent rejection at the current K, and is shown only when it beats the current beta. The "raise K" suggestion is shown only when one more tap per branch lowers adjacent rejection, and never above the K slider maximum of 64.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
