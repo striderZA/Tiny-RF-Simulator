@@ -2,10 +2,12 @@
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
 #include "spectrum.h"
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <numbers>
+#include <optional>
 #include <string>
 
 using Catch::Matchers::WithinAbs;
@@ -234,4 +236,32 @@ TEST_CASE("Attenuator: S-param mode adds S21 phase to per-bin phase",
     const auto &output = atten.node().outputs[0];
     REQUIRE(output.phase_deg.size() == 3);
     REQUIRE_THAT(output.phase_deg[0], WithinAbs(30.0 + expected_shift_deg, 1e-6));
+}
+
+TEST_CASE("Attenuator: upstream replaced at the same address with an equal generation recomputes",
+          "[attenuator][cache]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setAttenuation(6.0);
+
+    std::optional<Spectrum> upstream;
+    upstream.emplace(buildTestSpectrum());
+    upstream->tones = {{100e6, -10.0, 0.0}};
+    upstream->bumpGeneration();
+    atten.node().inputs[0] = &*upstream;
+    atten.update(0.0);
+    REQUIRE(atten.node().outputs[0].tones.size() == 1);
+    REQUIRE(atten.node().outputs[0].tones[0].freq_Hz == Catch::Approx(100e6));
+
+    const Spectrum *old_address = &*upstream;
+    upstream.reset();
+    upstream.emplace(buildTestSpectrum());
+    upstream->tones = {{200e6, -10.0, 0.0}};
+    upstream->bumpGeneration();
+    REQUIRE(&*upstream == old_address);
+    atten.node().inputs[0] = &*upstream;
+    atten.update(0.0);
+
+    REQUIRE(atten.node().outputs[0].tones.size() == 1);
+    CHECK(atten.node().outputs[0].tones[0].freq_Hz == Catch::Approx(200e6));
 }

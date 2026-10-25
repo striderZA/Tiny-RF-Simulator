@@ -60,14 +60,22 @@ struct Spectrum {
     // needs to apply conjugateSymmetricExpand() before binning tone power (see that function).
     bool is_complex_baseband = false;
 
-    // Generation counter for dirty-flag tracking. Producers increment after
-    // recomputation so consumers can detect upstream changes.
+    // Generation counter for dirty-flag tracking. Producers call bumpGeneration()
+    // after recomputation so consumers can detect upstream changes. Values come
+    // from one process-wide sequence: a downstream cache keys on (input address,
+    // generation), and a Spectrum rebuilt at a reused address must not repeat the
+    // generation the cache recorded for its predecessor.
     uint64_t generation = 0;
 
     // Per-object identity; see SpectrumIdentity.
     SpectrumIdentity identity;
 
-    void bumpGeneration() { ++generation; }
+    void bumpGeneration() { generation = nextGeneration(); }
+
+    static uint64_t nextGeneration() {
+        static std::atomic<uint64_t> counter{0};
+        return ++counter;
+    }
 
     void computeTotalNoise() {
         size_t n = frequencies.size();
