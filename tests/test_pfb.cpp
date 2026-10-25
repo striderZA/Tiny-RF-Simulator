@@ -41,6 +41,48 @@ TEST_CASE("PFB channelizer tone routing", "[pfb]") {
     REQUIRE(out.tones.size() == 1);
 }
 
+TEST_CASE("PFB DC tone level follows the half-bin channel grid", "[pfb]") {
+    // Centres sit at -Fs/2 + (k + 1/2)·Fs/M (docs/resources/pfb_channelizer_info.md,
+    // "RF Simulator Contract"). Odd M puts DC on a centre (-30 dBm). Even M puts DC on
+    // an edge shared by two channels, each at H(1/2) = -6.02 dB at the default K=8, beta=8
+    // (-36.02 dBm).
+    auto significantLevels = [](int M) {
+        NodeGraphEngine graph;
+        PFBChannelizerEngine pfb(0, graph);
+        Spectrum in;
+        in.frequencies.resize(401);
+        for (int i = 0; i < 401; ++i)
+            in.frequencies[i] = -200e6 + i * 1e6;
+        in.tones.push_back({0.0, -30.0, 0.0});
+        in.noise_total_W.assign(401, 1e-20);
+
+        pfb.setFs_Hz(400e6);
+        pfb.setChannelCount(M);
+        pfb.node().inputs[0] = &in;
+        pfb.update(0.0);
+
+        // Neighbours at the edge of the channel window carry the tone at about -113 dBm.
+        std::vector<std::pair<double, double>> levels;
+        for (const auto &ch : pfb.channels())
+            for (const auto &t : ch.tones)
+                if (t.power_dBm > -60.0)
+                    levels.emplace_back(ch.center_freq_Hz, t.power_dBm);
+        return levels;
+    };
+
+    const auto odd = significantLevels(31);
+    REQUIRE(odd.size() == 1);
+    REQUIRE(std::abs(odd[0].first) < 0.5e6);
+    REQUIRE(odd[0].second == Approx(-30.0).margin(0.05));
+
+    const auto even = significantLevels(32);
+    REQUIRE(even.size() == 2);
+    for (const auto &[centre, power] : even) {
+        REQUIRE(std::abs(std::abs(centre) - 6.25e6) < 1.0);
+        REQUIRE(power == Approx(-36.02).margin(0.05));
+    }
+}
+
 TEST_CASE("PFB channelizer noise distribution", "[pfb]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);

@@ -1,5 +1,6 @@
 #include "amplifier_engine.h"
 #include "common.h"
+#include "ideal_filter_engine.h"
 #include "mixer_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
@@ -282,23 +283,209 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     REQUIRE(out.tones[1].phase_deg == 45.0);
 }
 
-TEST_CASE("Mixer scales noise by conversion gain", "[mixer]") {
+// Analyzer power (dBm) at f_Hz, as the analyzer reads a real-domain spectrum: conjugate-symmetric
+// expansion halves each real tone onto +f and -f, then coherentToneWatts groups copies at one
+// frequency. Groups within window_Hz of f_Hz are summed in power.
+static double analyzerDbmAt(const Spectrum &spec, double f_Hz, double window_Hz) {
+    const auto tones = spec.is_complex_baseband ? spec.tones : conjugateSymmetricExpand(spec.tones);
+    double watts = 0.0;
+    for (const auto &[freq, w] : coherentToneWatts(tones))
+        if (std::abs(freq - f_Hz) <= window_Hz)
+            watts += w;
+    return 10.0 * std::log10(watts / 1e-3);
+}
+
+// Real-domain grid from 0 to (bins - 1) * step_Hz with zero noise, for analyzer renderSpectrum.
+static Spectrum zeroNoiseGrid(double step_Hz, int bins) {
+    Spectrum s;
+    for (int i = 0; i < bins; ++i)
+        s.frequencies.push_back(i * step_Hz);
+    s.noise_W.assign(s.frequencies.size(), 0.0);
+    s.noise_added_W.assign(s.frequencies.size(), 0.0);
+    s.noise_total_W.assign(s.frequencies.size(), 0.0);
+    return s;
+}
+
+// Two in-phase real tones at 50 and 150 MHz with LO 100 MHz: the lower sidebands coincide at 50 MHz
+// (each -26 dBm). The analyzer expands each to +-f at half power, then sums the two +50 MHz copies
+// coherently: -26 + 10*log10(2) = -22.99 dBm.
+TEST_CASE("Mixer coincident in-phase sidebands read coherently in the analyzer",
+          "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+    input.tones.push_back({150e6, -20.0, 0.0});
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer at LO 0 reads one tone's images coherently in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(0.0);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer sidebands split by rounding read coherently in the analyzer",
+          "[mixer][issue305]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
+    // Both lower sidebands are 740032354.775 Hz in exact decimal, but the two subtractions round
+    // differently: the keys differ by 1.19e-7 Hz, so exact-frequency grouping would sum in power.
+    gen.addTone(259967645.225, -20.0, 0.0);
+    gen.addTone(1740032354.775, -20.0, 0.0);
     gen.update(0.0);
 
     MixerEngine mix(0, graph);
-    mix.setConversionGain_dB(-6.0);
+    mix.setLoFreq_Hz(1e9);
     mix.node().inputs[0] = &gen.node().outputs[0];
     mix.update(0.0);
 
-    double G = dbToLinear(-6.0);
-    double expected_density = k * T * G;
+    const double dBm_740 = analyzerDbmAt(mix.node().outputs[0], 740032354.775, 1.0);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer rounding split straddling a grid midpoint reads coherently", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // Tones 2^-22 Hz apart at 1.74 GHz: the lower sidebands differ by the same 2^-22 Hz.
+    const double tone_a = 1740000000.000244140625;
+    gen.addTone(tone_a, -20.0, 0.0);
+    gen.addTone(tone_a + std::ldexp(1.0, -22), -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const double dBm_740 = analyzerDbmAt(mix.node().outputs[0], 740000000.0, 0.5);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer near-DC rounding split reads coherently in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // LO 2^30 - 0.1 Hz, tones LO -+ 0.3 Hz: both lower sidebands are 0.3 Hz, but each tone is
+    // rounded at the LO's ulp (2^-22 Hz), so the two sidebands differ by a few 1e-7 Hz.
+    const double lo = 1073741823.9;
+    gen.addTone(lo - 0.3, -20.0, 0.0);
+    gen.addTone(lo + 0.3, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(lo);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const double dBm_03 = analyzerDbmAt(mix.node().outputs[0], 0.3, 0.5);
+    REQUIRE(dBm_03 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+    input.tones.push_back({150e6, -20.0, 180.0});
+
+    // Both lower sidebands land at 50 MHz with opposite phase: the analyzer's coherent sum is zero.
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] < -100.0);
+}
+
+TEST_CASE("Analyzer groups copies within a few ulps of the largest tone frequency",
+          "[mixer][issue305]") {
+    // Copies one ulp apart at 1 GHz are one tone; copies 1 mHz apart are two.
+    const double one_ulp = std::nextafter(1e9, 2e9);
+    const std::vector<Spectrum::Tone> near = {{1e9, -20.0, 0.0}, {one_ulp, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(near).size() == 1);
+    const std::vector<Spectrum::Tone> far = {{1e9, -20.0, 0.0}, {1e9 + 1e-3, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(far).size() == 2);
+}
+
+TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
+    NodeGraphEngine graph;
+    Spectrum input;
+    for (int i = 0; i <= 40; ++i)
+        input.frequencies.push_back(i * 10e6);
+    input.noise_total_W.assign(input.frequencies.size(), 0.0);
+    input.noise_total_W[10] = 1e-12;
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.setConversionGain_dB(-6.0);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
     const auto &out = mix.node().outputs[0];
-    REQUIRE(!out.noise_total_W.empty());
-    for (double density : out.noise_total_W) {
-        REQUIRE(density == Approx(expected_density).epsilon(1e-30));
+    const double translated_density = 1e-12 * dbToLinear(-6.0);
+    REQUIRE(out.noise_total_W[0] == Approx(translated_density));
+    REQUIRE(out.noise_total_W[20] == Approx(translated_density));
+    REQUIRE(out.noise_total_W[10] == 0.0);
+}
+
+TEST_CASE("Mixer preserves RF noise SNR through an IF filter", "[mixer][domain]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    gen.addTone(1e9, -10.0);
+    gen.update(0.0);
+
+    IdealFilterEngine rf_filter(1, graph);
+    rf_filter.setFilterType(FilterType::BPF);
+    rf_filter.setCutoffs_Hz(950e6, 1050e6);
+    rf_filter.node().inputs[0] = &gen.node().outputs[0];
+    rf_filter.update(0.0);
+
+    MixerEngine mix(2, graph);
+    mix.setLoFreq_Hz(900e6);
+    mix.setConversionGain_dB(0.0);
+    mix.node().inputs[0] = &rf_filter.node().outputs[0];
+    mix.update(0.0);
+
+    IdealFilterEngine if_filter(3, graph);
+    if_filter.setFilterType(FilterType::LPF);
+    if_filter.setCutoff_Hz(150e6);
+    if_filter.node().inputs[0] = &mix.node().outputs[0];
+    if_filter.update(0.0);
+
+    const auto &rf = rf_filter.node().outputs[0];
+    const auto &if_out = if_filter.node().outputs[0];
+    double rf_noise_W = 0.0;
+    double if_noise_W = 0.0;
+    for (size_t i = 0; i < rf.frequencies.size(); ++i) {
+        if (rf.frequencies[i] >= 950e6 && rf.frequencies[i] <= 1050e6)
+            rf_noise_W += rf.noise_total_W[i] * 10e6;
     }
+    for (size_t i = 0; i < if_out.frequencies.size(); ++i) {
+        if (if_out.frequencies[i] >= 50e6 && if_out.frequencies[i] <= 150e6)
+            if_noise_W += if_out.noise_total_W[i] * 10e6;
+    }
+
+    const double rf_snr_dB = -10.0 - (10.0 * std::log10(rf_noise_W) + 30.0);
+    const double if_snr_dB = -10.0 - (10.0 * std::log10(if_noise_W) + 30.0);
+    REQUIRE(10.0 * std::log10(if_noise_W / (k * T * 100e6)) == Approx(0.0).margin(0.5));
+    REQUIRE(if_snr_dB == Approx(rf_snr_dB).margin(0.5));
 }
 
 TEST_CASE("Mixer with no input produces no tones", "[mixer]") {
@@ -381,6 +568,32 @@ TEST_CASE("Spectrum analyzer RBW filtering preserves tone peak power", "[spectru
     }
 }
 
+TEST_CASE("Spectrum analyzer combines same-frequency tone copies coherently", "[spectrum]") {
+    Spectrum spec;
+    spec.frequencies = {-10e6, 0.0, 10e6};
+    spec.is_complex_baseband = true;
+
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setVideoBw(1e6);
+
+    for (double rbw : {1e3, 100e6}) {
+        sa.setResBw(rbw);
+
+        spec.tones.clear();
+        spec.bumpGeneration();
+        const double floor_dBm = sa.renderSpectrum(spec)[1];
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 0.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(-20.0 + 6.0205999132).margin(0.01));
+
+        spec.tones = {{0.0, -20.0, 0.0}, {0.0, -20.0, 180.0}};
+        spec.bumpGeneration();
+        CHECK(sa.renderSpectrum(spec)[1] == Approx(floor_dBm).margin(0.01));
+    }
+}
+
 TEST_CASE("Spectrum analyzer RBW changes reset held traces", "[spectrum][trace]") {
     Spectrum spec;
     for (size_t i = 0; i <= 100; ++i) {
@@ -414,6 +627,70 @@ TEST_CASE("Spectrum analyzer RBW changes reset held traces", "[spectrum][trace]"
     }
     SECTION("Video Average starts with the new RBW") {
         check_change(TraceMode::VideoAverage, 100e6, 20e6);
+    }
+}
+
+TEST_CASE("Spectrum analyzer VBW and average-count changes reset held traces",
+          "[spectrum][trace]") {
+    Spectrum spec;
+    for (size_t i = 0; i <= 100; ++i) {
+        spec.frequencies.push_back((static_cast<double>(i) - 50.0) * 10e6);
+    }
+    spec.noise_total_W.assign(spec.frequencies.size(), k * T);
+    const decltype(spec.tones) tones = {{0.0, -20.0, 0.0}};
+
+    // Frame 1 uses tone0 and frame 2 uses tone1. After the setting change, the held trace
+    // must equal a fresh engine's trace at the new setting.
+    const auto check_change = [&](TraceMode mode, double vbw0, double vbw1, int avg0, int avg1,
+                                  bool tone0, bool tone1) {
+        spec.tones = tone0 ? tones : decltype(spec.tones){};
+        spec.generation = 1;
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(vbw0);
+        sa.setVideoAvgCount(avg0);
+        sa.setTraceMode(mode);
+        sa.renderSpectrum(spec);
+
+        sa.setVideoBw(vbw1);
+        sa.setVideoAvgCount(avg1);
+        spec.tones = tone1 ? tones : decltype(spec.tones){};
+        spec.generation = 2;
+        const auto held = sa.renderSpectrum(spec);
+
+        SpectrumAnalyzerEngine fresh;
+        fresh.setNoiseJitterEnabled(false);
+        fresh.setResBw(1e6);
+        fresh.setVideoBw(vbw1);
+        fresh.setVideoAvgCount(avg1);
+        fresh.setTraceMode(mode);
+        spec.generation = 3;
+        const auto expected = fresh.renderSpectrum(spec);
+
+        REQUIRE(held.size() == expected.size());
+        for (size_t i = 0; i < expected.size(); ++i) {
+            REQUIRE(held[i] == Approx(expected[i]).margin(0.01));
+        }
+    };
+
+    SECTION("VBW change drops Max Hold's old peak") {
+        check_change(TraceMode::MaxHold, 10e6, 100e6, 10, 10, true, true);
+    }
+    SECTION("VBW change drops Min Hold's old low") {
+        check_change(TraceMode::MinHold, 100e6, 10e6, 10, 10, true, true);
+    }
+    SECTION("VBW change restarts Video Average") {
+        check_change(TraceMode::VideoAverage, 10e6, 100e6, 10, 10, true, true);
+    }
+    SECTION("Avg Count change drops Max Hold's old peak") {
+        check_change(TraceMode::MaxHold, 10e6, 10e6, 2, 50, true, false);
+    }
+    SECTION("Avg Count change drops Min Hold's old low") {
+        check_change(TraceMode::MinHold, 10e6, 10e6, 2, 50, false, true);
+    }
+    SECTION("Avg Count change restarts Video Average") {
+        check_change(TraceMode::VideoAverage, 10e6, 10e6, 2, 50, true, false);
     }
 }
 
@@ -560,6 +837,283 @@ TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
     // With MaxHold, out2[0] holds the -10 dBm peak from frame 1.
     REQUIRE(out2[0] > out2[1] + 5.0); // bin 0 held high
     REQUIRE(out2[4] > out2[1] + 5.0); // bin 4 now high (tone moved)
+}
+
+TEST_CASE("Combined MaxHold holds the peak after a decreasing tone", "[spectrum][trace]") {
+    // Regression for #291: the Peak readout and marker use renderCombinedSpectrum.
+    // It must hold the per-bin maximum like renderSpectrum does, not show the current frame.
+    auto make_engine = [] {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(TraceMode::MaxHold);
+        return sa;
+    };
+
+    Spectrum spec;
+    spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    spec.tones = {{0.0, 0.0, 0.0}}; // 0 dBm tone at bin 0
+    spec.generation = 1;
+
+    Spectrum spec_ref = spec;
+    SpectrumAnalyzerEngine ref = make_engine();
+    ref.renderSpectrum(spec_ref);
+
+    SpectrumAnalyzerEngine sa = make_engine();
+    std::vector<const Spectrum *> specs = {&spec};
+    sa.renderCombinedSpectrum(specs);
+
+    // Second frame: tone drops to -30 dBm at the same bin.
+    spec.tones = {{0.0, -30.0, 0.0}};
+    spec.generation = 2;
+    spec_ref.tones = spec.tones;
+    spec_ref.generation = 2;
+
+    const auto held = ref.renderSpectrum(spec_ref);
+    const auto combined = sa.renderCombinedSpectrum(specs);
+
+    REQUIRE(combined.size() == held.size());
+    REQUIRE(held[0] == Approx(0.0).margin(0.5));
+    REQUIRE(combined[0] == Approx(held[0]).margin(1e-6));
+}
+
+TEST_CASE("Combined MaxHold drops held values when its spectrum is replaced at the same address",
+          "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    std::optional<Spectrum> slot;
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    slot->generation = 1;
+    const Spectrum *old_ptr = &*slot;
+    std::vector<const Spectrum *> specs = {old_ptr};
+    sa.renderCombinedSpectrum(specs);
+
+    // The old spectrum is removed and a new one is built at the same address.
+    slot.reset();
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, -30.0, 0.0}};
+    slot->generation = 1;
+    REQUIRE(&*slot == old_ptr);
+
+    // The new spectrum's own peak is -30 dBm; the old 0 dBm must not be held.
+    const auto combined = sa.renderCombinedSpectrum(specs);
+    REQUIRE(combined[0] == Approx(-30.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold keeps held values while a trace is hidden", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}}; // far from bin 0
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+
+    // Frame 1: both visible. Both spectra are still active when B is hidden.
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // Frame 2: B hidden (still active), A drops to -30 dBm.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(both);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(0.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold keeps a remaining trace's held value when another is removed",
+          "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}};
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}};
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // B is removed from the active set; A keeps the 0 dBm it held.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(only_a);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(0.0).margin(0.5)); // A keeps its own held peak
+}
+
+TEST_CASE("Combined readout ignores a hidden trace's held peak", "[spectrum][trace]") {
+    const auto make_engine = [] {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(TraceMode::MaxHold);
+        return sa;
+    };
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}}; // 0 dBm at 0 Hz
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, -30.0, 0.0}}; // -30 dBm at 20 MHz
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    SpectrumAnalyzerEngine sa = make_engine();
+    sa.pruneHistory(both);
+    sa.renderCombinedReadoutSpectrum(both, {true, true});
+
+    // A hidden (still active), B shown: the readout must match B alone, not A's held 0 dBm.
+    sa.pruneHistory(both);
+    const auto hidden_a = sa.renderCombinedReadoutSpectrum(both, {false, true});
+    SpectrumAnalyzerEngine ref = make_engine();
+    const std::vector<const Spectrum *> only_b = {&b};
+    ref.renderCombinedReadoutSpectrum(only_b, {true});
+    const auto expected = ref.renderCombinedReadoutSpectrum(only_b, {true});
+    REQUIRE(hidden_a.size() == expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+        REQUIRE(hidden_a[i] == Approx(expected[i]).margin(1e-6));
+    }
+    REQUIRE(hidden_a[0] < -20.0);
+
+    // Re-shown: A's held 0 dBm at 0 Hz returns.
+    const auto shown_again = sa.renderCombinedReadoutSpectrum(both, {true, true});
+    REQUIRE(shown_again[0] == Approx(0.0).margin(0.5));
+}
+
+TEST_CASE("Combined readout does not average in Video Average mode", "[spectrum][trace]") {
+    Spectrum s;
+    s.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    s.tones = {{0.0, 0.0, 0.0}};
+    s.generation = 1;
+    const std::vector<const Spectrum *> specs = {&s};
+
+    SpectrumAnalyzerEngine avg;
+    SpectrumAnalyzerEngine clear;
+    for (SpectrumAnalyzerEngine *sa : {&avg, &clear}) {
+        sa->setNoiseJitterEnabled(false);
+        sa->setResBw(1e6);
+        sa->setVideoBw(1e6);
+    }
+    avg.setTraceMode(TraceMode::VideoAverage);
+    avg.renderCombinedReadoutSpectrum(specs);
+    clear.renderCombinedReadoutSpectrum(specs);
+
+    s.tones = {{0.0, -30.0, 0.0}};
+    s.generation = 2;
+    const auto averaged = avg.renderCombinedReadoutSpectrum(specs);
+    const auto current = clear.renderCombinedReadoutSpectrum(specs);
+    REQUIRE(averaged.size() == current.size());
+    for (size_t i = 0; i < current.size(); ++i) {
+        REQUIRE(averaged[i] == Approx(current[i]).margin(1e-6));
+    }
+}
+
+TEST_CASE("Combined display and readout keep separate holds", "[spectrum][trace]") {
+    Spectrum s;
+    s.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    s.tones = {{0.0, 0.0, 0.0}};
+    s.generation = 1;
+    const std::vector<const Spectrum *> specs = {&s};
+    const std::vector<double> levels = {0.0, -30.0, -10.0};
+
+    SpectrumAnalyzerEngine both_calls;
+    SpectrumAnalyzerEngine readout_only;
+    for (SpectrumAnalyzerEngine *sa : {&both_calls, &readout_only}) {
+        sa->setNoiseJitterEnabled(false);
+        sa->setResBw(1e6);
+        sa->setVideoBw(1e6);
+        sa->setTraceMode(TraceMode::MaxHold);
+    }
+    for (size_t f = 0; f < levels.size(); ++f) {
+        s.tones = {{0.0, levels[f], 0.0}};
+        s.generation = f + 1;
+        both_calls.renderCombinedSpectrum(specs);
+        const auto got = both_calls.renderCombinedReadoutSpectrum(specs);
+        const auto want = readout_only.renderCombinedReadoutSpectrum(specs);
+        REQUIRE(got.size() == want.size());
+        for (size_t i = 0; i < want.size(); ++i) {
+            REQUIRE(got[i] == Approx(want[i]).margin(1e-6));
+        }
+    }
+}
+
+TEST_CASE("Max Hold readout matches Clear/Write on a steady scene", "[spectrum][trace]") {
+    // Max Hold on an unchanging scene must read what Clear/Write reads, including a tone on a
+    // finer grid than the readout axis (no tone may be dropped between axis points).
+    const auto make_engine = [](TraceMode mode) {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(mode);
+        return sa;
+    };
+    const auto expect_same_when_steady = [&](const std::vector<const Spectrum *> &specs) {
+        SpectrumAnalyzerEngine hold = make_engine(TraceMode::MaxHold);
+        SpectrumAnalyzerEngine clear = make_engine(TraceMode::ClearWrite);
+        std::vector<double> want, got;
+        for (int frame = 0; frame < 3; ++frame) {
+            want = clear.renderCombinedReadoutSpectrum(specs);
+            got = hold.renderCombinedReadoutSpectrum(specs);
+            REQUIRE(got.size() == want.size());
+            for (size_t i = 0; i < want.size(); ++i) {
+                REQUIRE(got[i] == Approx(want[i]).margin(1e-6));
+            }
+        }
+        return got;
+    };
+
+    SECTION("sources on different grids keep a tone between axis points") {
+        Spectrum coarse;
+        coarse.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        coarse.noise_total_W.assign(coarse.frequencies.size(), k * T);
+        coarse.generation = 1;
+        Spectrum fine;
+        for (int i = 0; i <= 20; ++i) {
+            fine.frequencies.push_back(i * 1e6);
+        }
+        fine.noise_total_W.assign(fine.frequencies.size(), k * T);
+        fine.tones = {{1e6, 0.0, 0.0}}; // 0 dBm at 1 MHz, between coarse axis points
+        fine.generation = 1;
+        const std::vector<const Spectrum *> specs = {&coarse, &fine};
+        const auto got = expect_same_when_steady(specs);
+        REQUIRE(*std::max_element(got.begin(), got.end()) > -6.0);
+    }
+
+    SECTION("overlapping identical sources add as Clear/Write does") {
+        Spectrum a;
+        a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        a.noise_total_W.assign(a.frequencies.size(), k * T);
+        a.tones = {{5e6, 0.0, 0.0}};
+        a.generation = 1;
+        Spectrum b = a;
+        const std::vector<const Spectrum *> specs = {&a, &b};
+        expect_same_when_steady(specs);
+    }
 }
 
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
@@ -721,6 +1275,51 @@ TEST_CASE("pruneHistory removes stale entries", "[spectrum][trace]") {
     REQUIRE(out[1] < -50.0);
 }
 
+TEST_CASE("Spectrum reusing a removed spectrum's address renders as a fresh engine",
+          "[spectrum][trace][regression]") {
+    // Issue #294: render cache and hold maps are keyed by Spectrum address. A removed
+    // spectrum A and a new spectrum B at the same address must not share state.
+    // Placement new reuses the storage deterministically.
+    auto makeSpec = [](Spectrum *slot, double tone_dBm, uint64_t gen) {
+        new (slot) Spectrum;
+        slot->frequencies = {0, 1e6, 2e6, 3e6, 4e6};
+        slot->tones = {{2e6, tone_dBm, 0.0}};
+        slot->generation = gen;
+    };
+    alignas(Spectrum) std::byte storage[sizeof(Spectrum)];
+    auto *slot = reinterpret_cast<Spectrum *>(storage);
+
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    makeSpec(slot, 0.0, 1);
+    sa.renderSpectrum(*slot);
+    slot->~Spectrum();
+
+    makeSpec(slot, -30.0, 1);
+    SpectrumAnalyzerEngine fresh;
+    fresh.setNoiseJitterEnabled(false);
+    fresh.setResBw(1e6);
+    fresh.setVideoBw(1e6);
+    fresh.setTraceMode(TraceMode::MaxHold);
+
+    auto got = sa.renderSpectrum(*slot);
+    auto want = fresh.renderSpectrum(*slot);
+    REQUIRE(got.size() == want.size());
+    for (size_t i = 0; i < got.size(); ++i)
+        REQUIRE(got[i] == Approx(want[i]));
+
+    slot->generation = 2;
+    got = sa.renderSpectrum(*slot);
+    want = fresh.renderSpectrum(*slot);
+    for (size_t i = 0; i < got.size(); ++i)
+        REQUIRE(got[i] == Approx(want[i]));
+    slot->~Spectrum();
+}
+
 TEST_CASE("Size mismatch resets history", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);
@@ -785,21 +1384,23 @@ TEST_CASE("Amplifier generates 2nd and 3rd harmonics", "[amplifier][nonlinear]")
 
     // Expected harmonics from the corrected formulas (see nonlinear_model.h):
     //   H2 (RMS) = k1 * Vp1^2 / sqrt(2)   (v_in^2 term: peak k1*A^2/2 at 2w, A = sqrt(2)*Vp1)
-    //   H3 (RMS) = k2 * Vp1^3 / 2         (v_in^3 term: peak k2*A^3/4 at 3w, A = sqrt(2)*Vp1)
+    //   H3 (RMS) = k2 * Vp1^3 / 4         (one third the amplitude of the equal-power IM3,
+    //                                      which is (3/4)*k2*Vp1^3)
     // with k1 = 1/V_oip2, k2 = 4/(3*V_oip3^2) and Vp1 the output-referred RMS voltage.
     const double Vp1 = std::sqrt(std::pow(10.0, -20.0 / 10.0) * 0.001 * 50.0);
     const double V_oip2 = std::sqrt(std::pow(10.0, 40.0 / 10.0) * 0.001 * 50.0);
     const double V_oip3 = std::sqrt(std::pow(10.0, 30.0 / 10.0) * 0.001 * 50.0);
     const double h2_v = (1.0 / V_oip2) * Vp1 * Vp1 / std::sqrt(2.0);
-    const double h3_v = (4.0 / (3.0 * V_oip3 * V_oip3)) * Vp1 * Vp1 * Vp1 / 2.0;
+    const double h3_v = (4.0 / (3.0 * V_oip3 * V_oip3)) * Vp1 * Vp1 * Vp1 / 4.0;
     const double h2_expected = 10.0 * std::log10((h2_v * h2_v / 50.0) / 0.001);
     const double h3_expected = 10.0 * std::log10((h3_v * h3_v / 50.0) / 0.001);
 
     REQUIRE(out.tones[1].freq_Hz == 200e6);
     REQUIRE(out.tones[1].power_dBm == Approx(h2_expected).epsilon(0.01));
 
+    // A 0.05 dB margin: the 6.02 dB error of a /2 H3 must fail this check.
     REQUIRE(out.tones[2].freq_Hz == 300e6);
-    REQUIRE(out.tones[2].power_dBm == Approx(h3_expected).epsilon(0.1));
+    REQUIRE(out.tones[2].power_dBm == Approx(h3_expected).margin(0.05));
 }
 
 TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]") {

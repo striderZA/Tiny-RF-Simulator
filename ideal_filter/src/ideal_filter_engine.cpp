@@ -1,4 +1,6 @@
 #include "ideal_filter_engine.h"
+#include "logging_core.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <nlohmann/json.hpp>
@@ -83,16 +85,22 @@ void IdealFilterEngine::update(double dt) {
             return;
         }
 
-        // Filter noise by |S21|^2, no added noise
+        // Passive two-port: noise_total = |S21|^2 * noise_in + kT * max(0, 1 - |S21|^2).
+        // Gain (|S21| > 1) adds no thermal term; clamping is the chosen rule for gain.
+        const double k = 1.3806e-23;
+        const double T = 290.0;
         out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], idx);
+            double mag_sq = std::norm(S);
             double nin =
                 (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
-            out.noise_W[i] = std::norm(S) * nin;
+            out.noise_W[i] = mag_sq * nin;
+            out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - mag_sq);
+            out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
         }
-        out.noise_added_W.assign(N, 0.0);
-        out.noise_total_W = out.noise_W;
 
         out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
         out.bumpGeneration();
@@ -170,34 +178,45 @@ nlohmann::json IdealFilterEngine::serialize() const {
 }
 
 void IdealFilterEngine::deserialize(const nlohmann::json &j) {
+    // Parse into locals and validate before any member changes, so a rejected band
+    // leaves the engine exactly as it was.
+    FilterType type = m_type;
     if (j.contains("filter_type")) {
         if (j["filter_type"].is_string()) {
             const std::string ft = j["filter_type"].get<std::string>();
             if (ft == "LPF")
-                m_type = FilterType::LPF;
+                type = FilterType::LPF;
             else if (ft == "HPF")
-                m_type = FilterType::HPF;
+                type = FilterType::HPF;
             else if (ft == "BPF")
-                m_type = FilterType::BPF;
+                type = FilterType::BPF;
             else if (ft == "BSF")
-                m_type = FilterType::BSF;
+                type = FilterType::BSF;
         } else {
             int ft = j.value("filter_type", 0);
             if (ft < 0)
                 ft = 0;
             if (ft > 3)
                 ft = 3;
-            m_type = static_cast<FilterType>(ft);
+            type = static_cast<FilterType>(ft);
         }
     }
     // Preserve the old registry factory's conditional cutoff semantics:
-    // both present -> setCutoffs; only fc_low -> setCutoff (mirrors high);
-    // neither -> keep constructor defaults.
+    // both present -> both cutoffs; only fc_low -> fc_low mirrored to high;
+    // neither -> keep current cutoffs.
+    double low = m_fc_low_Hz;
+    double high = m_fc_high_Hz;
     if (j.contains("fc_low_Hz") && j.contains("fc_high_Hz")) {
-        setCutoffs_Hz(j["fc_low_Hz"].get<double>(), j["fc_high_Hz"].get<double>());
+        low = j["fc_low_Hz"].get<double>();
+        high = j["fc_high_Hz"].get<double>();
     } else if (j.contains("fc_low_Hz")) {
-        setCutoff_Hz(j["fc_low_Hz"].get<double>());
+        low = high = j["fc_low_Hz"].get<double>();
     }
+    if (!isValidCutoffPair(type, low, high))
+        throw std::invalid_argument(kInvertedBandError);
+    m_type = type;
+    m_fc_low_Hz = low;
+    m_fc_high_Hz = high;
     m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
         m_sparam_data.load(m_sparam_filepath);
@@ -206,6 +225,14 @@ void IdealFilterEngine::deserialize(const nlohmann::json &j) {
     // An absent index selects S21 for a loaded file, as setSParamFilepath() does.
     const int default_fwd_idx = m_sparam_data.loaded() ? m_sparam_data.numPorts() : 0;
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", default_fwd_idx);
+    // An index outside the loaded matrix would read as unity in SParameterData::interpolate,
+    // so it falls back to the S21 default. Agent writes then see the adjustment and roll back.
+    const int matrix_size = m_sparam_data.numPorts() * m_sparam_data.numPorts();
+    if (m_sparam_data.loaded() && (m_sparam_fwd_idx < 0 || m_sparam_fwd_idx >= matrix_size)) {
+        LOG_WARN("sparam_fwd_idx %d is outside the %d-port matrix; using S21 (index %d)",
+                 m_sparam_fwd_idx, m_sparam_data.numPorts(), default_fwd_idx);
+        m_sparam_fwd_idx = default_fwd_idx;
+    }
     m_dirty = true;
 }
 

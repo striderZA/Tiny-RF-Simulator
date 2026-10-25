@@ -15,6 +15,17 @@ double kaiserWindowAt(double index, int N, double beta) {
 }
 double sincP(double v) { return std::abs(v) < 1e-12 ? 1.0 : std::sin(M_PI * v) / (M_PI * v); }
 double toDb(double v) { return 20.0 * std::log10(std::max(v, 1e-300)); }
+// Verdict basis: the least-suppressed |H| over the alias band, max over x in [1.0, 1.5], dB.
+double farFloorDb(const PfbFilterDesign &design) {
+    double floor_db = -1e300;
+    for (int i = 0; i <= 50; ++i)
+        floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
+    return floor_db;
+}
+// Worst (least-suppressed) rejection over the alias band: max(|H(1.0)|, far floor), dB.
+double worstRejectionDb(const PfbFilterDesign &design) {
+    return std::max(toDb(design.responseAt(1.0)), farFloorDb(design));
+}
 } // namespace
 
 PfbFilterDesign::PfbFilterDesign(int M, int K, double beta) {
@@ -65,14 +76,8 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
     m.edge_loss_db = toDb(design.responseAt(0.5));
     m.adjacent_rejection_db = toDb(design.responseAt(1.0));
 
-    // Far-adjacent floor: worst response over x in [1.0, 1.5].
-    double floor_db = -1e300;
-    for (int i = 0; i <= 50; ++i) {
-        floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
-    }
-    m.far_floor_db = floor_db;
-    // Verdict basis: the least-suppressed value across the alias band, so the
-    // target applies to H(1.0) and the far-adjacent floor alike.
+    // Far-adjacent floor and worst-case verdict basis (see farFloorDb / worstRejectionDb).
+    m.far_floor_db = farFloorDb(design);
     m.worst_rejection_db = std::max(m.adjacent_rejection_db, m.far_floor_db);
 
     // -3 dB half width: first crossing scanning outward from DC. The response
@@ -87,17 +92,21 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
         }
     }
 
-    // Flat-noise tilt: integral of H(x)^2 over the |x| <= 1 slice the engine
-    // integrates. ~ -0.6 dB for the corrected model (old narrow model: -9 dB).
-    const int steps = 400; // H^2 is a smooth bell; 0.005-ch sampling is ample
+    // Flat-noise tilt: normalized noise bandwidth in dB (~ -0.6 dB for the corrected model).
+    m.flat_noise_tilt_db = 10.0 * std::log10(std::max(design.normalizedNoiseBandwidth(), 1e-300));
+    return m;
+}
+
+double PfbFilterDesign::normalizedNoiseBandwidth() const {
+    // int_{-1}^{1} |H(x)|^2 dx, the channel-width-normalized noise bandwidth. H^2 is a
+    // smooth bell, so 400 trapezoid steps are ample.
+    const int steps = 400;
     double acc = 0.0;
     for (int i = 0; i <= steps; ++i) {
-        const double h = design.responseAt(-1.0 + 2.0 * i / steps);
+        const double h = responseAt(-1.0 + 2.0 * i / steps);
         acc += h * h;
     }
-    acc *= 2.0 / steps;
-    m.flat_noise_tilt_db = 10.0 * std::log10(std::max(acc, 1e-300));
-    return m;
+    return acc * 2.0 / steps;
 }
 
 RejectionStatus compareRejection(double rejection_db, double target_db) {
@@ -109,16 +118,71 @@ RejectionStatus compareRejection(double rejection_db, double target_db) {
     return RejectionStatus::Misses;
 }
 
+PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMetrics &metrics) {
+    PfbRecommendation rec;
+    const int M = design.channelCount();
+    const int K = design.tapsPerBranch();
+    if (design.tapCount() > kPfbRecommendMaxTaps)
+        return rec;
+    rec.searched = true;
+
+    // Verdict metric is the worst case over the alias band (metrics.worst_rejection_db).
+    // Each candidate changes one parameter and keeps the other, so the shown setting is
+    // the one that was evaluated.
+    double best_db = metrics.worst_rejection_db;
+    for (int b = 0; b <= 20; b += 4) {
+        if (static_cast<double>(b) == design.beta())
+            continue;
+        const double db = worstRejectionDb(PfbFilterDesign(M, K, b));
+        if (db < best_db) {
+            best_db = db;
+            rec.beta = b;
+            rec.taps_per_branch.reset();
+        }
+    }
+    for (int k : {K + 1, 64}) {
+        if (k <= K || k > 64)
+            continue;
+        const double db = worstRejectionDb(PfbFilterDesign(M, k, design.beta()));
+        if (db < best_db) {
+            best_db = db;
+            rec.taps_per_branch = k;
+            rec.beta.reset();
+        }
+    }
+    return rec;
+}
+
 std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
-                            double target_db) {
+                            double target_db, const PfbRecommendation &rec) {
     if (compareRejection(metrics.worst_rejection_db, target_db) == RejectionStatus::Meets)
         return {};
     char buf[256];
-    std::snprintf(buf, sizeof(buf),
-                  "Worst-case rejection %.1f dB is short of the %.0f dB target. "
-                  "Raise K (%d -> more) to narrow the transition band so the "
-                  "stopband starts closer to the channel edge, or raise beta "
-                  "(%.1f -> up to 20) to deepen the stopband floor.",
-                  -metrics.worst_rejection_db, target_db, design.tapsPerBranch(), design.beta());
-    return buf;
+    std::snprintf(buf, sizeof(buf), "Worst-case rejection %.1f dB is short of the %.0f dB target.",
+                  -metrics.worst_rejection_db, target_db);
+    std::string text = buf;
+    if (!rec.searched) {
+        std::snprintf(buf, sizeof(buf),
+                      " No suggestion: M*K = %d is above %d taps, where the search is skipped.",
+                      design.tapCount(), kPfbRecommendMaxTaps);
+        return text + buf;
+    }
+    if (rec.taps_per_branch.has_value()) {
+        std::snprintf(buf, sizeof(buf),
+                      " Set K (%d -> %d) at beta %.1f: this lowers worst-case rejection.",
+                      design.tapsPerBranch(), *rec.taps_per_branch, design.beta());
+        text += buf;
+    } else if (rec.beta.has_value()) {
+        std::snprintf(buf, sizeof(buf),
+                      " Set beta (%.1f -> %.1f) at K=%d: this lowers worst-case rejection.",
+                      design.beta(), *rec.beta, design.tapsPerBranch());
+        text += buf;
+    } else {
+        std::snprintf(buf, sizeof(buf),
+                      " None of the checked single changes improves it (K+1, K=64 if below, "
+                      "or beta 0, 4, ..., 20 at K=%d).",
+                      design.tapsPerBranch());
+        text += buf;
+    }
+    return text;
 }

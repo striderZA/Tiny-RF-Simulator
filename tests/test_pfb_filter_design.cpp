@@ -8,6 +8,7 @@
 #include "node_graph_engine.h"
 #include "pfb_channelizer_engine.h"
 #include "pfb_filter_design.h"
+#include "power_meter_engine.h"
 
 using Catch::Approx;
 
@@ -85,7 +86,7 @@ TEST_CASE("PfbFilterMetrics verdict covers the far alias band", "[pfb_filter_des
     REQUIRE(m.far_floor_db == Approx(-93.3).margin(0.2));
     REQUIRE(m.worst_rejection_db == Approx(m.far_floor_db).margin(1e-12));
     REQUIRE(compareRejection(m.worst_rejection_db, 100.0) != RejectionStatus::Meets);
-    REQUIRE(!pfbGuidanceText(PfbFilterDesign(32, 16, 8.0), m, 100.0).empty());
+    REQUIRE(!pfbGuidanceText(PfbFilterDesign(32, 16, 8.0), m, 100.0, PfbRecommendation{}).empty());
 }
 
 TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_design]") {
@@ -94,14 +95,28 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
     const double achieved = -m.worst_rejection_db; // positive magnitude
 
     REQUIRE(compareRejection(m.worst_rejection_db, achieved) == RejectionStatus::Meets);
-    REQUIRE(pfbGuidanceText(d, m, achieved).empty());
+    REQUIRE(pfbGuidanceText(d, m, achieved, PfbRecommendation{}).empty());
 
-    // A much harder target must produce a non-empty, K/beta-referencing hint.
+    // A much harder target must produce a non-empty hint.
     REQUIRE(compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Misses);
-    std::string hint = pfbGuidanceText(d, m, 140.0);
-    REQUIRE(!hint.empty());
-    REQUIRE(hint.find("K") != std::string::npos);
-    REQUIRE(hint.find("beta") != std::string::npos);
+    const PfbRecommendation rec = pfbRecommend(d, m);
+    REQUIRE(!pfbGuidanceText(d, m, 140.0, rec).empty());
+
+    // Issue #289: at K=8, beta=8 the hint must not send the user to a beta that
+    // lowers the worst-case rejection (beta=20 puts H(1) at -55.9 dB against -83.2 dB).
+    // The single suggested change must lower the worst case, and its beta must be the
+    // best of the checked values 0, 4, ..., 20 at K=8.
+    auto worst_db = [](const PfbFilterDesign &x) {
+        return computePfbMetrics(x).worst_rejection_db;
+    };
+    REQUIRE(rec.searched);
+    REQUIRE(rec.beta.has_value());
+    REQUIRE(!rec.taps_per_branch.has_value());
+    const double suggested_db = worst_db(PfbFilterDesign(32, 8, *rec.beta));
+    REQUIRE(suggested_db < m.worst_rejection_db);
+    for (int b = 0; b <= 20; b += 4)
+        REQUIRE(worst_db(PfbFilterDesign(32, 8, b)) >= suggested_db - 1e-9);
+    REQUIRE(pfbGuidanceText(d, m, 140.0, rec).find("beta (8.0 -> 12.0)") != std::string::npos);
 
     // A target 6 dB above achieved is Within10Db.
     REQUIRE(compareRejection(m.worst_rejection_db, achieved + 6.0) == RejectionStatus::Within10Db);
@@ -109,7 +124,50 @@ TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_des
     // Exact lower boundary: achieved == target_db - 10 is still Within10Db.
     REQUIRE(compareRejection(m.worst_rejection_db, achieved + 10.0) == RejectionStatus::Within10Db);
 }
+TEST_CASE("PFB guidance never suggests a change that worsens worst-case rejection",
+          "[pfb_filter_design]") {
+    // Sweep: any single change shown must lower the worst-case rejection when applied alone,
+    // and the text must say "None of the checked" exactly when nothing is shown. The text
+    // never claims that larger K values fail, since only the checked candidates were evaluated.
+    auto worst_db = [](const PfbFilterDesign &x) {
+        return computePfbMetrics(x).worst_rejection_db;
+    };
+    for (int M : {4, 8, 32})
+        for (int K = 1; K <= 16; ++K)
+            for (double beta : {0.0, 8.0, 9.0, 20.0}) {
+                const PfbFilterDesign d(M, K, beta);
+                const auto m = computePfbMetrics(d);
+                const auto rec = pfbRecommend(d, m);
+                const std::string text = pfbGuidanceText(d, m, 140.0, rec);
+                if (compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Meets) {
+                    REQUIRE(text.empty()); // target met: no hint at all
+                    continue;
+                }
+                REQUIRE(rec.searched);
+                REQUIRE(!(rec.taps_per_branch.has_value() && rec.beta.has_value()));
+                if (rec.taps_per_branch.has_value()) {
+                    REQUIRE(worst_db(PfbFilterDesign(M, *rec.taps_per_branch, beta)) <
+                            m.worst_rejection_db);
+                } else if (rec.beta.has_value()) {
+                    REQUIRE(worst_db(PfbFilterDesign(M, K, *rec.beta)) < m.worst_rejection_db);
+                } else {
+                    REQUIRE(text.find("None of the checked") != std::string::npos);
+                }
+                REQUIRE(text.find("No larger") == std::string::npos);
+            }
+}
 
+TEST_CASE("PFB guidance clamps K suggestion to the slider maximum", "[pfb_filter_design]") {
+    // K=64 is the slider maximum: no "more K" suggestion, and the text never says "more".
+    PfbFilterDesign top(32, 64, 0.0);
+    auto m = computePfbMetrics(top);
+    REQUIRE(compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Misses);
+    const PfbRecommendation rec = pfbRecommend(top, m);
+    REQUIRE(!rec.taps_per_branch.has_value());
+    const std::string hint = pfbGuidanceText(top, m, 140.0, rec);
+    REQUIRE(!hint.empty());
+    REQUIRE(hint.find("more") == std::string::npos);
+}
 TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filter_design]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
@@ -135,7 +193,29 @@ TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filt
     REQUIRE(mean > 0.5e-20);
     REQUIRE(mean < 1.5e-20);
 }
-TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
+namespace {
+constexpr double kBoltzmannT_W_per_Hz = 1.380649e-23 * 290.0;
+
+// Continuous ENBW in Hz: D * int_{-1}^{1} |H(x)|^2 dx, with D the channel width.
+double continuousEnbwHz(const PfbFilterDesign &design, double channel_bw_Hz) {
+    constexpr int steps = 8000;
+    double acc = 0.0;
+    for (int i = 0; i < steps; ++i) {
+        const double h = design.responseAt(-1.0 + (i + 0.5) * 2.0 / steps);
+        acc += h * h;
+    }
+    return channel_bw_Hz * acc * 2.0 / steps;
+}
+
+// 10 MHz input grid spanning -500..+500 MHz (101 bins), flat kT noise.
+void loadTenMhzKtGrid(Spectrum &in) {
+    for (int i = 0; i <= 100; ++i)
+        in.frequencies.push_back(-500e6 + i * 10e6);
+    in.noise_total_W.assign(in.frequencies.size(), kBoltzmannT_W_per_Hz);
+}
+} // namespace
+
+TEST_CASE("PFB channel ENBW matches continuous noise integration on a fine grid",
           "[pfb_filter_design][enbw]") {
     NodeGraphEngine graph;
     PFBChannelizerEngine pfb(0, graph);
@@ -152,11 +232,9 @@ TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
     pfb.update(0.0);
 
     const auto &critical = pfb.channels().at(16);
-    double expected_enbw_Hz = 0.0;
-    for (double weight : critical.bin_weights)
-        expected_enbw_Hz += weight * weight * 1e6;
-    REQUIRE(critical.enbw_Hz == Approx(expected_enbw_Hz).epsilon(1e-12));
-    REQUIRE(critical.noise_W == Approx(input_psd_W_per_Hz * expected_enbw_Hz).epsilon(1e-12));
+    const double expected_enbw_Hz = continuousEnbwHz(PfbFilterDesign(32, 8, 8.0), 400e6 / 32.0);
+    REQUIRE(critical.enbw_Hz == Approx(expected_enbw_Hz).epsilon(1e-3));
+    REQUIRE(critical.noise_W == Approx(input_psd_W_per_Hz * critical.enbw_Hz).epsilon(1e-12));
     const double critical_enbw_Hz = critical.enbw_Hz;
 
     pfb.setSamplingRatio(2);
@@ -164,6 +242,70 @@ TEST_CASE("PFB channel ENBW matches response-weighted noise integration",
     const auto &oversampled = pfb.channels().at(16);
     REQUIRE(oversampled.enbw_Hz > 1.8 * critical_enbw_Hz);
     REQUIRE(oversampled.noise_W == Approx(input_psd_W_per_Hz * oversampled.enbw_Hz).epsilon(1e-12));
+}
+
+TEST_CASE("PFB channel ENBW is grid-independent at M=64 on a 10 MHz grid",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(64);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const double expected_enbw_Hz = continuousEnbwHz(PfbFilterDesign(64, 8, 8.0), 1e9 / 64.0);
+    REQUIRE(pfb.channels().size() == 64);
+    for (const auto &ch : pfb.channels())
+        REQUIRE(ch.enbw_Hz == Approx(expected_enbw_Hz).epsilon(0.01));
+}
+
+TEST_CASE("PFB centre-channel noise at M=128 on a 10 MHz grid tracks kT*Fs/M",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(128);
+    pfb.setActiveChannel(64);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const auto &active = pfb.channels().at(64);
+    const double ideal_dBm = 10.0 * std::log10(kBoltzmannT_W_per_Hz * 1e9 / 128.0) + 30.0;
+    REQUIRE(active.noise_W > 0.0);
+    REQUIRE(10.0 * std::log10(active.noise_W) + 30.0 == Approx(ideal_dBm).margin(1.0));
+}
+
+TEST_CASE("PFB M=256 channel readout is finite only when PowerMeter accepts it",
+          "[pfb_filter_design][enbw][grid]") {
+    NodeGraphEngine graph;
+    PFBChannelizerEngine pfb(0, graph);
+
+    Spectrum in;
+    loadTenMhzKtGrid(in);
+    pfb.setFs_Hz(1e9);
+    pfb.setChannelCount(256);
+    pfb.setActiveChannel(128);
+    pfb.node().inputs[0] = &in;
+    pfb.update(0.0);
+
+    const double noise_W = pfb.channels().at(128).noise_W;
+    const bool readout_finite = std::isfinite(noise_W) && noise_W > 0.0;
+    const PowerMeasurement pm = PowerMeterEngine{}.measure(&pfb.node().outputs[0]);
+    REQUIRE(readout_finite == pm.valid);
+
+    // Full-band output must not silently read zero: where no channel has a usable
+    // estimate, every bin is unavailable (NaN) and PowerMeter rejects the spectrum.
+    const auto &full_band = pfb.node().outputs[1];
+    REQUIRE(full_band.noise_total_W.size() == in.frequencies.size());
+    for (double density : full_band.noise_total_W)
+        REQUIRE(std::isnan(density));
+    REQUIRE_FALSE(PowerMeterEngine{}.measure(&full_band).valid);
 }
 
 TEST_CASE("PFB engine tone weights match the shared prototype", "[pfb_filter_design]") {

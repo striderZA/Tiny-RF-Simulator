@@ -266,13 +266,8 @@ void AmplifierEngine::update(double dt) {
                                               intercept2Function(gain));
             for (const auto &t : result.extra_tones)
                 out.tones.push_back(t);
-            if (result.compression_dB < -1e8) {
-                for (size_t i = 0; i < n_fund; ++i)
-                    out.tones[i].power_dBm = MIN_POWER;
-            } else {
-                for (size_t i = 0; i < n_fund; ++i)
-                    out.tones[i].power_dBm += result.compression_dB;
-            }
+            for (size_t i = 0; i < n_fund; ++i)
+                out.tones[i].power_dBm += result.compression_dB;
         }
 
         if (in_ptr && !in_ptr->phase_deg.empty())
@@ -288,24 +283,19 @@ void AmplifierEngine::update(double dt) {
             return;
         }
 
-        // Amplify input noise by |S21|^2
+        // Amplify input noise by |S21|^2 and add the device noise per bin, each bin scaled
+        // by its own gain. A grid-wide mean would let clamped and negative bins dominate.
         out.noise_W.assign(N, 0.0);
-        double sum_gain = 0.0;
-        int gain_count = 0;
+        out.noise_added_W.assign(N, 0.0);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], m_sparam_fwd_idx);
             double gain_linear = std::norm(S);
-            sum_gain += gain_linear;
-            ++gain_count;
             double nin =
                 (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
             out.noise_W[i] = gain_linear * nin;
+            double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, gain_linear);
+            out.noise_added_W[i] = added_density <= 0.0 ? 0.0 : added_density;
         }
-
-        // Noise figure (scaled by average S21 gain)
-        double avg_gain = (gain_count > 0) ? (sum_gain / gain_count) : 1.0;
-        double added_density = addedNoiseDensity_W_per_Hz(m_nf_dB, avg_gain);
-        out.noise_added_W.assign(N, added_density <= 0.0 ? 0.0 : added_density);
 
         out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i)
@@ -347,13 +337,8 @@ void AmplifierEngine::update(double dt) {
         for (const auto &t : result.extra_tones)
             out.tones.push_back(t);
 
-        if (result.compression_dB < -1e8) {
-            for (size_t i = 0; i < n_fund; ++i)
-                out.tones[i].power_dBm = MIN_POWER;
-        } else {
-            for (size_t i = 0; i < n_fund; ++i)
-                out.tones[i].power_dBm += result.compression_dB;
-        }
+        for (size_t i = 0; i < n_fund; ++i)
+            out.tones[i].power_dBm += result.compression_dB;
     }
 
     const size_t N = out.frequencies.size();

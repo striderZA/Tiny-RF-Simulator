@@ -76,7 +76,33 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Spectrum-analyzer RBW and VBW span 1 kHz to 100 MHz. The range lives at the widget's `utils::inputFrequency()` call, and its trailing `displayUnit_Hz` picks the unit. Engine setters stay unclamped so tests and API callers can drive any value.
 - The analyzer reports noise power integrated over its effective RBW. Its sampled noise kernel is normalized per
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
-  changing RBW clears Max Hold, Min Hold, and Video Average history.
+  changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
+
+## Touchstone Parsing Contract
+
+- Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
+- Reference impedance: the option line `R n` sets it; v2.0 `[Reference]` overrides it and may span lines. A `[Reference]` with differing per-port values is refused and logged, since per-port renormalisation is not implemented. `R` is accepted by the parser; `SParameterData::load()` refuses a non-positive R.
+- `SParameterData::load()` renormalises a uniform reference R to 50 Ω: Z = R(I−S)⁻¹(I+S), S' = (Z−50)(Z+50)⁻¹. `TouchstoneParser::parse()` returns file values and the file reference unchanged.
+- The agent `data_file_read` tool reports raw file samples with `reference_impedance_ohm`; it does not renormalise. Read the reference field to interpret them.
+
+## S-parameter Contract
+
+- `SParameterData::interpolate()` evaluates negative frequencies at `|f|` and returns the conjugate response, matching a real-valued network's frequency symmetry.
+
+## Passive Coax Noise
+
+- Coax cable models a passive lossy stage at 290 K: each output bin is input noise times power gain plus `kT(1−gain)`.
+
+## Mixer Noise Contract
+
+- `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
+- `MixerEngine` emits one tone per sideband (no merge, no snapping). Copies that differ only by rounding (`tone ± LO` computed separately) are grouped by the analyzer and power meter through `coherentToneWatts()`, which sums copies within 4 ulps of the largest tone frequency in the list as phasors. The analyzer reads real-domain spectra after conjugate-symmetric expansion, so each real tone appears at +f and -f at half power. Network-analyzer comb readouts still take the first matching tone, so their gain and NF are unchanged.
+
+## ADC Output Grid Contract
+
+- `AdcEngine` output labels are bin centres: `label_k = -Fs/(2D) + (k + 0.5)·df_out`, bin k covers `[label_k - df/2, label_k + df/2)`. The lower output edge `-Fs/(2D)` lies in bin 0.
+- `SpectrumAnalyzerEngine::binPowerComponents` maps tones into the same cells. A tone on a negative half-bin edge goes to the bin above (`floor(x + 0.5)`, with a 1e-9-bin float tolerance at the lower edge).
+- Even N puts DC on a half-bin tie, so a 0 Hz tone shows at +df/2. This is the accepted trade-off of the bin-centre convention.
 
 ## Agent Rules
 

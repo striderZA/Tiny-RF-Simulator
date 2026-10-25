@@ -82,6 +82,12 @@ void AttenuatorEngine::update(double dt) {
             return;
         }
 
+        // Per-bin phase follows S21, as coax does: arg(S21) is added to the input phase.
+        for (size_t i = 0; i < std::min(N, out.phase_deg.size()); ++i) {
+            auto S = m_sparam_data.interpolate(out.frequencies[i], idx);
+            out.phase_deg[i] += std::arg(S) * 180.0 / std::numbers::pi;
+        }
+
         // Passive noise model: noise_total = noise_in * |S21|^2 + k*T*(1 - |S21|^2)
         const double k = 1.3806e-23;
         const double T = 290.0;
