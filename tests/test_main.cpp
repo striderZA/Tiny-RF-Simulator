@@ -283,6 +283,147 @@ TEST_CASE("Mixer preserves phase on sidebands", "[mixer]") {
     REQUIRE(out.tones[1].phase_deg == 45.0);
 }
 
+// Analyzer power (dBm) at f_Hz, as the analyzer reads a real-domain spectrum: conjugate-symmetric
+// expansion halves each real tone onto +f and -f, then coherentToneWatts groups copies at one
+// frequency. Groups within window_Hz of f_Hz are summed in power.
+static double analyzerDbmAt(const Spectrum &spec, double f_Hz, double window_Hz) {
+    const auto tones = spec.is_complex_baseband ? spec.tones : conjugateSymmetricExpand(spec.tones);
+    double watts = 0.0;
+    for (const auto &[freq, w] : coherentToneWatts(tones))
+        if (std::abs(freq - f_Hz) <= window_Hz)
+            watts += w;
+    return 10.0 * std::log10(watts / 1e-3);
+}
+
+// Real-domain grid from 0 to (bins - 1) * step_Hz with zero noise, for analyzer renderSpectrum.
+static Spectrum zeroNoiseGrid(double step_Hz, int bins) {
+    Spectrum s;
+    for (int i = 0; i < bins; ++i)
+        s.frequencies.push_back(i * step_Hz);
+    s.noise_W.assign(s.frequencies.size(), 0.0);
+    s.noise_added_W.assign(s.frequencies.size(), 0.0);
+    s.noise_total_W.assign(s.frequencies.size(), 0.0);
+    return s;
+}
+
+// Two in-phase real tones at 50 and 150 MHz with LO 100 MHz: the lower sidebands coincide at 50 MHz
+// (each -26 dBm). The analyzer expands each to +-f at half power, then sums the two +50 MHz copies
+// coherently: -26 + 10*log10(2) = -22.99 dBm.
+TEST_CASE("Mixer coincident in-phase sidebands read coherently in the analyzer",
+          "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+    input.tones.push_back({150e6, -20.0, 0.0});
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer at LO 0 reads one tone's images coherently in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(0.0);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer sidebands split by rounding read coherently in the analyzer",
+          "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // Both lower sidebands are 740032354.775 Hz in exact decimal, but the two subtractions round
+    // differently: the keys differ by 1.19e-7 Hz, so exact-frequency grouping would sum in power.
+    gen.addTone(259967645.225, -20.0, 0.0);
+    gen.addTone(1740032354.775, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const double dBm_740 = analyzerDbmAt(mix.node().outputs[0], 740032354.775, 1.0);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer rounding split straddling a grid midpoint reads coherently", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // Tones 2^-22 Hz apart at 1.74 GHz: the lower sidebands differ by the same 2^-22 Hz.
+    const double tone_a = 1740000000.000244140625;
+    gen.addTone(tone_a, -20.0, 0.0);
+    gen.addTone(tone_a + std::ldexp(1.0, -22), -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(1e9);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const double dBm_740 = analyzerDbmAt(mix.node().outputs[0], 740000000.0, 0.5);
+    REQUIRE(dBm_740 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer near-DC rounding split reads coherently in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(0, graph);
+    // LO 2^30 - 0.1 Hz, tones LO -+ 0.3 Hz: both lower sidebands are 0.3 Hz, but each tone is
+    // rounded at the LO's ulp (2^-22 Hz), so the two sidebands differ by a few 1e-7 Hz.
+    const double lo = 1073741823.9;
+    gen.addTone(lo - 0.3, -20.0, 0.0);
+    gen.addTone(lo + 0.3, -20.0, 0.0);
+    gen.update(0.0);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(lo);
+    mix.node().inputs[0] = &gen.node().outputs[0];
+    mix.update(0.0);
+
+    const double dBm_03 = analyzerDbmAt(mix.node().outputs[0], 0.3, 0.5);
+    REQUIRE(dBm_03 == Approx(-26.0 + 10.0 * std::log10(2.0)).margin(0.05));
+}
+
+TEST_CASE("Mixer sidebands that cancel exactly read as zero in the analyzer", "[mixer][issue305]") {
+    NodeGraphEngine graph;
+    Spectrum input = zeroNoiseGrid(1e6, 201);
+    input.tones.push_back({50e6, -20.0, 0.0});
+    input.tones.push_back({150e6, -20.0, 180.0});
+
+    // Both lower sidebands land at 50 MHz with opposite phase: the analyzer's coherent sum is zero.
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const SpectrumAnalyzerEngine analyzer;
+    const auto trace = analyzer.renderSpectrum(mix.node().outputs[0]);
+    REQUIRE(trace[50] < -100.0);
+}
+
+TEST_CASE("Analyzer groups copies within a few ulps of the largest tone frequency",
+          "[mixer][issue305]") {
+    // Copies one ulp apart at 1 GHz are one tone; copies 1 mHz apart are two.
+    const double one_ulp = std::nextafter(1e9, 2e9);
+    const std::vector<Spectrum::Tone> near = {{1e9, -20.0, 0.0}, {one_ulp, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(near).size() == 1);
+    const std::vector<Spectrum::Tone> far = {{1e9, -20.0, 0.0}, {1e9 + 1e-3, -20.0, 0.0}};
+    REQUIRE(coherentToneWatts(far).size() == 2);
+}
+
 TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     NodeGraphEngine graph;
     Spectrum input;

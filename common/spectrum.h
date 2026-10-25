@@ -1,7 +1,9 @@
 #pragma once
 
 #include "common.h"
+#include <algorithm>
 #include <atomic>
+#include <limits>
 #include <cmath>
 #include <complex>
 #include <map>
@@ -84,22 +86,36 @@ struct Spectrum {
 // Relative cancellation tolerance for coherent tone sums: a resultant within this fraction of the
 // summed amplitudes is exact cancellation, not a residue from rounding (e.g. cos/sin of 180 deg).
 inline constexpr double kCoherentCancelRelTol = 1e-12;
+// Copies closer than kCoherentFreqUlps ulps of the largest tone frequency in the list are one tone.
+// Copies formed as tone ± LO round at the ulp of their operands, which is set by the LO scale; the
+// list carries the upper sidebands at about LO, so its largest frequency sets that scale.
+inline constexpr double kCoherentFreqUlps = 4.0;
 
-// Combines tones into (freq_Hz, watts) pairs, one per distinct exact frequency. Copies at one
-// frequency are coherent: their RMS-voltage phasors (sqrt(W) at phase_deg) add, so in-phase
-// copies give +6.02 dB and opposite-phase copies cancel to zero. Distinct frequencies add as
-// power. Shared by the analyzer and power meter so both use one duplicate-tone model.
+// Combines tones into (freq_Hz, watts) pairs, one per distinct frequency (copies within the
+// tolerance share a group, keyed by the first frequency seen). Copies at one frequency
+// are coherent: their RMS-voltage phasors (sqrt(W) at phase_deg) add, so in-phase copies give
+// +6.02 dB and opposite-phase copies cancel to zero. Distinct frequencies add as power. Shared by
+// the analyzer and power meter so both use one duplicate-tone model.
 inline std::vector<std::pair<double, double>>
 coherentToneWatts(const std::vector<Spectrum::Tone> &tones) {
     struct Group {
         std::complex<double> phasor{0.0, 0.0};
         double amplitude_sum = 0.0;
     };
+    double scale_Hz = 0.0;
+    for (const auto &t : tones)
+        scale_Hz = std::max(scale_Hz, std::abs(t.freq_Hz));
+    const double tol_Hz =
+        kCoherentFreqUlps *
+        (std::nextafter(scale_Hz, std::numeric_limits<double>::infinity()) - scale_Hz);
     std::map<double, Group> groups;
     for (const auto &t : tones) {
         const double amplitude = std::sqrt(std::pow(10.0, (t.power_dBm - 30.0) / 10.0));
         const double phase = t.phase_deg * std::numbers::pi / 180.0;
-        Group &group = groups[t.freq_Hz];
+        auto it = groups.lower_bound(t.freq_Hz - tol_Hz);
+        if (it == groups.end() || it->first > t.freq_Hz + tol_Hz)
+            it = groups.emplace(t.freq_Hz, Group{}).first;
+        Group &group = it->second;
         group.phasor +=
             std::complex<double>(amplitude * std::cos(phase), amplitude * std::sin(phase));
         group.amplitude_sum += amplitude;
