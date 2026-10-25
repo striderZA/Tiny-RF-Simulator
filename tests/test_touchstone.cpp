@@ -255,3 +255,31 @@ TEST_CASE("TouchstoneParser reads a multi-digit port count from the extension", 
     REQUIRE(result->frequencies.size() == 1);
     REQUIRE(result->parameters[0].size() == 100);
 }
+
+TEST_CASE("TouchstoneParser rejects a data line with a non-numeric token", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_junk_line.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "junk junk\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(!result.has_value());
+    std::filesystem::remove(tmpfile);
+}
+
+TEST_CASE("TouchstoneParser rejects a point line with one value short", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_short_point.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(!result.has_value());
+    std::filesystem::remove(tmpfile);
+}

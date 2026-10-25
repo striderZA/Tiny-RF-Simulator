@@ -170,7 +170,7 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             continue;
 
         // Detect version 2.0 keywords
-        if (stripped.size() > 10 && stripped[0] == '[') {
+        if (stripped[0] == '[') {
             std::string lower = stripped;
             for (char &c : lower)
                 c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -207,6 +207,10 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         while (iss >> val) {
             raw_values.push_back(val);
         }
+        // Stopped on a token that is not a number: reject the file rather than
+        // dropping the rest of the line (which can silently lose a whole point).
+        if (!iss.eof())
+            return std::nullopt;
 
         // R2 in-loop: bail out as soon as the cap is provably exceeded.
         if (raw_values.size() > max_raw_values)
