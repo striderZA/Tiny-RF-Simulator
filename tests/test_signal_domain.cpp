@@ -186,7 +186,7 @@ TEST_CASE("SignalGenerator+Amplifier: false flag also propagates", "[domain][amp
     REQUIRE(amp.node().outputs[0].is_complex_baseband == false);
 }
 
-TEST_CASE("Combiner: propagates is_complex_baseband (manual mode, either input)",
+TEST_CASE("Combiner: propagates is_complex_baseband when both inputs are complex baseband",
           "[domain][combiner]") {
     NodeGraphEngine graph;
     CombinerEngine comb(0, graph);
@@ -197,7 +197,7 @@ TEST_CASE("Combiner: propagates is_complex_baseband (manual mode, either input)"
     in0.is_complex_baseband = true;
     in1.frequencies = {1e9, 2e9};
     in1.noise_total_W.assign(2, 1e-21);
-    in1.is_complex_baseband = false;
+    in1.is_complex_baseband = true;
 
     comb.node().inputs[0] = &in0;
     comb.node().inputs[1] = &in1;

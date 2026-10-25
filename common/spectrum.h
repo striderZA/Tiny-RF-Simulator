@@ -1,9 +1,32 @@
 #pragma once
 
 #include "common.h"
+#include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <complex>
 #include <cstdint>
+#include <limits>
+#include <map>
+#include <numbers>
+#include <utility>
 #include <vector>
+
+// Identity of one Spectrum object, for caches keyed on its address. Storage can be reused by
+// a later object at the same address, so an address alone does not identify an object.
+// Construction and copy-construction take a new value; assignment keeps this object's value,
+// so state keyed on it survives upstream recomputes that assign new contents.
+struct SpectrumIdentity {
+    static inline std::atomic<uint64_t> s_next{1};
+    uint64_t value = s_next.fetch_add(1, std::memory_order_relaxed);
+
+    SpectrumIdentity() = default;
+    SpectrumIdentity(const SpectrumIdentity &)
+        : value(s_next.fetch_add(1, std::memory_order_relaxed)) {}
+    SpectrumIdentity(SpectrumIdentity &&) : value(s_next.fetch_add(1, std::memory_order_relaxed)) {}
+    SpectrumIdentity &operator=(const SpectrumIdentity &) { return *this; }
+    SpectrumIdentity &operator=(SpectrumIdentity &&) { return *this; }
+};
 
 struct Spectrum {
     struct Tone {
@@ -41,6 +64,9 @@ struct Spectrum {
     // recomputation so consumers can detect upstream changes.
     uint64_t generation = 0;
 
+    // Per-object identity; see SpectrumIdentity.
+    SpectrumIdentity identity;
+
     void bumpGeneration() { ++generation; }
 
     void computeTotalNoise() {
@@ -56,6 +82,53 @@ struct Spectrum {
         }
     }
 };
+
+// Relative cancellation tolerance for coherent tone sums: a resultant within this fraction of the
+// summed amplitudes is exact cancellation, not a residue from rounding (e.g. cos/sin of 180 deg).
+inline constexpr double kCoherentCancelRelTol = 1e-12;
+// Copies closer than kCoherentFreqUlps ulps of the largest tone frequency in the list are one tone.
+// Copies formed as tone ± LO round at the ulp of their operands, which is set by the LO scale; the
+// list carries the upper sidebands at about LO, so its largest frequency sets that scale.
+inline constexpr double kCoherentFreqUlps = 4.0;
+
+// Combines tones into (freq_Hz, watts) pairs, one per distinct frequency (copies within the
+// tolerance share a group, keyed by the first frequency seen). Copies at one frequency
+// are coherent: their RMS-voltage phasors (sqrt(W) at phase_deg) add, so in-phase copies give
+// +6.02 dB and opposite-phase copies cancel to zero. Distinct frequencies add as power. Shared by
+// the analyzer and power meter so both use one duplicate-tone model.
+inline std::vector<std::pair<double, double>>
+coherentToneWatts(const std::vector<Spectrum::Tone> &tones) {
+    struct Group {
+        std::complex<double> phasor{0.0, 0.0};
+        double amplitude_sum = 0.0;
+    };
+    double scale_Hz = 0.0;
+    for (const auto &t : tones)
+        scale_Hz = std::max(scale_Hz, std::abs(t.freq_Hz));
+    const double tol_Hz =
+        kCoherentFreqUlps *
+        (std::nextafter(scale_Hz, std::numeric_limits<double>::infinity()) - scale_Hz);
+    std::map<double, Group> groups;
+    for (const auto &t : tones) {
+        const double amplitude = std::sqrt(std::pow(10.0, (t.power_dBm - 30.0) / 10.0));
+        const double phase = t.phase_deg * std::numbers::pi / 180.0;
+        auto it = groups.lower_bound(t.freq_Hz - tol_Hz);
+        if (it == groups.end() || it->first > t.freq_Hz + tol_Hz)
+            it = groups.emplace(t.freq_Hz, Group{}).first;
+        Group &group = it->second;
+        group.phasor +=
+            std::complex<double>(amplitude * std::cos(phase), amplitude * std::sin(phase));
+        group.amplitude_sum += amplitude;
+    }
+    std::vector<std::pair<double, double>> out;
+    out.reserve(groups.size());
+    for (const auto &[freq, group] : groups) {
+        const double resultant = std::abs(group.phasor);
+        const bool cancelled = resultant <= kCoherentCancelRelTol * group.amplitude_sum;
+        out.emplace_back(freq, cancelled ? 0.0 : resultant * resultant);
+    }
+    return out;
+}
 
 // Expands real-domain tones into their conjugate-symmetric (+-fc) representation per Euler's
 // formula: cos(2*pi*fc*t) = 0.5*(exp(j*2*pi*fc*t) + exp(-j*2*pi*fc*t)). Each non-DC tone becomes

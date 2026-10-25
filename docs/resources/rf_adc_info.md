@@ -20,8 +20,8 @@ Everything after the ADC is pure digital arithmetic.
 Analog RF Input
       |
       v
-[Anti-alias / input BPF]    ← assume ideal brickwall at Fs/2 for zone 1,
-      |                         or explicit band for higher Nyquist zones
+[Anti-alias / input BPF]    ← not modelled: the engine has no band (see §1);
+                              band-limit upstream with an explicit filter if needed
       v
 [Ideal Sampler @ Fs]        ← all Nyquist zone aliasing happens here
       |
@@ -50,6 +50,8 @@ An ADC sampling at `Fs` folds all analog content into `[0, Fs/2)` (first Nyquist
 f_low  = (Z-1) · Fs/2
 f_high =  Z    · Fs/2
 ```
+
+The simulator applies no anti-alias band in the engine: tones and input noise both fold from every Nyquist zone. Noise is the input PSD summed over all zones that alias onto each output bin; the input grid defines the noise band, and zero noise is assumed beyond its span. A wide grid raises the output noise floor by the number of zones it covers: the default generator grid (±20 GHz, kT per bin) spans 40 zones at Fs = 1 GHz, so the ADC noise floor sits about 16 dB above the single-zone value.
 
 The real sampled waveform's magnitude alias can be described by:
 
@@ -312,7 +314,7 @@ Three distinct aliasing mechanisms exist in this chain. The model must handle al
 
 ### 6.1 Nyquist Zone Aliasing (at the ADC)
 
-Any analog signal at `f_RF` aliases to `alias_frequency(f_RF, Fs)` as described in Section 1. This is **by design** for undersampling receivers (Zone 2, 3, …) but is also the mechanism by which out-of-band interferers corrupt the wanted channel. The pre-ADC anti-alias filter (assumed ideal brickwall in this twin) is the only defence.
+Any analog signal at `f_RF` aliases to `alias_frequency(f_RF, Fs)` as described in Section 1. This is **by design** for undersampling receivers (Zone 2, 3, …) but is also the mechanism by which out-of-band interferers corrupt the wanted channel. The engine applies no pre-ADC anti-alias filter: every zone folds, so any band-limiting must be supplied upstream of the ADC in the circuit.
 
 ### 6.2 Decimation Aliasing (after LPF)
 
@@ -331,7 +333,7 @@ If the NCO frequency is not an exact integer multiple of the FFT bin (when doing
 
 | Source | Cause | Prevention in twin |
 |---|---|---|
-| Nyquist zone fold | `f_RF > Fs/2` | Ideal BPF before sampler; correct NCO sign for zone |
+| Nyquist zone fold | `f_RF > Fs/2` | Not prevented in the engine (all zones fold); band-limit upstream if needed; correct NCO sign for zone |
 | Decimation alias | LPF cutoff > `Fs/(2D)` | Assert cutoff ≤ `1/D` (normalised); use sufficient filter order |
 | Spectral inversion | Even Nyquist zone | Negate NCO frequency or conjugate output |
 

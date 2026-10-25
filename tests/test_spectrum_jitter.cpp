@@ -1,5 +1,6 @@
 #include "spectrum.h"
 #include "spectrum_analyzer_engine.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <numeric>
@@ -151,4 +152,25 @@ TEST_CASE("SpectrumAnalyzer: non-positive jitter sigma is a safe no-op", "[spect
     REQUIRE(combined.size() == first.size());
     for (size_t i = 0; i < first.size(); ++i)
         REQUIRE(first[i] == second[i]);
+}
+
+TEST_CASE("SpectrumAnalyzer: peak readout over jittered noise tracks the un-jittered maximum",
+          "[spectrum][jitter]") {
+    // Noise-only spectrum: the readout peak is the maximum noise bin. Jitter
+    // inflates that maximum, so the readout must not be taken from the jittered trace.
+    Spectrum spec = makeTonePlusNoise();
+    spec.tones.clear();
+    std::vector<const Spectrum *> specs = {&spec};
+
+    SpectrumAnalyzerEngine sa;
+    configureJittered(sa);
+    sa.setNoiseJitterEnabled(false);
+    std::vector<double> clean = sa.renderCombinedSpectrum(specs);
+    double clean_peak = *std::max_element(clean.begin(), clean.end());
+    // The readout trace draws no jitter, so one frame with jitter enabled is the
+    // same as every frame; the peak must equal the un-jittered maximum.
+    sa.setNoiseJitterEnabled(true);
+    std::vector<double> readout = sa.renderCombinedReadoutSpectrum(specs);
+    double readout_peak = *std::max_element(readout.begin(), readout.end());
+    REQUIRE(std::abs(readout_peak - clean_peak) < 0.5);
 }

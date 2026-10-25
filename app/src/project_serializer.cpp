@@ -4,6 +4,7 @@
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "graph_editor_actions.h"
+#include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imnodes.h"
 #include "logging_core.h"
@@ -27,6 +28,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -1453,6 +1455,41 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
         if (!window_state_ok() || !graph_state_ok()) {
             // Leave m_last_load_reset false: the live project and its current
             // save path are untouched, so the caller keeps them.
+            return false;
+        }
+        // An inverted BPF/BSF band cannot be restored, and skipping that record would drop it
+        // and its links, so the next save would write the loss. Refuse the file before any
+        // reset: the live project and its save path are kept, like the checks above.
+        const auto ideal_filter_bands_ok = [&]() -> bool {
+            if (!root.contains("components") || !root["components"].is_array())
+                return true;
+            const auto *filter_descriptor = ComponentTypeRegistry::instance().find("filter");
+            size_t index = 0;
+            for (const auto &cj : root["components"]) {
+                // Resolve the record the way the loader does: any name findByProjectType()
+                // accepts for the filter descriptor, not only the project-type spelling.
+                const bool is_filter = filter_descriptor && cj.is_object() && cj.contains("type") &&
+                                       cj["type"].is_string() &&
+                                       ComponentTypeRegistry::instance().findByProjectType(
+                                           cj["type"].get<std::string>()) == filter_descriptor;
+                if (is_filter && cj.contains("params") && cj["params"].is_object()) {
+                    // Same deserialize() the loader runs, on a scratch engine that is discarded.
+                    NodeGraphEngine scratch_graph;
+                    IdealFilterEngine scratch(0, scratch_graph);
+                    try {
+                        scratch.deserialize(cj["params"]);
+                    } catch (const std::invalid_argument &e) {
+                        LOG_ERROR("Invalid project file %s: component %zu: %s", path.c_str(), index,
+                                  e.what());
+                        return false;
+                    }
+                }
+                ++index;
+            }
+            return true;
+        };
+        if (!ideal_filter_bands_ok()) {
+            // Leave m_last_load_reset false, as above.
             return false;
         }
 
