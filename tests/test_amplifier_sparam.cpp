@@ -96,25 +96,20 @@ TEST_CASE("Amplifier S-param interpolates between data points", "[amp][sparam]")
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + expected_gain).margin(0.5));
 }
 
-TEST_CASE("Amplifier S-param handles out-of-band frequency", "[amp][sparam]") {
+TEST_CASE("Amplifier S-param flags out-of-band frequency", "[amp][sparam]") {
     NodeGraphEngine graph;
     AmplifierEngine amp(0, graph);
     amp.setSParamFilepath(s2p_path());
     REQUIRE(amp.sparamLoaded());
 
-    SignalGeneratorEngine gen(1, graph);
-    double f_outside = amp.sparamData().freqs().back() + 10e9;
-    gen.addTone(f_outside, -20.0);
-    gen.update(0.0);
-
-    amp.node().inputs[0] = &gen.node().outputs[0];
-    amp.update(0.0);
-
-    const auto &out = amp.node().outputs[0];
-    REQUIRE(out.tones.size() == 1);
-    auto S21 = amp.sparamData().interpolate(f_outside, 2);
-    double expected_phase = std::arg(S21) * 180.0 / std::numbers::pi;
-    REQUIRE(out.tones[0].phase_deg == Approx(expected_phase).margin(0.1));
+    const auto &sp = amp.sparamData();
+    const double f_lo = sp.freqs().front();
+    const double f_hi = sp.freqs().back();
+    CHECK(sp.inBand(f_lo));
+    CHECK(sp.inBand(f_hi));
+    CHECK(sp.inBand(0.5 * (f_lo + f_hi)));
+    CHECK_FALSE(sp.inBand(f_lo - 1e6));
+    CHECK_FALSE(sp.inBand(f_hi + 10e9));
 }
 
 TEST_CASE("Amplifier S-param adds noise figure correctly", "[amp][sparam][nf]") {

@@ -319,6 +319,9 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
         if (engine.sparamLoaded()) {
             ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
                                 engine.sparamData().numPorts());
+            ImGui::TextDisabled("Band: %.4g-%.4g GHz (outside held at edge)",
+                                engine.sparamData().freqs().front() / 1e9,
+                                engine.sparamData().freqs().back() / 1e9);
         } else if (!engine.sparamFilepath().empty()) {
             ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load file");
         }
@@ -685,6 +688,9 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
         if (engine.sparamLoaded()) {
             ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
                                 engine.sparamData().numPorts());
+            ImGui::TextDisabled("Band: %.4g-%.4g GHz (outside held at edge)",
+                                engine.sparamData().freqs().front() / 1e9,
+                                engine.sparamData().freqs().back() / 1e9);
         } else if (!engine.sparamFilepath().empty()) {
             ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load file");
         }
@@ -750,6 +756,9 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
         if (engine.sparamLoaded()) {
             ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
                                 engine.sparamData().numPorts());
+            ImGui::TextDisabled("Band: %.4g-%.4g GHz (outside held at edge)",
+                                engine.sparamData().freqs().front() / 1e9,
+                                engine.sparamData().freqs().back() / 1e9);
         }
         // Disable ideal-mode controls in S-param mode
         ImGui::BeginDisabled();

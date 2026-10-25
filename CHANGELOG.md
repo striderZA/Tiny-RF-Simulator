@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- **S-parameter out-of-band points are flagged (#285)** — a Touchstone file's band is now shown in the Amplifier, Ideal Filter, and Equalizer inspectors, and `SParameterData::inBand()` reports whether a frequency lies inside it. Points outside the band still take the nearest edge value, so their gain is not measured.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed
