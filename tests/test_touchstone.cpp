@@ -1,6 +1,7 @@
 #include "s_parameter_data.h"
 #include "test_temp_paths.h"
 #include "touchstone_parser.h"
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -408,4 +409,73 @@ TEST_CASE("TouchstoneParser reads a multi-digit port count from the extension", 
     REQUIRE(result->num_ports == 10);
     REQUIRE(result->frequencies.size() == 1);
     REQUIRE(result->parameters[0].size() == 100);
+}
+
+TEST_CASE("TouchstoneParser rejects a data line with a non-numeric token", "[touchstone]") {
+    // Each middle line carries a token that is not a complete number, including
+    // partial tokens that reach end of line ("-", "1e") and a trailing sign.
+    const std::array<std::string, 7> bad_middle_lines = {
+        "junk junk", "-", "+", ".", "1e", "1 1 1 1 1 1 1 1 -", "2.0 0.1x 0 0 0 0 0 0 0"};
+    int index = 0;
+    for (const auto &bad : bad_middle_lines) {
+        std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_junk_line_" +
+                              std::to_string(index++) + ".s2p";
+        {
+            std::ofstream ofs(tmpfile);
+            ofs << "# GHz S DB R 50\n";
+            ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+            ofs << bad << "\n";
+            ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        }
+        INFO("middle line: " << bad);
+        auto result = TouchstoneParser::parse(tmpfile);
+        REQUIRE(!result.has_value());
+        std::filesystem::remove(tmpfile);
+    }
+}
+
+TEST_CASE("TouchstoneParser ignores a bracket line before the version keyword", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_bracket_pre.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "[Comment] not a keyword\n";
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(result.has_value());
+    REQUIRE(result->frequencies.size() == 3);
+    std::filesystem::remove(tmpfile);
+}
+
+TEST_CASE("TouchstoneParser ignores text preamble lines before the option line", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_preamble.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "Measured by Bob on Monday\n";
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(result.has_value());
+    REQUIRE(result->frequencies.size() == 3);
+    std::filesystem::remove(tmpfile);
+}
+
+TEST_CASE("TouchstoneParser rejects a point line with one value short", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_short_point.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(!result.has_value());
+    std::filesystem::remove(tmpfile);
 }
