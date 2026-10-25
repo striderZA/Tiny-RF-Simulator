@@ -438,3 +438,36 @@ TEST_CASE("PFB tone index handles disjoint generations without saturation",
         REQUIRE(pfb.node().outputs[1].tones.size() == in.tones.size());
     }
 }
+
+TEST_CASE("PfbFilterDesign responseAt matches the DTFT definition", "[pfb_filter_design]") {
+    constexpr double kPi = 3.14159265358979323846;
+    // Issue #130: responseAt uses a phasor recurrence instead of a cos() per
+    // tap. Compare against the full complex DTFT sum over every tap, which is
+    // the definition, for several (M, K, beta) and offsets, including the long
+    // filter where the recurrence re-anchors many times.
+    struct Case {
+        int M;
+        int K;
+        double beta;
+    };
+    const Case cases[] = {
+        {32, 8, 8.0}, {32, 16, 12.0}, {256, 8, 8.0}, {2048, 8, 8.0}, {2048, 64, 8.0}};
+    const double xs[] = {0.0, 0.25, 0.5, 1.0, 1.37, 2.0, -0.8, -1.5};
+    for (const auto &c : cases) {
+        PfbFilterDesign d(c.M, c.K, c.beta);
+        const auto &taps = d.taps();
+        const int N = static_cast<int>(taps.size());
+        for (double x : xs) {
+            const double w = 2.0 * kPi * x / c.M;
+            double re = 0.0;
+            double im = 0.0;
+            for (int n = 0; n < N; ++n) {
+                re += taps[n] * std::cos(w * n);
+                im -= taps[n] * std::sin(w * n);
+            }
+            const double reference = std::sqrt(re * re + im * im);
+            INFO("M=" << c.M << " K=" << c.K << " x=" << x);
+            REQUIRE(d.responseAt(x) == Approx(reference).margin(1e-10));
+        }
+    }
+}

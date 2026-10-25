@@ -46,16 +46,47 @@ double PfbFilterDesign::responseAt(double x) const {
     // DTFT magnitude of the real taps: H(x) = sum_n h[n] * exp(-j*2*pi*(x/M)*n).
     // The taps are symmetric about (N-1)/2 (linear phase), so the mirrored
     // terms of sum h[n]*cos(w*(n-center)) are equal: pair them and evaluate a
-    // half-length cosine sum instead of a full complex sum (~4x fewer trigs).
+    // half-length cosine sum instead of a full complex sum.
+    // cos(w*(i-center)) is produced by rotating unit phasors instead of a
+    // cos() call per tap. Four phasor chains advance by 4w per step so their
+    // rotations overlap. Each chain is re-anchored from exact sin/cos every
+    // kAnchor taps, so rounding drift stays near kAnchor * eps.
+    constexpr int kAnchor = 256; // multiple of 4
     const int N = static_cast<int>(m_taps.size());
     const double w = 2.0 * M_PI * x / m_M; // rad/sample
     const double center = (N - 1) / 2.0;
-    double acc = 0.0;
     const int half = N / 2;
-    for (int i = 0; i < half; ++i)
-        acc += 2.0 * m_taps[i] * std::cos(w * (i - center));
+    const double *t = m_taps.data();
+    const double c4 = std::cos(4.0 * w);
+    const double s4 = std::sin(4.0 * w);
+    double sum = 0.0;
+    for (int base = 0; base < half; base += kAnchor) {
+        const int end = std::min(half, base + kAnchor);
+        double c[4];
+        double s[4];
+        double part[4] = {0.0, 0.0, 0.0, 0.0};
+        for (int j = 0; j < 4; ++j) {
+            const double theta = w * (base + j - center);
+            c[j] = std::cos(theta);
+            s[j] = std::sin(theta);
+        }
+        int i = base;
+        for (; i + 4 <= end; i += 4) {
+            for (int j = 0; j < 4; ++j) {
+                part[j] += t[i + j] * c[j];
+                const double next_c = c[j] * c4 - s[j] * s4;
+                s[j] = s[j] * c4 + c[j] * s4;
+                c[j] = next_c;
+            }
+        }
+        // Tail: fewer than 4 taps left in this block; c[j] is the phasor for i + j.
+        for (int j = 0; i + j < end; ++j)
+            part[j] += t[i + j] * c[j];
+        sum += part[0] + part[1] + part[2] + part[3];
+    }
+    double acc = 2.0 * sum;
     if (N % 2 != 0)
-        acc += m_taps[half]; // center tap of an odd-length filter, cos(0) = 1
+        acc += t[half]; // center tap of an odd-length filter, cos(0) = 1
     return std::abs(acc);
 }
 
