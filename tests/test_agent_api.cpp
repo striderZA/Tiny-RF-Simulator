@@ -1591,11 +1591,10 @@ TEST_CASE("data_file_read reports the non-reciprocal S31 sample", "[agent_api][d
     REQUIRE(amplifier != nullptr);
     amplifier->deserialize({{"sparam_mode", true}, {"sparam_filepath", path.string()}});
 
-    const auto result = fixture.call("data_file_read",
-                                     {{"epoch", fixture.api.epoch()},
-                                      {"component", amplifier->id()},
-                                      {"s_row", 2},
-                                      {"s_col", 0}});
+    const auto result = fixture.call("data_file_read", {{"epoch", fixture.api.epoch()},
+                                                        {"component", amplifier->id()},
+                                                        {"s_row", 2},
+                                                        {"s_col", 0}});
     REQUIRE_FALSE(result.is_error);
     REQUIRE(result.structured.at("samples").size() == 1);
     CHECK(result.structured.at("samples")[0].at("magnitude_dB").get<double>() ==
