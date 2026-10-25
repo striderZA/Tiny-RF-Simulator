@@ -289,20 +289,29 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     // Prune stale trace history for nodes no longer visible
     std::vector<const Spectrum *> all_active;
-    for (auto *node : active_nodes) {
+    std::vector<bool> all_active_visible;
+    for (size_t i = 0; i < active_nodes.size(); ++i) {
+        auto *node = active_nodes[i];
         if (!node)
             continue;
         all_active.push_back(&outputSpectrumFor(node));
+        all_active_visible.push_back(m_trace_visible[i]);
     }
     m_engine.pruneHistory(all_active);
 
     // Combined trace and its marker/peak axis share the common readout axis.
     const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
     freq_axis = &combined_axis;
-    // Marker and peak readouts use the jitter-free trace on the same axis (issue #292).
-    m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(visible_specs);
+    // Marker and peak readouts use the jitter-free trace on the same axis (issue #292). Every
+    // active spectrum is passed so hidden traces keep their held value (issue #291).
+    m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(all_active, all_active_visible);
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
+        // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
+        for (auto *node : active_nodes) {
+            if (node)
+                m_engine.renderSpectrum(outputSpectrumFor(node));
+        }
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
         ImGui::End();
         return;

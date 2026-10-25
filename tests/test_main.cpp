@@ -839,6 +839,283 @@ TEST_CASE("MaxHold accumulates per-bin maximum", "[spectrum][trace]") {
     REQUIRE(out2[4] > out2[1] + 5.0); // bin 4 now high (tone moved)
 }
 
+TEST_CASE("Combined MaxHold holds the peak after a decreasing tone", "[spectrum][trace]") {
+    // Regression for #291: the Peak readout and marker use renderCombinedSpectrum.
+    // It must hold the per-bin maximum like renderSpectrum does, not show the current frame.
+    auto make_engine = [] {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(TraceMode::MaxHold);
+        return sa;
+    };
+
+    Spectrum spec;
+    spec.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    spec.tones = {{0.0, 0.0, 0.0}}; // 0 dBm tone at bin 0
+    spec.generation = 1;
+
+    Spectrum spec_ref = spec;
+    SpectrumAnalyzerEngine ref = make_engine();
+    ref.renderSpectrum(spec_ref);
+
+    SpectrumAnalyzerEngine sa = make_engine();
+    std::vector<const Spectrum *> specs = {&spec};
+    sa.renderCombinedSpectrum(specs);
+
+    // Second frame: tone drops to -30 dBm at the same bin.
+    spec.tones = {{0.0, -30.0, 0.0}};
+    spec.generation = 2;
+    spec_ref.tones = spec.tones;
+    spec_ref.generation = 2;
+
+    const auto held = ref.renderSpectrum(spec_ref);
+    const auto combined = sa.renderCombinedSpectrum(specs);
+
+    REQUIRE(combined.size() == held.size());
+    REQUIRE(held[0] == Approx(0.0).margin(0.5));
+    REQUIRE(combined[0] == Approx(held[0]).margin(1e-6));
+}
+
+TEST_CASE("Combined MaxHold drops held values when its spectrum is replaced at the same address",
+          "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    std::optional<Spectrum> slot;
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    slot->generation = 1;
+    const Spectrum *old_ptr = &*slot;
+    std::vector<const Spectrum *> specs = {old_ptr};
+    sa.renderCombinedSpectrum(specs);
+
+    // The old spectrum is removed and a new one is built at the same address.
+    slot.reset();
+    slot.emplace();
+    slot->frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    slot->tones = {{0.0, -30.0, 0.0}};
+    slot->generation = 1;
+    REQUIRE(&*slot == old_ptr);
+
+    // The new spectrum's own peak is -30 dBm; the old 0 dBm must not be held.
+    const auto combined = sa.renderCombinedSpectrum(specs);
+    REQUIRE(combined[0] == Approx(-30.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold keeps held values while a trace is hidden", "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}}; // 0 dBm at bin 0
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}}; // far from bin 0
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+
+    // Frame 1: both visible. Both spectra are still active when B is hidden.
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // Frame 2: B hidden (still active), A drops to -30 dBm.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(both);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(0.0).margin(0.5));
+}
+
+TEST_CASE("Combined MaxHold keeps a remaining trace's held value when another is removed",
+          "[spectrum][trace]") {
+    SpectrumAnalyzerEngine sa;
+    sa.setNoiseJitterEnabled(false);
+    sa.setResBw(1e6);
+    sa.setVideoBw(1e6);
+    sa.setTraceMode(TraceMode::MaxHold);
+
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}};
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, 0.0, 0.0}};
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    const std::vector<const Spectrum *> only_a = {&a};
+    sa.pruneHistory(both);
+    sa.renderCombinedSpectrum(both);
+
+    // B is removed from the active set; A keeps the 0 dBm it held.
+    a.tones = {{0.0, -30.0, 0.0}};
+    a.generation = 2;
+    sa.pruneHistory(only_a);
+    const auto combined = sa.renderCombinedSpectrum(only_a);
+    REQUIRE(combined[0] == Approx(0.0).margin(0.5)); // A keeps its own held peak
+}
+
+TEST_CASE("Combined readout ignores a hidden trace's held peak", "[spectrum][trace]") {
+    const auto make_engine = [] {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(TraceMode::MaxHold);
+        return sa;
+    };
+    Spectrum a;
+    a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    a.tones = {{0.0, 0.0, 0.0}}; // 0 dBm at 0 Hz
+    a.generation = 1;
+    Spectrum b = a;
+    b.tones = {{20e6, -30.0, 0.0}}; // -30 dBm at 20 MHz
+
+    const std::vector<const Spectrum *> both = {&a, &b};
+    SpectrumAnalyzerEngine sa = make_engine();
+    sa.pruneHistory(both);
+    sa.renderCombinedReadoutSpectrum(both, {true, true});
+
+    // A hidden (still active), B shown: the readout must match B alone, not A's held 0 dBm.
+    sa.pruneHistory(both);
+    const auto hidden_a = sa.renderCombinedReadoutSpectrum(both, {false, true});
+    SpectrumAnalyzerEngine ref = make_engine();
+    const std::vector<const Spectrum *> only_b = {&b};
+    ref.renderCombinedReadoutSpectrum(only_b, {true});
+    const auto expected = ref.renderCombinedReadoutSpectrum(only_b, {true});
+    REQUIRE(hidden_a.size() == expected.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+        REQUIRE(hidden_a[i] == Approx(expected[i]).margin(1e-6));
+    }
+    REQUIRE(hidden_a[0] < -20.0);
+
+    // Re-shown: A's held 0 dBm at 0 Hz returns.
+    const auto shown_again = sa.renderCombinedReadoutSpectrum(both, {true, true});
+    REQUIRE(shown_again[0] == Approx(0.0).margin(0.5));
+}
+
+TEST_CASE("Combined readout does not average in Video Average mode", "[spectrum][trace]") {
+    Spectrum s;
+    s.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    s.tones = {{0.0, 0.0, 0.0}};
+    s.generation = 1;
+    const std::vector<const Spectrum *> specs = {&s};
+
+    SpectrumAnalyzerEngine avg;
+    SpectrumAnalyzerEngine clear;
+    for (SpectrumAnalyzerEngine *sa : {&avg, &clear}) {
+        sa->setNoiseJitterEnabled(false);
+        sa->setResBw(1e6);
+        sa->setVideoBw(1e6);
+    }
+    avg.setTraceMode(TraceMode::VideoAverage);
+    avg.renderCombinedReadoutSpectrum(specs);
+    clear.renderCombinedReadoutSpectrum(specs);
+
+    s.tones = {{0.0, -30.0, 0.0}};
+    s.generation = 2;
+    const auto averaged = avg.renderCombinedReadoutSpectrum(specs);
+    const auto current = clear.renderCombinedReadoutSpectrum(specs);
+    REQUIRE(averaged.size() == current.size());
+    for (size_t i = 0; i < current.size(); ++i) {
+        REQUIRE(averaged[i] == Approx(current[i]).margin(1e-6));
+    }
+}
+
+TEST_CASE("Combined display and readout keep separate holds", "[spectrum][trace]") {
+    Spectrum s;
+    s.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+    s.tones = {{0.0, 0.0, 0.0}};
+    s.generation = 1;
+    const std::vector<const Spectrum *> specs = {&s};
+    const std::vector<double> levels = {0.0, -30.0, -10.0};
+
+    SpectrumAnalyzerEngine both_calls;
+    SpectrumAnalyzerEngine readout_only;
+    for (SpectrumAnalyzerEngine *sa : {&both_calls, &readout_only}) {
+        sa->setNoiseJitterEnabled(false);
+        sa->setResBw(1e6);
+        sa->setVideoBw(1e6);
+        sa->setTraceMode(TraceMode::MaxHold);
+    }
+    for (size_t f = 0; f < levels.size(); ++f) {
+        s.tones = {{0.0, levels[f], 0.0}};
+        s.generation = f + 1;
+        both_calls.renderCombinedSpectrum(specs);
+        const auto got = both_calls.renderCombinedReadoutSpectrum(specs);
+        const auto want = readout_only.renderCombinedReadoutSpectrum(specs);
+        REQUIRE(got.size() == want.size());
+        for (size_t i = 0; i < want.size(); ++i) {
+            REQUIRE(got[i] == Approx(want[i]).margin(1e-6));
+        }
+    }
+}
+
+TEST_CASE("Max Hold readout matches Clear/Write on a steady scene", "[spectrum][trace]") {
+    // Max Hold on an unchanging scene must read what Clear/Write reads, including a tone on a
+    // finer grid than the readout axis (no tone may be dropped between axis points).
+    const auto make_engine = [](TraceMode mode) {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(mode);
+        return sa;
+    };
+    const auto expect_same_when_steady = [&](const std::vector<const Spectrum *> &specs) {
+        SpectrumAnalyzerEngine hold = make_engine(TraceMode::MaxHold);
+        SpectrumAnalyzerEngine clear = make_engine(TraceMode::ClearWrite);
+        std::vector<double> want, got;
+        for (int frame = 0; frame < 3; ++frame) {
+            want = clear.renderCombinedReadoutSpectrum(specs);
+            got = hold.renderCombinedReadoutSpectrum(specs);
+            REQUIRE(got.size() == want.size());
+            for (size_t i = 0; i < want.size(); ++i) {
+                REQUIRE(got[i] == Approx(want[i]).margin(1e-6));
+            }
+        }
+        return got;
+    };
+
+    SECTION("sources on different grids keep a tone between axis points") {
+        Spectrum coarse;
+        coarse.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        coarse.noise_total_W.assign(coarse.frequencies.size(), k * T);
+        coarse.generation = 1;
+        Spectrum fine;
+        for (int i = 0; i <= 20; ++i) {
+            fine.frequencies.push_back(i * 1e6);
+        }
+        fine.noise_total_W.assign(fine.frequencies.size(), k * T);
+        fine.tones = {{1e6, 0.0, 0.0}}; // 0 dBm at 1 MHz, between coarse axis points
+        fine.generation = 1;
+        const std::vector<const Spectrum *> specs = {&coarse, &fine};
+        const auto got = expect_same_when_steady(specs);
+        REQUIRE(*std::max_element(got.begin(), got.end()) > -6.0);
+    }
+
+    SECTION("overlapping identical sources add as Clear/Write does") {
+        Spectrum a;
+        a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        a.noise_total_W.assign(a.frequencies.size(), k * T);
+        a.tones = {{5e6, 0.0, 0.0}};
+        a.generation = 1;
+        Spectrum b = a;
+        const std::vector<const Spectrum *> specs = {&a, &b};
+        expect_same_when_steady(specs);
+    }
+}
+
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);
