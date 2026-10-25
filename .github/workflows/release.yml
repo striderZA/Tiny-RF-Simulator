@@ -250,7 +250,9 @@ jobs:
             echo "ERROR: expected one CPack archive in build/, found ${#archives[@]}"
             exit 1
           fi
-          listing=$(cmake -E tar tf "${archives[0]}")
+          # cmake writes the listing in text mode, so Windows output ends lines in CR.
+          # Strip it, or the $-anchored patterns below never match.
+          listing=$(cmake -E tar tf "${archives[0]}" | tr -d '\r')
           # Each archive has one top-level directory; the patterns match below it.
           for required in \
             'bin/tiny-rf-simulator(\.exe)?$' \
