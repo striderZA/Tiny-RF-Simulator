@@ -235,6 +235,44 @@ jobs:
             build/bin/rf-sim-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
             mingw-dlls/
 
+      # CPack runs on the Release tree the job just built and tested, so the
+      # CPACK_* and install() settings in CMakeLists.txt are exercised on every
+      # tag. Its archive is a CI artifact only; release assets are still packaged
+      # by hand in the release job.
+      - name: Run CPack and verify archive
+        run: |
+          set -euo pipefail
+          cd build
+          cpack -C Release
+          shopt -s nullglob
+          archives=(rf-simulator-*.tar.gz rf-simulator-*.zip)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "ERROR: expected one CPack archive in build/, found ${#archives[@]}"
+            exit 1
+          fi
+          listing=$(cmake -E tar tf "${archives[0]}")
+          # Each archive has one top-level directory; the patterns match below it.
+          for required in \
+            'bin/tiny-rf-simulator(\.exe)?$' \
+            'bin/component_data/' \
+            'bin/extensions/' \
+            'share/doc/rf-simulator/README\.md$'; do
+            if ! grep -Eq "^[^/]+/${required}" <<< "$listing"; then
+              echo "ERROR: ${archives[0]} is missing an entry matching ${required}"
+              exit 1
+            fi
+          done
+          echo "CPack archive ${archives[0]} verified"
+
+      - name: Upload CPack output
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpack-${{ runner.os == 'Windows' && 'windows' || 'linux' }}
+          path: |
+            build/rf-simulator-*.tar.gz
+            build/rf-simulator-*.zip
+          if-no-files-found: error
+
   release:
     needs: [classify-release, validate-version, format, strict-build, sanitizer, package]
     if: >-

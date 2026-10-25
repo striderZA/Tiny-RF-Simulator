@@ -26,6 +26,8 @@
 - A failed tag is retagged as described in `CONTRIBUTING.md` ("Failed release tag"); a published release's tag is never moved.
 - `release.yml` declares top-level `permissions: contents: read`; only the `release` job has `contents: write`.
 - `strict-build` and `package` both run `.github/actions/build-and-test`, which holds each configuration's toolchain install, configure, build, test, and the Windows MinGW TEST_CASE floor check. `MINGW_TEST_CASE_FLOOR` is set in `release.yml`.
+- The `package` job also runs `cpack -C Release` on its build tree and uploads the archive as the `cpack-linux` / `cpack-windows` artifact. CPack output is CI-only: the release assets are still built by hand in the release job, and the job checks that the archive holds `bin/tiny-rf-simulator`, `bin/component_data/`, `bin/extensions/` and `share/doc/rf-simulator/README.md`.
+- `CMakeLists.txt` installs `extensions/` (`install(DIRECTORY extensions …)`), so that directory must exist in the repo, even empty. `extensions/.gitkeep` holds it; `cpack` fails on a missing install source.
 
 ## Work Guidance
 
