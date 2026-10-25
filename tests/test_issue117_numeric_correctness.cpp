@@ -169,6 +169,66 @@ TEST_CASE("Issue 117: equalizer magnitude profile and mixer signed difference", 
     REQUIRE(real_mixer.node().outputs[0].tones[0].freq_Hz == Approx(300e6));
 }
 
+TEST_CASE("Issue 302: real lower sideband phase is negated below the LO", "[issue302]") {
+    NodeGraphEngine graph;
+    MixerEngine mixer(0, graph);
+    mixer.setLoFreq_Hz(100e6);
+    mixer.setConversionGain_dB(-6.0);
+    auto below = makeSpectrum({0.0, 400e6}, {{50e6, -20.0, 60.0}}, false);
+    mixer.node().inputs[0] = &below;
+    mixer.update(0.0);
+    const auto &out = mixer.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    REQUIRE(out.tones[0].freq_Hz == Approx(50e6));
+    REQUIRE(out.tones[0].power_dBm == Approx(-26.0));
+    REQUIRE(out.tones[0].phase_deg == Approx(-60.0));
+    REQUIRE(out.tones[1].freq_Hz == Approx(150e6));
+    REQUIRE(out.tones[1].phase_deg == Approx(60.0));
+
+    MixerEngine above_mixer(1, graph);
+    above_mixer.setLoFreq_Hz(100e6);
+    auto above = makeSpectrum({0.0, 400e6}, {{150e6, -20.0, 60.0}}, false);
+    above_mixer.node().inputs[0] = &above;
+    above_mixer.update(0.0);
+    const auto &above_out = above_mixer.node().outputs[0];
+    REQUIRE(above_out.tones[0].freq_Hz == Approx(50e6));
+    REQUIRE(above_out.tones[0].phase_deg == Approx(60.0));
+
+    MixerEngine complex_mixer(2, graph);
+    complex_mixer.setLoFreq_Hz(100e6);
+    auto complex_input = makeSpectrum({-400e6, 400e6}, {{50e6, -20.0, 60.0}}, true);
+    complex_mixer.node().inputs[0] = &complex_input;
+    complex_mixer.update(0.0);
+    const auto &complex_out = complex_mixer.node().outputs[0];
+    REQUIRE(complex_out.tones[0].freq_Hz == Approx(-50e6));
+    REQUIRE(complex_out.tones[0].phase_deg == Approx(60.0));
+}
+
+TEST_CASE("Issue 302: mixer lower sideband phase sums coherently through an ADC", "[issue302]") {
+    NodeGraphEngine graph;
+    MixerEngine mixer(0, graph);
+    mixer.setLoFreq_Hz(100e6);
+    auto input = makeSpectrum({0.0, 400e6}, {{50e6, -20.0, 60.0}, {150e6, -20.0, 30.0}}, false);
+    mixer.node().inputs[0] = &input;
+    mixer.update(0.0);
+
+    AdcEngine adc(0, graph);
+    adc.setFs_Hz(1e9);
+    adc.setDecimation(1);
+    adc.setNcoFsFraction(0.0);
+    adc.node().inputs[0] = &mixer.node().outputs[0];
+    adc.update(0.0);
+
+    const Spectrum::Tone *bin = nullptr;
+    for (const auto &tone : adc.node().outputs[0].tones) {
+        if (std::abs(tone.freq_Hz - 50e6) < 1.0)
+            bin = &tone;
+    }
+    REQUIRE(bin != nullptr);
+    REQUIRE(bin->power_dBm == Approx(-26.0).margin(0.05));
+    REQUIRE(bin->phase_deg == Approx(-15.0).margin(0.1));
+}
+
 TEST_CASE("Issue 137: combiner S-param mode latches before a file is chosen", "[issue137]") {
     NodeGraphEngine graph;
     CombinerEngine combiner(0, graph);

@@ -1,9 +1,12 @@
 #include "amplifier_engine.h"
 #include "node_graph_engine.h"
 #include "signal_generator_engine.h"
+#include "test_temp_paths.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <numbers>
 
 using Catch::Approx;
@@ -223,4 +226,41 @@ TEST_CASE("Amplifier clamps OIP2 and OIP3 to >= -30 dBm", "[amp][nonlinear]") {
 
     amp.setOIP3_dBm(30.0);
     REQUIRE(amp.oip3_dBm() == Approx(30.0));
+}
+
+TEST_CASE("Amplifier S-param NF added term follows per-bin |S21|^2 on a steep device",
+          "[amp][sparam][nf]") {
+    // Two-point steep device: S21 = +20 dB at 1 GHz, -20 dB at 10 GHz. The clamp holds
+    // -20 dB above 10 GHz, so a grid-wide mean would be dominated by the 1 GHz bin.
+    const auto path = test_temp_paths::kProcessTempRoot.root() / "steep_amp_nf.s2p";
+    {
+        std::ofstream f(path);
+        f << "# Hz S RI R 50\n"
+          << "1000000000 0 0 10 0 0 0 0 0\n"
+          << "10000000000 0 0 0.1 0 0 0 0 0\n";
+    }
+
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+    amp.setSParamFilepath(path.string());
+    REQUIRE(amp.sparamMode());
+    std::filesystem::remove(path);
+    amp.setNF_dB(3.0);
+
+    Spectrum in;
+    in.frequencies = {1e9, 5e9, 10e9, 19.99e9};
+    in.noise_total_W.assign(in.frequencies.size(), 0.0);
+    amp.node().inputs[0] = &in;
+    amp.update(0.0);
+
+    const auto &out = amp.node().outputs[0];
+    REQUIRE(out.noise_added_W.size() == in.frequencies.size());
+    const double kTe = k * calculateNoiseTemp(3.0);
+    for (size_t i = 0; i < in.frequencies.size(); ++i) {
+        const double gain = std::norm(amp.sparamData().interpolate(in.frequencies[i], 2));
+        const double expected_W_per_Hz = kTe * gain;
+        const double error_dB = 10.0 * std::log10(out.noise_added_W[i] / expected_W_per_Hz);
+        INFO("bin " << i << " at " << in.frequencies[i] << " Hz");
+        REQUIRE(std::abs(error_dB) <= 1.0);
+    }
 }

@@ -304,7 +304,7 @@ add_standalone_test(test_adc_configuration
 # test_component_authoring: new TEST_CASEs must not join the main `tests` binary.
 add_standalone_test(test_pfb_filter_design
     SOURCES test_pfb_filter_design.cpp
-    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine
+    LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine simulator::power_meter_engine
 )
 add_standalone_test(test_pfb_calculator
     SOURCES test_pfb_calculator.cpp
@@ -402,6 +402,13 @@ add_standalone_test(test_spectrum_jitter
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Regression coverage for issue #293: the combined readout must resample traces
+# on different grids onto one axis instead of adding them by index.
+add_standalone_test(test_spectrum_combined_grid
+    SOURCES test_spectrum_combined_grid.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.
@@ -469,6 +476,14 @@ add_standalone_test(test_issue239_rbw_vbw_bounds
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Issue #271: a VBW window must not reduce a CW tone peak (tone level is set by
+# RBW; VBW smooths only the noise floor). Standalone for the MinGW-w64
+# registration-ceiling reason above.
+add_standalone_test(test_issue271_vbw_tone
+    SOURCES test_issue271_vbw_tone.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Standalone app-level coverage for the node-hover SNR row: the onNodeHover
 # callback carries the registry summary plus the analyzer's strongest-tone SNR
 # for the node's first output, and reports "unavailable" when that output has no
@@ -507,7 +522,7 @@ add_standalone_test(test_circuit_runtime
     SOURCES test_circuit_runtime.cpp
     LIBS simulator::circuit_runtime simulator::signal_generator_engine
          simulator::amplifier_engine simulator::adc_engine
-         simulator::pfb_channelizer_engine
+         simulator::pfb_channelizer_engine simulator::attenuator_engine
 )
 
 # Standalone, UI-free behavioral coverage for app-owned graph editor actions.

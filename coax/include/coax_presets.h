@@ -9,14 +9,15 @@ struct CableSpec {
     double delay_ns_per_m; // signal propagation delay
     double max_freq_GHz;   // upper limit of the datasheet model
     double diameter_mm;    // informational; for widget display
+    bool calibrated;       // false: no datasheet model; the engine refuses it
 };
 
 inline const std::array<CableSpec, 6> kCoaxCablePresets = {{
-    // name,      K1,        K2,        delay, max_f,  diam
-    {"MT 210", 0.0, 0.0, 0.0, 100.0, 0.0}, // Uncalibrated — datasheet values needed
-    {"MT 230", 0.0, 0.0, 0.0, 100.0, 0.0}, // Uncalibrated — datasheet values needed
-    {"MT 265", 0.0, 0.0, 0.0, 100.0, 0.0}, // Uncalibrated — datasheet values needed
-    {"MT 300", 0.0, 0.0, 0.0, 100.0, 0.0}, // Uncalibrated — datasheet values needed
-    {"MT 340", 0.004710, 0.000004, 4.76, 18.5, 8.6},
-    {"MT 480", 0.0, 0.0, 0.0, 100.0, 0.0}, // Uncalibrated — datasheet values needed
+    // name,      K1,        K2,        delay, max_f,  diam, calibrated
+    {"MT 210", 0.0, 0.0, 0.0, 100.0, 0.0, false}, // Uncalibrated — datasheet values needed
+    {"MT 230", 0.0, 0.0, 0.0, 100.0, 0.0, false}, // Uncalibrated — datasheet values needed
+    {"MT 265", 0.0, 0.0, 0.0, 100.0, 0.0, false}, // Uncalibrated — datasheet values needed
+    {"MT 300", 0.0, 0.0, 0.0, 100.0, 0.0, false}, // Uncalibrated — datasheet values needed
+    {"MT 340", 0.004710, 0.000004, 4.76, 18.5, 8.6, true},
+    {"MT 480", 0.0, 0.0, 0.0, 100.0, 0.0, false}, // Uncalibrated — datasheet values needed
 }};

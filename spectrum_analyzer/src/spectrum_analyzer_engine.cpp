@@ -17,6 +17,105 @@ static double W_to_dBm(double w) {
     return 10.0 * std::log10(w) + 30.0;
 }
 
+namespace {
+
+// Bin width of a grid: its first spacing, or 1 for a single-bin grid.
+double gridBinWidth(const std::vector<double> &freqs) {
+    return freqs.size() >= 2 ? freqs[1] - freqs[0] : 1.0;
+}
+
+// Whether x lies within a grid's span, padded by half a bin on each side.
+bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
+    return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
+}
+
+// Bin-cell lower-edge slack, in bins. Float error in (f - front)/bw can leave a tone on the
+// lower cell edge a few ulp below it; this covers that without moving real tones.
+constexpr double kCellEdgeTolerance = 1e-9;
+
+// Index of the grid entry nearest x; ties resolve to the lower index.
+size_t nearestGridIndex(const std::vector<double> &freqs, double x) {
+    auto hi_it = std::lower_bound(freqs.begin(), freqs.end(), x);
+    if (hi_it == freqs.begin()) {
+        return 0;
+    }
+    if (hi_it == freqs.end()) {
+        return freqs.size() - 1;
+    }
+    size_t hi = static_cast<size_t>(hi_it - freqs.begin());
+    size_t lo = hi - 1;
+    return (x - freqs[lo] <= freqs[hi] - x) ? lo : hi;
+}
+
+// Adds one trace's per-bin noise (W) and tone (W) onto readout-axis bins. Noise is a
+// density, so each axis bin samples the nearest source bin and is rescaled to the axis bin
+// width. A tone is an impulse, so its power moves to the nearest axis bin. On an identical
+// grid this is the identity. A null sum_tone_W skips tones.
+void accumulateOntoGrid(const std::vector<double> &src_freqs,
+                        const std::vector<double> &src_noise_W,
+                        const std::vector<double> &src_tone_W, const std::vector<double> &grid,
+                        double grid_bin_width, std::vector<double> &sum_noise_W,
+                        std::vector<double> *sum_tone_W) {
+    const double src_bin_width = gridBinWidth(src_freqs);
+    const double noise_scale = grid_bin_width / src_bin_width;
+    for (size_t j = 0; j < grid.size(); ++j) {
+        if (!withinGrid(src_freqs, src_bin_width, grid[j])) {
+            continue;
+        }
+        sum_noise_W[j] += src_noise_W[nearestGridIndex(src_freqs, grid[j])] * noise_scale;
+    }
+
+    if (!sum_tone_W) {
+        return;
+    }
+    for (size_t i = 0; i < src_freqs.size(); ++i) {
+        if (src_tone_W[i] == 0.0 || !withinGrid(grid, grid_bin_width, src_freqs[i])) {
+            continue;
+        }
+        (*sum_tone_W)[nearestGridIndex(grid, src_freqs[i])] += src_tone_W[i];
+    }
+}
+
+} // namespace
+
+std::vector<double>
+SpectrumAnalyzerEngine::combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const {
+    // Common axis for every trace: from the lowest start to the highest stop, at the coarsest
+    // bin spacing among the traces. Each trace is sampled onto it, so no trace's bins fall
+    // outside the axis and the result does not depend on trace order.
+    double start = 0.0;
+    double stop = 0.0;
+    double step = 0.0;
+    bool found = false;
+    for (const Spectrum *s : specs) {
+        if (!s || s->frequencies.empty()) {
+            continue;
+        }
+        const std::vector<double> &f = s->frequencies;
+        start = found ? std::min(start, f.front()) : f.front();
+        stop = found ? std::max(stop, f.back()) : f.back();
+        found = true;
+        if (f.size() >= 2 && gridBinWidth(f) > step) {
+            step = gridBinWidth(f);
+        }
+    }
+    if (!found) {
+        return {};
+    }
+    if (!(step > 0.0) || !std::isfinite(step)) {
+        step = 1.0;
+    }
+    if (!(stop > start)) {
+        return {start};
+    }
+    const size_t n = static_cast<size_t>(std::floor((stop - start) / step + 1e-9)) + 1;
+    std::vector<double> axis(n);
+    for (size_t i = 0; i < n; ++i) {
+        axis[i] = start + static_cast<double>(i) * step;
+    }
+    return axis;
+}
+
 void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                                                 std::vector<double> &tone_W) const {
     size_t n = spec.frequencies.size();
@@ -48,33 +147,55 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
         expanded_tones = conjugateSymmetricExpand(spec.tones);
         display_tones = &expanded_tones;
     }
-    for (const auto &t : *display_tones) {
-        if (n < 2) {
-            continue;
-        }
-        int bin_idx =
-            static_cast<int>(std::round((t.freq_Hz - spec.frequencies.front()) / bin_width));
+    if (n < 2) {
+        return;
+    }
+    for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
+        // A bin covers [label - bw/2, label + bw/2). A tone exactly on the lower edge gives
+        // a cell value of 0 in exact arithmetic, but rounding can leave it a hair below 0;
+        // that tone still belongs to the bin above, not the bin below the grid.
+        const double cell = (freq_Hz - spec.frequencies.front()) / bin_width + 0.5;
+        int bin_idx = static_cast<int>(std::floor(cell));
+        if (bin_idx == -1 && cell > -kCellEdgeTolerance)
+            bin_idx = 0;
         if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
-            tone_W[bin_idx] += std::pow(10.0, (t.power_dBm - 30.0) / 10.0);
+            tone_W[bin_idx] += watts;
         }
     }
 }
 
-std::vector<double>
-SpectrumAnalyzerEngine::toJitteredPower_dBm(const std::vector<double> &noise_W,
-                                            const std::vector<double> &tone_W) const {
-    std::vector<double> power_dBm(noise_W.size());
+std::vector<double> SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W,
+                                                                bool apply_jitter) const {
+    std::vector<double> noise_dBm(noise_W.size());
     // Constructing the distribution is only defined for a positive sigma, so
     // guard it: a disabled or invalid setting stays a pure no-op.
-    if (m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
+    if (apply_jitter && m_noise_jitter_enabled && m_noise_jitter_sigma_dB > 0.0) {
         std::normal_distribution<double> jitter(0.0, m_noise_jitter_sigma_dB);
-        for (size_t i = 0; i < power_dBm.size(); ++i) {
-            double noise_W_i = noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0);
-            power_dBm[i] = W_to_dBm(noise_W_i + tone_W[i]);
+        for (size_t i = 0; i < noise_dBm.size(); ++i) {
+            noise_dBm[i] = W_to_dBm(noise_W[i] * std::pow(10.0, jitter(m_rng) / 10.0));
         }
     } else {
-        for (size_t i = 0; i < power_dBm.size(); ++i) {
-            power_dBm[i] = W_to_dBm(noise_W[i] + tone_W[i]);
+        for (size_t i = 0; i < noise_dBm.size(); ++i) {
+            noise_dBm[i] = W_to_dBm(noise_W[i]);
+        }
+    }
+    return noise_dBm;
+}
+
+std::vector<double> SpectrumAnalyzerEngine::toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                                               const std::vector<double> &tone_W,
+                                                               double binWidth,
+                                                               bool apply_jitter) const {
+    // VBW smooths the noise floor only: the moving average runs on noise dBm, and tone
+    // power is added back in linear watts afterwards so a tone peak is never averaged.
+    const std::vector<double> noise_dBm =
+        this->applyVBW(this->toJitteredNoise_dBm(noise_W, apply_jitter), binWidth);
+    std::vector<double> power_dBm(noise_dBm.size());
+    for (size_t i = 0; i < power_dBm.size(); ++i) {
+        if (tone_W[i] > 0.0) {
+            power_dBm[i] = W_to_dBm(std::pow(10.0, (noise_dBm[i] - 30.0) / 10.0) + tone_W[i]);
+        } else {
+            power_dBm[i] = noise_dBm[i];
         }
     }
     return power_dBm;
@@ -94,7 +215,8 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     // Cache the expensive split + RBW step. Jitter + VBW still run every frame
     // so the display keeps its instrument-like live feel.
     std::vector<double> rbw_noise_W, rbw_tone_W;
-    if (&spec == m_cache_spectrum && spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
+    if (&spec == m_cache_spectrum && spec.identity.value == m_cache_identity &&
+        spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
         bin_width == m_cache_bin_width) {
         rbw_noise_W = m_cache_rbw_noise_W;
         rbw_tone_W = m_cache_rbw_tone_W;
@@ -104,6 +226,7 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         rbw_noise_W = this->applyRBWForNoise(noise_W, bin_width);
         rbw_tone_W = this->applyRBW(tone_W, bin_width);
         m_cache_spectrum = &spec;
+        m_cache_identity = spec.identity.value;
         m_cache_spec_gen = spec.generation;
         m_cache_rbw = m_rbw;
         m_cache_bin_width = bin_width;
@@ -111,99 +234,125 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
         m_cache_rbw_tone_W = rbw_tone_W;
     }
 
-    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
-
-    std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
+    std::vector<double> vbw_out =
+        this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, true);
     return this->applyTraceMode(spec, vbw_out);
 }
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
-    if (specs.empty()) {
-        return {};
+    if (m_trace_mode != TraceMode::MaxHold && m_trace_mode != TraceMode::MinHold) {
+        return this->renderCombinedTrace(specs, true, nullptr);
     }
+    this->advanceComponentHolds(specs, m_display_component_hold);
+    return this->renderCombinedTrace(specs, true, &m_display_component_hold);
+}
 
-    // Determine target length (use largest frequency vector among inputs)
-    size_t n = 0;
-    for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() > n) {
-            n = s->frequencies.size();
+std::vector<double>
+SpectrumAnalyzerEngine::renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs,
+                                                      const std::vector<bool> &visible) const {
+    std::vector<const Spectrum *> shown;
+    for (size_t i = 0; i < specs.size(); ++i) {
+        if (visible.empty() || (i < visible.size() && visible[i])) {
+            shown.push_back(specs[i]);
         }
     }
-    if (n == 0) {
-        return {};
+    if (m_trace_mode != TraceMode::MaxHold && m_trace_mode != TraceMode::MinHold) {
+        return this->renderCombinedTrace(shown, false, nullptr);
     }
+    // Every active spectrum advances, hidden ones included, so re-showing one resumes its hold.
+    this->advanceComponentHolds(specs, m_readout_component_hold);
+    return this->renderCombinedTrace(shown, false, &m_readout_component_hold);
+}
 
-    // Sum per-bin noise and tone power (W) separately so jitter can be applied
-    // to the noise floor without disturbing tone peaks.
-    std::vector<double> sum_noise_W(n, 0.0);
-    std::vector<double> sum_tone_W(n, 0.0);
+void SpectrumAnalyzerEngine::advanceComponentHolds(const std::vector<const Spectrum *> &specs,
+                                                   ComponentHoldMap &holds) const {
+    const bool is_max = m_trace_mode == TraceMode::MaxHold;
     for (const Spectrum *s : specs) {
-        if (!s) {
+        if (!s || s->frequencies.empty()) {
             continue;
         }
         std::vector<double> noise_W, tone_W;
         this->binPowerComponents(*s, noise_W, tone_W);
-        size_t m = std::min(n, noise_W.size());
-        for (size_t i = 0; i < m; ++i) {
-            sum_noise_W[i] += noise_W[i];
-            sum_tone_W[i] += tone_W[i];
+        ComponentHold &entry = holds[s];
+        if (entry.identity != s->identity.value || entry.noise_W.size() != noise_W.size() ||
+            entry.tone_W.size() != tone_W.size()) {
+            entry.identity = s->identity.value;
+            entry.noise_W = std::move(noise_W);
+            entry.tone_W = std::move(tone_W);
+            continue;
+        }
+        for (size_t i = 0; i < noise_W.size(); ++i) {
+            entry.noise_W[i] = is_max ? std::max(entry.noise_W[i], noise_W[i])
+                                      : std::min(entry.noise_W[i], noise_W[i]);
+        }
+        for (size_t i = 0; i < tone_W.size(); ++i) {
+            entry.tone_W[i] = is_max ? std::max(entry.tone_W[i], tone_W[i])
+                                     : std::min(entry.tone_W[i], tone_W[i]);
         }
     }
+}
 
-    // Pick a sensible bin width from the first non-empty frequency vector
-    double bin_width = 1.0;
+std::vector<double>
+SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> &specs,
+                                            bool apply_jitter,
+                                            const ComponentHoldMap *holds) const {
+    // Every trace is resampled onto the common readout axis before summing, so bins from
+    // different grids are never added by index (issue #293).
+    const std::vector<double> grid = this->combinedReadoutAxis(specs);
+    if (grid.empty()) {
+        return {};
+    }
+    const double bin_width = gridBinWidth(grid);
+
+    // Sum per-bin noise and tone power (W) separately so jitter can be applied
+    // to the noise floor without disturbing tone peaks.
+    std::vector<double> sum_noise_W(grid.size(), 0.0);
+    std::vector<double> sum_tone_W(grid.size(), 0.0);
     for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() >= 2) {
-            bin_width = s->frequencies[1] - s->frequencies.front();
-            break;
+        if (!s || s->frequencies.empty()) {
+            continue;
         }
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(*s, noise_W, tone_W);
+        if (holds) {
+            // Held components stand in for the current frame; each spectrum is advanced first.
+            auto it = holds->find(s);
+            if (it != holds->end() && it->second.identity == s->identity.value &&
+                it->second.noise_W.size() == noise_W.size() &&
+                it->second.tone_W.size() == tone_W.size()) {
+                noise_W = it->second.noise_W;
+                tone_W = it->second.tone_W;
+            }
+        }
+        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W,
+                           &sum_tone_W);
     }
 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
     std::vector<double> rbw_tone_W = this->applyRBW(sum_tone_W, bin_width);
 
-    // Jitter the noise floor only, then add the deterministic tone power back.
-    std::vector<double> power_dBm = this->toJitteredPower_dBm(rbw_noise_W, rbw_tone_W);
-
-    std::vector<double> vbw_out = this->applyVBW(power_dBm, bin_width);
-    return vbw_out;
+    // Jitter and VBW act on the noise floor only; tone power is added back in linear watts.
+    return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
 }
 
 double
 SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const {
-    if (specs.empty()) {
+    const std::vector<double> grid = this->combinedReadoutAxis(specs);
+    if (grid.empty()) {
         return -174.0;
     }
+    const double bin_width = gridBinWidth(grid);
 
-    size_t n = 0;
+    // Sum noise power per bin (W) on the readout grid across all spectra, excluding tones
+    std::vector<double> sum_noise_W(grid.size(), 0.0);
     for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() > n) {
-            n = s->frequencies.size();
-        }
-    }
-    if (n == 0) {
-        return -174.0;
-    }
-
-    double bin_width = 1.0;
-    for (const Spectrum *s : specs) {
-        if (s && s->frequencies.size() >= 2) {
-            bin_width = s->frequencies[1] - s->frequencies.front();
-            break;
-        }
-    }
-
-    // Sum noise power per bin (W) across all spectra, excluding tones
-    std::vector<double> sum_noise_W(n, 0.0);
-    for (const Spectrum *s : specs) {
-        if (!s) {
+        if (!s || s->frequencies.empty()) {
             continue;
         }
-        size_t m = std::min(n, s->noise_total_W.size());
-        for (size_t i = 0; i < m; ++i) {
-            sum_noise_W[i] += s->noise_total_W[i] * bin_width;
-        }
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(*s, noise_W, tone_W);
+        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W, nullptr);
     }
 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
@@ -443,7 +592,7 @@ SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
     if (m_trace_mode == TraceMode::ClearWrite) {
         return after_vbw;
     }
-    std::unordered_map<const Spectrum *, std::vector<double>> *history = nullptr;
+    std::unordered_map<const Spectrum *, TraceHistory> *history = nullptr;
     if (m_trace_mode == TraceMode::MaxHold)
         history = &m_max_hold;
     else if (m_trace_mode == TraceMode::MinHold)
@@ -453,9 +602,11 @@ SpectrumAnalyzerEngine::applyTraceMode(const Spectrum &spec,
     if (!history)
         return after_vbw;
 
-    auto &h = (*history)[&spec];
+    auto &entry = (*history)[&spec];
+    auto &h = entry.values;
 
-    if (h.size() != after_vbw.size()) {
+    if (entry.identity != spec.identity.value || h.size() != after_vbw.size()) {
+        entry.identity = spec.identity.value;
         h = after_vbw;
         return after_vbw;
     }
@@ -483,11 +634,22 @@ void SpectrumAnalyzerEngine::resetTraceHistory() const {
     m_max_hold.clear();
     m_min_hold.clear();
     m_video_avg.clear();
+    m_display_component_hold.clear();
+    m_readout_component_hold.clear();
 }
 
 void SpectrumAnalyzerEngine::pruneHistory(const std::vector<const Spectrum *> &active_keys) const {
     std::unordered_set<const Spectrum *> active(active_keys.begin(), active_keys.end());
     for (auto *map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
+        for (auto it = map->begin(); it != map->end();) {
+            if (active.find(it->first) == active.end()) {
+                it = map->erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (auto *map : {&m_display_component_hold, &m_readout_component_hold}) {
         for (auto it = map->begin(); it != map->end();) {
             if (active.find(it->first) == active.end()) {
                 it = map->erase(it);

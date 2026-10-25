@@ -114,8 +114,8 @@ class NonlinearModel {
             r.extra_tones.push_back({tone.freq_Hz * 2.0, H2_dBm, 0.0});
             total_distortion_mW += dbmToW(H2_dBm);
 
-            // H3: v_in^3 term -> RMS k2*A^3/(4*sqrt(2)) = k2*Vp1^3/2, A = sqrt(2)*Vp1
-            double V_h3 = k2_at(tone.freq_Hz) * Vp1 * Vp1 * Vp1 / 2.0;
+            // H3: one third the amplitude of equal-power IM3 for a cubic term.
+            double V_h3 = k2_at(tone.freq_Hz) * Vp1 * Vp1 * Vp1 / 4.0;
             double H3_dBm = vToDbm(V_h3);
             r.extra_tones.push_back({tone.freq_Hz * 3.0, H3_dBm, 0.0});
             total_distortion_mW += dbmToW(H3_dBm);
@@ -157,7 +157,9 @@ class NonlinearModel {
             }
         }
 
-        // Compression
+        // Compression. Distortion is capped at half the fundamental: past that point every product
+        // is scaled by one factor so total distortion is exactly half the fundamental. Compression
+        // then floors at -3.01 dB and every spur stays below the fundamental.
         double Pfund_mW = 0.0;
         for (const auto &tone : input_tones) {
             double g = gain_at_freq(tone.freq_Hz);
@@ -165,12 +167,17 @@ class NonlinearModel {
             Pfund_mW += dbmToW(Pout);
         }
 
-        if (total_distortion_mW >= Pfund_mW || Pfund_mW <= 0.0) {
-            r.compression_dB = -1e9; // deep compression sentinel
-        } else {
-            double ratio = 1.0 - total_distortion_mW / Pfund_mW;
-            r.compression_dB = 10.0 * std::log10(ratio);
+        if (Pfund_mW <= 0.0) {
+            r.compression_dB = 0.0; // no fundamental power, nothing to compress
+            return r;
         }
+        if (total_distortion_mW > 0.5 * Pfund_mW) {
+            const double scale = 0.5 * Pfund_mW / total_distortion_mW;
+            for (auto &product : r.extra_tones)
+                product.power_dBm += 10.0 * std::log10(scale);
+            total_distortion_mW *= scale;
+        }
+        r.compression_dB = 10.0 * std::log10(1.0 - total_distortion_mW / Pfund_mW);
 
         return r;
     }

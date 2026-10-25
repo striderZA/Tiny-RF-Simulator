@@ -69,6 +69,7 @@ void PfbCalculatorWidget::refreshDesignCache() {
     const PfbFilterDesign design(m_M, m_K, m_beta);
     m_cached_design = design;
     m_cached_metrics = computePfbMetrics(design);
+    m_cached_rec = pfbRecommend(design, m_cached_metrics);
 
     // Sample |H| in dB over x in [0, 1.5].
     const int kSamples = 151;
@@ -121,7 +122,8 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
         refreshDesignCache();
     const RejectionStatus st =
         compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
-    const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
+    const std::string hint =
+        pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db, m_cached_rec);
 
     // --- Left column: controls -------------------------------------------
     ImGui::BeginGroup();

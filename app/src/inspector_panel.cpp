@@ -602,19 +602,28 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index)
         if (ImGui::BeginCombo("Model", preview)) {
             for (int i = 0; i < static_cast<int>(kCoaxCablePresets.size()); ++i) {
                 bool selected = (i == engine.presetIndex());
+                const bool calibrated = kCoaxCablePresets[i].calibrated;
+                ImGui::BeginDisabled(!calibrated);
                 if (ImGui::Selectable(kCoaxCablePresets[i].name, selected)) {
                     engine.setPresetIndex(i);
                     m_param_edited = true;
                 }
+                ImGui::EndDisabled();
                 if (selected)
                     ImGui::SetItemDefaultFocus();
-                if (ImGui::IsItemHovered()) {
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", kCoaxCablePresets[i].name);
-                    ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
-                    ImGui::Text("K2 = %.6f dB/m", kCoaxCablePresets[i].K2_dB_per_m);
-                    ImGui::Text("Max freq: %.2f GHz", kCoaxCablePresets[i].max_freq_GHz);
-                    ImGui::Text("Delay: %.3f ns/m", kCoaxCablePresets[i].delay_ns_per_m);
+                    if (!kCoaxCablePresets[i].calibrated) {
+                        ImGui::TextUnformatted("Uncalibrated: no datasheet model.");
+                        ImGui::TextUnformatted(
+                            "Selection refused; a cable on this preset outputs nothing.");
+                    } else {
+                        ImGui::Text("K1 = %.6f dB/m", kCoaxCablePresets[i].K1_dB_per_m);
+                        ImGui::Text("K2 = %.6f dB/m", kCoaxCablePresets[i].K2_dB_per_m);
+                        ImGui::Text("Max freq: %.2f GHz", kCoaxCablePresets[i].max_freq_GHz);
+                        ImGui::Text("Delay: %.3f ns/m", kCoaxCablePresets[i].delay_ns_per_m);
+                    }
                     ImGui::EndTooltip();
                 }
             }
@@ -767,8 +776,14 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
     const char *type_names[] = {"LPF", "HPF", "BPF", "BSF"};
     int current = static_cast<int>(engine.filterType());
     if (ImGui::Combo("Type", &current, type_names, IM_ARRAYSIZE(type_names))) {
-        engine.setFilterType(static_cast<FilterType>(current));
-        m_param_edited = true;
+        // setFilterType() refuses a band type over an inverted stored pair (reachable from an
+        // LPF with a stray fc_high); the stored type is then left as it was.
+        try {
+            engine.setFilterType(static_cast<FilterType>(current));
+            m_param_edited = true;
+        } catch (const std::invalid_argument &e) {
+            LOG_WARN("Ideal filter type not changed: %s", e.what());
+        }
     }
 
     FilterType ft = engine.filterType();
@@ -789,8 +804,12 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
             changed = true;
         }
         if (changed) {
-            engine.setCutoffs_Hz(low, high);
-            m_param_edited = true;
+            try {
+                engine.setCutoffs_Hz(low, high);
+                m_param_edited = true;
+            } catch (const std::invalid_argument &e) {
+                LOG_WARN("Ideal filter cutoff rejected: %s", e.what());
+            }
         }
     }
 

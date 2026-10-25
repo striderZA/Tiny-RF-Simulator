@@ -25,7 +25,7 @@ Left-click a node to load it into the Properties panel, then adjust a parameter 
 ## View Results
 
 Ctrl+click an output pin to probe it — the Spectrum Analyzer plots that node's live signal. Up to four probes can be active, each with its own trace color.
-Noise traces show power integrated over the selected RBW. Changing RBW clears Max Hold, Min Hold, and Video Average history.
+Noise traces show power integrated over the selected RBW. Changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
 
 ## Navigate the Graph
 

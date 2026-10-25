@@ -6,6 +6,72 @@
 #include <limits>
 #include <numbers>
 
+namespace {
+
+constexpr double kSystemImpedance = 50.0; // Ohms, the simulator's reference
+
+// Solves M X = R in place for X (both n x n, row-major). M is destroyed and R
+// holds X on return. Returns false when M is singular.
+bool solveInPlace(std::vector<std::complex<double>> &m, std::vector<std::complex<double>> &r,
+                  int n) {
+    for (int c = 0; c < n; ++c) {
+        int pivot = c;
+        for (int row = c + 1; row < n; ++row)
+            if (std::abs(m[row * n + c]) > std::abs(m[pivot * n + c]))
+                pivot = row;
+        if (!(std::abs(m[pivot * n + c]) > 0.0))
+            return false;
+        if (pivot != c) {
+            for (int j = 0; j < n; ++j) {
+                std::swap(m[pivot * n + j], m[c * n + j]);
+                std::swap(r[pivot * n + j], r[c * n + j]);
+            }
+        }
+        for (int row = 0; row < n; ++row) {
+            if (row == c)
+                continue;
+            std::complex<double> f = m[row * n + c] / m[c * n + c];
+            if (f == std::complex<double>(0.0, 0.0))
+                continue;
+            for (int j = c; j < n; ++j)
+                m[row * n + j] -= f * m[c * n + j];
+            for (int j = 0; j < n; ++j)
+                r[row * n + j] -= f * r[c * n + j];
+        }
+    }
+    for (int row = 0; row < n; ++row) {
+        std::complex<double> d = m[row * n + row];
+        for (int j = 0; j < n; ++j)
+            r[row * n + j] /= d;
+    }
+    return true;
+}
+
+// Renormalises one n-port S matrix (row-major) from a uniform reference R to 50 ohm.
+// Z = R (I-S)^-1 (I+S) and S' = (Z-50)(Z+50)^-1. Both factors are polynomials in S,
+// so they commute and S' = A B^-1 with A = (R-50) I + (R+50) S and
+// B = (R+50) I + (R-50) S. This needs no inverse of (I-S), so S = 1 (open) is fine.
+bool renormalizeTo50(std::vector<std::complex<double>> &s, int n, double ref) {
+    if (!(ref > 0.0) || !std::isfinite(ref))
+        return false;
+    using cd = std::complex<double>;
+    std::vector<cd> a(s.size()), b(s.size());
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            cd sij = s[i * n + j];
+            cd eye = (i == j) ? cd(1.0, 0.0) : cd(0.0, 0.0);
+            a[i * n + j] = (ref - kSystemImpedance) * eye + (ref + kSystemImpedance) * sij;
+            b[i * n + j] = (ref + kSystemImpedance) * eye + (ref - kSystemImpedance) * sij;
+        }
+    }
+    if (!solveInPlace(b, a, n))
+        return false;
+    s = std::move(a);
+    return true;
+}
+
+} // namespace
+
 bool SParameterData::load(const std::string &filepath) {
     m_freqs.clear();
     m_params.clear();
@@ -19,6 +85,15 @@ bool SParameterData::load(const std::string &filepath) {
     if (data->parameter != TouchstoneData::Parameter::S) {
         LOG_WARN("Touchstone file does not contain S-parameters: %s", filepath.c_str());
         return false;
+    }
+    if (data->reference_impedance != kSystemImpedance) {
+        for (auto &point : data->parameters) {
+            if (!renormalizeTo50(point, data->num_ports, data->reference_impedance)) {
+                LOG_WARN("Cannot renormalise S-parameters from %g ohm to 50 ohm: %s",
+                         data->reference_impedance, filepath.c_str());
+                return false;
+            }
+        }
     }
     m_num_ports = data->num_ports;
     m_freqs = std::move(data->frequencies);
@@ -34,10 +109,16 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     int total = m_num_ports * m_num_ports;
     if (param_idx < 0 || param_idx >= total)
         return {1.0, 0.0};
-    if (freq_Hz <= m_freqs.front())
-        return m_params.front()[param_idx];
-    if (freq_Hz >= m_freqs.back())
-        return m_params.back()[param_idx];
+    const bool negative_frequency = freq_Hz < 0.0;
+    freq_Hz = std::abs(freq_Hz);
+    if (freq_Hz <= m_freqs.front()) {
+        auto response = m_params.front()[param_idx];
+        return negative_frequency ? std::conj(response) : response;
+    }
+    if (freq_Hz >= m_freqs.back()) {
+        auto response = m_params.back()[param_idx];
+        return negative_frequency ? std::conj(response) : response;
+    }
 
     auto it = std::lower_bound(m_freqs.begin(), m_freqs.end(), freq_Hz);
     size_t i =
@@ -46,7 +127,8 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     double t = (freq_Hz - f0) / (f1 - f0);
     auto p0 = m_params[i][param_idx];
     auto p1 = m_params[i + 1][param_idx];
-    return p0 + t * (p1 - p0);
+    auto response = p0 + t * (p1 - p0);
+    return negative_frequency ? std::conj(response) : response;
 }
 
 void SParameterData::applyToSpectrum(const Spectrum &in, Spectrum &out, int param_idx) const {

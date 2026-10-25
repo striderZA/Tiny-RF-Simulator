@@ -35,6 +35,10 @@ class SpectrumAnalyzerWidget {
     // below this floor (issue #88).
     static constexpr float kMinPlotHeight = 180.0f;
 
+    // The jitter-free combined trace the last draw() used for the Peak text, snap-to-peak
+    // and marker (issue #292). Empty when the last draw() had no visible trace.
+    const std::vector<double> &readoutTrace() const { return m_readout_dBm; }
+
   private:
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
@@ -45,6 +49,7 @@ class SpectrumAnalyzerWidget {
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     std::unordered_map<SignalNode *, PFBChannelizerEngine *> m_pfb_map;
     std::vector<bool> m_trace_visible; // Track visibility for each probe trace
+    std::vector<double> m_readout_dBm; // readout trace of the last draw() (issue #292)
 
     const Spectrum &outputSpectrumFor(SignalNode *node) const;
 

@@ -1,4 +1,5 @@
 #include "equalizer_engine.h"
+#include "logging_core.h"
 #include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
@@ -60,15 +61,22 @@ void EqualizerEngine::update(double dt) {
             return;
         }
 
+        // Passive two-port: noise_total = |S21|^2 * noise_in + kT * max(0, 1 - |S21|^2).
+        // Gain (|S21| > 1) adds no thermal term; clamping is the chosen rule for gain.
+        const double k = 1.3806e-23;
+        const double T = 290.0;
         out.noise_W.assign(N, 0.0);
+        out.noise_added_W.assign(N, 0.0);
+        out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i) {
             auto S = m_sparam_data.interpolate(out.frequencies[i], idx);
+            double mag_sq = std::norm(S);
             double nin =
                 (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
-            out.noise_W[i] = std::norm(S) * nin;
+            out.noise_W[i] = mag_sq * nin;
+            out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - mag_sq);
+            out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
         }
-        out.noise_added_W.assign(N, 0.0);
-        out.noise_total_W = out.noise_W;
         out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
         out.bumpGeneration();
         return;
@@ -111,8 +119,13 @@ void EqualizerEngine::update(double dt) {
         return;
     }
 
-    // Apply gain to noise per bin
+    // Passive two-port per bin, same rule as the S-parameter path:
+    // noise_total = G * noise_in + kT * max(0, 1 - G). Gain (G > 1) adds no thermal term.
+    const double k = 1.3806e-23;
+    const double T = 290.0;
     out.noise_W.assign(N, 0.0);
+    out.noise_added_W.assign(N, 0.0);
+    out.noise_total_W.resize(N);
     for (size_t i = 0; i < N; ++i) {
         double f = std::max(std::abs(out.frequencies[i]), 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);
@@ -120,9 +133,9 @@ void EqualizerEngine::update(double dt) {
         double gain_linear = dbToLinear(gain_db);
         double nin = (in_ptr && i < in_ptr->noise_total_W.size() ? in_ptr->noise_total_W[i] : 0.0);
         out.noise_W[i] = gain_linear * nin;
+        out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - gain_linear);
+        out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
     }
-    out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W = out.noise_W;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
     out.bumpGeneration();
 }
@@ -161,5 +174,13 @@ void EqualizerEngine::deserialize(const nlohmann::json &j) {
     // An absent index selects S21 for a loaded file, as setSParamFilepath() does.
     const int default_fwd_idx = m_sparam_data.loaded() ? m_sparam_data.numPorts() : 0;
     m_sparam_fwd_idx = j.value("sparam_fwd_idx", default_fwd_idx);
+    // An index outside the loaded matrix would read as unity in SParameterData::interpolate,
+    // so it falls back to the S21 default. Agent writes then see the adjustment and roll back.
+    const int matrix_size = m_sparam_data.numPorts() * m_sparam_data.numPorts();
+    if (m_sparam_data.loaded() && (m_sparam_fwd_idx < 0 || m_sparam_fwd_idx >= matrix_size)) {
+        LOG_WARN("sparam_fwd_idx %d is outside the %d-port matrix; using S21 (index %d)",
+                 m_sparam_fwd_idx, m_sparam_data.numPorts(), default_fwd_idx);
+        m_sparam_fwd_idx = default_fwd_idx;
+    }
     m_dirty = true;
 }

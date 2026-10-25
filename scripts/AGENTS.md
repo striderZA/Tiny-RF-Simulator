@@ -8,10 +8,11 @@
 - `scripts/release-notes.sh`
 - `scripts/format.sh`
 - `scripts/format-dirs.sh`
-- `scripts/install-clang-format.sh`
+- `scripts/clang-format-resolve.sh`
+- `scripts/test-format-version.sh`
 
 ## Local Contracts
-- `scripts/format-dirs.sh` is the single definition of the clang-format file set, used by `scripts/format.sh`, `.githooks/pre-commit`, and the release workflow's format job.
+- `scripts/clang-format-resolve.sh` is the single clang-format discovery and version check, sourced by `scripts/format.sh` and `.githooks/pre-commit`. It accepts only major >= 18 (`CLANG_FORMAT_MIN_MAJOR`), prefers the lowest accepted installed major, and falls back to the pinned `scripts/install-clang-format.sh` 18.1.8 copy only when no PATH binary qualifies.
 - `scripts/format.sh --all` checks the tracked C++ files under `scripts/format-dirs.sh` (`git ls-files`, not `find`), the same view a clean checkout gets in the release format job. Untracked files are not checked. An empty `--all` scan exits 1.
 - `scripts/release-notes.sh` is the single changelog-section extractor used by `release.yml` and `scripts/release.sh`; it rejects a missing section or one without a bullet.
 - `scripts/release.sh` prepares the branch, version bump, gates, and commit. `--tag` creates and pushes the annotated tag on `master` only.
@@ -25,6 +26,10 @@
 - A failed tag is retagged as described in `CONTRIBUTING.md` ("Failed release tag"); a published release's tag is never moved.
 - `release.yml` declares top-level `permissions: contents: read`; only the `release` job has `contents: write`.
 - `strict-build` and `package` both run `.github/actions/build-and-test`, which holds each configuration's toolchain install, configure, build, test, and the Windows MinGW TEST_CASE floor check. `MINGW_TEST_CASE_FLOOR` is set in `release.yml`.
+- The `package` job also runs `cpack -C Release` on its build tree and uploads the archive as the `cpack-linux` / `cpack-windows` artifact. CPack output is CI-only: the release assets are still built by hand in the release job, and the job checks that the archive holds `bin/tiny-rf-simulator`, `bin/component_data/`, `bin/extensions/` and `share/doc/rf-simulator/README.md`.
+- CPack output is not a replacement for the release assets yet. Known gaps: (1) Windows CPack ZIP omits `mingw-dlls/` (`libgcc_s_seh-1.dll`, `libstdc++-6.dll`, `libwinpthread-1.dll`), which the hand-built Windows release zip ships; (2) both archives include GLFW development files (`include/GLFW/`, `lib/libglfw3.a`, `lib/cmake/glfw3/`, `lib/pkgconfig/`) from GLFW's own install rules. Closing either gap changes install() or CPack settings and is a later step.
+- The verify step strips CR from `cmake -E tar tf` output (Windows text mode) before matching; keep that `tr -d '\r'` when editing the check.
+- `CMakeLists.txt` installs `extensions/` (`install(DIRECTORY extensions …)`), so that directory must exist in the repo, even empty. `extensions/.gitkeep` holds it; `cpack` fails on a missing install source.
 
 ## Work Guidance
 
@@ -35,7 +40,7 @@
 - The Windows package job fails when `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, or `libwinpthread-1.dll` is missing from `/mingw64/bin`.
 - `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `mkdocs build --strict` for pushes to `master` touching manual/build inputs, published releases, or manual dispatch.
-- Formatting check: `bash scripts/format.sh --check --all`.
+- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`.
 
 ## Child DOX Index
 - None.
