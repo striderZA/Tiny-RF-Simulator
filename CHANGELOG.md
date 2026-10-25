@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- **PFB calculator hint no longer recommends a change that lowers rejection (#289)** — the hint suggests at most one change, and only when it lowers adjacent rejection when applied alone: a beta from 0, 4, …, 20 at the current K, or K+1 / K=64 (the slider maximum) at the current beta. The text names the checked candidates when none helps. Designs above M×K = 8192 taps get no suggestion, which keeps the design refresh cost unchanged there.
+
 ### Changed
 
 - **CPack runs in the release package jobs** — the Linux and Windows `package` jobs run `cpack` on their Release build tree, verify the archive contains the installed executable, `component_data/`, `extensions/` and the README, and upload it as the `cpack-linux` / `cpack-windows` workflow artifact. The release assets are still built as before; CPack output is not yet published, and it is not yet a full replacement: the Windows archive omits the MinGW runtime DLLs and both archives include GLFW development files.
