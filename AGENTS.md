@@ -81,6 +81,9 @@ Link to the owning document instead of restating its rules or commands on anothe
 ## Touchstone Parsing Contract
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
+- Reference impedance: the option line `R n` sets it; v2.0 `[Reference]` overrides it and may span lines. A `[Reference]` with differing per-port values is refused and logged, since per-port renormalisation is not implemented. `R` is accepted by the parser; `SParameterData::load()` refuses a non-positive R.
+- `SParameterData::load()` renormalises a uniform reference R to 50 Ω: Z = R(I−S)⁻¹(I+S), S' = (Z−50)(Z+50)⁻¹. `TouchstoneParser::parse()` returns file values and the file reference unchanged.
+- The agent `data_file_read` tool reports raw file samples with `reference_impedance_ohm`; it does not renormalise. Read the reference field to interpret them.
 
 ## S-parameter Contract
 

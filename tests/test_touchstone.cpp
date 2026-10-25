@@ -1,9 +1,11 @@
+#include "s_parameter_data.h"
 #include "test_temp_paths.h"
 #include "touchstone_parser.h"
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <filesystem>
 #include <fstream>
 #include <numbers>
@@ -148,6 +150,158 @@ TEST_CASE("TouchstoneParser returns nullopt for file without option line", "[tou
     REQUIRE(!result.has_value());
     std::filesystem::remove(tmpfile);
 }
+
+static std::string writeTouchstoneFile(const std::string &name, const std::string &body) {
+    std::string path = std::filesystem::temp_directory_path().string() + "/" + name;
+    std::ofstream ofs(path);
+    ofs << body;
+    return path;
+}
+
+TEST_CASE("SParameterData renormalises a 75 ohm 1-port file to the 50 ohm system",
+          "[touchstone][reference]") {
+    // Issue #284: S11 = 0.5 referenced to 75 ohm is Z = 225 ohm, which is
+    // S11 = 175/275 = 7/11 = 0.6364 in a 50 ohm system.
+    std::string path = writeTouchstoneFile("test_r75_half.s1p", "# GHz S MA R 75\n"
+                                                                "1.0 0.5 0.0\n");
+    SParameterData sparam;
+    REQUIRE(sparam.load(path));
+    REQUIRE(sparam.params()[0][0].real() == Approx(7.0 / 11.0).epsilon(1e-9));
+    REQUIRE(sparam.params()[0][0].imag() == Approx(0.0).margin(1e-12));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SParameterData renormalises a matched 75 ohm load to -13.98 dB at 50 ohm",
+          "[touchstone][reference]") {
+    // Issue #284: a perfect 75 ohm match is S11 = 0 referenced to 75 ohm, which is
+    // S11 = (75 - 50) / (75 + 50) = 0.2 at 50 ohm, not a perfect match.
+    std::string path = writeTouchstoneFile("test_r75_matched.s1p", "# GHz S MA R 75\n"
+                                                                   "1.0 0.0 0.0\n");
+    SParameterData sparam;
+    REQUIRE(sparam.load(path));
+    REQUIRE(std::abs(sparam.params()[0][0]) == Approx(0.2).epsilon(1e-9));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SParameterData leaves a thru unchanged when both ports are 75 ohm",
+          "[touchstone][reference]") {
+    // Same reference on both ports: S21 = S12 = 1 is unchanged by the transform.
+    std::string path =
+        writeTouchstoneFile("test_r75_thru.s2p", "# GHz S RI R 75\n"
+                                                 "1.0 0.0 0.0 1.0 0.0 1.0 0.0 0.0 0.0\n");
+    SParameterData sparam;
+    REQUIRE(sparam.load(path));
+    REQUIRE(std::abs(sparam.params()[0][0]) == Approx(0.0).margin(1e-12));
+    REQUIRE(std::abs(sparam.params()[0][1] - std::complex<double>(1.0, 0.0)) ==
+            Approx(0.0).margin(1e-12));
+    REQUIRE(std::abs(sparam.params()[0][2] - std::complex<double>(1.0, 0.0)) ==
+            Approx(0.0).margin(1e-12));
+    REQUIRE(std::abs(sparam.params()[0][3]) == Approx(0.0).margin(1e-12));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("SParameterData renormalises an asymmetric 75 ohm 2-port matrix element by element",
+          "[touchstone][reference]") {
+    // File S (RI, 75 ohm) in Touchstone 2-port order S11, S21, S12, S22:
+    //   S11 = 0.2+0.1j, S21 = 0.6+0.2j, S12 = 0.5-0.3j, S22 = 0.1-0.4j.
+    // Expected 50 ohm values come from Z = R (I-S)^-1 (I+S), then S' = (Z-50)(Z+50)^-1,
+    // computed independently in exact 2x2 algebra. S21 != S12, so a transposed or
+    // mis-ordered matrix fails here while the symmetric thru test would not.
+    std::string path =
+        writeTouchstoneFile("test_r75_asym.s2p", "# GHz S RI R 75\n"
+                                                 "1.0 0.2 0.1 0.6 0.2 0.5 -0.3 0.1 -0.4\n");
+    SParameterData sparam;
+    REQUIRE(sparam.load(path));
+    const auto &s = sparam.params()[0];
+    REQUIRE(s[0].real() == Approx(0.3225342952205301).margin(1e-9));
+    REQUIRE(s[0].imag() == Approx(0.10040366793429745).margin(1e-9));
+    REQUIRE(s[1].real() == Approx(0.47211679607980783).margin(1e-9));
+    REQUIRE(s[1].imag() == Approx(-0.24795976999393476).margin(1e-9));
+    REQUIRE(s[2].real() == Approx(0.537461078404281).margin(1e-9));
+    REQUIRE(s[2].imag() == Approx(0.21377164148177008).margin(1e-9));
+    REQUIRE(s[3].real() == Approx(0.25719001289605714).margin(1e-9));
+    REQUIRE(s[3].imag() == Approx(-0.3613277435414075).margin(1e-9));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TouchstoneParser keeps file-referenced values and reports the file reference",
+          "[touchstone][reference]") {
+    std::string path = writeTouchstoneFile("test_r75_parse.s1p", "# GHz S MA R 75\n"
+                                                                 "1.0 0.5 0.0\n");
+    auto result = TouchstoneParser::parse(path);
+    REQUIRE(result.has_value());
+    REQUIRE(result->reference_impedance == Approx(75.0));
+    REQUIRE(result->parameters[0][0].real() == Approx(0.5));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TouchstoneParser reads v2.0 [Reference] as the reference impedance",
+          "[touchstone][reference]") {
+    std::string path =
+        writeTouchstoneFile("test_v2_reference.s2p", "[Version] 2.0\n"
+                                                     "# GHz S RI R 50\n"
+                                                     "[Number of Ports] 2\n"
+                                                     "[Two-Port Data Order] 21_12\n"
+                                                     "[Reference] 75 75\n"
+                                                     "[Network Data]\n"
+                                                     "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n"
+                                                     "[End]\n");
+    auto result = TouchstoneParser::parse(path);
+    REQUIRE(result.has_value());
+    REQUIRE(result->reference_impedance == Approx(75.0));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TouchstoneParser reads a v2.0 [Reference] that spans lines", "[touchstone][reference]") {
+    std::string path =
+        writeTouchstoneFile("test_v2_reference_multiline.s1p", "[Version] 2.0\n"
+                                                               "# GHz S RI R 50\n"
+                                                               "[Number of Ports] 1\n"
+                                                               "[Reference]\n"
+                                                               "75\n"
+                                                               "75\n"
+                                                               "[Network Data]\n"
+                                                               "1.0 0.0 0.0\n"
+                                                               "[End]\n");
+    auto result = TouchstoneParser::parse(path);
+    REQUIRE(result.has_value());
+    REQUIRE(result->reference_impedance == Approx(75.0));
+    REQUIRE(result->parameters.size() == 1);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TouchstoneParser lets v2.0 [Reference] override the option line R",
+          "[touchstone][reference]") {
+    std::string path = writeTouchstoneFile("test_v2_reference_override.s1p", "[Version] 2.0\n"
+                                                                             "# GHz S RI R 50\n"
+                                                                             "[Number of Ports] 1\n"
+                                                                             "[Reference] 75\n"
+                                                                             "[Network Data]\n"
+                                                                             "1.0 0.0 0.0\n"
+                                                                             "[End]\n");
+    auto result = TouchstoneParser::parse(path);
+    REQUIRE(result.has_value());
+    REQUIRE(result->reference_impedance == Approx(75.0));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("TouchstoneParser rejects v2.0 [Reference] with differing per-port values",
+          "[touchstone][reference]") {
+    // Per-port references are not renormalised, so they are refused rather than
+    // silently treated as a single reference.
+    std::string path =
+        writeTouchstoneFile("test_v2_reference_mixed.s2p", "[Version] 2.0\n"
+                                                           "# GHz S RI R 50\n"
+                                                           "[Number of Ports] 2\n"
+                                                           "[Two-Port Data Order] 21_12\n"
+                                                           "[Reference] 50 75\n"
+                                                           "[Network Data]\n"
+                                                           "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n"
+                                                           "[End]\n");
+    REQUIRE_FALSE(TouchstoneParser::parse(path).has_value());
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("TouchstoneParser honors v2.0 two-port data order", "[touchstone]") {
     const auto parse_v2 = [](const std::string &filename, const std::string &order) {
         const auto path = std::filesystem::temp_directory_path() / filename;

@@ -1,4 +1,5 @@
 #include "touchstone_parser.h"
+#include "logging_core.h"
 #include <charconv>
 #include <cmath>
 #include <fstream>
@@ -21,6 +22,14 @@ bool parseDataToken(std::string_view token, double &value) {
     const char *last = first + token.size();
     const auto [ptr, ec] = std::from_chars(first, last, value);
     return ec == std::errc() && ptr == last && std::isfinite(value);
+}
+
+// Appends every numeric token in s to out.
+void appendNumbers(const std::string &s, std::vector<double> &out) {
+    std::istringstream iss(s);
+    double v;
+    while (iss >> v)
+        out.push_back(v);
 }
 
 } // namespace
@@ -125,6 +134,8 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     bool two_port_data_order_is_12_21 = false;
     std::string line;
     std::vector<double> raw_values; // all numeric values from data lines
+    bool in_reference = false;
+    std::vector<double> reference_values; // v2.0 [Reference] values, in file order
 
     // Infer port count from file extension if not explicitly known
     // .s1p -> 1 port, .s2p -> 2 ports, etc. (Hoisted ahead of the read loop
@@ -211,8 +222,13 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
                 has_two_port_data_order = true;
                 two_port_data_order_is_12_21 = order == "12_21";
             }
-            if (has_version_keyword)
+            if (has_version_keyword) {
+                // [Reference] values may continue on following lines until the next keyword.
+                in_reference = lower.rfind("[reference]", 0) == 0;
+                if (in_reference)
+                    appendNumbers(stripped.substr(stripped.find(']') + 1), reference_values);
                 continue;
+            }
         }
         // Any other bracket line (a short [End] or an unrecognised keyword) is not data.
         if (stripped[0] == '[')
@@ -222,6 +238,11 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             if (!parseOptionLine(stripped, data))
                 return std::nullopt;
             option_line_found = true;
+            continue;
+        }
+
+        if (in_reference) {
+            appendNumbers(stripped, reference_values);
             continue;
         }
 
@@ -244,6 +265,19 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
         // R2 in-loop: bail out as soon as the cap is provably exceeded.
         if (raw_values.size() > max_raw_values)
             return std::nullopt;
+    }
+
+    // v2.0 [Reference] overrides R. Per-port references are not renormalised, so a
+    // list with differing values is rejected rather than read as one reference.
+    if (!reference_values.empty()) {
+        for (double r : reference_values)
+            if (r != reference_values.front()) {
+                LOG_WARN("Touchstone [Reference] lists differing per-port impedances, which are "
+                         "not supported: %s",
+                         filepath.c_str());
+                return std::nullopt;
+            }
+        data.reference_impedance = reference_values.front();
     }
 
     if (!option_line_found)
