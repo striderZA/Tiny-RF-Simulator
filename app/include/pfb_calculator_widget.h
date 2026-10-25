@@ -19,6 +19,8 @@ class PfbCalculatorWidget {
     PfbCalculatorWidget(const ComponentRegistry &components);
     void draw(const char *title, bool *p_open = nullptr);
     std::function<void()> onParamChange; // fired after Apply writes engine params
+    // Rejection verdict from the last draw(): the target against the far-band floor.
+    RejectionStatus verdict() const { return m_verdict; }
 
   private:
     PFBChannelizerEngine *resolveTarget(const std::vector<PFBChannelizerEngine *> &pfbs);
@@ -44,4 +46,5 @@ class PfbCalculatorWidget {
     std::vector<float> m_plot_db; // 151 samples over x in [0, 1.5]
     double m_plot_ymin_raw = 0.0; // raw sampled-data floor; target clamps run per frame in draw()
     double m_plot_ymax = 0.0;
+    RejectionStatus m_verdict = RejectionStatus::Misses;
 };

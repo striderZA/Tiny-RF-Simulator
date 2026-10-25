@@ -15,6 +15,52 @@ double kaiserWindowAt(double index, int N, double beta) {
 }
 double sincP(double v) { return std::abs(v) < 1e-12 ? 1.0 : std::sin(M_PI * v) / (M_PI * v); }
 double toDb(double v) { return 20.0 * std::log10(std::max(v, 1e-300)); }
+// Verdict basis: max |H(x)| over x in [1.0, 1.5], dB. Sidelobes are about 1/K wide in channel
+// units, so the scan step shrinks with K (at least four samples per lobe). A sampled local
+// maximum can sit up to ~0.7 dB below its true peak, so every local maximum within 1 dB of the
+// best sample is refined by golden-section search; a lower lobe cannot overtake it otherwise.
+double farFloorDb(const PfbFilterDesign &design) {
+    const double kStep = std::min(0.01, 0.25 / design.tapsPerBranch());
+    const int kSteps = static_cast<int>(std::ceil(0.5 / kStep));
+    const auto xAt = [kStep](int i) { return std::min(1.5, 1.0 + kStep * i); };
+    std::vector<double> samples(kSteps + 1);
+    double best_db = -1e300;
+    for (int i = 0; i <= kSteps; ++i) {
+        samples[i] = toDb(design.responseAt(xAt(i)));
+        best_db = std::max(best_db, samples[i]);
+    }
+    constexpr double kInvPhi = 0.6180339887498949;
+    double peak_db = best_db;
+    for (int i = 0; i <= kSteps; ++i) {
+        const bool local_max = (i == 0 || samples[i] >= samples[i - 1]) &&
+                               (i == kSteps || samples[i] >= samples[i + 1]);
+        if (!local_max || samples[i] < best_db - 1.0)
+            continue;
+        double lo = xAt(std::max(0, i - 1));
+        double hi = xAt(std::min(kSteps, i + 1));
+        double c = hi - kInvPhi * (hi - lo);
+        double d = lo + kInvPhi * (hi - lo);
+        double fc = toDb(design.responseAt(c));
+        double fd = toDb(design.responseAt(d));
+        for (int it = 0; it < 30; ++it) {
+            if (fc > fd) {
+                hi = d;
+                d = c;
+                fd = fc;
+                c = hi - kInvPhi * (hi - lo);
+                fc = toDb(design.responseAt(c));
+            } else {
+                lo = c;
+                c = d;
+                fc = fd;
+                d = lo + kInvPhi * (hi - lo);
+                fd = toDb(design.responseAt(d));
+            }
+        }
+        peak_db = std::max({peak_db, fc, fd});
+    }
+    return peak_db;
+}
 } // namespace
 
 PfbFilterDesign::PfbFilterDesign(int M, int K, double beta) {
@@ -96,12 +142,8 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
     m.edge_loss_db = toDb(design.responseAt(0.5));
     m.adjacent_rejection_db = toDb(design.responseAt(1.0));
 
-    // Far-adjacent floor: worst response over x in [1.0, 1.5].
-    double floor_db = -1e300;
-    for (int i = 0; i <= 50; ++i) {
-        floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
-    }
-    m.far_floor_db = floor_db;
+    // Verdict basis: the far floor over [1.0, 1.5], which includes H(1.0).
+    m.far_floor_db = farFloorDb(design);
 
     // -3 dB half width: first crossing scanning outward from DC. The response
     // is monotonically decreasing through the main lobe, so the first sample
@@ -149,13 +191,14 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
         return rec;
     rec.searched = true;
 
-    // Verdict metric is |H(1)| (metrics.adjacent_rejection_db). Each candidate changes one
-    // parameter and keeps the other, so the shown setting is the one that was evaluated.
-    double best_db = metrics.adjacent_rejection_db;
+    // Verdict metric is the far floor over the alias band (metrics.far_floor_db). Each
+    // candidate changes one parameter and keeps the other, so the shown setting is the one
+    // that was evaluated.
+    double best_db = metrics.far_floor_db;
     for (int b = 0; b <= 20; b += 4) {
         if (static_cast<double>(b) == design.beta())
             continue;
-        const double db = toDb(PfbFilterDesign(M, K, b).responseAt(1.0));
+        const double db = farFloorDb(PfbFilterDesign(M, K, b));
         if (db < best_db) {
             best_db = db;
             rec.beta = b;
@@ -165,7 +208,7 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
     for (int k : {K + 1, 64}) {
         if (k <= K || k > 64)
             continue;
-        const double db = toDb(PfbFilterDesign(M, k, design.beta()).responseAt(1.0));
+        const double db = farFloorDb(PfbFilterDesign(M, k, design.beta()));
         if (db < best_db) {
             best_db = db;
             rec.taps_per_branch = k;
@@ -177,11 +220,11 @@ PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMet
 
 std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
                             double target_db, const PfbRecommendation &rec) {
-    if (compareRejection(metrics.adjacent_rejection_db, target_db) == RejectionStatus::Meets)
+    if (compareRejection(metrics.far_floor_db, target_db) == RejectionStatus::Meets)
         return {};
     char buf[256];
-    std::snprintf(buf, sizeof(buf), "Adjacent rejection %.1f dB is short of the %.0f dB target.",
-                  -metrics.adjacent_rejection_db, target_db);
+    std::snprintf(buf, sizeof(buf), "Worst-case rejection %.1f dB is short of the %.0f dB target.",
+                  -metrics.far_floor_db, target_db);
     std::string text = buf;
     if (!rec.searched) {
         std::snprintf(buf, sizeof(buf),
@@ -191,12 +234,12 @@ std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetric
     }
     if (rec.taps_per_branch.has_value()) {
         std::snprintf(buf, sizeof(buf),
-                      " Set K (%d -> %d) at beta %.1f: this lowers adjacent rejection.",
+                      " Set K (%d -> %d) at beta %.1f: this lowers worst-case rejection.",
                       design.tapsPerBranch(), *rec.taps_per_branch, design.beta());
         text += buf;
     } else if (rec.beta.has_value()) {
         std::snprintf(buf, sizeof(buf),
-                      " Set beta (%.1f -> %.1f) at K=%d: this lowers adjacent rejection.",
+                      " Set beta (%.1f -> %.1f) at K=%d: this lowers worst-case rejection.",
                       design.beta(), *rec.beta, design.tapsPerBranch());
         text += buf;
     } else {
