@@ -507,7 +507,7 @@ add_standalone_test(test_circuit_runtime
     SOURCES test_circuit_runtime.cpp
     LIBS simulator::circuit_runtime simulator::signal_generator_engine
          simulator::amplifier_engine simulator::adc_engine
-         simulator::pfb_channelizer_engine
+         simulator::pfb_channelizer_engine simulator::attenuator_engine
 )
 
 # Standalone, UI-free behavioral coverage for app-owned graph editor actions.

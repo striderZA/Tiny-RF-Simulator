@@ -1,9 +1,11 @@
 #include "attenuator_engine.h"
 #include "node_graph_engine.h"
 #include "spectrum.h"
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <optional>
 
 using Catch::Matchers::WithinAbs;
 
@@ -202,4 +204,32 @@ TEST_CASE("Attenuator: hover summary", "[attenuator]") {
 
     std::string summary = atten.hoverSummary();
     REQUIRE(summary.find("10") != std::string::npos);
+}
+
+TEST_CASE("Attenuator: upstream replaced at the same address with an equal generation recomputes",
+          "[attenuator][cache]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setAttenuation(6.0);
+
+    std::optional<Spectrum> upstream;
+    upstream.emplace(buildTestSpectrum());
+    upstream->tones = {{100e6, -10.0, 0.0}};
+    upstream->bumpGeneration();
+    atten.node().inputs[0] = &*upstream;
+    atten.update(0.0);
+    REQUIRE(atten.node().outputs[0].tones.size() == 1);
+    REQUIRE(atten.node().outputs[0].tones[0].freq_Hz == Catch::Approx(100e6));
+
+    const Spectrum *old_address = &*upstream;
+    upstream.reset();
+    upstream.emplace(buildTestSpectrum());
+    upstream->tones = {{200e6, -10.0, 0.0}};
+    upstream->bumpGeneration();
+    REQUIRE(&*upstream == old_address);
+    atten.node().inputs[0] = &*upstream;
+    atten.update(0.0);
+
+    REQUIRE(atten.node().outputs[0].tones.size() == 1);
+    CHECK(atten.node().outputs[0].tones[0].freq_Hz == Catch::Approx(200e6));
 }
