@@ -1,4 +1,5 @@
 #include "touchstone_parser.h"
+#include "logging_core.h"
 #include <cmath>
 #include <fstream>
 #include <numbers>
@@ -241,8 +242,12 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
     // list with differing values is rejected rather than read as one reference.
     if (!reference_values.empty()) {
         for (double r : reference_values)
-            if (r != reference_values.front())
+            if (r != reference_values.front()) {
+                LOG_WARN("Touchstone [Reference] lists differing per-port impedances, which are "
+                         "not supported: %s",
+                         filepath.c_str());
                 return std::nullopt;
+            }
         data.reference_impedance = reference_values.front();
     }
 

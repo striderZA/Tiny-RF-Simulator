@@ -199,6 +199,30 @@ TEST_CASE("SParameterData leaves a thru unchanged when both ports are 75 ohm",
     std::filesystem::remove(path);
 }
 
+TEST_CASE("SParameterData renormalises an asymmetric 75 ohm 2-port matrix element by element",
+          "[touchstone][reference]") {
+    // File S (RI, 75 ohm) in Touchstone 2-port order S11, S21, S12, S22:
+    //   S11 = 0.2+0.1j, S21 = 0.6+0.2j, S12 = 0.5-0.3j, S22 = 0.1-0.4j.
+    // Expected 50 ohm values come from Z = R (I-S)^-1 (I+S), then S' = (Z-50)(Z+50)^-1,
+    // computed independently in exact 2x2 algebra. S21 != S12, so a transposed or
+    // mis-ordered matrix fails here while the symmetric thru test would not.
+    std::string path =
+        writeTouchstoneFile("test_r75_asym.s2p", "# GHz S RI R 75\n"
+                                                 "1.0 0.2 0.1 0.6 0.2 0.5 -0.3 0.1 -0.4\n");
+    SParameterData sparam;
+    REQUIRE(sparam.load(path));
+    const auto &s = sparam.params()[0];
+    REQUIRE(s[0].real() == Approx(0.3225342952205301).margin(1e-9));
+    REQUIRE(s[0].imag() == Approx(0.10040366793429745).margin(1e-9));
+    REQUIRE(s[1].real() == Approx(0.47211679607980783).margin(1e-9));
+    REQUIRE(s[1].imag() == Approx(-0.24795976999393476).margin(1e-9));
+    REQUIRE(s[2].real() == Approx(0.537461078404281).margin(1e-9));
+    REQUIRE(s[2].imag() == Approx(0.21377164148177008).margin(1e-9));
+    REQUIRE(s[3].real() == Approx(0.25719001289605714).margin(1e-9));
+    REQUIRE(s[3].imag() == Approx(-0.3613277435414075).margin(1e-9));
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("TouchstoneParser keeps file-referenced values and reports the file reference",
           "[touchstone][reference]") {
     std::string path = writeTouchstoneFile("test_r75_parse.s1p", "# GHz S MA R 75\n"
