@@ -1468,11 +1468,10 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
             for (const auto &cj : root["components"]) {
                 // Resolve the record the way the loader does: any name findByProjectType()
                 // accepts for the filter descriptor, not only the project-type spelling.
-                const bool is_filter =
-                    filter_descriptor && cj.is_object() && cj.contains("type") &&
-                    cj["type"].is_string() &&
-                    ComponentTypeRegistry::instance().findByProjectType(
-                        cj["type"].get<std::string>()) == filter_descriptor;
+                const bool is_filter = filter_descriptor && cj.is_object() && cj.contains("type") &&
+                                       cj["type"].is_string() &&
+                                       ComponentTypeRegistry::instance().findByProjectType(
+                                           cj["type"].get<std::string>()) == filter_descriptor;
                 if (is_filter && cj.contains("params") && cj["params"].is_object()) {
                     // Same deserialize() the loader runs, on a scratch engine that is discarded.
                     NodeGraphEngine scratch_graph;
@@ -1480,8 +1479,8 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
                     try {
                         scratch.deserialize(cj["params"]);
                     } catch (const std::invalid_argument &e) {
-                        LOG_ERROR("Invalid project file %s: component %zu: %s", path.c_str(),
-                                  index, e.what());
+                        LOG_ERROR("Invalid project file %s: component %zu: %s", path.c_str(), index,
+                                  e.what());
                         return false;
                     }
                 }

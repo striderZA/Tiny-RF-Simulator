@@ -1,16 +1,16 @@
-#include "test_temp_paths.h"
 #include "combiner_engine.h"
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
 #include "spectrum.h"
+#include "test_temp_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
-#include <numbers>
-#include <string>
 #include <filesystem>
 #include <fstream>
+#include <numbers>
+#include <string>
 
 using Catch::Matchers::WithinAbs;
 

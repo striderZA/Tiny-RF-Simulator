@@ -3,13 +3,13 @@
 #include "common.h"
 #include <algorithm>
 #include <atomic>
-#include <limits>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <numbers>
 #include <utility>
-#include <cstdint>
 #include <vector>
 
 // Identity of one Spectrum object, for caches keyed on its address. Storage can be reused by
