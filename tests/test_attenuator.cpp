@@ -265,3 +265,31 @@ TEST_CASE("Attenuator: upstream replaced at the same address with an equal gener
     REQUIRE(atten.node().outputs[0].tones.size() == 1);
     CHECK(atten.node().outputs[0].tones[0].freq_Hz == Catch::Approx(200e6));
 }
+
+TEST_CASE("Attenuator S-param flags out-of-band tones and sweep points",
+          "[attenuator][sparam][issue285]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+    atten.setSParamFilepath(
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p");
+    REQUIRE(atten.sparamLoaded());
+
+    const auto &sp = atten.sparamData();
+    const double f_mid = 0.5 * (sp.freqs().front() + sp.freqs().back());
+    const double f_above = sp.freqs().back() + 10e9;
+
+    Spectrum in;
+    in.frequencies = {f_mid, f_above};
+    in.tones = {{f_mid, -20.0, 0.0}, {f_above, -20.0, 0.0}};
+    atten.node().inputs[0] = &in;
+    atten.update(0.0);
+
+    const auto &out = atten.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    CHECK_FALSE(out.tones[0].out_of_band);
+    CHECK(out.tones[1].out_of_band);
+    REQUIRE(out.out_of_band.size() == 2);
+    CHECK_FALSE(out.out_of_band[0]);
+    CHECK(out.out_of_band[1]);
+}

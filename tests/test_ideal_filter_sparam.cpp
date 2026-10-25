@@ -182,3 +182,32 @@ TEST_CASE("S-parameter engines use conjugate responses on symmetric frequencies"
     check_response("combiner0", combiner.node().outputs[0], 0);
     check_response("combiner2", combiner.node().outputs[0], 2);
 }
+
+TEST_CASE("IdealFilter S-param flags out-of-band tones and sweep points",
+          "[filter][sparam][issue285]") {
+    NodeGraphEngine graph;
+    IdealFilterEngine flt(0, graph);
+    flt.setSParamFilepath(s2p_path());
+    REQUIRE(flt.sparamLoaded());
+
+    const auto &sp = flt.sparamData();
+    const double f_lo = sp.freqs().front();
+    const double f_hi = sp.freqs().back();
+    const double f_mid = 0.5 * (f_lo + f_hi);
+    const double f_above = f_hi + 10e9;
+
+    Spectrum in;
+    in.frequencies = {0.5 * f_lo, f_mid, f_above};
+    in.tones = {{f_mid, -20.0, 0.0}, {f_above, -20.0, 0.0}};
+    flt.node().inputs[0] = &in;
+    flt.update(0.0);
+
+    const auto &out = flt.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    CHECK_FALSE(out.tones[0].out_of_band);
+    CHECK(out.tones[1].out_of_band);
+    REQUIRE(out.out_of_band.size() == 3);
+    CHECK(out.out_of_band[0]);
+    CHECK_FALSE(out.out_of_band[1]);
+    CHECK(out.out_of_band[2]);
+}

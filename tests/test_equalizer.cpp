@@ -218,3 +218,34 @@ TEST_CASE("Equalizer ideal noise keeps the passive thermal term", "[equalizer][n
     for (size_t i = 0; i < out.noise_total_W.size(); ++i)
         REQUIRE(out.noise_total_W[i] == Approx(kT).epsilon(1e-6));
 }
+
+TEST_CASE("Equalizer S-param flags out-of-band tones and sweep points",
+          "[equalizer][sparam][issue285]") {
+    NodeGraphEngine graph;
+    EqualizerEngine eq(0, graph);
+    eq.setSParamFilepath(std::string(PROJECT_SOURCE_DIR) +
+                         "/component_data/amplifiers/adm-3844psm/"
+                         "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p");
+    REQUIRE(eq.sparamLoaded());
+
+    const auto &sp = eq.sparamData();
+    const double f_lo = sp.freqs().front();
+    const double f_hi = sp.freqs().back();
+    const double f_mid = 0.5 * (f_lo + f_hi);
+    const double f_above = f_hi + 10e9;
+
+    Spectrum in;
+    in.frequencies = {0.5 * f_lo, f_mid, f_above};
+    in.tones = {{f_mid, -20.0, 0.0}, {f_above, -20.0, 0.0}};
+    eq.node().inputs[0] = &in;
+    eq.update(0.0);
+
+    const auto &out = eq.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    CHECK_FALSE(out.tones[0].out_of_band);
+    CHECK(out.tones[1].out_of_band);
+    REQUIRE(out.out_of_band.size() == 3);
+    CHECK(out.out_of_band[0]);
+    CHECK_FALSE(out.out_of_band[1]);
+    CHECK(out.out_of_band[2]);
+}

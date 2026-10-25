@@ -33,10 +33,16 @@ struct Spectrum {
         double freq_Hz = 0.0;
         double power_dBm = -174;
         double phase_deg = 0.0;
+        // True when an S-parameter component held an edge value for this tone (freq outside
+        // the file band). Copied with the tone through downstream components.
+        bool out_of_band = false;
     };
 
     std::vector<double> frequencies;
     std::vector<Tone> tones;
+    // Per-bin twin of Tone::out_of_band, same size as frequencies when set. Empty when no
+    // S-parameter component has flagged the bins. Only the flagging component sets it.
+    std::vector<bool> out_of_band;
 
     // Source-vs-added invariant: noise_W holds density that entered through an
     // RF input and passed through to the output; noise_added_W holds density

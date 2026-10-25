@@ -131,6 +131,18 @@ std::complex<double> SParameterData::interpolate(double freq_Hz, int param_idx) 
     return negative_frequency ? std::conj(response) : response;
 }
 
+void SParameterData::markOutOfBand(const Spectrum *in, Spectrum &out) const {
+    const size_t N = out.frequencies.size();
+    std::vector<bool> flags(N, false);
+    if (in && in->out_of_band.size() == N)
+        flags = in->out_of_band;
+    for (size_t i = 0; i < N; ++i)
+        flags[i] = flags[i] || !inBand(out.frequencies[i]);
+    for (auto &t : out.tones)
+        t.out_of_band = t.out_of_band || !inBand(t.freq_Hz);
+    out.out_of_band = std::move(flags);
+}
+
 void SParameterData::applyToSpectrum(const Spectrum &in, Spectrum &out, int param_idx) const {
     if (!loaded()) {
         out.frequencies.clear();
