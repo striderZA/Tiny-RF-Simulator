@@ -241,55 +241,62 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const {
-    std::vector<double> display_dBm = this->renderCombinedTrace(specs, true);
     if (m_trace_mode != TraceMode::MaxHold && m_trace_mode != TraceMode::MinHold) {
-        return display_dBm;
+        return this->renderCombinedTrace(specs, true, nullptr);
     }
-    // Held traces are each shown spectrum's plotted renderSpectrum() result.
-    std::vector<const Spectrum *> shown;
-    std::vector<std::vector<double>> held;
-    for (const Spectrum *s : specs) {
-        if (s && !s->frequencies.empty()) {
-            shown.push_back(s);
-            held.push_back(this->renderSpectrum(*s));
-        }
-    }
-    if (display_dBm.empty()) {
-        return display_dBm;
-    }
-    return this->combineHeldTraces(shown, held, this->combinedReadoutAxis(specs),
-                                   std::move(display_dBm));
+    this->advanceComponentHolds(specs, m_display_component_hold);
+    return this->renderCombinedTrace(specs, true, &m_display_component_hold);
 }
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs,
                                                       const std::vector<bool> &visible) const {
-    const bool hold = m_trace_mode == TraceMode::MaxHold || m_trace_mode == TraceMode::MinHold;
     std::vector<const Spectrum *> shown;
-    std::vector<std::vector<double>> held;
     for (size_t i = 0; i < specs.size(); ++i) {
-        const Spectrum *s = specs[i];
+        if (visible.empty() || (i < visible.size() && visible[i])) {
+            shown.push_back(specs[i]);
+        }
+    }
+    if (m_trace_mode != TraceMode::MaxHold && m_trace_mode != TraceMode::MinHold) {
+        return this->renderCombinedTrace(shown, false, nullptr);
+    }
+    // Every active spectrum advances, hidden ones included, so re-showing one resumes its hold.
+    this->advanceComponentHolds(specs, m_readout_component_hold);
+    return this->renderCombinedTrace(shown, false, &m_readout_component_hold);
+}
+
+void SpectrumAnalyzerEngine::advanceComponentHolds(const std::vector<const Spectrum *> &specs,
+                                                   ComponentHoldMap &holds) const {
+    const bool is_max = m_trace_mode == TraceMode::MaxHold;
+    for (const Spectrum *s : specs) {
         if (!s || s->frequencies.empty()) {
             continue;
         }
-        // Hidden sources advance their readout hold too, so re-showing one resumes its held value.
-        std::vector<double> h = this->readoutSourceTrace(*s);
-        if (visible.empty() || (i < visible.size() && visible[i])) {
-            shown.push_back(s);
-            held.push_back(std::move(h));
+        std::vector<double> noise_W, tone_W;
+        this->binPowerComponents(*s, noise_W, tone_W);
+        ComponentHold &entry = holds[s];
+        if (entry.identity != s->identity.value || entry.noise_W.size() != noise_W.size() ||
+            entry.tone_W.size() != tone_W.size()) {
+            entry.identity = s->identity.value;
+            entry.noise_W = std::move(noise_W);
+            entry.tone_W = std::move(tone_W);
+            continue;
+        }
+        for (size_t i = 0; i < noise_W.size(); ++i) {
+            entry.noise_W[i] = is_max ? std::max(entry.noise_W[i], noise_W[i])
+                                      : std::min(entry.noise_W[i], noise_W[i]);
+        }
+        for (size_t i = 0; i < tone_W.size(); ++i) {
+            entry.tone_W[i] = is_max ? std::max(entry.tone_W[i], tone_W[i])
+                                     : std::min(entry.tone_W[i], tone_W[i]);
         }
     }
-    std::vector<double> display_dBm = this->renderCombinedTrace(shown, false);
-    if (!hold || display_dBm.empty()) {
-        return display_dBm;
-    }
-    return this->combineHeldTraces(shown, held, this->combinedReadoutAxis(shown),
-                                   std::move(display_dBm));
 }
 
 std::vector<double>
 SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> &specs,
-                                            bool apply_jitter) const {
+                                            bool apply_jitter,
+                                            const ComponentHoldMap *holds) const {
     // Every trace is resampled onto the common readout axis before summing, so bins from
     // different grids are never added by index (issue #293).
     const std::vector<double> grid = this->combinedReadoutAxis(specs);
@@ -308,6 +315,16 @@ SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> 
         }
         std::vector<double> noise_W, tone_W;
         this->binPowerComponents(*s, noise_W, tone_W);
+        if (holds) {
+            // Held components stand in for the current frame; each spectrum is advanced first.
+            auto it = holds->find(s);
+            if (it != holds->end() && it->second.identity == s->identity.value &&
+                it->second.noise_W.size() == noise_W.size() &&
+                it->second.tone_W.size() == tone_W.size()) {
+                noise_W = it->second.noise_W;
+                tone_W = it->second.tone_W;
+            }
+        }
         accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W,
                            &sum_tone_W);
     }
@@ -317,74 +334,6 @@ SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> 
 
     // Jitter and VBW act on the noise floor only; tone power is added back in linear watts.
     return this->toDisplayPower_dBm(rbw_noise_W, rbw_tone_W, bin_width, apply_jitter);
-}
-
-std::vector<double> SpectrumAnalyzerEngine::combineHeldTraces(
-    const std::vector<const Spectrum *> &shown, const std::vector<std::vector<double>> &held,
-    const std::vector<double> &grid, std::vector<double> fallback_dBm) const {
-    if (fallback_dBm.size() != grid.size()) {
-        return fallback_dBm;
-    }
-    const bool is_max = m_trace_mode == TraceMode::MaxHold;
-    std::vector<double> out = std::move(fallback_dBm);
-    std::vector<bool> covered(grid.size(), false);
-    for (size_t k = 0; k < shown.size(); ++k) {
-        const std::vector<double> &freqs = shown[k]->frequencies;
-        const std::vector<double> &h = held[k];
-        if (freqs.empty() || h.size() != freqs.size()) {
-            continue;
-        }
-        for (size_t i = 0; i < grid.size(); ++i) {
-            if (grid[i] < freqs.front() || grid[i] > freqs.back()) {
-                continue;
-            }
-            // Nearest source bin to this axis point (the lower one on a tie).
-            auto it = std::lower_bound(freqs.begin(), freqs.end(), grid[i]);
-            size_t j =
-                (it == freqs.end()) ? freqs.size() - 1 : static_cast<size_t>(it - freqs.begin());
-            if (it != freqs.begin() && it != freqs.end() && grid[i] - *(it - 1) <= *it - grid[i]) {
-                j = static_cast<size_t>(it - freqs.begin()) - 1;
-            }
-            const double v = h[j];
-            if (!covered[i]) {
-                out[i] = v;
-                covered[i] = true;
-            } else {
-                out[i] = is_max ? std::max(out[i], v) : std::min(out[i], v);
-            }
-        }
-    }
-    return out;
-}
-
-std::vector<double> SpectrumAnalyzerEngine::readoutSourceTrace(const Spectrum &spec) const {
-    if (spec.frequencies.empty() ||
-        (m_trace_mode != TraceMode::MaxHold && m_trace_mode != TraceMode::MinHold)) {
-        return {};
-    }
-    double bin_width = 1.0;
-    if (spec.frequencies.size() >= 2) {
-        bin_width = spec.frequencies[1] - spec.frequencies[0];
-    }
-    std::vector<double> noise_W, tone_W;
-    this->binPowerComponents(spec, noise_W, tone_W);
-    const std::vector<double> frame =
-        this->toDisplayPower_dBm(this->applyRBWForNoise(noise_W, bin_width),
-                                 this->applyRBW(tone_W, bin_width), bin_width, false);
-
-    const bool is_max = m_trace_mode == TraceMode::MaxHold;
-    auto &history = is_max ? m_readout_max_hold : m_readout_min_hold;
-    auto &entry = history[&spec];
-    auto &h = entry.values;
-    if (entry.identity != spec.identity.value || h.size() != frame.size()) {
-        entry.identity = spec.identity.value;
-        h = frame;
-        return frame;
-    }
-    for (size_t i = 0; i < h.size(); ++i) {
-        h[i] = is_max ? std::max(h[i], frame[i]) : std::min(h[i], frame[i]);
-    }
-    return h;
 }
 
 double
@@ -685,14 +634,22 @@ void SpectrumAnalyzerEngine::resetTraceHistory() const {
     m_max_hold.clear();
     m_min_hold.clear();
     m_video_avg.clear();
-    m_readout_max_hold.clear();
-    m_readout_min_hold.clear();
+    m_display_component_hold.clear();
+    m_readout_component_hold.clear();
 }
 
 void SpectrumAnalyzerEngine::pruneHistory(const std::vector<const Spectrum *> &active_keys) const {
     std::unordered_set<const Spectrum *> active(active_keys.begin(), active_keys.end());
-    for (auto *map :
-         {&m_max_hold, &m_min_hold, &m_video_avg, &m_readout_max_hold, &m_readout_min_hold}) {
+    for (auto *map : {&m_max_hold, &m_min_hold, &m_video_avg}) {
+        for (auto it = map->begin(); it != map->end();) {
+            if (active.find(it->first) == active.end()) {
+                it = map->erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (auto *map : {&m_display_component_hold, &m_readout_component_hold}) {
         for (auto it = map->begin(); it != map->end();) {
             if (active.find(it->first) == active.end()) {
                 it = map->erase(it);

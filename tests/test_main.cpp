@@ -1061,6 +1061,61 @@ TEST_CASE("Combined display and readout keep separate holds", "[spectrum][trace]
     }
 }
 
+TEST_CASE("Max Hold readout matches Clear/Write on a steady scene", "[spectrum][trace]") {
+    // Max Hold on an unchanging scene must read what Clear/Write reads, including a tone on a
+    // finer grid than the readout axis (no tone may be dropped between axis points).
+    const auto make_engine = [](TraceMode mode) {
+        SpectrumAnalyzerEngine sa;
+        sa.setNoiseJitterEnabled(false);
+        sa.setResBw(1e6);
+        sa.setVideoBw(1e6);
+        sa.setTraceMode(mode);
+        return sa;
+    };
+    const auto expect_same_when_steady = [&](const std::vector<const Spectrum *> &specs) {
+        SpectrumAnalyzerEngine hold = make_engine(TraceMode::MaxHold);
+        SpectrumAnalyzerEngine clear = make_engine(TraceMode::ClearWrite);
+        std::vector<double> want, got;
+        for (int frame = 0; frame < 3; ++frame) {
+            want = clear.renderCombinedReadoutSpectrum(specs);
+            got = hold.renderCombinedReadoutSpectrum(specs);
+            REQUIRE(got.size() == want.size());
+            for (size_t i = 0; i < want.size(); ++i) {
+                REQUIRE(got[i] == Approx(want[i]).margin(1e-6));
+            }
+        }
+        return got;
+    };
+
+    SECTION("sources on different grids keep a tone between axis points") {
+        Spectrum coarse;
+        coarse.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        coarse.noise_total_W.assign(coarse.frequencies.size(), k * T);
+        coarse.generation = 1;
+        Spectrum fine;
+        for (int i = 0; i <= 20; ++i) {
+            fine.frequencies.push_back(i * 1e6);
+        }
+        fine.noise_total_W.assign(fine.frequencies.size(), k * T);
+        fine.tones = {{1e6, 0.0, 0.0}}; // 0 dBm at 1 MHz, between coarse axis points
+        fine.generation = 1;
+        const std::vector<const Spectrum *> specs = {&coarse, &fine};
+        const auto got = expect_same_when_steady(specs);
+        REQUIRE(*std::max_element(got.begin(), got.end()) > -6.0);
+    }
+
+    SECTION("overlapping identical sources add as Clear/Write does") {
+        Spectrum a;
+        a.frequencies = {0, 5e6, 10e6, 15e6, 20e6};
+        a.noise_total_W.assign(a.frequencies.size(), k * T);
+        a.tones = {{5e6, 0.0, 0.0}};
+        a.generation = 1;
+        Spectrum b = a;
+        const std::vector<const Spectrum *> specs = {&a, &b};
+        expect_same_when_steady(specs);
+    }
+}
+
 TEST_CASE("MinHold accumulates per-bin minimum", "[spectrum][trace]") {
     SpectrumAnalyzerEngine sa;
     sa.setNoiseJitterEnabled(false);

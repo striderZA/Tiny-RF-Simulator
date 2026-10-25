@@ -307,6 +307,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(all_active, all_active_visible);
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
+        // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
+        for (auto *node : active_nodes) {
+            if (node)
+                m_engine.renderSpectrum(outputSpectrumFor(node));
+        }
         ImGui::Text("No visible traces. Enable at least one trace in the legend.");
         ImGui::End();
         return;

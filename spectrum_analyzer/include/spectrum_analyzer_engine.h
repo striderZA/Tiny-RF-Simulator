@@ -71,13 +71,15 @@ class SpectrumAnalyzerEngine {
     // Limits: a trace finer than the axis step contributes one sample per axis bin, so its
     // noise is an estimate; a single-bin trace puts its tone on the nearest axis bin.
     std::vector<double> combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const;
-    // Display trace: the combined spectrum with cosmetic noise jitter applied.
+    // Display trace: the combined spectrum with cosmetic noise jitter applied. Max/Min Hold: each
+    // spectrum's raw power components are held per bin on its own grid (see
+    // advanceComponentHolds), then summed onto the readout axis as Clear/Write does.
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
-    // Peak and marker readout trace, jitter-free, on the same readout axis as the display trace
-    // (issue #292). `specs` lists every active spectrum and `visible` marks the shown ones
-    // (parallel, empty = all shown). Max/Min Hold: the pointwise max/min of each shown source's
-    // own jitter-free held trace, so a hidden source keeps its history and re-showing it resumes
-    // the plotted value (issue #291). Other modes: the current-frame sum.
+    // Peak and marker readout trace, jitter-free, on the readout axis (issue #292). `specs` lists
+    // every active spectrum and `visible` marks the shown ones (parallel, empty = all shown).
+    // Max/Min Hold: the same sum as Clear/Write, but of held components, so a hidden source keeps
+    // its held value and re-showing it resumes the plotted value (issue #291). A steady scene reads
+    // the same in every mode. Other modes: the current-frame sum.
     std::vector<double> renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs,
                                                       const std::vector<bool> &visible = {}) const;
 
@@ -122,21 +124,25 @@ class SpectrumAnalyzerEngine {
     std::vector<double> toDisplayPower_dBm(const std::vector<double> &noise_W,
                                            const std::vector<double> &tone_W, double binWidth,
                                            bool apply_jitter) const;
+    // Raw per-bin power components (W) of one spectrum on its own grid, held for Max/Min Hold.
+    // The identity guard starts a fresh hold when a spectrum is replaced at the same address.
+    struct ComponentHold {
+        uint64_t identity = 0;
+        std::vector<double> noise_W;
+        std::vector<double> tone_W;
+    };
+    using ComponentHoldMap = std::unordered_map<const Spectrum *, ComponentHold>;
+    // Max/Min-holds each spectrum's components, per bin (Max/Min Hold only).
+    void advanceComponentHolds(const std::vector<const Spectrum *> &specs,
+                               ComponentHoldMap &holds) const;
+    // Sums the components of every spectrum onto the readout axis and returns dBm. With `holds`,
+    // each spectrum contributes its held components instead of the current frame's.
     std::vector<double> renderCombinedTrace(const std::vector<const Spectrum *> &specs,
-                                            bool apply_jitter) const;
+                                            bool apply_jitter, const ComponentHoldMap *holds) const;
     std::vector<double> applyRBWForNoise(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;
 
-    // Max/Min-holds each shown source's trace on its own grid, then takes the pointwise max/min
-    // on the readout axis. Bins no shown source covers keep `fallback_dBm`.
-    std::vector<double> combineHeldTraces(const std::vector<const Spectrum *> &shown,
-                                          const std::vector<std::vector<double>> &held,
-                                          const std::vector<double> &grid,
-                                          std::vector<double> fallback_dBm) const;
-    // Jitter-free trace of one spectrum on its own grid, held in the readout history (Max/Min
-    // only; empty otherwise).
-    std::vector<double> readoutSourceTrace(const Spectrum &spec) const;
     std::vector<double> applyTraceMode(const Spectrum &spec,
                                        const std::vector<double> &after_vbw) const;
 
@@ -164,10 +170,10 @@ class SpectrumAnalyzerEngine {
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_max_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_min_hold;
     mutable std::unordered_map<const Spectrum *, TraceHistory> m_video_avg;
-    // Readout history: same hold rules as above, kept apart from the display history so the
-    // readout never advances the plotted trace and the reverse.
-    mutable std::unordered_map<const Spectrum *, TraceHistory> m_readout_max_hold;
-    mutable std::unordered_map<const Spectrum *, TraceHistory> m_readout_min_hold;
+    // Held components for the display trace and the readout trace, kept apart so each path
+    // advances its own hold once per call.
+    mutable ComponentHoldMap m_display_component_hold;
+    mutable ComponentHoldMap m_readout_component_hold;
 
     mutable int m_video_avg_count = 10;
 };
