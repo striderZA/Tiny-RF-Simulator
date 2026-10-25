@@ -1,5 +1,6 @@
 #include "adc_engine.h"
 #include "amplifier_engine.h"
+#include "attenuator_engine.h"
 #include "circuit_runtime.h"
 #include "pfb_channelizer_engine.h"
 #include "signal_generator_engine.h"
@@ -192,4 +193,63 @@ TEST_CASE("CircuitRuntime advances its epoch only on whole-project clear", "[cir
 
     runtime.clearComponentsAndResetIds();
     CHECK(runtime.epoch() == 1);
+}
+
+TEST_CASE("CircuitRuntime same-batch upstream replacement reaches the downstream attenuator",
+          "[circuit_runtime][attenuator]") {
+    CircuitRuntime runtime;
+    auto *generator = static_cast<SignalGeneratorEngine *>(
+        runtime.createComponent(createEngine<SignalGeneratorEngine>));
+    auto *attenuator =
+        static_cast<AttenuatorEngine *>(runtime.createComponent(createEngine<AttenuatorEngine>));
+    REQUIRE(generator != nullptr);
+    REQUIRE(attenuator != nullptr);
+    generator->addTone(100e6, -20.0);
+    REQUIRE(runtime.connect(generator->outputPinId(), attenuator->inputPinId()).has_value());
+    runtime.update(0.0);
+    REQUIRE(attenuator->node().outputs[0].tones.size() == 1);
+    REQUIRE(attenuator->node().outputs[0].tones[0].freq_Hz == Catch::Approx(100e6));
+
+    // Same batch: remove A, add B at a different tone, connect B -> attenuator.
+    // No update() between the edits, so the downstream engine sees only the
+    // replacement's first output.
+    REQUIRE(runtime.removeComponent(generator->graphNodeId()));
+    auto *replacement = static_cast<SignalGeneratorEngine *>(
+        runtime.createComponent(createEngine<SignalGeneratorEngine>));
+    REQUIRE(replacement != nullptr);
+    replacement->addTone(200e6, -20.0);
+    REQUIRE(runtime.connect(replacement->outputPinId(), attenuator->inputPinId()).has_value());
+    runtime.update(0.0);
+
+    REQUIRE(attenuator->node().outputs[0].tones.size() == 1);
+    CHECK(attenuator->node().outputs[0].tones[0].freq_Hz == Catch::Approx(200e6));
+}
+
+TEST_CASE("CircuitRuntime same-batch replacement with a same-value upstream edit reaches the "
+          "downstream attenuator",
+          "[circuit_runtime][attenuator]") {
+    CircuitRuntime runtime;
+    auto *generator = static_cast<SignalGeneratorEngine *>(
+        runtime.createComponent(createEngine<SignalGeneratorEngine>));
+    auto *attenuator =
+        static_cast<AttenuatorEngine *>(runtime.createComponent(createEngine<AttenuatorEngine>));
+    REQUIRE(generator != nullptr);
+    REQUIRE(attenuator != nullptr);
+    generator->addTone(100e6, -20.0);
+    REQUIRE(runtime.connect(generator->outputPinId(), attenuator->inputPinId()).has_value());
+    runtime.update(0.0);
+    REQUIRE(attenuator->node().outputs[0].tones[0].freq_Hz == Catch::Approx(100e6));
+
+    REQUIRE(runtime.removeComponent(generator->graphNodeId()));
+    auto *replacement = static_cast<SignalGeneratorEngine *>(
+        runtime.createComponent(createEngine<SignalGeneratorEngine>));
+    REQUIRE(replacement != nullptr);
+    replacement->addTone(200e6, -20.0);
+    REQUIRE(runtime.connect(replacement->outputPinId(), attenuator->inputPinId()).has_value());
+    // Same-value edit before the first update of the batch.
+    replacement->updateTone(0, 200e6, -20.0);
+    runtime.update(0.0);
+
+    REQUIRE(attenuator->node().outputs[0].tones.size() == 1);
+    CHECK(attenuator->node().outputs[0].tones[0].freq_Hz == Catch::Approx(200e6));
 }
