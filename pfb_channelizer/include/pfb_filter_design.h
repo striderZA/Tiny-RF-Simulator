@@ -61,9 +61,9 @@ struct PfbRecommendation {
 };
 
 // Tap budget (M*K) above which the search is skipped. Measured at the budget (M=2048 K=4,
-// g++ -O2, best of 3): the search takes about 140-160 ms per refresh with the far-floor
-// verdict, against about 95 ms on the H(1.0)-only search. Above the budget no search runs
-// (0 ms), so large designs keep the pre-#289 refresh cost.
+// g++ -O2, one run): the search takes about 290 ms per refresh with the peak-refined far-floor
+// verdict, against about 140 ms with the 0.01-step sample maximum. Above the budget no search
+// runs (0 ms), so large designs keep the pre-#289 refresh cost.
 inline constexpr int kPfbRecommendMaxTaps = 8192;
 
 // Evaluates the candidate single changes above. Synthesizes one prototype per candidate,

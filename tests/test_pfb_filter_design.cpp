@@ -88,6 +88,25 @@ TEST_CASE("PfbFilterMetrics verdict covers the far alias band", "[pfb_filter_des
     REQUIRE(!pfbGuidanceText(PfbFilterDesign(32, 16, 8.0), m, 100.0, PfbRecommendation{}).empty());
 }
 
+TEST_CASE("PfbFilterMetrics far floor is the alias-band peak, not a grid sample",
+          "[pfb_filter_design]") {
+    // Regression (issue #290 review): a 0.01-step scan understated the far-band peak by up to
+    // 1.8 dB, so K=32, beta=8 at 100 dB read Meets while the true peak is -99.98 dB.
+    // Reference: a 0.0002-step brute-force maximum over [1.0, 1.5].
+    const std::pair<int, double> configs[] = {{32, 8.0}, {48, 10.0}, {16, 8.0}, {4, 4.0}};
+    for (const auto &[K, beta] : configs) {
+        const PfbFilterDesign d(32, K, beta);
+        double fine_db = -1e300;
+        for (int i = 0; i <= 2500; ++i)
+            fine_db = std::max(fine_db, 20.0 * std::log10(d.responseAt(1.0 + 0.0002 * i)));
+        const double far_db = computePfbMetrics(d).far_floor_db;
+        REQUIRE(far_db == Approx(fine_db).margin(0.01));
+    }
+    auto m = computePfbMetrics(PfbFilterDesign(32, 32, 8.0));
+    REQUIRE(m.far_floor_db == Approx(-99.98).margin(0.02));
+    REQUIRE(compareRejection(m.far_floor_db, 100.0) == RejectionStatus::Within10Db);
+}
+
 TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_design]") {
     PfbFilterDesign d(32, 8, 8.0);
     auto m = computePfbMetrics(d);
