@@ -170,7 +170,7 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             continue;
 
         // Detect version 2.0 keywords
-        if (stripped[0] == '[') {
+        if (stripped.size() > 10 && stripped[0] == '[') {
             std::string lower = stripped;
             for (char &c : lower)
                 c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -193,6 +193,9 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             if (has_version_keyword)
                 continue;
         }
+        // Any other bracket line (a short [End] or an unrecognised keyword) is not data.
+        if (stripped[0] == '[')
+            continue;
 
         if (stripped[0] == '#') {
             if (!parseOptionLine(stripped, data))
@@ -201,16 +204,18 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             continue;
         }
 
-        // Data line: read all numbers
+        // Data line: every whitespace token must be a complete number. A token that
+        // is not (a lone sign, "1e", or "1x") rejects the file rather than dropping
+        // the rest of the line, which can silently lose a whole frequency point.
         std::istringstream iss(stripped);
-        double val;
-        while (iss >> val) {
+        std::string token;
+        while (iss >> token) {
+            std::istringstream token_stream(token);
+            double val;
+            if (!(token_stream >> val) || token_stream.peek() != std::char_traits<char>::eof())
+                return std::nullopt;
             raw_values.push_back(val);
         }
-        // Stopped on a token that is not a number: reject the file rather than
-        // dropping the rest of the line (which can silently lose a whole point).
-        if (!iss.eof())
-            return std::nullopt;
 
         // R2 in-loop: bail out as soon as the cap is provably exceeded.
         if (raw_values.size() > max_raw_values)
