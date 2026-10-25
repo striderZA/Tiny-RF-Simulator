@@ -3,6 +3,7 @@
 ### Fixed
 
 - **PFB calculator hint no longer recommends a change that lowers rejection (#289)** — the hint suggests at most one change, and only when it lowers adjacent rejection when applied alone: a beta from 0, 4, …, 20 at the current K, or K+1 / K=64 (the slider maximum) at the current beta. The text names the checked candidates when none helps. Designs above M×K = 8192 taps get no suggestion, which keeps the design refresh cost unchanged there.
+- **Touchstone data lines with a non-numeric token are rejected (#286)** — a data line whose tokens are not all complete numbers (for example `junk junk`, a lone `-`, `1e`, or `0.1x`) fails the file to load, instead of silently dropping that line's frequency point and interpolating across the gap. Text lines before the option line are still ignored.
 
 ### Changed
 

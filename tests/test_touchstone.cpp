@@ -260,8 +260,8 @@ TEST_CASE("TouchstoneParser reads a multi-digit port count from the extension", 
 TEST_CASE("TouchstoneParser rejects a data line with a non-numeric token", "[touchstone]") {
     // Each middle line carries a token that is not a complete number, including
     // partial tokens that reach end of line ("-", "1e") and a trailing sign.
-    const std::array<std::string, 6> bad_middle_lines = {"junk junk", "-",  "+",
-                                                         ".",         "1e", "1 1 1 1 1 1 1 1 -"};
+    const std::array<std::string, 7> bad_middle_lines = {
+        "junk junk", "-", "+", ".", "1e", "1 1 1 1 1 1 1 1 -", "2.0 0.1x 0 0 0 0 0 0 0"};
     int index = 0;
     for (const auto &bad : bad_middle_lines) {
         std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_junk_line_" +
@@ -285,6 +285,22 @@ TEST_CASE("TouchstoneParser ignores a bracket line before the version keyword", 
     {
         std::ofstream ofs(tmpfile);
         ofs << "[Comment] not a keyword\n";
+        ofs << "# GHz S DB R 50\n";
+        ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+        ofs << "3.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
+    }
+    auto result = TouchstoneParser::parse(tmpfile);
+    REQUIRE(result.has_value());
+    REQUIRE(result->frequencies.size() == 3);
+    std::filesystem::remove(tmpfile);
+}
+
+TEST_CASE("TouchstoneParser ignores text preamble lines before the option line", "[touchstone]") {
+    std::string tmpfile = std::filesystem::temp_directory_path().string() + "/test_preamble.s2p";
+    {
+        std::ofstream ofs(tmpfile);
+        ofs << "Measured by Bob on Monday\n";
         ofs << "# GHz S DB R 50\n";
         ofs << "1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";
         ofs << "2.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0\n";

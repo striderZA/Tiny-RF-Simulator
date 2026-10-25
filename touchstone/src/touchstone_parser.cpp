@@ -1,8 +1,29 @@
 #include "touchstone_parser.h"
+#include <charconv>
 #include <cmath>
 #include <fstream>
 #include <numbers>
 #include <sstream>
+#include <string_view>
+#include <system_error>
+
+namespace {
+
+// Parses one whitespace-delimited token as a complete, finite decimal number.
+// Anything else (a lone sign, "1e", "0.1x", "nan") is rejected.
+bool parseDataToken(std::string_view token, double &value) {
+    if (token.size() > 1 && token.front() == '+') {
+        token.remove_prefix(1);
+        if (token.front() == '+' || token.front() == '-')
+            return false;
+    }
+    const char *first = token.data();
+    const char *last = first + token.size();
+    const auto [ptr, ec] = std::from_chars(first, last, value);
+    return ec == std::errc() && ptr == last && std::isfinite(value);
+}
+
+} // namespace
 
 std::string TouchstoneParser::stripComment(const std::string &line) {
     size_t pos = line.find('!');
@@ -204,16 +225,19 @@ std::optional<TouchstoneData> TouchstoneParser::parse(const std::string &filepat
             continue;
         }
 
-        // Data line: every whitespace token must be a complete number. A token that
-        // is not (a lone sign, "1e", or "1x") rejects the file rather than dropping
-        // the rest of the line, which can silently lose a whole frequency point.
+        // Data line: each whitespace token must be a complete number. Before the option
+        // line, reading stops at the first non-numeric token, as it always has, so text
+        // preamble lines are still ignored. After it, a bad token rejects the file rather
+        // than dropping the rest of the line, which can silently lose a whole point.
         std::istringstream iss(stripped);
         std::string token;
         while (iss >> token) {
-            std::istringstream token_stream(token);
             double val;
-            if (!(token_stream >> val) || token_stream.peek() != std::char_traits<char>::eof())
-                return std::nullopt;
+            if (!parseDataToken(token, val)) {
+                if (option_line_found)
+                    return std::nullopt;
+                break;
+            }
             raw_values.push_back(val);
         }
 
