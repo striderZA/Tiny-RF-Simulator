@@ -441,17 +441,29 @@ TEST_CASE("PFB tone index handles disjoint generations without saturation",
 
 TEST_CASE("PfbFilterDesign responseAt matches the DTFT definition", "[pfb_filter_design]") {
     constexpr double kPi = 3.14159265358979323846;
-    // Issue #130: responseAt uses a phasor recurrence instead of a cos() per
-    // tap. Compare against the full complex DTFT sum over every tap, which is
-    // the definition, for several (M, K, beta) and offsets, including the long
-    // filter where the recurrence re-anchors many times.
+    // responseAt rotates four phasor chains per block, re-anchors every 256 taps,
+    // and handles a sub-4 tail plus an odd-N centre tap separately. Each branch
+    // needs a case that reaches it, so the cases cover N = M*K that are odd,
+    // below 4, not multiples of 4 or 256, and above one anchor block. Compare
+    // against the full complex DTFT sum over every tap, which is the definition.
     struct Case {
         int M;
         int K;
         double beta;
     };
-    const Case cases[] = {
-        {32, 8, 8.0}, {32, 16, 12.0}, {256, 8, 8.0}, {2048, 8, 8.0}, {2048, 64, 8.0}};
+    const Case cases[] = {{2, 1, 8.0},    // N=2: half=1, single tail tap
+                          {3, 1, 8.0},    // N=3 odd: centre tap only
+                          {4, 1, 8.0},    // N=4: half=2, tail only, no chain block
+                          {4, 3, 8.0},    // N=12: half=6, one 4-chain step plus a 2-tap tail
+                          {6, 5, 8.0},    // N=30 (even): half=15, tail of 3
+                          {2, 3, 8.0},    // N=6: half=3, tail of 3
+                          {33, 7, 8.0},   // N=231 odd, half=115
+                          {2047, 1, 8.0}, // N=2047 odd, half=1023: several anchor blocks plus tail
+                          {32, 8, 8.0},   // N=256: exactly one anchor block
+                          {32, 16, 12.0}, // N=512
+                          {256, 8, 8.0},  // N=2048
+                          {2000, 5, 8.0}, // N=10000: many anchor blocks
+                          {2048, 64, 8.0}};
     const double xs[] = {0.0, 0.25, 0.5, 1.0, 1.37, 2.0, -0.8, -1.5};
     for (const auto &c : cases) {
         PfbFilterDesign d(c.M, c.K, c.beta);
@@ -466,7 +478,7 @@ TEST_CASE("PfbFilterDesign responseAt matches the DTFT definition", "[pfb_filter
                 im -= taps[n] * std::sin(w * n);
             }
             const double reference = std::sqrt(re * re + im * im);
-            INFO("M=" << c.M << " K=" << c.K << " x=" << x);
+            INFO("M=" << c.M << " K=" << c.K << " N=" << N << " x=" << x);
             REQUIRE(d.responseAt(x) == Approx(reference).margin(1e-10));
         }
     }

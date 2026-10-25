@@ -130,49 +130,6 @@ TEST_CASE("Benchmark: PFBChannelizerEngine update", "[bench][pfb]") {
         pfb.update(0.0); // prime: channels cached
         BENCHMARK("PFB update cached grid") { pfb.update(0.0); };
     }
-
-    // Issue #130 (PFB recompute): M=2048 with a 4097-bin grid over Fs=400 MHz.
-    // Dirty = each update changes K (K and K-1 alternate), forcing
-    // recomputeChannels(); clean = same input, cached channels. A K=64 dirty
-    // iteration takes seconds in an optimised build, so run these with
-    // `build/bin/tests "Benchmark: PFBChannelizerEngine update" --benchmark-samples 10`.
-    for (int K : {8, 64}) {
-        SECTION("M=2048 K=" + std::to_string(K) + " dirty (K change forces recompute)") {
-            NodeGraphEngine g;
-            PFBChannelizerEngine pfb(0, g);
-            pfb.setFs_Hz(400e6);
-            pfb.setChannelCount(2048);
-            pfb.setTapsPerBranch(K);
-            Spectrum in;
-            in.frequencies.resize(4097);
-            for (int i = 0; i < 4097; ++i)
-                in.frequencies[i] = -200e6 + i * (400e6 / 4096.0);
-            in.noise_total_W.assign(4097, 1e-20);
-            pfb.node().inputs[0] = &in;
-            pfb.update(0.0);
-            bool flip = false;
-            BENCHMARK("PFB M=2048 K=" + std::to_string(K) + " recompute (K toggles K/K-1)") {
-                flip = !flip;
-                pfb.setTapsPerBranch(flip ? K : K - 1);
-                pfb.update(0.0);
-            };
-        }
-        SECTION("M=2048 K=" + std::to_string(K) + " clean (cached channels)") {
-            NodeGraphEngine g;
-            PFBChannelizerEngine pfb(0, g);
-            pfb.setFs_Hz(400e6);
-            pfb.setChannelCount(2048);
-            pfb.setTapsPerBranch(K);
-            Spectrum in;
-            in.frequencies.resize(4097);
-            for (int i = 0; i < 4097; ++i)
-                in.frequencies[i] = -200e6 + i * (400e6 / 4096.0);
-            in.noise_total_W.assign(4097, 1e-20);
-            pfb.node().inputs[0] = &in;
-            pfb.update(0.0);
-            BENCHMARK("PFB M=2048 K=" + std::to_string(K) + " cached") { pfb.update(0.0); };
-        }
-    }
 }
 
 TEST_CASE("Benchmark: SpectrumAnalyzerEngine renderSpectrum", "[bench][spectrum]") {

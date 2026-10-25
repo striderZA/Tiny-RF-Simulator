@@ -306,6 +306,12 @@ add_standalone_test(test_pfb_filter_design
     SOURCES test_pfb_filter_design.cpp
     LIBS simulator::pfb_channelizer_engine simulator::node_graph_engine simulator::power_meter_engine
 )
+# Opt-in M=2048 PFB recompute benchmark (issue #130). Built only on request
+# (`--target bench_pfb_large`) and not registered with CTest: a K=64 recompute
+# takes seconds, which would dominate the required check.
+add_executable(bench_pfb_large EXCLUDE_FROM_ALL bench_pfb_large.cpp)
+target_link_libraries(bench_pfb_large PRIVATE
+    simulator::pfb_channelizer_engine simulator::node_graph_engine Catch2::Catch2WithMain)
 add_standalone_test(test_pfb_calculator
     SOURCES test_pfb_calculator.cpp
     LIBS simulator::app

@@ -36,7 +36,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - `test_ui` shares `<exe_dir>/layouts/UITestLayout.ini`; `test_engine/CMakeLists.txt` registers `add_test(NAME test_ui COMMAND test_ui)` and sets `RUN_SERIAL TRUE`. `test_ui` is not defined in `tests/CMakeLists.txt`; run the whole `test_ui` target, not individual UI cases.
 - `perf_app` (`test_engine/perf_main.cpp`) is opt-in: `cmake --build build --target perf_app`. It is declared `EXCLUDE_FROM_ALL` and is not a CTest target.
 - Matched perf runs: `cmake --build build --target perf_app`, then `build/bin/perf_app <scenario>` from the repo root on each tag. Delete `build/bin/app.ini` first so both trees start from defaults, and interleave tags.
-- Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark
+- Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark. Benchmarks too slow for CTest are `EXCLUDE_FROM_ALL` executables run on request, e.g. `cmake --build build --target bench_pfb_large` then `build/bin/bench_pfb_large --benchmark-samples 10` (PFB M=2048 recompute, issue #130).
 - Node graph tests must verify probe routing, link topology, and topological sort
 - Touchstone parser tests must cover all format variants (DB, MA, RI), frequency units, both required v2.0 two-port data orders, and row-major matrices for 3-port and 4-port files.
 - AMP parser tests must cover scalar and per-frequency IP3 sections, default and explicit units, empty or non-numeric S/Y/Z/POUT sections, and file:line diagnostics (`tests/test_amp_file.cpp`)

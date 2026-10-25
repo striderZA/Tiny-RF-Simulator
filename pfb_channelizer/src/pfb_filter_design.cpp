@@ -50,7 +50,7 @@ double PfbFilterDesign::responseAt(double x) const {
     // cos(w*(i-center)) is produced by rotating unit phasors instead of a
     // cos() call per tap. Four phasor chains advance by 4w per step so their
     // rotations overlap. Each chain is re-anchored from exact sin/cos every
-    // kAnchor taps, so rounding drift stays near kAnchor * eps.
+    // kAnchor taps, which bounds the rounding drift of the recurrence.
     constexpr int kAnchor = 256; // multiple of 4
     const int N = static_cast<int>(m_taps.size());
     const double w = 2.0 * M_PI * x / m_M; // rad/sample
