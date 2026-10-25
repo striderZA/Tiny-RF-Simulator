@@ -17,7 +17,12 @@ class SpectrumAnalyzerEngine {
     void setStopFrequency(double v) { m_stop_freq = v; }
     void setMinPower(double v) { m_min_power = v; }
     void setMaxPower(double v) { m_max_power = v; }
-    void setVideoBw(double v) { m_vbw = v; }
+    void setVideoBw(double v) {
+        if (m_vbw != v) {
+            m_vbw = v;
+            resetTraceHistory();
+        }
+    }
     void setResBw(double v) {
         if (m_rbw != v) {
             m_rbw = v;
@@ -38,7 +43,12 @@ class SpectrumAnalyzerEngine {
     double rbw() const { return m_rbw; }
 
     void setTraceMode(TraceMode m);
-    void setVideoAvgCount(int n) { m_video_avg_count = n; }
+    void setVideoAvgCount(int n) {
+        if (m_video_avg_count != n) {
+            m_video_avg_count = n;
+            resetTraceHistory();
+        }
+    }
 
     TraceMode traceMode() const { return m_trace_mode; }
     int videoAvgCount() const { return m_video_avg_count; }
@@ -53,7 +63,25 @@ class SpectrumAnalyzerEngine {
     // its sampled area to the requested RBW.
     std::vector<double> applyVBW(const std::vector<double> &power_dBm, double binWidth) const;
     std::vector<double> applyRBW(const std::vector<double> &power_W, double binWidth) const;
+    // combinedReadoutAxis() is the common axis that renderCombinedSpectrum() and
+    // computeAverageNoiseLevel() return values on: from the lowest start to the highest stop
+    // of the traces, at the coarsest bin spacing among them. Each trace is sampled onto it
+    // (noise density at the nearest source bin, scaled to the axis step; tone power to the
+    // nearest axis bin), so traces on different grids are never added by index (issue #293).
+    // Limits: a trace finer than the axis step contributes one sample per axis bin, so its
+    // noise is an estimate; a single-bin trace puts its tone on the nearest axis bin.
+    std::vector<double> combinedReadoutAxis(const std::vector<const Spectrum *> &specs) const;
+    // Display trace: the combined spectrum with cosmetic noise jitter applied. Max/Min Hold: each
+    // spectrum's raw power components are held per bin on its own grid (see
+    // advanceComponentHolds), then summed onto the readout axis as Clear/Write does.
     std::vector<double> renderCombinedSpectrum(const std::vector<const Spectrum *> &specs) const;
+    // Peak and marker readout trace, jitter-free, on the readout axis (issue #292). `specs` lists
+    // every active spectrum and `visible` marks the shown ones (parallel, empty = all shown).
+    // Max/Min Hold: the same sum as Clear/Write, but of held components, so a hidden source keeps
+    // its held value and re-showing it resumes the plotted value (issue #291). A steady scene reads
+    // the same in every mode. Other modes: the current-frame sum.
+    std::vector<double> renderCombinedReadoutSpectrum(const std::vector<const Spectrum *> &specs,
+                                                      const std::vector<bool> &visible = {}) const;
 
     double computeAverageNoiseLevel(const std::vector<const Spectrum *> &specs) const;
     std::vector<Peak> findPeaks(const std::vector<double> &power_dBm,
@@ -86,11 +114,31 @@ class SpectrumAnalyzerEngine {
     // may filter or jitter them independently before recombining.
     void binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                             std::vector<double> &tone_W) const;
-    // Combines RBW-filtered per-bin noise and tone power (W) into a dBm display
-    // trace. The cosmetic noise-floor jitter scales only the noise component, so
-    // deterministic tone peaks never wander; a non-positive sigma disables it.
-    std::vector<double> toJitteredPower_dBm(const std::vector<double> &noise_W,
-                                            const std::vector<double> &tone_W) const;
+    // Jittered noise floor (dBm per bin) from RBW-filtered noise power (W). When apply_jitter
+    // is set, the cosmetic jitter scales only this component; a non-positive sigma or a
+    // disabled jitter setting leaves it unjittered.
+    std::vector<double> toJitteredNoise_dBm(const std::vector<double> &noise_W,
+                                            bool apply_jitter) const;
+    // Builds the dBm display trace: VBW smooths the noise floor only, then the RBW-filtered
+    // tone power is added in linear watts, so tone peaks are never averaged.
+    std::vector<double> toDisplayPower_dBm(const std::vector<double> &noise_W,
+                                           const std::vector<double> &tone_W, double binWidth,
+                                           bool apply_jitter) const;
+    // Raw per-bin power components (W) of one spectrum on its own grid, held for Max/Min Hold.
+    // The identity guard starts a fresh hold when a spectrum is replaced at the same address.
+    struct ComponentHold {
+        uint64_t identity = 0;
+        std::vector<double> noise_W;
+        std::vector<double> tone_W;
+    };
+    using ComponentHoldMap = std::unordered_map<const Spectrum *, ComponentHold>;
+    // Max/Min-holds each spectrum's components, per bin (Max/Min Hold only).
+    void advanceComponentHolds(const std::vector<const Spectrum *> &specs,
+                               ComponentHoldMap &holds) const;
+    // Sums the components of every spectrum onto the readout axis and returns dBm. With `holds`,
+    // each spectrum contributes its held components instead of the current frame's.
+    std::vector<double> renderCombinedTrace(const std::vector<const Spectrum *> &specs,
+                                            bool apply_jitter, const ComponentHoldMap *holds) const;
     std::vector<double> applyRBWForNoise(const std::vector<double> &power_W, double binWidth) const;
     std::vector<double> applyRBWImpl(const std::vector<double> &power_W, double binWidth,
                                      bool normalizeNoiseBandwidth) const;
@@ -101,6 +149,7 @@ class SpectrumAnalyzerEngine {
     // Internal RBW cache: avoids re-applyRBW when spectrum data + settings haven't changed,
     // but still applies jitter + VBW every frame so the display looks alive.
     mutable const Spectrum *m_cache_spectrum = nullptr;
+    mutable uint64_t m_cache_identity = 0;
     mutable uint64_t m_cache_spec_gen = 0;
     mutable double m_cache_rbw = 0;
     mutable double m_cache_bin_width = 0;
@@ -112,9 +161,19 @@ class SpectrumAnalyzerEngine {
     mutable double m_noise_jitter_sigma_dB = 1.5;
 
     mutable TraceMode m_trace_mode = TraceMode::ClearWrite;
-    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_max_hold;
-    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_min_hold;
-    mutable std::unordered_map<const Spectrum *, std::vector<double>> m_video_avg;
+    // Each entry records the Spectrum identity it was built from; a different identity at the
+    // same address starts a fresh history.
+    struct TraceHistory {
+        uint64_t identity = 0;
+        std::vector<double> values;
+    };
+    mutable std::unordered_map<const Spectrum *, TraceHistory> m_max_hold;
+    mutable std::unordered_map<const Spectrum *, TraceHistory> m_min_hold;
+    mutable std::unordered_map<const Spectrum *, TraceHistory> m_video_avg;
+    // Held components for the display trace and the readout trace, kept apart so each path
+    // advances its own hold once per call.
+    mutable ComponentHoldMap m_display_component_hold;
+    mutable ComponentHoldMap m_readout_component_hold;
 
     mutable int m_video_avg_count = 10;
 };

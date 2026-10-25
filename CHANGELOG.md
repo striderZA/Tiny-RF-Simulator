@@ -1,3 +1,31 @@
+## [Unreleased]
+
+### Fixed
+
+- **PFB calculator hint no longer recommends a change that lowers rejection (#289)** — the hint suggests at most one change, and only when it lowers adjacent rejection when applied alone: a beta from 0, 4, …, 20 at the current K, or K+1 / K=64 (the slider maximum) at the current beta. The text names the checked candidates when none helps. Designs above M×K = 8192 taps get no suggestion, which keeps the design refresh cost unchanged there.
+
+### Changed
+
+- **CPack runs in the release package jobs** — the Linux and Windows `package` jobs run `cpack` on their Release build tree, verify the archive contains the installed executable, `component_data/`, `extensions/` and the README, and upload it as the `cpack-linux` / `cpack-windows` workflow artifact. The release assets are still built as before; CPack output is not yet published, and it is not yet a full replacement: the Windows archive omits the MinGW runtime DLLs and both archives include GLFW development files.
+
+## [0.29.3] - 2026-10-25
+
+### Fixed
+
+- **Peak and marker readouts hold Max/Min Hold (#291)** — with Max Hold or Min Hold on, the Peak readout and marker read the held value on the same sum as the plotted trace, not the current frame. Each visible trace holds its own power per bin on its own grid, so hiding a trace drops its contribution from the readout and re-showing it resumes its held value. A steady scene reads the same in Max Hold as in Clear/Write, including tones on finer grids than the readout axis. Video Average and Clear/Write readouts are unchanged.
+- **Coincident images add coherently (#305)** — the ADC merges tones that alias to the same output frequency within rounding tolerance, so an NCO setting such as 0.35 at 3 GHz no longer splits one coherent tone into two half-power tones. The analyzer and power meter group tone copies within 4 ulps of the largest tone frequency before summing them as phasors, so mixer sidebands whose rounding differs (`tone ± LO` computed separately, including near DC) add coherently in the analyzer. Copies at bit-identical frequencies were already coherent. The issue's 50/150 MHz example already read coherently on the base analyzer (-22.99 dBm after conjugate-symmetric expansion), so this change does not alter it. Network-analyzer readings and mixer LO = 0 readings are unchanged.
+- **Uncalibrated coax presets are refused (#280)** — MT 210, 230, 265, 300 and 480 have no datasheet model (K1 = K2 = 0, zero delay) and used to act as a lossless wire. They can no longer be selected from the Properties panel or agent writes, and a saved project using one keeps its index but outputs nothing, with the reason shown in the hover text and inspector tooltip. MT 340 is unaffected.
+- **Combiner refuses mismatched combines (#278)** — inputs on different frequency grids, or one complex-baseband (ADC) and one RF, are no longer summed by bin index. The combiner outputs nothing for that combine, logs a warning, and shows the reason in the hover text and inspector. Matched RF grids still sum per bin with -3 dB loss. The 2:1 RF switch is unchanged.
+- **Agent writes respect equalizer bounds (#301)** — agent writes to the equalizer's reference gain (±40 dB), reference frequency (1 Hz–100 GHz) and slope (±100 dB/decade) are rejected outside the inspector ranges, so an out-of-range value can no longer drive the output to infinite noise.
+- **Mixer noise follows LO sidebands (#265)** — input noise is scaled by conversion gain and translated to the difference and sum frequencies, so RF-filter/mixer/IF-filter chains retain the expected IF noise and SNR.
+- **Inverted BPF/BSF cutoffs are refused (#299)** — a band-pass or band-stop filter whose low cutoff is above its high cutoff is no longer accepted from the Properties panel, agent writes, or project files. An inspector edit that would invert the band is refused and the field keeps its last valid value. A project file holding such a filter does not open, and the open project is left unchanged.
+- **S-parameter response at negative frequencies (#266)** — frequency lookups now use the magnitude of negative frequencies and conjugate the response, matching real-valued network symmetry.
+- **Passive filter and equalizer noise keeps the thermal term (#297)** — noise through an S-parameter filter or equalizer is `|S21|² × noise_in + kT(1 − |S21|²)`, and the ideal equalizer uses `G × noise_in + kT(1 − G)`, matching the attenuator. Gain (|S21| or G > 1) adds no thermal term. A flat −3 dB S-parameter file, or −10 dB ideal equalizer gain, on a kT input now returns kT.
+
+### Changed
+
+- **clang-format 18 or newer is accepted** — the format check, the pre-commit hook, and `scripts/format.sh` accept any installed clang-format whose major version is 18 or higher, and reject older majors. They previously required the exact `version 18.` string, so a newer system clang-format was refused. Newer majors can flag existing files that CI's 18 accepts (clang-format 21 flags 11 tracked files), so CI's 18 remains the reference. The pinned 18.1.8 install stays as the fallback. The shared discovery is in `scripts/clang-format-resolve.sh`, tested by `scripts/test-format-version.sh`.
+
 ## [0.29.2] - 2026-10-21
 
 ### Fixed

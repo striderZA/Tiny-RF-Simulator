@@ -1,11 +1,14 @@
 #include "attenuator_engine.h"
 #include "node_graph_engine.h"
+#include "s_parameter_data.h"
 #include "spectrum.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <numbers>
 #include <optional>
+#include <string>
 
 using Catch::Matchers::WithinAbs;
 
@@ -204,6 +207,35 @@ TEST_CASE("Attenuator: hover summary", "[attenuator]") {
 
     std::string summary = atten.hoverSummary();
     REQUIRE(summary.find("10") != std::string::npos);
+}
+
+TEST_CASE("Attenuator: S-param mode adds S21 phase to per-bin phase",
+          "[attenuator][phase][sparam]") {
+    NodeGraphEngine graph;
+    AttenuatorEngine atten(1, graph);
+
+    const std::string path =
+        std::string(PROJECT_SOURCE_DIR) +
+        "/component_data/fixed_attenuators/atn01-0040psm/ATN01-0040PSM_SM_25C_De.s2p";
+    atten.setSParamFilepath(path);
+    REQUIRE(atten.sparamMode());
+
+    SParameterData data;
+    REQUIRE(data.load(path));
+    const int idx_S21 = 1 * data.numPorts() + 0;
+    const double expected_shift_deg =
+        std::arg(data.interpolate(1e9, idx_S21)) * 180.0 / std::numbers::pi;
+    REQUIRE(std::abs(expected_shift_deg) > 1.0);
+
+    Spectrum input = buildTestSpectrum();
+    input.phase_deg.assign(3, 30.0);
+    atten.node().inputs[0] = &input;
+
+    atten.update(0.016);
+
+    const auto &output = atten.node().outputs[0];
+    REQUIRE(output.phase_deg.size() == 3);
+    REQUIRE_THAT(output.phase_deg[0], WithinAbs(30.0 + expected_shift_deg, 1e-6));
 }
 
 TEST_CASE("Attenuator: upstream replaced at the same address with an equal generation recomputes",

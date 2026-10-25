@@ -1,12 +1,16 @@
+#include "coax_cable_engine.h"
 #include "coax_presets.h"
 #include "component_engine_base.h"
 #include "component_params.h"
 #include "component_registry.h"
 #include "component_type_registry.h"
 #include "editor_commands.h"
+#include "equalizer_engine.h"
 #include "flow_params.h"
 #include "graph_editor_actions.h"
+#include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
+#include "signal_generator_engine.h"
 #include "view_manager.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -240,8 +244,19 @@ TEST_CASE("State metadata describes every scalar engine serialization leaf", "[c
             CHECK(field.unit == expected_type->second.at(field.key).second);
             CHECK_FALSE(field.help.empty());
             CHECK(field.help.back() == '.');
-            CHECK((std::isinf(field.min) && field.min < 0.0));
-            CHECK((std::isinf(field.max) && field.max > 0.0));
+            if (descriptor->type == "equalizer" && field.key == "ref_gain_dB") {
+                CHECK(field.min == -40.0);
+                CHECK(field.max == 40.0);
+            } else if (descriptor->type == "equalizer" && field.key == "ref_freq_Hz") {
+                CHECK(field.min == 1.0);
+                CHECK(field.max == 100e9);
+            } else if (descriptor->type == "equalizer" && field.key == "slope_dB_per_decade") {
+                CHECK(field.min == -100.0);
+                CHECK(field.max == 100.0);
+            } else {
+                CHECK((std::isinf(field.min) && field.min < 0.0));
+                CHECK((std::isinf(field.max) && field.max > 0.0));
+            }
             const bool is_path_key = field.key == "sparam_filepath" ||
                                      field.key == "amp_filepath" || field.key == "ampf_filepath";
             CHECK(field.read_only == is_path_key);
@@ -633,4 +648,117 @@ TEST_CASE("Components without state metadata reject all parameter keys", "[compo
         fixture.commands.setComponentParams(engine->graphNodeId(), {{"gain_dB", 2.0}});
     CHECK(result.status == ParamWriteStatus::UnknownKey);
     CHECK(fixture.commands.revision() == revision);
+}
+
+TEST_CASE("Agent equalizer writes outside the inspector ranges are rejected",
+          "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("equalizer");
+    REQUIRE(engine != nullptr);
+    const auto &fields = paramsDescriptor("equalizer").state_fields;
+    REQUIRE(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e9}}).ok());
+
+    const auto rejected = applyComponentParams(*engine, fields, {{"slope_dB_per_decade", -400.0}});
+    CHECK(rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(rejected.path == "slope_dB_per_decade");
+    CHECK(rejected.expected == "number from -100 to 100");
+    CHECK(engine->serialize().at("slope_dB_per_decade").get<double>() == 0.0);
+
+    const auto gain_rejected = applyComponentParams(*engine, fields, {{"ref_gain_dB", 41.0}});
+    CHECK(gain_rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(engine->serialize().at("ref_gain_dB").get<double>() == 0.0);
+
+    const auto freq_rejected = applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e30}});
+    CHECK(freq_rejected.status == ParamWriteStatus::TypeMismatch);
+    CHECK(freq_rejected.expected == "number from 1 to 1e+11");
+    CHECK(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 1e13}}).status ==
+          ParamWriteStatus::TypeMismatch);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 0.0}}).status ==
+          ParamWriteStatus::TypeMismatch);
+    CHECK(engine->serialize().at("ref_freq_Hz").get<double>() == 1e9);
+
+    // Largest gain: negative slope, high reference frequency, top reference gain.
+    CHECK(applyComponentParams(*engine, fields, {{"slope_dB_per_decade", -100.0}}).status ==
+          ParamWriteStatus::Applied);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_gain_dB", 40.0}}).status ==
+          ParamWriteStatus::Applied);
+    CHECK(applyComponentParams(*engine, fields, {{"ref_freq_Hz", 100e9}}).status ==
+          ParamWriteStatus::Applied);
+
+    SignalGeneratorEngine gen(900, fixture.graph);
+    gen.addTone(0.0, -20.0);
+    gen.update(0.0);
+    engine->node().inputs[0] = &gen.node().outputs[0];
+    engine->update(0.0);
+
+    const auto &out = engine->node().outputs[0];
+    REQUIRE(out.tones.size() == 1);
+    CHECK(std::isfinite(out.tones[0].power_dBm));
+    for (const double noise : out.noise_total_W)
+        CHECK(std::isfinite(noise));
+}
+
+TEST_CASE("Agent writes refuse an inverted ideal filter band and keep the engine state",
+          "[component_params][filter]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("filter");
+    REQUIRE(engine != nullptr);
+    const nlohmann::json before = engine->serialize();
+    const std::vector<ParameterField> fields = {testField("filter_type"), testField("fc_low_Hz"),
+                                                testField("fc_high_Hz")};
+
+    const auto result = applyComponentParams(
+        *engine, fields, {{"filter_type", 2}, {"fc_low_Hz", 200e6}, {"fc_high_Hz", 100e6}});
+    CHECK(result.status == ParamWriteStatus::DeserializeFailed);
+    CHECK(result.error.find("low cutoff exceeds high cutoff") != std::string::npos);
+    CHECK(engine->serialize() == before);
+}
+
+TEST_CASE("Coax preset writes refuse uncalibrated presets", "[component_params][coax]") {
+    const auto *coax = ComponentTypeRegistry::instance().find("coax");
+    REQUIRE(coax != nullptr);
+    NodeGraphEngine graph;
+    CoaxCableEngine engine(0, graph);
+    const int MT340 = 4;
+
+    const auto by_label =
+        applyComponentParams(engine, coax->state_fields, {{"preset_index", "MT 210"}});
+    CHECK(by_label.status == ParamWriteStatus::TypeMismatch);
+    const auto by_index = applyComponentParams(engine, coax->state_fields, {{"preset_index", 0}});
+    CHECK(by_index.status == ParamWriteStatus::TypeMismatch);
+    REQUIRE(engine.serialize()["preset_index"] == MT340);
+}
+
+TEST_CASE("Out-of-range sparam_fwd_idx is refused as an engine adjustment", "[component_params]") {
+    const std::string s2p = std::string(PROJECT_SOURCE_DIR) +
+                            "/component_data/amplifiers/adm-3844psm/"
+                            "ADM-8344PSM_SM_A_25C_De_5V_5V_102mA.s2p";
+    for (const std::string type : {"filter", "equalizer"}) {
+        CAPTURE(type);
+        ParamsEngineFixture fixture;
+        auto *engine = fixture.create(type);
+        REQUIRE(engine != nullptr);
+        if (auto *filter = dynamic_cast<IdealFilterEngine *>(engine))
+            filter->setSParamFilepath(s2p);
+        else if (auto *equalizer = dynamic_cast<EqualizerEngine *>(engine))
+            equalizer->setSParamFilepath(s2p);
+        REQUIRE(engine->serialize()["sparam_fwd_idx"] == 2);
+
+        const auto &fields = paramsDescriptor(type).state_fields;
+        for (const int bad_index : {4, 99, -1}) {
+            CAPTURE(bad_index);
+            const auto result =
+                applyComponentParams(*engine, fields, {{"sparam_fwd_idx", bad_index}});
+            CHECK(result.status == ParamWriteStatus::EngineAdjusted);
+            CHECK(result.path == "sparam_fwd_idx");
+            CHECK(result.requested == bad_index);
+            CHECK(result.stored == 2);
+            CHECK(engine->serialize()["sparam_fwd_idx"] == 2);
+        }
+
+        const auto in_range = applyComponentParams(*engine, fields, {{"sparam_fwd_idx", 0}});
+        CHECK(in_range.status == ParamWriteStatus::Applied);
+        CHECK(engine->serialize()["sparam_fwd_idx"] == 0);
+    }
 }

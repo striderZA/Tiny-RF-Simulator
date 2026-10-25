@@ -51,6 +51,10 @@ int main() {
     test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
     test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;
     test_io.ConfigLogToTTY = true;
+    // The full scripted UI suite performs many real input actions; allow
+    // slower debug/headless runs more than the engine's 60-second default.
+    test_io.ConfigWatchdogWarning = 60.0f;
+    test_io.ConfigWatchdogKillTest = 120.0f;
     test_io.ConfigSavedSettings = false;
 
     ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
