@@ -50,16 +50,23 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design);
 enum class RejectionStatus { Meets, Within10Db, Misses };
 RejectionStatus compareRejection(double rejection_db, double target_db);
 
-// Suggested parameter changes for a missed rejection target. A field is set only
-// when that change lowers |H(1)| (the verdict metric) from the current design.
+// Suggested single-parameter change for a missed rejection target. At most one field
+// is set. Each candidate is evaluated with the other parameter unchanged, so the
+// suggested setting is exactly the one whose |H(1)| was checked. A candidate is
+// shown only when it lowers |H(1)| (the verdict metric) below the current design.
 struct PfbRecommendation {
-    std::optional<int> taps_per_branch; // K+1, only when K < 64 and |H(1)| improves
-    std::optional<double>
-        beta; // beta maximising |H(1)| at the current K, when it beats the current beta
+    bool searched = false;              // false: M*K above kPfbRecommendMaxTaps, no search run
+    std::optional<int> taps_per_branch; // K+1 or 64 (slider max), at the current beta
+    std::optional<double> beta;         // best of beta 0, 4, ..., 20, at the current K
 };
 
-// Synthesizes candidate prototypes (beta 0..20 in steps of 1, and K+1), so cache it
-// per design rather than calling it every frame.
+// Tap budget (M*K) above which the search is skipped. Measured at the budget: the search
+// adds 35-95 ms per refresh (1.9x-4.1x the base refresh, M=2048 K=4 worst). Above the
+// budget no search runs (0 ms), so large designs keep the pre-#289 refresh cost.
+inline constexpr int kPfbRecommendMaxTaps = 8192;
+
+// Evaluates the candidate single changes above. Synthesizes one prototype per candidate,
+// so cache the result per design rather than calling it every frame.
 PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMetrics &metrics);
 
 // Short manual-guidance string. Empty when the rejection target is met.

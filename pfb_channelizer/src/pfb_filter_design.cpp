@@ -111,30 +111,36 @@ RejectionStatus compareRejection(double rejection_db, double target_db) {
 }
 
 PfbRecommendation pfbRecommend(const PfbFilterDesign &design, const PfbFilterMetrics &metrics) {
-    // Verdict metric is |H(1)| (metrics.adjacent_rejection_db). Only report a change that lowers
-    // it.
     PfbRecommendation rec;
     const int M = design.channelCount();
     const int K = design.tapsPerBranch();
-    const double current_db = metrics.adjacent_rejection_db;
+    if (design.tapCount() > kPfbRecommendMaxTaps)
+        return rec;
+    rec.searched = true;
 
-    // Beta: the grid value that maximises |H(1)| at this K, when it beats the current beta.
-    double best_beta = design.beta();
-    double best_db = current_db;
-    for (int b = 0; b <= 20; ++b) {
+    // Verdict metric is |H(1)| (metrics.adjacent_rejection_db). Each candidate changes one
+    // parameter and keeps the other, so the shown setting is the one that was evaluated.
+    double best_db = metrics.adjacent_rejection_db;
+    for (int b = 0; b <= 20; b += 4) {
+        if (static_cast<double>(b) == design.beta())
+            continue;
         const double db = toDb(PfbFilterDesign(M, K, b).responseAt(1.0));
         if (db < best_db) {
             best_db = db;
-            best_beta = b;
+            rec.beta = b;
+            rec.taps_per_branch.reset();
         }
     }
-    if (best_beta != design.beta())
-        rec.beta = best_beta;
-
-    // K: one step more, only when below the slider maximum and it lowers |H(1)|.
-    if (K < 64 && toDb(PfbFilterDesign(M, K + 1, design.beta()).responseAt(1.0)) < current_db)
-        rec.taps_per_branch = K + 1;
-
+    for (int k : {K + 1, 64}) {
+        if (k <= K || k > 64)
+            continue;
+        const double db = toDb(PfbFilterDesign(M, k, design.beta()).responseAt(1.0));
+        if (db < best_db) {
+            best_db = db;
+            rec.taps_per_branch = k;
+            rec.beta.reset();
+        }
+    }
     return rec;
 }
 
@@ -146,21 +152,28 @@ std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetric
     std::snprintf(buf, sizeof(buf), "Adjacent rejection %.1f dB is short of the %.0f dB target.",
                   -metrics.adjacent_rejection_db, target_db);
     std::string text = buf;
-    if (rec.taps_per_branch.has_value()) {
-        std::snprintf(buf, sizeof(buf), " Raise K (%d -> %d) to narrow the transition band.",
-                      design.tapsPerBranch(), *rec.taps_per_branch);
-        text += buf;
-    }
-    if (rec.beta.has_value()) {
+    if (!rec.searched) {
         std::snprintf(buf, sizeof(buf),
-                      " Set beta (%.1f -> %.1f): it gives the best adjacent rejection at K=%d.",
+                      " No suggestion: M*K = %d is above %d taps, where the search is skipped.",
+                      design.tapCount(), kPfbRecommendMaxTaps);
+        return text + buf;
+    }
+    if (rec.taps_per_branch.has_value()) {
+        std::snprintf(buf, sizeof(buf),
+                      " Set K (%d -> %d) at beta %.1f: this lowers adjacent rejection.",
+                      design.tapsPerBranch(), *rec.taps_per_branch, design.beta());
+        text += buf;
+    } else if (rec.beta.has_value()) {
+        std::snprintf(buf, sizeof(buf),
+                      " Set beta (%.1f -> %.1f) at K=%d: this lowers adjacent rejection.",
                       design.beta(), *rec.beta, design.tapsPerBranch());
         text += buf;
+    } else {
+        std::snprintf(buf, sizeof(buf),
+                      " None of the checked single changes improves it (K+1, K=64 if below, "
+                      "or beta 0, 4, ..., 20 at K=%d).",
+                      design.tapsPerBranch());
+        text += buf;
     }
-    if (!rec.taps_per_branch.has_value() && !rec.beta.has_value())
-        text +=
-            design.tapsPerBranch() >= 64
-                ? " K is at its slider maximum (64), and no other beta improves adjacent rejection."
-                : " No larger K or other beta improves adjacent rejection at this M.";
     return text;
 }
