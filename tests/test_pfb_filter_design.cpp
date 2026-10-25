@@ -76,28 +76,38 @@ TEST_CASE("PfbFilterMetrics reference configs", "[pfb_filter_design]") {
     REQUIRE(m2.adjacent_rejection_db < -100.0);
 }
 
+TEST_CASE("PfbFilterMetrics verdict covers the far alias band", "[pfb_filter_design]") {
+    // Regression (issue #290): the verdict must not rest on H(1.0) alone.
+    // K=16, beta=8 gives H(1.0) = -109.9 dB but a far floor of -93.3 dB over
+    // [1.0, 1.5]; a 100 dB target must not read as Meets.
+    auto m = computePfbMetrics(PfbFilterDesign(32, 16, 8.0));
+    REQUIRE(m.adjacent_rejection_db == Approx(-109.9).margin(0.2));
+    REQUIRE(m.far_floor_db == Approx(-93.3).margin(0.2));
+    REQUIRE(m.worst_rejection_db == Approx(m.far_floor_db).margin(1e-12));
+    REQUIRE(compareRejection(m.worst_rejection_db, 100.0) != RejectionStatus::Meets);
+    REQUIRE(!pfbGuidanceText(PfbFilterDesign(32, 16, 8.0), m, 100.0).empty());
+}
+
 TEST_CASE("PfbFilterMetrics rejection comparison and guidance", "[pfb_filter_design]") {
     PfbFilterDesign d(32, 8, 8.0);
     auto m = computePfbMetrics(d);
-    const double achieved = -m.adjacent_rejection_db; // positive magnitude
+    const double achieved = -m.worst_rejection_db; // positive magnitude
 
-    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved) == RejectionStatus::Meets);
+    REQUIRE(compareRejection(m.worst_rejection_db, achieved) == RejectionStatus::Meets);
     REQUIRE(pfbGuidanceText(d, m, achieved).empty());
 
     // A much harder target must produce a non-empty, K/beta-referencing hint.
-    REQUIRE(compareRejection(m.adjacent_rejection_db, 140.0) == RejectionStatus::Misses);
+    REQUIRE(compareRejection(m.worst_rejection_db, 140.0) == RejectionStatus::Misses);
     std::string hint = pfbGuidanceText(d, m, 140.0);
     REQUIRE(!hint.empty());
     REQUIRE(hint.find("K") != std::string::npos);
     REQUIRE(hint.find("beta") != std::string::npos);
 
     // A target 6 dB above achieved is Within10Db.
-    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 6.0) ==
-            RejectionStatus::Within10Db);
+    REQUIRE(compareRejection(m.worst_rejection_db, achieved + 6.0) == RejectionStatus::Within10Db);
 
     // Exact lower boundary: achieved == target_db - 10 is still Within10Db.
-    REQUIRE(compareRejection(m.adjacent_rejection_db, achieved + 10.0) ==
-            RejectionStatus::Within10Db);
+    REQUIRE(compareRejection(m.worst_rejection_db, achieved + 10.0) == RejectionStatus::Within10Db);
 }
 
 TEST_CASE("PFB engine tiles flat noise (regression vs narrow model)", "[pfb_filter_design]") {

@@ -71,6 +71,9 @@ PfbFilterMetrics computePfbMetrics(const PfbFilterDesign &design) {
         floor_db = std::max(floor_db, toDb(design.responseAt(1.0 + 0.01 * i)));
     }
     m.far_floor_db = floor_db;
+    // Verdict basis: the least-suppressed value across the alias band, so the
+    // target applies to H(1.0) and the far-adjacent floor alike.
+    m.worst_rejection_db = std::max(m.adjacent_rejection_db, m.far_floor_db);
 
     // -3 dB half width: first crossing scanning outward from DC. The response
     // is monotonically decreasing through the main lobe, so the first sample
@@ -108,14 +111,14 @@ RejectionStatus compareRejection(double rejection_db, double target_db) {
 
 std::string pfbGuidanceText(const PfbFilterDesign &design, const PfbFilterMetrics &metrics,
                             double target_db) {
-    if (compareRejection(metrics.adjacent_rejection_db, target_db) == RejectionStatus::Meets)
+    if (compareRejection(metrics.worst_rejection_db, target_db) == RejectionStatus::Meets)
         return {};
     char buf[256];
     std::snprintf(buf, sizeof(buf),
-                  "Adjacent rejection %.1f dB is short of the %.0f dB target. "
+                  "Worst-case rejection %.1f dB is short of the %.0f dB target. "
                   "Raise K (%d -> more) to narrow the transition band so the "
                   "stopband starts closer to the channel edge, or raise beta "
                   "(%.1f -> up to 20) to deepen the stopband floor.",
-                  -metrics.adjacent_rejection_db, target_db, design.tapsPerBranch(), design.beta());
+                  -metrics.worst_rejection_db, target_db, design.tapsPerBranch(), design.beta());
     return buf;
 }

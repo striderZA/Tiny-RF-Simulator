@@ -119,8 +119,7 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     // frame after release so only the settled value pays the cost.
     if (!ImGui::IsAnyItemActive())
         refreshDesignCache();
-    const RejectionStatus st =
-        compareRejection(m_cached_metrics.adjacent_rejection_db, m_target_db);
+    const RejectionStatus st = compareRejection(m_cached_metrics.worst_rejection_db, m_target_db);
     const std::string hint = pfbGuidanceText(m_cached_design, m_cached_metrics, m_target_db);
 
     // --- Left column: controls -------------------------------------------
@@ -203,8 +202,9 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
     ImGui::Dummy(ImVec2(avail.x, plot_h));
 
     ImGui::Separator();
-    ImGui::TextColored(statusColor(st), "Adjacent rejection: %.1f dB (target %.0f dB)",
-                       -m_cached_metrics.adjacent_rejection_db, m_target_db);
+    ImGui::TextColored(statusColor(st),
+                       "Worst rejection (H(1.0), far floor): %.1f dB (target %.0f dB)",
+                       -m_cached_metrics.worst_rejection_db, m_target_db);
 
     ImGui::Text("-3 dB half-width:  %.3f channel", m_cached_metrics.passband_halfwidth_ch);
     ImGui::SameLine(250.0f);

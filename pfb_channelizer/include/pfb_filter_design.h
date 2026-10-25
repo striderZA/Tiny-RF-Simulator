@@ -32,7 +32,8 @@ class PfbFilterDesign {
 struct PfbFilterMetrics {
     double passband_halfwidth_ch = 0.0; // -3 dB half width, in channel units
     double edge_loss_db = 0.0;          // |H(0.5)| in dB (~ -6 for all designs)
-    double adjacent_rejection_db = 0.0; // |H(1.0)| in dB; compared to the target
+    double adjacent_rejection_db = 0.0; // |H(1.0)| in dB; shown, not the verdict alone
+    double worst_rejection_db = 0.0;    // max(adjacent, far floor) in dB; the verdict basis
     double far_floor_db = 0.0;          // max |H(x)| over x in [1.0, 1.5], dB
     int total_taps = 0;                 // N = M*K
     double flat_noise_tilt_db = 0.0;    // 10*log10( int_{-1..1} H(x)^2 dx )
