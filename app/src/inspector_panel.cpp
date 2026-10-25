@@ -844,6 +844,11 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
             engine.setSParamFilepath(path_buf);
             m_param_edited = true;
         }
+        if (engine.sparamLoaded()) {
+            ImGui::TextDisabled("Band: %.4g-%.4g GHz (outside held at edge)",
+                                engine.sparamData().freqs().front() / 1e9,
+                                engine.sparamData().freqs().back() / 1e9);
+        }
     }
 
     ImGui::Text("NF = %.2f dB", engine.attenuation());

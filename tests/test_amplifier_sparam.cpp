@@ -99,7 +99,7 @@ TEST_CASE("Amplifier S-param interpolates between data points", "[amp][sparam]")
     REQUIRE(out.tones[0].power_dBm == Approx(-20.0 + expected_gain).margin(0.5));
 }
 
-TEST_CASE("Amplifier S-param flags out-of-band frequency", "[amp][sparam]") {
+TEST_CASE("Amplifier S-param flags out-of-band tones and sweep points", "[amp][sparam]") {
     NodeGraphEngine graph;
     AmplifierEngine amp(0, graph);
     amp.setSParamFilepath(s2p_path());
@@ -108,11 +108,24 @@ TEST_CASE("Amplifier S-param flags out-of-band frequency", "[amp][sparam]") {
     const auto &sp = amp.sparamData();
     const double f_lo = sp.freqs().front();
     const double f_hi = sp.freqs().back();
-    CHECK(sp.inBand(f_lo));
-    CHECK(sp.inBand(f_hi));
-    CHECK(sp.inBand(0.5 * (f_lo + f_hi)));
-    CHECK_FALSE(sp.inBand(f_lo - 1e6));
-    CHECK_FALSE(sp.inBand(f_hi + 10e9));
+    const double f_mid = 0.5 * (f_lo + f_hi);
+    const double f_below = 0.5 * f_lo;
+    const double f_above = f_hi + 10e9;
+
+    Spectrum in;
+    in.frequencies = {f_below, f_mid, f_above};
+    in.tones = {{f_mid, -20.0, 0.0}, {f_above, -20.0, 0.0}};
+    amp.node().inputs[0] = &in;
+    amp.update(0.0);
+
+    const auto &out = amp.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    CHECK_FALSE(out.tones[0].out_of_band);
+    CHECK(out.tones[1].out_of_band);
+    REQUIRE(out.out_of_band.size() == 3);
+    CHECK(out.out_of_band[0]);
+    CHECK_FALSE(out.out_of_band[1]);
+    CHECK(out.out_of_band[2]);
 }
 
 TEST_CASE("Amplifier S-param adds noise figure correctly", "[amp][sparam][nf]") {

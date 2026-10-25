@@ -2,7 +2,7 @@
 
 ### Fixed
 
-- **S-parameter out-of-band points are flagged (#285)** — a Touchstone file's band is now shown in the Amplifier, Ideal Filter, and Equalizer inspectors, and `SParameterData::inBand()` reports whether a frequency lies inside it. Points outside the band still take the nearest edge value, so their gain is not measured.
+- **S-parameter out-of-band points are flagged (#285)** — Amplifier, Equalizer, Ideal Filter, and Attenuator S-parameter outputs mark each out-of-band tone (`Tone::out_of_band`) and sweep bin (`Spectrum::out_of_band`). A Touchstone file's band is shown in the inspectors. Points outside the band still take the nearest edge value, so their gain is not measured; the marks are the signal for that.
 - **PFB calculator hint no longer recommends a change that lowers rejection (#289)** — the hint suggests at most one change, and only when it lowers adjacent rejection when applied alone: a beta from 0, 4, …, 20 at the current K, or K+1 / K=64 (the slider maximum) at the current beta. The text names the checked candidates when none helps. Designs above M×K = 8192 taps get no suggestion, which keeps the design refresh cost unchanged there.
 - **Touchstone data lines with a non-numeric token are rejected (#286)** — a data line whose tokens are not all complete numbers (for example `junk junk`, a lone `-`, `1e`, or `0.1x`) fails the file to load, instead of silently dropping that line's frequency point and interpolating across the gap. Text lines before the option line are still ignored.
 

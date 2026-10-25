@@ -41,6 +41,10 @@ Second-order intermodulation (IM2) products, at the sum and difference of two to
 
 Only the six intercept columns above affect the signal. Gain, NF, S-parameter, and VSWR columns are read but not applied yet.
 
+## Touchstone S-parameter band
+
+A Touchstone file (`.s2p`) covers a frequency band. Inside the band, S-parameters are interpolated between its points. Outside the band they hold the value of the nearest edge point, which is not a measurement. The inspector shows the file's band. The output marks each out-of-band tone and sweep bin, and the attenuator, equalizer and ideal filter do the same. The held value still sets the gain at those frequencies. A mark stays on a tone that a later block passes through; sweep-bin marks are not carried past other blocks.
+
 ## Errors
 
 - A file that cannot be read, or does not follow the format, is not used. Its path stays in the **File** line, and the error appears in red below the section. The message names the file and, for a problem on one line, that line.

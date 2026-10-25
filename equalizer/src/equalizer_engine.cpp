@@ -47,6 +47,7 @@ void EqualizerEngine::update(double dt) {
             t.power_dBm += 20.0 * std::log10(std::abs(S));
             t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
         }
+        m_sparam_data.markOutOfBand(in_ptr, out);
 
         if (in_ptr && !in_ptr->phase_deg.empty())
             out.phase_deg = in_ptr->phase_deg;
@@ -98,6 +99,7 @@ void EqualizerEngine::update(double dt) {
     // Apply gain vs frequency profile
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
+    out.out_of_band = in_ptr ? in_ptr->out_of_band : std::vector<bool>{};
     for (auto &t : out.tones) {
         double f = std::max(std::abs(t.freq_Hz), 1.0);
         double ratio = std::max(f / m_ref_freq_Hz, 1e-30);

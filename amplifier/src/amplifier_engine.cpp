@@ -254,6 +254,7 @@ void AmplifierEngine::update(double dt) {
             t.power_dBm += 20.0 * std::log10(mag);
             t.phase_deg += std::arg(S) * 180.0 / std::numbers::pi;
         }
+        m_sparam_data.markOutOfBand(in_ptr, out);
 
         // Nonlinear processing
         if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
@@ -322,6 +323,7 @@ void AmplifierEngine::update(double dt) {
     out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
     out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
     out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
+    out.out_of_band = in_ptr ? in_ptr->out_of_band : std::vector<bool>{};
     for (auto &t : out.tones) {
         t.power_dBm += m_gain_dB;
     }
