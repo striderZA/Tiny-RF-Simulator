@@ -166,7 +166,7 @@ nlohmann::json EqualizerEngine::serialize() const {
 
 void EqualizerEngine::deserialize(const nlohmann::json &j) {
     m_ref_gain_dB = j.value("ref_gain_dB", 0.0);
-    m_ref_freq_Hz = j.value("ref_freq_Hz", 1e9);
+    setRefFreq_Hz(j.value("ref_freq_Hz", 1e9));
     m_slope_dB_per_decade = j.value("slope_dB_per_decade", 0.0);
     m_sparam_filepath = j.value("sparam_filepath", j.value("sparam_path", ""));
     if (!m_sparam_filepath.empty())
