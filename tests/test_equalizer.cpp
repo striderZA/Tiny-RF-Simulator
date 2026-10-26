@@ -139,6 +139,57 @@ TEST_CASE("Equalizer setRefFreq_Hz clamps to minimum 1 Hz", "[equalizer]") {
     REQUIRE(eq.refFreq_Hz() == Approx(1e6));
 }
 
+// Runs -20 dBm tones at 100 MHz and 1 GHz through eq; returns their output powers in dBm.
+static std::pair<double, double> equalizedTonePowers(EqualizerEngine &eq,
+                                                     SignalGeneratorEngine &gen) {
+    gen.addTone(100e6, -20.0);
+    gen.addTone(1e9, -20.0);
+    gen.update(0.0);
+
+    eq.node().inputs[0] = &gen.node().outputs[0];
+    eq.update(0.0);
+
+    const auto &out = eq.node().outputs[0];
+    REQUIRE(out.tones.size() == 2);
+    std::pair<double, double> powers{NAN, NAN};
+    for (const auto &t : out.tones) {
+        if (std::abs(t.freq_Hz - 100e6) < 1.0)
+            powers.first = t.power_dBm;
+        else if (std::abs(t.freq_Hz - 1e9) < 1.0)
+            powers.second = t.power_dBm;
+    }
+    return powers;
+}
+
+TEST_CASE("Equalizer deserialize floors ref_freq_Hz at 1 Hz like setRefFreq_Hz", "[equalizer]") {
+    for (const double ref_Hz : {0.0, -1e9}) {
+        for (const double slope : {-12.0, 0.0, 10.0}) {
+            INFO("ref_freq_Hz " << ref_Hz << ", slope " << slope << " dB/decade");
+
+            NodeGraphEngine setter_graph;
+            EqualizerEngine by_setter(0, setter_graph);
+            by_setter.setRefGain_dB(0.0);
+            by_setter.setRefFreq_Hz(ref_Hz);
+            by_setter.setSlope_dBPerDecade(slope);
+            SignalGeneratorEngine setter_gen(1, setter_graph);
+            const auto expected = equalizedTonePowers(by_setter, setter_gen);
+
+            NodeGraphEngine json_graph;
+            EqualizerEngine by_json(0, json_graph);
+            by_json.deserialize(
+                {{"ref_gain_dB", 0.0}, {"ref_freq_Hz", ref_Hz}, {"slope_dB_per_decade", slope}});
+            REQUIRE(by_json.refFreq_Hz() == Approx(1.0));
+            SignalGeneratorEngine json_gen(1, json_graph);
+            const auto actual = equalizedTonePowers(by_json, json_gen);
+
+            REQUIRE(std::isfinite(actual.first));
+            REQUIRE(std::isfinite(actual.second));
+            REQUIRE(actual.first == Approx(expected.first).margin(0.01));
+            REQUIRE(actual.second == Approx(expected.second).margin(0.01));
+        }
+    }
+}
+
 TEST_CASE("Equalizer handles negative frequency tone without NaN", "[equalizer]") {
     NodeGraphEngine graph;
     EqualizerEngine eq(0, graph);
