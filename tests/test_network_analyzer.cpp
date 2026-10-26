@@ -505,17 +505,11 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
     na.setPointB(amp.outputPinId());
 
     // Closed form for the two equal tones (1 and 2 GHz) at output power Pout, OIP3 = 0 dBm,
-    // OIP2 = 100 dBm (its products are below -100 dBm, so they are dropped). Each IM3 product
-    // is 3*Pout - 2*OIP3 (intercept rule); each third harmonic is one third the amplitude of
-    // an IM3, a power ratio of 1/9. The model sums 2 H3 tones and 4 IM3 products, and each
-    // fundamental is compressed by 10*log10(1 - D/P_fund).
+    // OIP2 = 100 dBm (its products are below -100 dBm, so they are dropped). Each tone is
+    // compressed by 20*log10(1 - Pout/OIP3), so the gain is 20 dB plus that compression.
     const auto expected_gain_dB = [](double stim_dBm) {
-        const double pout_W = dbmToW(stim_dBm + 20.0);
-        const double oip3_W = dbmToW(0.0);
-        const double im3_W = pout_W * pout_W * pout_W / (oip3_W * oip3_W);
-        const double distortion_W = 4.0 * im3_W + 2.0 * im3_W / 9.0;
-        const double fundamental_W = 2.0 * pout_W;
-        return 20.0 + 10.0 * std::log10(1.0 - distortion_W / fundamental_W);
+        const double ratio = dbmToW(stim_dBm + 20.0) / dbmToW(0.0); // Pout / OIP3, linear
+        return 20.0 + 20.0 * std::log10(1.0 - ratio);
     };
     const auto check_gain = [&](double stim_dBm) {
         na.setStimulusPower(stim_dBm);
@@ -526,9 +520,9 @@ TEST_CASE("NetworkAnalyzer: configured stimulus power reaches the isolated chain
         return expected_gain_dB(stim_dBm);
     };
 
-    // -40 dBm: linear regime, gain equals the configured 20 dB.
+    // -40 dBm: Pout is -20 dBm, ratio 0.01, so the compression is 20*log10(0.99) = -0.087 dB.
     const double near_linear = check_gain(-40.0);
-    REQUIRE_THAT(near_linear, WithinAbs(20.0, 0.01));
+    REQUIRE_THAT(near_linear, WithinAbs(19.913, 0.01));
     // -30 dBm: compressed, measured gain matches the closed form and is lower.
     const double compressed = check_gain(-30.0);
     REQUIRE(compressed < near_linear);

@@ -1447,9 +1447,13 @@ TEST_CASE("Amplifier shows compression at high input", "[amplifier][nonlinear]")
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    double gain_high = amp.node().outputs[0].tones[0].power_dBm - 5.0;
-    REQUIRE(gain_high < 0.0);
-    REQUIRE(gain_high > -3.0);
+    // Closed form: Pout is 5 dBm and OIP3 is 10 dBm, so the ratio is 10^-0.5 and the closed-form
+    // gain is 20*log10(1 - 10^-0.5) = -3.30 dB. Compression stops at the -3.01 dB floor, which is
+    // where the distortion cap holds, so the expected gain is the larger of the two.
+    const double closed_form_dB = 20.0 * std::log10(1.0 - std::pow(10.0, -0.5));
+    const double expected_dB = std::max(closed_form_dB, 10.0 * std::log10(0.5));
+    const double gain_high = amp.node().outputs[0].tones[0].power_dBm - 5.0;
+    REQUIRE(gain_high == Approx(expected_dB).margin(0.01));
 }
 
 TEST_CASE("Amplifier single tone produces no IMD products", "[amplifier][nonlinear]") {

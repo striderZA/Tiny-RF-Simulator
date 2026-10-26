@@ -367,3 +367,37 @@ TEST_CASE("serialize and deserialize keep the amp-f reference and block selectio
     const auto restored_out = runAmplifier(restored, kTwoTones);
     CHECK(powerAt(restored_out, 3.0e9) == Approx(powerAt(original_out, 3.0e9)));
 }
+
+TEST_CASE("amp-f OP1dB column puts the realised -1 dB input at P1dB (issue 273)",
+          "[ampf][nonlinear][issue273]") {
+    Scratch scratch;
+    for (double p1db : {0.0, 10.0, 15.0}) {
+        CAPTURE(p1db);
+        const std::string level = std::to_string(p1db);
+        const auto path = scratch.write("r12_" + std::to_string(static_cast<int>(p1db)) + ".ampf",
+                                        kHead + "# COLUMNS: OP1dB_dBm\nBEGIN\n1000 " + level +
+                                            "\n1300 " + level + "\nEND\n");
+        // Gain at 1 GHz for one input power. A fresh engine per probe, so no state carries over.
+        const auto gain_at = [&path](double in_dBm) {
+            NodeGraphEngine graph;
+            AmplifierEngine amp(0, graph);
+            amp.setGain_dB(0.0);
+            amp.setEnableNonlinear(true);
+            amp.setAmpfFilepath(path);
+            REQUIRE(amp.ampfBlockSelected());
+            const auto out = runAmplifier(amp, {{1.0e9, in_dBm, 0.0}});
+            return powerAt(out, 1.0e9) - in_dBm;
+        };
+        // Gain falls as the input rises, so bisection finds the single -1 dB crossing.
+        double lo = -20.0;
+        double hi = 40.0;
+        for (int i = 0; i < 60; ++i) {
+            const double mid = 0.5 * (lo + hi);
+            if (gain_at(mid) > -1.0)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        CHECK(0.5 * (lo + hi) == Approx(p1db).margin(0.2));
+    }
+}
