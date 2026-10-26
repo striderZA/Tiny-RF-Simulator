@@ -175,9 +175,9 @@ The passive one-input/one-output attenuator applies `Pout = Pin - attenuation_dB
 
 ### Splitter and combiner
 
-`SplitterEngine` is one input to two outputs. Each output applies the fixed 3.0103 dB power split to tones and noise, preserves phase and signal metadata, and adds no noise. Its two indexed outputs are distinct signals; links and probes must retain the selected port.
+`SplitterEngine` is one input to two outputs. Each output applies the fixed 3.0103 dB power split to tones and noise, adds the passive thermal term `kT * (1 - g)` with `g = 0.5`, so a kT input reads a 3.01 dB noise figure, preserves phase and signal metadata, and keeps its two indexed outputs as distinct signals whose links and probes must retain the selected port.
 
-`CombinerEngine` is two inputs to one output. Manual mode appends each input's tones with 3.0103 dB loss per path, sums noise powers incoherently, and scales the result by the same path loss. In S-parameter mode a valid three-port Touchstone file maps input 0 through S21 and input 1 through S31; passive added noise is clamped at zero when the configured gains would imply a negative thermal term. The combiner caches both input pointers and generations. A two-port file does not enter its three-port S-parameter path.
+`CombinerEngine` is two inputs to one output. Manual mode appends each input's tones with 3.0103 dB loss per path. In both modes noise follows one passive rule per bin: each connected input contributes `g_i * noise_i`, `kT * max(0, 1 - g_0 - g_1)` is added as thermal noise, and each absent input adds `g_i * kT` as a 290 K termination. Manual mode uses `g = 0.5` per input; S-parameter mode uses `|S21|^2` and `|S31|^2`. In S-parameter mode a valid three-port Touchstone file maps input 0 through S21 and input 1 through S31. The combiner caches both input pointers and generations. A two-port file does not enter its three-port S-parameter path.
 
 ### RF switches (`rf_switch/`, `rf_switch_2to1/`)
 
