@@ -65,7 +65,10 @@ class NonlinearModel {
 
     struct Result {
         std::vector<Spectrum::Tone> extra_tones;
-        double compression_dB = 0.0;
+        // One compression (dB) per input tone, in input order: 20*log10(1 - Pout/OIP3) at that
+        // tone's output power, against the OIP3 at its frequency with Oip3Fn. Floored at -3.01 dB.
+        // Apply entry i to the fundamental of input tone i. Empty when nonlinearity is off.
+        std::vector<double> tone_compression_dB;
     };
 
     // Products use the scalar intercepts unless functions are given. With oip3_at_freq, each
@@ -74,6 +77,8 @@ class NonlinearModel {
     // oip2_at_freq, each harmonic uses the OIP2 at its own tone, and each IM2 product uses the
     // lower of its two tones' OIP2, the larger second-order coefficient. A non-finite value from
     // either function is replaced by the scalar intercept.
+    // tone_compression_dB has one value per input tone (see Result). Each tone's value is the
+    // closed-form cubic at that tone's own output power, so the amplifier applies it to that tone.
     Result process(const std::vector<Spectrum::Tone> &input_tones, GainFn gain_at_freq,
                    const Oip3Fn &oip3_at_freq = {}, const Oip2Fn &oip2_at_freq = {}) const {
         using detail::dbmToV;
@@ -94,11 +99,18 @@ class NonlinearModel {
             const double k = k1ForOip2(oip2_at_freq(freq_Hz));
             return std::isfinite(k) ? k : m_k1;
         };
+        // Output third-order intercept (dBm) for a fundamental at freq_Hz.
+        const auto oip3_dBm_at = [&](double freq_Hz) {
+            if (!oip3_at_freq)
+                return m_oip3_dBm;
+            const double oip3 = oip3_at_freq(freq_Hz);
+            return std::isfinite(oip3) ? oip3 : m_oip3_dBm;
+        };
         // Third-order coefficient for a fundamental at freq_Hz.
         const auto k2_at = [&](double freq_Hz) {
             if (!oip3_at_freq)
                 return m_k2;
-            const double k = k2ForOip3(oip3_at_freq(freq_Hz));
+            const double k = k2ForOip3(oip3_dBm_at(freq_Hz));
             return std::isfinite(k) ? k : m_k2;
         };
 
@@ -157,27 +169,34 @@ class NonlinearModel {
             }
         }
 
-        // Compression. Distortion is capped at half the fundamental: past that point every product
-        // is scaled by one factor so total distortion is exactly half the fundamental. Compression
-        // then floors at -3.01 dB and every spur stays below the fundamental.
+        // Compression, per tone. Distortion is capped at half the fundamental: past that point
+        // every product is scaled by one factor so total distortion is exactly half the
+        // fundamental. The cap keeps every spur at or below the fundamental.
+        std::vector<double> Pout_dBm(input_tones.size());
         double Pfund_mW = 0.0;
-        for (const auto &tone : input_tones) {
-            double g = gain_at_freq(tone.freq_Hz);
-            double Pout = tone.power_dBm + 20.0 * std::log10(g);
-            Pfund_mW += dbmToW(Pout);
+        for (size_t i = 0; i < input_tones.size(); ++i) {
+            Pout_dBm[i] =
+                input_tones[i].power_dBm + 20.0 * std::log10(gain_at_freq(input_tones[i].freq_Hz));
+            Pfund_mW += dbmToW(Pout_dBm[i]);
         }
 
-        if (Pfund_mW <= 0.0) {
-            r.compression_dB = 0.0; // no fundamental power, nothing to compress
-            return r;
-        }
+        r.tone_compression_dB.assign(input_tones.size(), 0.0);
+        if (Pfund_mW <= 0.0)
+            return r; // no fundamental power, nothing to compress
         if (total_distortion_mW > 0.5 * Pfund_mW) {
             const double scale = 0.5 * Pfund_mW / total_distortion_mW;
             for (auto &product : r.extra_tones)
                 product.power_dBm += 10.0 * std::log10(scale);
             total_distortion_mW *= scale;
         }
-        r.compression_dB = 10.0 * std::log10(1.0 - total_distortion_mW / Pfund_mW);
+        // Closed-form cubic for each tone at its own output power and OIP3. The headroom is
+        // floored at 1/sqrt(2), the -3.01 dB half-fundamental floor, so compression stays finite
+        // past the 1 dB point.
+        for (size_t i = 0; i < input_tones.size(); ++i) {
+            const double ratio =
+                std::pow(10.0, (Pout_dBm[i] - oip3_dBm_at(input_tones[i].freq_Hz)) / 10.0);
+            r.tone_compression_dB[i] = 20.0 * std::log10(std::max(1.0 - ratio, std::sqrt(0.5)));
+        }
 
         return r;
     }

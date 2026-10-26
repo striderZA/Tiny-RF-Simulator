@@ -367,3 +367,63 @@ TEST_CASE("serialize and deserialize keep the amp-f reference and block selectio
     const auto restored_out = runAmplifier(restored, kTwoTones);
     CHECK(powerAt(restored_out, 3.0e9) == Approx(powerAt(original_out, 3.0e9)));
 }
+
+TEST_CASE("amp-f OP1dB column puts the realised -1 dB input at P1dB (issue 273)",
+          "[ampf][nonlinear][issue273]") {
+    Scratch scratch;
+    for (double p1db : {0.0, 10.0, 15.0}) {
+        CAPTURE(p1db);
+        const std::string level = std::to_string(p1db);
+        const auto path = scratch.write("r12_" + std::to_string(static_cast<int>(p1db)) + ".ampf",
+                                        kHead + "# COLUMNS: OP1dB_dBm\nBEGIN\n1000 " + level +
+                                            "\n1300 " + level + "\nEND\n");
+        // Gain at 1 GHz for one input power. A fresh engine per probe, so no state carries over.
+        const auto gain_at = [&path](double in_dBm) {
+            NodeGraphEngine graph;
+            AmplifierEngine amp(0, graph);
+            amp.setGain_dB(0.0);
+            amp.setEnableNonlinear(true);
+            amp.setAmpfFilepath(path);
+            REQUIRE(amp.ampfBlockSelected());
+            const auto out = runAmplifier(amp, {{1.0e9, in_dBm, 0.0}});
+            return powerAt(out, 1.0e9) - in_dBm;
+        };
+        // Gain falls as the input rises, so bisection finds the single -1 dB crossing.
+        double lo = -20.0;
+        double hi = 40.0;
+        for (int i = 0; i < 60; ++i) {
+            const double mid = 0.5 * (lo + hi);
+            if (gain_at(mid) > -1.0)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        CHECK(0.5 * (lo + hi) == Approx(p1db).margin(0.2));
+    }
+}
+
+TEST_CASE("amp-f OIP3 column compresses each tone by its own closed form (issue 273)",
+          "[ampf][nonlinear][issue273]") {
+    Scratch scratch;
+    const auto path =
+        scratch.write("per_tone_compression.ampf",
+                      kHead + "# COLUMNS: OIP3_dBm\nBEGIN\n1000 20.0\n2000 30.0\nEND\n");
+
+    NodeGraphEngine graph;
+    AmplifierEngine amp(0, graph);
+    amp.setGain_dB(0.0);
+    amp.setEnableNonlinear(true);
+    amp.setAmpfFilepath(path);
+    REQUIRE(amp.ampfBlockSelected());
+
+    // Equal 15 dBm tones. The 1 GHz tone (OIP3 20 dBm) reads the -3.01 dB floor. The 2 GHz tone
+    // (OIP3 30 dBm) reads 20*log10(1 - 10^-1.5) = -0.28 dB. A shared worst-tone value would hit
+    // both with -3.01 dB.
+    const auto out = runAmplifier(amp, {{1.0e9, 15.0, 0.0}, {2.0e9, 15.0, 0.0}});
+    REQUIRE(out.size() >= 2);
+    REQUIRE(out[0].freq_Hz == Approx(1.0e9));
+    REQUIRE(out[1].freq_Hz == Approx(2.0e9));
+    CHECK(out[0].power_dBm == Approx(15.0 + 10.0 * std::log10(0.5)).margin(0.01));
+    CHECK(out[1].power_dBm ==
+          Approx(15.0 + 20.0 * std::log10(1.0 - std::pow(10.0, -1.5))).margin(0.01));
+}
