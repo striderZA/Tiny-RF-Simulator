@@ -100,7 +100,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 ## Mixer Noise Contract
 
-- `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.
+- `MixerEngine` scales input noise by conversion gain and adds it to both sidebands: each input bin's density `G·n` goes to the nearest output-grid bin at `|f − LO|` and at `f + LO`. Noise follows the double-sideband (DSB) convention, the same full-gain-per-sideband rule as tones: a flat input gives `2·G·S` in an output bin whose two images (`LO ± f`) both lie in the input band, and `G·S` where only one image exists (for example after an RF band-pass filter). Sideband images that fall beyond the output grid's edges are dropped, so the integrated output is not conserved on a finite grid. Mixer-added noise (NF) remains distributed over the output grid. This assumes the DSB convention; the LO power that would set the real sideband split is not modelled (issue #282).
 - `MixerEngine` emits one tone per sideband (no merge, no snapping). Copies that differ only by rounding (`tone ± LO` computed separately) are grouped by the analyzer and power meter through `coherentToneWatts()`, which sums copies within 4 ulps of the largest tone frequency in the list as phasors. The analyzer reads real-domain spectra after conjugate-symmetric expansion, so each real tone appears at +f and -f at half power. Network-analyzer comb readouts still take the first matching tone, so their gain and NF are unchanged.
 
 ## ADC Output Grid Contract

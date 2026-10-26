@@ -445,6 +445,62 @@ TEST_CASE("Mixer translates noise into both LO sidebands", "[mixer][domain]") {
     REQUIRE(out.noise_total_W[10] == 0.0);
 }
 
+// Flat input noise S over 0-500 MHz, LO 100 MHz, G = -6 dB. An output bin is reached by both of its
+// images (LO - f and LO + f), so the double-sideband convention gives 2*G*S. The 50 MHz bin takes
+// images at 50 and 150 MHz; the 300 MHz bin takes images at 200 and 400 MHz.
+TEST_CASE("Mixer noise on flat input is double-sideband", "[mixer][domain][issue282]") {
+    NodeGraphEngine graph;
+    const double S = 1e-20;
+    Spectrum input;
+    for (int i = 0; i <= 500; ++i)
+        input.frequencies.push_back(i * 1e6);
+    input.noise_total_W.assign(input.frequencies.size(), S);
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.setConversionGain_dB(-6.0);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    const double dsb_ratio = 2.0 * dbToLinear(-6.0);
+    REQUIRE(out.noise_total_W[50] / S == Approx(dsb_ratio));
+    REQUIRE(out.noise_total_W[300] / S == Approx(dsb_ratio));
+}
+
+// Tone at 150 MHz (-20 dBm) in flat thermal noise kT, LO 100 MHz, G = -6 dB, read in a 1 MHz bin at
+// the 50 MHz sideband. The tone term is +G. The noise term is +G + 3.01 dB, because the bin takes
+// noise from both images. Output SNR is therefore input SNR - 3.01 dB.
+TEST_CASE("Mixer output SNR follows the double-sideband noise convention",
+          "[mixer][domain][issue282]") {
+    NodeGraphEngine graph;
+    const double bw_Hz = 1e6;
+    Spectrum input;
+    for (int i = 0; i <= 500; ++i)
+        input.frequencies.push_back(i * 1e6);
+    input.noise_total_W.assign(input.frequencies.size(), k * T);
+    input.tones.push_back({150e6, -20.0, 0.0});
+
+    MixerEngine mix(0, graph);
+    mix.setLoFreq_Hz(100e6);
+    mix.setConversionGain_dB(-6.0);
+    mix.node().inputs[0] = &input;
+    mix.update(0.0);
+
+    const auto &out = mix.node().outputs[0];
+    const Spectrum::Tone *sideband = nullptr;
+    for (const auto &tone : out.tones)
+        if (tone.freq_Hz == 50e6)
+            sideband = &tone;
+    REQUIRE(sideband != nullptr);
+
+    const auto dBm = [](double watts) { return 10.0 * std::log10(watts / 1e-3); };
+    const double snr_in_dB = -20.0 - dBm(k * T * bw_Hz);
+    const double snr_out_dB = sideband->power_dBm - dBm(out.noise_total_W[50] * bw_Hz);
+    REQUIRE(sideband->power_dBm == Approx(-20.0 - 6.0));
+    REQUIRE(snr_out_dB - snr_in_dB == Approx(-10.0 * std::log10(2.0)).margin(1e-6));
+}
+
 TEST_CASE("Mixer preserves RF noise SNR through an IF filter", "[mixer][domain]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
