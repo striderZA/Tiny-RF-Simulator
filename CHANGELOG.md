@@ -13,6 +13,7 @@
 ### Changed
 
 - **CPack runs in the release package jobs** — the Linux and Windows `package` jobs run `cpack` on their Release build tree, verify the archive contains the installed executable, `component_data/`, `extensions/` and the README, and upload it as the `cpack-linux` / `cpack-windows` workflow artifact. The release assets are still built as before; CPack output is not yet published, and it is not yet a full replacement: the Windows archive omits the MinGW runtime DLLs and both archives include GLFW development files.
+- **Mixer noise DSB convention pinned, no behaviour change (#282)** — the mixer already adds each input noise bin to both sidebands at full conversion gain, as tones are. Flat input noise reads `2·G·S` per interior output bin (3.01 dB above `G·S`); an RF band-pass in front of the mixer leaves one image, which reads `G·S`. Output noise is unchanged from 0.29.3. The new regression tests pin the DSB density and the SNR terms: tone +G and noise +G+3.01 dB, so output SNR = input SNR − 3.01 dB for any G. The composed criterion "input SNR + conversion gain" cannot hold under DSB, because the noise also scales with G. Mixer SSB/DSB behaviour depends on LO power, which is not modelled.
 
 ## [0.29.3] - 2026-10-25
 
