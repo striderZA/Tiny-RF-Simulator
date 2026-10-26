@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.29.4] - 2026-10-26
+
 ### Fixed
 
 - **PFB recompute is about 5–7× faster at large M and K (#130)** — changing M or K (up to 2048 channels and 64 taps per branch) recomputes the channel weights faster. The prototype response now rotates a phasor per tap instead of calling `cos()` for each tap. Filter values agree with the direct sum to within 1e-10. At M=2048 (Release build) a K=8 recompute drops from about 710 ms to 140 ms, and K=64 from about 6.2 s to 1.0 s.
