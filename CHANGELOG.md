@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Fixed
+
+- **Node colours show the right hue** — the per-type node colour was packed as ARGB but ImGui reads `IM_COL32` (0xAABBGGRR), so red and blue were swapped on every type (the ADC rendered orange). `themeColor()` now returns the `IM_COL32` layout. The new `themeColor uses the IM_COL32 channel order` test fails on the old packing.
+- **Node title bars take their type colour** — ImNodes copies the title-bar colour at `BeginNode`, but the widget pushed it after, so every node kept the default grey. The colour is now pushed before `BeginNode` for plain nodes and collapsed group blocks.
+- **Schematic symbols are centred on their node body** — symbols were drawn at hard-coded offsets (about 8 px left and 13 px above the body centre). Plain nodes centre the symbol on the 96×64 body, and collapsed group blocks on their 120×60 body, both measured from the layout cursor.
+
 ## [0.29.4] - 2026-10-26
 
 ### Fixed

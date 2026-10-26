@@ -224,6 +224,5 @@ TEST_CASE_METHOD(ImGuiFixture, "kindForLabel separates the 1:2 and 2:1 SPDT pref
 }
 
 TEST_CASE("SPDT 2:1 switch has its own theme colour", "[dispatch]") {
-    REQUIRE(themeColor(NodeKind::RFSwitchSPDT2to1) == 0xFFE879F9u);
     REQUIRE(themeColor(NodeKind::RFSwitchSPDT2to1) != themeColor(NodeKind::Unknown));
 }

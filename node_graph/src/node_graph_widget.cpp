@@ -296,6 +296,11 @@ void NodeGraphWidget::drawNodes() {
                 ImNodes::SetNodeGridSpacePos(node.node_id, cached_position->second);
         }
 
+        const NodeKind kind = kindForLabel(node.label);
+        const ImU32 color = static_cast<ImU32>(themeColor(kind));
+        // ImNodes copies TitleBar and NodeOutline in BeginNode, so push them first.
+        ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
+        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);
         ImNodes::BeginNode(node.node_id);
         m_registered_in_pool.insert(node.node_id);
         // A cache restore is not a user drag; reset both movement baselines.
@@ -323,31 +328,22 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
-        const NodeKind kind = kindForLabel(node.label);
-        const ImU32 color = static_cast<ImU32>(themeColor(kind));
-        ImNodes::PushColorStyle(ImNodesCol_TitleBar, color);
-        ImNodes::PushColorStyle(ImNodesCol_NodeOutline, color);
         ImNodes::BeginNodeTitleBar();
         ImGui::TextUnformatted(node.label.c_str());
         ImNodes::EndNodeTitleBar();
-
-        // Schematic symbol body. Centered in the body region.
-        // ponytail: hardcoded body rect; upgrade when GetNodeBodyRect becomes available.
-        constexpr float BODY_W = 96.0f;
-        constexpr float BODY_H = 64.0f;
-        constexpr float TITLE_BAR_H = 24.0f;
-        float subtitle_offset = 0.0f;
-        if (!node.part_number.empty())
-            subtitle_offset = ImGui::GetTextLineHeightWithSpacing();
-        ImVec2 body_center(screen_pos.x + BODY_W * 0.5f,
-                           screen_pos.y + TITLE_BAR_H + subtitle_offset + BODY_H * 0.5f);
-        ImDrawList *dl = ImGui::GetWindowDrawList();
 
         // Render part number subtitle
         if (!node.part_number.empty()) {
             ImGui::TextDisabled("%s", node.part_number.c_str());
         }
 
+        // Schematic symbol, centred on the body Dummy below. The cursor is the Dummy's top-left
+        // once the title bar and part-number line are placed, so no offsets are assumed.
+        constexpr float BODY_W = 96.0f;
+        constexpr float BODY_H = 64.0f;
+        const ImVec2 body_origin = ImGui::GetCursorScreenPos();
+        const ImVec2 body_center(body_origin.x + BODY_W * 0.5f, body_origin.y + BODY_H * 0.5f);
+        ImDrawList *dl = ImGui::GetWindowDrawList();
         drawSchematicSymbol(dl, body_center, kind, color);
         ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
@@ -386,9 +382,9 @@ void NodeGraphWidget::drawNodes() {
             }
         }
 
+        ImNodes::EndNode();
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
-        ImNodes::EndNode();
         m_cached_node_dimensions[node.node_id] = ImNodes::GetNodeDimensions(node.node_id);
     }
 }
