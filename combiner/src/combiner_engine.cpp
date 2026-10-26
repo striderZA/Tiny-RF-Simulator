@@ -32,6 +32,25 @@ void refuseCombine(Spectrum &out, size_t N, const Spectrum *a, const Spectrum *b
     out.bumpGeneration();
 }
 
+struct BinNoise {
+    double through_W; // connected inputs' noise density, scaled by each path's power gain
+    double added_W;   // thermal term: absent-input termination plus the passive sum rule
+};
+
+// Passive combiner noise for one bin. A connected input passes gain*noise through. An absent
+// input is a 290 K termination and adds gain*kT. The passive sum rule adds
+// kT*max(0, 1 - gain0 - gain1). With one connected input this reduces to the attenuator's
+// gain*noise + kT(1-gain). Manual and S-parameter modes both use this rule.
+BinNoise combinerBinNoise(bool connected0, double noise0_W, double gain0, bool connected1,
+                          double noise1_W, double gain1) {
+    const double kT = k * T;
+    BinNoise bin;
+    bin.through_W = (connected0 ? gain0 * noise0_W : 0.0) + (connected1 ? gain1 * noise1_W : 0.0);
+    bin.added_W = kT * std::max(0.0, 1.0 - gain0 - gain1) + (connected0 ? 0.0 : gain0 * kT) +
+                  (connected1 ? 0.0 : gain1 * kT);
+    return bin;
+}
+
 } // namespace
 
 CombinerEngine::CombinerEngine(int id, NodeGraphEngine &graph)
@@ -189,10 +208,8 @@ void CombinerEngine::update(double dt) {
         out.is_complex_baseband =
             (in0 && in0->is_complex_baseband) || (in1 && in1->is_complex_baseband);
 
-        // Noise: scale by |S21|^2 and |S31|^2 respectively
-        const double k = 1.3806e-23;
-        const double T = 290.0;
-
+        // Noise: S21 and S31 set each input's power gain; the shared passive rule adds the
+        // thermal term, so manual and S-parameter modes agree on it.
         out.noise_W.assign(N, 0.0);
         out.noise_added_W.assign(N, 0.0);
         out.noise_total_W.resize(N);
@@ -200,15 +217,15 @@ void CombinerEngine::update(double dt) {
         for (size_t i = 0; i < N; ++i) {
             auto S21 = m_sparam_data.interpolate(out.frequencies[i], idx_S21);
             auto S31 = m_sparam_data.interpolate(out.frequencies[i], idx_S31);
-            double mag_sq_S21 = std::norm(S21);
-            double mag_sq_S31 = std::norm(S31);
 
             double n0 = (in0 && i < in0->noise_total_W.size()) ? in0->noise_total_W[i] : 0.0;
             double n1 = (in1 && i < in1->noise_total_W.size()) ? in1->noise_total_W[i] : 0.0;
 
-            out.noise_W[i] = n0 * mag_sq_S21 + n1 * mag_sq_S31;
-            out.noise_added_W[i] = k * T * std::max(0.0, 1.0 - mag_sq_S21 - mag_sq_S31);
-            out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
+            const BinNoise bin = combinerBinNoise(in0 != nullptr, n0, std::norm(S21),
+                                                  in1 != nullptr, n1, std::norm(S31));
+            out.noise_W[i] = bin.through_W;
+            out.noise_added_W[i] = bin.added_W;
+            out.noise_total_W[i] = bin.through_W + bin.added_W;
         }
 
         out.phase_deg.assign(N, 0.0);
@@ -292,16 +309,19 @@ void CombinerEngine::update(double dt) {
     out.is_complex_baseband =
         (in0 && in0->is_complex_baseband) || (in1 && in1->is_complex_baseband);
 
-    // Noise: incoherent power sum, then apply loss
+    // Noise: passive sum rule per bin. An absent input is a 290 K termination.
     out.noise_W.assign(N, 0.0);
-    for (size_t i = 0; i < N; ++i) {
-        double n0 = (in0 && i < in0->noise_total_W.size()) ? in0->noise_total_W[i] : 0.0;
-        double n1 = (in1 && i < in1->noise_total_W.size()) ? in1->noise_total_W[i] : 0.0;
-        out.noise_W[i] = loss_linear * (n0 + n1);
-    }
-
     out.noise_added_W.assign(N, 0.0);
-    out.noise_total_W = out.noise_W;
+    out.noise_total_W.resize(N);
+    for (size_t i = 0; i < N; ++i) {
+        const double n0 = (in0 && i < in0->noise_total_W.size()) ? in0->noise_total_W[i] : 0.0;
+        const double n1 = (in1 && i < in1->noise_total_W.size()) ? in1->noise_total_W[i] : 0.0;
+        const BinNoise bin =
+            combinerBinNoise(in0 != nullptr, n0, loss_linear, in1 != nullptr, n1, loss_linear);
+        out.noise_W[i] = bin.through_W;
+        out.noise_added_W[i] = bin.added_W;
+        out.noise_total_W[i] = bin.through_W + bin.added_W;
+    }
 
     if (in0 && !in0->phase_deg.empty())
         out.phase_deg = in0->phase_deg;

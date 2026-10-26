@@ -108,7 +108,7 @@
     },
     {
       "id": "claim_e2f5465a823845e2964ee36864118bb6",
-      "statement": "The splitter applies a fixed 3.0103 dB loss to each output, and manual Combiner mode applies the same loss to each input tone path and incoherently sums noise; in three-port S-parameter mode the combiner maps S21 and S31 and adds only non-negative passive thermal noise.",
+      "statement": "The splitter applies a fixed 3.0103 dB loss to each output and adds the passive thermal term kT(1-g), so a kT input reads a 3.01 dB noise figure. Manual Combiner mode applies the same loss to each input tone path and adds one passive per-bin rule shared with S-parameter mode: connected inputs pass g_i times noise, kT*max(0, 1-g_0-g_1) is added, and each absent input adds g_i*kT as a 290 K termination. S-parameter mode takes g from |S21|^2 and |S31|^2.",
       "evidence": [
         {
           "resource": "repo://combiner/include/combiner_engine.h#L49-L49",

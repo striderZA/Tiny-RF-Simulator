@@ -4,6 +4,7 @@
 #include "spectrum.h"
 #include "test_temp_paths.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -26,6 +27,21 @@ Spectrum buildTestSpectrum(double freq_Hz, double power_dBm, double phase_deg) {
     s.phase_deg.assign(3, 0.0);
     s.fs_Hz = 1e9;
     return s;
+}
+
+std::filesystem::path writeFlatMinus3dBS3p() {
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("flat_minus3db_" + test_temp_paths::processTag() + ".s3p");
+    std::ofstream file(path);
+    // The combiner reads pairs 6 and 7 for its two input paths; each is 1/sqrt(2), a 3 dB split.
+    file << "# Hz S RI R 50\n";
+    for (const char *freq : {"5e8", "5e9"}) {
+        file << freq;
+        for (int pair = 0; pair < 9; ++pair)
+            file << (pair == 6 || pair == 7 ? " 0.7071067811865476 0" : " 0 0");
+        file << '\n';
+    }
+    return path;
 }
 
 } // namespace
@@ -221,6 +237,75 @@ TEST_CASE("Combiner: matched grids sum noise per bin with -3 dB loss", "[combine
     REQUIRE_THAT(out.noise_total_W[0], WithinAbs(0.5 * (4e-21 + 8e-21), 1e-30));
     REQUIRE_THAT(out.noise_total_W[1], WithinAbs(0.5 * (2e-21 + 6e-21), 1e-30));
     REQUIRE_THAT(out.noise_total_W[2], WithinAbs(0.5 * (1e-21 + 3e-21), 1e-30));
+}
+
+TEST_CASE("Combiner: a kT input through one port reads 3.01 dB NF in manual mode",
+          "[combiner][noise][issue277]") {
+    NodeGraphEngine graph;
+    CombinerEngine combiner(1, graph);
+    constexpr double kT = 1.3806e-23 * 290.0;
+
+    Spectrum in0 = buildTestSpectrum(1e9, -10.0, 0.0);
+    in0.noise_total_W.assign(3, kT);
+    combiner.node().inputs[0] = &in0;
+    combiner.node().inputs[1] = nullptr;
+    combiner.update(0.0);
+
+    // Port 1 is absent, so it is a 290 K termination: 0.5*kT through port 0 plus 0.5*kT
+    // from the absent port gives kT out, the attenuator model at gain 0.5.
+    const auto &out = combiner.node().outputs[0];
+    REQUIRE(out.noise_total_W.size() == 3);
+    for (double density : out.noise_total_W) {
+        REQUIRE(density / kT == Catch::Approx(1.0).epsilon(1e-9));
+        REQUIRE_THAT(10.0 * std::log10(density / (0.5 * kT)), WithinAbs(3.0103, 1e-3));
+    }
+}
+
+TEST_CASE("Combiner: S-param and manual modes agree on thermal noise for a 3 dB part",
+          "[combiner][noise][sparam][issue277]") {
+    constexpr double kT = 1.3806e-23 * 290.0;
+    const auto path = writeFlatMinus3dBS3p();
+
+    Spectrum src0 = buildTestSpectrum(1e9, -10.0, 0.0);
+    src0.noise_total_W.assign(3, kT);
+    Spectrum src1 = buildTestSpectrum(2e9, -20.0, 0.0);
+    src1.noise_total_W.assign(3, kT);
+
+    // Each case drives one or both inputs with a kT source; an absent input is a 290 K termination.
+    struct InputCase {
+        bool in0;
+        bool in1;
+    };
+    for (const InputCase c :
+         {InputCase{true, true}, InputCase{true, false}, InputCase{false, true}}) {
+        const Spectrum *a = c.in0 ? &src0 : nullptr;
+        const Spectrum *b = c.in1 ? &src1 : nullptr;
+
+        NodeGraphEngine manual_graph;
+        CombinerEngine manual(1, manual_graph);
+        manual.node().inputs[0] = a;
+        manual.node().inputs[1] = b;
+        manual.update(0.0);
+
+        NodeGraphEngine sparam_graph;
+        CombinerEngine sparam(2, sparam_graph);
+        sparam.setSParamFilepath(path.string());
+        REQUIRE(sparam.sparamMode());
+        sparam.node().inputs[0] = a;
+        sparam.node().inputs[1] = b;
+        sparam.update(0.0);
+
+        const auto &manual_noise = manual.node().outputs[0].noise_total_W;
+        const auto &sparam_noise = sparam.node().outputs[0].noise_total_W;
+        REQUIRE(manual_noise.size() == 3);
+        REQUIRE(sparam_noise.size() == 3);
+        for (size_t i = 0; i < 3; ++i) {
+            REQUIRE(sparam_noise[i] / kT == Catch::Approx(1.0).epsilon(1e-9));
+            REQUIRE(manual_noise[i] / kT == Catch::Approx(sparam_noise[i] / kT).epsilon(1e-9));
+        }
+    }
+
+    std::filesystem::remove(path);
 }
 
 TEST_CASE("Combiner: refuses inputs on different frequency grids", "[combiner][issue278]") {

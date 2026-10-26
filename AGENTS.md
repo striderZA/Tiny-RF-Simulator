@@ -93,6 +93,11 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 - Coax cable models a passive lossy stage at 290 K: each output bin is input noise times power gain plus `kT(1−gain)`.
 
+## Passive Splitter and Combiner Noise
+
+- Splitter outputs pass `gain·noise_in` and add `kT(1−gain)` per bin, the attenuator model at the split gain (0.5, −3.01 dB). A kT input reads NF 3.01 dB.
+- Combiner noise per bin is `Σ gain_i·noise_i` over connected inputs, plus `kT·max(0, 1 − Σ gain_i)`, plus `gain_i·kT` for each absent input (a 290 K termination). Manual mode uses gain 0.5 per input; S-parameter mode uses `|S21|²` and `|S31|²`. Both modes share this rule in `combinerBinNoise()`; one connected input reduces to the attenuator.
+
 ## Mixer Noise Contract
 
 - `MixerEngine` scales input noise by conversion gain and accumulates it at the nearest output-grid bins for both LO difference and sum frequencies. Mixer-added noise remains distributed over the output grid.

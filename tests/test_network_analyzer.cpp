@@ -592,6 +592,31 @@ TEST_CASE("NetworkAnalyzer: noise figure accuracy against a real amplifier chain
         REQUIRE_THAT(g, WithinAbs(20.0, 0.05));
 }
 
+// A splitter output is a passive -3.01 dB stage: the analyzer reads NF as (noise_out / gain) / kT,
+// so a kT input must read kT out over gain 0.5, which is 3.01 dB.
+TEST_CASE("NetworkAnalyzer: splitter output reads 3.01 dB noise figure",
+          "[network_analyzer][splitter][issue277]") {
+    NodeGraphEngine graph;
+    SignalGeneratorEngine gen(1, graph);
+    SplitterEngine splitter(2, graph);
+    graph.addLink(gen.outputPinId(), splitter.inputPinId());
+    TestNaHost host({&gen, &splitter});
+    NetworkAnalyzerEngine na(graph, host);
+    na.setStartFrequency(1e9);
+    na.setStopFrequency(2e9);
+    na.setPoints(21);
+    na.setStimulusPower(-30.0);
+    na.setPointA(gen.outputPinId());
+    na.setPointB(splitter.outputPinId(0));
+    na.update();
+
+    REQUIRE(na.gainDb().size() == 21);
+    for (double g : na.gainDb())
+        REQUIRE_THAT(g, WithinAbs(-3.0103, 0.05));
+    for (double nf : na.noiseFigureDb())
+        REQUIRE_THAT(nf, WithinAbs(3.0103, 0.05));
+}
+
 // Points outside an S-parameter file's band hold the edge value, so the analyzer must not
 // report them as measured gain or NF: they stay NaN. Band of the shipped amp S2P: 10 MHz-26.5 GHz.
 TEST_CASE("NetworkAnalyzer: out-of-band S-parameter sweep points read NaN",
