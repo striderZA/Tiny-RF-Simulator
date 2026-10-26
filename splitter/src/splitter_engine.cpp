@@ -65,7 +65,8 @@ void SplitterEngine::update(double dt) {
             out.noise_W[i] = loss_linear * nin;
         }
 
-        out.noise_added_W.assign(N, 0.0);
+        // Passive lossy split: each output adds kT(1-gain), as the attenuator does.
+        out.noise_added_W.assign(N, k * T * (1.0 - loss_linear));
         out.noise_total_W.resize(N);
         for (size_t i = 0; i < N; ++i) {
             out.noise_total_W[i] = out.noise_W[i] + out.noise_added_W[i];
