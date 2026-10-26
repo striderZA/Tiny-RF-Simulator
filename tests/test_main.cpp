@@ -225,7 +225,7 @@ TEST_CASE("Splitter preserves phase on both outputs", "[splitter]") {
     }
 }
 
-TEST_CASE("Splitter adds passive thermal noise: kT input reads 3.01 dB NF", "[splitter]") {
+TEST_CASE("Splitter adds passive thermal noise: kT in gives kT out per output", "[splitter]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
     gen.update(0.0);
@@ -234,16 +234,13 @@ TEST_CASE("Splitter adds passive thermal noise: kT input reads 3.01 dB NF", "[sp
     split.node().inputs[0] = &gen.node().outputs[0];
     split.update(0.0);
 
-    // Each output passes gain*kT and adds kT(1-gain), the attenuator model with gain 0.5.
-    constexpr double gain = 0.5;
+    // Each output passes gain*kT and adds kT(1-gain), the attenuator model at gain 0.5.
+    // The noise figure readout is checked through the network analyzer.
     for (size_t out_idx = 0; out_idx < 2; ++out_idx) {
         const auto &out = split.node().outputs[out_idx];
         REQUIRE(!out.noise_total_W.empty());
-        for (double density : out.noise_total_W) {
-            REQUIRE(density == Approx(k * T).epsilon(1e-10));
-            const double nf_dB = 10.0 * std::log10(density / (gain * k * T));
-            REQUIRE(nf_dB == Approx(3.0103).margin(1e-3));
-        }
+        for (double density : out.noise_total_W)
+            REQUIRE(density / (k * T) == Approx(1.0).epsilon(1e-10));
     }
 }
 

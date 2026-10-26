@@ -4,6 +4,7 @@
 #include "spectrum.h"
 #include "test_temp_paths.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -255,7 +256,7 @@ TEST_CASE("Combiner: a kT input through one port reads 3.01 dB NF in manual mode
     const auto &out = combiner.node().outputs[0];
     REQUIRE(out.noise_total_W.size() == 3);
     for (double density : out.noise_total_W) {
-        REQUIRE_THAT(density, Catch::Matchers::WithinRel(kT, 1e-9));
+        REQUIRE(density / kT == Catch::Approx(1.0).epsilon(1e-9));
         REQUIRE_THAT(10.0 * std::log10(density / (0.5 * kT)), WithinAbs(3.0103, 1e-3));
     }
 }
@@ -299,8 +300,8 @@ TEST_CASE("Combiner: S-param and manual modes agree on thermal noise for a 3 dB 
         REQUIRE(manual_noise.size() == 3);
         REQUIRE(sparam_noise.size() == 3);
         for (size_t i = 0; i < 3; ++i) {
-            REQUIRE_THAT(sparam_noise[i], Catch::Matchers::WithinRel(kT, 1e-9));
-            REQUIRE_THAT(manual_noise[i], Catch::Matchers::WithinRel(sparam_noise[i], 1e-9));
+            REQUIRE(sparam_noise[i] / kT == Catch::Approx(1.0).epsilon(1e-9));
+            REQUIRE(manual_noise[i] / kT == Catch::Approx(sparam_noise[i] / kT).epsilon(1e-9));
         }
     }
 
