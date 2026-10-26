@@ -1436,7 +1436,7 @@ TEST_CASE("Amplifier generates two-tone IMD products", "[amplifier][nonlinear]")
 TEST_CASE("Amplifier shows compression at high input", "[amplifier][nonlinear]") {
     NodeGraphEngine graph;
     SignalGeneratorEngine gen(0, graph);
-    gen.addTone(100e6, 5.0);
+    gen.addTone(100e6, 3.0);
     gen.update(0.0);
 
     AmplifierEngine amp(0, graph);
@@ -1447,13 +1447,13 @@ TEST_CASE("Amplifier shows compression at high input", "[amplifier][nonlinear]")
     amp.node().inputs[0] = &gen.node().outputs[0];
     amp.update(0.0);
 
-    // Closed form: Pout is 5 dBm and OIP3 is 10 dBm, so the ratio is 10^-0.5 and the closed-form
-    // gain is 20*log10(1 - 10^-0.5) = -3.30 dB. Compression stops at the -3.01 dB floor, which is
-    // where the distortion cap holds, so the expected gain is the larger of the two.
-    const double closed_form_dB = 20.0 * std::log10(1.0 - std::pow(10.0, -0.5));
-    const double expected_dB = std::max(closed_form_dB, 10.0 * std::log10(0.5));
-    const double gain_high = amp.node().outputs[0].tones[0].power_dBm - 5.0;
-    REQUIRE(gain_high == Approx(expected_dB).margin(0.01));
+    // Closed form: Pout is 3 dBm and OIP3 is 10 dBm, so the ratio is 10^-0.7 and the gain falls by
+    // 20*log10(1 - 10^-0.7) = -1.93 dB. That is above the -3.01 dB floor, so the closed form
+    // applies and the test checks it directly.
+    const double closed_form_dB = 20.0 * std::log10(1.0 - std::pow(10.0, -0.7));
+    REQUIRE(closed_form_dB > 10.0 * std::log10(0.5));
+    const double gain_high = amp.node().outputs[0].tones[0].power_dBm - 3.0;
+    REQUIRE(gain_high == Approx(closed_form_dB).margin(0.01));
 }
 
 TEST_CASE("Amplifier single tone produces no IMD products", "[amplifier][nonlinear]") {

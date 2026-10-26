@@ -1434,7 +1434,7 @@ TEST_CASE("NonlinearModel: 0.01 dB sweep across deep compression stays finite an
     for (int i = 0; i <= 700; ++i) { // 19.00 .. 26.00 dBm: crosses the old sentinel near 24.8 dBm
         const double in_dBm = 19.0 + 0.01 * i;
         const auto r = model.process({{1e9, in_dBm, 0.0}}, unity);
-        const double fund_dBm = in_dBm + r.compression_dB;
+        const double fund_dBm = in_dBm + r.tone_compression_dB[0];
         REQUIRE(std::isfinite(fund_dBm));
         REQUIRE(fund_dBm > -174.0);
         if (i > 0)

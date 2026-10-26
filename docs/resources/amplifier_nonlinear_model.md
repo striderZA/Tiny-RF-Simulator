@@ -131,7 +131,7 @@ To add nonlinear behaviour to an existing amplifier model, implement the followi
 - [ ] **Two-tone IMD**: for any two input tones, calculate the 6 IMD frequency products and their power levels (IMDArr[7..12]).
 - [ ] **Power summation**: sum signal, harmonic, and IMD contributions (in linear mW) before converting back to dBm.
 - [ ] **Noise at output**: apply the noise figure and gain to compute output noise using `Pout = [(Pext + kT0B) * (f - 1)] * g`.
-- [ ] **Compression**: the 1 dB point follows the closed-form cubic `compression_dB = 20·log10(1 − Pout/OIP3)` per tone, so the 1 dB input sits 9.64 dB below OIP3. Compression stops at -3.01 dB (the half-fundamental floor, where the distortion cap holds). Compression is not the power sum of the distortion products.
+- [ ] **Compression**: each input tone's fundamental is compressed by the closed-form cubic `20·log10(1 − Pout/OIP3)`, at that tone's own output power and against the OIP3 at its frequency. The 1 dB point therefore sits 9.64 dB below OIP3. Each tone's compression stops at -3.01 dB (the half-fundamental floor). Compression is not the power sum of the distortion products.
 
 ---
 
