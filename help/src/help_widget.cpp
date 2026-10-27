@@ -19,10 +19,12 @@ const HelpSection sections[] = {
          "Select a node: left-click on it",
          "Select multiple nodes: Ctrl+click or rubber-band selection",
          "Delete selected nodes: press Delete key",
+         "Align or distribute selected nodes: right-click one of them, then choose Align or "
+         "Distribute",
          "Right-click canvas: open context menu to add components",
          "New here? Help > Tutorial runs a guided walkthrough of this workflow",
      },
-     7},
+     8},
     {"Adding and Removing Components",
      {
          "Right-click the canvas and choose a component from the context menu",

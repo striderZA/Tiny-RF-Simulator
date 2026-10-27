@@ -98,8 +98,21 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         return m_editor_commands.setGroupCollapsed(group_id, collapsed);
     };
     editor_actions.selectGroup = [this](int group_id) { m_editor_commands.selectGroup(group_id); };
+    editor_actions.moveNodes = [this](const std::vector<LayoutMove> &moves) {
+        return m_editor_commands.moveNodes(moves);
+    };
+    editor_actions.undoLayout = [this]() { return m_editor_commands.undoLayout(); };
+    editor_actions.canUndoLayout = [this]() { return m_editor_commands.canUndoLayout(); };
     m_graph_widget =
         std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
+    // Layout commands read and write node positions through the widget, which owns them.
+    m_editor_commands.readNodePosition = [this](int node_id) {
+        const ImVec2 position = m_graph_widget->editorPositionForSave(node_id);
+        return LayoutPoint{position.x, position.y};
+    };
+    m_editor_commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
+        m_graph_widget->setNodeEditorSpacePosition(node_id, ImVec2(position.x, position.y));
+    };
     m_serializer = std::make_unique<ProjectSerializer>(
         m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
         m_receiver_requirements, m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor,
@@ -443,6 +456,7 @@ void RfSimulatorApp::newProject() {
     m_current_project_path.clear();
     refreshExtensions();
     m_editor_commands.markClean();
+    m_editor_commands.clearLayoutUndo();
     // The reset replaced every engine, so the panel's snapshots and result refer
     // to a circuit that no longer exists. The retained flow selection is
     // revalidated against the new circuit by the panel itself.
@@ -880,6 +894,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
             // (issue #113). A failure that left state intact keeps the path.
             m_current_project_path.clear();
             m_editor_commands.markModified();
+            m_editor_commands.clearLayoutUndo();
             // Extension discovery is rooted at the project directory, so it
             // must be re-derived once the path is gone: otherwise the
             // destroyed project's project-local tools and data packs stay
@@ -903,6 +918,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
     m_current_project_path = path;
     refreshExtensions();
     m_editor_commands.markClean();
+    m_editor_commands.clearLayoutUndo();
     // A load that replaced the circuit — this successful one, or a failed one
     // that reset it (handled above) — is a circuit reload for the panel, so its
     // latch and stale result are cleared; a failed load that left the live

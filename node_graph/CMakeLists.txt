@@ -4,6 +4,7 @@ project(node_graph LANGUAGES CXX)
 # ---- Engine (pure data) ----
 add_library(node_graph_engine STATIC
     src/node_graph_engine.cpp
+    src/node_layout.cpp
     src/rewire.cpp
 )
 
@@ -19,6 +20,7 @@ add_library(simulator::node_graph_engine ALIAS node_graph_engine)
 add_library(node_graph_widget STATIC
     src/node_graph_widget.cpp
     src/node_graph_widget_groups.cpp
+    src/node_graph_widget_layout.cpp
     src/node_graph_widget_tooltips.cpp
     src/schematic_symbols.cpp
 )

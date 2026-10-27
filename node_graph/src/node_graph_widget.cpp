@@ -69,9 +69,14 @@ void NodeGraphWidget::selectNode(int node_id) {
     ImNodes::SelectNode(node_id);
 }
 
+ImVec2 NodeGraphWidget::cachedNodeDimensions(int node_id) const {
+    const ImVec2 kFallbackNodeDimensions(260.0f, 160.0f);
+    const auto it = m_cached_node_dimensions.find(node_id);
+    return it != m_cached_node_dimensions.end() ? it->second : kFallbackNodeDimensions;
+}
+
 std::optional<NodeGraphBounds>
 NodeGraphWidget::nodeBoundsExcluding(const std::unordered_set<int> &excluded_node_ids) const {
-    const ImVec2 kFallbackNodeDimensions(260.0f, 160.0f);
     std::optional<NodeGraphBounds> bounds;
     const auto include_bounds = [&bounds](const NodeGraphBounds &candidate) {
         if (!bounds) {
@@ -92,10 +97,7 @@ NodeGraphWidget::nodeBoundsExcluding(const std::unordered_set<int> &excluded_nod
         const ImVec2 position = position_it != m_last_node_grid_positions.end()
                                     ? position_it->second
                                     : ImVec2(0.0f, 0.0f);
-        const auto dimensions_it = m_cached_node_dimensions.find(node.node_id);
-        const ImVec2 dimensions = dimensions_it != m_cached_node_dimensions.end()
-                                      ? dimensions_it->second
-                                      : kFallbackNodeDimensions;
+        const ImVec2 dimensions = cachedNodeDimensions(node.node_id);
         include_bounds({position, position + dimensions});
     }
 
@@ -164,6 +166,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
         setupDarkTheme();
         rebuildSynthMaps();
+        rememberCollapsedSelection();
 
         drawGroupBackgrounds();
 
@@ -581,6 +584,40 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
             if (m_actions.removeComponent)
                 m_actions.removeComponent(m_context_menu_node);
         }
+        ImGui::Separator();
+        // Layout acts on the selection, so it needs two or more selected nodes including the
+        // node that was clicked.
+        const bool can_layout =
+            layoutSelectionCount() >= 2 && ImNodes::IsNodeSelected(m_context_menu_node);
+        if (ImGui::BeginMenu("Align", can_layout)) {
+            if (ImGui::MenuItem("Left"))
+                alignSelection(AlignMode::Left);
+            if (ImGui::MenuItem("Right"))
+                alignSelection(AlignMode::Right);
+            if (ImGui::MenuItem("Top"))
+                alignSelection(AlignMode::Top);
+            if (ImGui::MenuItem("Bottom"))
+                alignSelection(AlignMode::Bottom);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Centre on Vertical Line (same x)"))
+                alignSelection(AlignMode::CentreHorizontally);
+            if (ImGui::MenuItem("Centre on Horizontal Line (same y)"))
+                alignSelection(AlignMode::CentreVertically);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Distribute", can_layout)) {
+            if (ImGui::MenuItem("Horizontally"))
+                distributeSelection(DistributeAxis::Horizontal);
+            if (ImGui::MenuItem("Vertically"))
+                distributeSelection(DistributeAxis::Vertical);
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        const bool can_undo = m_actions.canUndoLayout && m_actions.canUndoLayout();
+        if (ImGui::MenuItem("Undo Layout", nullptr, false, can_undo)) {
+            if (m_actions.undoLayout)
+                m_actions.undoLayout();
+        }
         ImGui::EndPopup();
     }
 
@@ -596,6 +633,19 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
                 if (addable.on_add)
                     addable.on_add(m_context_menu_pos);
             }
+        }
+        ImGui::EndPopup();
+    }
+    // Opened here, outside the popup scopes above, so the modal shares the window's ID stack.
+    if (m_open_layout_message) {
+        ImGui::OpenPopup("LayoutRefused");
+        m_open_layout_message = false;
+    }
+    if (ImGui::BeginPopupModal("LayoutRefused", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted(m_layout_message.c_str());
+        if (ImGui::Button("OK")) {
+            m_layout_message.clear();
+            ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }

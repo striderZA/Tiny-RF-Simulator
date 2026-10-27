@@ -104,6 +104,13 @@ add_standalone_test(test_node_graph_rewire
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+# Align and distribute geometry for the node editor (pure, no ImGui). Standalone for the
+# MinGW-w64 registration ceiling (see tests/AGENTS.md).
+add_standalone_test(test_node_layout
+    SOURCES test_node_layout.cpp
+    LIBS simulator::node_graph_engine
+)
+
 # Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
 # Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
 add_standalone_test(test_sparam_legacy_key

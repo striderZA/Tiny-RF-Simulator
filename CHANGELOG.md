@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **Align and distribute selected nodes (TRS-79)** — with two or more nodes selected, right-click one of them for **Align** (Left, Right, Top, Bottom, Centre on Vertical Line, Centre on Horizontal Line) or **Distribute** (Horizontally, Vertically). Centre on Vertical Line puts the nodes' centres on one vertical line (same x); Centre on Horizontal Line puts them on one horizontal line (same y). Align uses the selection's bounding box. Distribute keeps the outer two nodes fixed and spaces the others with equal gaps between edges. Expanded nodes, including grouped nodes whose group is expanded, move. A selection that includes a collapsed subcircuit block or one of its members is refused with a message that names the subcircuit, including after the subcircuit was collapsed while its members were selected. **Undo Layout** in the same menu reverts the last align or distribute, as long as no other project edit has been made since. There is no keyboard shortcut; snap to grid and auto-arrange are not included.
+
 ### Fixed
 
 - **Node colours show the right hue** — the per-type node colour was packed as ARGB but ImGui reads `IM_COL32` (0xAABBGGRR), so red and blue were swapped on every type (the ADC rendered orange). `themeColor()` now returns the `IM_COL32` layout. The new `themeColor uses the IM_COL32 channel order` test fails on the old packing.
