@@ -3,6 +3,7 @@
 ### Added
 
 - **Align and distribute selected nodes (TRS-79)** — with two or more nodes selected, right-click one of them for **Align** (Left, Right, Top, Bottom, Centre on Vertical Line, Centre on Horizontal Line) or **Distribute** (Horizontally, Vertically). Centre on Vertical Line puts the nodes' centres on one vertical line (same x); Centre on Horizontal Line puts them on one horizontal line (same y). Align uses the selection's bounding box. Distribute keeps the outer two nodes fixed and spaces the others with equal gaps between edges. Expanded nodes, including grouped nodes whose group is expanded, move. A selection that includes a collapsed subcircuit block or one of its members is refused with a message that names the subcircuit, including after the subcircuit was collapsed while its members were selected. **Undo Layout** in the same menu reverts the last align or distribute, as long as no other project edit has been made since. There is no keyboard shortcut; snap to grid and auto-arrange are not included.
+- **Snap nodes to grid (TRS-80)** — **View > Snap to Grid** makes dragged nodes snap to ImNodes' 24 px grid. It is off by default and lasts for the session only. Right-click a selected node for **Snap selection to grid**, which rounds the selected nodes onto the grid whether or not drag snapping is on. A selection that includes a collapsed subcircuit is refused, as with align.
 
 ### Fixed
 

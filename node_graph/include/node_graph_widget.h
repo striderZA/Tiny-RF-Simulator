@@ -92,6 +92,12 @@ class NodeGraphWidget {
     // Number of selection entries a layout would move: selected component nodes plus collapsed
     // blocks, with stale ImNodes entries left out. The Align and Distribute entries need two.
     int layoutSelectionCount() const;
+    // Snaps the selected nodes onto the grid (ImNodes::SnapNodeToGrid), whether or not drag
+    // snapping is on. The refusal rules are those of align. Nodes not yet in the pool are skipped.
+    void snapSelectionToGrid();
+    // Drag snapping to ImNodes' grid (TRS-80). Off by default; kept for the session only.
+    void setGridSnapping(bool enabled) { m_grid_snapping = enabled; }
+    bool gridSnapping() const { return m_grid_snapping; }
     // Bounds of existing component nodes and currently rendered collapsed groups in editor space,
     // excluding IDs added by the current batch. Nodes without a cached position are at the origin.
     std::optional<NodeGraphBounds>
@@ -217,6 +223,8 @@ class NodeGraphWidget {
     // Collapsed subcircuits that had a selected member, as seen at the start of each draw. Names
     // the subcircuit when a collapse has pruned that member from the ImNodes selection.
     std::set<int> m_collapsed_selection_groups;
+    // Drag snapping to the grid, applied to ImNodes' style at the start of each draw.
+    bool m_grid_snapping = false;
 
     // Internal rendering helpers
     void rebuildSynthMaps();

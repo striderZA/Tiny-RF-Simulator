@@ -1517,6 +1517,9 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
+            // Drag snapping only. The node menu's "Snap selection to grid" works either way.
+            if (ImGui::MenuItem("Snap to Grid", nullptr, m_graph_widget->gridSnapping()))
+                m_graph_widget->setGridSnapping(!m_graph_widget->gridSnapping());
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
             ImGui::MenuItem("Test Flow", nullptr, &m_show_test_flow);
