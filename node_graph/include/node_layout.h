@@ -34,8 +34,8 @@ enum class AlignMode {
     Right,
     Top,
     Bottom,
-    CentreHorizontally, // centres share one x
-    CentreVertically,   // centres share one y
+    CentreHorizontally, // centres on one vertical line: shared x
+    CentreVertically,   // centres on one horizontal line: shared y
 };
 
 enum class DistributeAxis { Horizontal, Vertical };

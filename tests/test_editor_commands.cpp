@@ -41,6 +41,12 @@ struct ImGuiFixture {
         ImGui::CreateContext();
         ImPlot::CreateContext();
         ImNodes::CreateContext();
+        // Headless frames need a display size and a built font atlas (no renderer backend here).
+        ImGui::GetIO().DisplaySize = ImVec2(1920, 1080);
+        ImGui::GetIO().IniFilename = nullptr;
+        unsigned char *atlas_pixels = nullptr;
+        int atlas_w = 0, atlas_h = 0;
+        ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&atlas_pixels, &atlas_w, &atlas_h);
     }
     ~ImGuiFixture() {
         ImNodes::DestroyContext();
@@ -489,6 +495,14 @@ void selectNodes(NodeGraphWidget &widget, const std::vector<int> &ids) {
         ImNodes::SelectNode(id);
 }
 
+// Draws one headless frame of the node editor, as the app does on each update.
+void drawFrame(NodeGraphWidget &widget) {
+    ImGui::NewFrame();
+    bool open = true;
+    widget.draw("Node Editor", &open);
+    ImGui::EndFrame();
+}
+
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -514,24 +528,111 @@ TEST_CASE_METHOD(ImGuiFixture,
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
-                 "Node editor refuses align when the selection holds a collapsed subcircuit member",
+                 "Node editor refuses align when a collapsed member is still selected after frames",
                  "[editor_commands][app][layout]") {
     RfSimulatorApp app;
     NodeGraphWidget &widget = app.testGraphWidget();
     const int a = app.testCreateComponent("generator", 9301)->graphNodeId();
     const int b = app.testCreateComponent("amplifier", 9302)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9303)->graphNodeId();
     widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
     widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
-    selectNodes(widget, {a, b});
+    widget.setNodeEditorSpacePosition(c, ImVec2(500.0f, 80.0f));
+    drawFrame(widget);
+    selectNodes(widget, {a, b, c});
+    const int group = app.testCreateGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(app.testSetGroupCollapsed(group, true));
+    // The first frame after the collapse drops the hidden members from ImNodes; later frames
+    // must still name the subcircuit.
+    drawFrame(widget);
+    drawFrame(widget);
+
+    // Only C is a live entry, so the Align entries must not count the two stale ones.
+    REQUIRE(widget.layoutSelectionCount() == 1);
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(widget.layoutMessage().find("\"Front end\"") != std::string::npos);
+    REQUIRE(widget.layoutMessage().find("no longer") == std::string::npos);
+    REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
+    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Node editor refuses align for a collapsed member before any frame is drawn",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9311)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9312)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9313)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(500.0f, 80.0f));
+    selectNodes(widget, {a, b, c});
     const int group = app.testCreateGroup("Front end", {a, b});
     REQUIRE(group != -1);
     REQUIRE(app.testSetGroupCollapsed(group, true));
 
     widget.alignSelection(AlignMode::Top);
-    REQUIRE(widget.layoutMessage().find("Front end") != std::string::npos);
-    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
-    REQUIRE(widget.editorPositionForSave(b).y == 60.0f);
+    REQUIRE(widget.layoutMessage().find("\"Front end\"") != std::string::npos);
+    REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
     REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Node editor refuses align when a collapsed subcircuit block is selected",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9321)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9322)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9323)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(500.0f, 80.0f));
+    const int group = app.testCreateGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(app.testSetGroupCollapsed(group, true));
+    drawFrame(widget); // draws the collapsed block
+    selectNodes(widget, {group, c});
+
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(widget.layoutMessage().find("collapsed subcircuit \"Front end\"") != std::string::npos);
+    REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Expanding a selected subcircuit leaves stale entries that do not refuse layout",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9331)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9332)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9333)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(500.0f, 80.0f));
+    drawFrame(widget);
+    const int group = app.testCreateGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(app.testSetGroupCollapsed(group, true));
+    drawFrame(widget);
+    selectNodes(widget, {group});
+    drawFrame(widget);
+    // Expanding drops the block from ImNodes, leaving a stale entry in the selection.
+    REQUIRE(app.testSetGroupCollapsed(group, false));
+    drawFrame(widget);
+
+    // Select the expanded members without clearing, so the stale block entry stays in ImNodes.
+    ImNodes::EditorContextSet(widget.context());
+    ImNodes::SelectNode(a);
+    ImNodes::SelectNode(b);
+    REQUIRE(widget.layoutSelectionCount() == 2);
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(widget.layoutMessage().empty());
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "New project drops the layout undo record",

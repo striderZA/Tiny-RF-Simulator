@@ -6,6 +6,7 @@
 #include "node_layout.h"
 #include <functional>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -88,6 +89,9 @@ class NodeGraphWidget {
     void alignSelection(AlignMode mode);
     void distributeSelection(DistributeAxis axis);
     const std::string &layoutMessage() const { return m_layout_message; }
+    // Number of selection entries a layout would move: selected component nodes plus collapsed
+    // blocks, with stale ImNodes entries left out. The Align and Distribute entries need two.
+    int layoutSelectionCount() const;
     // Bounds of existing component nodes and currently rendered collapsed groups in editor space,
     // excluding IDs added by the current batch. Nodes without a cached position are at the origin.
     std::optional<NodeGraphBounds>
@@ -210,6 +214,9 @@ class NodeGraphWidget {
     bool m_show_create_popup = false;
     std::string m_layout_message;
     bool m_open_layout_message = false;
+    // Collapsed subcircuits that had a selected member, as seen at the start of each draw. Names
+    // the subcircuit when a collapse has pruned that member from the ImNodes selection.
+    std::set<int> m_collapsed_selection_groups;
 
     // Internal rendering helpers
     void rebuildSynthMaps();
@@ -227,6 +234,10 @@ class NodeGraphWidget {
     void runLayout(
         const std::function<std::vector<LayoutMove>(const std::vector<LayoutItem> &)> &layout);
     void showLayoutMessage(std::string message);
+    std::vector<int> liveSelection(bool *has_stale) const;
+    bool isLiveSelectionEntry(int id) const;
+    void rememberCollapsedSelection();
+    std::string layoutRefusal(const std::vector<int> &live, bool has_stale) const;
     // Measured node size from the last draw, or the safe fallback for a node not yet drawn.
     ImVec2 cachedNodeDimensions(int node_id) const;
 };

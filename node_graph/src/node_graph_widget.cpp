@@ -166,6 +166,7 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Begin(title, p_open)) {
         setupDarkTheme();
         rebuildSynthMaps();
+        rememberCollapsedSelection();
 
         drawGroupBackgrounds();
 
@@ -587,7 +588,7 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
         // Layout acts on the selection, so it needs two or more selected nodes including the
         // node that was clicked.
         const bool can_layout =
-            ImNodes::NumSelectedNodes() >= 2 && ImNodes::IsNodeSelected(m_context_menu_node);
+            layoutSelectionCount() >= 2 && ImNodes::IsNodeSelected(m_context_menu_node);
         if (ImGui::BeginMenu("Align", can_layout)) {
             if (ImGui::MenuItem("Left"))
                 alignSelection(AlignMode::Left);
@@ -598,9 +599,9 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
             if (ImGui::MenuItem("Bottom"))
                 alignSelection(AlignMode::Bottom);
             ImGui::Separator();
-            if (ImGui::MenuItem("Centre Horizontally"))
+            if (ImGui::MenuItem("Centre on Vertical Line (same x)"))
                 alignSelection(AlignMode::CentreHorizontally);
-            if (ImGui::MenuItem("Centre Vertically"))
+            if (ImGui::MenuItem("Centre on Horizontal Line (same y)"))
                 alignSelection(AlignMode::CentreVertically);
             ImGui::EndMenu();
         }
