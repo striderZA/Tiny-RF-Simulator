@@ -119,6 +119,10 @@ class NodeGraphWidget {
     // members use the cached grid position (or the origin) plus the current pan.
     ImVec2 editorPositionForSave(int node_id);
 
+    // Draws the schematic glyph for `kind` (and its label, if any) centred on `center`, inside the
+    // shared 48x32 design box. Public so the geometry tests can measure the drawn vertices.
+    static void drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKind kind, ImU32 color);
+
   private:
     const NodeGraphEngine &m_engine;
     NodeGraphWidgetActions m_actions;
@@ -201,7 +205,6 @@ class NodeGraphWidget {
 
     // Theme & symbol drawing
     void setupDarkTheme();
-    static void drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKind kind, ImU32 color);
 
     // Interaction handlers
     void detectNodeMoves();
