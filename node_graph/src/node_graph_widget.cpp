@@ -8,6 +8,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 
@@ -267,6 +268,40 @@ NodeKind NodeGraphWidget::kindForLabel(const std::string &label) const {
     return best;
 }
 
+namespace {
+
+float textWidth(std::string_view text) {
+    return ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
+}
+
+// Trims `text` with a trailing "..." so it fits `max_width`; unchanged when it already fits.
+// Cuts only at UTF-8 character starts, so a multi-byte character is never split.
+std::string fitTitleToWidth(const std::string &text, float max_width) {
+    if (textWidth(text) <= max_width)
+        return text;
+    constexpr std::string_view ellipsis = "...";
+    std::string candidate;
+    for (size_t keep = text.size(); keep-- > 0;) {
+        if ((static_cast<unsigned char>(text[keep]) & 0xC0) == 0x80)
+            continue; // continuation byte, not a cut point
+        candidate.assign(text, 0, keep);
+        candidate += ellipsis;
+        if (textWidth(candidate) <= max_width)
+            return candidate;
+    }
+    return std::string(ellipsis);
+}
+
+// Label for pin `index`, or `fallback` when the node sets no label for it.
+std::string_view pinLabel(const std::vector<std::string> &labels, size_t index,
+                          std::string_view fallback) {
+    if (index < labels.size() && !labels[index].empty())
+        return labels[index];
+    return fallback;
+}
+
+} // namespace
+
 void NodeGraphWidget::drawNodes() {
     // Clear screen position cache - will be repopulated for nodes drawn this frame.
     // This ensures detectNodeMoves() only checks nodes that were actually drawn,
@@ -328,8 +363,13 @@ void NodeGraphWidget::drawNodes() {
             m_grid_to_screen_offset = screen_pos - grid_pos;
             first_visible = false;
         }
+        // The body is a fixed 96x64 box. The title is clamped to its width, so a long label
+        // cannot widen the node past the body plus node padding.
+        constexpr float BODY_W = 96.0f;
+        constexpr float BODY_H = 64.0f;
         ImNodes::BeginNodeTitleBar();
-        ImGui::TextUnformatted(node.label.c_str());
+        const std::string title = fitTitleToWidth(node.label, BODY_W);
+        ImGui::TextUnformatted(title.c_str());
         ImNodes::EndNodeTitleBar();
 
         // Render part number subtitle
@@ -339,46 +379,55 @@ void NodeGraphWidget::drawNodes() {
 
         // Schematic symbol, centred on the body Dummy below. The cursor is the Dummy's top-left
         // once the title bar and part-number line are placed, so no offsets are assumed.
-        constexpr float BODY_W = 96.0f;
-        constexpr float BODY_H = 64.0f;
         const ImVec2 body_origin = ImGui::GetCursorScreenPos();
+        const float content_left = ImGui::GetCursorPosX();
         const ImVec2 body_center(body_origin.x + BODY_W * 0.5f, body_origin.y + BODY_H * 0.5f);
         ImDrawList *dl = ImGui::GetWindowDrawList();
         drawSchematicSymbol(dl, body_center, kind, color);
         ImGui::Dummy(ImVec2(BODY_W, BODY_H));
 
-        for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
-            ImNodes::BeginInputAttribute(node.input_pin_ids[i]);
-            const char *label = (i < node.input_labels.size() && !node.input_labels[i].empty())
-                                    ? node.input_labels[i].c_str()
-                                    : "IN";
-            ImGui::Text("%s", label);
-            ImNodes::EndInputAttribute();
-        }
-
+        // Pin rows: row r holds input r on the left and output r on the right, so a node is
+        // max(inputs, outputs) rows tall instead of inputs + outputs.
         static const ImU32 probe_colors[4] = {
             IM_COL32(22, 199, 154, 255), // Teal
             IM_COL32(230, 150, 40, 255), // Orange
             IM_COL32(120, 50, 170, 255), // Purple
             IM_COL32(60, 140, 220, 255), // Blue
         };
-
-        for (size_t i = 0; i < node.output_pin_ids.size(); ++i) {
-            int pin = node.output_pin_ids[i];
-            int slot = m_engine.probeSlotForPin(pin);
-            if (slot >= 0) {
-                ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
-                ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
+        const float pin_gap = ImGui::GetStyle().ItemSpacing.x;
+        const size_t input_count = node.input_pin_ids.size();
+        const size_t output_count = node.output_pin_ids.size();
+        for (size_t row = 0; row < std::max(input_count, output_count); ++row) {
+            float input_end_x = content_left;
+            if (row < input_count) {
+                const std::string_view label = pinLabel(node.input_labels, row, "IN");
+                ImNodes::BeginInputAttribute(node.input_pin_ids[row]);
+                ImGui::TextUnformatted(label.data(), label.data() + label.size());
+                ImNodes::EndInputAttribute();
+                input_end_x = content_left + textWidth(label);
             }
-            ImNodes::BeginOutputAttribute(pin);
-            const char *label = (i < node.output_labels.size() && !node.output_labels[i].empty())
-                                    ? node.output_labels[i].c_str()
-                                    : "OUT";
-            ImGui::Text("%s", label);
-            ImNodes::EndOutputAttribute();
-            if (slot >= 0) {
-                ImNodes::PopColorStyle();
-                ImNodes::PopColorStyle();
+            if (row < output_count) {
+                const std::string_view label = pinLabel(node.output_labels, row, "OUT");
+                // Right-align on the body edge, but never over this row's input label.
+                float output_x = content_left + BODY_W - textWidth(label);
+                if (row < input_count) {
+                    ImGui::SameLine();
+                    output_x = std::max(output_x, input_end_x + pin_gap);
+                }
+                ImGui::SetCursorPosX(output_x);
+                const int pin = node.output_pin_ids[row];
+                const int slot = m_engine.probeSlotForPin(pin);
+                if (slot >= 0) {
+                    ImNodes::PushColorStyle(ImNodesCol_Pin, probe_colors[slot]);
+                    ImNodes::PushColorStyle(ImNodesCol_PinHovered, probe_colors[slot]);
+                }
+                ImNodes::BeginOutputAttribute(pin);
+                ImGui::TextUnformatted(label.data(), label.data() + label.size());
+                ImNodes::EndOutputAttribute();
+                if (slot >= 0) {
+                    ImNodes::PopColorStyle();
+                    ImNodes::PopColorStyle();
+                }
             }
         }
 
