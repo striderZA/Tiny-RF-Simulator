@@ -1209,6 +1209,70 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(graph.links().size(), initial_links);
     };
 
+    // Pin rows: outputs sit beside inputs, so a node is max(inputs, outputs) pin rows tall. A
+    // 1-in/1-out Amplifier therefore has the same height as a 0-in/1-out Generator (one row).
+    // The stacked layout gave the Amplifier one extra row.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_one_in_one_out_has_one_pin_row");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        struct ComponentCleanup {
+            RfSimulatorApp &app;
+            std::vector<int> graph_node_ids;
+
+            explicit ComponentCleanup(RfSimulatorApp &app) : app(app) {}
+
+            ~ComponentCleanup() {
+                for (auto node = graph_node_ids.rbegin(); node != graph_node_ids.rend(); ++node)
+                    app.testRemoveComponent(*node);
+            }
+        } cleanup(*s_app);
+
+        IComponentEngine *amp =
+            s_app->testAddComponentAtPosition("amplifier", ImVec2(300.0f, 100.0f));
+        IM_CHECK(amp != nullptr);
+        const int amp_node = amp->graphNodeId();
+        cleanup.graph_node_ids.push_back(amp_node);
+
+        IComponentEngine *gen =
+            s_app->testAddComponentAtPosition("generator", ImVec2(500.0f, 100.0f));
+        IM_CHECK(gen != nullptr);
+        const int gen_node = gen->graphNodeId();
+        cleanup.graph_node_ids.push_back(gen_node);
+        ctx->Yield(4);
+
+        const float amp_h = ImNodes::GetNodeDimensions(amp_node).y;
+        const float gen_h = ImNodes::GetNodeDimensions(gen_node).y;
+        IM_CHECK(amp_h > 0.0f);
+        IM_CHECK(std::abs(amp_h - gen_h) < 1.0f);
+    };
+
+    // A title wider than the 96 px body is clamped, so the node stays at body width plus the
+    // 16 px node padding (112 px). "SPDT Switch (2:1) N" measures about 130-150 px unclamped.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_long_title_clamped_to_body_width");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        struct ComponentCleanup {
+            RfSimulatorApp &app;
+            std::vector<int> graph_node_ids;
+
+            explicit ComponentCleanup(RfSimulatorApp &app) : app(app) {}
+
+            ~ComponentCleanup() {
+                for (auto node = graph_node_ids.rbegin(); node != graph_node_ids.rend(); ++node)
+                    app.testRemoveComponent(*node);
+            }
+        } cleanup(*s_app);
+
+        IComponentEngine *sw =
+            s_app->testAddComponentAtPosition("rf_switch_spdt_2to1", ImVec2(300.0f, 100.0f));
+        IM_CHECK(sw != nullptr);
+        const int sw_node = sw->graphNodeId();
+        cleanup.graph_node_ids.push_back(sw_node);
+        ctx->Yield(4);
+
+        const float node_w = ImNodes::GetNodeDimensions(sw_node).x;
+        IM_CHECK(node_w > 0.0f);
+        IM_CHECK(node_w <= 112.0f + 1.0f);
+    };
+
     t = IM_REGISTER_TEST(e, "rf_simulator", "connection_delete");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         const auto &graph = s_app->testGraphEngine();

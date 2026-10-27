@@ -6,6 +6,10 @@
 - **Node title bars take their type colour** — ImNodes copies the title-bar colour at `BeginNode`, but the widget pushed it after, so every node kept the default grey. The colour is now pushed before `BeginNode` for plain nodes and collapsed group blocks.
 - **Schematic symbols are centred on their node body** — symbols were drawn at hard-coded offsets (about 8 px left and 13 px above the body centre). Plain nodes centre the symbol on their 96×64 body, measured from the layout cursor. A collapsed group block has no fixed body: its symbol is centred on the block and in the free slot above its Expand button, so it no longer sits under Expand or touches the "(no external connections)" text.
 
+### Changed
+
+- **Node pins share rows, and long titles are trimmed (#173)** — a plain node puts input *r* and output *r* on the same row, so a node is `max(inputs, outputs)` pin rows tall instead of `inputs + outputs`. A 1-in/1-out node is one pin row shorter than before and the same height as a 0-in/1-out generator. Titles wider than the 96 px body are trimmed with `...`, so the node stays at body width plus node padding. Collapsed group blocks are unchanged.
+
 ## [0.29.4] - 2026-10-26
 
 ### Fixed
