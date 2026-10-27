@@ -103,8 +103,10 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         ImGui::TextUnformatted(g.name.c_str());
         ImNodes::EndNodeTitleBar();
 
-        // Content origin below the title bar: top-left of the body rect used for the symbol.
+        // Content origin below the title bar. The symbol sits in the free slot between here and
+        // the Expand button: the pin rows, or the fallback spacer when the group has no pins.
         const ImVec2 body_origin = ImGui::GetCursorScreenPos();
+        ImVec2 slot_bottom = body_origin;
 
         // Render boundary pins inside the body. In imnodes, the pin circle is drawn at the
         // left/right edge of the node and the ImGui text content you put between
@@ -114,6 +116,7 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
             // Fallback indicator so the collapsed block doesn't look broken when the
             // group has no cross-boundary links
             ImGui::Dummy(ImVec2(120, 30));
+            slot_bottom = ImGui::GetCursorScreenPos();
             ImGui::Indent(8);
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 180, 200, 180));
             ImGui::TextUnformatted("(no external connections)");
@@ -146,15 +149,8 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
                     ImNodes::PopColorStyle();
                 }
             }
+            slot_bottom = ImGui::GetCursorScreenPos();
         }
-
-        // Schematic symbol in the 120x60 body that starts at the content origin under the title
-        // bar (body_origin), not at a hard-coded title height.
-        constexpr float BODY_W = 120.0f;
-        constexpr float BODY_H = 60.0f;
-        const ImVec2 body_center(body_origin.x + BODY_W * 0.5f, body_origin.y + BODY_H * 0.5f);
-        ImDrawList *dl = ImGui::GetWindowDrawList();
-        drawSchematicSymbol(dl, body_center, NodeKind::GroupCollapsed, group_color);
 
         // Expand button in the body. Placing it in the title bar would conflict with
         // imnodes' title-bar drag handling. Right-click context menu still works as a fallback.
@@ -166,6 +162,14 @@ void NodeGraphWidget::drawGroupCollapsedBlocks() {
         ImNodes::EndNode();
         ImNodes::PopColorStyle(); // NodeOutline
         ImNodes::PopColorStyle(); // TitleBar
+        // Symbol centred on the measured block: horizontally on the node rect, vertically in the
+        // free slot above the Expand button. Drawn after EndNode, when the node rect is known.
+        const ImVec2 node_origin = ImNodes::GetNodeScreenSpacePos(g.id);
+        const ImVec2 node_size = ImNodes::GetNodeDimensions(g.id);
+        const ImVec2 symbol_center(node_origin.x + node_size.x * 0.5f,
+                                   (body_origin.y + slot_bottom.y) * 0.5f);
+        drawSchematicSymbol(ImGui::GetWindowDrawList(), symbol_center, NodeKind::GroupCollapsed,
+                            group_color);
         const ImVec2 group_position = ImNodes::GetNodeEditorSpacePos(g.id);
         const ImVec2 group_dimensions = ImNodes::GetNodeDimensions(g.id);
         m_cached_collapsed_group_bounds[g.id] = {group_position, group_position + group_dimensions};
