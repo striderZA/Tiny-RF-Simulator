@@ -265,7 +265,18 @@ TEST_CASE("themeColor returns a non-zero color for every NodeKind", "[node_graph
     REQUIRE(themeColor(NodeKind::IdealFilter) != 0u);
     REQUIRE(themeColor(NodeKind::CoaxCable) != 0u);
     REQUIRE(themeColor(NodeKind::GroupCollapsed) != 0u);
-    REQUIRE(themeColor(NodeKind::Equalizer) == 0xFF34D399);
+    REQUIRE(themeColor(NodeKind::Equalizer) == 0xFF99D334u); // #34D399 in IM_COL32 order
+}
+
+// ImGui's default IM_COL32 packs 0xAABBGGRR: red in the low byte, blue in bits 16-23.
+// Adc is #60A5FA (blue). On a channel-swapped value the low byte would be 0xFA.
+TEST_CASE("themeColor uses the IM_COL32 channel order", "[node_graph][appearance]") {
+    const uint32_t adc = themeColor(NodeKind::Adc);
+    REQUIRE((adc & 0xFFu) == 0x60u);
+    REQUIRE(((adc >> 8) & 0xFFu) == 0xA5u);
+    REQUIRE(((adc >> 16) & 0xFFu) == 0xFAu);
+    REQUIRE((adc >> 24) == 0xFFu);
+    REQUIRE(adc == 0xFFFAA560u);
 }
 
 TEST_CASE("themeColor returns a distinct color per NodeKind", "[node_graph][appearance]") {

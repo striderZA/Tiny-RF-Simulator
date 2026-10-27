@@ -165,41 +165,46 @@ enum class NodeKind {
     GroupCollapsed
 };
 
-// Per-NodeKind ARGB color. Engine has no imgui include, so the return type
-// is plain uint32_t (same bit layout as IM_COL32: 0xAARRGGBB). The widget
-// casts to ImU32 at the call site.
+// Packs 0xRRGGBB as an opaque colour in ImGui's IM_COL32 layout (0xAABBGGRR, red in the
+// low byte, blue in bits 16-23). The engine has no imgui include, so the layout is spelled
+// out here; the widget casts the result to ImU32 without swapping channels.
+constexpr uint32_t rgbToImU32(uint32_t rgb) {
+    return 0xFF000000u | ((rgb & 0x0000FFu) << 16) | (rgb & 0x00FF00u) | ((rgb >> 16) & 0x0000FFu);
+}
+
+// Per-NodeKind colour, in IM_COL32 layout (see rgbToImU32).
 inline uint32_t themeColor(NodeKind k) {
     switch (k) {
     case NodeKind::Generator:
-        return 0xFF4ADE80; // green
+        return rgbToImU32(0x4ADE80); // green
     case NodeKind::Amplifier:
-        return 0xFFFB923C; // orange
+        return rgbToImU32(0xFB923C); // orange
     case NodeKind::Mixer:
-        return 0xFFC084FC; // purple
+        return rgbToImU32(0xC084FC); // purple
     case NodeKind::Splitter:
-        return 0xFFFACC15; // amber
+        return rgbToImU32(0xFACC15); // amber
     case NodeKind::Adc:
-        return 0xFF60A5FA; // blue
+        return rgbToImU32(0x60A5FA); // blue
     case NodeKind::PFB:
-        return 0xFF22D3EE; // cyan
+        return rgbToImU32(0x22D3EE); // cyan
     case NodeKind::IdealFilter:
-        return 0xFF2DD4BF; // teal
+        return rgbToImU32(0x2DD4BF); // teal
     case NodeKind::CoaxCable:
-        return 0xFF94A3B8; // slate
+        return rgbToImU32(0x94A3B8); // slate
     case NodeKind::Equalizer:
-        return 0xFF34D399; // emerald
+        return rgbToImU32(0x34D399); // emerald
     case NodeKind::Attenuator:
-        return 0xFF64B48C; // muted green
+        return rgbToImU32(0x64B48C); // muted green
     case NodeKind::Combiner:
-        return 0xFFF87171; // red
+        return rgbToImU32(0xF87171); // red
     case NodeKind::RFSwitchSPDT:
-        return 0xFFE879F9; // fuchsia
+        return rgbToImU32(0xE879F9); // fuchsia
     case NodeKind::RFSwitchSPDT2to1:
-        return 0xFFE879F9; // fuchsia (same device family as the 1:2 SPDT)
+        return rgbToImU32(0xE879F9); // fuchsia (same device family as the 1:2 SPDT)
     case NodeKind::GroupCollapsed:
-        return 0xFF818CF8;  // indigo
-    case NodeKind::Unknown: // fallthrough
+        return rgbToImU32(0x818CF8); // indigo
+    case NodeKind::Unknown:          // fallthrough
     default:
-        return 0xFF9CA3AF; // gray
+        return rgbToImU32(0x9CA3AF); // gray
     }
 }
