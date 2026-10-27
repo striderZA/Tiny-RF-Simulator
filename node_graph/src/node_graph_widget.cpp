@@ -612,6 +612,10 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
                 distributeSelection(DistributeAxis::Vertical);
             ImGui::EndMenu();
         }
+        const bool can_snap =
+            layoutSelectionCount() >= 1 && ImNodes::IsNodeSelected(m_context_menu_node);
+        if (ImGui::MenuItem("Snap selection to grid", nullptr, false, can_snap))
+            snapSelectionToGrid();
         ImGui::Separator();
         const bool can_undo = m_actions.canUndoLayout && m_actions.canUndoLayout();
         if (ImGui::MenuItem("Undo Layout", nullptr, false, can_undo)) {
@@ -792,6 +796,12 @@ void NodeGraphWidget::handleProbeClick() {
 }
 
 void NodeGraphWidget::setupDarkTheme() {
+    // ImNodes reads its snap flag while dragging, so the toggle is applied on every draw.
+    ImNodesStyle &style = ImNodes::GetStyle();
+    if (m_grid_snapping)
+        style.Flags |= ImNodesStyleFlags_GridSnapping;
+    else
+        style.Flags &= ~ImNodesStyleFlags_GridSnapping;
     // ponytail: pushes are popped at the end of the same draw() call (balanced
     // before the closing ImGui::End()). Per-node title/border overrides are
     // pushed inside BeginNode/EndNode and explicitly popped in the same block.

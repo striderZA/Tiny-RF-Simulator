@@ -6,7 +6,7 @@ namespace {
 
 struct HelpSection {
     const char *title;
-    const char *bullets[8]; // max 8 bullets per section
+    const char *bullets[10]; // max 10 bullets per section
     int bullet_count;
 };
 
@@ -21,10 +21,13 @@ const HelpSection sections[] = {
          "Delete selected nodes: press Delete key",
          "Align or distribute selected nodes: right-click one of them, then choose Align or "
          "Distribute",
+         "Snap selected nodes to the grid: right-click one of them, then choose Snap selection to "
+         "grid",
+         "Drag snapping to the grid: View > Snap to Grid (off by default)",
          "Right-click canvas: open context menu to add components",
          "New here? Help > Tutorial runs a guided walkthrough of this workflow",
      },
-     8},
+     10},
     {"Adding and Removing Components",
      {
          "Right-click the canvas and choose a component from the context menu",

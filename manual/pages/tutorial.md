@@ -29,4 +29,4 @@ Noise traces show power integrated over the selected RBW. Changing RBW, VBW, or 
 
 ## Navigate the Graph
 
-Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete to remove them. With two or more selected, right-click one of them to align or distribute the selection. That's the whole workflow — click Finish.
+Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete to remove them. With two or more selected, right-click one of them to align or distribute the selection, or to snap it to the grid. Turn on **View > Snap to Grid** to make dragged nodes snap too. That's the whole workflow — click Finish.

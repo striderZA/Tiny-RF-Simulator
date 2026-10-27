@@ -451,6 +451,103 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(1);
     };
 
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_snap_menu");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(800, 600));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        const int left = s_app->testCreateComponent("generator", 9601)->graphNodeId();
+        const int right = s_app->testCreateComponent("amplifier", 9602)->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(left, ImVec2(101.0f, 43.0f));
+        widget.setNodeEditorSpacePosition(right, ImVec2(305.0f, 61.0f));
+        ctx->Yield(2);
+
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(left);
+        ImNodes::SelectNode(right);
+        const auto centreOf = [&](int node_id) {
+            ImNodes::EditorContextSet(widget.context());
+            const ImVec2 origin = ImNodes::GetNodeScreenSpacePos(node_id);
+            const ImVec2 size = ImNodes::GetNodeDimensions(node_id);
+            return ImVec2(origin.x + size.x * 0.5f, origin.y + size.y * 0.5f);
+        };
+
+        ctx->MouseMoveToPos(centreOf(right));
+        ctx->MouseClick(1);
+        ctx->Yield(2);
+        ctx->MenuClick("//$FOCUSED/Snap selection to grid");
+        ctx->Yield(2);
+        IM_CHECK_EQ(widget.editorPositionForSave(left).x, 96.0f);
+        IM_CHECK_EQ(widget.editorPositionForSave(left).y, 48.0f);
+        IM_CHECK_EQ(widget.editorPositionForSave(right).x, 312.0f);
+        IM_CHECK_EQ(widget.editorPositionForSave(right).y, 72.0f);
+
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        s_app->testRemoveComponent(left);
+        s_app->testRemoveComponent(right);
+        ctx->Yield(1);
+    };
+
+    // Drag snapping: a drag lands on the grid only while View > Snap to Grid is on.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_grid_snap_drag");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(800, 600));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        const int node = s_app->testCreateComponent("generator", 9611)->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(node, ImVec2(101.0f, 43.0f));
+        ctx->Yield(2);
+        ImNodes::ClearNodeSelection();
+
+        const auto dragBy = [&](ImVec2 delta) {
+            ImNodes::EditorContextSet(widget.context());
+            const ImVec2 origin = ImNodes::GetNodeScreenSpacePos(node);
+            const ImVec2 size = ImNodes::GetNodeDimensions(node);
+            const ImVec2 from(origin.x + size.x * 0.5f, origin.y + size.y * 0.5f);
+            ctx->MouseMoveToPos(from);
+            ctx->MouseDown(ImGuiMouseButton_Left);
+            ctx->MouseMoveToPos(ImVec2(from.x + delta.x, from.y + delta.y));
+            ctx->MouseUp(ImGuiMouseButton_Left);
+            ctx->Yield(2);
+        };
+        const auto toggleSnapMenu = [&]() {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Snap to Grid");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+
+        IM_CHECK(!widget.gridSnapping());
+        dragBy(ImVec2(37.0f, 19.0f));
+        const ImVec2 free_pos = widget.nodeGridPosition(node);
+        IM_CHECK_EQ(free_pos.x, 138.0f);
+        IM_CHECK_EQ(free_pos.y, 62.0f);
+
+        toggleSnapMenu();
+        IM_CHECK(widget.gridSnapping());
+        dragBy(ImVec2(37.0f, 19.0f));
+        const ImVec2 snapped_pos = widget.nodeGridPosition(node);
+        IM_CHECK_EQ(fmodf(snapped_pos.x, 24.0f), 0.0f);
+        IM_CHECK_EQ(fmodf(snapped_pos.y, 24.0f), 0.0f);
+
+        toggleSnapMenu();
+        IM_CHECK(!widget.gridSnapping());
+
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        s_app->testRemoveComponent(node);
+        ctx->Yield(1);
+    };
+
     t = IM_REGISTER_TEST(e, "rf_simulator", "properties_window_exists");
     t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Properties"); };
 

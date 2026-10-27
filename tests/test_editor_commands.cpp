@@ -650,3 +650,103 @@ TEST_CASE_METHOD(ImGuiFixture, "New project drops the layout undo record",
     app.newProject();
     REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "Grid snapping is off by default and the widget toggle sets it",
+                 "[editor_commands][app][grid]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9501)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(101.0f, 43.0f));
+    const auto snapFlagSet = []() {
+        return (ImNodes::GetStyle().Flags & ImNodesStyleFlags_GridSnapping) != 0;
+    };
+
+    drawFrame(widget);
+    REQUIRE_FALSE(widget.gridSnapping());
+    REQUIRE_FALSE(snapFlagSet());
+
+    widget.setGridSnapping(true);
+    drawFrame(widget);
+    REQUIRE(snapFlagSet());
+
+    widget.setGridSnapping(false);
+    drawFrame(widget);
+    REQUIRE_FALSE(snapFlagSet());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Snap selection to grid rounds each selected node onto the grid",
+                 "[editor_commands][app][grid]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9511)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9512)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9513)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(101.0f, 43.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(305.0f, 61.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(101.0f, 43.0f));
+    ImNodes::EditorContextSet(widget.context());
+    ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+    selectNodes(widget, {a, b});
+    const std::uint64_t revision = app.projectRevision();
+
+    widget.snapSelectionToGrid();
+
+    REQUIRE(widget.layoutMessage().empty());
+    REQUIRE(widget.editorPositionForSave(a).x == 96.0f);
+    REQUIRE(widget.editorPositionForSave(a).y == 48.0f);
+    REQUIRE(widget.editorPositionForSave(b).x == 312.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 72.0f);
+    REQUIRE(widget.editorPositionForSave(c).x == 101.0f);
+    REQUIRE(widget.editorPositionForSave(c).y == 43.0f);
+    REQUIRE(app.projectRevision() != revision);
+    // The command restores the drag-snap bit it borrowed, so the toggle stays off.
+    REQUIRE_FALSE(widget.gridSnapping());
+    REQUIRE((ImNodes::GetStyle().Flags & ImNodesStyleFlags_GridSnapping) == 0);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Snap selection to grid on an already snapped selection changes nothing",
+                 "[editor_commands][app][grid]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9521)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9522)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(96.0f, 48.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(312.0f, 72.0f));
+    widget.setGridSnapping(true);
+    drawFrame(widget);
+    selectNodes(widget, {a, b});
+    const std::uint64_t revision = app.projectRevision();
+
+    widget.snapSelectionToGrid();
+
+    REQUIRE(app.projectRevision() == revision);
+    REQUIRE(widget.editorPositionForSave(a).x == 96.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 72.0f);
+    REQUIRE(widget.gridSnapping());
+    REQUIRE((ImNodes::GetStyle().Flags & ImNodesStyleFlags_GridSnapping) != 0);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Snap selection to grid refuses a selected collapsed subcircuit",
+                 "[editor_commands][app][grid]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9531)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9532)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9533)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(101.0f, 43.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(305.0f, 61.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(101.0f, 43.0f));
+    const int group = app.testCreateGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(app.testSetGroupCollapsed(group, true));
+    drawFrame(widget); // draws the collapsed block
+    selectNodes(widget, {group, c});
+    const std::uint64_t revision = app.projectRevision();
+
+    widget.snapSelectionToGrid();
+
+    REQUIRE(widget.layoutMessage().find("collapsed subcircuit \"Front end\"") != std::string::npos);
+    REQUIRE(widget.editorPositionForSave(c).x == 101.0f);
+    REQUIRE(app.projectRevision() == revision);
+}

@@ -3,9 +3,10 @@
 #include <cstddef>
 #include <utility>
 
-// Align and distribute for the widget's node selection (TRS-79). The geometry is in node_layout.h;
-// this file reads the selection, refuses selections that hide nodes, and hands the moves to the
-// app's command boundary.
+// Align, distribute and snap-to-grid for the widget's node selection (TRS-79, TRS-80). The align
+// geometry is in node_layout.h. This file reads the selection, refuses selections that hide nodes,
+// and hands align moves to the app's command boundary. Snap rounds with ImNodes and reports the
+// change through onNodeMoved, as a drag does.
 //
 // ImNodes keeps a selection entry after its node leaves the pool: a node hidden by a collapse or
 // removed from the graph reads back as an invalid id (INT_MIN), and its slot is reused later. Such
@@ -37,6 +38,37 @@ void NodeGraphWidget::alignSelection(AlignMode mode) {
 void NodeGraphWidget::distributeSelection(DistributeAxis axis) {
     runLayout(
         [axis](const std::vector<LayoutItem> &items) { return distributeNodes(items, axis); });
+}
+
+void NodeGraphWidget::snapSelectionToGrid() {
+    bool has_stale = false;
+    const std::vector<int> live = liveSelection(&has_stale);
+    const std::string refusal = layoutRefusal(live, has_stale);
+    if (!refusal.empty()) {
+        showLayoutMessage(refusal);
+        return;
+    }
+
+    // ImNodes rounds an origin only while GridSnapping is set, and drag snapping may be off. Set
+    // the bit for these calls and restore it afterwards.
+    ImNodesStyle &style = ImNodes::GetStyle();
+    const ImNodesStyleFlags saved_flags = style.Flags;
+    style.Flags |= ImNodesStyleFlags_GridSnapping;
+    bool moved = false;
+    for (int id : live) {
+        // SnapNodeToGrid would create a pool entry at the origin for an unknown node, so only
+        // nodes already placed in the pool are rounded.
+        if (!m_registered_in_pool.count(id))
+            continue;
+        const ImVec2 before = ImNodes::GetNodeGridSpacePos(id);
+        ImNodes::SnapNodeToGrid(id);
+        const ImVec2 after = ImNodes::GetNodeGridSpacePos(id);
+        moved = moved || after.x != before.x || after.y != before.y;
+    }
+    style.Flags = saved_flags;
+
+    if (moved && onNodeMoved)
+        onNodeMoved();
 }
 
 int NodeGraphWidget::layoutSelectionCount() const {
