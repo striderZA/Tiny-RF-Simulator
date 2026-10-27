@@ -9,6 +9,7 @@
 ### Changed
 
 - **Node pins share rows, and long titles are trimmed (#173)** — a plain node puts input *r* and output *r* on the same row, so a node is `max(inputs, outputs)` pin rows tall instead of `inputs + outputs`. A 1-in/1-out node is one pin row shorter than before and the same height as a 0-in/1-out generator. Titles wider than the 96 px body are trimmed with `...`, so the node stays at body width plus node padding. Collapsed group blocks are unchanged.
+- **Schematic symbols share one design box (#173)** — every node glyph is drawn inside one 48×32 box centred on the 96×64 body, with the same 2 px stroke and terminal leads to the box edge. The ATT and M labels share one slot below the box. Equalizer, ADC, and Mixer keep a 20 px minimum size at 1x. The Unknown kind now draws a dashed frame with a vector "?" at half alpha, where it drew nothing before. `drawSchematicSymbol()` keeps its signature; `test_schematic_symbols` checks the box, the size floor, and the Unknown glyph.
 
 ## [0.29.4] - 2026-10-26
 

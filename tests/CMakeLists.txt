@@ -440,6 +440,13 @@ add_standalone_test(test_issue116_collapsed_groups
     SOURCES test_issue116_collapsed_groups.cpp
     LIBS simulator::app simulator::node_graph_widget
 )
+# Standalone: schematic symbol geometry. Every glyph stays in the shared 48x32 design box, small
+# glyphs keep a 20 px size floor, and Unknown draws its own glyph. Kept outside tests.exe for the
+# MinGW-w64 registration ceiling above.
+add_standalone_test(test_schematic_symbols
+    SOURCES test_schematic_symbols.cpp
+    LIBS simulator::node_graph_widget
+)
 # Standalone issue #117 coverage: six independent DSP numeric-correctness
 # regressions. Kept outside tests.exe because of the MinGW-w64 registration
 # ceiling.
