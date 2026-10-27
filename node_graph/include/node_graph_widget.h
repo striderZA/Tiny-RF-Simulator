@@ -3,6 +3,7 @@
 #include "group.h"
 #include "imgui.h"
 #include "node_graph_engine.h"
+#include "node_layout.h"
 #include <functional>
 #include <optional>
 #include <string>
@@ -41,6 +42,11 @@ struct NodeGraphWidgetActions {
     std::function<bool(int, std::string)> renameGroup;
     std::function<bool(int, bool)> setGroupCollapsed;
     std::function<void(int)> selectGroup;
+    // Align and distribute. moveNodes places the listed nodes and returns the refusal reason, or an
+    // empty string when accepted; undoLayout and canUndoLayout cover the last accepted layout.
+    std::function<std::string(const std::vector<LayoutMove> &)> moveNodes;
+    std::function<bool()> undoLayout;
+    std::function<bool()> canUndoLayout;
 };
 
 class NodeGraphWidget {
@@ -76,6 +82,12 @@ class NodeGraphWidget {
     // Makes `node_id` the only selected node, which is what the Properties panel reads. The node
     // must already be in the editor pool, as setNodeEditorSpacePosition() guarantees.
     void selectNode(int node_id);
+    // Aligns or distributes the selected nodes by their editor-space positions and sizes. A
+    // selection that includes a collapsed subcircuit or its members is refused, and the refusal
+    // text is left in layoutMessage() until the user dismisses the message.
+    void alignSelection(AlignMode mode);
+    void distributeSelection(DistributeAxis axis);
+    const std::string &layoutMessage() const { return m_layout_message; }
     // Bounds of existing component nodes and currently rendered collapsed groups in editor space,
     // excluding IDs added by the current batch. Nodes without a cached position are at the origin.
     std::optional<NodeGraphBounds>
@@ -196,6 +208,8 @@ class NodeGraphWidget {
     std::vector<AddableComponent> m_addable_components;
     std::vector<std::pair<std::string, NodeKind>> m_kind_prefixes;
     bool m_show_create_popup = false;
+    std::string m_layout_message;
+    bool m_open_layout_message = false;
 
     // Internal rendering helpers
     void rebuildSynthMaps();
@@ -210,4 +224,9 @@ class NodeGraphWidget {
     void detectNodeMoves();
     void handleRubberBand(bool editor_hovered);
     void handleGroupSelection();
+    void runLayout(
+        const std::function<std::vector<LayoutMove>(const std::vector<LayoutItem> &)> &layout);
+    void showLayoutMessage(std::string message);
+    // Measured node size from the last draw, or the safe fallback for a node not yet drawn.
+    ImVec2 cachedNodeDimensions(int node_id) const;
 };

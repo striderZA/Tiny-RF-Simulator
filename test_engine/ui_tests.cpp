@@ -400,6 +400,57 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->PopupCloseOne();
     };
 
+    // Align and undo from the node right-click menu (TRS-79): two selected nodes, right-click the
+    // lower one, Align > Top moves it onto the upper node's top edge, and Undo Layout puts it back.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "node_align_menu");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(800, 600));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        const int upper = s_app->testCreateComponent("generator", 9501)->graphNodeId();
+        const int lower = s_app->testCreateComponent("amplifier", 9502)->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(upper, ImVec2(120.0f, 300.0f));
+        widget.setNodeEditorSpacePosition(lower, ImVec2(320.0f, 380.0f));
+        ctx->Yield(2);
+
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(upper);
+        ImNodes::SelectNode(lower);
+        // Screen-space centre of a node, read after a frame so ImNodes has its size.
+        const auto centreOf = [&](int node_id) {
+            ImNodes::EditorContextSet(widget.context());
+            const ImVec2 origin = ImNodes::GetNodeScreenSpacePos(node_id);
+            const ImVec2 size = ImNodes::GetNodeDimensions(node_id);
+            return ImVec2(origin.x + size.x * 0.5f, origin.y + size.y * 0.5f);
+        };
+
+        ctx->MouseMoveToPos(centreOf(lower));
+        ctx->MouseClick(1);
+        ctx->Yield(2);
+        ctx->MenuClick("//$FOCUSED/Align/Top");
+        ctx->Yield(2);
+        IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
+        IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 300.0f);
+
+        ctx->MouseMoveToPos(centreOf(lower));
+        ctx->MouseClick(1);
+        ctx->Yield(2);
+        ctx->MenuClick("//$FOCUSED/Undo Layout");
+        ctx->Yield(2);
+        IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
+        IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 380.0f);
+
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        s_app->testRemoveComponent(upper);
+        s_app->testRemoveComponent(lower);
+        ctx->Yield(1);
+    };
+
     t = IM_REGISTER_TEST(e, "rf_simulator", "properties_window_exists");
     t->TestFunc = [](ImGuiTestContext *ctx) { ctx->WindowFocus("Properties"); };
 

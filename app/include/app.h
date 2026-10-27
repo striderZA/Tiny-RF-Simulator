@@ -179,6 +179,7 @@ class RfSimulatorApp {
     int testCreateGroup(std::string name, std::vector<int> member_node_ids);
     bool testRemoveGroup(int group_id);
     bool testSetGroupCollapsed(int group_id, bool collapsed);
+    EditorCommands &testEditorCommands() { return m_editor_commands; }
     const NodeGraphEngine &testGraphEngine() const { return m_circuit_runtime.graph(); }
     const ComponentRegistry &testComponents() const { return m_circuit_runtime.components(); }
     const ComponentLibrary &testComponentLibrary() const { return m_library; }

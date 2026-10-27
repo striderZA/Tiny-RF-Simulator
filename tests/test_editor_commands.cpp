@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -355,4 +356,196 @@ TEST_CASE_METHOD(ImGuiFixture, "Project load and New rebuild PFB views from the 
         REQUIRE_FALSE(app.isDirty());
     }
     std::filesystem::remove(path);
+}
+
+namespace {
+
+// Stands in for the widget's imnodes positions: the command reads and writes through the hooks.
+struct PositionStore {
+    std::map<int, LayoutPoint> positions;
+
+    void attach(EditorCommands &commands) {
+        commands.readNodePosition = [this](int node_id) { return positions[node_id]; };
+        commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
+            positions[node_id] = position;
+        };
+    }
+
+    bool at(int node_id, float x, float y) const {
+        const auto it = positions.find(node_id);
+        return it != positions.end() && it->second.x == x && it->second.y == y;
+    }
+};
+
+} // namespace
+
+TEST_CASE("moveNodes places every listed node as one revision and one-step undo restores them",
+          "[editor_commands][layout]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    store.positions[b] = LayoutPoint{300.0f, 40.0f};
+
+    const std::uint64_t before = f.commands.revision();
+    REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+    REQUIRE(store.at(a, 50.0f, 20.0f));
+    REQUIRE(store.at(b, 50.0f, 40.0f));
+    REQUIRE(f.commands.revision() == before + 1);
+    REQUIRE(f.commands.canUndoLayout());
+
+    REQUIRE(f.commands.undoLayout());
+    REQUIRE(store.at(a, 10.0f, 20.0f));
+    REQUIRE(store.at(b, 300.0f, 40.0f));
+    REQUIRE(f.commands.revision() == before + 2);
+
+    SECTION("undo is one step: a second undo has nothing to restore") {
+        REQUIRE_FALSE(f.commands.canUndoLayout());
+        REQUIRE_FALSE(f.commands.undoLayout());
+        REQUIRE(store.at(a, 10.0f, 20.0f));
+    }
+}
+
+TEST_CASE("moveNodes refuses a node inside a collapsed subcircuit and changes nothing",
+          "[editor_commands][layout]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    const int group = f.commands.createGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(f.commands.setGroupCollapsed(group, true));
+    const std::uint64_t revision = f.commands.revision();
+
+    const std::string error = f.commands.moveNodes({{a, {99.0f, 99.0f}}, {b, {99.0f, 40.0f}}});
+    REQUIRE_FALSE(error.empty());
+    REQUIRE(error.find("Front end") != std::string::npos);
+    REQUIRE(store.at(a, 10.0f, 20.0f));
+    REQUIRE(store.at(b, 300.0f, 40.0f));
+    REQUIRE(f.commands.revision() == revision);
+    REQUIRE_FALSE(f.commands.canUndoLayout());
+}
+
+TEST_CASE("a layout that moves nothing leaves the revision and the undo record alone",
+          "[editor_commands][layout]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+    const std::uint64_t revision = f.commands.revision();
+
+    REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+    REQUIRE(f.commands.revision() == revision);
+    REQUIRE(f.commands.canUndoLayout());
+    REQUIRE(f.commands.undoLayout());
+    REQUIRE(store.at(a, 10.0f, 20.0f));
+}
+
+TEST_CASE("a later project edit makes the layout undo unavailable", "[editor_commands][layout]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+
+    f.commands.createComponent(descriptor("generator").create);
+    REQUIRE_FALSE(f.commands.canUndoLayout());
+    REQUIRE_FALSE(f.commands.undoLayout());
+    REQUIRE(store.at(a, 50.0f, 20.0f));
+}
+
+TEST_CASE("moveNodes refuses a list that names the same node twice", "[editor_commands][layout]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    const std::uint64_t revision = f.commands.revision();
+
+    REQUIRE_FALSE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {a, {60.0f, 20.0f}}}).empty());
+    REQUIRE(store.at(a, 10.0f, 20.0f));
+    REQUIRE(f.commands.revision() == revision);
+}
+
+namespace {
+
+// Selects exactly `ids` in the widget's ImNodes context, as a box or Ctrl-click selection does.
+void selectNodes(NodeGraphWidget &widget, const std::vector<int> &ids) {
+    ImNodes::EditorContextSet(widget.context());
+    ImNodes::ClearNodeSelection();
+    for (int id : ids)
+        ImNodes::SelectNode(id);
+}
+
+} // namespace
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Node editor align moves the selected nodes and one-step undo restores them",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9201)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9202)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    selectNodes(widget, {a, b});
+
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(widget.layoutMessage().empty());
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).x == 300.0f);
+
+    REQUIRE(app.testEditorCommands().undoLayout());
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 60.0f);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Node editor refuses align when the selection holds a collapsed subcircuit member",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9301)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9302)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    selectNodes(widget, {a, b});
+    const int group = app.testCreateGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(app.testSetGroupCollapsed(group, true));
+
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(widget.layoutMessage().find("Front end") != std::string::npos);
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 60.0f);
+    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "New project drops the layout undo record",
+                 "[editor_commands][app][layout]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9401)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9402)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    selectNodes(widget, {a, b});
+    widget.alignSelection(AlignMode::Top);
+    REQUIRE(app.testEditorCommands().canUndoLayout());
+
+    app.newProject();
+    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
 }

@@ -2,6 +2,7 @@
 
 #include "circuit_runtime.h"
 #include "component_params.h"
+#include "node_layout.h"
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -52,6 +53,11 @@ class EditorCommands {
     // Runs after every change to the set of live components.
     std::function<void()> onComponentsChanged;
 
+    // Editor-space node positions for moveNodes() and undoLayout(). The app wires them to the
+    // widget, which owns the imnodes positions; both must be set before a layout command runs.
+    std::function<LayoutPoint(int node_id)> readNodePosition;
+    std::function<void(int node_id, LayoutPoint position)> writeNodePosition;
+
     IComponentEngine *createComponent(const ComponentFactory &factory);
     ComponentAddResult createComponentWithParams(const ComponentFactory &factory,
                                                  const nlohmann::ordered_json &params);
@@ -86,6 +92,18 @@ class EditorCommands {
     // Selection is not project state: it never advances the revision.
     void selectGroup(int group_id);
 
+    // Layout (align and distribute). Places each listed node at its position as one command.
+    // Returns the refusal reason, or an empty string when accepted. A list that changes nothing is
+    // accepted without advancing the revision. Refused, with nothing changed, when a listed node is
+    // unknown or belongs to a collapsed subcircuit.
+    std::string moveNodes(const std::vector<LayoutMove> &moves);
+    // Restores the positions the last accepted moveNodes() replaced. Available only while no other
+    // project edit has been accepted since, so it never overwrites a later edit.
+    bool undoLayout();
+    bool canUndoLayout() const;
+    // Drops the undo record. Called when the project is replaced, since node ids are reused.
+    void clearLayoutUndo() { m_layout_undo.clear(); }
+
     void markModified();
     void markClean();
     bool isDirty() const { return m_revision != m_clean_revision; }
@@ -98,4 +116,8 @@ class EditorCommands {
     GraphEditorActions &m_editor_actions;
     std::uint64_t m_revision = 0;
     std::uint64_t m_clean_revision = 0;
+    // Positions the last accepted layout command replaced, and the revision it was accepted at.
+    // The record is valid only while the revision still matches.
+    std::vector<LayoutMove> m_layout_undo;
+    std::uint64_t m_layout_undo_revision = 0;
 };
