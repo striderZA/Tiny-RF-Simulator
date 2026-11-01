@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- **CPack packages include the Windows MinGW runtime DLLs** — on Windows, CMake installs `libgcc_s_seh-1.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` beside `tiny-rf-simulator.exe`, the same three the release zip copies by hand, and `CPACK_PACKAGE_EXECUTABLES` names `tiny-rf-simulator`. The `rf-sim-mcp` install rule moved into the top-level `CMakeLists.txt` beside the GUI install, with no change to the installed files. CPack output stays a CI artifact: release assets are still packaged by hand, and the CPack archive still differs from them in layout and in the GLFW development files.
+
 ## [0.30.0] - 2026-10-27
 
 ### Added

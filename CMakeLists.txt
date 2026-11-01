@@ -233,7 +233,26 @@ add_subdirectory("test_engine")
 # =============================================================================
 # Install targets
 # =============================================================================
-install(TARGETS tiny-rf-simulator RUNTIME DESTINATION bin)
+install(TARGETS tiny-rf-simulator rf-sim-mcp RUNTIME DESTINATION bin)
+
+# MinGW runtime DLLs that the Windows release zip ships. The release workflow
+# copies the same three from /mingw64/bin; CMake resolves them from the compiler's
+# own directory (the MSYS2 MinGW-w64 bin), so a missing DLL fails configure.
+if(WIN32)
+    get_filename_component(RFSIM_MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(RFSIM_MINGW_RUNTIME_DLLS libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
+    set(RFSIM_MINGW_RUNTIME_DLL_PATHS "")
+    foreach(dll IN LISTS RFSIM_MINGW_RUNTIME_DLLS)
+        string(MAKE_C_IDENTIFIER "${dll}" dll_id)
+        find_file(RFSIM_DLL_${dll_id} NAMES ${dll} PATHS "${RFSIM_MINGW_BIN_DIR}" NO_DEFAULT_PATH)
+        if(NOT RFSIM_DLL_${dll_id})
+            message(FATAL_ERROR "MinGW runtime DLL ${dll} not found in ${RFSIM_MINGW_BIN_DIR}")
+        endif()
+        list(APPEND RFSIM_MINGW_RUNTIME_DLL_PATHS "${RFSIM_DLL_${dll_id}}")
+    endforeach()
+    install(FILES ${RFSIM_MINGW_RUNTIME_DLL_PATHS} DESTINATION bin)
+endif()
+
 # Install component data (JSON library definitions + S-parameter files) and
 # built-in extension payloads next to the executable. The app resolves both
 # scan roots exe-relative (refreshExtensions in app.cpp, scanRoots in
@@ -267,5 +286,8 @@ if(WIN32)
 else()
   set(CPACK_GENERATOR "TGZ")
 endif()
+
+# GUI executable for CPack. TGZ and ZIP do not use it; no shortcut generator is enabled.
+set(CPACK_PACKAGE_EXECUTABLES "tiny-rf-simulator" "Tiny RF Simulator")
 
 include(CPack)
