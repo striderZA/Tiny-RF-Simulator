@@ -57,6 +57,11 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG 92dcf4ce74f2e2554a98fea09be7c705c17daa5a
 )
+# GLFW_INSTALL OFF drops GLFW's install rules, which add only development files
+# (include/GLFW headers, static libglfw3.a, CMake config, pkgconfig). GLFW is
+# built static and linked into the executables, so no runtime file is lost.
+# This gates GLFW's install() calls only; the GLFW build is unchanged.
+set(GLFW_INSTALL OFF)
 FetchContent_MakeAvailable(glfw)
 
 # Fetch Catch2 for unit testing

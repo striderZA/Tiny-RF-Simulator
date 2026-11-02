@@ -2,7 +2,11 @@
 
 ### Changed
 
-- **CPack packages include the Windows MinGW runtime DLLs** — on Windows, CMake installs `libgcc_s_seh-1.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` beside `tiny-rf-simulator.exe`, the same three the release zip copies by hand, and `CPACK_PACKAGE_EXECUTABLES` names `tiny-rf-simulator`. The `rf-sim-mcp` install rule moved into the top-level `CMakeLists.txt` beside the GUI install, with no change to the installed files. CPack output stays a CI artifact: release assets are still packaged by hand, and the CPack archive still differs from them in layout and in the GLFW development files.
+- **CPack packages include the Windows MinGW runtime DLLs** — on Windows, CMake installs `libgcc_s_seh-1.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` beside `tiny-rf-simulator.exe`, the same three the release zip copies by hand, and `CPACK_PACKAGE_EXECUTABLES` names `tiny-rf-simulator`. The `rf-sim-mcp` install rule moved into the top-level `CMakeLists.txt` beside the GUI install, with no change to the installed files. CPack output stays a CI artifact: release assets are still packaged by hand, and the CPack archive still differs from them in layout.
+
+### Fixed
+
+- **CPack packages omit GLFW development files** — the root `CMakeLists.txt` sets `GLFW_INSTALL OFF` before fetching GLFW, so the CPack archive no longer contains `include/GLFW/`, `lib/libglfw3.a`, `lib/cmake/glfw3/` or `lib/pkgconfig/`. GLFW is linked statically, so the runtime files are unchanged.
 
 ## [0.30.0] - 2026-10-27
 
