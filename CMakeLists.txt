@@ -57,6 +57,11 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG 92dcf4ce74f2e2554a98fea09be7c705c17daa5a
 )
+# GLFW_INSTALL OFF drops GLFW's install rules, which add only development files
+# (include/GLFW headers, static libglfw3.a, CMake config, pkgconfig). GLFW is
+# built static and linked into the executables, so no runtime file is lost.
+# This gates GLFW's install() calls only; the GLFW build is unchanged.
+set(GLFW_INSTALL OFF)
 FetchContent_MakeAvailable(glfw)
 
 # Fetch Catch2 for unit testing
@@ -236,10 +241,22 @@ add_subdirectory("test_engine")
 install(TARGETS tiny-rf-simulator rf-sim-mcp RUNTIME DESTINATION bin)
 
 # MinGW runtime DLLs that the Windows release zip ships. The release workflow
-# copies the same three from /mingw64/bin; CMake resolves them from the compiler's
-# own directory (the MSYS2 MinGW-w64 bin), so a missing DLL fails configure.
+# copies the same three from /mingw64/bin, the MINGW64 prefix of its MSYS2 shell.
+# Resolve that same bin directory here: MSYSTEM_PREFIX is /mingw64 in a MINGW64
+# shell, and cygpath turns it into the Windows path find_file needs. A missing
+# DLL fails configure.
 if(WIN32)
-    get_filename_component(RFSIM_MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    if(NOT DEFINED ENV{MSYSTEM_PREFIX})
+        message(FATAL_ERROR "MSYSTEM_PREFIX is not set: configure Windows builds from an MSYS2 MINGW64 shell")
+    endif()
+    find_program(RFSIM_CYGPATH cygpath REQUIRED)
+    execute_process(COMMAND "${RFSIM_CYGPATH}" -m "$ENV{MSYSTEM_PREFIX}/bin"
+        OUTPUT_VARIABLE RFSIM_MINGW_BIN_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE RFSIM_CYGPATH_RESULT)
+    if(NOT RFSIM_CYGPATH_RESULT EQUAL 0)
+        message(FATAL_ERROR "cygpath could not convert $ENV{MSYSTEM_PREFIX}/bin")
+    endif()
     set(RFSIM_MINGW_RUNTIME_DLLS libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
     set(RFSIM_MINGW_RUNTIME_DLL_PATHS "")
     foreach(dll IN LISTS RFSIM_MINGW_RUNTIME_DLLS)
@@ -266,7 +283,8 @@ install(DIRECTORY extensions DESTINATION bin)
 install(FILES README.md LICENSE DESTINATION share/doc/rf-simulator)
 install(DIRECTORY openwiki/ DESTINATION share/doc/rf-simulator/openwiki
   PATTERN ".git" EXCLUDE
-  PATTERN ".last-update.json" EXCLUDE)
+  PATTERN ".last-update.json" EXCLUDE
+  PATTERN ".claims" EXCLUDE)
 
 # =============================================================================
 # CPack configuration
