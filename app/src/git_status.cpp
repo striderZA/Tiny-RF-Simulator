@@ -541,6 +541,19 @@ std::optional<GitStatus> parseGitStatus(std::string_view output) {
     return status;
 }
 
+// Git only reports "not a git repository" in a plain folder, so it is not started
+// unless the directory or an ancestor holds a .git entry (a directory, or a file
+// for worktrees and submodules).
+static bool isInsideGitWorkTree(const std::filesystem::path &directory) {
+    std::error_code error;
+    for (auto current = directory;; current = current.parent_path()) {
+        if (std::filesystem::exists(current / ".git", error))
+            return true;
+        if (current == current.parent_path())
+            return false;
+    }
+}
+
 std::optional<GitStatus> queryGitStatus(const std::filesystem::path &working_directory) {
     if (working_directory.empty())
         return std::nullopt;
@@ -548,6 +561,9 @@ std::optional<GitStatus> queryGitStatus(const std::filesystem::path &working_dir
     const std::filesystem::path absolute_directory =
         std::filesystem::absolute(working_directory, error).lexically_normal();
     if (error || !std::filesystem::is_directory(absolute_directory, error) || error)
+        return std::nullopt;
+    // Plain folders: skip the git process, which would only report "not a git repository".
+    if (!isInsideGitWorkTree(absolute_directory))
         return std::nullopt;
 
     const auto output = runGitStatus(absolute_directory);
