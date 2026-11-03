@@ -344,6 +344,20 @@ TEST_CASE("Git status query is unavailable outside a repository or without Git o
     CHECK(monitor.label() == "Git unavailable");
 }
 
+TEST_CASE("Git status query finds the repository from a subdirectory", "[git_status][query]") {
+    ScopedEnvironmentVariable git_dir("GIT_DIR", std::nullopt);
+    ScopedEnvironmentVariable git_work_tree("GIT_WORK_TREE", std::nullopt);
+    TempTree tree;
+    const fs::path repository = tree.root / "repository";
+    const fs::path subdirectory = repository / "project" / "nested";
+    initializeRepository(repository, "subdir-project");
+    fs::create_directories(subdirectory);
+
+    const auto status = queryGitStatus(subdirectory);
+    REQUIRE(status.has_value());
+    CHECK(status->branch == "subdir-project");
+}
+
 TEST_CASE("Git status query stops when Git exceeds its process deadline", "[git_status][timeout]") {
     TempTree tree;
     const fs::path repository = tree.root / "repository";
@@ -457,6 +471,9 @@ TEST_CASE("Git status monitor rejects stale results after a rapid A-B-A project 
     fs::create_directories(other);
     writeFile(active / "git_status_branch.txt", "old-project\n");
     writeFile(other / "git_status_branch.txt", "other-project\n");
+    // The status query starts git only for a directory that holds a .git entry.
+    fs::create_directories(active / ".git");
+    fs::create_directories(other / ".git");
 
     const fs::path fake_bin = tree.root / "delayed-git";
     fs::create_directories(fake_bin);
