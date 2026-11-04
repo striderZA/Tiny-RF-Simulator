@@ -111,6 +111,13 @@ add_standalone_test(test_node_layout
     LIBS simulator::node_graph_engine
 )
 
+# Direct coverage of the single physical-link rule shared by the canvas, project-load
+# restoration, and the test-flow runner. Standalone for the MinGW registration ceiling.
+add_standalone_test(test_graph_link_policy
+    SOURCES test_graph_link_policy.cpp
+    LIBS common
+)
+
 # Legacy sparam_path fallback for the amplifier, equalizer, and ideal filter.
 # Standalone for the MinGW-w64 registration ceiling (see tests/AGENTS.md).
 add_standalone_test(test_sparam_legacy_key
