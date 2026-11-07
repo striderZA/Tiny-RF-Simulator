@@ -159,8 +159,8 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
             continue;
         }
         // A budget stage is a single-input, single-output two-port: the probe drives
-        // inputs[0] and reads outputs[0]. A source (zero inputs) or a combiner/mixer
-        // (multiple inputs) must not reach that code.
+        // inputs[0] and reads outputs[0]. A source (zero inputs) or a combiner (two inputs)
+        // must not reach that code.
         if (engine->node().inputs.size() != 1 || engine->node().outputs.empty()) {
             evaluations.push_back(unresolvedEvaluation(
                 points, "'" + stage.part_number + "' (" + stage.type +
