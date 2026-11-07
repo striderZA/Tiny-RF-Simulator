@@ -599,6 +599,12 @@ add_standalone_test(test_receiver_performance_measurements
     ARGS --skip-benchmarks
 )
 
+# Standalone, UI-free budget cascade math and project JSON coverage.
+add_standalone_test(test_budget_calculator
+    SOURCES test_budget_calculator.cpp
+    LIBS simulator::editor_services
+)
+
 # Standalone issue #182 coverage: utils::inputDouble()/inputFrequency() show and
 # keep a value outside their limits, log it once, and clamp only user edits
 # (never against the edit's direction); includes the inspector amplifier-gain

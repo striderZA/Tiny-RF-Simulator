@@ -29,6 +29,7 @@ add_library(editor_services STATIC
     src/graph_editor_actions.cpp
     src/component_type_registry.cpp
     src/component_library.cpp
+    src/budget_calculator.cpp
     src/receiver_requirements.cpp
     src/receiver_performance_measurement.cpp
     src/output_snr.cpp
