@@ -2724,6 +2724,22 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "rf_simulator", "budget_panel_opens_and_closes");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Budget");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Budget");
+        IM_CHECK(panel != nullptr && panel->Active);
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Budget");
+        ctx->SetRef("");
+        for (int frame = 0; frame < 8 && s_app->m_show_budget; ++frame)
+            ctx->Yield();
+        IM_CHECK(!s_app->m_show_budget);
+    };
+
     // Agent panel control callbacks are replaced here, so the tests exercise
     // the UI without enabling the production listener or persisting a setting.
     t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_server_toggle_callback");

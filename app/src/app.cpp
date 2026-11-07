@@ -176,6 +176,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_circuit_runtime.graph());
     m_receiver_requirements_widget = std::make_unique<ReceiverRequirementsWidget>();
     m_receiver_requirements_widget->onChange = [this]() { markDirty(); };
+    m_budget_widget = std::make_unique<BudgetWidget>();
+    m_budget_widget->onChange = [this]() { markDirty(); };
     m_power_meter_widget =
         std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_circuit_runtime.graph());
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
@@ -365,6 +367,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
     m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
+    m_show_budget = m_state.loadBool("WindowState", "Budget", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
     m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
     m_show_agent = m_state.loadBool("WindowState", "Agent", false);
@@ -1514,6 +1517,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
             ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
+            ImGui::MenuItem("Budget", nullptr, &m_show_budget);
             ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
@@ -1861,11 +1865,15 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
-    if (m_show_na || m_show_receiver_requirements)
+    if (m_show_na || m_show_receiver_requirements || m_show_budget)
         m_na_engine.update();
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
-    if (m_show_receiver_requirements) {
+
+    // The Requirements and Budget panels read the same sweep and receiver
+    // measurement, so evaluate them once whenever either panel is visible.
+    ReceiverRequirementsEvaluation simulation_result;
+    if (m_show_receiver_requirements || m_show_budget) {
         ReceiverRequirementsConfig measurement_config;
         if (m_receiver_requirements.config && m_receiver_requirements.invalid_reason.empty())
             measurement_config = *m_receiver_requirements.config;
@@ -1878,7 +1886,13 @@ void RfSimulatorApp::draw_ui() {
         m_receiver_performance_engine.update(measurement_config, m_na_engine.pointAPin(),
                                              m_na_engine.pointBPin(),
                                              m_na_engine.sweepFrequencies());
-
+        const auto &measurements = m_receiver_performance_engine.measurements();
+        simulation_result = evaluateReceiverRequirements(
+            m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
+            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
+            measurements.output_power_dBm, measurements.iip3_dBm);
+    }
+    if (m_show_receiver_requirements) {
         std::vector<ReceiverGeneratorToneOption> source_tones;
         const int source_node_id = m_circuit_runtime.graph().nodeIdForPin(m_na_engine.pointAPin());
         if (IComponentEngine *source = m_circuit_runtime.components().find(source_node_id);
@@ -1888,13 +1902,17 @@ void RfSimulatorApp::draw_ui() {
             for (const auto &tone : generator->tones())
                 source_tones.push_back({tone.freq_Hz, tone.power_dBm});
         }
-        const auto &measurements = m_receiver_performance_engine.measurements();
-        const auto result = evaluateReceiverRequirements(
-            m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
-            m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
-            measurements.output_power_dBm, measurements.iip3_dBm);
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
-                                             m_receiver_requirements, result, source_tones);
+                                             m_receiver_requirements, simulation_result,
+                                             source_tones);
+    }
+    if (m_show_budget && m_budget_widget) {
+        m_budget_widget->draw(
+            "Budget", &m_show_budget, m_budget, m_library, m_na_engine.sweepFrequencies(),
+            m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
+            m_receiver_performance_engine.measurements().output_power_dBm,
+            m_receiver_performance_engine.measurements().iip3_dBm, m_receiver_requirements,
+            simulation_result, m_na_engine.stimulusPower());
     }
 
     if (m_show_power_meter)
@@ -1968,6 +1986,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
     m_state.saveBool("WindowState", "PowerMeter", m_show_power_meter);
     m_state.saveBool("WindowState", "ReceiverRequirements", m_show_receiver_requirements);
+    m_state.saveBool("WindowState", "Budget", m_show_budget);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_circuit_runtime.components(), m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);

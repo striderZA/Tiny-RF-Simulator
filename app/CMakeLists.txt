@@ -83,6 +83,7 @@ add_library(app STATIC
     src/project_serializer.cpp
     src/test_flow_widget.cpp
     src/receiver_requirements_widget.cpp
+    src/budget_widget.cpp
 )
 add_library(simulator::app ALIAS app)
 

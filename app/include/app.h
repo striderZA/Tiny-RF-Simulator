@@ -4,6 +4,7 @@
 #include "amplifier_engine.h"
 #include "attenuator_engine.h"
 #include "budget_calculator.h"
+#include "budget_widget.h"
 #include "component_form_model.h"
 #include "component_form_widget.h"
 
@@ -80,6 +81,7 @@ class RfSimulatorApp {
     bool m_show_spectrum = true;
     bool m_show_na = false;
     bool m_show_receiver_requirements = false;
+    bool m_show_budget = false;
     bool m_show_power_meter = false;
     // Test Flow panel visibility; persisted through SessionState
     // (WindowState/TestFlow) exactly like the other panel toggles.
@@ -196,6 +198,7 @@ class RfSimulatorApp {
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
     BudgetConfig &testBudgetConfig() { return m_budget; }
+    BudgetWidget &testBudgetWidget() { return *m_budget_widget; }
     std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
     PFBViewManager &testPfbViews() { return m_pfb_views; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
@@ -284,6 +287,7 @@ class RfSimulatorApp {
     std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
     std::unique_ptr<PowerMeterWidget> m_power_meter_widget;
     std::unique_ptr<ReceiverRequirementsWidget> m_receiver_requirements_widget;
+    std::unique_ptr<BudgetWidget> m_budget_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
