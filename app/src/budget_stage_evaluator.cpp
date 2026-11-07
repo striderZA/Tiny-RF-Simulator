@@ -158,12 +158,14 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
                 points, "cannot instantiate '" + stage.part_number + "' (" + stage.type + ")"));
             continue;
         }
-        // A budget stage is a two-port: the probe writes inputs[0] and reads outputs[0]. A
-        // future zero-input definition (for example a source type) must not reach that code.
-        if (engine->node().inputs.size() < 1 || engine->node().outputs.empty()) {
-            evaluations.push_back(
-                unresolvedEvaluation(points, "'" + stage.part_number + "' (" + stage.type +
-                                                 ") is not a two-port and cannot be evaluated"));
+        // A budget stage is a single-input, single-output two-port: the probe drives
+        // inputs[0] and reads outputs[0]. A source (zero inputs) or a combiner/mixer
+        // (multiple inputs) must not reach that code.
+        if (engine->node().inputs.size() != 1 || engine->node().outputs.empty()) {
+            evaluations.push_back(unresolvedEvaluation(
+                points, "'" + stage.part_number + "' (" + stage.type +
+                            ") is not a single-input, single-output two-port and cannot be "
+                            "evaluated"));
             continue;
         }
 

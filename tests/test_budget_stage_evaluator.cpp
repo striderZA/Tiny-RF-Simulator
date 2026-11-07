@@ -199,7 +199,26 @@ TEST_CASE("Evaluator leaves a non-two-port stage unresolved", "[budget][evaluato
     auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
     REQUIRE(out.size() == 1);
     REQUIRE_FALSE(out[0].resolved);
-    REQUIRE_FALSE(out[0].diagnostic.empty());
+    REQUIRE(out[0].diagnostic.find("two-port") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
+TEST_CASE("Evaluator leaves a multi-input stage unresolved", "[budget][evaluator]") {
+    ComponentLibrary library;
+    library.scan(libraryRoot());
+    // `combiner` is a real registry type with two input pins. The project loader excludes it,
+    // but a programmatic config must not leave inputs[1] unset for the probe loop.
+    BudgetConfig config;
+    BudgetStage stage;
+    stage.type = "combiner";
+    stage.part_number = "COMB1";
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("two-port") != std::string::npos);
     REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
 }
 
