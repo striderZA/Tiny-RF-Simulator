@@ -81,6 +81,18 @@ void AmplifierEngine::loadAmpFile(const std::string &path) {
     }
 }
 
+// The amplitude gain the stage applies at each frequency: |S21| in S-parameter mode, the
+// scalar voltage gain otherwise.
+NonlinearModel::GainFn AmplifierEngine::gainFunction() const {
+    if (m_sparam_mode && m_sparam_data.loaded()) {
+        return [this](double freq_Hz) {
+            return std::abs(m_sparam_data.interpolate(freq_Hz, m_sparam_fwd_idx));
+        };
+    }
+    const double gain_amp = std::sqrt(dbToLinear(m_gain_dB));
+    return [gain_amp](double) { return gain_amp; };
+}
+
 // Third-order intercept at each frequency. An OIP3 section is used as given, and it wins
 // when the file also has an IIP3 section. An IIP3 section alone gives OIP3 = IIP3 plus the
 // small-signal gain at the same frequency.
@@ -101,6 +113,32 @@ AmplifierEngine::intercept3Function(const NonlinearModel::GainFn &gain) const {
         };
     }
     return {};
+}
+
+double AmplifierEngine::oip3At_Hz(double freq_Hz) const {
+    const auto fn = intercept3Function(gainFunction());
+    return fn ? fn(freq_Hz) : m_nonlinear.oip3_dBm();
+}
+
+double AmplifierEngine::p1dbAt_Hz(double freq_Hz) const {
+    const auto gain = gainFunction();
+    if (ampfBlockSelected()) {
+        const AmpfBlock *block = activeAmpfBlock();
+        const int op1db = m_ampf->columnIndex("OP1dB_dBm");
+        if (op1db >= 0) {
+            const double value = block->valueAt(static_cast<size_t>(op1db), freq_Hz);
+            if (std::isfinite(value))
+                return clampFinite(value);
+        }
+        const int ip1db = m_ampf->columnIndex("IP1dB_dBm");
+        if (ip1db >= 0) {
+            const double value =
+                block->valueAt(static_cast<size_t>(ip1db), freq_Hz) + gainDb(gain, freq_Hz);
+            if (std::isfinite(value))
+                return clampFinite(value);
+        }
+    }
+    return m_nonlinear.p1db_dBm();
 }
 
 void AmplifierEngine::setAmpfFilepath(const std::string &path) {
@@ -259,10 +297,7 @@ void AmplifierEngine::update(double dt) {
         // Nonlinear processing
         if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
             size_t n_fund = out.tones.size();
-            const NonlinearModel::GainFn gain = [this](double freq) {
-                auto S = this->m_sparam_data.interpolate(freq, this->m_sparam_fwd_idx);
-                return std::abs(S);
-            };
+            const auto gain = gainFunction();
             auto result = m_nonlinear.process(in_ptr->tones, gain, intercept3Function(gain),
                                               intercept2Function(gain));
             for (const auto &t : result.extra_tones)
@@ -331,8 +366,7 @@ void AmplifierEngine::update(double dt) {
     // Nonlinear processing
     if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
         size_t n_fund = out.tones.size();
-        double gain_amp = std::sqrt(dbToLinear(m_gain_dB));
-        const NonlinearModel::GainFn gain = [gain_amp](double) { return gain_amp; };
+        const auto gain = gainFunction();
         auto result = m_nonlinear.process(in_ptr->tones, gain, intercept3Function(gain),
                                           intercept2Function(gain));
 

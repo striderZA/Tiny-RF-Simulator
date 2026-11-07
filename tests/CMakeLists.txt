@@ -168,6 +168,13 @@ add_standalone_test(test_amplifier_amp_file
     LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
+# Per-frequency OIP3 and P1dB queries used by the budget calculator. Standalone for the
+# MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_budget_queries
+    SOURCES test_amplifier_budget_queries.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine

@@ -40,6 +40,14 @@ class AmplifierEngine : public ComponentEngineBase {
     double oip3_dBm() const { return m_nonlinear.oip3_dBm(); }
     double p1db_dBm() const { return m_nonlinear.p1db_dBm(); }
 
+    // Per-frequency intercepts for stage budgeting. oip3At_Hz() follows the same precedence
+    // update() uses: amp-f, then the AMP file, then the scalar. p1dbAt_Hz() reads the amp-f
+    // OP1dB column, then IP1dB plus the gain, then the scalar. Both use the gain update()
+    // applies at that frequency: |S21| in S-parameter mode, the scalar voltage gain
+    // otherwise.
+    double oip3At_Hz(double freq_Hz) const;
+    double p1dbAt_Hz(double freq_Hz) const;
+
     void setEnableNonlinear(bool en) {
         if (en != m_nonlinear.enabled()) {
             m_nonlinear.setEnabled(en);
@@ -130,6 +138,7 @@ class AmplifierEngine : public ComponentEngineBase {
     const AmpfBlock *activeAmpfBlock() const {
         return ampfBlockSelected() ? &m_ampf->blocks[static_cast<size_t>(m_ampf_block)] : nullptr;
     }
+    NonlinearModel::GainFn gainFunction() const;
     NonlinearModel::Oip3Fn intercept3Function(const NonlinearModel::GainFn &gain) const;
     NonlinearModel::Oip3Fn ampfOip3Function(const NonlinearModel::GainFn &gain) const;
     NonlinearModel::Oip2Fn intercept2Function(const NonlinearModel::GainFn &gain) const;
