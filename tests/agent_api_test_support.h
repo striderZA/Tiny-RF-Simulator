@@ -107,6 +107,8 @@ class FakeAgentHost final : public IAgentHost {
         return found == node_positions.end() ? std::array<float, 2>{0.0f, 0.0f} : found->second;
     }
     bool setNodeEditorSpacePosition(int graph_node_id, std::array<float, 2> position) override {
+        if (throw_on_position_write)
+            throw std::runtime_error("position write failed");
         if (nodeEditorSpacePosition(graph_node_id) == position)
             return false;
         node_positions[graph_node_id] = position;
@@ -136,6 +138,7 @@ class FakeAgentHost final : public IAgentHost {
     bool modal_open = false;
     int activity_attempts = 0;
     bool throw_on_activity = false;
+    bool throw_on_position_write = false;
     std::optional<std::string> name;
     std::optional<std::string> open_path;
     bool save_succeeds = true;
