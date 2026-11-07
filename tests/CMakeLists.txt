@@ -619,6 +619,14 @@ add_standalone_test(test_budget_stage_evaluator
     LIBS simulator::editor_services
 )
 
+# App-bound budget project serialization: save/newProject/load round trip, malformed-stage
+# isolation, and reset. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_budget_project
+    SOURCES test_budget_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_budget_project PROPERTIES RUN_SERIAL TRUE)
+
 # Standalone issue #182 coverage: utils::inputDouble()/inputFrequency() show and
 # keep a value outside their limits, log it once, and clamp only user edits
 # (never against the edit's direction); includes the inspector amplifier-gain

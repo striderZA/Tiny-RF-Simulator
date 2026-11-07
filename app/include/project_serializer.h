@@ -1,5 +1,6 @@
 #pragma once
 
+#include "budget_calculator.h"
 #include "receiver_requirements.h"
 #include <array>
 #include <filesystem>
@@ -29,9 +30,9 @@ class ProjectSerializer {
   public:
     ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                       NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                      ReceiverRequirementsState &receiver_requirements, bool &show_log,
-                      bool &show_spectrum, bool &show_properties, bool &show_node_editor,
-                      NetworkAnalyzerEngine &na_engine);
+                      ReceiverRequirementsState &receiver_requirements, BudgetConfig &budget,
+                      bool &show_log, bool &show_spectrum, bool &show_properties,
+                      bool &show_node_editor, NetworkAnalyzerEngine &na_engine);
 
     // Build or restore project state without file I/O. Without sparam_root,
     // paths remain verbatim; window_state controls UI-flag writing/restoration.
@@ -78,6 +79,7 @@ class ProjectSerializer {
     NodeGraphWidget &m_graph_widget;
     PFBViewManager &m_pfb_views;
     ReceiverRequirementsState &m_receiver_requirements;
+    BudgetConfig &m_budget;
     bool &m_show_log;
     bool &m_show_spectrum;
     bool &m_show_properties;

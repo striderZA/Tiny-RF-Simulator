@@ -1028,11 +1028,12 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
 ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
                                      ReceiverRequirementsState &receiver_requirements,
-                                     bool &show_log, bool &show_spectrum, bool &show_properties,
-                                     bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
+                                     BudgetConfig &budget, bool &show_log, bool &show_spectrum,
+                                     bool &show_properties, bool &show_node_editor,
+                                     NetworkAnalyzerEngine &na_engine)
     : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_show_log(show_log),
-      m_show_spectrum(show_spectrum), m_show_properties(show_properties),
+      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_budget(budget),
+      m_show_log(show_log), m_show_spectrum(show_spectrum), m_show_properties(show_properties),
       m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
 
 const ComponentRegistry &ProjectSerializer::components() const { return m_runtime.components(); }
@@ -1191,6 +1192,11 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
         root["receiver_requirements"] = {{"invalid_configuration", true},
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
+
+    // An empty cascade is the untouched default, so it is omitted rather than
+    // written as an empty object every project would then carry.
+    if (!m_budget.stages.empty())
+        root["budget_calculator"] = budgetToJson(m_budget);
 
     // Synchronize engine nodes before saving, including nodes added without a render frame.
     // editorPositionForSave() gates live reads to registered visible nodes; unregistered nodes
@@ -1500,6 +1506,13 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
             if (!m_receiver_requirements.invalid_reason.empty())
                 LOG_WARN("Invalid receiver requirements in project file %s: %s", path.c_str(),
                          m_receiver_requirements.invalid_reason.c_str());
+        }
+        if (root.contains("budget_calculator")) {
+            std::string diagnostic;
+            m_budget = budgetFromJson(root["budget_calculator"], diagnostic);
+            if (!diagnostic.empty())
+                LOG_WARN("Invalid budget calculator data in project file %s: %s",
+                         source_label.c_str(), diagnostic.c_str());
         }
 
         // Map: type string \u2192 factory lambda
@@ -1866,6 +1879,7 @@ void ProjectSerializer::reset() {
     m_runtime.clearComponentsAndResetIds();
     m_editor_actions.resetForProjectReplacement();
     m_receiver_requirements = {};
+    m_budget = {};
 
     // Clear the Network Analyzer's probe points too — otherwise a stale pin
     // id survives into the next project and can alias a newly allocated pin.
