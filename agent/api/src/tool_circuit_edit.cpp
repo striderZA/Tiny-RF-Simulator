@@ -194,6 +194,36 @@ struct EditSummary {
     }
 };
 
+// Closes the checkpoint when an operation throws something other than AgentArgumentError,
+// which finish() never sees. It commits rather than discards: edits applied before the throw
+// stay revertable, and no open snapshot outlives the call.
+class OpenCheckpointGuard {
+  public:
+    OpenCheckpointGuard(IAgentHost &host, const EditSummary &summary) noexcept
+        : m_host(host), m_summary(summary) {}
+    OpenCheckpointGuard(const OpenCheckpointGuard &) = delete;
+    OpenCheckpointGuard &operator=(const OpenCheckpointGuard &) = delete;
+    ~OpenCheckpointGuard() {
+        if (!m_open)
+            return;
+        try {
+            const std::string text = m_summary.text();
+            m_host.commitCheckpoint(text.empty() ? "interrupted" : "interrupted: " + text);
+        } catch (const std::exception &error) {
+            LOG_ERROR("circuit_edit could not close its checkpoint: %s", error.what());
+        } catch (...) {
+            LOG_ERROR("circuit_edit could not close its checkpoint: unknown exception");
+        }
+    }
+    // finish() closes the checkpoint itself; the destructor must not commit a second time.
+    void close() noexcept { m_open = false; }
+
+  private:
+    IAgentHost &m_host;
+    const EditSummary &m_summary;
+    bool m_open = true;
+};
+
 AgentToolResult errorWithPrefix(AgentError error, std::uint64_t epoch, const Json &applied) {
     AgentToolResult result = agentErrorResult(error, epoch);
     result.structured["applied"] = applied;
@@ -457,15 +487,17 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
         return agentErrorResult(error, epoch);
     }
 
-    context.host.beginCheckpoint(call);
     Json applied = Json::array();
     std::unordered_map<std::string, int> refs_by_name;
     std::vector<RefEntry> refs;
     std::vector<int> added_node_ids;
     std::vector<std::optional<std::array<float, 2>>> positions;
     EditSummary summary;
+    context.host.beginCheckpoint(call);
+    OpenCheckpointGuard open_checkpoint(context.host, summary);
 
     const auto finish = [&](bool preserve_empty_checkpoint = false) {
+        open_checkpoint.close();
         // No-op results do not create empty checkpoints or evict real history.
         const bool state_changed =
             std::any_of(applied.begin(), applied.end(),

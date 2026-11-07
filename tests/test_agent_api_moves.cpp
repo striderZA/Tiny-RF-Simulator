@@ -239,3 +239,27 @@ TEST_CASE("circuit_edit rejects coordinates outside the float range without conv
     CHECK(fixture.host.node_positions.at(generator->graphNodeId())[0] ==
           std::numeric_limits<float>::max());
 }
+
+TEST_CASE("circuit_edit closes its checkpoint when an operation throws a non-argument error",
+          "[agent_api][circuit_edit]") {
+    ApiFixture fixture;
+    auto *generator = fixture.add<SignalGeneratorEngine>("generator");
+    REQUIRE(generator != nullptr);
+    fixture.host.node_positions[generator->graphNodeId()] = {10.0f, 20.0f};
+    const std::uint64_t revision = fixture.commands.revision();
+    fixture.host.throw_on_position_write = true;
+
+    const AgentToolResult result = editCall(
+        fixture, nlohmann::ordered_json::array({{{"op", "move"},
+                                                 {"component", generator->id()},
+                                                 {"position", {{"x", 30.0}, {"y", 40.0}}}}}));
+
+    REQUIRE(result.is_error);
+    CHECK(errorFor(result).at("code") == "INTERNAL");
+    CHECK(fixture.commands.revision() == revision);
+    // Every begin is closed exactly once, so no open snapshot outlives the call.
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits + fixture.host.checkpoint_discards == 1);
+    CHECK(fixture.host.checkpoint_commits == 1);
+    CHECK(fixture.host.last_checkpoint_summary == "interrupted");
+}

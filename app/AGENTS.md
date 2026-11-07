@@ -70,6 +70,7 @@ Application orchestration and UI for the simulator, including the app-bound proj
 - `ProjectSerializer::toJson()` / `fromJson()` own in-memory serialization and restoration. `save()` calls `toJson({project_dir, true})`, adds the project name, then retains atomic file output; `load()` retains file reading, the size cap, and parse recovery before calling `fromJson(root, {project_dir, true}, path)`. Without `sparam_root`, S-parameter paths remain verbatim and are not resolved or contained; `window_state=false` omits or ignores window flags for checkpoint snapshots.
 - `exitApplication()` stops the agent server before `std::exit(0)`, which skips destructors. Ordinary shutdown stops it in the `RfSimulatorApp` destructor.
 - `AppAgentHost` keeps the newest 20 checkpoints and the newest 50 activity entries. Every `recordActivity()` call logs exactly one `Agent:` INFO line, including when the new entry evicts the oldest.
+- `AppAgentHost::beginCheckpoint()` over an open checkpoint commits the open one as `interrupted: <tool>` and logs a warning, instead of overwriting its snapshot.
 - `AppAgentHost::placeComponents()` honors explicit positions. Automatic placement never moves existing nodes.
 - `revertAgentCheckpoint(id)` accepts only a live checkpoint; a missing or stale id is logged, not silently ignored.
 - Every IIP3 fundamental and IM3 frequency in `ReceiverPerformanceMeasurementEngine` must stay within the inclusive `MIN_FREQ..MAX_FREQ` bounds.

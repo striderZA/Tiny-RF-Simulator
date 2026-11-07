@@ -22,6 +22,13 @@ AppAgentHost::AppAgentHost(NodeGraphWidget &graph_widget, Hooks hooks)
 // Checkpoints
 // ======================================================================
 void AppAgentHost::beginCheckpoint(const AgentCall &call) {
+    if (m_has_pending) {
+        // A begin with no end. The interrupted snapshot is the only revert point for the
+        // edits its call made, so keep it as a checkpoint instead of overwriting it.
+        LOG_WARN("AppAgentHost: checkpoint for %s was never closed; committing it as interrupted",
+                 m_pending_tool.c_str());
+        commitCheckpoint("interrupted: " + m_pending_tool);
+    }
     m_pending_tool = call.tool;
     m_pending_client = call.client;
     m_pending_snapshot = m_hooks.capture();
