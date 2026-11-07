@@ -26,6 +26,7 @@
 | 20 | **Modulation components** — AM, FM, PM, and digital modulations (QAM, PSK, OFDM) | 📋 Planned (future) | Fundamental RF building blocks for communication system simulation. |
 | 21 | **Measurement instruments** — power meter, phase noise analyzer, SNR/THD/SFDR meters | 📋 Planned (future) | Signal quality metrics and advanced measurement tools. |
 | 22 | **PFB filter calculator + real-prototype engine model** — dockable filter calculator tool with prototype response plot, achieved metrics vs rejection target, and Apply-to-selected-PFB; engine channel weights now come from a shared real windowed-sinc Kaiser prototype (single source of truth with the tool) | ✅ Completed | PfbFilterDesign core in pfb_channelizer; old analytic prototypeResponse/kaiserWindow removed; serialization unchanged; standalone tests in test_pfb_filter_design. |
+| 23 | **Budget calculator** — library-part cascade with frequency-dependent gain/NF/OIP3/P1dB, overlaid with receiver requirements and the live simulation | ✅ Completed | Stage table + four plots; requirements and simulation overlaid; project snapshot; no mixers in v1. |
 
 ## Status Key
 

@@ -12,6 +12,8 @@ nav:
       - Agent (MCP): agent.md
   - Components:
       - Amplifier: amplifier.md
+  - Tools:
+      - Budget: budget.md
 markdown_extensions:
   - admonition
   - attr_list

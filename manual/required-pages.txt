@@ -3,3 +3,4 @@ install.md
 tutorial.md
 agent.md
 amplifier.md
+budget.md
