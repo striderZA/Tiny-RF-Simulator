@@ -224,6 +224,31 @@ TEST_CASE("Checkpoints keep the newest 20 and removal returns the undone summari
     CHECK(f.host.findCheckpoint(15) == nullptr);
 }
 
+TEST_CASE("A checkpoint begun over an open one commits the interrupted snapshot", "[agent_app]") {
+    AgentFixture f;
+    int captures = 0;
+    AppAgentHost host(f.widget, {[&captures]() -> json { return json{{"capture", ++captures}}; }});
+
+    AgentCall first;
+    first.tool = "circuit_edit";
+    first.client = "test";
+    host.beginCheckpoint(first);
+
+    AgentCall second;
+    second.tool = "measure_port";
+    second.client = "test";
+    host.beginCheckpoint(second);
+    host.commitCheckpoint("second summary");
+
+    REQUIRE(host.checkpoints().size() == 2);
+    CHECK(host.checkpoints()[0].tool == "circuit_edit");
+    CHECK(host.checkpoints()[0].summary == "interrupted: circuit_edit");
+    CHECK(host.checkpoints()[0].snapshot == json{{"capture", 1}});
+    CHECK(host.checkpoints()[1].tool == "measure_port");
+    CHECK(host.checkpoints()[1].summary == "second summary");
+    CHECK(host.checkpoints()[1].snapshot == json{{"capture", 2}});
+}
+
 // ======================================================================
 // Test: Auto-layout placement
 // ======================================================================
