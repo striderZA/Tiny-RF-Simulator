@@ -29,8 +29,11 @@ struct BudgetConfig {
 struct BudgetStageMetrics {
     std::vector<double> gain_dB;
     std::vector<double> nf_dB;
-    std::vector<double> oip3_dBm; // +infinity when the stage has no nonlinearity
-    std::vector<double> p1db_dBm; // output-referred; +infinity when there is no nonlinearity
+    // +infinity when the stage type has no OIP3/P1dB model (a passive); an amplifier
+    // contributes its spec whether or not its simulation nonlinearity is enabled.
+    std::vector<double> oip3_dBm;
+    // Output-referred; +infinity when the stage type has no OIP3/P1dB model (a passive).
+    std::vector<double> p1db_dBm;
     std::vector<bool> out_of_band;
 };
 

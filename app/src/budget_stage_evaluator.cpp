@@ -1,0 +1,243 @@
+#include "budget_stage_evaluator.h"
+
+#include "amplifier_engine.h"
+#include "circuit_runtime.h"
+#include "common.h"
+#include "graph_editor_actions.h"
+
+#include <cmath>
+#include <filesystem>
+#include <iomanip>
+#include <limits>
+#include <optional>
+#include <set>
+#include <sstream>
+
+namespace {
+
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+// The frequency-matching tolerance NetworkAnalyzerEngine::computeMeasurement() uses for the
+// output tone and the noise bin.
+constexpr double kFreqEpsilonHz = 1.0;
+
+const double kInfinity = std::numeric_limits<double>::infinity();
+
+// A stage type with no OIP3/P1dB model contributes nothing to those cascades, so the default
+// is +infinity. Points that cannot be evaluated are reset to NaN below.
+BudgetStageMetrics emptyMetrics(std::size_t points) {
+    BudgetStageMetrics metrics;
+    metrics.gain_dB.assign(points, kNaN);
+    metrics.nf_dB.assign(points, kNaN);
+    metrics.oip3_dBm.assign(points, kInfinity);
+    metrics.p1db_dBm.assign(points, kInfinity);
+    metrics.out_of_band.assign(points, false);
+    return metrics;
+}
+
+// An unresolved stage has no usable values anywhere; NaN intercepts keep it from reading as a
+// passive with no OIP3/P1dB model.
+BudgetStageEvaluation unresolvedEvaluation(std::size_t points, std::string diagnostic) {
+    BudgetStageEvaluation evaluation;
+    evaluation.metrics = emptyMetrics(points);
+    evaluation.metrics.oip3_dBm.assign(points, kNaN);
+    evaluation.metrics.p1db_dBm.assign(points, kNaN);
+    evaluation.resolved = false;
+    evaluation.diagnostic = std::move(diagnostic);
+    return evaluation;
+}
+
+// Index of the first tone within 1 Hz of `f`, as the analyzer's gain read does.
+std::optional<std::size_t> findTone(const Spectrum &spectrum, double f) {
+    for (std::size_t i = 0; i < spectrum.tones.size(); ++i) {
+        if (std::abs(spectrum.tones[i].freq_Hz - f) <= kFreqEpsilonHz) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+// Index of the first frequency bin within 1 Hz of `f`, as the analyzer's noise read does.
+std::optional<std::size_t> findNoiseBin(const Spectrum &spectrum, double f) {
+    for (std::size_t i = 0; i < spectrum.frequencies.size(); ++i) {
+        if (std::abs(spectrum.frequencies[i] - f) <= kFreqEpsilonHz) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+// The engines zero their noise path on a one-bin grid (`N < 2`), so the stimulus carries two
+// bins at the same frequency: the tone's, and one only to keep the noise path active.
+Spectrum makeStimulus(double f, double stimulus_power_dBm) {
+    Spectrum stimulus;
+    stimulus.frequencies = {f, f};
+    stimulus.tones = {{f, stimulus_power_dBm, 0.0}};
+    stimulus.noise_W = {k * T, k * T};
+    stimulus.noise_added_W = {0.0, 0.0};
+    stimulus.phase_deg = {0.0, 0.0};
+    stimulus.computeTotalNoise();
+    stimulus.bumpGeneration();
+    return stimulus;
+}
+
+// Resolves every data-file reference against the library JSON's directory before
+// instantiate(). instantiate() logs and skips a file it cannot load, so a budget stage has to
+// reject it here to avoid silently evaluating a defaulted part.
+std::optional<std::string> checkDataFiles(const ComponentDefinition &definition) {
+    std::set<std::string> checked;
+    for (const auto &ref : definition.data_files) {
+        // componentDataFilePath() returns the first entry of a type, so later duplicates of
+        // the same type cannot resolve to a different file.
+        if (!checked.insert(ref.type).second) {
+            continue;
+        }
+        const auto path = componentDataFilePath(definition, ref.type);
+        if (!path) {
+            return "cannot resolve data file '" + ref.path + "' against the library directory";
+        }
+        std::error_code ec;
+        if (!std::filesystem::exists(*path, ec) || ec) {
+            return "data file not found: " + path->string();
+        }
+    }
+    return std::nullopt;
+}
+
+ComponentDefinition definitionFor(const BudgetStage &stage) {
+    ComponentDefinition definition;
+    definition.schema_version = 1;
+    definition.type = stage.type;
+    definition.part_number = stage.part_number;
+    definition.manufacturer = stage.manufacturer;
+    definition.description = stage.description;
+    definition.parameters = stage.parameters;
+    definition.data_files = stage.data_files;
+    definition.source_path = stage.source_path;
+    return definition;
+}
+
+std::string cacheKey(const BudgetConfig &config, const std::vector<double> &frequencies_Hz,
+                     double stimulus_power_dBm) {
+    std::ostringstream key;
+    key << std::setprecision(17);
+    key << budgetToJson(config).dump() << '|' << stimulus_power_dBm << '|';
+    for (const double f : frequencies_Hz) {
+        key << f << ',';
+    }
+    return key.str();
+}
+
+} // namespace
+
+std::vector<BudgetStageEvaluation>
+BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &library,
+                               const std::vector<double> &frequencies_Hz,
+                               double stimulus_power_dBm) {
+    const std::string key = cacheKey(config, frequencies_Hz, stimulus_power_dBm);
+    if (key == m_cache_key) {
+        return m_cache;
+    }
+
+    const std::size_t points = frequencies_Hz.size();
+    std::vector<BudgetStageEvaluation> evaluations;
+    evaluations.reserve(config.stages.size());
+
+    for (const BudgetStage &stage : config.stages) {
+        if (stage.unresolved) {
+            evaluations.push_back(unresolvedEvaluation(points, stage.unresolved_reason));
+            continue;
+        }
+
+        const ComponentDefinition definition = definitionFor(stage);
+        if (const auto data_file_error = checkDataFiles(definition)) {
+            evaluations.push_back(unresolvedEvaluation(points, *data_file_error));
+            continue;
+        }
+
+        CircuitRuntime runtime;
+        GraphEditorActions actions(runtime);
+        IComponentEngine *engine = library.instantiate(definition, runtime, actions);
+        if (!engine) {
+            evaluations.push_back(unresolvedEvaluation(
+                points, "cannot instantiate '" + stage.part_number + "' (" + stage.type + ")"));
+            continue;
+        }
+
+        BudgetStageEvaluation evaluation;
+        evaluation.metrics = emptyMetrics(points);
+
+        // A budget stage is a linear two-port: its nonlinearity is represented by the
+        // OIP3/P1dB columns, not by compressing the probe tone. Library definitions omit
+        // `enable_nonlinear`, which makes the amplifier's deserialize() enable its nonlinear
+        // model; turn it off so the gain/NF probe stays small-signal.
+        auto *amplifier = dynamic_cast<AmplifierEngine *>(engine);
+        if (amplifier) {
+            amplifier->setEnableNonlinear(false);
+        }
+
+        for (std::size_t i = 0; i < points; ++i) {
+            const double f = frequencies_Hz[i];
+            Spectrum stimulus = makeStimulus(f, stimulus_power_dBm);
+            engine->node().inputs[0] = &stimulus;
+            engine->update(0.0);
+
+            const Spectrum &response = engine->node().outputs[0];
+            const auto tone_idx = findTone(response, f);
+            if (!tone_idx) {
+                continue; // no output at this frequency: leave the point invalid
+            }
+            const auto noise_idx = findNoiseBin(response, f);
+
+            // A tone or bin an S-parameter block flagged out of band holds the nearest edge
+            // value, not a measurement. The whole point is out of band and no edge-held
+            // intercept may enter the cascade.
+            const bool noise_out_of_band = noise_idx && *noise_idx < response.out_of_band.size() &&
+                                           response.out_of_band[*noise_idx];
+            if (response.tones[*tone_idx].out_of_band || noise_out_of_band) {
+                evaluation.metrics.out_of_band[i] = true;
+                evaluation.metrics.gain_dB[i] = kNaN;
+                evaluation.metrics.nf_dB[i] = kNaN;
+                evaluation.metrics.oip3_dBm[i] = kNaN;
+                evaluation.metrics.p1db_dBm[i] = kNaN;
+                continue;
+            }
+
+            const double gain_dB = response.tones[*tone_idx].power_dBm - stimulus_power_dBm;
+            if (!std::isfinite(gain_dB)) {
+                continue;
+            }
+            evaluation.metrics.gain_dB[i] = gain_dB;
+
+            if (noise_idx && *noise_idx < response.noise_total_W.size()) {
+                const double noise_out_W = response.noise_total_W[*noise_idx];
+                const double gain_linear = dbToLinear(gain_dB);
+                if (gain_linear > 0.0 && std::isfinite(noise_out_W)) {
+                    const double nf_linear = (noise_out_W / gain_linear) / (k * T);
+                    if (nf_linear > 0.0) {
+                        evaluation.metrics.nf_dB[i] = 10.0 * std::log10(nf_linear);
+                    }
+                }
+            }
+
+            // An amplifier contributes its OIP3/P1dB spec whether or not its simulation
+            // nonlinearity is enabled. Only stage types without an OIP3/P1dB model (passives)
+            // stay +infinity.
+            if (amplifier) {
+                evaluation.metrics.oip3_dBm[i] = amplifier->oip3At_Hz(f);
+                evaluation.metrics.p1db_dBm[i] = amplifier->p1dbAt_Hz(f);
+            }
+        }
+
+        evaluations.push_back(std::move(evaluation));
+    }
+
+    m_cache_key = key;
+    m_cache = std::move(evaluations);
+    return m_cache;
+}
+
+void BudgetStageEvaluator::clearCache() {
+    m_cache_key.clear();
+    m_cache.clear();
+}

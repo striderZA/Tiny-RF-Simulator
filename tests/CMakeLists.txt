@@ -612,6 +612,13 @@ add_standalone_test(test_budget_calculator
     LIBS simulator::editor_services
 )
 
+# Standalone, UI-free budget stage evaluator: scalar and S-parameter stages, out-of-band
+# points, missing data files, and cache invalidation.
+add_standalone_test(test_budget_stage_evaluator
+    SOURCES test_budget_stage_evaluator.cpp
+    LIBS simulator::editor_services
+)
+
 # Standalone issue #182 coverage: utils::inputDouble()/inputFrequency() show and
 # keep a value outside their limits, log it once, and clamp only user edits
 # (never against the edit's direction); includes the inspector amplifier-gain
