@@ -740,3 +740,12 @@ add_dependencies(test_git_status test_git_status_hanging_git)
 target_compile_definitions(test_git_status PRIVATE
     GIT_STATUS_HANG_HELPER="$<TARGET_FILE:test_git_status_hanging_git>"
 )
+
+# Budget cascade editor: library picker, stage table ordering, and the cursor snap.
+# Constructs an ImGui/ImPlot/ImNodes context (no window), so it stays standalone for the
+# MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_budget_widget
+    SOURCES test_budget_widget.cpp
+    LIBS simulator::app simulator::iq_plot_widget
+)
+set_tests_properties(test_budget_widget PROPERTIES RUN_SERIAL TRUE)
