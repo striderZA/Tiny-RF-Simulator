@@ -15,7 +15,7 @@
 namespace {
 
 constexpr int kBudgetColumnCount = 10;
-constexpr const char *kUnavailable = "\xE2\x80\x94"; // em dash
+constexpr const char *kUnavailable = "--";
 
 bool isSupportedBudgetType(const std::string &type) {
     // The registry names the ideal filter `filter`; `ideal_filter` is accepted as an alias
@@ -105,17 +105,29 @@ void BudgetWidget::removeStage(BudgetConfig &budget, std::size_t index) {
 bool BudgetWidget::moveStage(BudgetConfig &budget, std::size_t index, int delta) {
     if (index >= budget.stages.size() || delta == 0)
         return false;
-    const auto last = static_cast<int>(budget.stages.size()) - 1;
-    const int target = static_cast<int>(index) + delta;
+    const auto last = static_cast<long long>(budget.stages.size()) - 1;
+    const long long target = static_cast<long long>(index) + delta;
     if (target < 0 || target > last)
         return false;
 
-    std::swap(budget.stages[index], budget.stages[static_cast<std::size_t>(target)]);
-    // The selection follows the moved stage, so repeated Up/Down keep acting on it.
-    if (m_selected_stage == static_cast<int>(index))
-        m_selected_stage = target;
-    else if (m_selected_stage == target)
-        m_selected_stage = static_cast<int>(index);
+    auto first = budget.stages.begin() + static_cast<std::ptrdiff_t>(index);
+    auto destination = budget.stages.begin() + static_cast<std::ptrdiff_t>(target);
+    if (delta > 0)
+        std::rotate(first, first + 1, destination + 1);
+    else
+        std::rotate(destination, first, first + 1);
+
+    // The selection follows the stage that moved, and the stages it jumped over shift one
+    // slot in the opposite direction.
+    const int from = static_cast<int>(index);
+    const int to = static_cast<int>(target);
+    if (m_selected_stage == from) {
+        m_selected_stage = to;
+    } else if (delta > 0 && m_selected_stage > from && m_selected_stage <= to) {
+        --m_selected_stage;
+    } else if (delta < 0 && m_selected_stage >= to && m_selected_stage < from) {
+        ++m_selected_stage;
+    }
     if (onChange)
         onChange();
     return true;
@@ -130,6 +142,30 @@ void BudgetWidget::clearStages(BudgetConfig &budget) {
 
 std::size_t BudgetWidget::stageCount(const BudgetConfig &budget) const {
     return budget.stages.size();
+}
+
+std::vector<BudgetResult>
+BudgetWidget::rowCascades(const BudgetConfig &budget, const std::vector<double> &frequencies_Hz,
+                          const std::vector<BudgetStageMetrics> &stage_metrics) const {
+    std::vector<BudgetResult> rows;
+    rows.reserve(budget.stages.size());
+    BudgetConfig prefix = budget;
+    prefix.stages.clear();
+    std::vector<BudgetStageMetrics> prefix_metrics;
+    for (std::size_t i = 0; i < budget.stages.size(); ++i) {
+        prefix.stages.push_back(budget.stages[i]);
+        if (i < stage_metrics.size())
+            prefix_metrics.push_back(stage_metrics[i]);
+        rows.push_back(computeBudget(prefix, frequencies_Hz, prefix_metrics));
+    }
+    return rows;
+}
+
+double BudgetWidget::outputReferredOip3_dBm(const BudgetResult &cascade, std::size_t point) {
+    if (point >= cascade.iip3_dBm.size() || point >= cascade.gain_dB.size())
+        return std::numeric_limits<double>::quiet_NaN();
+    // inf + finite stays inf; any NaN input propagates as the placeholder.
+    return cascade.iip3_dBm[point] + cascade.gain_dB[point];
 }
 
 void BudgetWidget::setCursor_Hz(double hz) {
@@ -245,9 +281,12 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
                 if (!needle.empty() && lowerCopy(haystack).find(needle) == std::string::npos)
                     continue;
 
-                std::string label = definition->part_number;
+                std::string label;
+                if (!definition->data_files.empty())
+                    label = "[DATA] ";
+                label += definition->part_number;
                 if (!definition->manufacturer.empty())
-                    label += " \xE2\x80\x94 " + definition->manufacturer;
+                    label += " -- " + definition->manufacturer;
                 label += " (" + definition->type + ")";
 
                 any = true;
@@ -274,7 +313,7 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
         stage_metrics.reserve(m_evaluations.size());
         for (const BudgetStageEvaluation &evaluation : m_evaluations)
             stage_metrics.push_back(evaluation.metrics);
-        m_budget_result = computeBudget(budget, frequencies_Hz, stage_metrics);
+        m_row_cascades = rowCascades(budget, frequencies_Hz, stage_metrics);
         m_result_key = key;
     }
 
@@ -315,7 +354,7 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
                 std::string label = stage.part_number;
                 if (!evaluation->diagnostic.empty())
-                    label += " \xE2\x80\x94 " + evaluation->diagnostic;
+                    label += " -- " + evaluation->diagnostic;
                 ImGui::TextUnformatted(label.c_str());
                 ImGui::PopStyleColor();
             } else {
@@ -347,22 +386,24 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
             drawValue(in_band, stage_point ? evaluation->metrics.p1db_dBm[m_cursor_index]
                                            : std::numeric_limits<double>::quiet_NaN());
 
-            bool result_point = have_point && m_cursor_index < m_budget_result.valid.size() &&
-                                m_budget_result.valid[m_cursor_index] &&
-                                m_cursor_index < m_budget_result.gain_dB.size() &&
-                                m_cursor_index < m_budget_result.nf_dB.size() &&
-                                m_cursor_index < m_budget_result.iip3_dBm.size() &&
-                                m_cursor_index < m_budget_result.p1db_dBm.size();
+            const BudgetResult *cascade = i < m_row_cascades.size() ? &m_row_cascades[i] : nullptr;
+            bool result_point =
+                have_point && cascade != nullptr && m_cursor_index < cascade->valid.size() &&
+                cascade->valid[m_cursor_index] && m_cursor_index < cascade->gain_dB.size() &&
+                m_cursor_index < cascade->nf_dB.size() &&
+                m_cursor_index < cascade->iip3_dBm.size() &&
+                m_cursor_index < cascade->p1db_dBm.size();
 
             const double nan = std::numeric_limits<double>::quiet_NaN();
             ImGui::TableSetColumnIndex(6);
-            drawValue(result_point, result_point ? m_budget_result.gain_dB[m_cursor_index] : nan);
+            drawValue(result_point, result_point ? cascade->gain_dB[m_cursor_index] : nan);
             ImGui::TableSetColumnIndex(7);
-            drawValue(result_point, result_point ? m_budget_result.nf_dB[m_cursor_index] : nan);
+            drawValue(result_point, result_point ? cascade->nf_dB[m_cursor_index] : nan);
             ImGui::TableSetColumnIndex(8);
-            drawValue(result_point, result_point ? m_budget_result.iip3_dBm[m_cursor_index] : nan);
+            drawValue(result_point,
+                      result_point ? outputReferredOip3_dBm(*cascade, m_cursor_index) : nan);
             ImGui::TableSetColumnIndex(9);
-            drawValue(result_point, result_point ? m_budget_result.p1db_dBm[m_cursor_index] : nan);
+            drawValue(result_point, result_point ? cascade->p1db_dBm[m_cursor_index] : nan);
 
             ImGui::PopID();
         }

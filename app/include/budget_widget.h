@@ -27,10 +27,21 @@ class BudgetWidget {
     // the budget has no model for, such as a generator.
     bool addStage(BudgetConfig &budget, const ComponentDefinition &definition);
     void removeStage(BudgetConfig &budget, std::size_t index);
-    // Moves one stage by `delta` positions. Returns whether the order changed.
+    // Moves one stage by `delta` positions, rotating the stages in between. Returns whether
+    // the order changed.
     bool moveStage(BudgetConfig &budget, std::size_t index, int delta);
     void clearStages(BudgetConfig &budget);
     std::size_t stageCount(const BudgetConfig &budget) const;
+
+    // One entry per stage row: entry i is `computeBudget` over stages[0..i], so the table's
+    // `Cum.` columns show the chain ending at that stage rather than the whole cascade.
+    std::vector<BudgetResult>
+    rowCascades(const BudgetConfig &budget, const std::vector<double> &frequencies_Hz,
+                const std::vector<BudgetStageMetrics> &stage_metrics) const;
+
+    // `Cum. OIP3` cell: `BudgetResult::iip3_dBm` is input-referred, while the stage column is
+    // output-referred, so add the cascade gain. Non-finite inputs stay non-finite (placeholder).
+    static double outputReferredOip3_dBm(const BudgetResult &cascade, std::size_t point);
 
     // The cursor snaps to the nearest grid point. Before the first draw the value is kept
     // as requested; draw() then clamps it to the first/last point of the grid.
@@ -43,7 +54,7 @@ class BudgetWidget {
     BudgetStageEvaluator m_evaluator;
     std::string m_result_key;
     std::vector<BudgetStageEvaluation> m_evaluations;
-    BudgetResult m_budget_result;
+    std::vector<BudgetResult> m_row_cascades;
     std::vector<double> m_frequencies_Hz;
     double m_cursor_Hz = 0.0;
     std::size_t m_cursor_index = 0;
