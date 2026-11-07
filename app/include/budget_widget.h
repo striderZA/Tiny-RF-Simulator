@@ -48,6 +48,13 @@ class BudgetWidget {
     void setCursor_Hz(double hz);
     double cursor_Hz() const;
 
+    // Requirement evaluation of the predicted cascade over the sweep. An empty budget has no
+    // predicted curve and reports Incomplete. Computed by draw().
+    ReceiverRequirementStatus budgetStatus() const;
+    // The evaluation the app computed from the live simulation and passed to draw().
+    ReceiverRequirementStatus simulationStatus() const;
+    const ReceiverRequirementsEvaluation &budgetEvaluation() const;
+
     std::function<void()> onChange;
 
   private:
@@ -55,7 +62,14 @@ class BudgetWidget {
     std::string m_result_key;
     std::vector<BudgetStageEvaluation> m_evaluations;
     std::vector<BudgetResult> m_row_cascades;
+    BudgetResult m_budget_result;
+    ReceiverRequirementsEvaluation m_budget_evaluation;
+    ReceiverRequirementsEvaluation m_simulation_result;
     std::vector<double> m_frequencies_Hz;
+    std::vector<double> m_simulation_gain_dB;
+    std::vector<double> m_simulation_nf_dB;
+    std::vector<double> m_simulation_output_power_dBm;
+    std::vector<double> m_simulation_iip3_dBm;
     double m_cursor_Hz = 0.0;
     std::size_t m_cursor_index = 0;
     bool m_cursor_set = false;

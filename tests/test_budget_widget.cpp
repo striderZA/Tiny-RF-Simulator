@@ -44,6 +44,19 @@ const ComponentDefinition *findPart(const ComponentLibrary &library, const std::
     return nullptr;
 }
 
+// Snapshot a library definition the way the picker adds it to the budget.
+BudgetStage stageFor(const ComponentDefinition &definition) {
+    BudgetStage stage;
+    stage.type = definition.type;
+    stage.part_number = definition.part_number;
+    stage.manufacturer = definition.manufacturer;
+    stage.description = definition.description;
+    stage.parameters = definition.parameters;
+    stage.data_files = definition.data_files;
+    stage.source_path = definition.source_path;
+    return stage;
+}
+
 // draw() takes the simulation traces and requirement evaluation the app already has; these
 // tests do not exercise the result plots, so they stay empty.
 void drawWidget(BudgetWidget &widget, BudgetConfig &config, ComponentLibrary &library,
@@ -207,4 +220,108 @@ TEST_CASE_METHOD(BudgetImGuiFixture, "Budget stage moves rotate the cascade", "[
     REQUIRE(config.stages[1].part_number == "B");
     REQUIRE(config.stages[2].part_number == "C");
     REQUIRE(config.stages[3].part_number == "A");
+}
+
+TEST_CASE_METHOD(BudgetImGuiFixture, "Budget status reuses the receiver requirement rules",
+                 "[budget][widget]") {
+    ComponentLibrary library;
+    library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    const auto *am = findPart(library, "AM1143");
+    REQUIRE(am != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFor(*am));
+    // AM1143's placeholder S-parameter file would dominate the predicted curve above 1 GHz
+    // (S21 falls to about 23 dB at 2 GHz). Drop it so the test exercises the datasheet
+    // scalars the brief names: 30 dB gain and 1.5 dB noise figure.
+    config.stages[0].data_files.clear();
+    ReceiverRequirementsState requirements;
+    requirements.config = ReceiverRequirementsConfig{};
+    requirements.config->band_start_Hz = 1e9;
+    requirements.config->band_stop_Hz = 2e9;
+    requirements.config->gain = ReceiverGainLimits{25.0, 35.0};
+    requirements.config->nf_max_dB = 1.0;
+
+    BudgetWidget widget;
+    ImGui::NewFrame();
+    widget.draw("Budget", nullptr, config, library, {1e9, 2e9}, {30.0, 30.0}, {1.5, 1.5},
+                {-30.0, -30.0}, {35.0, 35.0}, requirements, ReceiverRequirementsEvaluation{},
+                -30.0);
+    ImGui::Render();
+    REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Fail); // NF 1.5 > 1.0
+    REQUIRE(widget.simulationStatus() == ReceiverRequirementStatus::Incomplete);
+
+    requirements.config->nf_max_dB = 2.0;
+    ImGui::NewFrame();
+    widget.draw("Budget", nullptr, config, library, {1e9, 2e9}, {30.0, 30.0}, {1.5, 1.5},
+                {-30.0, -30.0}, {35.0, 35.0}, requirements, ReceiverRequirementsEvaluation{},
+                -30.0);
+    ImGui::Render();
+    REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE_METHOD(BudgetImGuiFixture, "Passive-only budget reports IIP3 as incomplete",
+                 "[budget][widget]") {
+    ComponentLibrary library;
+    library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    const auto *filter = findPart(library, "MFLP-00033CSP1");
+    REQUIRE(filter != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFor(*filter));
+    ReceiverRequirementsState requirements;
+    requirements.config = ReceiverRequirementsConfig{};
+    requirements.config->band_start_Hz = 1e9;
+    requirements.config->band_stop_Hz = 2e9;
+    // The ideal filter is a 0 dB passband here: a finite gain curve proves the stage really
+    // was evaluated, so the IIP3 metric is missing rather than the whole cascade.
+    requirements.config->gain = ReceiverGainLimits{-5.0, 5.0};
+    requirements.config->iip3_min_dBm = -10.0;
+    requirements.config->measurement_conditions.iip3 =
+        ReceiverIIP3TestSettings{1.0e6, -20.0, -10.0, 1.0};
+
+    BudgetWidget widget;
+    ImGui::NewFrame();
+    widget.draw("Budget", nullptr, config, library, {1e9, 2e9}, {}, {}, {}, {}, requirements,
+                ReceiverRequirementsEvaluation{}, -30.0);
+    ImGui::Render();
+    // A passive has no finite OIP3, so the IIP3 metric is missing rather than satisfied.
+    REQUIRE(widget.budgetEvaluation().gain.status == ReceiverRequirementStatus::Pass);
+    REQUIRE(widget.budgetEvaluation().iip3.status == ReceiverRequirementStatus::Incomplete);
+    REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE_METHOD(BudgetImGuiFixture, "Empty budget and an out-of-band stage do not crash",
+                 "[budget][widget]") {
+    ComponentLibrary library;
+    library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    const auto *am = findPart(library, "AM1143");
+    REQUIRE(am != nullptr);
+
+    ReceiverRequirementsState requirements;
+    requirements.config = ReceiverRequirementsConfig{};
+    requirements.config->band_start_Hz = 1e9;
+    requirements.config->band_stop_Hz = 2e9;
+    requirements.config->gain = ReceiverGainLimits{25.0, 35.0};
+
+    BudgetConfig empty;
+    BudgetWidget widget;
+    ImGui::NewFrame();
+    widget.draw("Budget", nullptr, empty, library, {1e9, 2e9}, {30.0, 30.0}, {1.5, 1.5},
+                {-30.0, -30.0}, {35.0, 35.0}, requirements, ReceiverRequirementsEvaluation{},
+                -30.0);
+    ImGui::Render();
+    // A budget with no stages has no predicted curve to evaluate: it is incomplete.
+    REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Incomplete);
+
+    // AM1143's S-parameter file stops at 10 GHz, so every point above it is out of band.
+    BudgetConfig out_of_band;
+    out_of_band.stages.push_back(stageFor(*am));
+    requirements.config->band_start_Hz = 20e9;
+    requirements.config->band_stop_Hz = 21e9;
+    ImGui::NewFrame();
+    widget.draw("Budget", nullptr, out_of_band, library, {20e9, 21e9}, {}, {}, {}, {}, requirements,
+                ReceiverRequirementsEvaluation{}, -30.0);
+    ImGui::Render();
+    REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Incomplete);
 }

@@ -1,12 +1,15 @@
 #include "budget_widget.h"
 
 #include "imgui.h"
+#include "implot.h"
+#include "receiver_requirements_widget.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -73,6 +76,152 @@ void drawValue(bool available, double value) {
         return;
     }
     ImGui::Text("%.3f", value);
+}
+
+const char *statusText(ReceiverRequirementStatus status) {
+    switch (status) {
+    case ReceiverRequirementStatus::NotConfigured:
+        return "Not configured";
+    case ReceiverRequirementStatus::InvalidConfiguration:
+        return "Invalid configuration";
+    case ReceiverRequirementStatus::Incomplete:
+        return "Incomplete";
+    case ReceiverRequirementStatus::Pass:
+        return "Pass";
+    case ReceiverRequirementStatus::Fail:
+        return "Fail";
+    }
+    return "Incomplete";
+}
+
+void drawStatusText(ReceiverRequirementStatus status) {
+    switch (receiverRequirementStatusTone(status)) {
+    case ReceiverRequirementStatusTone::PassGreen:
+        ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "%s", statusText(status));
+        break;
+    case ReceiverRequirementStatusTone::FailRed:
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", statusText(status));
+        break;
+    case ReceiverRequirementStatusTone::Neutral:
+        ImGui::TextDisabled("%s", statusText(status));
+        break;
+    }
+}
+
+std::vector<double> toGHz(const std::vector<double> &frequencies_Hz) {
+    std::vector<double> frequencies_GHz;
+    frequencies_GHz.reserve(frequencies_Hz.size());
+    for (const double frequency : frequencies_Hz)
+        frequencies_GHz.push_back(frequency / 1.0e9);
+    return frequencies_GHz;
+}
+
+// Drops every sample after the first `on` in each `on + off` run by turning it into NaN.
+// Drawn with ImPlotLineFlags_SkipNaN this makes a solid series dashed (on > 1) or dotted
+// (on == 1); a single surviving sample between gaps draws no segment of its own.
+std::vector<double> dashPattern(const std::vector<double> &values, int on, int off) {
+    std::vector<double> pattern = values;
+    const int period = on + off;
+    if (period <= 0)
+        return pattern;
+    for (std::size_t i = 0; i < pattern.size(); ++i) {
+        if (static_cast<int>(i % static_cast<std::size_t>(period)) >= on)
+            pattern[i] = std::numeric_limits<double>::quiet_NaN();
+    }
+    return pattern;
+}
+
+void plotSeries(const char *label, const std::vector<double> &frequencies_GHz,
+                const std::vector<double> &values, const ImVec4 &color, int on, int off) {
+    const std::size_t count = std::min(frequencies_GHz.size(), values.size());
+    if (count == 0)
+        return;
+    std::vector<double> plotted(values.begin(),
+                                values.begin() + static_cast<std::ptrdiff_t>(count));
+    if (on > 0)
+        plotted = dashPattern(plotted, on, off);
+    ImPlotSpec spec;
+    spec.LineColor = color;
+    spec.LineWeight = 2.0f;
+    spec.Flags = ImPlotLineFlags_SkipNaN;
+    ImPlot::PlotLine(label, frequencies_GHz.data(), plotted.data(), static_cast<int>(count), spec);
+}
+
+// A horizontal requirement limit drawn as a dashed segment over the band only.
+void plotLimit(const char *label, const ReceiverRequirementsConfig &config, double value) {
+    if (!std::isfinite(value) || !(config.band_stop_Hz > config.band_start_Hz))
+        return;
+    constexpr int kSamples = 129;
+    std::vector<double> frequencies_GHz(kSamples);
+    std::vector<double> values(kSamples, value);
+    for (int i = 0; i < kSamples; ++i) {
+        const double fraction = static_cast<double>(i) / static_cast<double>(kSamples - 1);
+        frequencies_GHz[i] =
+            (config.band_start_Hz + (config.band_stop_Hz - config.band_start_Hz) * fraction) /
+            1.0e9;
+    }
+    const std::vector<double> dashed = dashPattern(values, 6, 4);
+    ImPlotSpec spec;
+    spec.LineColor = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
+    spec.LineWeight = 1.0f;
+    spec.Flags = ImPlotItemFlags_NoLegend | static_cast<int>(ImPlotLineFlags_SkipNaN);
+    ImPlot::PlotLine(label, frequencies_GHz.data(), dashed.data(), kSamples, spec);
+}
+
+void plotCursor(double cursor_Hz) {
+    if (!std::isfinite(cursor_Hz))
+        return;
+    const double cursor_GHz = cursor_Hz / 1.0e9;
+    ImPlotSpec spec;
+    spec.LineColor = ImVec4(0.95f, 0.85f, 0.35f, 1.0f);
+    spec.LineWeight = 1.0f;
+    spec.Flags = ImPlotItemFlags_NoLegend;
+    ImPlot::PlotInfLines("Cursor", &cursor_GHz, 1, spec);
+}
+
+// One result plot: requirement limits, the predicted cascade, the live simulation, and the
+// shared cursor. The budget curve is always solid and the simulation curve dotted.
+void drawBudgetPlot(const char *id, const char *title, const char *unit,
+                    const std::vector<double> &frequencies_Hz,
+                    const std::vector<double> &budget_values,
+                    const std::vector<double> &simulation_values,
+                    const ReceiverRequirementsState &requirements,
+                    const ReceiverMetricEvaluation &metric, std::optional<double> limit_min,
+                    std::optional<double> limit_max, double cursor_Hz) {
+    ImGui::PushID(id);
+
+    ImGui::TextUnformatted(title);
+    ImGui::SameLine();
+    if (!requirements.config)
+        ImGui::TextDisabled("Configure receiver requirements");
+    else
+        drawStatusText(metric.status);
+
+    if (frequencies_Hz.empty()) {
+        ImGui::TextDisabled("Simulation unavailable");
+        ImGui::PopID();
+        return;
+    }
+    if (simulation_values.empty())
+        ImGui::TextDisabled("Simulation unavailable");
+
+    const std::vector<double> frequencies_GHz = toGHz(frequencies_Hz);
+    if (ImPlot::BeginPlot(id, ImVec2(-1.0f, 180.0f), ImPlotFlags_NoTitle)) {
+        ImPlot::SetupAxes("Frequency (GHz)", unit);
+        if (requirements.config) {
+            if (limit_min)
+                plotLimit("##limit_min", *requirements.config, *limit_min);
+            if (limit_max)
+                plotLimit("##limit_max", *requirements.config, *limit_max);
+        }
+        plotSeries("Budget", frequencies_GHz, budget_values, ImVec4(0.35f, 0.65f, 1.0f, 1.0f), 0,
+                   0);
+        plotSeries("Simulation", frequencies_GHz, simulation_values,
+                   ImVec4(0.35f, 0.9f, 0.55f, 1.0f), 2, 3);
+        plotCursor(cursor_Hz);
+        ImPlot::EndPlot();
+    }
+    ImGui::PopID();
 }
 
 } // namespace
@@ -188,12 +337,6 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
                         const ReceiverRequirementsState &requirements,
                         const ReceiverRequirementsEvaluation &simulation_result,
                         double stimulus_power_dBm) {
-    (void)simulation_gain_dB;
-    (void)simulation_nf_dB;
-    (void)simulation_output_power_dBm;
-    (void)simulation_iip3_dBm;
-    (void)simulation_result;
-
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;
@@ -201,6 +344,12 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
 
     if (m_frequencies_Hz != frequencies_Hz)
         m_frequencies_Hz = frequencies_Hz;
+
+    m_simulation_gain_dB = simulation_gain_dB;
+    m_simulation_nf_dB = simulation_nf_dB;
+    m_simulation_output_power_dBm = simulation_output_power_dBm;
+    m_simulation_iip3_dBm = simulation_iip3_dBm;
+    m_simulation_result = simulation_result;
 
     if (!frequencies_Hz.empty()) {
         if (!m_cursor_set || !std::isfinite(m_cursor_Hz)) {
@@ -314,7 +463,22 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
         for (const BudgetStageEvaluation &evaluation : m_evaluations)
             stage_metrics.push_back(evaluation.metrics);
         m_row_cascades = rowCascades(budget, frequencies_Hz, stage_metrics);
+        m_budget_result = computeBudget(budget, frequencies_Hz, stage_metrics);
         m_result_key = key;
+    }
+
+    // The predicted cascade is evaluated with the same rules the live simulation uses. An
+    // empty budget has no curve of its own, so it stays Incomplete rather than passing on the
+    // zero-gain result computeBudget would return.
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    if (budget.stages.empty()) {
+        m_budget_evaluation = ReceiverRequirementsEvaluation{};
+    } else {
+        const double sweep_start = frequencies_Hz.empty() ? nan : frequencies_Hz.front();
+        const double sweep_stop = frequencies_Hz.empty() ? nan : frequencies_Hz.back();
+        m_budget_evaluation = evaluateReceiverRequirements(
+            requirements, sweep_start, sweep_stop, frequencies_Hz, m_budget_result.gain_dB,
+            m_budget_result.nf_dB, m_budget_result.output_power_dBm, m_budget_result.iip3_dBm);
     }
 
     const bool have_point = !frequencies_Hz.empty() && m_cursor_index < frequencies_Hz.size();
@@ -413,5 +577,65 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
     if (budget.stages.empty())
         ImGui::TextDisabled("Add a library part");
 
+    // --- Result plots ------------------------------------------------------------
+    if (!budget.stages.empty()) {
+        ImGui::SeparatorText("Predicted performance");
+
+        std::optional<double> gain_min;
+        std::optional<double> gain_max;
+        std::optional<double> nf_max;
+        std::optional<double> power_min;
+        std::optional<double> power_max;
+        std::optional<double> iip3_min;
+        if (requirements.config) {
+            const ReceiverRequirementsConfig &config = *requirements.config;
+            if (config.gain) {
+                gain_min = config.gain->minimum_dB;
+                gain_max = config.gain->maximum_dB;
+            }
+            nf_max = config.nf_max_dB;
+            if (config.output_power) {
+                power_min = config.output_power->minimum_dBm;
+                power_max = config.output_power->maximum_dBm;
+            }
+            iip3_min = config.iip3_min_dBm;
+        }
+
+        const ImGuiTableFlags plot_table_flags = ImGuiTableFlags_SizingStretchSame;
+        if (ImGui::BeginTable("BudgetPlots", 2, plot_table_flags)) {
+            ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextColumn();
+            drawBudgetPlot("gain", "Gain (dB)", "Gain (dB)", frequencies_Hz,
+                           m_budget_result.gain_dB, m_simulation_gain_dB, requirements,
+                           m_budget_evaluation.gain, gain_min, gain_max, m_cursor_Hz);
+            ImGui::TableNextColumn();
+            drawBudgetPlot("nf", "Noise figure (dB)", "NF (dB)", frequencies_Hz,
+                           m_budget_result.nf_dB, m_simulation_nf_dB, requirements,
+                           m_budget_evaluation.noise_figure, std::nullopt, nf_max, m_cursor_Hz);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            drawBudgetPlot("output_power", "Output power (dBm)", "Output power (dBm)",
+                           frequencies_Hz, m_budget_result.output_power_dBm,
+                           m_simulation_output_power_dBm, requirements,
+                           m_budget_evaluation.output_power, power_min, power_max, m_cursor_Hz);
+            ImGui::TableNextColumn();
+            drawBudgetPlot("iip3", "IIP3 (dBm)", "IIP3 (dBm)", frequencies_Hz,
+                           m_budget_result.iip3_dBm, m_simulation_iip3_dBm, requirements,
+                           m_budget_evaluation.iip3, iip3_min, std::nullopt, m_cursor_Hz);
+            ImGui::EndTable();
+        }
+    }
+
     ImGui::End();
+}
+
+ReceiverRequirementStatus BudgetWidget::budgetStatus() const { return m_budget_evaluation.overall; }
+
+ReceiverRequirementStatus BudgetWidget::simulationStatus() const {
+    return m_simulation_result.overall;
+}
+
+const ReceiverRequirementsEvaluation &BudgetWidget::budgetEvaluation() const {
+    return m_budget_evaluation;
 }
