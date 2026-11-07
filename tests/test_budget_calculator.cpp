@@ -64,6 +64,38 @@ TEST_CASE("Budget invalidates out-of-band and zero-gain points", "[budget]") {
     REQUIRE(std::isnan(r.gain_dB[1]));
     REQUIRE(std::isnan(r.nf_dB[1]));
 }
+TEST_CASE("Budget invalidates a non-finite or underflowing stage gain", "[budget]") {
+    BudgetConfig config;
+    config.stages = {BudgetStage{}, BudgetStage{}};
+    std::vector<double> freqs{1e9, 2e9};
+
+    // Point 1 has a non-finite gain with the stage in band, so the out-of-band flag from
+    // the case above cannot be what invalidates it.
+    BudgetStageMetrics a{{10.0, 10.0}, {2.0, 2.0}, {30.0, 30.0}, {20.0, 20.0}, {false, false}};
+    BudgetStageMetrics b{{20.0, -std::numeric_limits<double>::infinity()},
+                         {3.0, 3.0},
+                         {40.0, 40.0},
+                         {30.0, 30.0},
+                         {false, false}};
+    auto non_finite = computeBudget(config, freqs, {a, b});
+    REQUIRE(non_finite.valid[0]);
+    REQUIRE_FALSE(non_finite.valid[1]);
+    REQUIRE(std::isnan(non_finite.gain_dB[1]));
+    REQUIRE(std::isnan(non_finite.nf_dB[1]));
+    REQUIRE(std::isnan(non_finite.output_power_dBm[1]));
+    REQUIRE(std::isnan(non_finite.iip3_dBm[1]));
+    REQUIRE(std::isnan(non_finite.p1db_dBm[1]));
+
+    // A finite gain that underflows to a zero linear gain (~1e-400) must invalidate too.
+    BudgetStageMetrics underflow{
+        {10.0, -4000.0}, {2.0, 2.0}, {30.0, 30.0}, {20.0, 20.0}, {false, false}};
+    BudgetStageMetrics after{{20.0, 20.0}, {3.0, 3.0}, {40.0, 40.0}, {30.0, 30.0}, {false, false}};
+    auto zero_gain = computeBudget(config, freqs, {underflow, after});
+    REQUIRE(zero_gain.valid[0]);
+    REQUIRE_FALSE(zero_gain.valid[1]);
+    REQUIRE(std::isnan(zero_gain.gain_dB[1]));
+    REQUIRE(std::isnan(zero_gain.nf_dB[1]));
+}
 TEST_CASE("Budget passive-only IIP3 is not applicable", "[budget]") {
     BudgetConfig config;
     config.stages = {BudgetStage{}};
