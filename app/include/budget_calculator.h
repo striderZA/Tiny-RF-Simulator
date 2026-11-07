@@ -16,9 +16,15 @@ struct BudgetStage {
     nlohmann::json parameters = nlohmann::json::object();
     std::vector<DataFileRef> data_files;
     std::string source_path; // library JSON path, for resolving data files
-    bool unresolved = false; // set at load time; never saved as true
-    std::string unresolved_reason;
 };
+
+// v1 stage-type whitelist, shared by the picker and the project loader. `ideal_filter` is
+// accepted as an alias for the registry name `filter`.
+bool budgetSupportsStageType(const std::string &type);
+
+// Returns the registry stage type for `type` (`ideal_filter` -> `filter`), or an empty string
+// for a type the budget cannot model. Callers store the returned name, not the alias.
+std::string budgetNormalizeStageType(const std::string &type);
 
 struct BudgetConfig {
     std::vector<BudgetStage> stages; // cascade order, first stage first

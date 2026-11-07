@@ -14,7 +14,14 @@ Each plot draws three things:
 
 Gain and noise figure come from the Network Analyzer alone, so they need only **Point A**, **Point B**, and the sweep. Output power and IIP3 come from the receiver measurement instead, so their simulation curves need the matching limit in Receiver Requirements: an output-power limit with an applied reference tone, or an IIP3 limit with a two-tone measurement condition. Without that, that series is empty.
 
-The plots use the Network Analyzer's sweep as their frequency axis, so configure **Point A** and **Point B** and the sweep there. Without a sweep, the panel shows **Simulation unavailable** and draws no plot. Next to each plot title, the panel shows the status of that metric against the requirements: **Pass**, **Fail**, **Incomplete**, **Not configured**, or **Invalid configuration**, or **Configure receiver requirements** when no requirements are set.
+The plots use the Network Analyzer's sweep as their frequency axis, so configure **Point A** and **Point B** and the sweep there. Without a sweep, the panel shows **Simulation unavailable** and draws no plot.
+
+Next to each plot title, the panel shows two statuses against the requirements:
+
+- **`Budget: <status>`** — the predicted cascade.
+- **`Simulation: <status>`** — the live circuit.
+
+Each status is **Pass**, **Fail**, **Incomplete**, **Not configured**, or **Invalid configuration**. When no requirements are set, the panel shows **Configure receiver requirements** in place of both. Below the toolbar, the panel repeats the overall result as **`Budget: <status>`** and **`Simulation: <status>`**. A metric with missing values is **Incomplete**, so the overall status is the least favourable of the configured metrics.
 
 A yellow vertical line marks the cursor and is shared by all four plots.
 
@@ -62,7 +69,7 @@ The prediction is a classic cascade calculation, not a full simulation:
 - Noise figure follows Friis; gain adds in dB; IIP3 and P1dB combine as reciprocal powers.
 - P1dB uses the standard small-signal approximation, referred to each stage's input, and is output-referred in the table.
 
-A frequency point is left out when any stage is out of band there, or its gain or noise figure is not finite, or its linear gain is zero or negative. Curves then have a gap at that point.
+A frequency point is left out when any stage is out of band there, or its gain or noise figure is not finite, or its linear gain is zero or negative. Curves then have a gap at that point. The requirement evaluation treats any invalid in-band point as missing, so a budget whose data band is narrower than the requirement band reports Incomplete for that metric.
 
 ## Limits in this version
 

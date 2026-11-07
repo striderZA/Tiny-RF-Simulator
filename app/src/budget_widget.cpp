@@ -20,13 +20,6 @@ namespace {
 constexpr int kBudgetColumnCount = 10;
 constexpr const char *kUnavailable = "--";
 
-bool isSupportedBudgetType(const std::string &type) {
-    // The registry names the ideal filter `filter`; `ideal_filter` is accepted as an alias
-    // and normalized on insert.
-    return type == "amplifier" || type == "attenuator" || type == "filter" ||
-           type == "ideal_filter" || type == "equalizer" || type == "coax";
-}
-
 BudgetStage stageFromDefinition(const ComponentDefinition &definition) {
     BudgetStage stage;
     stage.type = definition.type;
@@ -94,16 +87,16 @@ const char *statusText(ReceiverRequirementStatus status) {
     return "Incomplete";
 }
 
-void drawStatusText(ReceiverRequirementStatus status) {
+void drawStatusText(const char *label, ReceiverRequirementStatus status) {
     switch (receiverRequirementStatusTone(status)) {
     case ReceiverRequirementStatusTone::PassGreen:
-        ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "%s", statusText(status));
+        ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "%s: %s", label, statusText(status));
         break;
     case ReceiverRequirementStatusTone::FailRed:
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", statusText(status));
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s: %s", label, statusText(status));
         break;
     case ReceiverRequirementStatusTone::Neutral:
-        ImGui::TextDisabled("%s", statusText(status));
+        ImGui::TextDisabled("%s: %s", label, statusText(status));
         break;
     }
 }
@@ -187,22 +180,24 @@ void plotCursor(double cursor_Hz) {
 }
 
 // One result plot: requirement limits, the predicted cascade, the live simulation, and the
-// shared cursor. The budget curve is always solid and the simulation curve dotted.
-void drawBudgetPlot(const char *id, const char *title, const char *unit,
-                    const std::vector<double> &frequencies_Hz,
-                    const std::vector<double> &budget_values,
-                    const std::vector<double> &simulation_values,
-                    const ReceiverRequirementsState &requirements,
-                    const ReceiverMetricEvaluation &metric, std::optional<double> limit_min,
-                    std::optional<double> limit_max, double cursor_Hz) {
+// shared cursor. The budget curve is always solid and the simulation curve short-dashed.
+void drawBudgetPlot(
+    const char *id, const char *title, const char *unit, const std::vector<double> &frequencies_Hz,
+    const std::vector<double> &budget_values, const std::vector<double> &simulation_values,
+    const ReceiverRequirementsState &requirements, const ReceiverMetricEvaluation &metric,
+    const ReceiverMetricEvaluation &simulation_metric, std::optional<double> limit_min,
+    std::optional<double> limit_max, double cursor_Hz) {
     ImGui::PushID(id);
 
     ImGui::TextUnformatted(title);
     ImGui::SameLine();
-    if (!requirements.config)
+    if (!requirements.config) {
         ImGui::TextDisabled("Configure receiver requirements");
-    else
-        drawStatusText(metric.status);
+    } else {
+        drawStatusText("Budget", metric.status);
+        ImGui::SameLine(0.0f, 16.0f);
+        drawStatusText("Simulation", simulation_metric.status);
+    }
 
     if (frequencies_Hz.empty()) {
         ImGui::TextDisabled("Simulation unavailable");
@@ -234,12 +229,12 @@ void drawBudgetPlot(const char *id, const char *title, const char *unit,
 } // namespace
 
 bool BudgetWidget::addStage(BudgetConfig &budget, const ComponentDefinition &definition) {
-    if (!isSupportedBudgetType(definition.type))
+    const std::string stage_type = budgetNormalizeStageType(definition.type);
+    if (stage_type.empty())
         return false;
     BudgetStage stage = stageFromDefinition(definition);
     // The library and evaluator use the registry name for the ideal filter.
-    if (stage.type == "ideal_filter")
-        stage.type = "filter";
+    stage.type = stage_type;
     budget.stages.push_back(std::move(stage));
     if (onChange)
         onChange();
@@ -429,7 +424,7 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
             bool any = false;
             for (std::size_t i = 0; i < definitions.size(); ++i) {
                 const ComponentDefinition *definition = definitions[i];
-                if (!definition || !isSupportedBudgetType(definition->type))
+                if (!definition || !budgetSupportsStageType(definition->type))
                     continue;
 
                 std::string haystack = definition->part_number + " " + definition->manufacturer +
@@ -489,6 +484,11 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
     }
 
     const bool have_point = !frequencies_Hz.empty() && m_cursor_index < frequencies_Hz.size();
+
+    // --- Overall status ----------------------------------------------------------
+    drawStatusText("Budget", m_budget_evaluation.overall);
+    ImGui::SameLine(0.0f, 16.0f);
+    drawStatusText("Simulation", m_simulation_result.overall);
 
     // --- Stage table -------------------------------------------------------------
     const ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -615,21 +615,25 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
             ImGui::TableNextColumn();
             drawBudgetPlot("gain", "Gain (dB)", "Gain (dB)", frequencies_Hz,
                            m_budget_result.gain_dB, m_simulation_gain_dB, requirements,
-                           m_budget_evaluation.gain, gain_min, gain_max, m_cursor_Hz);
+                           m_budget_evaluation.gain, m_simulation_result.gain, gain_min, gain_max,
+                           m_cursor_Hz);
             ImGui::TableNextColumn();
             drawBudgetPlot("nf", "Noise figure (dB)", "NF (dB)", frequencies_Hz,
                            m_budget_result.nf_dB, m_simulation_nf_dB, requirements,
-                           m_budget_evaluation.noise_figure, std::nullopt, nf_max, m_cursor_Hz);
+                           m_budget_evaluation.noise_figure, m_simulation_result.noise_figure,
+                           std::nullopt, nf_max, m_cursor_Hz);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             drawBudgetPlot("output_power", "Output power (dBm)", "Output power (dBm)",
                            frequencies_Hz, m_budget_result.output_power_dBm,
                            m_simulation_output_power_dBm, requirements,
-                           m_budget_evaluation.output_power, power_min, power_max, m_cursor_Hz);
+                           m_budget_evaluation.output_power, m_simulation_result.output_power,
+                           power_min, power_max, m_cursor_Hz);
             ImGui::TableNextColumn();
             drawBudgetPlot("iip3", "IIP3 (dBm)", "IIP3 (dBm)", frequencies_Hz,
                            m_budget_result.iip3_dBm, m_simulation_iip3_dBm, requirements,
-                           m_budget_evaluation.iip3, iip3_min, std::nullopt, m_cursor_Hz);
+                           m_budget_evaluation.iip3, m_simulation_result.iip3, iip3_min,
+                           std::nullopt, m_cursor_Hz);
             ImGui::EndTable();
         }
     }

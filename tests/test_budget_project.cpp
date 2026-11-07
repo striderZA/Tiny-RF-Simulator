@@ -102,6 +102,62 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed budget stage is isolated on load", "[b
     std::remove(path.string().c_str());
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "Unsupported budget stage type is rejected on load",
+                 "[budget][project]") {
+    const auto path = tempPath("rfsim_budget_unsupported_");
+    std::remove(path.string().c_str());
+    {
+        std::ofstream out(path);
+        REQUIRE(out);
+        out << R"json({
+            "version": 1,
+            "components": [],
+            "links": [],
+            "probe_pins": [],
+            "groups": [],
+            "network_analyzer": {},
+            "window_state": {},
+            "graph_state": {},
+            "budget_calculator": {
+                "version": 1,
+                "input_power_dbm": -12.5,
+                "stages": [
+                    {"type": "generator", "part_number": "GEN1"},
+                    {"type": "amplifier", "part_number": "AM1143"},
+                    {"type": "ideal_filter", "part_number": "FILT"}
+                ]
+            }
+        })json";
+    }
+
+    RfSimulatorApp app;
+    REQUIRE(app.loadProject(path.string()));
+    // The generator is dropped instead of reaching the two-port probe; the rest survives and
+    // the alias normalizes to the registry name.
+    REQUIRE(app.testBudgetConfig().stages.size() == 2);
+    REQUIRE(app.testBudgetConfig().stages[0].part_number == "AM1143");
+    REQUIRE(app.testBudgetConfig().stages[1].part_number == "FILT");
+    REQUIRE(app.testBudgetConfig().stages[1].type == "filter");
+    std::remove(path.string().c_str());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Empty budget keeps a non-default input power",
+                 "[budget][project]") {
+    RfSimulatorApp app;
+    auto &budget = app.testBudgetConfig();
+    budget.stages.clear();
+    budget.input_power_dBm = -10.0;
+
+    const auto path = tempPath("rfsim_budget_power_");
+    REQUIRE(app.saveProject(path.string()));
+    app.newProject();
+    REQUIRE(app.testBudgetConfig().input_power_dBm == Approx(-30.0));
+    REQUIRE(app.loadProject(path.string()));
+    REQUIRE(app.testBudgetConfig().stages.empty());
+    REQUIRE(app.testBudgetConfig().input_power_dBm == Approx(-10.0));
+    std::remove(path.string().c_str());
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "New project clears the budget", "[budget][project]") {
     RfSimulatorApp app;
     app.testBudgetConfig().stages.push_back(BudgetStage{});

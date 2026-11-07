@@ -144,11 +144,6 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
     evaluations.reserve(config.stages.size());
 
     for (const BudgetStage &stage : config.stages) {
-        if (stage.unresolved) {
-            evaluations.push_back(unresolvedEvaluation(points, stage.unresolved_reason));
-            continue;
-        }
-
         const ComponentDefinition definition = definitionFor(stage);
         if (const auto data_file_error = checkDataFiles(definition)) {
             evaluations.push_back(unresolvedEvaluation(points, *data_file_error));
@@ -161,6 +156,14 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
         if (!engine) {
             evaluations.push_back(unresolvedEvaluation(
                 points, "cannot instantiate '" + stage.part_number + "' (" + stage.type + ")"));
+            continue;
+        }
+        // A budget stage is a two-port: the probe writes inputs[0] and reads outputs[0]. A
+        // future zero-input definition (for example a source type) must not reach that code.
+        if (engine->node().inputs.size() < 1 || engine->node().outputs.empty()) {
+            evaluations.push_back(
+                unresolvedEvaluation(points, "'" + stage.part_number + "' (" + stage.type +
+                                                 ") is not a two-port and cannot be evaluated"));
             continue;
         }
 

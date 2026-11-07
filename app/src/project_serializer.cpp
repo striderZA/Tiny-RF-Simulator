@@ -1193,9 +1193,10 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
                                          {"diagnostic", m_receiver_requirements.invalid_reason}};
     }
 
-    // An empty cascade is the untouched default, so it is omitted rather than
-    // written as an empty object every project would then carry.
-    if (!m_budget.stages.empty())
+    // An untouched budget is omitted rather than written as an empty object every project
+    // would then carry. A non-default input power is an edit even with no stages, so the key
+    // is still written and the value round-trips.
+    if (!m_budget.stages.empty() || m_budget.input_power_dBm != BudgetConfig{}.input_power_dBm)
         root["budget_calculator"] = budgetToJson(m_budget);
 
     // Synchronize engine nodes before saving, including nodes added without a render frame.

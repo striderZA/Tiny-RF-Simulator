@@ -42,12 +42,17 @@ bool readStage(const nlohmann::json &value, BudgetStage &stage, std::string &rea
         reason = "`type` must be a string";
         return false;
     }
+    const std::string normalized_type = budgetNormalizeStageType(type->get<std::string>());
+    if (normalized_type.empty()) {
+        reason = "unsupported stage type `" + type->get<std::string>() + "`";
+        return false;
+    }
     const auto part_number = value.find("part_number");
     if (part_number == value.end() || !part_number->is_string()) {
         reason = "`part_number` must be a string";
         return false;
     }
-    stage.type = type->get<std::string>();
+    stage.type = normalized_type;
     stage.part_number = part_number->get<std::string>();
     if (!readOptionalString(value, "manufacturer", stage.manufacturer, reason) ||
         !readOptionalString(value, "description", stage.description, reason) ||
@@ -89,6 +94,19 @@ bool readStage(const nlohmann::json &value, BudgetStage &stage, std::string &rea
 }
 
 } // namespace
+
+std::string budgetNormalizeStageType(const std::string &type) {
+    if (type == "ideal_filter")
+        return "filter";
+    if (type == "amplifier" || type == "attenuator" || type == "filter" || type == "equalizer" ||
+        type == "coax")
+        return type;
+    return {};
+}
+
+bool budgetSupportsStageType(const std::string &type) {
+    return !budgetNormalizeStageType(type).empty();
+}
 
 BudgetResult computeBudget(const BudgetConfig &config, const std::vector<double> &frequencies_Hz,
                            const std::vector<BudgetStageMetrics> &stage_metrics) {

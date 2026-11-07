@@ -252,12 +252,16 @@ TEST_CASE_METHOD(BudgetImGuiFixture, "Budget status reuses the receiver requirem
     REQUIRE(widget.simulationStatus() == ReceiverRequirementStatus::Incomplete);
 
     requirements.config->nf_max_dB = 2.0;
+    ReceiverRequirementsEvaluation simulation;
+    simulation.overall = ReceiverRequirementStatus::Pass;
+    simulation.gain.status = ReceiverRequirementStatus::Pass;
     ImGui::NewFrame();
     widget.draw("Budget", nullptr, config, library, {1e9, 2e9}, {30.0, 30.0}, {1.5, 1.5},
-                {-30.0, -30.0}, {35.0, 35.0}, requirements, ReceiverRequirementsEvaluation{},
-                -30.0);
+                {-30.0, -30.0}, {35.0, 35.0}, requirements, simulation, -30.0);
     ImGui::Render();
     REQUIRE(widget.budgetStatus() == ReceiverRequirementStatus::Pass);
+    // The panel renders the passed-in simulation evaluation unchanged.
+    REQUIRE(widget.simulationStatus() == ReceiverRequirementStatus::Pass);
 }
 
 TEST_CASE_METHOD(BudgetImGuiFixture, "Passive-only budget reports IIP3 as incomplete",

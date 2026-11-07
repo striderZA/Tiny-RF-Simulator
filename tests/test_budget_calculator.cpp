@@ -139,3 +139,33 @@ TEST_CASE("Budget JSON isolates a malformed stage", "[budget]") {
     REQUIRE(config.stages[0].part_number == "A");
     REQUIRE_FALSE(diagnostic.empty());
 }
+
+TEST_CASE("Budget JSON rejects an unsupported stage type", "[budget]") {
+    nlohmann::json j = {{"version", 1},
+                        {"stages",
+                         {{{"type", "generator"}, {"part_number", "GEN"}},
+                          {{"type", "amplifier"}, {"part_number", "A"}}}}};
+    std::string diagnostic;
+    auto config = budgetFromJson(j, diagnostic);
+    REQUIRE(config.stages.size() == 1);
+    REQUIRE(config.stages[0].part_number == "A");
+    REQUIRE(diagnostic.find("generator") != std::string::npos);
+}
+
+TEST_CASE("Budget JSON normalizes the ideal filter alias", "[budget]") {
+    nlohmann::json j = {{"version", 1},
+                        {"stages", {{{"type", "ideal_filter"}, {"part_number", "F"}}}}};
+    std::string diagnostic;
+    auto config = budgetFromJson(j, diagnostic);
+    REQUIRE(diagnostic.empty());
+    REQUIRE(config.stages.size() == 1);
+    REQUIRE(config.stages[0].type == "filter");
+}
+
+TEST_CASE("Budget stage types are whitelisted and normalized", "[budget]") {
+    REQUIRE(budgetSupportsStageType("amplifier"));
+    REQUIRE(budgetSupportsStageType("ideal_filter"));
+    REQUIRE_FALSE(budgetSupportsStageType("generator"));
+    REQUIRE(budgetNormalizeStageType("ideal_filter") == "filter");
+    REQUIRE(budgetNormalizeStageType("generator").empty());
+}

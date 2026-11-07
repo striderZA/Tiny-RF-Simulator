@@ -184,6 +184,25 @@ TEST_CASE("Evaluator leaves an out-of-band amplifier point invalid", "[budget][e
     REQUIRE(std::isnan(out[0].metrics.p1db_dBm[1]));
 }
 
+TEST_CASE("Evaluator leaves a non-two-port stage unresolved", "[budget][evaluator]") {
+    ComponentLibrary library;
+    library.scan(libraryRoot());
+    // `generator` is a real engine type with no input pin. The loader now rejects it, but a
+    // hand-built config must not make the probe write inputs[0] out of bounds.
+    BudgetConfig config;
+    BudgetStage stage;
+    stage.type = "generator";
+    stage.part_number = "GEN1";
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE_FALSE(out[0].diagnostic.empty());
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
 TEST_CASE("Evaluator invalidates a stage after its parameters change", "[budget][evaluator]") {
     ComponentLibrary library;
     library.scan(libraryRoot());
