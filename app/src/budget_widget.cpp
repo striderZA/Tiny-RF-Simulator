@@ -138,6 +138,13 @@ void plotSeries(const char *label, const std::vector<double> &frequencies_GHz,
         return;
     std::vector<double> plotted(values.begin(),
                                 values.begin() + static_cast<std::ptrdiff_t>(count));
+    // computeBudget emits +inf for a cascade with no nonlinearity. ImPlot's line renderer
+    // only guards NaN around PrimLine, so every non-finite point is normalized here before
+    // dashing/plotting; the SkipNaN flag then breaks the line instead of drawing an inf.
+    for (double &value : plotted) {
+        if (!std::isfinite(value))
+            value = std::numeric_limits<double>::quiet_NaN();
+    }
     if (on > 0)
         plotted = dashPattern(plotted, on, off);
     ImPlotSpec spec;
