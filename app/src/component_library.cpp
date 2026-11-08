@@ -739,7 +739,8 @@ std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::str
 IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                                                 CircuitRuntime &runtime,
                                                 GraphEditorActions &editor_actions,
-                                                std::optional<int> component_id) {
+                                                std::optional<int> component_id,
+                                                std::vector<DataFileLoadIssue> *data_file_issues) {
     const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
     if (!descriptor) {
         LOG_WARN("ComponentLibrary: unknown component type '%s'", def.type.c_str());
@@ -785,6 +786,9 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                     LOG_WARN("ComponentLibrary: rejecting path parameter '%s' for "
                              "%s (must stay within the library directory)",
                              value.c_str(), def.part_number.c_str());
+                    if (data_file_issues)
+                        data_file_issues->push_back(
+                            {key, value, "path parameter is outside the library directory"});
                     params.erase(key);
                 }
             }
@@ -799,11 +803,17 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                 LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
                          "component type '%s' (%s)",
                          df.path.c_str(), def.type.c_str(), def.part_number.c_str());
+                if (data_file_issues)
+                    data_file_issues->push_back(
+                        {df.type, df.path, "the component type does not load S-parameter files"});
                 continue;
             }
             if (!descriptor->load_sparam_file) {
                 LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
                          def.type.c_str(), def.part_number.c_str());
+                if (data_file_issues)
+                    data_file_issues->push_back(
+                        {df.type, df.path, "the component type does not load S-parameter files"});
                 continue;
             }
             if (sparam_data_file_consumed) {
@@ -820,6 +830,9 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                 LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
                          "(must stay within the library directory)",
                          df.path.c_str(), def.part_number.c_str());
+                if (data_file_issues)
+                    data_file_issues->push_back(
+                        {df.type, df.path, "path is outside the library directory"});
                 continue;
             }
 
@@ -830,6 +843,11 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
             } else {
                 LOG_WARN("Failed to load S-param file for %s: %s (S-param mode remains disabled)",
                          def.part_number.c_str(), sparam_path->string().c_str());
+                if (data_file_issues)
+                    data_file_issues->push_back(
+                        {df.type, df.path,
+                         "failed to load the S-parameter file (or it did not enable "
+                         "S-parameter mode)"});
             }
         }
 

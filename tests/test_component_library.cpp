@@ -34,6 +34,42 @@ static std::string write_temp_json(const std::string &content) {
     return path.string();
 }
 
+// Writes `content` to `name` in a fresh per-process, per-call directory and returns the
+// file's full path; the caller removes `parent_path()`.
+static std::string write_temp_file(const std::string &name, const std::string &content) {
+    static int s_file_counter = 0;
+    const auto dir = std::filesystem::temp_directory_path() /
+                     ("test_component_files_" + test_temp_paths::processTag() + "_" +
+                      std::to_string(s_file_counter++));
+    std::filesystem::create_directories(dir);
+    const auto path = dir / name;
+    std::ofstream ofs(path, std::ios::binary);
+    ofs << content;
+    ofs.close();
+    return path.string();
+}
+
+// Writes `s2p_content` as `entry.s2p` plus a library JSON referencing it, in one fresh
+// directory (`cleanup_dir`, which the caller removes). Returns the JSON path.
+static std::string write_sparam_library_entry(const std::string &s2p_content,
+                                              const std::string &part_number,
+                                              std::filesystem::path &cleanup_dir) {
+    const std::string s2p_path = write_temp_file("entry.s2p", s2p_content);
+    cleanup_dir = std::filesystem::path(s2p_path).parent_path();
+    nlohmann::json json = {
+        {"schema_version", 2},
+        {"type", "amplifier"},
+        {"part_number", part_number},
+        {"parameters", {{"gain_dB", 20.0}, {"nf_dB", 1.0}}},
+        {"data_files", nlohmann::json::array({{{"type", "s_parameters"}, {"path", "entry.s2p"}}})},
+    };
+    const auto json_path = cleanup_dir / "entry.json";
+    std::ofstream ofs(json_path);
+    ofs << json.dump();
+    ofs.close();
+    return json_path.string();
+}
+
 TEST_CASE("ComponentLibrary loads valid amplifier JSON", "[library]") {
     std::string json = R"({
         "schema_version": 1,
@@ -461,4 +497,53 @@ TEST_CASE("ComponentLibrary falls back when S-param file missing", "[library]") 
     REQUIRE(amp->nf_dB() == Approx(1.0));
 
     std::filesystem::remove_all(tmpdir);
+}
+
+TEST_CASE("ComponentLibrary reports a data file that fails to load", "[library]") {
+    std::filesystem::path cleanup_dir;
+    const std::string json_path =
+        write_sparam_library_entry("not a touchstone file\n", "AMP_CORRUPT_SPARAM", cleanup_dir);
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    std::vector<ComponentLibrary::DataFileLoadIssue> issues;
+
+    auto *engine = lib.instantiate(*defs[0], runtime, actions, std::nullopt, &issues);
+
+    // The engine still exists so the editor can fall back; the caller decides whether that
+    // fallback is acceptable.
+    REQUIRE(engine != nullptr);
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].type == "s_parameters");
+    REQUIRE(issues[0].path == "entry.s2p");
+    REQUIRE_FALSE(issues[0].reason.empty());
+
+    std::filesystem::remove_all(cleanup_dir);
+}
+
+TEST_CASE("ComponentLibrary reports no issue for a loadable data file", "[library]") {
+    std::filesystem::path cleanup_dir;
+    const std::string json_path = write_sparam_library_entry(
+        "! valid\n# Hz S RI R 50\n1e9 0 0 0.5 0 0 0 0 0\n", "AMP_VALID_SPARAM", cleanup_dir);
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    std::vector<ComponentLibrary::DataFileLoadIssue> issues;
+
+    auto *engine = lib.instantiate(*defs[0], runtime, actions, std::nullopt, &issues);
+
+    REQUIRE(engine != nullptr);
+    REQUIRE(issues.empty());
+
+    std::filesystem::remove_all(cleanup_dir);
 }

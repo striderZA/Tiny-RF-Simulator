@@ -76,11 +76,12 @@ class Scratch {
 
 // The built-in RC-10-10+ definition with a data file attached; the data-file load is what
 // enables S-parameter mode.
-std::string attenuatorDefinition(const std::string &data_file) {
+std::string attenuatorDefinition(const std::string &data_file,
+                                 const std::string &part_number = "TEST-ATT") {
     nlohmann::json definition = {
         {"schema_version", 1},
         {"type", "attenuator"},
-        {"part_number", "TEST-ATT"},
+        {"part_number", part_number},
         {"manufacturer", "Test"},
         {"description", "Test attenuator"},
         {"parameters", {{"attenuation_dB", 0.0}}},
@@ -160,6 +161,36 @@ TEST_CASE("Evaluator marks a missing data file unresolved", "[budget][evaluator]
     REQUIRE_FALSE(out[0].diagnostic.empty());
     REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
     REQUIRE(std::isnan(out[0].metrics.oip3_dBm[0]));
+}
+
+TEST_CASE("Evaluator rejects a stage whose declared data file cannot load", "[budget][evaluator]") {
+    Scratch scratch;
+    // A declared file that exists but cannot be read as Touchstone must not be replaced by
+    // the definition's scalar defaults: the stage has to stay unresolved.
+    scratch.write("bad.s2p", "not a touchstone file\n");
+    std::filesystem::create_directories(scratch.dir() / "dir.s2p");
+    scratch.write("one.s2p", "# Hz S RI R 50\n1e9 0.5 0\n");
+    scratch.write("bad.json", attenuatorDefinition("bad.s2p", "BAD-FILE"));
+    scratch.write("dir.json", attenuatorDefinition("dir.s2p", "DIR-FILE"));
+    scratch.write("one.json", attenuatorDefinition("one.s2p", "ONE-PORT"));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+
+    BudgetStageEvaluator evaluator;
+    for (const std::string part : {"BAD-FILE", "DIR-FILE", "ONE-PORT"}) {
+        INFO("part " << part);
+        const auto *definition = findPart(library, part);
+        REQUIRE(definition != nullptr);
+
+        BudgetConfig config;
+        config.stages.push_back(stageFrom(*definition));
+        auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+        REQUIRE(out.size() == 1);
+        REQUIRE_FALSE(out[0].resolved);
+        REQUIRE_FALSE(out[0].diagnostic.empty());
+        REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+    }
 }
 
 TEST_CASE("Evaluator leaves an out-of-band amplifier point invalid", "[budget][evaluator]") {

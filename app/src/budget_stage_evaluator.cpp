@@ -82,8 +82,8 @@ Spectrum makeStimulus(double f, double stimulus_power_dBm) {
 }
 
 // Resolves every data-file reference against the library JSON's directory before
-// instantiate(). instantiate() logs and skips a file it cannot load, so a budget stage has to
-// reject it here to avoid silently evaluating a defaulted part.
+// instantiate(), so a reference that cannot even be located is reported before any engine
+// exists. A file that exists but does not load is reported by instantiate() instead.
 std::optional<std::string> checkDataFiles(const ComponentDefinition &definition) {
     std::set<std::string> checked;
     for (const auto &ref : definition.data_files) {
@@ -102,6 +102,19 @@ std::optional<std::string> checkDataFiles(const ComponentDefinition &definition)
         }
     }
     return std::nullopt;
+}
+
+// "s_parameters 'bad.s2p': failed to load the S-parameter file (or it did not enable
+// S-parameter mode); ..." — one clause per unusable data file or path parameter.
+std::string describeDataFileIssues(const std::vector<ComponentLibrary::DataFileLoadIssue> &issues) {
+    std::ostringstream text;
+    for (std::size_t i = 0; i < issues.size(); ++i) {
+        if (i != 0) {
+            text << "; ";
+        }
+        text << issues[i].type << " '" << issues[i].path << "': " << issues[i].reason;
+    }
+    return text.str();
 }
 
 ComponentDefinition definitionFor(const BudgetStage &stage) {
@@ -152,10 +165,19 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
 
         CircuitRuntime runtime;
         GraphEditorActions actions(runtime);
-        IComponentEngine *engine = library.instantiate(definition, runtime, actions);
+        std::vector<ComponentLibrary::DataFileLoadIssue> data_file_issues;
+        IComponentEngine *engine =
+            library.instantiate(definition, runtime, actions, std::nullopt, &data_file_issues);
         if (!engine) {
             evaluations.push_back(unresolvedEvaluation(
                 points, "cannot instantiate '" + stage.part_number + "' (" + stage.type + ")"));
+            continue;
+        }
+        // instantiate() still returns an engine that fell back to the definition's scalar
+        // defaults. A budget stage must not be evaluated from a substituted response.
+        if (!data_file_issues.empty()) {
+            evaluations.push_back(
+                unresolvedEvaluation(points, describeDataFileIssues(data_file_issues)));
             continue;
         }
         // A budget stage is a single-input, single-output two-port: the probe drives

@@ -68,15 +68,28 @@ std::optional<std::filesystem::path> componentDataFilePath(const ComponentDefini
 
 class ComponentLibrary {
   public:
+    // A data file (or path parameter) that instantiate() could not use. The engine is still
+    // returned: the caller decides whether a fallback to the definition's scalar defaults is
+    // acceptable (the editor accepts it) or the component is unusable (a budget stage).
+    struct DataFileLoadIssue {
+        std::string type;   // "s_parameters", or the path-parameter key
+        std::string path;   // the reference as written in the definition
+        std::string reason; // human-readable
+    };
+
     void loadFile(const std::string &filepath);
     std::vector<const ComponentDefinition *> all() const;
     void scan(const std::string &directory);
     std::vector<const ComponentDefinition *> byType(const std::string &type) const;
     // `component_id` reuses an existing component id (in-place replacement); nullopt reserves
     // a fresh one from the runtime.
+    // `data_file_issues`, when set, receives one entry per data file or path parameter the
+    // instantiation could not use. The engine is returned regardless; callers that cannot
+    // tolerate the scalar-default fallback must inspect the vector.
     IComponentEngine *instantiate(const ComponentDefinition &def, CircuitRuntime &runtime,
                                   GraphEditorActions &editor_actions,
-                                  std::optional<int> component_id = std::nullopt);
+                                  std::optional<int> component_id = std::nullopt,
+                                  std::vector<DataFileLoadIssue> *data_file_issues = nullptr);
     std::vector<ValidationIssue> validate(const std::string &type,
                                           const nlohmann::json &parameters) const;
     void upsert(const ComponentDefinition &def);
