@@ -29,7 +29,7 @@ class CombinerEngine : public ComponentEngineBase {
     bool manualMode() const { return m_manual_mode; }
 
     void setSParamMode(bool enabled);
-    bool sparamMode() const { return m_sparam_mode; }
+    bool sparamMode() const override { return m_sparam_mode; }
     void setSParamFilepath(const std::string &path);
     bool sparamLoaded() const { return m_sparam_data.loaded(); }
     const std::string &sparamFilepath() const { return m_sparam_filepath; }

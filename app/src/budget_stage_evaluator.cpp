@@ -191,26 +191,40 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
         // resolve and exist while the engine still fell back to its scalar model (a parse
         // failure or a file that does not enable the mode), which the issue list above does
         // not see: only the engine state can show it.
-        if ((stageDeclaresParameter(stage, "sparam_filepath") ||
-             stageDeclaresParameter(stage, "sparam_path")) &&
-            !engine->sparamMode()) {
-            evaluations.push_back(
-                unresolvedEvaluation(points, "'" + stage.part_number +
-                                                 "' declares an S-parameter file that did not "
-                                                 "load and did not enable S-parameter mode"));
+        const auto declaredValue = [&stage](const char *key) {
+            return stageDeclaresParameter(stage, key) ? stage.parameters[key].get<std::string>()
+                                                      : std::string{};
+        };
+        const std::string sparam_file = declaredValue("sparam_filepath");
+        const std::string sparam_legacy_file = declaredValue("sparam_path");
+        if ((!sparam_file.empty() || !sparam_legacy_file.empty()) && !engine->sparamMode()) {
+            const std::string &file = sparam_file.empty() ? sparam_legacy_file : sparam_file;
+            evaluations.push_back(unresolvedEvaluation(
+                points, "'" + stage.part_number + "' declares an S-parameter file '" + file +
+                            "' that did not load and did not enable S-parameter mode"));
             continue;
         }
         if (const auto *amplifier = dynamic_cast<const AmplifierEngine *>(engine)) {
-            if (stageDeclaresParameter(stage, "amp_filepath") && !amplifier->ampLoaded()) {
-                evaluations.push_back(unresolvedEvaluation(
-                    points, "'" + stage.part_number + "' declares an AMP file that did not load"));
+            // A selected amp-f block replaces the AMP file's intercepts, so a broken legacy
+            // file is only a defect when no block replaces it.
+            const std::string amp_file = declaredValue("amp_filepath");
+            if (!amp_file.empty() && !amplifier->ampfBlockSelected() && !amplifier->ampLoaded()) {
+                std::string diagnostic = "'" + stage.part_number + "' declares an AMP file '" +
+                                         amp_file + "' that did not load";
+                if (!amplifier->ampError().empty()) {
+                    diagnostic += ": " + amplifier->ampError();
+                }
+                evaluations.push_back(unresolvedEvaluation(points, std::move(diagnostic)));
                 continue;
             }
-            if (stageDeclaresParameter(stage, "ampf_filepath") && !amplifier->ampfBlockSelected()) {
-                evaluations.push_back(
-                    unresolvedEvaluation(points, "'" + stage.part_number +
-                                                     "' declares an amp-f file without a selected "
-                                                     "block"));
+            const std::string ampf_file = declaredValue("ampf_filepath");
+            if (!ampf_file.empty() && !amplifier->ampfBlockSelected()) {
+                std::string diagnostic = "'" + stage.part_number + "' declares an amp-f file '" +
+                                         ampf_file + "' without a selected block";
+                if (!amplifier->ampfError().empty()) {
+                    diagnostic += ": " + amplifier->ampfError();
+                }
+                evaluations.push_back(unresolvedEvaluation(points, std::move(diagnostic)));
                 continue;
             }
         }

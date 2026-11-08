@@ -411,6 +411,105 @@ TEST_CASE("Evaluator accepts an amp-f path parameter with one block", "[budget][
     REQUIRE(out[0].metrics.gain_dB[0] == Approx(20.0).margin(1e-3));
 }
 
+TEST_CASE("Evaluator rejects a loaded S-parameter file that does not enable the mode",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    // A one-port file parses, but it cannot enable S-parameter mode on a two-port stage; the
+    // declaration is still not honoured.
+    scratch.write("one.s2p", "# Hz S RI R 50\n1e9 0.0 0.0\n");
+    scratch.write("att.json", definitionJson("attenuator", "ONE-PORT-PARAM",
+                                             {{"attenuation_dB", 0.0},
+                                              {"sparam_mode", true},
+                                              {"sparam_filepath", "one.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "ONE-PORT-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    // The diagnostic must name the declared file so the user can find it.
+    REQUIRE(out[0].diagnostic.find("one.s2p") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
+TEST_CASE("Evaluator accepts the legacy sparam_path key", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("good.s2p", "# Hz S RI R 50\n1e9 0 0 0.5 0 0 0 0 0\n");
+    scratch.write("att.json", definitionJson("attenuator", "LEGACY-SPARAM-PARAM",
+                                             {{"attenuation_dB", 0.0},
+                                              {"sparam_mode", true},
+                                              {"sparam_path", "good.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "LEGACY-SPARAM-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(-6.0206).margin(1e-3));
+}
+
+TEST_CASE("Evaluator treats empty AMP and amp-f parameters as undeclared", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("amp.json",
+                  definitionJson("amplifier", "EMPTY-AMP-PARAMS",
+                                 {{"gain_dB", 20.0}, {"amp_filepath", ""}, {"ampf_filepath", ""}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "EMPTY-AMP-PARAMS");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(20.0).margin(1e-3));
+}
+
+TEST_CASE("Evaluator lets a selected amp-f block replace a broken AMP file",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    // The selected block supplies the intercepts, so the unreadable legacy AMP file is not a
+    // defect for this stage.
+    scratch.write("one.ampf", "# amp-f v1\nDEVICE TEST\n# COLUMNS: OIP3_dBm\nBEGIN\n"
+                              "1000 10.0\nEND\n");
+    scratch.write("amp.json", definitionJson("amplifier", "AMPF-REPLACES-AMP",
+                                             {{"gain_dB", 20.0},
+                                              {"amp_filepath", "bad.amp"},
+                                              {"ampf_filepath", "one.ampf"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "AMPF-REPLACES-AMP");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(20.0).margin(1e-3));
+}
+
 TEST_CASE("Evaluator leaves an out-of-band amplifier point invalid", "[budget][evaluator]") {
     ComponentLibrary library;
     library.scan(libraryRoot());
