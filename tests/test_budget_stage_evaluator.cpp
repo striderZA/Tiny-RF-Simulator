@@ -9,6 +9,8 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <utility>
+#include <vector>
 
 using Catch::Approx;
 
@@ -74,20 +76,27 @@ class Scratch {
     std::filesystem::path m_dir;
 };
 
+// A minimal library entry of `type`; `data_file`, when set, is the stage's single declared
+// S-parameter reference.
+std::string definitionJson(const std::string &type, const std::string &part_number,
+                           const nlohmann::json &parameters, const std::string &data_file = {}) {
+    nlohmann::json definition = {
+        {"schema_version", 1},           {"type", type},
+        {"part_number", part_number},    {"manufacturer", "Test"},
+        {"description", "Test " + type}, {"parameters", parameters},
+    };
+    if (!data_file.empty()) {
+        definition["data_files"] =
+            nlohmann::json::array({{{"type", "s_parameters"}, {"path", data_file}}});
+    }
+    return definition.dump(2);
+}
+
 // The built-in RC-10-10+ definition with a data file attached; the data-file load is what
 // enables S-parameter mode.
 std::string attenuatorDefinition(const std::string &data_file,
                                  const std::string &part_number = "TEST-ATT") {
-    nlohmann::json definition = {
-        {"schema_version", 1},
-        {"type", "attenuator"},
-        {"part_number", part_number},
-        {"manufacturer", "Test"},
-        {"description", "Test attenuator"},
-        {"parameters", {{"attenuation_dB", 0.0}}},
-        {"data_files", nlohmann::json::array({{{"type", "s_parameters"}, {"path", data_file}}})},
-    };
-    return definition.dump(2);
+    return definitionJson("attenuator", part_number, {{"attenuation_dB", 0.0}}, data_file);
 }
 
 } // namespace
@@ -178,7 +187,8 @@ TEST_CASE("Evaluator rejects a stage whose declared data file cannot load", "[bu
     library.scan(scratch.dir().string());
 
     BudgetStageEvaluator evaluator;
-    for (const std::string part : {"BAD-FILE", "DIR-FILE", "ONE-PORT"}) {
+    for (const auto &[part, file] : std::vector<std::pair<std::string, std::string>>{
+             {"BAD-FILE", "bad.s2p"}, {"DIR-FILE", "dir.s2p"}, {"ONE-PORT", "one.s2p"}}) {
         INFO("part " << part);
         const auto *definition = findPart(library, part);
         REQUIRE(definition != nullptr);
@@ -188,9 +198,76 @@ TEST_CASE("Evaluator rejects a stage whose declared data file cannot load", "[bu
         auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
         REQUIRE(out.size() == 1);
         REQUIRE_FALSE(out[0].resolved);
-        REQUIRE_FALSE(out[0].diagnostic.empty());
+        // The diagnostic must name the file, or the user cannot tell which reference failed.
+        REQUIRE(out[0].diagnostic.find(file) != std::string::npos);
         REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
     }
+}
+
+TEST_CASE("Evaluator rejects a stage whose type does not load S-parameter files",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    // The switch does not support S-parameter files, so a declared one cannot be honoured;
+    // evaluating from the switch's scalar model would hide the broken declaration.
+    scratch.write("dummy.s2p", "# Hz S RI R 50\n1e9 0 0 0.5 0 0 0 0 0\n");
+    scratch.write("switch.json", definitionJson("rf_switch_spdt", "SW-FILE",
+                                                {{"insertion_loss_dB", 0.5}}, "dummy.s2p"));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "SW-FILE");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("does not load S-parameter files") != std::string::npos);
+}
+
+TEST_CASE("Evaluator rejects an escaping path parameter", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("att.json",
+                  definitionJson("attenuator", "ESC-PARAM",
+                                 {{"attenuation_dB", 0.0}, {"sparam_filepath", "../x.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "ESC-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("outside the library directory") != std::string::npos);
+}
+
+TEST_CASE("Evaluator treats an empty path parameter as undeclared", "[budget][evaluator]") {
+    Scratch scratch;
+    // An empty string is not a reference to a file; it must not turn the stage unresolved.
+    scratch.write("att.json", definitionJson("attenuator", "EMPTY-PARAM",
+                                             {{"attenuation_dB", 0.0}, {"sparam_filepath", ""}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "EMPTY-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(0.0).margin(1e-6));
 }
 
 TEST_CASE("Evaluator leaves an out-of-band amplifier point invalid", "[budget][evaluator]") {

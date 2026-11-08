@@ -83,9 +83,9 @@ class ComponentLibrary {
     std::vector<const ComponentDefinition *> byType(const std::string &type) const;
     // `component_id` reuses an existing component id (in-place replacement); nullopt reserves
     // a fresh one from the runtime.
-    // `data_file_issues`, when set, receives one entry per data file or path parameter the
-    // instantiation could not use. The engine is returned regardless; callers that cannot
-    // tolerate the scalar-default fallback must inspect the vector.
+    // `data_file_issues`, when set, *appends* one entry per data file or path parameter the
+    // instantiation could not use (it is never cleared). The engine is returned regardless;
+    // callers that cannot tolerate the scalar-default fallback must inspect the vector.
     IComponentEngine *instantiate(const ComponentDefinition &def, CircuitRuntime &runtime,
                                   GraphEditorActions &editor_actions,
                                   std::optional<int> component_id = std::nullopt,

@@ -780,6 +780,12 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                 if (!params.contains(key) || !params[key].is_string())
                     continue;
                 const std::string value = params[key].get<std::string>();
+                // An empty value declares no file at all; drop it silently rather than
+                // reporting it as an escape (a budget stage treats "" as undeclared too).
+                if (value.empty()) {
+                    params.erase(key);
+                    continue;
+                }
                 if (auto resolved = resolveDataFilePath(json_dir, value)) {
                     params[key] = resolved->string();
                 } else {
@@ -799,18 +805,14 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
         for (const auto &df : def.data_files) {
             if (df.type != "s_parameters")
                 continue;
-            if (!descriptor->supports_sparam_file) {
-                LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
-                         "component type '%s' (%s)",
-                         df.path.c_str(), def.type.c_str(), def.part_number.c_str());
-                if (data_file_issues)
-                    data_file_issues->push_back(
-                        {df.type, df.path, "the component type does not load S-parameter files"});
-                continue;
-            }
-            if (!descriptor->load_sparam_file) {
-                LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
-                         def.type.c_str(), def.part_number.c_str());
+            if (!descriptor->supports_sparam_file || !descriptor->load_sparam_file) {
+                if (!descriptor->supports_sparam_file)
+                    LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
+                             "component type '%s' (%s)",
+                             df.path.c_str(), def.type.c_str(), def.part_number.c_str());
+                else
+                    LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
+                             def.type.c_str(), def.part_number.c_str());
                 if (data_file_issues)
                     data_file_issues->push_back(
                         {df.type, df.path, "the component type does not load S-parameter files"});

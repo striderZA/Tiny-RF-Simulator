@@ -49,11 +49,12 @@ static std::string write_temp_file(const std::string &name, const std::string &c
     return path.string();
 }
 
-// Writes `s2p_content` as `entry.s2p` plus a library JSON referencing it, in one fresh
-// directory (`cleanup_dir`, which the caller removes). Returns the JSON path.
+// Writes `s2p_content` as `entry.s2p` plus a library JSON referencing `data_file_path`, in one
+// fresh directory (`cleanup_dir`, which the caller removes). Returns the JSON path.
 static std::string write_sparam_library_entry(const std::string &s2p_content,
                                               const std::string &part_number,
-                                              std::filesystem::path &cleanup_dir) {
+                                              std::filesystem::path &cleanup_dir,
+                                              const std::string &data_file_path = "entry.s2p") {
     const std::string s2p_path = write_temp_file("entry.s2p", s2p_content);
     cleanup_dir = std::filesystem::path(s2p_path).parent_path();
     nlohmann::json json = {
@@ -61,7 +62,8 @@ static std::string write_sparam_library_entry(const std::string &s2p_content,
         {"type", "amplifier"},
         {"part_number", part_number},
         {"parameters", {{"gain_dB", 20.0}, {"nf_dB", 1.0}}},
-        {"data_files", nlohmann::json::array({{{"type", "s_parameters"}, {"path", "entry.s2p"}}})},
+        {"data_files",
+         nlohmann::json::array({{{"type", "s_parameters"}, {"path", data_file_path}}})},
     };
     const auto json_path = cleanup_dir / "entry.json";
     std::ofstream ofs(json_path);
@@ -544,6 +546,32 @@ TEST_CASE("ComponentLibrary reports no issue for a loadable data file", "[librar
 
     REQUIRE(engine != nullptr);
     REQUIRE(issues.empty());
+
+    std::filesystem::remove_all(cleanup_dir);
+}
+
+TEST_CASE("ComponentLibrary reports an escaping data file", "[library]") {
+    std::filesystem::path cleanup_dir;
+    const std::string json_path =
+        write_sparam_library_entry("! unused\n# Hz S RI R 50\n1e9 0 0 0.5 0 0 0 0 0\n",
+                                   "AMP_ESCAPE_SPARAM", cleanup_dir, "../decoy.s2p");
+
+    ComponentLibrary lib;
+    lib.loadFile(json_path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    std::vector<ComponentLibrary::DataFileLoadIssue> issues;
+
+    auto *engine = lib.instantiate(*defs[0], runtime, actions, std::nullopt, &issues);
+
+    REQUIRE(engine != nullptr);
+    REQUIRE(issues.size() == 1);
+    REQUIRE(issues[0].type == "s_parameters");
+    REQUIRE(issues[0].path == "../decoy.s2p");
+    REQUIRE(issues[0].reason.find("outside the library directory") != std::string::npos);
 
     std::filesystem::remove_all(cleanup_dir);
 }
