@@ -516,6 +516,49 @@ TEST_CASE("Evaluator accepts an amp-f path parameter with one block", "[budget][
     REQUIRE(out[0].metrics.gain_dB[0] == Approx(20.0).margin(1e-3));
 }
 
+TEST_CASE("Evaluator reports edge-held AMP/amp-f intercepts beyond the file band",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    // A single 1 GHz row. The query below is at 5 GHz, outside the amp-f band, where the
+    // block's last row is the edge value the amplifier model reports.
+    scratch.write("narrow.ampf", "# amp-f v1\nDEVICE TEST\n# COLUMNS: OIP3_dBm OP1dB_dBm\n"
+                                 "BEGIN\n1000 32.0 22.0\nEND\n");
+    nlohmann::json definition = {
+        {"schema_version", 2},
+        {"type", "amplifier"},
+        {"part_number", "TEST-AMP-AMPF"},
+        {"manufacturer", "Test"},
+        {"description", "Test amplifier"},
+        {"parameters",
+         {{"gain_dB", 10.0},
+          {"nf_dB", 2.0},
+          {"oip3_dBm", 30.0},
+          {"p1db_dBm", 20.0},
+          {"ampf_filepath", "narrow.ampf"}}},
+    };
+    scratch.write("amp.json", definition.dump(2));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *part = findPart(library, "TEST-AMP-AMPF");
+    REQUIRE(part != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*part));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {5e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    // An AMP/amp-f intercept is not an S-parameter response, so the point stays in band and
+    // the edge-held value enters the cascade.
+    REQUIRE_FALSE(out[0].metrics.out_of_band[0]);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(10.0).margin(1e-3));
+    REQUIRE(out[0].metrics.nf_dB[0] == Approx(2.0).margin(1e-3));
+    REQUIRE(out[0].metrics.oip3_dBm[0] == Approx(32.0));
+    REQUIRE(out[0].metrics.p1db_dBm[0] == Approx(22.0));
+}
+
 TEST_CASE("Evaluator rejects a loaded S-parameter file that does not enable the mode",
           "[budget][evaluator]") {
     Scratch scratch;

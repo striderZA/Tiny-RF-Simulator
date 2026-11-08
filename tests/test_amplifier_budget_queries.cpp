@@ -138,3 +138,28 @@ TEST_CASE("Amplifier S-parameter gain is used for IIP3 conversion", "[amplifier]
     // IIP3 20 dBm + S21 gain (-6.0206 dB) = 13.9794 dBm.
     REQUIRE(amp.oip3At_Hz(1e9) == Approx(20.0 + 20.0 * std::log10(0.5)).epsilon(1e-9));
 }
+
+TEST_CASE("Amplifier intercepts hold their edge value above the file band", "[amplifier][budget]") {
+    Scratch scratch;
+
+    SECTION("an amp-f block holds its last row") {
+        NodeGraphEngine graph;
+        AmplifierEngine amp(1, graph);
+        amp.deserialize({{"gain_dB", 10.0}, {"oip3_dBm", 30.0}, {"p1db_dBm", 20.0}});
+        amp.setAmpfFilepath(
+            scratch.write("edge.ampf", ampfFile("OIP3_dBm OP1dB_dBm", "32.0 22.0")));
+        REQUIRE(amp.ampfBlockSelected());
+        // The block's 1 GHz row is the edge value for every frequency above it.
+        REQUIRE(amp.oip3At_Hz(5e9) == Approx(32.0));
+        REQUIRE(amp.p1dbAt_Hz(5e9) == Approx(22.0));
+    }
+
+    SECTION("a legacy AMP OIP3 section holds its last row") {
+        NodeGraphEngine graph;
+        AmplifierEngine amp(1, graph);
+        amp.deserialize({{"gain_dB", 10.0}, {"oip3_dBm", 30.0}, {"p1db_dBm", 20.0}});
+        amp.setAmpFilepath(scratch.write("edge.amp", kNetwork + "OIP3 dBm\nFREQ GHz\n1.0 32.0\n"));
+        REQUIRE(amp.ampLoaded());
+        REQUIRE(amp.oip3At_Hz(5e9) == Approx(32.0));
+    }
+}

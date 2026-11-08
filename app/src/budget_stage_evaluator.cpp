@@ -287,9 +287,10 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
             }
             const auto noise_idx = findNoiseBin(response, f);
 
-            // A tone or bin an S-parameter block flagged out of band holds the nearest edge
-            // value, not a measurement. The whole point is out of band and no edge-held
-            // intercept may enter the cascade.
+            // An S-parameter tone or bin outside the file band holds its nearest edge value,
+            // not a measurement, so the whole point is invalid. An AMP/amp-f intercept instead
+            // holds its edge value outside its own band, matching the amplifier model, and the
+            // budget reports that value.
             const bool noise_out_of_band = noise_idx && *noise_idx < response.out_of_band.size() &&
                                            response.out_of_band[*noise_idx];
             if (response.tones[*tone_idx].out_of_band || noise_out_of_band) {
