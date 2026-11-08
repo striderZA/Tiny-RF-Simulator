@@ -35,9 +35,9 @@ Only part types the budget can model are listed: amplifiers, attenuators, filter
 
 Use **Remove**, **Up**, and **Down** on the selected row, or **Clear** to empty the chain. Stage order is the top-to-bottom order of the table.
 
-Each row snapshots the library definition's parameters. A part's data files are not copied: the panel reads them from the library directory recorded in `source_path` when it evaluates the chain. Editing or replacing a data file changes the prediction; deleting it, or a file that cannot be loaded, marks the row unresolved with the reason after `--`.
+Each row snapshots the library definition's parameters. A part's data-file references are kept, but their contents are not: the panel reads the files from the library directory recorded in `source_path` when it evaluates the chain. Editing or replacing a data file changes the prediction, and deleting it or leaving a file that cannot be loaded marks the row unresolved with the reason after `--` — once the cache is refreshed (see below).
 
-The evaluator caches a stage, so a data-file change may not appear until you next edit a stage, the input power, or the sweep. A project moved to another machine needs the same library paths.
+The evaluator caches one whole-chain result. The cache key is the stage settings, the input power, and the sweep; data-file contents are not part of it. So an edit, a deletion, or a corrupt file may not show up until you next change a stage, the input power, or the sweep. A project moved to another machine needs the same library paths.
 
 A saved stage's file inputs must resolve inside a scanned library root. If they do not, the row is unresolved.
 
@@ -75,7 +75,9 @@ The prediction is a classic cascade calculation, not a full simulation:
 
 A frequency point is left out when any stage is out of band there, or its gain or noise figure is not finite, or its linear gain is zero or negative. Curves then have a gap at that point. The requirement evaluation treats any invalid in-band point as missing, so a budget whose data band is narrower than the requirement band reports Incomplete for that metric.
 
-A Touchstone file's frequency range sets where that rule applies to the gain and noise figure read from it. AMP and amp-f intercept curves behave differently: the OIP3 and P1dB curves hold their edge value outside the file's frequency range, matching the amplifier model, so an intercept is not dropped for being outside that range.
+A Touchstone file's frequency range sets its band: outside it the whole point is left out, so gain, noise figure, OIP3, and P1dB all disappear together, not the gain and noise figure alone.
+
+AMP and amp-f intercepts behave differently. An amp-f block holds its OIP3 and P1dB edge values outside its frequency range, matching the amplifier model. A legacy AMP file supplies OIP3 (or IIP3-derived) curves only, which also hold their edge value, while its P1dB stays the scalar value. Edge-hold never rescues a point that the Touchstone file puts out of band.
 
 ## Limits in this version
 
