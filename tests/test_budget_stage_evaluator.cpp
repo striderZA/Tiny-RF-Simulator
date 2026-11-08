@@ -172,6 +172,34 @@ TEST_CASE("Evaluator marks a missing data file unresolved", "[budget][evaluator]
     REQUIRE(std::isnan(out[0].metrics.oip3_dBm[0]));
 }
 
+TEST_CASE("Evaluator rejects a stage outside the scanned library roots", "[budget][evaluator]") {
+    Scratch library_scratch;
+    library_scratch.write("test.s2p", "# Hz S RI R 50\n"
+                                      "1e9 0 0 0.5 0 0 0 0 0\n");
+    library_scratch.write("att.json", attenuatorDefinition("test.s2p"));
+
+    ComponentLibrary library;
+    library.scan(library_scratch.dir().string());
+    const auto *definition = findPart(library, "TEST-ATT");
+    REQUIRE(definition != nullptr);
+
+    // The stage keeps a valid data file but points its source path at a library that was
+    // never scanned, so the reference cannot be confined to a library root.
+    Scratch outside;
+    BudgetStage stage = stageFrom(*definition);
+    stage.source_path = (outside.dir() / "part.json").string();
+
+    BudgetConfig config;
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    CAPTURE(out[0].diagnostic);
+    REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
+}
+
 TEST_CASE("Evaluator rejects a stage whose declared data file cannot load", "[budget][evaluator]") {
     Scratch scratch;
     // A declared file that exists but cannot be read as Touchstone must not be replaced by

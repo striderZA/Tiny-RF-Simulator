@@ -3,6 +3,7 @@
 #include "amplifier_engine.h"
 #include "circuit_runtime.h"
 #include "common.h"
+#include "component_params.h"
 #include "graph_editor_actions.h"
 
 #include <cmath>
@@ -124,6 +125,20 @@ bool stageDeclaresParameter(const BudgetStage &stage, const char *key) {
            stage.parameters[key].is_string() && !stage.parameters[key].get<std::string>().empty();
 }
 
+// Whether the stage names a file at all: data_files, or any path parameter with a non-empty
+// value. Only such a stage needs its source path confined to a scanned library root.
+bool declaresFileInput(const BudgetStage &stage) {
+    if (!stage.data_files.empty()) {
+        return true;
+    }
+    for (const char *key : kPathParameterKeys) {
+        if (stageDeclaresParameter(stage, key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 ComponentDefinition definitionFor(const BudgetStage &stage) {
     ComponentDefinition definition;
     definition.schema_version = 1;
@@ -165,6 +180,14 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
 
     for (const BudgetStage &stage : config.stages) {
         const ComponentDefinition definition = definitionFor(stage);
+        // A reference can only be resolved against a directory the library actually indexed;
+        // otherwise checkDataFiles() reports the file as missing, which misattributes the
+        // problem to the file instead of to the stage's unscanned source library.
+        if (declaresFileInput(stage) && !library.containsLibraryPath(stage.source_path)) {
+            evaluations.push_back(unresolvedEvaluation(
+                points, "stage source path is outside the scanned library roots"));
+            continue;
+        }
         if (const auto data_file_error = checkDataFiles(definition)) {
             evaluations.push_back(unresolvedEvaluation(points, *data_file_error));
             continue;

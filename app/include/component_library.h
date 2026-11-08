@@ -80,6 +80,10 @@ class ComponentLibrary {
     void loadFile(const std::string &filepath);
     std::vector<const ComponentDefinition *> all() const;
     void scan(const std::string &directory);
+    // True when `source_path` is non-empty and lies within one of the directories passed to
+    // scan(). Budget stages use this to reject a definition whose source file was never
+    // part of a scanned library before any relative data-file reference is resolved.
+    bool containsLibraryPath(std::string_view source_path) const;
     std::vector<const ComponentDefinition *> byType(const std::string &type) const;
     // `component_id` reuses an existing component id (in-place replacement); nullopt reserves
     // a fresh one from the runtime.
@@ -99,4 +103,7 @@ class ComponentLibrary {
 
   private:
     std::vector<ComponentDefinition> m_definitions;
+    // Canonical absolute paths of the directories passed to scan(), one entry per distinct
+    // root. containsLibraryPath() confines a stage's source file to these roots.
+    std::vector<std::filesystem::path> m_roots;
 };

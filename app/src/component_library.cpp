@@ -691,6 +691,13 @@ void ComponentLibrary::scan(const std::string &directory) {
                      ec.message().c_str());
         return;
     }
+    // Record the root before indexing its files so containsLibraryPath() can confine a
+    // definition read by this scan even if the subtree later fails partway through.
+    std::error_code root_ec;
+    const fs::path canonical_root = fs::weakly_canonical(directory, root_ec);
+    if (!root_ec && std::find(m_roots.begin(), m_roots.end(), canonical_root) == m_roots.end()) {
+        m_roots.push_back(canonical_root);
+    }
     try {
         fs::recursive_directory_iterator it(directory,
                                             fs::directory_options::skip_permission_denied, ec);
@@ -725,6 +732,14 @@ void ComponentLibrary::scan(const std::string &directory) {
         // scan of the remaining roots.
         LOG_WARN("ComponentLibrary: skipping unreadable directory in scan: %s", e.what());
     }
+}
+
+bool ComponentLibrary::containsLibraryPath(std::string_view source_path) const {
+    if (source_path.empty())
+        return false;
+    const fs::path candidate(source_path);
+    return std::any_of(m_roots.begin(), m_roots.end(),
+                       [&](const fs::path &root) { return pathWithinRoot(root, candidate); });
 }
 
 std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::string &type) const {

@@ -133,6 +133,37 @@ TEST_CASE("ComponentLibrary scans directory recursively", "[library]") {
     std::filesystem::remove_all(lib_root);
 }
 
+TEST_CASE("ComponentLibrary confines paths to scanned roots", "[library]") {
+    const auto lib_root = std::filesystem::temp_directory_path() /
+                          ("test_lib_roots_" + test_temp_paths::processTag());
+    const auto outside_root = std::filesystem::temp_directory_path() /
+                              ("test_lib_outside_" + test_temp_paths::processTag());
+    std::filesystem::create_directories(lib_root / "amplifiers");
+    std::filesystem::create_directories(outside_root);
+
+    {
+        std::ofstream ofs(lib_root / "amplifiers/root_amp.json");
+        ofs << R"({"schema_version":1,"type":"amplifier","part_number":"ROOT-AMP","parameters":{"gain_dB":10.0}})";
+    }
+    {
+        std::ofstream ofs(outside_root / "part.json");
+        ofs << R"({"schema_version":1,"type":"amplifier","part_number":"OUTSIDE-AMP","parameters":{"gain_dB":10.0}})";
+    }
+
+    ComponentLibrary lib;
+    lib.scan(lib_root.string());
+
+    const auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(lib.containsLibraryPath(defs[0]->source_path));
+    REQUIRE(lib.containsLibraryPath((lib_root / "amplifiers").string()));
+    REQUIRE_FALSE(lib.containsLibraryPath((outside_root / "part.json").string()));
+    REQUIRE_FALSE(lib.containsLibraryPath(""));
+
+    std::filesystem::remove_all(lib_root);
+    std::filesystem::remove_all(outside_root);
+}
+
 TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]") {
     std::string json =
         R"({"schema_version":1,"type":"amplifier","part_number":"TEST-AMP","parameters":{"gain_dB":25.0,"nf_dB":3.0,"oip3_dBm":35.0,"p1db_dBm":20.0}})";
