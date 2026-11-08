@@ -17,7 +17,8 @@ struct BudgetStageEvaluation {
 // touched. Each stage goes through ComponentLibrary::instantiate() and therefore the same
 // parameter and data-file loading path as a placed component, with one tone at each grid
 // frequency. Results are cached and recomputed only when the stage snapshots, the stimulus
-// power, or the frequency grid change.
+// power, the frequency grid, or the library root set change (a new root can resolve a stage
+// that was previously outside every root).
 class BudgetStageEvaluator {
   public:
     std::vector<BudgetStageEvaluation> evaluate(const BudgetConfig &config,

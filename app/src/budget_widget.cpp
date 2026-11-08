@@ -51,13 +51,14 @@ std::string lowerCopy(std::string text) {
     return text;
 }
 
-// Same inputs as the evaluator's cache key: any stage snapshot, grid, or stimulus change
-// invalidates both the per-stage evaluation and the cascade result.
+// Same inputs as the evaluator's cache key: any stage snapshot, grid, stimulus, or library
+// root-set change invalidates both the per-stage evaluation and the cascade result.
 std::string resultKey(const BudgetConfig &config, const std::vector<double> &frequencies_Hz,
-                      double stimulus_power_dBm) {
+                      double stimulus_power_dBm, std::size_t root_generation) {
     std::ostringstream key;
     key << std::setprecision(17);
-    key << budgetToJson(config).dump() << '|' << stimulus_power_dBm << '|';
+    key << budgetToJson(config).dump() << '|' << stimulus_power_dBm << '|' << root_generation
+        << '|';
     for (const double frequency : frequencies_Hz)
         key << frequency << ',';
     return key.str();
@@ -229,6 +230,10 @@ void drawBudgetPlot(
 } // namespace
 
 bool BudgetWidget::addStage(BudgetConfig &budget, const ComponentDefinition &definition) {
+    // While an unsupported-version section is preserved verbatim, saving writes that section
+    // and nothing else, so an edit here would be silently discarded. Refuse instead.
+    if (!budget.unsupported_section.is_null())
+        return false;
     const std::string stage_type = budgetNormalizeStageType(definition.type);
     if (stage_type.empty())
         return false;
@@ -380,9 +385,13 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
     const bool has_selection =
         m_selected_stage >= 0 && m_selected_stage < static_cast<int>(budget.stages.size());
     const auto selected = static_cast<std::size_t>(m_selected_stage);
+    // An unsupported-version section is written back verbatim, so edits would be discarded.
+    const bool budget_read_only = !budget.unsupported_section.is_null();
 
+    ImGui::BeginDisabled(budget_read_only);
     if (ImGui::Button("Add part"))
         ImGui::OpenPopup("##budget_add_part");
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(!has_selection);
     if (ImGui::Button("Remove"))
@@ -408,10 +417,25 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
+    ImGui::BeginDisabled(budget_read_only);
     double input_power = budget.input_power_dBm;
     if (ImGui::InputDouble("Input power (dBm)", &input_power, 0.0, 0.0, "%.2f") &&
         setBudgetInputPower(budget, input_power) && onChange)
         onChange();
+    ImGui::EndDisabled();
+
+    // The budget predicts output power from the input power above, while the simulation uses
+    // the Network Analyzer's source-tone power. Showing it makes a systematic offset visible.
+    ImGui::SameLine();
+    ImGui::TextDisabled("Sim source tone: %.2f dBm", stimulus_power_dBm);
+
+    // An unsupported-version section was preserved verbatim; the stages below are not its
+    // stages, so say so rather than presenting an empty cascade as the user's budget.
+    if (!budget.unsupported_reason.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+        ImGui::TextUnformatted(budget.unsupported_reason.c_str());
+        ImGui::PopStyleColor();
+    }
 
     if (ImGui::BeginPopup("##budget_add_part")) {
         ImGui::TextUnformatted("Add library part");
@@ -458,7 +482,8 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
     }
 
     // --- Evaluation --------------------------------------------------------------
-    const std::string key = resultKey(budget, frequencies_Hz, stimulus_power_dBm);
+    const std::string key =
+        resultKey(budget, frequencies_Hz, stimulus_power_dBm, library.rootGeneration());
     if (key != m_result_key) {
         m_evaluations = m_evaluator.evaluate(budget, library, frequencies_Hz, stimulus_power_dBm);
         std::vector<BudgetStageMetrics> stage_metrics;
@@ -579,10 +604,32 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
 
             ImGui::PopID();
         }
+
+        // A stage entry the loader could not interpret is still shown, in red, with the
+        // reason, and is written back unchanged on save. It is not part of the cascade.
+        for (std::size_t i = 0; i < budget.rejected_stages.size(); ++i) {
+            const BudgetRejectedStage &rejected = budget.rejected_stages[i];
+            ImGui::PushID(static_cast<int>(budget.stages.size() + i));
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(kUnavailable);
+            ImGui::TableSetColumnIndex(1);
+            std::string label = "Unresolved stage";
+            if (rejected.raw.is_object()) {
+                const auto part = rejected.raw.find("part_number");
+                if (part != rejected.raw.end() && part->is_string() && !part->empty())
+                    label = part->get<std::string>();
+            }
+            label += " -- " + rejected.reason;
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
         ImGui::EndTable();
     }
 
-    if (budget.stages.empty())
+    if (budget.stages.empty() && budget.rejected_stages.empty())
         ImGui::TextDisabled("Add a library part");
 
     // --- Result plots ------------------------------------------------------------

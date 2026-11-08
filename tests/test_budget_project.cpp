@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <string>
 
 using Catch::Approx;
@@ -43,6 +44,13 @@ fs::path tempPath(const char *stem) {
     return fs::temp_directory_path() / (std::string(stem) + test_temp_paths::processTag() + "_" +
                                         std::to_string(++sequence) + ".rfsim");
 }
+
+nlohmann::json readProject(const fs::path &path) {
+    std::ifstream in(path);
+    nlohmann::json root;
+    in >> root;
+    return root;
+}
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture, "Budget round-trips through the project file", "[budget][project]") {
@@ -68,7 +76,8 @@ TEST_CASE_METHOD(ImGuiFixture, "Budget round-trips through the project file", "[
     std::remove(path.string().c_str());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Malformed budget stage is isolated on load", "[budget][project]") {
+TEST_CASE_METHOD(ImGuiFixture, "Malformed budget stage is retained on load and save",
+                 "[budget][project]") {
     const auto path = tempPath("rfsim_budget_malformed_");
     std::remove(path.string().c_str());
     {
@@ -96,13 +105,27 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed budget stage is isolated on load", "[b
 
     RfSimulatorApp app;
     REQUIRE(app.loadProject(path.string()));
-    REQUIRE(app.testBudgetConfig().input_power_dBm == Approx(-12.5));
-    REQUIRE(app.testBudgetConfig().stages.size() == 1);
-    REQUIRE(app.testBudgetConfig().stages[0].part_number == "AM1143");
+    const auto &budget = app.testBudgetConfig();
+    REQUIRE(budget.input_power_dBm == Approx(-12.5));
+    REQUIRE(budget.stages.size() == 1);
+    REQUIRE(budget.stages[0].part_number == "AM1143");
+    REQUIRE(budget.rejected_stages.size() == 1);
+    REQUIRE(budget.rejected_stages[0].raw["type"] == 42);
+    REQUIRE(budget.rejected_stages[0].raw["part_number"] == "BROKEN");
+    REQUIRE_FALSE(budget.rejected_stages[0].reason.empty());
+
+    // Saving after the load must not lose the unreadable entry.
+    const auto saved_path = tempPath("rfsim_budget_malformed_saved_");
+    REQUIRE(app.saveProject(saved_path.string()));
+    const auto saved = readProject(saved_path);
+    REQUIRE(saved["budget_calculator"]["stages"].size() == 2);
+    REQUIRE(saved["budget_calculator"]["stages"][1]["type"] == 42);
+    REQUIRE(saved["budget_calculator"]["stages"][1]["part_number"] == "BROKEN");
     std::remove(path.string().c_str());
+    std::remove(saved_path.string().c_str());
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Unsupported budget stage type is rejected on load",
+TEST_CASE_METHOD(ImGuiFixture, "Unsupported budget stage type is retained on load and save",
                  "[budget][project]") {
     const auto path = tempPath("rfsim_budget_unsupported_");
     std::remove(path.string().c_str());
@@ -132,13 +155,78 @@ TEST_CASE_METHOD(ImGuiFixture, "Unsupported budget stage type is rejected on loa
 
     RfSimulatorApp app;
     REQUIRE(app.loadProject(path.string()));
-    // The generator is dropped instead of reaching the two-port probe; the rest survives and
-    // the alias normalizes to the registry name.
-    REQUIRE(app.testBudgetConfig().stages.size() == 2);
-    REQUIRE(app.testBudgetConfig().stages[0].part_number == "AM1143");
-    REQUIRE(app.testBudgetConfig().stages[1].part_number == "FILT");
-    REQUIRE(app.testBudgetConfig().stages[1].type == "filter");
+    // The generator is kept as a rejected entry instead of reaching the two-port probe; the
+    // rest survives and the alias normalizes to the registry name.
+    const auto &budget = app.testBudgetConfig();
+    REQUIRE(budget.stages.size() == 2);
+    REQUIRE(budget.stages[0].part_number == "AM1143");
+    REQUIRE(budget.stages[1].part_number == "FILT");
+    REQUIRE(budget.stages[1].type == "filter");
+    REQUIRE(budget.rejected_stages.size() == 1);
+    REQUIRE(budget.rejected_stages[0].raw["part_number"] == "GEN1");
+
+    // The rejected entry keeps its original position in the saved array.
+    const auto saved_path = tempPath("rfsim_budget_unsupported_saved_");
+    REQUIRE(app.saveProject(saved_path.string()));
+    const auto saved = readProject(saved_path);
+    const auto &stages = saved["budget_calculator"]["stages"];
+    REQUIRE(stages.size() == 3);
+    REQUIRE(stages[0]["part_number"] == "GEN1");
+    REQUIRE(stages[1]["part_number"] == "AM1143");
+    REQUIRE(stages[2]["part_number"] == "FILT");
     std::remove(path.string().c_str());
+    std::remove(saved_path.string().c_str());
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Unsupported budget version is preserved verbatim",
+                 "[budget][project]") {
+    const auto path = tempPath("rfsim_budget_version_");
+    std::remove(path.string().c_str());
+    {
+        std::ofstream out(path);
+        REQUIRE(out);
+        out << R"json({
+            "version": 1,
+            "components": [],
+            "links": [],
+            "probe_pins": [],
+            "groups": [],
+            "network_analyzer": {},
+            "window_state": {},
+            "graph_state": {},
+            "budget_calculator": {
+                "version": 2,
+                "future_field": {"nested": true},
+                "input_power_dbm": -12.5,
+                "stages": [
+                    {"type": "future_part", "part_number": "FUTURE"}
+                ]
+            }
+        })json";
+    }
+
+    RfSimulatorApp app;
+    REQUIRE(app.loadProject(path.string()));
+    const auto &budget = app.testBudgetConfig();
+    REQUIRE(budget.stages.empty());
+    REQUIRE(budget.rejected_stages.empty());
+    REQUIRE(budget.unsupported_section["version"] == 2);
+    REQUIRE_FALSE(budget.unsupported_reason.empty());
+
+    // Saving keeps the unknown schema, including fields and stages this build cannot model.
+    const auto saved_path = tempPath("rfsim_budget_version_saved_");
+    REQUIRE(app.saveProject(saved_path.string()));
+    const auto saved = readProject(saved_path);
+    const auto &section = saved["budget_calculator"];
+    REQUIRE(section["version"] == 2);
+    REQUIRE(section["future_field"]["nested"] == true);
+    REQUIRE(section["stages"].size() == 1);
+    REQUIRE(section["stages"][0]["part_number"] == "FUTURE");
+
+    app.newProject();
+    REQUIRE(app.testBudgetConfig().unsupported_section.is_null());
+    std::remove(path.string().c_str());
+    std::remove(saved_path.string().c_str());
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Empty budget keeps a non-default input power",

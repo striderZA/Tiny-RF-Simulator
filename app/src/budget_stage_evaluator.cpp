@@ -153,10 +153,11 @@ ComponentDefinition definitionFor(const BudgetStage &stage) {
 }
 
 std::string cacheKey(const BudgetConfig &config, const std::vector<double> &frequencies_Hz,
-                     double stimulus_power_dBm) {
+                     double stimulus_power_dBm, std::size_t root_generation) {
     std::ostringstream key;
     key << std::setprecision(17);
-    key << budgetToJson(config).dump() << '|' << stimulus_power_dBm << '|';
+    key << budgetToJson(config).dump() << '|' << stimulus_power_dBm << '|' << root_generation
+        << '|';
     for (const double f : frequencies_Hz) {
         key << f << ',';
     }
@@ -169,7 +170,8 @@ std::vector<BudgetStageEvaluation>
 BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &library,
                                const std::vector<double> &frequencies_Hz,
                                double stimulus_power_dBm) {
-    const std::string key = cacheKey(config, frequencies_Hz, stimulus_power_dBm);
+    const std::string key =
+        cacheKey(config, frequencies_Hz, stimulus_power_dBm, library.rootGeneration());
     if (key == m_cache_key) {
         return m_cache;
     }

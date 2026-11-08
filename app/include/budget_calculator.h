@@ -2,6 +2,7 @@
 
 #include "component_library.h"
 
+#include <cstddef>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -28,9 +29,25 @@ bool budgetSupportsStageType(const std::string &type);
 // for a type the budget cannot model. Callers store the returned name, not the alias.
 std::string budgetNormalizeStageType(const std::string &type);
 
+// A stage entry the loader could not interpret, kept so saving after loading does not lose
+// data (for example a stage type a newer version introduced). `raw` is the entry exactly as
+// it appeared in the project; `position` is its index in the source `stages` array.
+struct BudgetRejectedStage {
+    nlohmann::json raw;
+    std::string reason;
+    std::size_t position = 0;
+};
+
 struct BudgetConfig {
     std::vector<BudgetStage> stages; // cascade order, first stage first
     double input_power_dBm = -30.0;  // output-power prediction
+    // Entries the loader skipped. They are not part of the cascade but are written back
+    // unchanged, at their original position, and shown in the widget as unresolved rows.
+    std::vector<BudgetRejectedStage> rejected_stages;
+    // The whole raw `budget_calculator` value when its version is not supported. While set,
+    // `budgetToJson()` returns it verbatim: an unknown schema is preserved, not rewritten.
+    nlohmann::json unsupported_section;
+    std::string unsupported_reason;
 };
 
 // Rejects a non-finite value. Returns true when the config changed.
@@ -67,7 +84,9 @@ BudgetResult computeBudget(const BudgetConfig &config, const std::vector<double>
                            const std::vector<BudgetStageMetrics> &stage_metrics);
 
 // Project JSON (top-level key `budget_calculator`). `budgetFromJson` never throws on
-// malformed input: it keeps the stages it can restore, appends one diagnostic per
-// rejected stage, and reports a structural problem in `diagnostic`.
+// malformed input: it keeps the stages it can restore, retains each rejected entry in
+// `rejected_stages` with its diagnostic, and reports a structural problem in `diagnostic`.
+// `budgetToJson` writes rejected entries back unchanged; when the section's version is
+// unsupported it returns the raw section verbatim.
 nlohmann::json budgetToJson(const BudgetConfig &config);
 BudgetConfig budgetFromJson(const nlohmann::json &json, std::string &diagnostic);

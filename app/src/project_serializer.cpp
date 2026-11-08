@@ -1195,8 +1195,11 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
 
     // An untouched budget is omitted rather than written as an empty object every project
     // would then carry. A non-default input power is an edit even with no stages, so the key
-    // is still written and the value round-trips.
-    if (!m_budget.stages.empty() || m_budget.input_power_dBm != BudgetConfig{}.input_power_dBm)
+    // is still written and the value round-trips. Unsupported-version raw data and rejected
+    // stages must be written even when no stage could be restored, or saving would lose them.
+    if (!m_budget.stages.empty() || !m_budget.rejected_stages.empty() ||
+        !m_budget.unsupported_section.is_null() ||
+        m_budget.input_power_dBm != BudgetConfig{}.input_power_dBm)
         root["budget_calculator"] = budgetToJson(m_budget);
 
     // Synchronize engine nodes before saving, including nodes added without a render frame.

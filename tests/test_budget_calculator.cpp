@@ -127,29 +127,82 @@ TEST_CASE("Budget JSON round-trips stages and input power", "[budget]") {
     REQUIRE(restored.stages[0].part_number == "AM1143");
     REQUIRE(restored.stages[0].parameters == s.parameters);
 }
-TEST_CASE("Budget JSON isolates a malformed stage", "[budget]") {
-    nlohmann::json j = {{"version", 1},
-                        {"input_power_dbm", -30.0},
-                        {"stages",
-                         {{{"type", "amplifier"}, {"part_number", "A"}, {"parameters", {}}},
-                          {{"type", 5}, {"part_number", "B"}, {"parameters", {}}}}}};
+TEST_CASE("Budget JSON isolates and retains a malformed stage", "[budget]") {
+    const nlohmann::json malformed = {{"type", 5}, {"part_number", "B"}, {"parameters", {}}};
+    nlohmann::json j = {
+        {"version", 1},
+        {"input_power_dbm", -30.0},
+        {"stages",
+         nlohmann::json::array(
+             {{{"type", "amplifier"}, {"part_number", "A"}, {"parameters", {}}}, malformed})}};
     std::string diagnostic;
     auto config = budgetFromJson(j, diagnostic);
     REQUIRE(config.stages.size() == 1);
     REQUIRE(config.stages[0].part_number == "A");
+    REQUIRE(config.rejected_stages.size() == 1);
+    REQUIRE(config.rejected_stages[0].raw == malformed);
+    REQUIRE_FALSE(config.rejected_stages[0].reason.empty());
+    REQUIRE(config.rejected_stages[0].position == 1);
     REQUIRE_FALSE(diagnostic.empty());
+
+    // Saving after loading puts the rejected entry back unchanged, at its original position.
+    const nlohmann::json saved = budgetToJson(config);
+    REQUIRE(saved["stages"].size() == 2);
+    REQUIRE(saved["stages"][0]["part_number"] == "A");
+    REQUIRE(saved["stages"][1] == malformed);
+
+    std::string second_diagnostic;
+    const auto restored = budgetFromJson(saved, second_diagnostic);
+    REQUIRE(restored.stages.size() == 1);
+    REQUIRE(restored.rejected_stages.size() == 1);
+    REQUIRE(restored.rejected_stages[0].raw == malformed);
 }
 
-TEST_CASE("Budget JSON rejects an unsupported stage type", "[budget]") {
-    nlohmann::json j = {{"version", 1},
-                        {"stages",
-                         {{{"type", "generator"}, {"part_number", "GEN"}},
-                          {{"type", "amplifier"}, {"part_number", "A"}}}}};
+TEST_CASE("Budget JSON rejects and retains an unsupported stage type", "[budget]") {
+    const nlohmann::json unsupported = {{"type", "generator"}, {"part_number", "GEN"}};
+    nlohmann::json j = {
+        {"version", 1},
+        {"stages",
+         nlohmann::json::array({unsupported, {{"type", "amplifier"}, {"part_number", "A"}}})}};
     std::string diagnostic;
     auto config = budgetFromJson(j, diagnostic);
     REQUIRE(config.stages.size() == 1);
     REQUIRE(config.stages[0].part_number == "A");
+    REQUIRE(config.rejected_stages.size() == 1);
+    REQUIRE(config.rejected_stages[0].raw == unsupported);
     REQUIRE(diagnostic.find("generator") != std::string::npos);
+}
+
+TEST_CASE("Budget JSON preserves an unsupported version verbatim", "[budget]") {
+    const nlohmann::json section = {
+        {"version", 2},
+        {"input_power_dbm", -3.0},
+        {"future_field", {{"nested", true}}},
+        {"stages", {{{"type", "future_part"}, {"part_number", "FUTURE"}}}}};
+    std::string diagnostic;
+    const auto config = budgetFromJson(section, diagnostic);
+    REQUIRE(config.stages.empty());
+    REQUIRE(config.rejected_stages.empty());
+    REQUIRE(config.unsupported_section == section);
+    REQUIRE_FALSE(config.unsupported_reason.empty());
+    REQUIRE(diagnostic == config.unsupported_reason);
+    // Nothing this build knows how to interpret is rewritten: the raw section round-trips.
+    REQUIRE(budgetToJson(config) == section);
+}
+
+TEST_CASE("Budget JSON rejects a non-finite input power", "[budget]") {
+    nlohmann::json j = {{"version", 1}};
+    j["input_power_dbm"] = std::numeric_limits<double>::infinity();
+    std::string diagnostic;
+    const auto config = budgetFromJson(j, diagnostic);
+    REQUIRE(config.input_power_dBm == Approx(-30.0));
+    REQUIRE(diagnostic.find("finite") != std::string::npos);
+
+    j["input_power_dbm"] = -std::numeric_limits<double>::infinity();
+    diagnostic.clear();
+    const auto negative = budgetFromJson(j, diagnostic);
+    REQUIRE(negative.input_power_dBm == Approx(-30.0));
+    REQUIRE(diagnostic.find("finite") != std::string::npos);
 }
 
 TEST_CASE("Budget JSON normalizes the ideal filter alias", "[budget]") {

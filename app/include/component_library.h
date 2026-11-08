@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -85,6 +86,10 @@ class ComponentLibrary {
     // a definition's relative data files against, so a source path equal to a root itself is
     // not contained. Empty paths and libraries with no root are false.
     bool containsLibraryPath(std::string_view source_path) const;
+    // Increments whenever a new root is recorded by scan() or createUserEntry(). Callers
+    // that cache a containment decision include it in their cache key, because the answer
+    // depends on the root set as well as on the path.
+    std::size_t rootGeneration() const { return m_root_generation; }
     std::vector<const ComponentDefinition *> byType(const std::string &type) const;
     // `component_id` reuses an existing component id (in-place replacement); nullopt reserves
     // a fresh one from the runtime.
@@ -108,4 +113,6 @@ class ComponentLibrary {
     // directory passed to scan() or created into by createUserEntry().
     // containsLibraryPath() confines a stage's source file to these roots.
     std::vector<std::filesystem::path> m_roots;
+    // Bumped each time m_roots gains an entry; see rootGeneration().
+    std::size_t m_root_generation = 0;
 };

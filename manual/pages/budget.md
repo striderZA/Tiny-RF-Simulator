@@ -37,9 +37,11 @@ Use **Remove**, **Up**, and **Down** on the selected row, or **Clear** to empty 
 
 Each row snapshots the library definition's parameters. A part's data-file references are kept, but their contents are not: the panel reads the files from the library directory recorded in `source_path` when it evaluates the chain. Editing or replacing a data file changes the prediction, and deleting it or leaving a file that cannot be loaded marks the row unresolved with the reason after `--` — once the cache is refreshed (see below).
 
-The evaluator caches one whole-chain result. The cache key is the stage settings, the input power, and the sweep; data-file contents are not part of it. So an edit, a deletion, or a corrupt file may not show up until you next change a stage, the input power, or the sweep. A project moved to another machine needs the same library paths.
+The evaluator caches one whole-chain result. The cache key is the stage settings, the budget input power, the simulation source-tone power, the sweep, and the set of scanned library roots; data-file contents are not part of it. So an edit, a deletion, or a corrupt file may not show up until you next change a stage, the input power, the sweep, or the library roots. A project moved to another machine needs the same library paths.
 
-A saved stage's file inputs must resolve inside a scanned library root. If they do not, the row is unresolved.
+A saved stage's file inputs must resolve inside a scanned library root. If they do not, the row is unresolved. Registering or scanning that root makes the next evaluation resolve the row.
+
+Stages the panel cannot read are not thrown away. An entry with an unknown type or a malformed field is kept, saved back unchanged, and shown in red with the reason after `--`; it has no values and is not part of the cascade. If the project's budget section has a version this build does not support, the whole section is preserved as-is and the panel shows a notice instead of those stages; editing is disabled until the project is opened by a build that understands it. Opening and saving such a project therefore loses nothing, and a newer version can still read it.
 
 ## The table
 
@@ -47,6 +49,7 @@ Values in the table are read at the cursor:
 
 - **Cursor (Hz)** in the toolbar sets the cursor. It snaps to the nearest sweep point.
 - **Input power (dBm)** sets the power used for the output-power prediction. It affects output power only.
+- **Sim source tone** beside it shows the Network Analyzer stimulus power the simulation uses, so a difference between the prediction and the measured output power is visible.
 
 The first columns give each stage's own values at the cursor: **Gain (dB)**, **NF (dB)**, **OIP3 (dBm)**, and **P1dB (dBm)**. The `Cum.` columns show the chain ending at that row, not the whole chain: `Cum. gain`, `Cum. NF`, `Cum. OIP3`, and `Cum. P1dB` for stages 1 through that row.
 

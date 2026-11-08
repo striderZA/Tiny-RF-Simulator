@@ -200,6 +200,39 @@ TEST_CASE("Evaluator rejects a stage outside the scanned library roots", "[budge
     REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
 }
 
+TEST_CASE("Evaluator re-evaluates after a previously unscanned root is registered",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("test.s2p", "# Hz S RI R 50\n"
+                              "1e9 0 0 0.5 0 0 0 0 0\n");
+    const std::string json_path = scratch.write("att.json", attenuatorDefinition("test.s2p"));
+
+    // The stage snapshot is valid, but its source directory is not a library root yet.
+    BudgetStage stage;
+    stage.type = "attenuator";
+    stage.part_number = "TEST-ATT";
+    stage.parameters = {{"attenuation_dB", 0.0}};
+    stage.data_files = {{"s_parameters", "test.s2p"}};
+    stage.source_path = json_path;
+    BudgetConfig config;
+    config.stages.push_back(stage);
+
+    ComponentLibrary library;
+    BudgetStageEvaluator evaluator;
+    const auto before = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(before.size() == 1);
+    REQUIRE_FALSE(before[0].resolved);
+    CAPTURE(before[0].diagnostic);
+    REQUIRE(before[0].diagnostic.find("library roots") != std::string::npos);
+
+    // Registering the root changes the containment answer, and the cache key must notice.
+    library.scan(scratch.dir().string());
+    const auto after = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(after.size() == 1);
+    REQUIRE(after[0].resolved);
+    REQUIRE(after[0].metrics.gain_dB[0] == Approx(-6.0206).margin(1e-3));
+}
+
 TEST_CASE("Evaluator rejects a source path equal to the scanned root", "[budget][evaluator]") {
     Scratch library_scratch;
     library_scratch.write("test.s2p", "# Hz S RI R 50\n"

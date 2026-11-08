@@ -70,16 +70,20 @@ bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
 
 // Record a scan/index root exactly once, as a canonical absolute directory. A regular file is
 // not a root: consumers resolve a definition's data files against its source file's directory,
-// and a file root would admit that file's own path but no directory under it.
-void recordRoot(std::vector<fs::path> &roots, const fs::path &directory) {
+// and a file root would admit that file's own path but no directory under it. Returns true
+// when this call adds a root, so callers can bump their root-set generation.
+bool recordRoot(std::vector<fs::path> &roots, const fs::path &directory) {
     std::error_code ec;
     const fs::path canonical = fs::weakly_canonical(directory, ec);
     if (ec)
-        return;
+        return false;
     if (!fs::is_directory(canonical, ec) || ec)
-        return;
-    if (std::find(roots.begin(), roots.end(), canonical) == roots.end())
+        return false;
+    if (std::find(roots.begin(), roots.end(), canonical) == roots.end()) {
         roots.push_back(canonical);
+        return true;
+    }
+    return false;
 }
 
 // Resolve a data-file path from a library definition against the library JSON
@@ -570,7 +574,8 @@ ComponentLibraryCreateResult ComponentLibrary::createUserEntry(ComponentDefiniti
 
     // An entry created through this API is live without a scan; its root must be a known
     // library root for the same confinement rule the scanned entries get.
-    recordRoot(m_roots, root);
+    if (recordRoot(m_roots, root))
+        ++m_root_generation;
 
     result.status = ComponentLibraryCreateStatus::Created;
     result.path = destination;
@@ -711,7 +716,8 @@ void ComponentLibrary::scan(const std::string &directory) {
     }
     // Record the root before indexing its files so containsLibraryPath() can confine a
     // definition read by this scan even if the subtree later fails partway through.
-    recordRoot(m_roots, directory);
+    if (recordRoot(m_roots, directory))
+        ++m_root_generation;
     try {
         fs::recursive_directory_iterator it(directory,
                                             fs::directory_options::skip_permission_denied, ec);

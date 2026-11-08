@@ -135,6 +135,36 @@ TEST_CASE_METHOD(BudgetImGuiFixture, "Budget widget draws the table without a cr
     REQUIRE(widget.cursor_Hz() == Approx(1.5e9));
 }
 
+TEST_CASE_METHOD(BudgetImGuiFixture, "Budget widget draws rejected stages and a version notice",
+                 "[budget][widget]") {
+    ComponentLibrary library;
+
+    // A retained rejected entry is drawn as an extra row and is not part of the cascade.
+    BudgetConfig config;
+    BudgetRejectedStage rejected;
+    rejected.raw = {{"type", 5}, {"part_number", "BROKEN"}};
+    rejected.reason = "`type` must be a string";
+    config.rejected_stages.push_back(rejected);
+    BudgetWidget widget;
+    drawWidget(widget, config, library, {1.0e9});
+    REQUIRE(widget.stageCount(config) == 0);
+
+    // An unsupported-version section shows its notice and contributes no stages. The test
+    // harness cannot read drawn ImGui text, so the row/notice content is not asserted here;
+    // the label text is covered indirectly by the JSON retention tests.
+    BudgetConfig unsupported;
+    unsupported.unsupported_section = {{"version", 2}};
+    unsupported.unsupported_reason = "Budget: unsupported version";
+    drawWidget(widget, unsupported, library, {1.0e9});
+    REQUIRE(widget.stageCount(unsupported) == 0);
+    // Adding a stage would be discarded because save writes the raw section verbatim.
+    ComponentDefinition part;
+    part.type = "amplifier";
+    part.part_number = "NEW";
+    REQUIRE_FALSE(widget.addStage(unsupported, part));
+    REQUIRE(widget.stageCount(unsupported) == 0);
+}
+
 TEST_CASE_METHOD(BudgetImGuiFixture, "Budget cumulative rows are prefix cascades",
                  "[budget][widget]") {
     BudgetConfig config;

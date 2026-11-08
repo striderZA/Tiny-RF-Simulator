@@ -1,5 +1,6 @@
 #include "budget_calculator.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -91,6 +92,21 @@ bool readStage(const nlohmann::json &value, BudgetStage &stage, std::string &rea
         }
     }
     return true;
+}
+
+nlohmann::json stageToJson(const BudgetStage &stage) {
+    nlohmann::json data_files = nlohmann::json::array();
+    for (const DataFileRef &file : stage.data_files)
+        data_files.push_back({{"type", file.type}, {"path", file.path}});
+
+    return {
+        {"type", stage.type},
+        {"part_number", stage.part_number},
+        {"manufacturer", stage.manufacturer},
+        {"description", stage.description},
+        {"parameters", stage.parameters.is_null() ? nlohmann::json::object() : stage.parameters},
+        {"data_files", std::move(data_files)},
+        {"source_path", stage.source_path}};
 }
 
 } // namespace
@@ -201,21 +217,32 @@ BudgetResult computeBudget(const BudgetConfig &config, const std::vector<double>
 }
 
 nlohmann::json budgetToJson(const BudgetConfig &config) {
-    nlohmann::json stages = nlohmann::json::array();
-    for (const BudgetStage &stage : config.stages) {
-        nlohmann::json data_files = nlohmann::json::array();
-        for (const DataFileRef &file : stage.data_files)
-            data_files.push_back({{"type", file.type}, {"path", file.path}});
+    // An unrecognised version is preserved verbatim: the loader cannot model its stages, and
+    // rewriting it to v1 would discard fields this build does not know about.
+    if (!config.unsupported_section.is_null())
+        return config.unsupported_section;
 
-        stages.push_back({{"type", stage.type},
-                          {"part_number", stage.part_number},
-                          {"manufacturer", stage.manufacturer},
-                          {"description", stage.description},
-                          {"parameters", stage.parameters.is_null() ? nlohmann::json::object()
-                                                                    : stage.parameters},
-                          {"data_files", std::move(data_files)},
-                          {"source_path", stage.source_path}});
+    std::vector<const BudgetRejectedStage *> rejected;
+    rejected.reserve(config.rejected_stages.size());
+    for (const BudgetRejectedStage &stage : config.rejected_stages)
+        rejected.push_back(&stage);
+    std::stable_sort(rejected.begin(), rejected.end(),
+                     [](const BudgetRejectedStage *a, const BudgetRejectedStage *b) {
+                         return a->position < b->position;
+                     });
+
+    // Re-emit the rejected entries at their original positions so a load/save round trip
+    // keeps the array order as well as the raw content.
+    nlohmann::json stages = nlohmann::json::array();
+    std::size_t next_stage = 0;
+    for (const BudgetRejectedStage *stage : rejected) {
+        while (next_stage < config.stages.size() && next_stage < stage->position)
+            stages.push_back(stageToJson(config.stages[next_stage++]));
+        stages.push_back(stage->raw);
     }
+    while (next_stage < config.stages.size())
+        stages.push_back(stageToJson(config.stages[next_stage++]));
+
     return nlohmann::json{
         {"version", 1}, {"input_power_dbm", config.input_power_dBm}, {"stages", std::move(stages)}};
 }
@@ -233,17 +260,24 @@ BudgetConfig budgetFromJson(const nlohmann::json &json, std::string &diagnostic)
         // Numeric comparison keeps an out-of-range integer token from wrapping during
         // conversion; any value other than 1 is an unsupported version.
         if (!version->is_number_integer() || *version != 1) {
-            diagnostic = "Budget: unsupported version";
+            config.unsupported_reason = "Budget: unsupported version";
+            config.unsupported_section = json;
+            diagnostic = config.unsupported_reason;
             return config;
         }
     }
 
     const auto input_power = json.find("input_power_dbm");
     if (input_power != json.end() && !input_power->is_null()) {
-        if (input_power->is_number())
-            config.input_power_dBm = input_power->get<double>();
-        else
+        if (input_power->is_number()) {
+            const double dBm = input_power->get<double>();
+            if (std::isfinite(dBm))
+                config.input_power_dBm = dBm;
+            else
+                appendDiagnostic(diagnostic, "Budget: `input_power_dbm` must be finite");
+        } else {
             appendDiagnostic(diagnostic, "Budget: `input_power_dbm` must be a number");
+        }
     }
 
     const auto stages = json.find("stages");
@@ -261,6 +295,8 @@ BudgetConfig budgetFromJson(const nlohmann::json &json, std::string &diagnostic)
             config.stages.push_back(std::move(stage));
         } else {
             appendDiagnostic(diagnostic, "Stage " + std::to_string(index) + ": " + reason);
+            config.rejected_stages.push_back(
+                BudgetRejectedStage{(*stages)[index], std::move(reason), index});
         }
     }
     return config;
