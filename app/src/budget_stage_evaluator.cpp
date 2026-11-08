@@ -117,6 +117,13 @@ std::string describeDataFileIssues(const std::vector<ComponentLibrary::DataFileL
     return text.str();
 }
 
+// True only when the stage actually names a file: an absent key, a non-string value, and
+// an empty string all declare no file. instantiate() treats "" the same way.
+bool stageDeclaresParameter(const BudgetStage &stage, const char *key) {
+    return stage.parameters.is_object() && stage.parameters.contains(key) &&
+           stage.parameters[key].is_string() && !stage.parameters[key].get<std::string>().empty();
+}
+
 ComponentDefinition definitionFor(const BudgetStage &stage) {
     ComponentDefinition definition;
     definition.schema_version = 1;
@@ -179,6 +186,33 @@ BudgetStageEvaluator::evaluate(const BudgetConfig &config, ComponentLibrary &lib
             evaluations.push_back(
                 unresolvedEvaluation(points, describeDataFileIssues(data_file_issues)));
             continue;
+        }
+        // A stage that names a data file in its parameters must have loaded it. The path may
+        // resolve and exist while the engine still fell back to its scalar model (a parse
+        // failure or a file that does not enable the mode), which the issue list above does
+        // not see: only the engine state can show it.
+        if ((stageDeclaresParameter(stage, "sparam_filepath") ||
+             stageDeclaresParameter(stage, "sparam_path")) &&
+            !engine->sparamMode()) {
+            evaluations.push_back(
+                unresolvedEvaluation(points, "'" + stage.part_number +
+                                                 "' declares an S-parameter file that did not "
+                                                 "load and did not enable S-parameter mode"));
+            continue;
+        }
+        if (const auto *amplifier = dynamic_cast<const AmplifierEngine *>(engine)) {
+            if (stageDeclaresParameter(stage, "amp_filepath") && !amplifier->ampLoaded()) {
+                evaluations.push_back(unresolvedEvaluation(
+                    points, "'" + stage.part_number + "' declares an AMP file that did not load"));
+                continue;
+            }
+            if (stageDeclaresParameter(stage, "ampf_filepath") && !amplifier->ampfBlockSelected()) {
+                evaluations.push_back(
+                    unresolvedEvaluation(points, "'" + stage.part_number +
+                                                     "' declares an amp-f file without a selected "
+                                                     "block"));
+                continue;
+            }
         }
         // A budget stage is a single-input, single-output two-port: the probe drives
         // inputs[0] and reads outputs[0]. A source (zero inputs) or a combiner (two inputs)

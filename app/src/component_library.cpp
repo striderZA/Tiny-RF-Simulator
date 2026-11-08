@@ -781,7 +781,8 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                     continue;
                 const std::string value = params[key].get<std::string>();
                 // An empty value declares no file at all; drop it silently rather than
-                // reporting it as an escape (a budget stage treats "" as undeclared too).
+                // reporting it as an escape. The budget evaluator's
+                // stageDeclaresParameter() applies the same empty-string rule.
                 if (value.empty()) {
                     params.erase(key);
                     continue;

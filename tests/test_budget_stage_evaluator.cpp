@@ -270,6 +270,147 @@ TEST_CASE("Evaluator treats an empty path parameter as undeclared", "[budget][ev
     REQUIRE(out[0].metrics.gain_dB[0] == Approx(0.0).margin(1e-6));
 }
 
+TEST_CASE("Evaluator rejects an S-parameter path parameter that did not load",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    // The path stays inside the scratch root, so the resolution report is empty. A missing
+    // file leaves S-parameter mode off, and the stage must not fall back to the scalar
+    // attenuation.
+    scratch.write("att.json", definitionJson("attenuator", "BAD-SPARAM-PARAM",
+                                             {{"attenuation_dB", 0.0},
+                                              {"sparam_mode", true},
+                                              {"sparam_filepath", "bad.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "BAD-SPARAM-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("S-parameter mode") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
+TEST_CASE("Evaluator rejects an S-parameter path parameter whose file cannot be parsed",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("garbled.s2p", "not a touchstone file\n");
+    scratch.write("att.json", definitionJson("attenuator", "GARBLED-SPARAM-PARAM",
+                                             {{"attenuation_dB", 0.0},
+                                              {"sparam_mode", true},
+                                              {"sparam_path", "garbled.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "GARBLED-SPARAM-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("S-parameter mode") != std::string::npos);
+}
+
+TEST_CASE("Evaluator accepts an S-parameter path parameter that loaded", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("good.s2p", "# Hz S RI R 50\n1e9 0 0 0.5 0 0 0 0 0\n");
+    scratch.write("att.json", definitionJson("attenuator", "GOOD-SPARAM-PARAM",
+                                             {{"attenuation_dB", 0.0},
+                                              {"sparam_mode", true},
+                                              {"sparam_filepath", "good.s2p"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "GOOD-SPARAM-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(-6.0206).margin(1e-3));
+}
+
+TEST_CASE("Evaluator rejects an AMP path parameter that did not load", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("amp.json", definitionJson("amplifier", "BAD-AMP-PARAM",
+                                             {{"gain_dB", 20.0}, {"amp_filepath", "bad.amp"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "BAD-AMP-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("AMP file") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
+TEST_CASE("Evaluator rejects an amp-f path parameter without a selected block",
+          "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("amp.json", definitionJson("amplifier", "BAD-AMPF-PARAM",
+                                             {{"gain_dB", 20.0}, {"ampf_filepath", "bad.ampf"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "BAD-AMPF-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("amp-f") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
+TEST_CASE("Evaluator accepts an amp-f path parameter with one block", "[budget][evaluator]") {
+    Scratch scratch;
+    scratch.write("one.ampf", "# amp-f v1\nDEVICE TEST\n# COLUMNS: OIP3_dBm\nBEGIN\n"
+                              "1000 10.0\nEND\n");
+    scratch.write(
+        "amp.json",
+        definitionJson("amplifier", "GOOD-AMPF-PARAM",
+                       {{"gain_dB", 20.0}, {"oip3_dBm", 30.0}, {"ampf_filepath", "one.ampf"}}));
+
+    ComponentLibrary library;
+    library.scan(scratch.dir().string());
+    const auto *definition = findPart(library, "GOOD-AMPF-PARAM");
+    REQUIRE(definition != nullptr);
+
+    BudgetConfig config;
+    config.stages.push_back(stageFrom(*definition));
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(20.0).margin(1e-3));
+}
+
 TEST_CASE("Evaluator leaves an out-of-band amplifier point invalid", "[budget][evaluator]") {
     ComponentLibrary library;
     library.scan(libraryRoot());

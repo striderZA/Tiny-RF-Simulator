@@ -30,6 +30,10 @@ class IComponentEngine {
     // component-type dispatch tables (save/load, duplicate, inspector, menu).
     virtual std::string_view type_name() const = 0;
 
+    // True only for an engine that has actually loaded and enabled an S-parameter model.
+    // Engines without S-parameter support keep the default.
+    virtual bool sparamMode() const { return false; }
+
     // Serialization — default no-op
     virtual nlohmann::json serialize() const { return nlohmann::json::object(); }
     virtual void deserialize(const nlohmann::json &) {}

@@ -24,7 +24,7 @@ class AttenuatorEngine : public ComponentEngineBase {
     double attenuation() const { return m_atten_dB; }
 
     void setSParamMode(bool enabled);
-    bool sparamMode() const { return m_sparam_mode; }
+    bool sparamMode() const override { return m_sparam_mode; }
 
     void setSParamFilepath(const std::string &path);
     bool sparamLoaded() const { return m_sparam_data.loaded(); }
