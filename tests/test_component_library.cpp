@@ -150,6 +150,14 @@ TEST_CASE("ComponentLibrary confines paths to scanned roots", "[library]") {
         ofs << R"({"schema_version":1,"type":"amplifier","part_number":"OUTSIDE-AMP","parameters":{"gain_dB":10.0}})";
     }
 
+    const auto sibling_root = std::filesystem::temp_directory_path() /
+                              ("test_lib_roots_" + test_temp_paths::processTag() + "_evil");
+    std::filesystem::create_directories(sibling_root);
+    {
+        std::ofstream ofs(sibling_root / "part.json");
+        ofs << R"({"schema_version":1,"type":"amplifier","part_number":"SIBLING-AMP","parameters":{"gain_dB":10.0}})";
+    }
+
     ComponentLibrary lib;
     lib.scan(lib_root.string());
 
@@ -157,11 +165,56 @@ TEST_CASE("ComponentLibrary confines paths to scanned roots", "[library]") {
     REQUIRE(defs.size() == 1);
     REQUIRE(lib.containsLibraryPath(defs[0]->source_path));
     REQUIRE(lib.containsLibraryPath((lib_root / "amplifiers").string()));
+    // The root itself is not contained: its data-file base would be the root's parent.
+    REQUIRE_FALSE(lib.containsLibraryPath(lib_root.string()));
     REQUIRE_FALSE(lib.containsLibraryPath((outside_root / "part.json").string()));
+    // A sibling whose name shares the root's prefix is a different directory.
+    REQUIRE_FALSE(lib.containsLibraryPath((sibling_root / "part.json").string()));
+    // Traversal out of the root is rejected on the resolved path.
+    REQUIRE_FALSE(lib.containsLibraryPath(
+        (lib_root / ".." / sibling_root.filename() / "part.json").string()));
     REQUIRE_FALSE(lib.containsLibraryPath(""));
 
     std::filesystem::remove_all(lib_root);
     std::filesystem::remove_all(outside_root);
+    std::filesystem::remove_all(sibling_root);
+}
+
+TEST_CASE("ComponentLibrary does not treat a scanned file as a root", "[library]") {
+    const std::string file_path = write_temp_file(
+        "entry.json",
+        R"({"schema_version":1,"type":"amplifier","part_number":"FILE-AMP","parameters":{"gain_dB":10.0}})");
+
+    ComponentLibrary lib;
+    lib.scan(file_path);
+
+    // Only a directory can be a library root: a file root would admit no definition and would
+    // let a path with the file as its parent read as contained.
+    REQUIRE_FALSE(lib.containsLibraryPath(file_path));
+    REQUIRE_FALSE(lib.containsLibraryPath(file_path + "/part.json"));
+
+    std::filesystem::remove_all(std::filesystem::path(file_path).parent_path());
+}
+
+TEST_CASE("ComponentLibrary contains an entry created without a scan", "[library]") {
+    const auto root = std::filesystem::temp_directory_path() /
+                      ("test_lib_create_" + test_temp_paths::processTag());
+    std::filesystem::create_directories(root);
+
+    ComponentLibrary lib;
+    ComponentDefinition definition;
+    definition.schema_version = 1;
+    definition.type = "attenuator";
+    definition.part_number = "CREATED-ATT";
+    definition.manufacturer = "Test";
+    definition.parameters = {{"attenuation_dB", 8.0}};
+
+    const auto result = lib.createUserEntry(std::move(definition), root);
+    REQUIRE(result.status == ComponentLibraryCreateStatus::Created);
+    // A created entry is live without a scan, so its root must already confine it.
+    REQUIRE(lib.containsLibraryPath(result.path.string()));
+
+    std::filesystem::remove_all(root);
 }
 
 TEST_CASE("ComponentLibrary instantiates amplifier from definition", "[library]") {

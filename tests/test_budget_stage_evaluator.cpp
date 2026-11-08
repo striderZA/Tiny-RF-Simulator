@@ -200,6 +200,83 @@ TEST_CASE("Evaluator rejects a stage outside the scanned library roots", "[budge
     REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
 }
 
+TEST_CASE("Evaluator rejects a source path equal to the scanned root", "[budget][evaluator]") {
+    Scratch library_scratch;
+    library_scratch.write("test.s2p", "# Hz S RI R 50\n"
+                                      "1e9 0 0 0.5 0 0 0 0 0\n");
+    library_scratch.write("att.json", attenuatorDefinition("test.s2p"));
+
+    ComponentLibrary library;
+    library.scan(library_scratch.dir().string());
+    const auto *definition = findPart(library, "TEST-ATT");
+    REQUIRE(definition != nullptr);
+
+    // A root passed as the source path would make the data-file base its parent, outside
+    // every root; containment is judged on the source file's directory, not the path.
+    BudgetStage stage = stageFrom(*definition);
+    stage.source_path = library_scratch.dir().string();
+
+    BudgetConfig config;
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    CAPTURE(out[0].diagnostic);
+    REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
+}
+
+TEST_CASE("Evaluator skips the root check for a stage with no file input", "[budget][evaluator]") {
+    ComponentLibrary library;
+    library.scan(libraryRoot());
+    BudgetStage stage = stageFor(library, "AM1143");
+    // A scalar stage names no file, so where its source lives cannot change the result: the
+    // gate must not reject it for an outside source path.
+    stage.data_files.clear();
+    stage.source_path = "Z:/never-scanned/part.json";
+
+    BudgetConfig config;
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE(out[0].resolved);
+    REQUIRE(out[0].metrics.gain_dB[0] == Approx(30.0).margin(1e-3));
+}
+
+TEST_CASE("Evaluator rejects a path-parameter-only stage outside the scanned roots",
+          "[budget][evaluator]") {
+    Scratch library_scratch;
+    library_scratch.write("test.s2p", "# Hz S RI R 50\n"
+                                      "1e9 0 0 0.5 0 0 0 0 0\n");
+    library_scratch.write("att.json", attenuatorDefinition("test.s2p"));
+
+    ComponentLibrary library;
+    library.scan(library_scratch.dir().string());
+    const auto *definition = findPart(library, "TEST-ATT");
+    REQUIRE(definition != nullptr);
+
+    // No data_files; the stage declares its file only through a path parameter, which the
+    // gate must still treat as a file input.
+    Scratch outside;
+    BudgetStage stage = stageFrom(*definition);
+    stage.data_files.clear();
+    stage.parameters["sparam_filepath"] = "test.s2p";
+    stage.source_path = (outside.dir() / "part.json").string();
+
+    BudgetConfig config;
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    CAPTURE(out[0].diagnostic);
+    REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
+}
+
 TEST_CASE("Evaluator rejects a stage whose declared data file cannot load", "[budget][evaluator]") {
     Scratch scratch;
     // A declared file that exists but cannot be read as Touchstone must not be replaced by

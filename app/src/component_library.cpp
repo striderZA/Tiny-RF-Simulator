@@ -68,6 +68,20 @@ bool pathWithinRoot(const fs::path &root, const fs::path &candidate) {
     return true;
 }
 
+// Record a scan/index root exactly once, as a canonical absolute directory. A regular file is
+// not a root: consumers resolve a definition's data files against its source file's directory,
+// and a file root would admit that file's own path but no directory under it.
+void recordRoot(std::vector<fs::path> &roots, const fs::path &directory) {
+    std::error_code ec;
+    const fs::path canonical = fs::weakly_canonical(directory, ec);
+    if (ec)
+        return;
+    if (!fs::is_directory(canonical, ec) || ec)
+        return;
+    if (std::find(roots.begin(), roots.end(), canonical) == roots.end())
+        roots.push_back(canonical);
+}
+
 // Resolve a data-file path from a library definition against the library JSON
 // file's directory. Returns the canonical path on success, or nullopt when the
 // entry must be skipped.
@@ -554,6 +568,10 @@ ComponentLibraryCreateResult ComponentLibrary::createUserEntry(ComponentDefiniti
     }
     cleanupStaging();
 
+    // An entry created through this API is live without a scan; its root must be a known
+    // library root for the same confinement rule the scanned entries get.
+    recordRoot(m_roots, root);
+
     result.status = ComponentLibraryCreateStatus::Created;
     result.path = destination;
     return result;
@@ -693,11 +711,7 @@ void ComponentLibrary::scan(const std::string &directory) {
     }
     // Record the root before indexing its files so containsLibraryPath() can confine a
     // definition read by this scan even if the subtree later fails partway through.
-    std::error_code root_ec;
-    const fs::path canonical_root = fs::weakly_canonical(directory, root_ec);
-    if (!root_ec && std::find(m_roots.begin(), m_roots.end(), canonical_root) == m_roots.end()) {
-        m_roots.push_back(canonical_root);
-    }
+    recordRoot(m_roots, directory);
     try {
         fs::recursive_directory_iterator it(directory,
                                             fs::directory_options::skip_permission_denied, ec);
@@ -737,9 +751,15 @@ void ComponentLibrary::scan(const std::string &directory) {
 bool ComponentLibrary::containsLibraryPath(std::string_view source_path) const {
     if (source_path.empty())
         return false;
-    const fs::path candidate(source_path);
-    return std::any_of(m_roots.begin(), m_roots.end(),
-                       [&](const fs::path &root) { return pathWithinRoot(root, candidate); });
+    // Callers resolve a definition's relative data files against the source file's directory,
+    // so that directory is what must be inside a root. Judging the source path itself would
+    // accept a source path equal to a root, whose directory lies outside every root.
+    const fs::path source_directory = fs::path(source_path).parent_path();
+    if (source_directory.empty())
+        return false;
+    return std::any_of(m_roots.begin(), m_roots.end(), [&](const fs::path &root) {
+        return pathWithinRoot(root, source_directory);
+    });
 }
 
 std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::string &type) const {
