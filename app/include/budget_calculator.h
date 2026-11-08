@@ -6,8 +6,10 @@
 #include <string>
 #include <vector>
 
-// Stage snapshot stored in the project's budget. It is self-contained: the library is
-// only consulted by the picker, so a later library edit cannot change a saved budget.
+// Stage snapshot stored in the project's budget. The stage stores a definition snapshot;
+// the picker is the only reader of the library index. Data files are resolved against
+// `source_path` at evaluation time, and a declared file that fails to load leaves the
+// stage unresolved.
 struct BudgetStage {
     std::string type; // library definition type, e.g. "amplifier"
     std::string part_number;

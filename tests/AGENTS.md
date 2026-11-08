@@ -41,6 +41,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - Touchstone parser tests must cover all format variants (DB, MA, RI), frequency units, both required v2.0 two-port data orders, and row-major matrices for 3-port and 4-port files.
 - AMP parser tests must cover scalar and per-frequency IP3 sections, default and explicit units, empty or non-numeric S/Y/Z/POUT sections, and file:line diagnostics (`tests/test_amp_file.cpp`)
 - amp-f v1 reader tests must cover every rule in the spec, block identity and DEVICE inheritance, `FREQ_UNITS`, NaN cells, and `<path>:<line>` diagnostics (`tests/test_ampf_file.cpp`). Amplifier tests cover per-frequency intercepts, selection, fallback, and save/load (`tests/test_amplifier_ampf.cpp`).
+- Budget tests cover cascade math, data-file/path-parameter load failures, source-path containment, two-port guards, AMP/amp-f edge-hold, project round-trip, and the widget table/status.
 
 ## Verification
 
@@ -58,6 +59,8 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_agent_packaged_acceptance$' --output-on-failure`
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
+- `ctest --test-dir build -R 'test_budget_|test_amplifier_budget_queries' --output-on-failure` — budget cascade, evaluator, project, and widget targets plus the amplifier intercept queries.
+- The `[library]` cases, for example in `test_component_library.cpp`, run in the main `tests` binary; there is no separate `test_component_library` target.
 - `ctest --test-dir build -R '^test_node_graph_rewire$' --output-on-failure` covers shared rewire characterization and scaling; its standalone target follows the MinGW registration convention in Local Contracts.
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit
 - `ctest --test-dir build -j8` must also pass with zero failures; never run a second `ctest` against the same build tree at the same time (see Local Contracts)
