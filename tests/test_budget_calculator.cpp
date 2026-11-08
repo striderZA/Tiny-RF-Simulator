@@ -178,4 +178,6 @@ TEST_CASE("Budget input power edits reject non-finite values", "[budget]") {
     REQUIRE(config.input_power_dBm == Approx(-30.0));
     REQUIRE(setBudgetInputPower(config, -20.0));
     REQUIRE(config.input_power_dBm == Approx(-20.0));
+    REQUIRE_FALSE(setBudgetInputPower(config, -20.0));
+    REQUIRE(config.input_power_dBm == Approx(-20.0));
 }
