@@ -570,6 +570,26 @@ TEST_CASE("Evaluator leaves a multi-input stage unresolved", "[budget][evaluator
     REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
 }
 
+TEST_CASE("Evaluator leaves a multi-output stage unresolved", "[budget][evaluator]") {
+    ComponentLibrary library;
+    library.scan(libraryRoot());
+    // `splitter` is a real registry type with one input and two output pins. The loader and
+    // picker exclude it, but a programmatic config must not be evaluated from outputs[0]
+    // alone.
+    BudgetConfig config;
+    BudgetStage stage;
+    stage.type = "splitter";
+    stage.part_number = "SPLIT1";
+    config.stages.push_back(stage);
+
+    BudgetStageEvaluator evaluator;
+    auto out = evaluator.evaluate(config, library, {1e9}, -30.0);
+    REQUIRE(out.size() == 1);
+    REQUIRE_FALSE(out[0].resolved);
+    REQUIRE(out[0].diagnostic.find("two-port") != std::string::npos);
+    REQUIRE(std::isnan(out[0].metrics.gain_dB[0]));
+}
+
 TEST_CASE("Evaluator invalidates a stage after its parameters change", "[budget][evaluator]") {
     ComponentLibrary library;
     library.scan(libraryRoot());
