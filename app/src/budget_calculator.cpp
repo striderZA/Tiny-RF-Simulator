@@ -108,6 +108,13 @@ bool budgetSupportsStageType(const std::string &type) {
     return !budgetNormalizeStageType(type).empty();
 }
 
+bool setBudgetInputPower(BudgetConfig &config, double dBm) {
+    if (!std::isfinite(dBm) || dBm == config.input_power_dBm)
+        return false;
+    config.input_power_dBm = dBm;
+    return true;
+}
+
 BudgetResult computeBudget(const BudgetConfig &config, const std::vector<double> &frequencies_Hz,
                            const std::vector<BudgetStageMetrics> &stage_metrics) {
     const std::size_t points = frequencies_Hz.size();

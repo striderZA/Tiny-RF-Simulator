@@ -31,6 +31,9 @@ struct BudgetConfig {
     double input_power_dBm = -30.0;  // output-power prediction
 };
 
+// Rejects a non-finite value. Returns true when the config changed.
+bool setBudgetInputPower(BudgetConfig &config, double dBm);
+
 // Per-stage values extracted at one frequency grid point.
 struct BudgetStageMetrics {
     std::vector<double> gain_dB;

@@ -169,3 +169,13 @@ TEST_CASE("Budget stage types are whitelisted and normalized", "[budget]") {
     REQUIRE(budgetNormalizeStageType("ideal_filter") == "filter");
     REQUIRE(budgetNormalizeStageType("generator").empty());
 }
+
+TEST_CASE("Budget input power edits reject non-finite values", "[budget]") {
+    BudgetConfig config;
+    REQUIRE_FALSE(setBudgetInputPower(config, std::numeric_limits<double>::quiet_NaN()));
+    REQUIRE(config.input_power_dBm == Approx(-30.0));
+    REQUIRE_FALSE(setBudgetInputPower(config, std::numeric_limits<double>::infinity()));
+    REQUIRE(config.input_power_dBm == Approx(-30.0));
+    REQUIRE(setBudgetInputPower(config, -20.0));
+    REQUIRE(config.input_power_dBm == Approx(-20.0));
+}

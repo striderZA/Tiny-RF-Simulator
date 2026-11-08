@@ -408,8 +408,9 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
 
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
-    if (ImGui::InputDouble("Input power (dBm)", &budget.input_power_dBm, 0.0, 0.0, "%.2f") &&
-        onChange)
+    double input_power = budget.input_power_dBm;
+    if (ImGui::InputDouble("Input power (dBm)", &input_power, 0.0, 0.0, "%.2f") &&
+        setBudgetInputPower(budget, input_power) && onChange)
         onChange();
 
     if (ImGui::BeginPopup("##budget_add_part")) {
