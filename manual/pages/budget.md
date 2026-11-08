@@ -41,7 +41,7 @@ The evaluator caches one whole-chain result. The cache key is the stage settings
 
 A saved stage's file inputs must resolve inside a scanned library root. If they do not, the row is unresolved. Registering or scanning that root makes the next evaluation resolve the row.
 
-Stages the panel cannot read are not thrown away. An entry with an unknown type or a malformed field is kept, saved back unchanged, and shown in red with the reason after `--`; it has no values and is not part of the cascade. If the project's budget section has a version this build does not support, the whole section is preserved as-is and the panel shows a notice instead of those stages; editing is disabled until the project is opened by a build that understands it. Opening and saving such a project therefore loses nothing, and a newer version can still read it.
+Stages the panel cannot read are not thrown away. An entry with an unknown type or a malformed field is kept, saved back unchanged, and shown in red with the reason after `--`; it has no values and is not part of the cascade. If the project's budget section has a version this build does not support, the whole section is preserved as-is and the panel shows a notice instead of those stages; editing is disabled until the project is opened by a build that understands it. Opening and saving such a project preserves those entries and that section, and a newer version can still read it. Structural problems (for example a `stages` value that is not an array) are reported and cannot be retained.
 
 ## The table
 

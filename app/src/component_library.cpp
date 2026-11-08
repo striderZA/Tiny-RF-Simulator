@@ -86,6 +86,14 @@ bool recordRoot(std::vector<fs::path> &roots, const fs::path &directory) {
     return false;
 }
 
+// Process-wide monotonic counter so a generation value never repeats across library
+// instances: a new ComponentLibrary starting at zero could otherwise match a cache key
+// built against a different instance's root set.
+std::size_t nextRootGeneration() {
+    static std::atomic<std::size_t> counter{0};
+    return counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 // Resolve a data-file path from a library definition against the library JSON
 // file's directory. Returns the canonical path on success, or nullopt when the
 // entry must be skipped.
@@ -575,7 +583,7 @@ ComponentLibraryCreateResult ComponentLibrary::createUserEntry(ComponentDefiniti
     // An entry created through this API is live without a scan; its root must be a known
     // library root for the same confinement rule the scanned entries get.
     if (recordRoot(m_roots, root))
-        ++m_root_generation;
+        m_root_generation = nextRootGeneration();
 
     result.status = ComponentLibraryCreateStatus::Created;
     result.path = destination;
@@ -717,7 +725,7 @@ void ComponentLibrary::scan(const std::string &directory) {
     // Record the root before indexing its files so containsLibraryPath() can confine a
     // definition read by this scan even if the subtree later fails partway through.
     if (recordRoot(m_roots, directory))
-        ++m_root_generation;
+        m_root_generation = nextRootGeneration();
     try {
         fs::recursive_directory_iterator it(directory,
                                             fs::directory_options::skip_permission_denied, ec);

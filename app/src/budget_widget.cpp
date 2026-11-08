@@ -617,7 +617,8 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
             std::string label = "Unresolved stage";
             if (rejected.raw.is_object()) {
                 const auto part = rejected.raw.find("part_number");
-                if (part != rejected.raw.end() && part->is_string() && !part->empty())
+                if (part != rejected.raw.end() && part->is_string() &&
+                    !part->get_ref<const std::string &>().empty())
                     label = part->get<std::string>();
             }
             label += " -- " + rejected.reason;
@@ -629,7 +630,7 @@ void BudgetWidget::draw(const char *title, bool *p_open, BudgetConfig &budget,
         ImGui::EndTable();
     }
 
-    if (budget.stages.empty() && budget.rejected_stages.empty())
+    if (!budget_read_only && budget.stages.empty() && budget.rejected_stages.empty())
         ImGui::TextDisabled("Add a library part");
 
     // --- Result plots ------------------------------------------------------------

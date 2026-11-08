@@ -200,6 +200,18 @@ TEST_CASE("Evaluator rejects a stage outside the scanned library roots", "[budge
     REQUIRE(out[0].diagnostic.find("library roots") != std::string::npos);
 }
 
+TEST_CASE("Library root generations are process-unique across instances", "[budget][evaluator]") {
+    ComponentLibrary first;
+    first.scan(libraryRoot());
+    ComponentLibrary second;
+    second.scan(libraryRoot());
+    REQUIRE(first.rootGeneration() != 0);
+    REQUIRE(second.rootGeneration() != 0);
+    // A per-instance counter starting at zero could make a cache key from one library match
+    // another library's key after the first reaches the same count.
+    REQUIRE(first.rootGeneration() != second.rootGeneration());
+}
+
 TEST_CASE("Evaluator re-evaluates after a previously unscanned root is registered",
           "[budget][evaluator]") {
     Scratch scratch;
