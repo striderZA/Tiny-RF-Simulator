@@ -22,21 +22,6 @@ using OrderedJson = nlohmann::ordered_json;
     fail(std::move(error));
 }
 
-// The epoch every edit carries. It is judged before any other argument, so a stale call reports
-// STALE_EPOCH even when its other arguments are also invalid.
-std::uint64_t requiredEpoch(const OrderedJson &arguments) {
-    if (!arguments.is_object())
-        invalid("/", "expected an object");
-    const auto found = arguments.find("epoch");
-    if (found == arguments.end())
-        invalid("/epoch", "required argument is missing");
-    if (found->is_number_unsigned())
-        return found->get<std::uint64_t>();
-    if (found->is_number_integer() && found->get<std::int64_t>() >= 0)
-        return static_cast<std::uint64_t>(found->get<std::int64_t>());
-    invalid("/epoch", "expected a non-negative integer");
-}
-
 // Unknown top-level argument keys, matching the schema's additionalProperties.
 void checkArgumentKeys(const OrderedJson &arguments) {
     if (!arguments.is_object())
@@ -124,8 +109,12 @@ AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall
         throw;
     }
     if (!applied) {
-        api.m_context.host.commitCheckpoint("interrupted: receiver requirements");
-        return unavailable(api);
+        // The host has requirements state but refused the write. Nothing was applied, so the open
+        // checkpoint is discarded; only a throw commits it as interrupted.
+        api.m_context.host.discardCheckpoint();
+        return agentErrorResult(
+            AgentError{AgentErrorCode::Internal, "the host rejected the receiver requirements"},
+            epoch);
     }
     api.m_context.commands.markModified();
     api.m_context.host.commitCheckpoint("receiver requirements");

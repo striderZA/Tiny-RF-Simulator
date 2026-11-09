@@ -139,6 +139,8 @@ class FakeAgentHost final : public IAgentHost {
         return requirements;
     }
     bool setReceiverRequirements(const ReceiverRequirementsSet &set) override {
+        if (!requirements_write_succeeds)
+            return false;
         requirements = set;
         return true;
     }
@@ -163,6 +165,7 @@ class FakeAgentHost final : public IAgentHost {
     std::function<AgentProjectLoadResult(const std::string &)> load_outcome =
         [](const std::string &) { return AgentProjectLoadResult{true, false}; };
     std::optional<ReceiverRequirementsSet> requirements = ReceiverRequirementsSet{};
+    bool requirements_write_succeeds = true;
     int checkpoint_begins = 0;
     int checkpoint_commits = 0;
     int checkpoint_discards = 0;

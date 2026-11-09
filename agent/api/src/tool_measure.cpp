@@ -165,6 +165,19 @@ AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::strin
     return agentErrorResult(error, epoch);
 }
 
+std::uint64_t requiredEpoch(const OrderedJson &arguments) {
+    if (!arguments.is_object())
+        invalid("/", "expected an object");
+    const auto found = arguments.find("epoch");
+    if (found == arguments.end())
+        invalid("/epoch", "required argument is missing");
+    if (found->is_number_unsigned())
+        return found->get<std::uint64_t>();
+    if (found->is_number_integer() && found->get<std::int64_t>() >= 0)
+        return static_cast<std::uint64_t>(found->get<std::int64_t>());
+    invalid("/epoch", "expected a non-negative integer");
+}
+
 namespace {
 
 std::vector<double> finiteValues(const std::vector<double> &values) {

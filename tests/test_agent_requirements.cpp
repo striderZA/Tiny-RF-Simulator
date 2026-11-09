@@ -135,6 +135,29 @@ TEST_CASE("requirements_edit checks the epoch first", "[agent_requirements]") {
     CHECK(fixture.host.checkpoint_begins == 0);
 }
 
+TEST_CASE("requirements_edit reports a host that refuses the write", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.requirements_write_succeeds = false;
+    const auto before = fixture.commands.revision();
+    ReceiverRequirementsSet next;
+    next.modes.push_back({"Default", std::nullopt});
+
+    const auto result =
+        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                           {"requirements", receiverRequirementsToJson(next)}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INTERNAL");
+    CHECK(error.at("message") == "the host rejected the receiver requirements");
+    // The write changed nothing, so the project stays as it was and no checkpoint survives.
+    CHECK(*fixture.host.requirements == twoModeSet());
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 1);
+    CHECK(fixture.host.checkpoint_commits == 0);
+    CHECK(fixture.host.last_checkpoint_summary != "interrupted: receiver requirements");
+    CHECK(fixture.host.checkpoint_discards == 1);
+}
+
 TEST_CASE("requirements tools report INTERNAL without host support", "[agent_requirements]") {
     ApiFixture fixture;
     fixture.host.requirements = std::nullopt;
