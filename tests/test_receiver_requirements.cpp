@@ -527,3 +527,162 @@ TEST_CASE("ReceiverRequirements maps outcomes to status tones", "[receiver_requi
     CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Incomplete) ==
           ReceiverRequirementStatusTone::Neutral);
 }
+
+TEST_CASE("Receiver requirement modes add copies of the selected mode",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "Band 1 High Gain", error));
+    CHECK(set.modes.size() == 1);
+    CHECK_FALSE(set.modes[0].config);
+    set.modes[0].config = allConfigured();
+    REQUIRE(addReceiverRequirementsMode(set, "  Band 1 Low Gain  ", error));
+    CHECK(set.selected == 1);
+    CHECK(set.modes[1].name == "Band 1 Low Gain");
+    CHECK(set.modes[1].config == set.modes[0].config);
+}
+
+TEST_CASE("Receiver requirement mode names are checked", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "Low Gain", error));
+    const auto before = set;
+    CHECK_FALSE(addReceiverRequirementsMode(set, " low gain ", error));
+    CHECK(error == "A mode named 'low gain' already exists.");
+    CHECK_FALSE(addReceiverRequirementsMode(set, "   ", error));
+    CHECK(error == "Mode name must not be empty.");
+    CHECK_FALSE(addReceiverRequirementsMode(set, std::string(65, 'x'), error));
+    CHECK(error == "Mode name must be at most 64 characters.");
+    CHECK(set == before);
+    CHECK(renameReceiverRequirementsMode(set, 0, "LOW GAIN", error)); // own name, new case
+    CHECK(set.modes[0].name == "LOW GAIN");
+}
+
+TEST_CASE("Receiver requirement mode count is capped", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    for (std::size_t i = 0; i < kMaxReceiverRequirementModes; ++i)
+        REQUIRE(addReceiverRequirementsMode(set, "M" + std::to_string(i), error));
+    CHECK_FALSE(addReceiverRequirementsMode(set, "extra", error));
+    CHECK(error == "At most 64 modes are allowed.");
+}
+
+TEST_CASE("Removing a receiver requirement mode keeps the selection valid",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    for (auto name : {"A", "B", "C"})
+        REQUIRE(addReceiverRequirementsMode(set, name, error));
+    REQUIRE(set.selected == 2);
+    REQUIRE(removeReceiverRequirementsMode(set, 2));
+    CHECK(set.selected == 1);
+    REQUIRE(removeReceiverRequirementsMode(set, 0));
+    CHECK(set.selected == 0);
+    CHECK(set.modes[0].name == "B");
+    REQUIRE(removeReceiverRequirementsMode(set, 0));
+    CHECK(set.modes.empty());
+    CHECK(set.selected == 0);
+    CHECK_FALSE(removeReceiverRequirementsMode(set, 0));
+}
+
+TEST_CASE("Applying a draft changes only the selected mode", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    CHECK_FALSE(applyReceiverRequirementsDraftToSelectedMode(set, gainDraft(), error));
+    CHECK(error == "Add a mode before applying requirements.");
+
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    REQUIRE(selectReceiverRequirementsMode(set, 0));
+
+    REQUIRE(applyReceiverRequirementsDraftToSelectedMode(set, gainDraft(), error));
+    REQUIRE(set.modes[0].config.has_value());
+    CHECK(set.modes[0].config->band_start_Hz == 1.0e9);
+    CHECK(set.modes[0].config->band_stop_Hz == 2.0e9);
+    REQUIRE(set.modes[0].config->gain.has_value());
+    CHECK(set.modes[0].config->gain->minimum_dB == 10.0);
+    CHECK(set.modes[0].config->gain->maximum_dB == 20.0);
+    CHECK_FALSE(set.modes[1].config.has_value());
+
+    const auto before = set;
+    auto malformed = gainDraft();
+    malformed.band_start_Hz = "x";
+    CHECK_FALSE(applyReceiverRequirementsDraftToSelectedMode(set, malformed, error));
+    CHECK(error == "Requirement band endpoints must be finite numbers.");
+    CHECK(set == before);
+
+    ReceiverRequirementsDraft disabled;
+    disabled.band_start_Hz = "1e9";
+    disabled.band_stop_Hz = "2e9";
+    REQUIRE(applyReceiverRequirementsDraftToSelectedMode(set, disabled, error));
+    CHECK_FALSE(set.modes[0].config.has_value());
+    CHECK_FALSE(set.modes[1].config.has_value());
+}
+
+TEST_CASE("A successful mode edit clears a retained invalid diagnostic",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    set.invalid_reason = "bad file";
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    CHECK(set.invalid_reason.empty());
+}
+
+TEST_CASE("Selected receiver requirements state follows the selection",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet empty;
+    auto state = selectedReceiverRequirementsState(empty);
+    CHECK_FALSE(state.config.has_value());
+    CHECK(state.invalid_reason.empty());
+
+    ReceiverRequirementsSet invalid;
+    invalid.invalid_reason = "bad file";
+    state = selectedReceiverRequirementsState(invalid);
+    CHECK_FALSE(state.config.has_value());
+    CHECK(state.invalid_reason == "bad file");
+
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    set.modes[1].config = allConfigured();
+    REQUIRE(selectReceiverRequirementsMode(set, 1));
+    state = selectedReceiverRequirementsState(set);
+    REQUIRE(state.config.has_value());
+    CHECK(state.config == set.modes[1].config);
+    CHECK(state.invalid_reason.empty());
+}
+
+TEST_CASE("Receiver requirements set validation reports the first problem",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet duplicates;
+    duplicates.modes.push_back({"x", std::nullopt});
+    duplicates.modes.push_back({"X", std::nullopt});
+    CHECK(validateReceiverRequirementsSet(duplicates) ==
+          std::optional<std::string>("A mode named 'x' already exists."));
+
+    ReceiverRequirementsSet padded;
+    padded.modes.push_back({" A", std::nullopt});
+    CHECK(validateReceiverRequirementsSet(padded) ==
+          std::optional<std::string>("Mode name must not have leading or trailing spaces."));
+
+    ReceiverRequirementsSet out_of_range;
+    out_of_range.modes.push_back({"A", std::nullopt});
+    out_of_range.selected = 1;
+    CHECK(validateReceiverRequirementsSet(out_of_range) ==
+          std::optional<std::string>("Selected mode is out of range."));
+
+    ReceiverRequirementsSet bad_config;
+    bad_config.modes.push_back({"A", allConfigured()});
+    auto broken = allConfigured();
+    broken.band_start_Hz = 2.0e9;
+    broken.band_stop_Hz = 1.0e9;
+    bad_config.modes.push_back({"B", broken});
+    CHECK(validateReceiverRequirementsSet(bad_config) ==
+          std::optional<std::string>("Mode 'B': Requirement band start must be below band stop."));
+
+    ReceiverRequirementsSet valid;
+    valid.modes.push_back({"A", allConfigured()});
+    valid.modes.push_back({"B", std::nullopt});
+    CHECK_FALSE(validateReceiverRequirementsSet(valid).has_value());
+}

@@ -3,11 +3,34 @@
 #include "common.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <string_view>
+#include <utility>
 
 namespace {
+std::string trimAsciiWhitespace(std::string_view text) {
+    constexpr std::string_view whitespace = " \t\n\r\f\v";
+    const auto first = text.find_first_not_of(whitespace);
+    if (first == std::string_view::npos)
+        return {};
+    const auto last = text.find_last_not_of(whitespace);
+    return std::string(text.substr(first, last - first + 1));
+}
+
+std::string asciiLowercase(std::string_view text) {
+    std::string lowered(text);
+    for (char &character : lowered)
+        character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    return lowered;
+}
+
+bool modeNamesEqual(std::string_view first, std::string_view second) {
+    return asciiLowercase(first) == asciiLowercase(second);
+}
+
 std::optional<double> parseNumber(const std::string &text) {
     if (text.empty())
         return std::nullopt;
@@ -136,6 +159,139 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
          *config.measurement_conditions.input_level_dBm > MAX_POWER))
         return "Input level must be between -174 and 10 dBm.";
     return std::nullopt;
+}
+
+std::optional<std::string>
+receiverRequirementsModeNameError(const ReceiverRequirementsSet &set, std::string_view trimmed_name,
+                                  std::optional<std::size_t> except_index) {
+    if (trimmed_name.empty())
+        return "Mode name must not be empty.";
+    if (trimmed_name.size() > kMaxReceiverRequirementModeNameLength)
+        return "Mode name must be at most 64 characters.";
+    for (std::size_t i = 0; i < set.modes.size(); ++i) {
+        if (except_index && *except_index == i)
+            continue;
+        if (modeNamesEqual(set.modes[i].name, trimmed_name))
+            return "A mode named '" + std::string(trimmed_name) + "' already exists.";
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequirementsSet &set) {
+    if (set.modes.size() > kMaxReceiverRequirementModes)
+        return "At most 64 modes are allowed.";
+    for (std::size_t i = 0; i < set.modes.size(); ++i) {
+        const std::string &name = set.modes[i].name;
+        if (name != trimAsciiWhitespace(name))
+            return "Mode name must not have leading or trailing spaces.";
+        if (name.empty())
+            return "Mode name must not be empty.";
+        if (name.size() > kMaxReceiverRequirementModeNameLength)
+            return "Mode name must be at most 64 characters.";
+        for (std::size_t earlier = 0; earlier < i; ++earlier) {
+            if (modeNamesEqual(set.modes[earlier].name, name))
+                return "A mode named '" + set.modes[earlier].name + "' already exists.";
+        }
+    }
+    if (set.modes.empty() ? set.selected != 0 : set.selected >= set.modes.size())
+        return "Selected mode is out of range.";
+    for (const auto &mode : set.modes) {
+        if (!mode.config)
+            continue;
+        if (auto reason = validateReceiverRequirementsConfig(*mode.config))
+            return "Mode '" + mode.name + "': " + *reason;
+    }
+    return std::nullopt;
+}
+
+bool addReceiverRequirementsMode(ReceiverRequirementsSet &set, std::string_view name,
+                                 std::string &error) {
+    if (set.modes.size() >= kMaxReceiverRequirementModes) {
+        error = "At most 64 modes are allowed.";
+        return false;
+    }
+    const std::string trimmed = trimAsciiWhitespace(name);
+    if (auto reason = receiverRequirementsModeNameError(set, trimmed, std::nullopt)) {
+        error = *reason;
+        return false;
+    }
+    ReceiverRequirementsMode mode;
+    mode.name = trimmed;
+    if (!set.modes.empty() && set.selected < set.modes.size())
+        mode.config = set.modes[set.selected].config;
+    set.modes.push_back(std::move(mode));
+    set.selected = set.modes.size() - 1;
+    set.invalid_reason.clear();
+    error.clear();
+    return true;
+}
+
+bool renameReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index,
+                                    std::string_view name, std::string &error) {
+    if (index >= set.modes.size()) {
+        error = "Selected mode is out of range.";
+        return false;
+    }
+    const std::string trimmed = trimAsciiWhitespace(name);
+    if (auto reason = receiverRequirementsModeNameError(set, trimmed, index)) {
+        error = *reason;
+        return false;
+    }
+    set.modes[index].name = trimmed;
+    set.invalid_reason.clear();
+    error.clear();
+    return true;
+}
+
+bool removeReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index) {
+    if (index >= set.modes.size())
+        return false;
+    set.modes.erase(set.modes.begin() + static_cast<std::ptrdiff_t>(index));
+    if (set.modes.empty())
+        set.selected = 0;
+    else if (set.selected > index)
+        --set.selected;
+    else if (set.selected >= set.modes.size())
+        set.selected = set.modes.size() - 1;
+    set.invalid_reason.clear();
+    return true;
+}
+
+bool selectReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index) {
+    if (index >= set.modes.size())
+        return false;
+    set.selected = index;
+    set.invalid_reason.clear();
+    return true;
+}
+
+bool applyReceiverRequirementsDraftToSelectedMode(ReceiverRequirementsSet &set,
+                                                  const ReceiverRequirementsDraft &draft,
+                                                  std::string &error) {
+    if (set.modes.empty()) {
+        error = "Add a mode before applying requirements.";
+        return false;
+    }
+    if (set.selected >= set.modes.size()) {
+        error = "Selected mode is out of range.";
+        return false;
+    }
+    ReceiverRequirementsState state;
+    state.config = set.modes[set.selected].config;
+    if (!applyReceiverRequirementsDraft(state, draft, error))
+        return false;
+    set.modes[set.selected].config = state.config;
+    set.invalid_reason.clear();
+    return true;
+}
+
+ReceiverRequirementsState selectedReceiverRequirementsState(const ReceiverRequirementsSet &set) {
+    ReceiverRequirementsState state;
+    if (!set.invalid_reason.empty())
+        state.invalid_reason = set.invalid_reason;
+    else if (set.selected < set.modes.size())
+        state.config = set.modes[set.selected].config;
+    return state;
 }
 
 std::optional<ReceiverRequirementsConfig>

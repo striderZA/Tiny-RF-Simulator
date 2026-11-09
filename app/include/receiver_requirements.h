@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 enum class ReceiverRequirementStatus {
@@ -16,11 +17,13 @@ enum class ReceiverRequirementStatus {
 struct ReceiverGainLimits {
     double minimum_dB;
     double maximum_dB;
+    bool operator==(const ReceiverGainLimits &) const = default;
 };
 
 struct ReceiverOutputPowerLimits {
     double minimum_dBm;
     double maximum_dBm;
+    bool operator==(const ReceiverOutputPowerLimits &) const = default;
 };
 
 struct ReceiverIIP3TestSettings {
@@ -28,6 +31,7 @@ struct ReceiverIIP3TestSettings {
     double input_start_dBm;
     double input_stop_dBm;
     double input_step_dB;
+    bool operator==(const ReceiverIIP3TestSettings &) const = default;
 };
 
 constexpr std::size_t kMaxReceiverIIP3InputLevels = 101;
@@ -37,6 +41,7 @@ std::optional<std::size_t> receiverIIP3LevelCount(const ReceiverIIP3TestSettings
 struct ReceiverMeasurementConditions {
     std::optional<double> input_level_dBm;
     std::optional<ReceiverIIP3TestSettings> iip3;
+    bool operator==(const ReceiverMeasurementConditions &) const = default;
 };
 
 struct ReceiverRequirementsConfig {
@@ -47,6 +52,23 @@ struct ReceiverRequirementsConfig {
     std::optional<ReceiverOutputPowerLimits> output_power;
     std::optional<double> iip3_min_dBm;
     ReceiverMeasurementConditions measurement_conditions;
+    bool operator==(const ReceiverRequirementsConfig &) const = default;
+};
+
+constexpr std::size_t kMaxReceiverRequirementModes = 64;
+constexpr std::size_t kMaxReceiverRequirementModeNameLength = 64;
+
+struct ReceiverRequirementsMode {
+    std::string name;
+    std::optional<ReceiverRequirementsConfig> config; // nullopt = not configured
+    bool operator==(const ReceiverRequirementsMode &) const = default;
+};
+
+struct ReceiverRequirementsSet {
+    std::vector<ReceiverRequirementsMode> modes;
+    std::size_t selected = 0;   // 0 when modes is empty
+    std::string invalid_reason; // set only for retained malformed project data; modes empty
+    bool operator==(const ReceiverRequirementsSet &) const = default;
 };
 
 struct ReceiverRequirementsState {
@@ -94,6 +116,20 @@ bool applyReceiverRequirementsDraft(ReceiverRequirementsState &state,
                                     const ReceiverRequirementsDraft &draft, std::string &error);
 std::optional<std::string>
 validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config);
+std::optional<std::string>
+receiverRequirementsModeNameError(const ReceiverRequirementsSet &set, std::string_view trimmed_name,
+                                  std::optional<std::size_t> except_index);
+std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequirementsSet &set);
+bool addReceiverRequirementsMode(ReceiverRequirementsSet &set, std::string_view name,
+                                 std::string &error);
+bool renameReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index,
+                                    std::string_view name, std::string &error);
+bool removeReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index);
+bool selectReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index);
+bool applyReceiverRequirementsDraftToSelectedMode(ReceiverRequirementsSet &set,
+                                                  const ReceiverRequirementsDraft &draft,
+                                                  std::string &error);
+ReceiverRequirementsState selectedReceiverRequirementsState(const ReceiverRequirementsSet &set);
 ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     const ReceiverRequirementsState &state, double sweep_start_Hz, double sweep_stop_Hz,
     const std::vector<double> &frequencies_Hz, const std::vector<double> &gain_dB,
