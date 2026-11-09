@@ -1882,16 +1882,17 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
     if (m_show_receiver_requirements) {
+        const auto measurement_state = selectedReceiverRequirementsState(m_receiver_requirements);
         ReceiverRequirementsConfig measurement_config;
-        if (m_receiver_requirements.config && m_receiver_requirements.invalid_reason.empty())
-            measurement_config = *m_receiver_requirements.config;
+        if (measurement_state.config && measurement_state.invalid_reason.empty())
+            measurement_config = *measurement_state.config;
         m_receiver_performance_engine.update(measurement_config, m_na_engine.pointAPin(),
                                              m_na_engine.pointBPin(),
                                              m_na_engine.sweepFrequencies());
 
         const auto &measurements = m_receiver_performance_engine.measurements();
         const auto result = evaluateReceiverRequirements(
-            m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
+            measurement_state, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
             m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
             measurements.output_power_dBm, measurements.iip3_dBm);
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,

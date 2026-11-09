@@ -55,6 +55,19 @@ void saveJson(const std::string &path, const json &value) {
     output << value.dump(2);
 }
 
+// Replaces the requirement set with one "Default" mode. A default-constructed
+// config leaves that mode not configured, matching the old empty state.
+void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
+    auto &set = app.testReceiverRequirements();
+    set = ReceiverRequirementsSet{};
+    ReceiverRequirementsMode mode;
+    mode.name = "Default";
+    if (!(config == ReceiverRequirementsConfig{}))
+        mode.config = config;
+    set.modes.push_back(std::move(mode));
+    set.selected = 0;
+}
+
 json savedProjectWithRequirements(const std::string &path, const json &requirements) {
     {
         RfSimulatorApp app;
@@ -67,30 +80,85 @@ json savedProjectWithRequirements(const std::string &path, const json &requireme
 }
 } // namespace
 
-TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist valid project settings",
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements load a legacy object as one Default mode",
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_valid");
-    {
-        RfSimulatorApp app;
-        app.saveProject(path);
-    }
-    auto project = loadJson(path);
-    project["receiver_requirements"] = validRequirements;
-    saveJson(path, project);
-    {
-        RfSimulatorApp app;
-        app.loadProject(path);
-        REQUIRE(app.testReceiverRequirementsState().config.has_value());
-        REQUIRE(app.testReceiverRequirementsState().config->gain.has_value());
-        CHECK(app.testReceiverRequirementsState().config->gain->minimum_dB == 10.0);
-        CHECK(app.testReceiverRequirementsState().config->gain->maximum_dB == 20.0);
-        CHECK(app.testReceiverRequirementsState().config->nf_max_dB == 5.0);
-        CHECK(app.componentCount() == 2);
-        app.saveProject(path);
-    }
+    savedProjectWithRequirements(path, validRequirements);
+    RfSimulatorApp app;
+    app.loadProject(path);
+    auto &set = app.testReceiverRequirements();
+    REQUIRE(set.modes.size() == 1);
+    CHECK(set.modes[0].name == "Default");
+    CHECK(set.selected == 0);
+    REQUIRE(set.modes[0].config.has_value());
+    CHECK(set.modes[0].config->gain.has_value());
+    CHECK(set.modes[0].config->gain->minimum_dB == 10.0);
+    CHECK(set.modes[0].config->gain->maximum_dB == 20.0);
+    CHECK(set.modes[0].config->nf_max_dB == 5.0);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.input_level_dBm.has_value());
+    CHECK(app.componentCount() == 2);
+
+    const auto loaded_state = app.testReceiverRequirementsState();
+    REQUIRE(loaded_state.config.has_value());
+    CHECK(loaded_state.invalid_reason.empty());
+
+    app.saveProject(path);
     const json saved = loadJson(path);
     REQUIRE(saved.contains("receiver_requirements"));
-    CHECK(saved["receiver_requirements"] == validRequirements);
+    const auto &requirements = saved["receiver_requirements"];
+    CHECK(requirements["format"] == 2);
+    REQUIRE(requirements["modes"].is_array());
+    REQUIRE(requirements["modes"].size() == 1);
+    CHECK(requirements["modes"][0]["name"] == "Default");
+    CHECK(requirements["modes"][0]["config"] == validRequirements);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements round-trip two modes and the selected mode",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_modes_round_trip");
+    ReceiverRequirementsSet original;
+    ReceiverRequirementsMode high;
+    high.name = "Band 1 High Gain";
+    ReceiverRequirementsConfig high_config;
+    high_config.band_start_Hz = 5.0e6;
+    high_config.band_stop_Hz = 10.0e6;
+    high_config.gain = ReceiverGainLimits{10.0, 20.0};
+    high.config = high_config;
+    ReceiverRequirementsMode low;
+    low.name = "Band 1 Low Gain";
+    ReceiverRequirementsConfig low_config = high_config;
+    low_config.gain = ReceiverGainLimits{0.0, 5.0};
+    low_config.measurement_conditions.input_level_dBm = -30.0;
+    low.config = low_config;
+    original.modes = {high, low};
+    original.selected = 1;
+    {
+        RfSimulatorApp app;
+        app.testReceiverRequirements() = original;
+        app.saveProject(path);
+    }
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.testReceiverRequirements() == original);
+    const auto loaded_state = app.testReceiverRequirementsState();
+    REQUIRE(loaded_state.config.has_value());
+    REQUIRE(loaded_state.config->gain.has_value());
+    CHECK(loaded_state.config->gain->minimum_dB == 0.0);
+    CHECK(loaded_state.config->measurement_conditions.input_level_dBm == -30.0);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements with no modes are not saved",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_no_modes");
+    RfSimulatorApp app;
+    app.saveProject(path);
+    const json saved = loadJson(path);
+    CHECK_FALSE(saved.contains("receiver_requirements"));
+    app.loadProject(path);
+    CHECK(app.testReceiverRequirements().modes.empty());
+    CHECK(app.testReceiverRequirementsState().invalid_reason.empty());
     std::filesystem::remove(path);
 }
 
@@ -98,7 +166,6 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_optional");
     RfSimulatorApp app;
-    auto &state = app.testReceiverRequirementsState();
     ReceiverRequirementsConfig config;
     config.band_start_Hz = 1.0e9;
     config.band_stop_Hz = 2.0e9;
@@ -108,11 +175,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     config.iip3_min_dBm = 10.0;
     config.measurement_conditions.input_level_dBm = -30.0;
     config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
-    state.config = config;
+    setSingleModeRequirements(app, config);
     app.saveProject(path);
 
     const auto saved = loadJson(path);
-    const auto &requirements = saved["receiver_requirements"];
+    const auto &requirements = saved["receiver_requirements"]["modes"][0]["config"];
     CHECK(requirements["output_power_min_dbm"] == -30.0);
     CHECK(requirements["output_power_max_dbm"] == 0.0);
     CHECK(requirements["iip3_min_dbm"] == 10.0);
@@ -122,6 +189,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     CHECK(requirements["measurement_conditions"]["iip3"]["input_stop_dbm"] == -20.0);
     CHECK(requirements["measurement_conditions"]["iip3"]["input_step_db"] == 5.0);
     app.loadProject(path);
+    const auto state = app.testReceiverRequirementsState();
     REQUIRE(state.config.has_value());
     REQUIRE(state.config->output_power.has_value());
     CHECK(state.config->output_power->minimum_dBm == -30.0);
@@ -137,30 +205,37 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist gain-only and NF-o
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_partial");
     RfSimulatorApp app;
-    auto &state = app.testReceiverRequirementsState();
     ReceiverRequirementsConfig config;
     config.band_start_Hz = 1.0e9;
     config.band_stop_Hz = 2.0e9;
     config.gain = ReceiverGainLimits{10.0, 20.0};
-    state.config = config;
+    setSingleModeRequirements(app, config);
     app.saveProject(path);
     app.loadProject(path);
-    REQUIRE(state.config.has_value());
-    REQUIRE(state.config->gain.has_value());
-    CHECK(state.config->gain->minimum_dB == 10.0);
-    CHECK(state.config->gain->maximum_dB == 20.0);
-    CHECK_FALSE(state.config->nf_max_dB.has_value());
-    CHECK_FALSE(loadJson(path)["receiver_requirements"].contains("nf_max_db"));
+    {
+        const auto state = app.testReceiverRequirementsState();
+        REQUIRE(state.config.has_value());
+        REQUIRE(state.config->gain.has_value());
+        CHECK(state.config->gain->minimum_dB == 10.0);
+        CHECK(state.config->gain->maximum_dB == 20.0);
+        CHECK_FALSE(state.config->nf_max_dB.has_value());
+    }
+    CHECK_FALSE(
+        loadJson(path)["receiver_requirements"]["modes"][0]["config"].contains("nf_max_db"));
 
     config.gain.reset();
     config.nf_max_dB = 5.0;
-    state.config = config;
+    setSingleModeRequirements(app, config);
     app.saveProject(path);
     app.loadProject(path);
-    REQUIRE(state.config.has_value());
-    CHECK_FALSE(state.config->gain.has_value());
-    CHECK(state.config->nf_max_dB == 5.0);
-    CHECK_FALSE(loadJson(path)["receiver_requirements"].contains("gain_min_db"));
+    {
+        const auto state = app.testReceiverRequirementsState();
+        REQUIRE(state.config.has_value());
+        CHECK_FALSE(state.config->gain.has_value());
+        CHECK(state.config->nf_max_dB == 5.0);
+    }
+    CHECK_FALSE(
+        loadJson(path)["receiver_requirements"]["modes"][0]["config"].contains("gain_min_db"));
     std::filesystem::remove(path);
 }
 
@@ -431,10 +506,17 @@ TEST_CASE_METHOD(ImGuiFixture,
     {
         RfSimulatorApp app;
         app.loadProject(path);
-        REQUIRE(app.testReceiverRequirementsState().config.has_value());
-        const auto &config = *app.testReceiverRequirementsState().config;
+        const auto legacy_state = app.testReceiverRequirementsState();
+        REQUIRE(legacy_state.config.has_value());
+        const auto &config = *legacy_state.config;
         REQUIRE(config.output_power.has_value());
         CHECK_FALSE(config.measurement_conditions.input_level_dBm.has_value());
+        // No silent fallback: a migrated output-power limit without an input
+        // level stays Incomplete instead of borrowing a generator tone.
+        // The engine returns no output-power samples without an input level.
+        const auto evaluation =
+            evaluateReceiverRequirements(legacy_state, 1.0e9, 2.0e9, {1.5e9}, {0.0}, {0.0}, {}, {});
+        CHECK(evaluation.output_power.status == ReceiverRequirementStatus::Incomplete);
         app.saveProject(path);
     }
     {
@@ -445,7 +527,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     }
     {
         auto project = loadJson(path);
-        project["receiver_requirements"]["measurement_conditions"] =
+        project["receiver_requirements"]["modes"][0]["config"]["measurement_conditions"] =
             json{{"input_level_dbm", -30.0}};
         saveJson(path, project);
     }
@@ -459,11 +541,12 @@ TEST_CASE_METHOD(ImGuiFixture,
     }
     {
         const json saved = loadJson(path);
-        CHECK(saved["receiver_requirements"]["measurement_conditions"]["input_level_dbm"] == -30.0);
+        CHECK(saved["receiver_requirements"]["modes"][0]["config"]["measurement_conditions"]
+                   ["input_level_dbm"] == -30.0);
     }
     {
         auto project = loadJson(path);
-        project["receiver_requirements"]["measurement_conditions"] =
+        project["receiver_requirements"]["modes"][0]["config"]["measurement_conditions"] =
             json{{"input_level_dbm", "bad"}};
         saveJson(path, project);
     }
@@ -472,7 +555,7 @@ TEST_CASE_METHOD(ImGuiFixture,
         app.loadProject(path);
         CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
         CHECK(app.testReceiverRequirementsState().invalid_reason ==
-              "Input level must be a number.");
+              "Mode 1: Input level must be a number.");
     }
     std::filesystem::remove(path);
 }

@@ -930,105 +930,12 @@ std::string normalizeReceiverRequirementsOverflowNumbers(const std::string &text
     return normalized;
 }
 
-ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value) {
-    ReceiverRequirementsState state;
-    const auto invalidate = [&state](std::string reason) {
-        state.config.reset();
-        state.invalid_reason = std::move(reason);
-        return state;
-    };
-    if (!value.is_object())
-        return invalidate("Receiver requirements must be a JSON object.");
-    if (value.contains("invalid_configuration")) {
-        if (value["invalid_configuration"].is_boolean() &&
-            value["invalid_configuration"].get<bool>()) {
-            if (value.contains("diagnostic") && value["diagnostic"].is_string() &&
-                !value["diagnostic"].get<std::string>().empty())
-                return invalidate(value["diagnostic"].get<std::string>());
-            return invalidate("Saved receiver requirements are marked invalid.");
-        }
-        return invalidate("Receiver requirements contain a malformed invalid marker.");
-    }
-
-    if (!value.contains("band_start_hz") || !value["band_start_hz"].is_number() ||
-        !value.contains("band_stop_hz") || !value["band_stop_hz"].is_number())
-        return invalidate("Receiver requirements band endpoints must be numbers.");
-
-    ReceiverRequirementsConfig config;
-    config.band_start_Hz = value["band_start_hz"].get<double>();
-    config.band_stop_Hz = value["band_stop_hz"].get<double>();
-    const auto readOptionalNumber = [&value](const char *key, std::optional<double> &field) {
-        if (!value.contains(key))
-            return true;
-        if (!value[key].is_number())
-            return false;
-        field = value[key].get<double>();
-        return true;
-    };
-
-    std::optional<double> gain_minimum;
-    std::optional<double> gain_maximum;
-    if (!readOptionalNumber("gain_min_db", gain_minimum) ||
-        !readOptionalNumber("gain_max_db", gain_maximum))
-        return invalidate("Receiver gain limits must be numbers.");
-    if (gain_minimum.has_value() != gain_maximum.has_value())
-        return invalidate("Receiver gain minimum and maximum must be saved together.");
-    if (gain_minimum)
-        config.gain = ReceiverGainLimits{*gain_minimum, *gain_maximum};
-    if (!readOptionalNumber("nf_max_db", config.nf_max_dB))
-        return invalidate("Receiver noise figure limit must be a number.");
-
-    std::optional<double> output_minimum;
-    std::optional<double> output_maximum;
-    if (!readOptionalNumber("output_power_min_dbm", output_minimum) ||
-        !readOptionalNumber("output_power_max_dbm", output_maximum))
-        return invalidate("Receiver output power limits must be numbers.");
-    if (output_minimum.has_value() != output_maximum.has_value())
-        return invalidate("Receiver output power minimum and maximum must be saved together.");
-    if (output_minimum)
-        config.output_power = ReceiverOutputPowerLimits{*output_minimum, *output_maximum};
-    if (!readOptionalNumber("iip3_min_dbm", config.iip3_min_dBm))
-        return invalidate("Receiver IIP3 limit must be a number.");
-
-    if (value.contains("measurement_conditions")) {
-        const auto &conditions = value["measurement_conditions"];
-        if (!conditions.is_object())
-            return invalidate("Receiver measurement conditions must be an object.");
-        if (conditions.contains("input_level_dbm")) {
-            if (!conditions["input_level_dbm"].is_number())
-                return invalidate("Input level must be a number.");
-            config.measurement_conditions.input_level_dBm =
-                conditions["input_level_dbm"].get<double>();
-        }
-        if (conditions.contains("iip3")) {
-            const auto &iip3 = conditions["iip3"];
-            constexpr std::array<const char *, 4> iip3_keys = {"tone_spacing_hz", "input_start_dbm",
-                                                               "input_stop_dbm", "input_step_db"};
-            double iip3_fields[4]{};
-            if (!iip3.is_object())
-                return invalidate("IIP3 test settings must be an object.");
-            for (std::size_t i = 0; i < iip3_keys.size(); ++i) {
-                if (!iip3.contains(iip3_keys[i]) || !iip3[iip3_keys[i]].is_number())
-                    return invalidate(std::string("IIP3 test field '") + iip3_keys[i] +
-                                      "' must be a number.");
-                iip3_fields[i] = iip3[iip3_keys[i]].get<double>();
-            }
-            config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{
-                iip3_fields[0], iip3_fields[1], iip3_fields[2], iip3_fields[3]};
-        }
-    }
-    if (auto reason = validateReceiverRequirementsConfig(config))
-        return invalidate(*reason);
-    state.config = config;
-    return state;
-}
-
 } // namespace
 
 ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     ReceiverRequirementsState &receiver_requirements,
-                                     bool &show_log, bool &show_spectrum, bool &show_properties,
+                                     ReceiverRequirementsSet &receiver_requirements, bool &show_log,
+                                     bool &show_spectrum, bool &show_properties,
                                      bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
     : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
       m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_show_log(show_log),
@@ -1157,39 +1064,8 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
 nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
     nlohmann::json root;
     root["version"] = 1;
-    if (m_receiver_requirements.config) {
-        const auto &config = *m_receiver_requirements.config;
-        nlohmann::json requirements = {{"band_start_hz", config.band_start_Hz},
-                                       {"band_stop_hz", config.band_stop_Hz}};
-        if (config.gain) {
-            requirements["gain_min_db"] = config.gain->minimum_dB;
-            requirements["gain_max_db"] = config.gain->maximum_dB;
-        }
-        if (config.nf_max_dB)
-            requirements["nf_max_db"] = *config.nf_max_dB;
-        if (config.output_power) {
-            requirements["output_power_min_dbm"] = config.output_power->minimum_dBm;
-            requirements["output_power_max_dbm"] = config.output_power->maximum_dBm;
-        }
-        if (config.iip3_min_dBm)
-            requirements["iip3_min_dbm"] = *config.iip3_min_dBm;
-        nlohmann::json conditions = nlohmann::json::object();
-        if (config.measurement_conditions.input_level_dBm)
-            conditions["input_level_dbm"] = *config.measurement_conditions.input_level_dBm;
-        if (config.measurement_conditions.iip3) {
-            const auto &settings = *config.measurement_conditions.iip3;
-            conditions["iip3"] = {{"tone_spacing_hz", settings.tone_spacing_Hz},
-                                  {"input_start_dbm", settings.input_start_dBm},
-                                  {"input_stop_dbm", settings.input_stop_dBm},
-                                  {"input_step_db", settings.input_step_dB}};
-        }
-        if (!conditions.empty())
-            requirements["measurement_conditions"] = std::move(conditions);
-        root["receiver_requirements"] = std::move(requirements);
-    } else if (!m_receiver_requirements.invalid_reason.empty()) {
-        root["receiver_requirements"] = {{"invalid_configuration", true},
-                                         {"diagnostic", m_receiver_requirements.invalid_reason}};
-    }
+    if (!m_receiver_requirements.modes.empty() || !m_receiver_requirements.invalid_reason.empty())
+        root["receiver_requirements"] = receiverRequirementsToJson(m_receiver_requirements);
 
     // Synchronize engine nodes before saving, including nodes added without a render frame.
     // editorPositionForSave() gates live reads to registered visible nodes; unregistered nodes
@@ -1495,7 +1371,7 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
         m_last_load_reset = true;
         reset();
         if (root.contains("receiver_requirements")) {
-            m_receiver_requirements = parseReceiverRequirements(root["receiver_requirements"]);
+            m_receiver_requirements = receiverRequirementsFromJson(root["receiver_requirements"]);
             if (!m_receiver_requirements.invalid_reason.empty())
                 LOG_WARN("Invalid receiver requirements in project file %s: %s", path.c_str(),
                          m_receiver_requirements.invalid_reason.c_str());

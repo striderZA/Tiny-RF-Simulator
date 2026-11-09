@@ -42,6 +42,17 @@ void setAgentPanelVisible(ImGuiTestContext *ctx, bool visible) {
     ctx->Yield(3);
 }
 
+void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
+    auto &set = app.testReceiverRequirements();
+    set = ReceiverRequirementsSet{};
+    ReceiverRequirementsMode mode;
+    mode.name = "Default";
+    if (!(config == ReceiverRequirementsConfig{}))
+        mode.config = config;
+    set.modes.push_back(mode);
+    set.selected = 0;
+}
+
 struct AgentPanelUiCleanup {
     RfSimulatorApp &app;
     ImGuiTestContext *ctx;
@@ -1859,9 +1870,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->Yield(2);
         }
         s_app->m_show_na = false;
-        auto &state = s_app->testReceiverRequirementsState();
-        state.config.reset();
-        state.invalid_reason.clear();
+        const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        // Let the widget reload its draft from the new set before interacting.
+        ctx->Yield(3);
         std::uint64_t clean_revision = s_app->projectRevision();
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
@@ -1871,6 +1883,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         if (!panel || !panel->Active)
             return;
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
 
         auto *generator =
             dynamic_cast<SignalGeneratorEngine *>(s_app->testCreateComponent("generator", 9201));
@@ -1934,14 +1950,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ~RunCapReset() { engine.setMaxRunsPerUpdate(std::nullopt); }
         } run_cap_reset{receiver};
         receiver.setMaxRunsPerUpdate(100);
-        state.config = config;
-        state.invalid_reason.clear();
+        setSingleModeRequirements(*s_app, config);
+        // Let the widget reload its draft from the new set before interacting.
+        ctx->Yield(3);
         clean_revision = s_app->projectRevision();
         ctx->Yield(3);
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
         if (!panel || !panel->Active)
             return;
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
 
         const auto finite = [](const std::vector<double> &values) {
             return !values.empty() && std::all_of(values.begin(), values.end(), [](double value) {
@@ -2013,14 +2034,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK(std::fabs(iip3 - 33.0) < 3.0);
         ctx->Yield(1);
         const auto applied_evaluation = evaluateReceiverRequirements(
-            state, 5.0e6, 10.0e6, na.sweepFrequencies(), na.gainDb(), na.noiseFigureDb(),
+            state(), 5.0e6, 10.0e6, na.sweepFrequencies(), na.gainDb(), na.noiseFigureDb(),
             complete.output_power_dBm, complete.iip3_dBm);
         IM_CHECK_EQ(applied_evaluation.output_power.status, ReceiverRequirementStatus::Pass);
         IM_CHECK_EQ(applied_evaluation.iip3.status, ReceiverRequirementStatus::Pass);
         IM_CHECK_EQ(applied_evaluation.overall, ReceiverRequirementStatus::Pass);
 
         // A passing status is green only for the applied configuration. Draft
-        // edits must replace it with the neutral unapplied state.
+        // edits must replace it with the neutral unapplied state().
         const auto has_pass_green = [](ImGuiWindow *window) {
             if (!window || !window->DrawList)
                 return false;
@@ -2047,8 +2068,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band stop (Hz)", "9000000");
         ctx->Yield(2);
-        IM_CHECK(state.config.has_value());
-        IM_CHECK_EQ(state.config->band_stop_Hz, 10.0e6);
+        IM_CHECK(state().config.has_value());
+        IM_CHECK_EQ(state().config->band_stop_Hz, 10.0e6);
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
         IM_CHECK(!has_pass_green(panel));
         ctx->ItemClick("Cancel");
@@ -2064,8 +2085,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         na.setPointA(-1);
         na.setPointB(-1);
-        state.config.reset();
-        state.invalid_reason.clear();
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
         s_app->testRemoveComponent(amplifier->graphNodeId());
         s_app->testRemoveComponent(attenuator->graphNodeId());
         s_app->testRemoveComponent(generator->graphNodeId());
@@ -2090,9 +2110,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         if (!panel || !panel->Active)
             return;
-        auto &state = s_app->testReceiverRequirementsState();
-        state.config.reset();
-        state.invalid_reason.clear();
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
+        const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        // Let the widget reload its draft from the new set before interacting.
+        ctx->Yield(3);
         const std::uint64_t clean_revision = s_app->projectRevision();
 
         // Apply rejects the draft with a red error line; the committed state and
@@ -2123,24 +2148,23 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
-        IM_CHECK(!state.config.has_value());
+        IM_CHECK(!state().config.has_value());
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
         IM_CHECK(has_error_text(panel));
 
         ctx->ItemInputValue("Input level (dBm)", "-30");
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
-        IM_CHECK(state.config.has_value());
-        if (state.config)
-            IM_CHECK(state.config->measurement_conditions.input_level_dBm == -30.0);
+        IM_CHECK(state().config.has_value());
+        if (state().config)
+            IM_CHECK(state().config->measurement_conditions.input_level_dBm == -30.0);
         IM_CHECK(s_app->projectRevision() > clean_revision);
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
         ctx->Yield(2);
-        state.config.reset();
-        state.invalid_reason.clear();
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
         ctx->Yield(2);
     };
 
@@ -2163,9 +2187,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         if (!panel || !panel->Active)
             return;
-        auto &state = s_app->testReceiverRequirementsState();
-        state.config.reset();
-        state.invalid_reason.clear();
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
+        const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        // Let the widget reload its draft from the new set before interacting.
+        ctx->Yield(3);
         // Revision comparisons prove whether an Apply recorded a project edit,
         // independent of whatever unsaved state earlier cases left behind.
         const std::uint64_t revision_before_invalid = s_app->projectRevision();
@@ -2180,7 +2209,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("NF max (dB)", "5");
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
-        IM_CHECK(!state.config.has_value());
+        IM_CHECK(!state().config.has_value());
         IM_CHECK_EQ(s_app->projectRevision(), revision_before_invalid);
 
         ctx->ItemInputValue("Band start (Hz)", "1000000");
@@ -2190,21 +2219,31 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
         IM_CHECK(s_app->m_show_receiver_requirements);
-        IM_CHECK(state.config.has_value());
-        if (state.config) {
-            IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
-            IM_CHECK_EQ(state.config->band_stop_Hz, 1.0e7);
-            IM_CHECK_EQ(state.config->gain->minimum_dB, -3.0);
-            IM_CHECK_EQ(state.config->gain->maximum_dB, 3.0);
-            IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
+        IM_CHECK(state().config.has_value());
+        if (state().config) {
+            IM_CHECK_EQ(state().config->band_start_Hz, 1.0e6);
+            IM_CHECK_EQ(state().config->band_stop_Hz, 1.0e7);
+            IM_CHECK_EQ(state().config->gain->minimum_dB, -3.0);
+            IM_CHECK_EQ(state().config->gain->maximum_dB, 3.0);
+            IM_CHECK_EQ(state().config->nf_max_dB, 5.0);
         }
         IM_CHECK(s_app->projectRevision() > revision_before_invalid);
         IM_CHECK(s_app->isDirty());
 
-        state.config.reset();
-        state.invalid_reason = "malformed project data";
+        auto &invalid_set = s_app->testReceiverRequirements();
+        invalid_set = ReceiverRequirementsSet{};
+        invalid_set.invalid_reason = "malformed project data";
         const std::uint64_t revision_before_repair = s_app->projectRevision();
         ctx->SetRef("Receiver Requirements");
+        // Retained malformed data has no modes, so the limit fields stay hidden
+        // until Add mode clears the invalid marker.
+        IM_CHECK(!ctx->ItemExists("Band start (Hz)"));
+        ctx->ItemInputValue("Mode name", "Repaired");
+        ctx->ItemClick("Add mode");
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testReceiverRequirements().modes.size(), 1);
+        IM_CHECK(s_app->testReceiverRequirementsState().invalid_reason.empty());
+        IM_CHECK(s_app->projectRevision() > revision_before_repair);
         ctx->ItemCheck("Enable gain");
         ctx->ItemCheck("Enable noise figure");
         ctx->ItemInputValue("Band start (Hz)", "1000000");
@@ -2212,11 +2251,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("Gain min (dB)", "-3");
         ctx->ItemInputValue("Gain max (dB)", "3");
         ctx->ItemInputValue("NF max (dB)", "5");
+        const std::uint64_t revision_before_repair_apply = s_app->projectRevision();
         ctx->ItemClick("Apply requirements");
         ctx->Yield(2);
-        IM_CHECK(state.config.has_value());
-        IM_CHECK(state.invalid_reason.empty());
-        IM_CHECK(s_app->projectRevision() > revision_before_repair);
+        IM_CHECK(state().config.has_value());
+        IM_CHECK(state().invalid_reason.empty());
+        IM_CHECK(s_app->projectRevision() > revision_before_repair_apply);
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
@@ -2241,10 +2281,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         if (!panel || !panel->Active)
             return;
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
 
-        auto &state = s_app->testReceiverRequirementsState();
-        state.config.reset();
-        state.invalid_reason.clear();
+        const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        // Let the widget reload its draft from the new set before locating items.
+        ctx->Yield(3);
         std::uint64_t clean_revision = s_app->projectRevision();
         ctx->SetRef("Receiver Requirements");
         const auto setEnabled = [ctx](const char *label, bool enabled) {
@@ -2279,19 +2324,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("IIP3 input stop (dBm)", "-30");
         ctx->ItemInputValue("IIP3 input step (dB)", "5");
         apply();
-        IM_CHECK(!state.config.has_value());
+        IM_CHECK(!state().config.has_value());
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
 
         // Invalid values in disabled metrics must not block a valid Apply.
         setEnabled("Enable output power", false);
         setEnabled("Enable IIP3", false);
         apply();
-        IM_CHECK(state.config.has_value());
-        if (state.config) {
-            IM_CHECK(state.config->gain.has_value());
-            IM_CHECK(state.config->nf_max_dB.has_value());
-            IM_CHECK(!state.config->output_power.has_value());
-            IM_CHECK(!state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config.has_value());
+        if (state().config) {
+            IM_CHECK(state().config->gain.has_value());
+            IM_CHECK(state().config->nf_max_dB.has_value());
+            IM_CHECK(!state().config->output_power.has_value());
+            IM_CHECK(!state().config->iip3_min_dBm.has_value());
         }
         IM_CHECK(s_app->projectRevision() > clean_revision);
 
@@ -2309,94 +2354,95 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         panel = ImGui::FindWindowByName("Receiver Requirements");
         IM_CHECK(panel != nullptr && panel->Active);
         IM_CHECK(s_app->m_show_receiver_requirements);
-        IM_CHECK(state.config.has_value());
-        if (!state.config)
+        IM_CHECK(state().config.has_value());
+        if (!state().config)
             return;
-        IM_CHECK(state.config->gain.has_value());
-        IM_CHECK(state.config->nf_max_dB.has_value());
-        IM_CHECK(state.config->output_power.has_value());
-        IM_CHECK(state.config->iip3_min_dBm.has_value());
-        IM_CHECK_EQ(state.config->band_start_Hz, 1.0e6);
-        IM_CHECK_EQ(state.config->band_stop_Hz, 1.0e7);
-        IM_CHECK_EQ(state.config->nf_max_dB, 5.0);
-        IM_CHECK_EQ(state.config->iip3_min_dBm, 10.0);
-        if (state.config->gain) {
-            IM_CHECK_EQ(state.config->gain->minimum_dB, -3.0);
-            IM_CHECK_EQ(state.config->gain->maximum_dB, 3.0);
+        IM_CHECK(state().config->gain.has_value());
+        IM_CHECK(state().config->nf_max_dB.has_value());
+        IM_CHECK(state().config->output_power.has_value());
+        IM_CHECK(state().config->iip3_min_dBm.has_value());
+        IM_CHECK_EQ(state().config->band_start_Hz, 1.0e6);
+        IM_CHECK_EQ(state().config->band_stop_Hz, 1.0e7);
+        IM_CHECK_EQ(state().config->nf_max_dB, 5.0);
+        IM_CHECK_EQ(state().config->iip3_min_dBm, 10.0);
+        if (state().config->gain) {
+            IM_CHECK_EQ(state().config->gain->minimum_dB, -3.0);
+            IM_CHECK_EQ(state().config->gain->maximum_dB, 3.0);
         }
-        if (state.config->output_power) {
-            IM_CHECK_EQ(state.config->output_power->minimum_dBm, -40.0);
-            IM_CHECK_EQ(state.config->output_power->maximum_dBm, 0.0);
+        if (state().config->output_power) {
+            IM_CHECK_EQ(state().config->output_power->minimum_dBm, -40.0);
+            IM_CHECK_EQ(state().config->output_power->maximum_dBm, 0.0);
         }
-        IM_CHECK(state.config->measurement_conditions.iip3.has_value());
-        IM_CHECK(state.config->measurement_conditions.input_level_dBm == -30.0);
-        if (state.config->measurement_conditions.iip3) {
-            IM_CHECK_EQ(state.config->measurement_conditions.iip3->tone_spacing_Hz, 2.0e6);
-            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_start_dBm, -60.0);
-            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_stop_dBm, -40.0);
-            IM_CHECK_EQ(state.config->measurement_conditions.iip3->input_step_dB, 2.0);
+        IM_CHECK(state().config->measurement_conditions.iip3.has_value());
+        IM_CHECK(state().config->measurement_conditions.input_level_dBm == -30.0);
+        if (state().config->measurement_conditions.iip3) {
+            IM_CHECK_EQ(state().config->measurement_conditions.iip3->tone_spacing_Hz, 2.0e6);
+            IM_CHECK_EQ(state().config->measurement_conditions.iip3->input_start_dBm, -60.0);
+            IM_CHECK_EQ(state().config->measurement_conditions.iip3->input_stop_dBm, -40.0);
+            IM_CHECK_EQ(state().config->measurement_conditions.iip3->input_step_dB, 2.0);
         }
         IM_CHECK(s_app->projectRevision() > clean_revision);
 
-        const auto applied = *state.config;
+        const auto applied = *state().config;
         clean_revision = s_app->projectRevision();
         ctx->ItemInputValue("Band stop (Hz)", "9000000");
         ctx->ItemInputValue("Output power max (dBm)", "-5");
         setEnabled("Enable gain", false);
         ctx->ItemClick("Cancel");
         ctx->Yield(2);
-        IM_CHECK(state.config.has_value());
-        if (state.config) {
-            IM_CHECK_EQ(state.config->band_stop_Hz, applied.band_stop_Hz);
-            IM_CHECK(state.config->gain.has_value());
-            IM_CHECK(state.config->output_power.has_value());
-            IM_CHECK_EQ(state.config->output_power->maximum_dBm, applied.output_power->maximum_dBm);
-            IM_CHECK_EQ(state.config->iip3_min_dBm, applied.iip3_min_dBm);
+        IM_CHECK(state().config.has_value());
+        if (state().config) {
+            IM_CHECK_EQ(state().config->band_stop_Hz, applied.band_stop_Hz);
+            IM_CHECK(state().config->gain.has_value());
+            IM_CHECK(state().config->output_power.has_value());
+            IM_CHECK_EQ(state().config->output_power->maximum_dBm,
+                        applied.output_power->maximum_dBm);
+            IM_CHECK_EQ(state().config->iip3_min_dBm, applied.iip3_min_dBm);
         }
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
 
         setEnabled("Enable gain", false);
         apply();
-        IM_CHECK(state.config.has_value() && !state.config->gain.has_value());
-        IM_CHECK(state.config->nf_max_dB.has_value());
-        IM_CHECK(state.config->output_power.has_value());
-        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config.has_value() && !state().config->gain.has_value());
+        IM_CHECK(state().config->nf_max_dB.has_value());
+        IM_CHECK(state().config->output_power.has_value());
+        IM_CHECK(state().config->iip3_min_dBm.has_value());
         setEnabled("Enable gain", true);
         ctx->ItemInputValue("Gain min (dB)", "-3");
         ctx->ItemInputValue("Gain max (dB)", "3");
         apply();
-        IM_CHECK(state.config.has_value() && state.config->gain.has_value());
+        IM_CHECK(state().config.has_value() && state().config->gain.has_value());
 
         setEnabled("Enable noise figure", false);
         apply();
-        IM_CHECK(state.config.has_value() && !state.config->nf_max_dB.has_value());
-        IM_CHECK(state.config->gain.has_value());
-        IM_CHECK(state.config->output_power.has_value());
-        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config.has_value() && !state().config->nf_max_dB.has_value());
+        IM_CHECK(state().config->gain.has_value());
+        IM_CHECK(state().config->output_power.has_value());
+        IM_CHECK(state().config->iip3_min_dBm.has_value());
         setEnabled("Enable noise figure", true);
         ctx->ItemInputValue("NF max (dB)", "5");
         apply();
-        IM_CHECK(state.config.has_value() && state.config->nf_max_dB.has_value());
+        IM_CHECK(state().config.has_value() && state().config->nf_max_dB.has_value());
 
         setEnabled("Enable output power", false);
         apply();
-        IM_CHECK(state.config.has_value() && !state.config->output_power.has_value());
-        IM_CHECK(state.config->gain.has_value());
-        IM_CHECK(state.config->nf_max_dB.has_value());
-        IM_CHECK(state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config.has_value() && !state().config->output_power.has_value());
+        IM_CHECK(state().config->gain.has_value());
+        IM_CHECK(state().config->nf_max_dB.has_value());
+        IM_CHECK(state().config->iip3_min_dBm.has_value());
         setEnabled("Enable output power", true);
         ctx->ItemInputValue("Output power min (dBm)", "-40");
         ctx->ItemInputValue("Output power max (dBm)", "0");
         ctx->ItemInputValue("Input level (dBm)", "-30");
         apply();
-        IM_CHECK(state.config.has_value() && state.config->output_power.has_value());
+        IM_CHECK(state().config.has_value() && state().config->output_power.has_value());
 
         setEnabled("Enable IIP3", false);
         apply();
-        IM_CHECK(state.config.has_value() && !state.config->iip3_min_dBm.has_value());
-        IM_CHECK(state.config->gain.has_value());
-        IM_CHECK(state.config->nf_max_dB.has_value());
-        IM_CHECK(state.config->output_power.has_value());
+        IM_CHECK(state().config.has_value() && !state().config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config->gain.has_value());
+        IM_CHECK(state().config->nf_max_dB.has_value());
+        IM_CHECK(state().config->output_power.has_value());
         setEnabled("Enable IIP3", true);
         ctx->ItemInputValue("IIP3 min (dBm)", "10");
         ctx->ItemInputValue("IIP3 tone spacing (Hz)", "2000000");
@@ -2404,14 +2450,138 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("IIP3 input stop (dBm)", "-40");
         ctx->ItemInputValue("IIP3 input step (dB)", "2");
         apply();
-        IM_CHECK(state.config.has_value() && state.config->iip3_min_dBm.has_value());
+        IM_CHECK(state().config.has_value() && state().config->iip3_min_dBm.has_value());
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
         ctx->Yield(2);
-        state.config.reset();
-        state.invalid_reason.clear();
+        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_modes_add_rename_remove_and_switch");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+        // Start from a known scroll position so item locations do not depend on
+        // the scroll state the previous case left behind.
+        ctx->ScrollToTop("Receiver Requirements");
+        ctx->Yield(2);
+
+        auto &set = s_app->testReceiverRequirements();
+        set = ReceiverRequirementsSet{};
+        ctx->Yield(3);
+        ctx->SetRef("Receiver Requirements");
+        IM_CHECK(!ctx->ItemExists("Band start (Hz)"));
+        IM_CHECK(!ctx->ItemExists("Apply requirements"));
+
+        // 1. An empty set accepts the first mode through the name field.
+        std::uint64_t revision = s_app->projectRevision();
+        ctx->ItemInputValue("Mode name", "Band 1 High Gain");
+        ctx->ItemClick("Add mode");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 1);
+        IM_CHECK(set.modes[0].name == "Band 1 High Gain");
+        IM_CHECK_EQ(set.selected, 0);
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        revision = s_app->projectRevision();
+        ctx->ItemInputValue("Band start (Hz)", "5000000");
+        ctx->ItemInputValue("Band stop (Hz)", "10000000");
+        ctx->ItemCheck("Enable gain");
+        ctx->ItemInputValue("Gain min (dB)", "0");
+        ctx->ItemInputValue("Gain max (dB)", "20");
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 1);
+        IM_CHECK(set.modes[0].config.has_value());
+        IM_CHECK_EQ(set.modes[0].config->band_start_Hz, 5.0e6);
+        IM_CHECK_EQ(set.modes[0].config->band_stop_Hz, 10.0e6);
+        IM_CHECK(set.modes[0].config->gain.has_value());
+        IM_CHECK_EQ(set.modes[0].config->gain->minimum_dB, 0.0);
+        IM_CHECK_EQ(set.modes[0].config->gain->maximum_dB, 20.0);
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        // 2. Adding a second mode copies the selected mode's config.
+        revision = s_app->projectRevision();
+        ctx->ItemInputValue("Mode name", "Band 1 Low Gain");
+        ctx->ItemClick("Add mode");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 2);
+        IM_CHECK_EQ(set.selected, 1);
+        IM_CHECK(set.modes[1].config.has_value());
+        IM_CHECK(set.modes[1].config == set.modes[0].config);
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        // 3. Unapplied edits disable the mode controls, so a combo click cannot
+        // switch modes, while Cancel restores the applied config.
+        ctx->ItemInputValue("Band stop (Hz)", "9000000");
+        ctx->Yield(3);
+        IM_CHECK((ctx->ItemInfo("Mode").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        IM_CHECK((ctx->ItemInfo("Add mode").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        IM_CHECK((ctx->ItemInfo("Rename mode").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        IM_CHECK((ctx->ItemInfo("Remove mode").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        ctx->ItemClick("Mode");
+        ctx->Yield(2);
+        if (ctx->ItemExists("**/Band 1 High Gain"))
+            ctx->ItemClick("**/Band 1 High Gain");
+        ctx->SetRef("Receiver Requirements");
+        ctx->Yield(2);
+        IM_CHECK_EQ(set.selected, 1);
+        ctx->ItemClick("Cancel");
+        ctx->Yield(3);
+        IM_CHECK(set.modes[1].config.has_value());
+        IM_CHECK_EQ(set.modes[1].config->band_stop_Hz, 10.0e6);
+
+        // 4. Selecting another mode reloads the draft; rename applies to it.
+        revision = s_app->projectRevision();
+        ctx->ItemClick("Mode");
+        ctx->Yield(2);
+        ctx->SetRef("");
+        ctx->ItemClick("**/Band 1 High Gain");
+        ctx->SetRef("Receiver Requirements");
+        ctx->Yield(3);
+        IM_CHECK_EQ(set.selected, 0);
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        revision = s_app->projectRevision();
+        ctx->ItemInputValue("Mode name", "HG");
+        ctx->ItemClick("Rename mode");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 2);
+        IM_CHECK(set.modes[0].name == "HG");
+        IM_CHECK(set.modes[1].name == "Band 1 Low Gain");
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        // 5. Removing the selected mode leaves the other one selected.
+        revision = s_app->projectRevision();
+        ctx->ItemClick("Remove mode");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 1);
+        IM_CHECK(set.modes[0].name == "Band 1 Low Gain");
+        IM_CHECK_EQ(set.selected, 0);
+        IM_CHECK(s_app->projectRevision() > revision);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        set = ReceiverRequirementsSet{};
     };
 
     // Agent panel control callbacks are replaced here, so the tests exercise

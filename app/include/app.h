@@ -193,7 +193,10 @@ class RfSimulatorApp {
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
-    ReceiverRequirementsState &testReceiverRequirementsState() { return m_receiver_requirements; }
+    ReceiverRequirementsSet &testReceiverRequirements() { return m_receiver_requirements; }
+    ReceiverRequirementsState testReceiverRequirementsState() {
+        return selectedReceiverRequirementsState(m_receiver_requirements);
+    }
     std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
     PFBViewManager &testPfbViews() { return m_pfb_views; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.
@@ -306,7 +309,7 @@ class RfSimulatorApp {
     ReceiverPerformanceMeasurementEngine m_receiver_performance_engine{m_circuit_runtime.graph(),
                                                                        m_na_host};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
-    ReceiverRequirementsState m_receiver_requirements;
+    ReceiverRequirementsSet m_receiver_requirements;
     std::unique_ptr<ProjectSerializer> m_serializer;
     std::vector<std::string> m_last_saved_data_files;
     GitStatusMonitor m_git_status_monitor;
