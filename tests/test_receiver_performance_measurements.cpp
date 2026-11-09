@@ -727,6 +727,7 @@ TEST_CASE("Receiver measurement resumes incremental in-band work and resets chan
     CHECK(evaluation.overall == ReceiverRequirementStatus::Incomplete);
 
     const int prepared_passes = c.host.scratch_passes;
+    const double retained_front = partial.output_power_dBm.front();
     engine.update(settings, c.generator.outputPinId(), c.pointB(), full_band_grid);
     CHECK(engine.isInProgress());
     CHECK(c.host.scratch_passes == prepared_passes);
@@ -739,9 +740,21 @@ TEST_CASE("Receiver measurement resumes incremental in-band work and resets chan
     REQUIRE(reset.output_power_dBm.size() == points);
     REQUIRE(reset.iip3_dBm.size() == points);
     // A changed input level resets the retained samples, then the same update
-    // call immediately measures the first center at the new level; the sweep
+    // call immediately measures the first center at the new level. The chain is
+    // linear and flat, so the fresh sample is 2 dB below the retained -10 dBm
+    // one and every finite sample equals the -12 dBm value; a stale sample
+    // would still be finite and would pass an is-finite check alone. The sweep
     // still cannot reach the far end.
-    CHECK(isFinite(reset.output_power_dBm.front()));
+    const double fresh_front = reset.output_power_dBm.front();
+    CHECK(fresh_front == Catch::Approx(retained_front - 2.0).margin(1e-6));
+    std::size_t finite_samples = 0;
+    for (const double power : reset.output_power_dBm) {
+        if (!isFinite(power))
+            continue;
+        ++finite_samples;
+        CHECK(power == Catch::Approx(fresh_front).margin(1e-3));
+    }
+    CHECK(finite_samples > 0);
     CHECK(std::isnan(reset.output_power_dBm.back()));
 }
 
