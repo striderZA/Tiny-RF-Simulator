@@ -8,6 +8,8 @@ This manual is for people who run the simulator. It covers the Windows and Linux
 
 With a saved project open, the menu bar shows its filename and the project's current Git commit and working-tree counts. Hover over the Git summary to see the branch and full counts for staged, unstaged, untracked, and conflicted paths. For an untitled project, status is read from the simulator's current working directory. If Git or a repository is unavailable, the header shows `Git unavailable`.
 
+The right edge of the menu bar shows the build you are running: the version and the short commit it was built from, for example `0.30.0 (9cad3be)`. On a narrow window the project filename and Git summary shorten so that stamp stays visible.
+
 ## Start here
 
 - [Install](install.md): download the release archive and run the simulator.
