@@ -4,6 +4,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <limits>
@@ -685,4 +686,97 @@ TEST_CASE("Receiver requirements set validation reports the first problem",
     valid.modes.push_back({"A", allConfigured()});
     valid.modes.push_back({"B", std::nullopt});
     CHECK_FALSE(validateReceiverRequirementsSet(valid).has_value());
+}
+
+TEST_CASE("Receiver requirements JSON round-trips modes and selection",
+          "[receiver_requirements][json]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "HG", error));
+    set.modes[0].config = allConfigured();
+    set.modes[0].config->measurement_conditions.input_level_dBm = -30.0;
+    REQUIRE(addReceiverRequirementsMode(set, "LG", error));
+    set.modes[1].config.reset();
+    const auto encoded = receiverRequirementsToJson(set);
+    CHECK(encoded.at("format") == 2);
+    CHECK(encoded.at("selected_mode") == 1);
+    CHECK(encoded.at("modes")[1].at("config").is_null());
+    CHECK(encoded.at("modes")[0].at("config").at("measurement_conditions").at("input_level_dbm") ==
+          -30.0);
+    CHECK(receiverRequirementsFromJson(encoded) == set);
+
+    ReceiverRequirementsSet empty;
+    const auto encoded_empty = receiverRequirementsToJson(empty);
+    CHECK(
+        (encoded_empty ==
+         nlohmann::json{{"format", 2}, {"selected_mode", 0}, {"modes", nlohmann::json::array()}}));
+}
+
+TEST_CASE("Receiver requirements JSON migrates a format 1 object to one Default mode",
+          "[receiver_requirements][json]") {
+    const nlohmann::json legacy = {
+        {"band_start_hz", 1.0e9},
+        {"band_stop_hz", 2.0e9},
+        {"gain_min_db", 10.0},
+        {"gain_max_db", 20.0},
+        {"measurement_conditions", {{"output_reference_tone_frequency_hz", 1.0e9}}}};
+    const auto set = receiverRequirementsFromJson(legacy);
+    REQUIRE(set.invalid_reason.empty());
+    REQUIRE(set.modes.size() == 1);
+    CHECK(set.modes[0].name == "Default");
+    CHECK(set.selected == 0);
+    CHECK(set.modes[0].config->gain->maximum_dB == 20.0);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.input_level_dBm);
+
+    auto with_input_level = legacy;
+    with_input_level["measurement_conditions"]["input_level_dbm"] = -30.0;
+    const auto with_level = receiverRequirementsFromJson(with_input_level);
+    REQUIRE(with_level.invalid_reason.empty());
+    REQUIRE(with_level.modes.size() == 1);
+    CHECK(with_level.modes[0].name == "Default");
+    CHECK(with_level.modes[0].config->measurement_conditions.input_level_dBm == -30.0);
+}
+
+TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
+          "[receiver_requirements][json]") {
+    const auto check_invalid = [](const ReceiverRequirementsSet &set, const std::string &reason) {
+        CHECK(set.invalid_reason == reason);
+        CHECK(set.modes.empty());
+        CHECK(set.selected == 0);
+    };
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{{"format", 3}}),
+                  "Unsupported receiver requirements format 3.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"selected_mode", 5},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}}})}}),
+                  "Selected mode is out of range.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}},
+                                                       {{"config", nullptr}}})}}),
+                  "Mode 2: Mode name must be a string.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}},
+                                                       {{"name", "a"}, {"config", nullptr}}})}}),
+                  "A mode named 'A' already exists.");
+
+    auto bad_input_level = allConfigured();
+    const auto encoded_bad_level = receiverRequirementsToJson(
+        ReceiverRequirementsSet{{ReceiverRequirementsMode{"A", bad_input_level}}, 0, {}});
+    auto malformed_level = encoded_bad_level;
+    malformed_level["modes"][0]["config"]["measurement_conditions"]["input_level_dbm"] = "loud";
+    check_invalid(receiverRequirementsFromJson(malformed_level),
+                  "Mode 1: Input level must be a number.");
+
+    ReceiverRequirementsSet marker;
+    marker.invalid_reason = "x";
+    const auto encoded_marker = receiverRequirementsToJson(marker);
+    CHECK((encoded_marker == nlohmann::json{{"invalid_configuration", true}, {"diagnostic", "x"}}));
+    check_invalid(receiverRequirementsFromJson(encoded_marker), "x");
 }

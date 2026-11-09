@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -120,6 +121,10 @@ std::optional<std::string>
 receiverRequirementsModeNameError(const ReceiverRequirementsSet &set, std::string_view trimmed_name,
                                   std::optional<std::size_t> except_index);
 std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequirementsSet &set);
+
+constexpr int kReceiverRequirementsFormat = 2;
+nlohmann::json receiverRequirementsToJson(const ReceiverRequirementsSet &set);
+ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value);
 bool addReceiverRequirementsMode(ReceiverRequirementsSet &set, std::string_view name,
                                  std::string &error);
 bool renameReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index,
