@@ -1616,19 +1616,33 @@ void RfSimulatorApp::draw_ui() {
             return ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
         };
         const float spacing = ImGui::GetStyle().ItemSpacing.x;
-        const float current_x = ImGui::GetCursorPosX();
         const float available_width = ImGui::GetContentRegionAvail().x;
         const float fps_width = measure_text(fps_title);
+        // The build stamp has a fixed width, so it reserves its own space on the
+        // right and the project and Git labels shorten to make room for it.
+        std::string version_title = APP_VERSION;
+        if (const std::string_view git_hash = APP_GIT_HASH; !git_hash.empty())
+            version_title += " (" + std::string(git_hash) + ")";
+        const float version_width = measure_text(version_title);
         const auto &git_status = m_git_status_monitor.status();
-        const GitStatusHeaderLabels header_labels = fitGitHeaderLabels(
-            project_title, git_status, available_width, fps_width, spacing, measure_text);
+        const GitStatusHeaderLabels header_labels =
+            fitGitHeaderLabels(project_title, git_status, available_width,
+                               fps_width + spacing + version_width, spacing, measure_text);
         const std::string &visible_project_title = header_labels.project_title;
         const std::string &git_title = header_labels.git_title;
         const bool show_project_title = !visible_project_title.empty();
         const float gap_count = show_project_title ? 2.0f : 1.0f;
-        const float right_width = fps_width + measure_text(git_title) + spacing * gap_count +
+        const float right_width = version_width + spacing + fps_width + measure_text(git_title) +
+                                  spacing * gap_count +
                                   (show_project_title ? measure_text(visible_project_title) : 0.0f);
-        ImGui::SameLine(std::max(current_x, current_x + available_width - right_width));
+        // SameLine() adds the menu bar's group offset (its left padding) to the given
+        // x, which would push the rightmost label past the bar's clip rect. Place the
+        // cluster in screen coordinates instead so it ends exactly at the content edge.
+        const ImVec2 line_pos = ImGui::GetCursorScreenPos();
+        const float right_edge_x =
+            ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - ImGui::GetStyle().WindowPadding.x;
+        ImGui::SetCursorScreenPos(
+            ImVec2(std::max(line_pos.x, right_edge_x - right_width), line_pos.y));
         if (show_project_title) {
             ImGui::Text("%s", visible_project_title.c_str());
             if (visible_project_title != project_title && ImGui::IsItemHovered())
@@ -1642,6 +1656,8 @@ void RfSimulatorApp::draw_ui() {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("%s", fps_title);
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", version_title.c_str());
         ImGui::EndMainMenuBar();
     }
 
