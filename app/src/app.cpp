@@ -214,6 +214,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     };
     agent_hooks.save_project = [this](const std::string &path) { return saveProject(path); };
     agent_hooks.saved_project_data_files = [this]() { return m_last_saved_data_files; };
+    agent_hooks.receiver_requirements = [this]() { return m_receiver_requirements; };
+    // The agent API opens the checkpoint and calls EditorCommands::markModified() itself.
+    agent_hooks.set_receiver_requirements = [this](const ReceiverRequirementsSet &set) {
+        m_receiver_requirements = set;
+    };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);

@@ -135,6 +135,13 @@ class FakeAgentHost final : public IAgentHost {
         loaded_paths.push_back(path);
         return load_outcome(path);
     }
+    std::optional<ReceiverRequirementsSet> receiverRequirements() const override {
+        return requirements;
+    }
+    bool setReceiverRequirements(const ReceiverRequirementsSet &set) override {
+        requirements = set;
+        return true;
+    }
     void recordActivity(const AgentActivity &entry) override {
         ++activity_attempts;
         if (throw_on_activity)
@@ -155,6 +162,7 @@ class FakeAgentHost final : public IAgentHost {
     std::vector<std::string> loaded_paths;
     std::function<AgentProjectLoadResult(const std::string &)> load_outcome =
         [](const std::string &) { return AgentProjectLoadResult{true, false}; };
+    std::optional<ReceiverRequirementsSet> requirements = ReceiverRequirementsSet{};
     int checkpoint_begins = 0;
     int checkpoint_commits = 0;
     int checkpoint_discards = 0;

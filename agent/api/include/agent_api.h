@@ -88,6 +88,8 @@ class AgentApi final : public IAgentCallExecutor {
     friend AgentToolResult executeReceiverMeasureTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeProjectSaveTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeProjectLoadTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeRequirementsGetTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeRequirementsEditTool(const AgentApi &, const AgentCall &);
 
     IComponentEngine *scratchTypeEngine(std::string_view type) const;
 

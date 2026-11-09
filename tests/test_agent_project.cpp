@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "receiver_requirements.h"
 #include "test_temp_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -340,4 +341,20 @@ TEST_CASE_METHOD(ProjectFixture, "project tools refuse paths that name another f
         CHECK(result.structured.at("error").at("code") == "INVALID_ARGUMENT");
     }
 #endif
+}
+
+TEST_CASE_METHOD(ProjectFixture, "requirements_edit is revertable through its checkpoint",
+                 "[agent_app][project]") {
+    ReceiverRequirementsSet next;
+    next.modes.push_back({"Default", std::nullopt});
+    next.selected = 0;
+
+    const AgentToolResult result =
+        call("requirements_edit", {{"epoch", app.testProjectEpoch()},
+                                   {"requirements", receiverRequirementsToJson(next)}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(app.testReceiverRequirements().modes.size() == 1);
+
+    app.revertAgentCheckpoint(app.testAgentHost().checkpoints().back().id);
+    CHECK(app.testReceiverRequirements().modes.empty());
 }

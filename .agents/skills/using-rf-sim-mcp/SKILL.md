@@ -10,7 +10,7 @@ Tools act on the open project. Use `tools/list` for arguments and [reference.md]
 ## Before the first call
 
 - Enable Agent Server (**View > Agent > Agent Server**) or calls return `SIMULATOR_UNAVAILABLE`.
-- The catalog has 13 tools; report any missing from `tools/list`.
+- The catalog has 15 tools; report any missing from `tools/list`.
 - For library entries, call `component_types {type}`; create only when `authorable` is true and use non-file `library_fields` in `library_create`. It writes validated JSON only; no circuit placement, state/checkpoint changes, or overwrite. See the reference for roots and limits.
 - Only `project_save`/`project_load` read or write `.rfsim`; MCP offers no dialogs or checkpoint reverts.
 
@@ -20,6 +20,7 @@ Tools act on the open project. Use `tools/list` for arguments and [reference.md]
 2. Before changing a component, call `component_get {epoch, component}` for its `param_info`.
 3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` takes an existing id and an absolute position; `add.position` places a new component.
 4. Measure with `measure_port` or `network_analyzer_sweep`. `null` means unavailable, never zero.
+5. For receiver requirements, call `requirements_get`, edit the whole format-2 object, and send it back with `requirements_edit {epoch, requirements}`. Edits never change the epoch; an edit identical to the stored set changes nothing.
 
 ## Epochs
 

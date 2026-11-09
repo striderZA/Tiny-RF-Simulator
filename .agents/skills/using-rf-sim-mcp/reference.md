@@ -74,6 +74,16 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 - `snr_basis.kind` is `rbw` (with `rbw_Hz`) for analyzer SNR, or `pfb_channel` (with `enbw_Hz` and `channel_noise_dBm`) for PFB outputs.
 - For real-domain signals, the reported single-sided tone power is 3.01 dB above the spectrum analyzer's displayed peak.
 
+## Receiver requirements
+
+- `requirements_get` takes no arguments. Both tools return `{epoch, revision, dirty, requirements, invalid_reason}`. `epoch` changes only when the project is replaced, so an edit never advances it; `revision` advances by one per applied edit; `dirty` is true while the project has unsaved changes.
+- `requirements` is the format-2 object: `{format: 2, selected_mode, modes: [{name, config}]}`. `selected_mode` is a zero-based index (0 when there are no modes). A mode's `config` is `null` when the mode is unconfigured, otherwise `{band_start_hz, band_stop_hz, gain_min_db?, gain_max_db?, nf_max_db?, output_power_min_dbm?, output_power_max_dbm?, iip3_min_dbm?, measurement_conditions?}`. Band endpoints are required; gain and output-power minimum/maximum are sent in pairs; `measurement_conditions` holds `input_level_dbm?` (from -174 to 10 dBm) and `iip3?` (`tone_spacing_hz`, `input_start_dbm`, `input_stop_dbm`, `input_step_db`).
+- At most 64 modes; names are unique ignoring case, trimmed, and 1 to 64 characters.
+- When the project retained malformed requirement data, `invalid_reason` carries the diagnostic and `requirements` is the empty format-2 object. Fix the modes and send a complete valid object to clear it; there is no partial edit.
+- `requirements_edit {epoch, requirements}` replaces the whole set. It checks, in order: `epoch` (`STALE_EPOCH`), unknown arguments, `requirements` is an object (`INVALID_ARGUMENT` at `/requirements`), `format` is present and 2 (`INVALID_ARGUMENT` at `/requirements/format`), then the decoded set validates (`INVALID_ARGUMENT` at `/requirements` with the diagnostic as the message).
+- An edit equal to the stored set returns success without opening a checkpoint, marking the project modified, or advancing `revision`. A different set is checkpointed as `receiver requirements` and can be reverted from the Agent panel; a failed application commits `interrupted: receiver requirements`.
+- Both tools report `INTERNAL` when the GUI provides no requirements state.
+
 ## network_analyzer_sweep
 
 - Takes two output endpoints, `point_a` and `point_b`. Optional: `start_Hz`, `stop_Hz`, `points`, `stimulus_dBm`, and `arrays`. If you give both `start_Hz` and `stop_Hz`, `start_Hz` must be below `stop_Hz`. If you give only one, it is checked against the current value of the other. If `arrays` is given, `arrays.max_points` is required (2 to 401).

@@ -516,6 +516,66 @@ Json receiverMeasureSuccessSchema() {
         {"epoch", "in_progress", "frequencies_Hz", "output_power_dBm", "iip3_dBm"});
 }
 
+Json receiverMeasurementConditionsSchema() {
+    return objectSchema(properties(
+        {{"input_level_dbm",
+          numberSchema("Input level the output-power limit is measured at, in dBm; from -174 "
+                       "to 10 dBm.")},
+         {"iip3",
+          objectSchema(
+              properties({{"tone_spacing_hz", numberSchema("Two-tone spacing in Hz; positive.")},
+                          {"input_start_dbm", numberSchema("First input level in dBm.")},
+                          {"input_stop_dbm", numberSchema("Last input level in dBm.")},
+                          {"input_step_db", numberSchema("Input level step in dB; positive.")}}),
+              {"tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"})}}));
+}
+
+Json receiverRequirementConfigSchema() {
+    return objectSchema(
+        properties(
+            {{"band_start_hz", numberSchema("Band start frequency in Hz.")},
+             {"band_stop_hz", numberSchema("Band stop frequency in Hz; above the start.")},
+             {"gain_min_db", numberSchema("Minimum gain in dB; sent together with gain_max_db.")},
+             {"gain_max_db", numberSchema("Maximum gain in dB; sent together with gain_min_db.")},
+             {"nf_max_db", numberSchema("Maximum noise figure in dB.")},
+             {"output_power_min_dbm",
+              numberSchema("Minimum output power in dBm; sent with output_power_max_dbm.")},
+             {"output_power_max_dbm",
+              numberSchema("Maximum output power in dBm; sent with output_power_min_dbm.")},
+             {"iip3_min_dbm", numberSchema("Minimum IIP3 in dBm.")},
+             {"measurement_conditions", receiverMeasurementConditionsSchema()}}),
+        {"band_start_hz", "band_stop_hz"});
+}
+
+Json receiverRequirementsModeSchema() {
+    return objectSchema(
+        properties({{"name", stringSchema("Unique mode name, up to 64 characters.")},
+                    {"config", nullableSchema(receiverRequirementConfigSchema())}}),
+        {"name", "config"});
+}
+
+Json receiverRequirementsObjectSchema() {
+    return objectSchema(
+        properties({{"format", integerSchema("Requirements format; only 2 is accepted.")},
+                    {"selected_mode",
+                     integerSchema("Zero-based selected mode; 0 when there are no modes.", 0)},
+                    {"modes", arraySchema(receiverRequirementsModeSchema(), 0, 64)}}),
+        {"format", "modes"});
+}
+
+Json receiverRequirementsSuccessSchema() {
+    return objectSchema(
+        properties({{"epoch", integerSchema("Current project epoch.", 0)},
+                    {"revision", integerSchema("Project revision after the call.", 0)},
+                    {"dirty", booleanSchema("True while the project has unsaved changes.")},
+                    {"requirements", receiverRequirementsObjectSchema()},
+                    {"invalid_reason",
+                     nullableSchema(stringSchema(
+                         "Diagnostic for retained malformed project data; null when the modes are "
+                         "valid. When set, `requirements` is the empty format-2 object."))}}),
+        {"epoch", "revision", "dirty", "requirements", "invalid_reason"});
+}
+
 Json projectFileSuccessSchema(bool include_copied_data_files = false) {
     if (include_copied_data_files) {
         return objectSchema(
@@ -857,7 +917,31 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                  properties({{"epoch", integerSchema("Epoch from the latest circuit read.", 0)},
                              {"path", stringSchema("Absolute path of an existing .rfsim file.")}}),
                  {"epoch", "path"}, Json{{"epoch", 3}, {"path", "C:/Projects/amp-chain.rfsim"}}),
-             projectFileSuccessSchema(), destructiveAnnotations())};
+             projectFileSuccessSchema(), destructiveAnnotations()),
+        tool("requirements_get", "Get Receiver Requirements",
+             "Read the receiver requirement modes and the selected mode. Results carry the project "
+             "epoch, revision, and dirty state; edits never change the epoch.",
+             inputSchema(properties({}), {}, Json::object()), receiverRequirementsSuccessSchema(),
+             readOnlyAnnotations()),
+        tool("requirements_edit", "Edit Receiver Requirements",
+             "Replace every receiver requirement mode and the selection with a complete format-2 "
+             "object. An edit that matches the stored set changes nothing and opens no checkpoint. "
+             "Use requirements_get first, then send the edited object with the current epoch.",
+             inputSchema(
+                 properties({{"epoch", integerSchema("Epoch from the latest requirements_get.", 0)},
+                             {"requirements", receiverRequirementsObjectSchema()}}),
+                 {"epoch", "requirements"},
+                 Json{{"epoch", 0},
+                      {"requirements",
+                       {{"format", 2},
+                        {"selected_mode", 0},
+                        {"modes", Json::array({Json{{"name", "Default"},
+                                                    {"config",
+                                                     {{"band_start_hz", 1.0e9},
+                                                      {"band_stop_hz", 2.0e9},
+                                                      {"gain_min_db", 10.0},
+                                                      {"gain_max_db", 20.0}}}}})}}}}),
+             receiverRequirementsSuccessSchema(), destructiveAnnotations())};
     return catalog;
 }
 

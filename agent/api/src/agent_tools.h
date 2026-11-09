@@ -18,6 +18,8 @@ std::unique_ptr<IAgentCallTask> startTestFlowRunTask(AgentApi &api, const AgentC
 AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeProjectSaveTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeRequirementsGetTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 

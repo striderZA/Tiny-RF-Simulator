@@ -55,6 +55,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_agent_library_create$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_app$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`
+- `ctest --test-dir build -R '^test_agent_requirements$' --output-on-failure` — `requirements_get` and `requirements_edit` host routing, checkpoint and revision behavior, argument-check order, and invalid data.
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_agent_packaged_acceptance$' --output-on-failure`
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)

@@ -185,6 +185,19 @@ AgentProjectLoadResult AppAgentHost::loadProjectFile(const std::string &path) {
     return m_hooks.load_project(path);
 }
 
+std::optional<ReceiverRequirementsSet> AppAgentHost::receiverRequirements() const {
+    if (!m_hooks.receiver_requirements)
+        return std::nullopt;
+    return m_hooks.receiver_requirements();
+}
+
+bool AppAgentHost::setReceiverRequirements(const ReceiverRequirementsSet &set) {
+    if (!m_hooks.set_receiver_requirements)
+        return false;
+    m_hooks.set_receiver_requirements(set);
+    return true;
+}
+
 // ======================================================================
 // Activity log
 // ======================================================================
