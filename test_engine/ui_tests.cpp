@@ -49,6 +49,50 @@ template <typename Condition> void waitForUi(ImGuiTestContext *ctx, Condition co
         ctx->Yield();
 }
 
+// True when the receiver panel's draw list contains the red error colour.
+bool hasErrorText(ImGuiWindow *window) {
+    if (!window || !window->DrawList)
+        return false;
+    const ImVec4 expected(1.0f, 0.35f, 0.35f, 1.0f);
+    for (int i = 0; i < window->DrawList->VtxBuffer.Size; ++i) {
+        const ImVec4 actual = ImGui::ColorConvertU32ToFloat4(window->DrawList->VtxBuffer[i].col);
+        if (std::fabs(actual.x - expected.x) < 0.01f && std::fabs(actual.y - expected.y) < 0.01f &&
+            std::fabs(actual.z - expected.z) < 0.01f)
+            return true;
+    }
+    return false;
+}
+
+// Scrolls the receiver panel to the bottom, then yields until its scroll offset
+// has stopped changing for two consecutive frames. A single ScrollToBottom can
+// land short or keep moving while the content height changes; clicking an item
+// before the offset settles targets a stale rectangle.
+void settlePanelScrollToBottom(ImGuiTestContext *ctx) {
+    ctx->ScrollToBottom("//Receiver Requirements");
+    ImGuiWindow *window = ImGui::FindWindowByName("Receiver Requirements");
+    float previous = window ? window->Scroll.y : 0.0f;
+    int stable_frames = 0;
+    for (int frame = 0; frame < 60 && stable_frames < 2; ++frame) {
+        ctx->Yield();
+        window = ImGui::FindWindowByName("Receiver Requirements");
+        const float current = window ? window->Scroll.y : previous;
+        stable_frames = std::fabs(current - previous) < 0.5f ? stable_frames + 1 : 0;
+        previous = current;
+    }
+}
+
+// Polls the red error vertices while keeping the panel scrolled to the bottom,
+// bounded to 60 frames.
+bool settleAndFindErrorText(ImGuiTestContext *ctx) {
+    for (int frame = 0; frame < 60; ++frame) {
+        ctx->ScrollToBottom("//Receiver Requirements");
+        if (hasErrorText(ImGui::FindWindowByName("Receiver Requirements")))
+            return true;
+        ctx->Yield();
+    }
+    return false;
+}
+
 void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
     auto &set = app.testReceiverRequirements();
     set = ReceiverRequirementsSet{};
@@ -2130,28 +2174,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // Apply rejects the draft with a red error line; the committed state and
         // project revision stay untouched until the input level supplies the
         // measured source power.
-        const auto has_error_text = [](ImGuiWindow *window) {
-            if (!window || !window->DrawList)
-                return false;
-            const ImVec4 expected(1.0f, 0.35f, 0.35f, 1.0f);
-            for (int i = 0; i < window->DrawList->VtxBuffer.Size; ++i) {
-                const ImVec4 actual =
-                    ImGui::ColorConvertU32ToFloat4(window->DrawList->VtxBuffer[i].col);
-                if (std::fabs(actual.x - expected.x) < 0.01f &&
-                    std::fabs(actual.y - expected.y) < 0.01f &&
-                    std::fabs(actual.z - expected.z) < 0.01f)
-                    return true;
-            }
-            return false;
-        };
-
         ctx->SetRef("Receiver Requirements");
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
         ctx->ItemCheck("Enable output power");
         ctx->ItemInputValue("Output power min (dBm)", "-40");
         ctx->ItemInputValue("Output power max (dBm)", "0");
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         // Negative: a fixed settle window proves nothing was applied.
         ctx->Yield(6);
@@ -2159,12 +2188,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         IM_CHECK(!state().config.has_value());
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
-        ctx->ScrollToBottom("//Receiver Requirements");
-        waitForUi(ctx, [&]() { return has_error_text(panel); });
-        IM_CHECK(has_error_text(panel));
+        IM_CHECK(settleAndFindErrorText(ctx));
+        IM_CHECK(hasErrorText(panel));
 
         ctx->ItemInputValue("Input level (dBm)", "-30");
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         waitForUi(ctx, [&]() { return state().config.has_value(); });
         IM_CHECK(state().config.has_value());
@@ -2219,7 +2247,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("Gain min (dB)", "-3");
         ctx->ItemInputValue("Gain max (dB)", "3");
         ctx->ItemInputValue("NF max (dB)", "5");
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         // Negative: a fixed settle window proves the invalid draft stayed out.
         ctx->Yield(6);
@@ -2228,7 +2256,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         ctx->ItemInputValue("Band start (Hz)", "1000000");
         ctx->ItemInputValue("Band stop (Hz)", "10000000");
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         waitForUi(ctx, [&]() { return state().config.has_value(); });
         panel = ImGui::FindWindowByName("Receiver Requirements");
@@ -2268,7 +2296,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemInputValue("Gain max (dB)", "3");
         ctx->ItemInputValue("NF max (dB)", "5");
         const std::uint64_t revision_before_repair_apply = s_app->projectRevision();
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         waitForUi(ctx,
                   [&]() { return state().config.has_value() && state().invalid_reason.empty(); });
@@ -2320,7 +2348,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->Yield(1);
         };
         const auto apply = [ctx]() {
-            ctx->ScrollToBottom("//Receiver Requirements");
+            settlePanelScrollToBottom(ctx);
             ctx->ItemClick("Apply requirements");
             ctx->Yield(2);
         };
@@ -2552,7 +2580,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemCheck("Enable gain");
         ctx->ItemInputValue("Gain min (dB)", "0");
         ctx->ItemInputValue("Gain max (dB)", "20");
-        ctx->ScrollToBottom("//Receiver Requirements");
+        settlePanelScrollToBottom(ctx);
         ctx->ItemClick("Apply requirements");
         waitForUi(ctx, [&]() { return set.modes[0].config.has_value(); });
         IM_CHECK(set.modes.size() == 1);
