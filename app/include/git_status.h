@@ -37,11 +37,13 @@ struct GitStatusHeaderLabels {
     std::string git_title;
 };
 
-// Fits the project and Git labels while reserving room for the FPS and the
-// complete commit/change summary before shortening branch text.
+// Fits the project and Git labels while reserving room for the fixed right-hand
+// labels (the version stamp and the FPS, including the spacing between them) and
+// the complete commit/change summary before shortening branch text.
 GitStatusHeaderLabels fitGitHeaderLabels(std::string_view project_title,
                                          const std::optional<GitStatus> &status,
-                                         float available_width, float fps_width, float item_spacing,
+                                         float available_width, float right_labels_width,
+                                         float item_spacing,
                                          const std::function<float(std::string_view)> &measure);
 
 // Parses the machine-readable `git status --porcelain=v2 --branch` response.

@@ -688,21 +688,23 @@ std::string fitGitStatusHeaderLabel(const GitStatus &status, float max_width,
 
 GitStatusHeaderLabels fitGitHeaderLabels(std::string_view project_title,
                                          const std::optional<GitStatus> &status,
-                                         float available_width, float fps_width, float item_spacing,
+                                         float available_width, float right_labels_width,
+                                         float item_spacing,
                                          const std::function<float(std::string_view)> &measure) {
     constexpr std::string_view unavailable_label = "Git unavailable";
     const float minimum_git_width =
         status ? measure(gitStatusHeaderSummary(*status)) : measure(unavailable_label);
     const float project_gap_count = project_title.empty() ? 1.0f : 2.0f;
-    const float project_width_budget = std::max(
-        0.0f, available_width - fps_width - item_spacing * project_gap_count - minimum_git_width);
+    const float project_width_budget =
+        std::max(0.0f, available_width - right_labels_width - item_spacing * project_gap_count -
+                           minimum_git_width);
 
     GitStatusHeaderLabels labels;
     labels.project_title = fitTextToWidth(project_title, project_width_budget, measure);
     const bool show_project_title = !labels.project_title.empty();
     const float gap_count = show_project_title ? 2.0f : 1.0f;
     const float git_width =
-        std::max(0.0f, available_width - fps_width - item_spacing * gap_count -
+        std::max(0.0f, available_width - right_labels_width - item_spacing * gap_count -
                            (show_project_title ? measure(labels.project_title) : 0.0f));
     labels.git_title = status ? fitGitStatusHeaderLabel(*status, git_width, measure)
                               : fitTextToWidth(unavailable_label, git_width, measure);

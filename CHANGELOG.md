@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **The menu bar shows the running build's version** — the right edge of the menu bar ends with `0.30.0 (9cad3be)`: the project version from `CMakeLists.txt` and the short commit captured at configure time. The project and Git labels shorten to keep the stamp visible on a narrow window.
+
 ### Changed
 
 - **CPack packages include the Windows MinGW runtime DLLs** — on Windows, CMake installs `libgcc_s_seh-1.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` beside `tiny-rf-simulator.exe`, the same three the release zip copies by hand, and `CPACK_PACKAGE_EXECUTABLES` names `tiny-rf-simulator`. The `rf-sim-mcp` install rule moved into the top-level `CMakeLists.txt` beside the GUI install, with no change to the installed files. CPack output stays a CI artifact: release assets are still packaged by hand, and the CPack archive still differs from them in layout.

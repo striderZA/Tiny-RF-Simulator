@@ -249,14 +249,16 @@ TEST_CASE("Git header label fits narrow widths while preserving the commit and c
     const std::string fps_title = "30.0 FPS";
     constexpr float spacing = 8.0f;
     constexpr float project_width = 88.0f;
+    const std::string version_title = "0.30.0 (abc1234)";
+    const float right_labels_width = measure(fps_title) + spacing + measure(version_title);
     const float required_width =
-        project_width + measure("Git: 0123456 +1 ~2 ?3") + measure(fps_title) + 2.0f * spacing;
+        project_width + measure("Git: 0123456 +1 ~2 ?3") + right_labels_width + 2.0f * spacing;
     const std::optional<GitStatus> status_snapshot{status};
     const auto labels = fitGitHeaderLabels(project_title, status_snapshot, required_width,
-                                           measure(fps_title), spacing, measure);
+                                           right_labels_width, spacing, measure);
     CHECK(labels.project_title == "Circuit_...");
     CHECK(labels.git_title == "Git: 0123456 +1 ~2 ?3");
-    CHECK(measure(labels.project_title) + measure(labels.git_title) + measure(fps_title) +
+    CHECK(measure(labels.project_title) + measure(labels.git_title) + right_labels_width +
               2.0f * spacing <=
           required_width);
 }
