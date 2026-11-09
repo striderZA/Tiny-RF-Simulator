@@ -152,15 +152,22 @@ struct Circuit {
     int pointB() const { return amplifier.outputPinId(); }
 };
 
-ReceiverRequirementsConfig config(double frequency = 1.0e9) {
+ReceiverRequirementsConfig config() {
     ReceiverRequirementsConfig c;
     c.band_start_Hz = 1.0e9;
     c.band_stop_Hz = 2.0e9;
     c.output_power = ReceiverOutputPowerLimits{-100.0, 100.0};
     c.iip3_min_dBm = 0.0;
-    c.measurement_conditions.output_reference_tone_frequency_Hz = frequency;
+    c.measurement_conditions.input_level_dBm = -10.0;
     c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{2.0e6, -60.0, -40.0, 2.0};
     return c;
+}
+
+ReceiverMeasurementRequest toneRequest(std::optional<double> tone_Hz) {
+    ReceiverMeasurementRequest request;
+    request.output_power = true;
+    request.reference_tone_Hz = tone_Hz;
+    return request;
 }
 
 bool isFinite(double value) { return std::isfinite(value); }
@@ -175,9 +182,19 @@ void runToCompletion(ReceiverPerformanceMeasurementEngine &engine,
     REQUIRE_FALSE(engine.isInProgress());
 }
 
+// The same sweep loop as runToCompletion, driven through the request overload.
+void runRequestToCompletion(ReceiverPerformanceMeasurementEngine &engine,
+                            const ReceiverMeasurementRequest &request, int point_a, int point_b,
+                            const std::vector<double> &grid) {
+    engine.update(request, point_a, point_b, grid);
+    for (int update = 0; engine.isInProgress() && update < 1000; ++update)
+        engine.update(request, point_a, point_b, grid);
+    REQUIRE_FALSE(engine.isInProgress());
+}
+
 } // namespace
 
-TEST_CASE("Receiver measurement engine measures selected generator-reference output power",
+TEST_CASE("Receiver measurement engine measures output power through the configured chain",
           "[receiver_measurements]") {
     Circuit c;
     c.attenuator.setAttenuation(7.0);
@@ -195,25 +212,24 @@ TEST_CASE("Receiver measurement engine measures selected generator-reference out
 TEST_CASE("Receiver output power coherently combines duplicate-frequency tones by phase",
           "[receiver_measurements]") {
     Circuit c;
-    auto selected = config();
-    selected.iip3_min_dBm.reset();
+    const auto selected = toneRequest(1.0e9);
 
     ReceiverPerformanceMeasurementEngine single(c.graph, c.host);
-    runToCompletion(single, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    runRequestToCompletion(single, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     REQUIRE(isFinite(single.measurements().output_power_dBm[0]));
     const double single_power = single.measurements().output_power_dBm[0];
 
     Host same_phase_host{{&c.generator, &c.attenuator, &c.amplifier},
                          DroppedTone::DuplicateSamePhase};
     ReceiverPerformanceMeasurementEngine same_phase(c.graph, same_phase_host);
-    runToCompletion(same_phase, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    runRequestToCompletion(same_phase, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(same_phase.measurements().output_power_dBm[0] ==
           Catch::Approx(single_power + 6.020599913).margin(1e-6));
 
     Host quadrature_host{{&c.generator, &c.attenuator, &c.amplifier},
                          DroppedTone::DuplicateQuadrature};
     ReceiverPerformanceMeasurementEngine quadrature(c.graph, quadrature_host);
-    runToCompletion(quadrature, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    runRequestToCompletion(quadrature, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(quadrature.measurements().output_power_dBm[0] ==
           Catch::Approx(single_power + 3.010299957).margin(1e-6));
 
@@ -228,17 +244,14 @@ TEST_CASE("Receiver source resolves one tone automatically and explicit selectio
     Circuit c;
     c.generator.addTone(1.1e9, -20.0);
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
-    auto selected = config(1.1e9);
-    selected.iip3_min_dBm.reset();
-    runToCompletion(engine, selected, c.generator.outputPinId(), c.attenuator.outputPinId(),
-                    {1.0e9});
+    runRequestToCompletion(engine, toneRequest(1.1e9), c.generator.outputPinId(),
+                           c.attenuator.outputPinId(), {1.0e9});
     CHECK(engine.measurements().output_power_dBm[0] == Catch::Approx(-20.0));
-    selected.measurement_conditions.output_reference_tone_frequency_Hz = 1.0e9;
-    runToCompletion(engine, selected, c.generator.outputPinId(), c.attenuator.outputPinId(),
-                    {1.0e9});
+    runRequestToCompletion(engine, toneRequest(1.0e9), c.generator.outputPinId(),
+                           c.attenuator.outputPinId(), {1.0e9});
     CHECK(engine.measurements().output_power_dBm[0] == Catch::Approx(-10.0));
-    selected.measurement_conditions.output_reference_tone_frequency_Hz = 1.2e9;
-    engine.update(selected, c.generator.outputPinId(), c.attenuator.outputPinId(), {1.0e9});
+    engine.update(toneRequest(1.2e9), c.generator.outputPinId(), c.attenuator.outputPinId(),
+                  {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
 }
 
@@ -246,35 +259,29 @@ TEST_CASE("Receiver measurement rejects missing, removed, duplicate and ambiguou
           "[receiver_measurements]") {
     Circuit c;
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
-    auto selected = config();
-    selected.iip3_min_dBm.reset();
-    engine.update(selected, -1, c.pointB(), {1.0e9});
+    engine.update(toneRequest(1.0e9), -1, c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
-    selected.measurement_conditions.output_reference_tone_frequency_Hz.reset();
     c.generator.addTone(1.1e9, -20.0);
-    engine.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    engine.update(toneRequest(std::nullopt), c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
     c.generator.removeTone(1);
     c.generator.addTone(1.0e9, -11.0);
-    engine.update(config(), c.generator.outputPinId(), c.pointB(), {1.0e9});
+    engine.update(toneRequest(1.0e9), c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
     c.generator.removeTone(1);
-    runToCompletion(engine, config(1.0e9), c.generator.outputPinId(), c.pointB(), {1.0e9});
+    runRequestToCompletion(engine, toneRequest(1.0e9), c.generator.outputPinId(), c.pointB(),
+                           {1.0e9});
     CHECK(isFinite(engine.measurements().output_power_dBm[0]));
     c.generator.updateTone(0, 1.2e9, -10.0);
-    selected = config(1.0e9);
-    selected.iip3_min_dBm.reset();
-    engine.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    engine.update(toneRequest(1.0e9), c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
 }
 
 TEST_CASE("Receiver source requires a generator and a resolvable tone", "[receiver_measurements]") {
     Circuit c;
     ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
-    auto selected = config();
-    selected.iip3_min_dBm.reset();
-    selected.measurement_conditions.output_reference_tone_frequency_Hz.reset();
-    runToCompletion(engine, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    const auto selected = toneRequest(std::nullopt);
+    runRequestToCompletion(engine, selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(engine.measurements().output_power_dBm[0] == Catch::Approx(-10.0));
     c.generator.removeTone(0);
     engine.update(selected, c.generator.outputPinId(), c.pointB(), {1.0e9});
@@ -282,6 +289,47 @@ TEST_CASE("Receiver source requires a generator and a resolvable tone", "[receiv
     c.generator.addTone(1.0e9, -10.0);
     engine.update(selected, c.attenuator.outputPinId(), c.pointB(), {1.0e9});
     CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
+}
+
+TEST_CASE("Receiver config measures output power at the explicit input level",
+          "[receiver_measurements]") {
+    Circuit c; // generator tone stays at -10 dBm
+    c.attenuator.setAttenuation(7.0);
+    c.amplifier.setGain_dB(12.0);
+    auto s = config();
+    s.iip3_min_dBm.reset();
+    s.measurement_conditions.input_level_dBm = -30.0;
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    runToCompletion(engine, s, c.generator.outputPinId(), c.pointB(), {1.0e9, 1.1e9});
+    CHECK(engine.measurements().output_power_dBm[0] == Catch::Approx(-25.0).margin(1e-8));
+    CHECK(engine.measurements().output_power_dBm[1] == Catch::Approx(-25.0).margin(1e-8));
+}
+
+TEST_CASE("Receiver config without an input level leaves output power unavailable",
+          "[receiver_measurements]") {
+    Circuit c;
+    auto s = config();
+    s.iip3_min_dBm.reset();
+    s.measurement_conditions.input_level_dBm.reset();
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    engine.update(s, c.generator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK_FALSE(engine.isInProgress());
+    CHECK(std::isnan(engine.measurements().output_power_dBm[0]));
+}
+
+TEST_CASE("Receiver request input level needs no generator at Point A",
+          "[receiver_measurements][request]") {
+    Circuit c;
+    c.amplifier.setGain_dB(12.0);
+    ReceiverMeasurementRequest r;
+    r.output_power = true;
+    r.input_level_dBm = -30.0;
+    r.reference_tone_Hz = 1.2e9; // unmatched; must be ignored
+    ReceiverPerformanceMeasurementEngine engine(c.graph, c.host);
+    engine.update(r, c.attenuator.outputPinId(), c.pointB(), {1.0e9});
+    for (int i = 0; engine.isInProgress() && i < 1000; ++i)
+        engine.update(r, c.attenuator.outputPinId(), c.pointB(), {1.0e9});
+    CHECK(engine.measurements().output_power_dBm[0] == Catch::Approx(-18.0).margin(1e-8));
 }
 
 TEST_CASE("Receiver IIP3 estimates single and cascaded nonlinear stages on both IM3 sides",
@@ -550,7 +598,7 @@ TEST_CASE(
         engine.update(settings, point_a, c.pointB(), grid);
         const int prepared = c.host.scratch_passes;
 
-        settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+        settings.measurement_conditions.input_level_dBm = -15.0;
         engine.update(settings, point_a, c.pointB(), grid);
         CHECK(c.host.scratch_passes == prepared);
         settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{4.0e6, -50.0, -30.0, 1.0};
@@ -583,8 +631,8 @@ TEST_CASE("Receiver measurement cache invalidates on every measured input",
     expectReset("Point A generator state");
     c.amplifier.setGain_dB(3.0);
     expectReset("on-path component state");
-    settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
-    expectReset("enabled output reference tone");
+    settings.measurement_conditions.input_level_dBm = -15.0;
+    expectReset("enabled input level");
     settings.measurement_conditions.iip3 = ReceiverIIP3TestSettings{4.0e6, -60.0, -40.0, 2.0};
     expectReset("enabled IIP3 conditions");
     settings.output_power.reset();
@@ -683,14 +731,17 @@ TEST_CASE("Receiver measurement resumes incremental in-band work and resets chan
     CHECK(engine.isInProgress());
     CHECK(c.host.scratch_passes == prepared_passes);
 
-    settings.measurement_conditions.output_reference_tone_frequency_Hz = 1.2e9;
+    settings.measurement_conditions.input_level_dBm = -12.0;
     engine.update(settings, c.generator.outputPinId(), c.pointB(), full_band_grid);
     CHECK(engine.isInProgress());
     CHECK(c.host.scratch_passes > prepared_passes);
     const auto &reset = engine.measurements();
     REQUIRE(reset.output_power_dBm.size() == points);
     REQUIRE(reset.iip3_dBm.size() == points);
-    CHECK(std::isnan(reset.output_power_dBm.front()));
+    // A changed input level resets the retained samples, then the same update
+    // call immediately measures the first center at the new level; the sweep
+    // still cannot reach the far end.
+    CHECK(isFinite(reset.output_power_dBm.front()));
     CHECK(std::isnan(reset.output_power_dBm.back()));
 }
 
@@ -885,16 +936,6 @@ TEST_CASE("Receiver IIP3 through a switched filter bank matches the selected bra
 }
 
 namespace {
-// The same sweep loop as runToCompletion, driven through the request overload.
-void runRequestToCompletion(ReceiverPerformanceMeasurementEngine &engine,
-                            const ReceiverMeasurementRequest &request, int point_a, int point_b,
-                            const std::vector<double> &grid) {
-    engine.update(request, point_a, point_b, grid);
-    for (int update = 0; engine.isInProgress() && update < 1000; ++update)
-        engine.update(request, point_a, point_b, grid);
-    REQUIRE_FALSE(engine.isInProgress());
-}
-
 // Element-wise equality that treats NaN as equal to NaN, so unavailable values compare equal.
 bool sameSamples(const std::vector<double> &left, const std::vector<double> &right) {
     if (left.size() != right.size())

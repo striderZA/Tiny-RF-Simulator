@@ -1,6 +1,5 @@
 #include "receiver_requirements_widget.h"
 #include "imgui.h"
-#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <string>
@@ -10,7 +9,8 @@ constexpr const char *kLabels[] = {
     "Band start (Hz)",        "Band stop (Hz)",        "Gain min (dB)",
     "Gain max (dB)",          "NF max (dB)",           "Output power min (dBm)",
     "Output power max (dBm)", "IIP3 min (dBm)",        "IIP3 tone spacing (Hz)",
-    "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)"};
+    "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)",
+    "Input level (dBm)"};
 
 const char *statusText(ReceiverRequirementStatus status) {
     switch (status) {
@@ -44,17 +44,7 @@ bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDra
            a.iip3_input_step_dB == b.iip3_input_step_dB && a.gain_enabled == b.gain_enabled &&
            a.noise_figure_enabled == b.noise_figure_enabled &&
            a.output_power_enabled == b.output_power_enabled && a.iip3_enabled == b.iip3_enabled &&
-           a.output_reference_tone_frequency_Hz == b.output_reference_tone_frequency_Hz;
-}
-
-std::string toneLabel(double frequency_Hz) {
-    char label[64]{};
-    std::snprintf(label, sizeof(label), "%g MHz", frequency_Hz / 1.0e6);
-    return label;
-}
-
-bool isValidReferenceTone(double frequency_Hz) {
-    return std::isfinite(frequency_Hz) && frequency_Hz > 0.0;
+           a.input_level_dBm == b.input_level_dBm;
 }
 
 void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
@@ -112,8 +102,7 @@ bool ReceiverRequirementsWidget::stateMatchesSnapshot(
            (!a.output_power || (a.output_power->minimum_dBm == b.output_power->minimum_dBm &&
                                 a.output_power->maximum_dBm == b.output_power->maximum_dBm)) &&
            a.iip3_min_dBm == b.iip3_min_dBm &&
-           a.measurement_conditions.output_reference_tone_frequency_Hz ==
-               b.measurement_conditions.output_reference_tone_frequency_Hz &&
+           a.measurement_conditions.input_level_dBm == b.measurement_conditions.input_level_dBm &&
            a.measurement_conditions.iip3.has_value() == b.measurement_conditions.iip3.has_value() &&
            (!a.measurement_conditions.iip3 || (a.measurement_conditions.iip3->tone_spacing_Hz ==
                                                    b.measurement_conditions.iip3->tone_spacing_Hz &&
@@ -143,17 +132,14 @@ ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
     draft.noise_figure_enabled = m_nf_enabled;
     draft.output_power_enabled = m_output_power_enabled;
     draft.iip3_enabled = m_iip3_enabled;
-    draft.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
+    draft.input_level_dBm = m_buffers[12].data();
     return draft;
 }
 
-void ReceiverRequirementsWidget::resetDraft(
-    const ReceiverRequirementsState &state,
-    const std::vector<ReceiverGeneratorToneOption> &source_tones) {
+void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsState &state) {
     for (auto &buffer : m_buffers)
         buffer.fill('\0');
     m_gain_enabled = m_nf_enabled = m_output_power_enabled = m_iip3_enabled = false;
-    m_source_tone_frequency_Hz.reset();
     if (state.config && state.invalid_reason.empty()) {
         const auto &config = *state.config;
         setNumber(m_buffers[0], config.band_start_Hz);
@@ -183,24 +169,20 @@ void ReceiverRequirementsWidget::resetDraft(
             setNumber(m_buffers[10], settings.input_stop_dBm);
             setNumber(m_buffers[11], settings.input_step_dB);
         }
-        m_source_tone_frequency_Hz =
-            config.measurement_conditions.output_reference_tone_frequency_Hz;
+        if (config.measurement_conditions.input_level_dBm)
+            setNumber(m_buffers[12], *config.measurement_conditions.input_level_dBm);
     }
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
-        isValidReferenceTone(source_tones.front().frequency_Hz))
-        m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
     m_baseline = makeDraft();
     m_snapshot = state;
     m_initialized = true;
     m_error.clear();
 }
 
-void ReceiverRequirementsWidget::draw(
-    const char *title, bool *p_open, ReceiverRequirementsState &state,
-    const ReceiverRequirementsEvaluation &result,
-    const std::vector<ReceiverGeneratorToneOption> &source_tones) {
+void ReceiverRequirementsWidget::draw(const char *title, bool *p_open,
+                                      ReceiverRequirementsState &state,
+                                      const ReceiverRequirementsEvaluation &result) {
     if (!m_initialized || !stateMatchesSnapshot(state))
-        resetDraft(state, source_tones);
+        resetDraft(state);
 
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -217,40 +199,12 @@ void ReceiverRequirementsWidget::draw(
     ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
     if (m_nf_enabled)
         ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
-        isValidReferenceTone(source_tones.front().frequency_Hz)) {
-        m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
-        m_baseline.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
-    }
     ImGui::Checkbox("Enable output power", &m_output_power_enabled);
     if (m_output_power_enabled) {
         ImGui::InputText(kLabels[5], m_buffers[5].data(), m_buffers[5].size());
         ImGui::InputText(kLabels[6], m_buffers[6].data(), m_buffers[6].size());
-        if (source_tones.empty()) {
-            ImGui::TextDisabled("Output reference tone: unavailable");
-        } else {
-            std::string preview = "Select tone";
-            if (m_source_tone_frequency_Hz) {
-                std::size_t matches = 0;
-                for (const auto &tone : source_tones)
-                    matches += tone.frequency_Hz == *m_source_tone_frequency_Hz ? 1 : 0;
-                preview = matches == 1 ? toneLabel(*m_source_tone_frequency_Hz)
-                                       : toneLabel(*m_source_tone_frequency_Hz) + " (unavailable)";
-            }
-            if (ImGui::BeginCombo("Output reference tone", preview.c_str())) {
-                for (std::size_t i = 0; i < source_tones.size(); ++i) {
-                    const auto &tone = source_tones[i];
-                    const std::string label = toneLabel(tone.frequency_Hz);
-                    ImGui::PushID(static_cast<int>(i));
-                    const bool selected = m_source_tone_frequency_Hz == tone.frequency_Hz;
-                    if (ImGui::Selectable(label.c_str(), selected))
-                        m_source_tone_frequency_Hz = tone.frequency_Hz;
-                    ImGui::PopID();
-                }
-                ImGui::EndCombo();
-            }
-        }
     }
+    ImGui::InputText(kLabels[12], m_buffers[12].data(), m_buffers[12].size());
     ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
     if (m_iip3_enabled) {
         ImGui::InputText(kLabels[7], m_buffers[7].data(), m_buffers[7].size());
@@ -264,14 +218,14 @@ void ReceiverRequirementsWidget::draw(
     if (ImGui::Button("Apply requirements")) {
         if (applyReceiverRequirementsDraft(state, draft, m_error)) {
             const bool changed = !stateMatchesSnapshot(state);
-            resetDraft(state, source_tones);
+            resetDraft(state);
             if (changed && onChange)
                 onChange();
         }
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel"))
-        resetDraft(state, source_tones);
+        resetDraft(state);
     const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
     if (!m_error.empty())
@@ -288,6 +242,8 @@ void ReceiverRequirementsWidget::draw(
         drawStatusRow("Gain", result.gain, "dB");
         drawStatusRow("Noise figure", result.noise_figure, "dB");
         drawStatusRow("Output power", result.output_power, "dBm");
+        if (state.config->output_power && !state.config->measurement_conditions.input_level_dBm)
+            ImGui::TextDisabled("Needs input level");
         drawStatusRow("IIP3", result.iip3, "dBm");
         switch (receiverRequirementStatusTone(result.overall)) {
         case ReceiverRequirementStatusTone::PassGreen:

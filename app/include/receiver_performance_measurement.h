@@ -25,6 +25,7 @@ struct ReceiverPerformanceMeasurements {
 struct ReceiverMeasurementRequest {
     bool output_power = false;               // measure output power
     bool iip3 = false;                       // measure IIP3
+    std::optional<double> input_level_dBm;   // explicit source level; skips the generator
     std::optional<double> reference_tone_Hz; // engaged selector; nullopt picks a sole tone
     std::optional<ReceiverIIP3TestSettings> iip3_settings; // used when iip3 is true
 };

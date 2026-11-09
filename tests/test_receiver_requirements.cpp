@@ -1,9 +1,11 @@
+#include "common.h"
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <limits>
 #include <string>
 #include <vector>
@@ -19,7 +21,7 @@ ReceiverRequirementsConfig allConfigured() {
     c.nf_max_dB = 5.0;
     c.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
     c.iip3_min_dBm = 10.0;
-    c.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    c.measurement_conditions.input_level_dBm = -30.0;
     c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
     return c;
 }
@@ -49,19 +51,43 @@ ReceiverRequirementsDraft gainDraft() {
     return d;
 }
 } // namespace
-TEST_CASE("ReceiverRequirements applies gain-only draft with an invalid hidden output tone",
-          "[receiver_requirements]") {
-    ReceiverRequirementsState state;
-    ReceiverRequirementsDraft draft = gainDraft();
-    draft.output_reference_tone_frequency_Hz = -5.0e6;
-    std::string error;
+TEST_CASE("ReceiverRequirements validates the input level range", "[receiver_requirements]") {
+    auto c = allConfigured();
+    c.measurement_conditions.input_level_dBm = MIN_POWER;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.measurement_conditions.input_level_dBm = MAX_POWER;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    for (double bad : {MIN_POWER - 1.0, MAX_POWER + 1.0, std::nan("")}) {
+        c.measurement_conditions.input_level_dBm = bad;
+        CHECK(validateReceiverRequirementsConfig(c) ==
+              std::optional<std::string>("Input level must be between -174 and 10 dBm."));
+    }
+}
 
-    CHECK(applyReceiverRequirementsDraft(state, draft, error));
-    CHECK(error.empty());
-    REQUIRE(state.config.has_value());
-    CHECK(state.config->gain.has_value());
-    CHECK_FALSE(state.config->output_power.has_value());
-    CHECK_FALSE(state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+TEST_CASE("ReceiverRequirements draft requires an input level for output power",
+          "[receiver_requirements]") {
+    auto d = gainDraft();
+    d.output_power_enabled = true;
+    d.output_power_min_dBm = "-40";
+    d.output_power_max_dBm = "0";
+    std::string error;
+    CHECK_FALSE(parseReceiverRequirementsDraft(d, error).has_value());
+    CHECK(error == "Output power needs an input level (dBm).");
+    d.input_level_dBm = "-30";
+    const auto config = parseReceiverRequirementsDraft(d, error);
+    REQUIRE(config.has_value());
+    CHECK(config->measurement_conditions.input_level_dBm == -30.0);
+}
+
+TEST_CASE("ReceiverRequirements draft keeps an input level without output power",
+          "[receiver_requirements]") {
+    auto d = gainDraft();
+    d.input_level_dBm = "-25";
+    std::string error;
+    CHECK(parseReceiverRequirementsDraft(d, error)->measurement_conditions.input_level_dBm ==
+          -25.0);
+    d.input_level_dBm = "";
+    CHECK_FALSE(parseReceiverRequirementsDraft(d, error)->measurement_conditions.input_level_dBm);
 }
 
 TEST_CASE("ReceiverRequirements supports independent optional metric limits",
@@ -150,8 +176,7 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     c.measurement_conditions.iip3->input_step_dB = 6.0;
     CHECK(validateReceiverRequirementsConfig(c).has_value());
     c = allConfigured();
-    c.measurement_conditions.output_reference_tone_frequency_Hz =
-        std::numeric_limits<double>::quiet_NaN();
+    c.measurement_conditions.input_level_dBm = std::numeric_limits<double>::quiet_NaN();
     CHECK(validateReceiverRequirementsConfig(c).has_value());
     c = allConfigured();
     c.band_start_Hz = std::numeric_limits<double>::quiet_NaN();
@@ -181,15 +206,14 @@ TEST_CASE(
 
     config = allConfigured();
     config.output_power.reset();
-    config.measurement_conditions.output_reference_tone_frequency_Hz =
-        std::numeric_limits<double>::quiet_NaN();
+    config.measurement_conditions.input_level_dBm = std::numeric_limits<double>::quiet_NaN();
     CHECK(validateReceiverRequirementsConfig(config).has_value());
 }
 
-TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone selector",
+TEST_CASE("ReceiverRequirements evaluates valid output samples with an input level",
           "[receiver_requirements]") {
     auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    state.config->measurement_conditions.input_level_dBm = -30.0;
     const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
                                  {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
                                   std::numeric_limits<double>::quiet_NaN()});
@@ -197,26 +221,15 @@ TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone se
     CHECK(result.overall == ReceiverRequirementStatus::Pass);
 }
 
-TEST_CASE("ReceiverRequirements reports incomplete output data without a tone selector",
+TEST_CASE("ReceiverRequirements reports incomplete output data with an input level",
           "[receiver_requirements]") {
     auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    state.config->measurement_conditions.input_level_dBm = -30.0;
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, nan, nan, nan, 0},
                                  {nan, 10, 15, 20, nan});
     CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-
-TEST_CASE("ReceiverRequirements does not gate output samples by selector band location",
-          "[receiver_requirements]") {
-    auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz = 2.5e9;
-    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
-                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
-                                  std::numeric_limits<double>::quiet_NaN()});
-    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Pass);
 }
 
 TEST_CASE("ReceiverRequirements returns Not configured when every metric is disabled",
@@ -306,7 +319,7 @@ TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply
     REQUIRE(state.config->output_power.has_value());
     CHECK(state.config->output_power->minimum_dBm == -30.0);
     CHECK(state.config->output_power->maximum_dBm == 0.0);
-    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    CHECK(state.config->measurement_conditions.input_level_dBm == -30.0);
     REQUIRE(state.config->measurement_conditions.iip3.has_value());
     CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
     CHECK(state.config->measurement_conditions.iip3->input_start_dBm == -30.0);
@@ -468,7 +481,7 @@ TEST_CASE("ReceiverRequirements draft parses enabled output and IIP3 settings",
     d.output_power_enabled = true;
     d.output_power_min_dBm = "-30";
     d.output_power_max_dBm = "0";
-    d.output_reference_tone_frequency_Hz = 1.5e9;
+    d.input_level_dBm = "-30";
     d.iip3_enabled = true;
     d.iip3_min_dBm = "10";
     d.iip3_tone_spacing_Hz = "1e6";
@@ -481,6 +494,7 @@ TEST_CASE("ReceiverRequirements draft parses enabled output and IIP3 settings",
     REQUIRE(parsed->output_power.has_value());
     CHECK(parsed->output_power->minimum_dBm == Approx(-30.0));
     CHECK(parsed->output_power->maximum_dBm == Approx(0.0));
+    CHECK(parsed->measurement_conditions.input_level_dBm == Approx(-30.0));
     REQUIRE(parsed->measurement_conditions.iip3.has_value());
     CHECK(parsed->measurement_conditions.iip3->input_stop_dBm == Approx(-20.0));
 }

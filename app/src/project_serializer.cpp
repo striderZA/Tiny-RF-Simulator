@@ -994,11 +994,11 @@ ReceiverRequirementsState parseReceiverRequirements(const nlohmann::json &value)
         const auto &conditions = value["measurement_conditions"];
         if (!conditions.is_object())
             return invalidate("Receiver measurement conditions must be an object.");
-        if (conditions.contains("output_reference_tone_frequency_hz")) {
-            if (!conditions["output_reference_tone_frequency_hz"].is_number())
-                return invalidate("Output reference tone frequency must be a number.");
-            config.measurement_conditions.output_reference_tone_frequency_Hz =
-                conditions["output_reference_tone_frequency_hz"].get<double>();
+        if (conditions.contains("input_level_dbm")) {
+            if (!conditions["input_level_dbm"].is_number())
+                return invalidate("Input level must be a number.");
+            config.measurement_conditions.input_level_dBm =
+                conditions["input_level_dbm"].get<double>();
         }
         if (conditions.contains("iip3")) {
             const auto &iip3 = conditions["iip3"];
@@ -1174,9 +1174,8 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
         if (config.iip3_min_dBm)
             requirements["iip3_min_dbm"] = *config.iip3_min_dBm;
         nlohmann::json conditions = nlohmann::json::object();
-        if (config.measurement_conditions.output_reference_tone_frequency_Hz)
-            conditions["output_reference_tone_frequency_hz"] =
-                *config.measurement_conditions.output_reference_tone_frequency_Hz;
+        if (config.measurement_conditions.input_level_dBm)
+            conditions["input_level_dbm"] = *config.measurement_conditions.input_level_dBm;
         if (config.measurement_conditions.iip3) {
             const auto &settings = *config.measurement_conditions.iip3;
             conditions["iip3"] = {{"tone_spacing_hz", settings.tone_spacing_Hz},

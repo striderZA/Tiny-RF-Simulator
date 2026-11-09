@@ -106,7 +106,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     config.nf_max_dB = 5.0;
     config.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
     config.iip3_min_dBm = 10.0;
-    config.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    config.measurement_conditions.input_level_dBm = -30.0;
     config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
     state.config = config;
     app.saveProject(path);
@@ -116,7 +116,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     CHECK(requirements["output_power_min_dbm"] == -30.0);
     CHECK(requirements["output_power_max_dbm"] == 0.0);
     CHECK(requirements["iip3_min_dbm"] == 10.0);
-    CHECK(requirements["measurement_conditions"]["output_reference_tone_frequency_hz"] == 1.5e9);
+    CHECK(requirements["measurement_conditions"]["input_level_dbm"] == -30.0);
     CHECK(requirements["measurement_conditions"]["iip3"]["tone_spacing_hz"] == 1.0e6);
     CHECK(requirements["measurement_conditions"]["iip3"]["input_start_dbm"] == -30.0);
     CHECK(requirements["measurement_conditions"]["iip3"]["input_stop_dbm"] == -20.0);
@@ -129,7 +129,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     CHECK(state.config->iip3_min_dBm == config.iip3_min_dBm);
     REQUIRE(state.config->measurement_conditions.iip3.has_value());
     CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
-    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    CHECK(state.config->measurement_conditions.input_level_dBm == -30.0);
     std::filesystem::remove(path);
 }
 
@@ -291,7 +291,7 @@ TEST_CASE_METHOD(ImGuiFixture, "New project clears receiver requirements",
              {"gain_min_db", 10.0},
              {"gain_max_db", 20.0},
              {"nf_max_db", 5.0},
-             {"measurement_conditions", json{{"output_reference_tone_frequency_hz", 1.5e9},
+             {"measurement_conditions", json{{"input_level_dbm", -30.0},
                                              {"iip3", json{{"tone_spacing_hz", 1.0e6},
                                                            {"input_start_dbm", -30.0},
                                                            {"input_stop_dbm", -20.0},
@@ -303,7 +303,7 @@ TEST_CASE_METHOD(ImGuiFixture, "New project clears receiver requirements",
         CHECK(app.componentCount() == 2);
         REQUIRE(app.testReceiverRequirementsState().config.has_value());
         CHECK(app.testReceiverRequirementsState()
-                  .config->measurement_conditions.output_reference_tone_frequency_Hz.has_value());
+                  .config->measurement_conditions.input_level_dBm.has_value());
         REQUIRE(
             app.testReceiverRequirementsState().config->measurement_conditions.iip3.has_value());
         app.newProject();
@@ -361,14 +361,6 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed persisted receiver requirements are in
         {"conditions_array", json{{"band_start_hz", 1.0e9},
                                   {"band_stop_hz", 2.0e9},
                                   {"measurement_conditions", json::array()}}},
-        {"wrong_tone_selector",
-         json{{"band_start_hz", 1.0e9},
-              {"band_stop_hz", 2.0e9},
-              {"measurement_conditions", json{{"output_reference_tone_frequency_hz", "1.5e9"}}}}},
-        {"null_tone_selector",
-         json{{"band_start_hz", 1.0e9},
-              {"band_stop_hz", 2.0e9},
-              {"measurement_conditions", json{{"output_reference_tone_frequency_hz", nullptr}}}}},
         {"iip3_not_object", json{{"band_start_hz", 1.0e9},
                                  {"band_stop_hz", 2.0e9},
                                  {"measurement_conditions", json{{"iip3", 4}}}}},
@@ -427,29 +419,61 @@ TEST_CASE_METHOD(ImGuiFixture, "Malformed persisted receiver requirements are in
     }
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "Finite stale receiver tone selector remains valid and unchanged",
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Receiver requirements drop the legacy reference tone and keep the input level",
                  "[receiver_requirements][project]") {
-    const auto path = tempPath("_stale_tone_selector");
-    const json requirements = {
-        {"band_start_hz", 1.0e9},
-        {"band_stop_hz", 2.0e9},
-        {"measurement_conditions", json{{"output_reference_tone_frequency_hz", 3.0e9}}}};
+    const auto path = tempPath("_legacy_tone_input_level");
+    auto requirements = validRequirements;
+    requirements["output_power_min_dbm"] = -40.0;
+    requirements["output_power_max_dbm"] = 0.0;
+    requirements["measurement_conditions"] = json{{"output_reference_tone_frequency_hz", 1.0e9}};
     savedProjectWithRequirements(path, requirements);
-    RfSimulatorApp app;
-    app.loadProject(path);
-    REQUIRE(app.testReceiverRequirementsState().config.has_value());
-    CHECK(app.testReceiverRequirementsState().invalid_reason.empty());
-    REQUIRE(app.testReceiverRequirementsState()
-                .config->measurement_conditions.output_reference_tone_frequency_Hz.has_value());
-    CHECK(*app.testReceiverRequirementsState()
-               .config->measurement_conditions.output_reference_tone_frequency_Hz == 3.0e9);
-    app.saveProject(path);
-    CHECK(loadJson(path)["receiver_requirements"]["measurement_conditions"]
-                        ["output_reference_tone_frequency_hz"] == 3.0e9);
-    app.loadProject(path);
-    REQUIRE(app.testReceiverRequirementsState().config.has_value());
-    CHECK(*app.testReceiverRequirementsState()
-               .config->measurement_conditions.output_reference_tone_frequency_Hz == 3.0e9);
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.testReceiverRequirementsState().config.has_value());
+        const auto &config = *app.testReceiverRequirementsState().config;
+        REQUIRE(config.output_power.has_value());
+        CHECK_FALSE(config.measurement_conditions.input_level_dBm.has_value());
+        app.saveProject(path);
+    }
+    {
+        const json saved = loadJson(path);
+        REQUIRE(saved.contains("receiver_requirements"));
+        CHECK(saved["receiver_requirements"].dump().find("output_reference_tone_frequency_hz") ==
+              std::string::npos);
+    }
+    {
+        auto project = loadJson(path);
+        project["receiver_requirements"]["measurement_conditions"] =
+            json{{"input_level_dbm", -30.0}};
+        saveJson(path, project);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        REQUIRE(app.testReceiverRequirementsState().config.has_value());
+        CHECK(app.testReceiverRequirementsState().config->measurement_conditions.input_level_dBm ==
+              -30.0);
+        app.saveProject(path);
+    }
+    {
+        const json saved = loadJson(path);
+        CHECK(saved["receiver_requirements"]["measurement_conditions"]["input_level_dbm"] == -30.0);
+    }
+    {
+        auto project = loadJson(path);
+        project["receiver_requirements"]["measurement_conditions"] =
+            json{{"input_level_dbm", "bad"}};
+        saveJson(path, project);
+    }
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        CHECK_FALSE(app.testReceiverRequirementsState().config.has_value());
+        CHECK(app.testReceiverRequirementsState().invalid_reason ==
+              "Input level must be a number.");
+    }
     std::filesystem::remove(path);
 }
 

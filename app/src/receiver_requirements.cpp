@@ -1,5 +1,7 @@
 #include "receiver_requirements.h"
 
+#include "common.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -128,10 +130,11 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
         if (!count)
             return "IIP3 input sweep must have 3–101 finite, advancing levels.";
     }
-    if (config.measurement_conditions.output_reference_tone_frequency_Hz &&
-        (!std::isfinite(*config.measurement_conditions.output_reference_tone_frequency_Hz) ||
-         *config.measurement_conditions.output_reference_tone_frequency_Hz <= 0.0))
-        return "Output reference tone frequency must be finite and positive.";
+    if (config.measurement_conditions.input_level_dBm &&
+        (!std::isfinite(*config.measurement_conditions.input_level_dBm) ||
+         *config.measurement_conditions.input_level_dBm < MIN_POWER ||
+         *config.measurement_conditions.input_level_dBm > MAX_POWER))
+        return "Input level must be between -174 and 10 dBm.";
     return std::nullopt;
 }
 
@@ -185,8 +188,17 @@ parseReceiverRequirementsDraft(const ReceiverRequirementsDraft &draft, std::stri
         config.measurement_conditions.iip3 =
             ReceiverIIP3TestSettings{*spacing, *start, *stop, *step};
     }
-    config.measurement_conditions.output_reference_tone_frequency_Hz =
-        draft.output_power_enabled ? draft.output_reference_tone_frequency_Hz : std::nullopt;
+    if (!draft.input_level_dBm.empty()) {
+        auto level = parseNumber(draft.input_level_dBm);
+        if (!level) {
+            error = "Input level must be a finite number.";
+            return std::nullopt;
+        }
+        config.measurement_conditions.input_level_dBm = *level;
+    } else if (draft.output_power_enabled) {
+        error = "Output power needs an input level (dBm).";
+        return std::nullopt;
+    }
     if (auto reason = validateReceiverRequirementsConfig(config)) {
         error = *reason;
         return std::nullopt;

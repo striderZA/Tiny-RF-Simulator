@@ -679,7 +679,7 @@ int run(RfSimulatorApp &app, GLFWwindow *window, const std::string &scenario,
         config.band_start_Hz = 50e6;
         config.band_stop_Hz = 150e6;
         config.output_power = ReceiverOutputPowerLimits{-200.0, 200.0};
-        config.measurement_conditions.output_reference_tone_frequency_Hz = 100e6;
+        config.measurement_conditions.input_level_dBm = -30.0;
         app.testReceiverRequirementsState().config = config;
         std::printf("FIXTURE scenario=receiver config_set=%d invalid_reason_empty=%d\n",
                     app.testReceiverRequirementsState().config.has_value() ? 1 : 0,
