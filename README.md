@@ -41,7 +41,7 @@
 - 🧪 **Test Flow** — author repeatable parameter sweeps on a live circuit, capture built-in measurements, preview results, and export them as JSON (`View > Test Flow`)
 - 🧮 **PFB Filter Calculator** — plot the Kaiser prototype response, compare filter metrics with a rejection target, and apply designs to PFB channelizers (`View > Filter Calculator`)
 - 📐 **Receiver Requirements** — band, gain, and noise-figure limits, with a pass, fail, or incomplete status for each check (`View > Receiver Requirements`)
-- ⚡ **Receiver output power and IIP3 checks** — output-power limits at a reference tone and two-tone IIP3 sweeps, reported alongside gain and noise figure
+- ⚡ **Receiver output power and IIP3 checks** — output power measured at each mode's input level, and two-tone IIP3 sweeps, reported alongside gain and noise figure
 
 
 ## 🚀 Quick Start
