@@ -657,8 +657,8 @@ TEST_CASE("Selected receiver requirements state follows the selection",
 TEST_CASE("Receiver requirements set validation reports the first problem",
           "[receiver_requirements][modes]") {
     ReceiverRequirementsSet duplicates;
-    duplicates.modes.push_back({"x", std::nullopt});
     duplicates.modes.push_back({"X", std::nullopt});
+    duplicates.modes.push_back({"x", std::nullopt});
     CHECK(validateReceiverRequirementsSet(duplicates) ==
           std::optional<std::string>("A mode named 'x' already exists."));
 
@@ -737,6 +737,25 @@ TEST_CASE("Receiver requirements JSON migrates a format 1 object to one Default 
     CHECK(with_level.modes[0].config->measurement_conditions.input_level_dBm == -30.0);
 }
 
+TEST_CASE("Receiver requirements JSON migrates a band-only legacy object",
+          "[receiver_requirements][json]") {
+    const nlohmann::json legacy = {{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}};
+    const auto set = receiverRequirementsFromJson(legacy);
+    REQUIRE(set.invalid_reason.empty());
+    REQUIRE(set.modes.size() == 1);
+    CHECK(set.modes[0].name == "Default");
+    CHECK(set.selected == 0);
+    REQUIRE(set.modes[0].config.has_value());
+    CHECK(set.modes[0].config->band_start_Hz == 1.0e9);
+    CHECK(set.modes[0].config->band_stop_Hz == 2.0e9);
+    CHECK_FALSE(set.modes[0].config->gain);
+    CHECK_FALSE(set.modes[0].config->nf_max_dB);
+    CHECK_FALSE(set.modes[0].config->output_power);
+    CHECK_FALSE(set.modes[0].config->iip3_min_dBm);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.input_level_dBm);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.iip3);
+}
+
 TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
           "[receiver_requirements][json]") {
     const auto check_invalid = [](const ReceiverRequirementsSet &set, const std::string &reason) {
@@ -764,7 +783,7 @@ TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
                       {"format", 2},
                       {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}},
                                                        {{"name", "a"}, {"config", nullptr}}})}}),
-                  "A mode named 'A' already exists.");
+                  "A mode named 'a' already exists.");
 
     auto bad_input_level = allConfigured();
     const auto encoded_bad_level = receiverRequirementsToJson(

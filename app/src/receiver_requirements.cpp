@@ -329,7 +329,7 @@ std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequire
             return "Mode name must be at most 64 characters.";
         for (std::size_t earlier = 0; earlier < i; ++earlier) {
             if (modeNamesEqual(set.modes[earlier].name, name))
-                return "A mode named '" + set.modes[earlier].name + "' already exists.";
+                return "A mode named '" + name + "' already exists.";
         }
     }
     if (set.modes.empty() ? set.selected != 0 : set.selected >= set.modes.size())
