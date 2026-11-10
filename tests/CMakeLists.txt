@@ -168,6 +168,13 @@ add_standalone_test(test_amplifier_amp_file
     LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
+# AMP and amp-f intercept coverage per frequency, and the compression-level inverse. Standalone
+# for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_intercept_coverage
+    SOURCES test_amplifier_intercept_coverage.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine

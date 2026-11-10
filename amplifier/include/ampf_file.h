@@ -30,6 +30,8 @@ struct AmpfBlock {
     // bracket f_Hz and holds the nearest row outside them. NaN when the value, or a
     // bracketing value, is missing.
     double valueAt(size_t column, double f_Hz) const;
+    // True when f_Hz lies inside the block's [first, last] rows; valueAt holds the edge outside.
+    bool covers(double f_Hz) const;
 };
 
 struct AmpfFile {

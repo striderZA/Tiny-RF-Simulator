@@ -40,7 +40,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 - Node graph tests must verify probe routing, link topology, and topological sort
 - Touchstone parser tests must cover all format variants (DB, MA, RI), frequency units, both required v2.0 two-port data orders, and row-major matrices for 3-port and 4-port files.
 - AMP parser tests must cover scalar and per-frequency IP3 sections, default and explicit units, empty or non-numeric S/Y/Z/POUT sections, and file:line diagnostics (`tests/test_amp_file.cpp`)
-- amp-f v1 reader tests must cover every rule in the spec, block identity and DEVICE inheritance, `FREQ_UNITS`, NaN cells, and `<path>:<line>` diagnostics (`tests/test_ampf_file.cpp`). Amplifier tests cover per-frequency intercepts, selection, fallback, and save/load (`tests/test_amplifier_ampf.cpp`).
+- amp-f v1 reader tests must cover every rule in the spec, block identity and DEVICE inheritance, `FREQ_UNITS`, NaN cells, and `<path>:<line>` diagnostics (`tests/test_ampf_file.cpp`). Amplifier tests cover per-frequency intercepts, selection, fallback, and save/load (`tests/test_amplifier_ampf.cpp`). Intercept coverage (`oip3At_Hz()`) and the compression-level inverse are covered by `tests/test_amplifier_intercept_coverage.cpp`.
 
 ## Verification
 

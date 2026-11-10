@@ -38,6 +38,14 @@ double gainDb(const NonlinearModel::GainFn &gain, double freq_Hz) {
     return 20.0 * std::log10(gain(freq_Hz));
 }
 
+// Records the first reason a value is not covered by its file. Later reasons do not replace it.
+void markUncovered(AmplifierInterceptAt &at, const char *reason) {
+    if (!at.covered)
+        return;
+    at.covered = false;
+    at.reason = reason;
+}
+
 // An amp-f selection as JSON: each VAR or COND key with its value.
 nlohmann::json selectionToJson(const AmpfValues &values) {
     nlohmann::json json = nlohmann::json::object();
@@ -81,26 +89,65 @@ void AmplifierEngine::loadAmpFile(const std::string &path) {
     }
 }
 
-// Third-order intercept at each frequency. An OIP3 section is used as given, and it wins
-// when the file also has an IIP3 section. An IIP3 section alone gives OIP3 = IIP3 plus the
-// small-signal gain at the same frequency.
-NonlinearModel::Oip3Fn
-AmplifierEngine::intercept3Function(const NonlinearModel::GainFn &gain) const {
+// Third-order intercept at one frequency, with its file coverage. An OIP3 section is used as
+// given, and it wins when the file also has an IIP3 section. An IIP3 section alone gives OIP3 =
+// IIP3 plus the small-signal gain at the same frequency. With no file intercept, the scalar OIP3
+// applies and is covered.
+AmplifierInterceptAt AmplifierEngine::interceptAt3(double freq_Hz,
+                                                   const NonlinearModel::GainFn &gain) const {
     if (ampfBlockSelected())
-        return ampfOip3Function(gain);
+        return ampfInterceptAt(freq_Hz, gain);
+    AmplifierInterceptAt at;
+    at.oip3_dBm = m_nonlinear.oip3_dBm();
     if (!m_amp)
-        return {};
+        return at;
     if (m_amp->oip3) {
-        const AmpIp3Curve *curve = &*m_amp->oip3;
-        return [curve](double freq_Hz) { return clampIntercept(curve->dBmAt(freq_Hz)); };
+        const AmpIp3Curve &curve = *m_amp->oip3;
+        at.oip3_dBm = clampIntercept(curve.dBmAt(freq_Hz));
+        if (!curve.covers(freq_Hz))
+            markUncovered(at, "AMP OIP3 data does not cover this frequency.");
+        return at;
     }
     if (m_amp->iip3) {
-        const AmpIp3Curve *curve = &*m_amp->iip3;
-        return [curve, gain](double freq_Hz) {
-            return clampIntercept(curve->dBmAt(freq_Hz) + 20.0 * std::log10(gain(freq_Hz)));
-        };
+        const AmpIp3Curve &curve = *m_amp->iip3;
+        const double derived = curve.dBmAt(freq_Hz) + gainDb(gain, freq_Hz);
+        at.oip3_dBm = clampIntercept(derived);
+        if (!curve.covers(freq_Hz))
+            markUncovered(at, "AMP IIP3 data does not cover this frequency.");
+        else if (m_sparam_mode && m_sparam_data.loaded() && !m_sparam_data.inBand(freq_Hz))
+            markUncovered(at, "S-parameter gain data does not cover this frequency.");
+        else if (!std::isfinite(derived))
+            markUncovered(at, "The derived OIP3 is not finite.");
     }
-    return {};
+    return at;
+}
+
+// Third-order intercept function for process(). With no file intercept it is empty, so process()
+// uses the scalar OIP3 and its result is unchanged.
+NonlinearModel::Oip3Fn
+AmplifierEngine::intercept3Function(const NonlinearModel::GainFn &gain) const {
+    const bool file_intercept = ampfBlockSelected() || (m_amp && (m_amp->oip3 || m_amp->iip3));
+    if (!file_intercept)
+        return {};
+    return [this, gain](double freq_Hz) { return interceptAt3(freq_Hz, gain).oip3_dBm; };
+}
+
+// OIP3 at freq_Hz for the stored file and scalar values, with the active mode's small-signal
+// gain. Independent of enableNonlinear(). update() applies the same value through
+// intercept3Function().
+AmplifierInterceptAt AmplifierEngine::oip3At_Hz(double freq_Hz) const {
+    return interceptAt3(freq_Hz, smallSignalGain());
+}
+
+// Linear amplitude gain at each frequency for the active mode: |S21| in S-parameter mode, and
+// the flat ideal gain otherwise.
+NonlinearModel::GainFn AmplifierEngine::smallSignalGain() const {
+    if (m_sparam_mode && m_sparam_data.loaded())
+        return [this](double freq_Hz) {
+            return std::abs(m_sparam_data.interpolate(freq_Hz, m_sparam_fwd_idx));
+        };
+    const double amp = std::sqrt(dbToLinear(m_gain_dB));
+    return [amp](double) { return amp; };
 }
 
 void AmplifierEngine::setAmpfFilepath(const std::string &path) {
@@ -150,42 +197,60 @@ void AmplifierEngine::resolveAmpfBlock() {
     LOG_WARN("amp-f block not selected; its intercepts are not used: %s", m_ampf_error.c_str());
 }
 
-// Third-order intercept at each frequency from the selected block. The first finite source
-// wins: OIP3; IIP3 plus the gain; OP1dB plus the seeding offset of the P1dB rule; IP1dB plus
-// the gain plus that offset. The scalar OIP3 applies when none is finite.
-NonlinearModel::Oip3Fn AmplifierEngine::ampfOip3Function(const NonlinearModel::GainFn &gain) const {
+// amp-f intercept at freq_Hz from the selected block. The first finite source wins: OIP3; IIP3
+// plus the gain; OP1dB plus the seeding offset of the P1dB rule; IP1dB plus the gain plus that
+// offset. The scalar OIP3 applies, uncovered, when none is finite.
+AmplifierInterceptAt AmplifierEngine::ampfInterceptAt(double freq_Hz,
+                                                      const NonlinearModel::GainFn &gain) const {
     const AmpfBlock *block = activeAmpfBlock();
     const int oip3 = m_ampf->columnIndex("OIP3_dBm");
     const int iip3 = m_ampf->columnIndex("IIP3_dBm");
     const int op1db = m_ampf->columnIndex("OP1dB_dBm");
     const int ip1db = m_ampf->columnIndex("IP1dB_dBm");
-    const double scalar = m_nonlinear.oip3_dBm();
-    return [block, gain, oip3, iip3, op1db, ip1db, scalar](double freq_Hz) {
-        if (oip3 >= 0) {
-            const double value = block->valueAt(static_cast<size_t>(oip3), freq_Hz);
-            if (std::isfinite(value))
-                return clampFinite(value);
+
+    std::optional<double> value;
+    bool gain_derived = false;
+    if (oip3 >= 0) {
+        const double v = block->valueAt(static_cast<size_t>(oip3), freq_Hz);
+        if (std::isfinite(v))
+            value = clampFinite(v);
+    }
+    if (!value && iip3 >= 0) {
+        const double v = block->valueAt(static_cast<size_t>(iip3), freq_Hz) + gainDb(gain, freq_Hz);
+        if (std::isfinite(v)) {
+            value = clampFinite(v);
+            gain_derived = true;
         }
-        if (iip3 >= 0) {
-            const double value =
-                block->valueAt(static_cast<size_t>(iip3), freq_Hz) + gainDb(gain, freq_Hz);
-            if (std::isfinite(value))
-                return clampFinite(value);
+    }
+    if (!value && op1db >= 0) {
+        const double v =
+            block->valueAt(static_cast<size_t>(op1db), freq_Hz) + NonlinearModel::kOip3OverP1dB_dB;
+        if (std::isfinite(v))
+            value = clampFinite(v);
+    }
+    if (!value && ip1db >= 0) {
+        const double v = block->valueAt(static_cast<size_t>(ip1db), freq_Hz) +
+                         gainDb(gain, freq_Hz) + NonlinearModel::kOip3OverP1dB_dB;
+        if (std::isfinite(v)) {
+            value = clampFinite(v);
+            gain_derived = true;
         }
-        if (op1db >= 0) {
-            const double value = block->valueAt(static_cast<size_t>(op1db), freq_Hz) +
-                                 NonlinearModel::kOip3OverP1dB_dB;
-            if (std::isfinite(value))
-                return clampFinite(value);
-        }
-        if (ip1db >= 0) {
-            const double value = block->valueAt(static_cast<size_t>(ip1db), freq_Hz) +
-                                 gainDb(gain, freq_Hz) + NonlinearModel::kOip3OverP1dB_dB;
-            if (std::isfinite(value))
-                return clampFinite(value);
-        }
-        return scalar;
-    };
+    }
+
+    AmplifierInterceptAt at;
+    if (!value) {
+        at.oip3_dBm = m_nonlinear.oip3_dBm();
+        markUncovered(at,
+                      "amp-f block has no OIP3, IIP3, OP1dB, or IP1dB value at this frequency.");
+        return at;
+    }
+    at.oip3_dBm = *value;
+    if (!block->covers(freq_Hz))
+        markUncovered(at, "amp-f data does not cover this frequency.");
+    else if (gain_derived && m_sparam_mode && m_sparam_data.loaded() &&
+             !m_sparam_data.inBand(freq_Hz))
+        markUncovered(at, "S-parameter gain data does not cover this frequency.");
+    return at;
 }
 
 // Second-order intercept at each frequency from the selected block. The first finite source
@@ -259,10 +324,7 @@ void AmplifierEngine::update(double dt) {
         // Nonlinear processing
         if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
             size_t n_fund = out.tones.size();
-            const NonlinearModel::GainFn gain = [this](double freq) {
-                auto S = this->m_sparam_data.interpolate(freq, this->m_sparam_fwd_idx);
-                return std::abs(S);
-            };
+            const NonlinearModel::GainFn gain = smallSignalGain();
             auto result = m_nonlinear.process(in_ptr->tones, gain, intercept3Function(gain),
                                               intercept2Function(gain));
             for (const auto &t : result.extra_tones)
@@ -331,8 +393,7 @@ void AmplifierEngine::update(double dt) {
     // Nonlinear processing
     if (m_nonlinear.enabled() && in_ptr && !in_ptr->tones.empty()) {
         size_t n_fund = out.tones.size();
-        double gain_amp = std::sqrt(dbToLinear(m_gain_dB));
-        const NonlinearModel::GainFn gain = [gain_amp](double) { return gain_amp; };
+        const NonlinearModel::GainFn gain = smallSignalGain();
         auto result = m_nonlinear.process(in_ptr->tones, gain, intercept3Function(gain),
                                           intercept2Function(gain));
 
