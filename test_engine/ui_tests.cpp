@@ -2587,7 +2587,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(set.modes[1].config.has_value());
         IM_CHECK_EQ(set.modes[1].config->band_stop_Hz, 10.0e6);
 
-        // 4. Selecting another mode reloads the draft; rename applies to it.
+        // 4. Selecting another mode reloads the draft and marks nothing dirty; rename applies to
+        // it.
         revision = s_app->projectRevision();
         ctx->ItemClick("Mode");
         ctx->Yield(2);
@@ -2596,7 +2597,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("Receiver Requirements");
         waitForUi(ctx, [&]() { return set.selected == 0; });
         IM_CHECK_EQ(set.selected, 0);
-        IM_CHECK(s_app->projectRevision() > revision);
+        IM_CHECK_EQ(s_app->projectRevision(), revision);
 
         revision = s_app->projectRevision();
         ctx->ScrollToTop("//Receiver Requirements");

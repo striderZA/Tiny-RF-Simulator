@@ -214,13 +214,10 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         for (std::size_t index = 0; index < set.modes.size(); ++index) {
             ImGui::PushID(static_cast<int>(index));
             const bool selected = index == selected_index;
-            if (ImGui::Selectable(set.modes[index].name.c_str(), selected)) {
-                if (selectReceiverRequirementsMode(set, index)) {
-                    resetDraft(set);
-                    if (onChange)
-                        onChange();
-                }
-            }
+            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
+            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
+                selectReceiverRequirementsMode(set, index))
+                resetDraft(set);
             if (selected)
                 ImGui::SetItemDefaultFocus();
             ImGui::PopID();
