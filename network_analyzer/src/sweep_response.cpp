@@ -17,12 +17,16 @@ struct Indexed {
     std::size_t index;
 };
 
-// Entries sorted by frequency, ties broken by index.
+// Entries sorted by frequency, ties broken by index. Non-finite frequencies have no place in the
+// order (they break the strict weak order) and match nothing, so they are left out.
 std::vector<Indexed> sortedByFrequency(const std::vector<double> &frequencies_Hz) {
     std::vector<Indexed> sorted;
     sorted.reserve(frequencies_Hz.size());
-    for (std::size_t i = 0; i < frequencies_Hz.size(); ++i)
+    for (std::size_t i = 0; i < frequencies_Hz.size(); ++i) {
+        if (!std::isfinite(frequencies_Hz[i]))
+            continue;
         sorted.push_back({frequencies_Hz[i], i});
+    }
     std::sort(sorted.begin(), sorted.end(), [](const Indexed &a, const Indexed &b) {
         return a.freq_Hz < b.freq_Hz || (a.freq_Hz == b.freq_Hz && a.index < b.index);
     });

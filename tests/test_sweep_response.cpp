@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 TEST_CASE("linear sweep grid matches the analyzer's lerp", "[sweep_response]") {
@@ -69,6 +70,15 @@ TEST_CASE("readout reports noise bins and their flags", "[sweep_response]") {
     const auto flagged = readSweepResponse({4.0e9}, held);
     REQUIRE(flagged.size() == 1);
     CHECK(flagged[0].noise_out_of_band);
+}
+
+TEST_CASE("a non-finite tone frequency cannot hide a finite match", "[sweep_response]") {
+    Spectrum response;
+    response.tones = {{std::numeric_limits<double>::quiet_NaN(), -20.0, 0.0}, {1.0e9, -11.0, 0.0}};
+    const auto near = readSweepResponse({1.0e9}, response);
+    REQUIRE(near.size() == 1);
+    REQUIRE(near[0].tone_dBm.has_value());
+    CHECK(near[0].tone_dBm == Catch::Approx(-11.0));
 }
 
 TEST_CASE("sweep noise figure comes from output noise over gain", "[sweep_response]") {
