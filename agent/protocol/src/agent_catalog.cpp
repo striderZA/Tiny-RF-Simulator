@@ -1149,8 +1149,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                                            {"inputs", Json::array({Json{{"from", "input"}}})}}})},
                         {"outputs",
                          Json::array({Json{{"name", "RX"}, {"stage", "LNA"}, {"port", 0}}})},
-                        {"modes",
-                         Json::array()}}}}),
+                        {"modes", Json::array()}}}}),
              rfBudgetSuccessSchema(), destructiveAnnotations())};
     return catalog;
 }
