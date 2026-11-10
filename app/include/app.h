@@ -197,6 +197,18 @@ class RfSimulatorApp {
     ReceiverRequirementsState testReceiverRequirementsState() {
         return selectedReceiverRequirementsState(m_receiver_requirements);
     }
+    // Replaces the set with one mode named "Default"; a default config leaves it unconfigured.
+    void testSetSingleModeRequirements(const ReceiverRequirementsConfig &config) {
+        m_receiver_requirements = ReceiverRequirementsSet{};
+        ReceiverRequirementsMode mode;
+        mode.name = "Default";
+        if (!(config == ReceiverRequirementsConfig{}))
+            mode.config = config;
+        m_receiver_requirements.modes.push_back(std::move(mode));
+    }
+    const std::string &testReceiverRequirementsError() const {
+        return m_receiver_requirements_widget->error();
+    }
     std::size_t testPfbViewCount() const { return m_pfb_views.size(); }
     PFBViewManager &testPfbViews() { return m_pfb_views; }
     // Test Flow panel model; app-level tests drive load/run/restore through it.

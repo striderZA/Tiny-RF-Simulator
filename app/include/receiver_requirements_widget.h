@@ -16,6 +16,8 @@ class ReceiverRequirementsWidget {
               const ReceiverRequirementsEvaluation &result);
 
     std::function<void()> onChange;
+    // The validation error shown under the mode controls; empty when there is none.
+    const std::string &error() const { return m_error; }
 
   private:
     void resetDraft(const ReceiverRequirementsSet &set);

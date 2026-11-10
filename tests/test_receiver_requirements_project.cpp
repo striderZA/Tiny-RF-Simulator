@@ -55,19 +55,6 @@ void saveJson(const std::string &path, const json &value) {
     output << value.dump(2);
 }
 
-// Replaces the requirement set with one "Default" mode. A default-constructed
-// config leaves that mode not configured, matching the old empty state.
-void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
-    auto &set = app.testReceiverRequirements();
-    set = ReceiverRequirementsSet{};
-    ReceiverRequirementsMode mode;
-    mode.name = "Default";
-    if (!(config == ReceiverRequirementsConfig{}))
-        mode.config = config;
-    set.modes.push_back(std::move(mode));
-    set.selected = 0;
-}
-
 json savedProjectWithRequirements(const std::string &path, const json &requirements) {
     {
         RfSimulatorApp app;
@@ -175,7 +162,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist optional metrics a
     config.iip3_min_dBm = 10.0;
     config.measurement_conditions.input_level_dBm = -30.0;
     config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
-    setSingleModeRequirements(app, config);
+    app.testSetSingleModeRequirements(config);
     app.saveProject(path);
 
     const auto saved = loadJson(path);
@@ -209,7 +196,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist gain-only and NF-o
     config.band_start_Hz = 1.0e9;
     config.band_stop_Hz = 2.0e9;
     config.gain = ReceiverGainLimits{10.0, 20.0};
-    setSingleModeRequirements(app, config);
+    app.testSetSingleModeRequirements(config);
     app.saveProject(path);
     app.loadProject(path);
     {
@@ -225,7 +212,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements persist gain-only and NF-o
 
     config.gain.reset();
     config.nf_max_dB = 5.0;
-    setSingleModeRequirements(app, config);
+    app.testSetSingleModeRequirements(config);
     app.saveProject(path);
     app.loadProject(path);
     {

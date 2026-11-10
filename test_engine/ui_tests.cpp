@@ -49,20 +49,6 @@ template <typename Condition> void waitForUi(ImGuiTestContext *ctx, Condition co
         ctx->Yield();
 }
 
-// True when the receiver panel's draw list contains the red error colour.
-bool hasErrorText(ImGuiWindow *window) {
-    if (!window || !window->DrawList)
-        return false;
-    const ImVec4 expected(1.0f, 0.35f, 0.35f, 1.0f);
-    for (int i = 0; i < window->DrawList->VtxBuffer.Size; ++i) {
-        const ImVec4 actual = ImGui::ColorConvertU32ToFloat4(window->DrawList->VtxBuffer[i].col);
-        if (std::fabs(actual.x - expected.x) < 0.01f && std::fabs(actual.y - expected.y) < 0.01f &&
-            std::fabs(actual.z - expected.z) < 0.01f)
-            return true;
-    }
-    return false;
-}
-
 // Scrolls the receiver panel to the bottom, then yields until its scroll offset
 // has stopped changing for two consecutive frames. A single ScrollToBottom can
 // land short or keep moving while the content height changes; clicking an item
@@ -79,29 +65,6 @@ void settlePanelScrollToBottom(ImGuiTestContext *ctx) {
         stable_frames = std::fabs(current - previous) < 0.5f ? stable_frames + 1 : 0;
         previous = current;
     }
-}
-
-// Polls the red error vertices while keeping the panel scrolled to the bottom,
-// bounded to 60 frames.
-bool settleAndFindErrorText(ImGuiTestContext *ctx) {
-    for (int frame = 0; frame < 60; ++frame) {
-        ctx->ScrollToBottom("//Receiver Requirements");
-        if (hasErrorText(ImGui::FindWindowByName("Receiver Requirements")))
-            return true;
-        ctx->Yield();
-    }
-    return false;
-}
-
-void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
-    auto &set = app.testReceiverRequirements();
-    set = ReceiverRequirementsSet{};
-    ReceiverRequirementsMode mode;
-    mode.name = "Default";
-    if (!(config == ReceiverRequirementsConfig{}))
-        mode.config = config;
-    set.modes.push_back(mode);
-    set.selected = 0;
 }
 
 struct AgentPanelUiCleanup {
@@ -1922,7 +1885,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         }
         s_app->m_show_na = false;
         const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         // Let the widget reload its draft from the new set before interacting.
         ctx->Yield(3);
         std::uint64_t clean_revision = s_app->projectRevision();
@@ -2001,7 +1964,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ~RunCapReset() { engine.setMaxRunsPerUpdate(std::nullopt); }
         } run_cap_reset{receiver};
         receiver.setMaxRunsPerUpdate(100);
-        setSingleModeRequirements(*s_app, config);
+        s_app->testSetSingleModeRequirements(config);
         // Let the widget reload its draft from the new set before interacting.
         ctx->Yield(3);
         clean_revision = s_app->projectRevision();
@@ -2136,7 +2099,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         na.setPointA(-1);
         na.setPointB(-1);
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         s_app->testRemoveComponent(amplifier->graphNodeId());
         s_app->testRemoveComponent(attenuator->graphNodeId());
         s_app->testRemoveComponent(generator->graphNodeId());
@@ -2166,12 +2129,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ScrollToTop("//Receiver Requirements");
         ctx->Yield(2);
         const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         // Let the widget reload its draft from the new set before interacting.
         ctx->Yield(3);
         const std::uint64_t clean_revision = s_app->projectRevision();
 
-        // Apply rejects the draft with a red error line; the committed state and
+        // Apply rejects the draft with a validation error; the committed state and
         // project revision stay untouched until the input level supplies the
         // measured source power.
         ctx->SetRef("Receiver Requirements");
@@ -2188,8 +2151,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(panel != nullptr && panel->Active);
         IM_CHECK(!state().config.has_value());
         IM_CHECK_EQ(s_app->projectRevision(), clean_revision);
-        IM_CHECK(settleAndFindErrorText(ctx));
-        IM_CHECK(hasErrorText(panel));
+        waitForUi(ctx, [&]() { return !s_app->testReceiverRequirementsError().empty(); });
+        IM_CHECK(!s_app->testReceiverRequirementsError().empty());
 
         ctx->ItemInputValue("Input level (dBm)", "-30");
         settlePanelScrollToBottom(ctx);
@@ -2204,7 +2167,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
         ctx->Yield(2);
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         ctx->Yield(2);
     };
 
@@ -2232,7 +2195,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ScrollToTop("//Receiver Requirements");
         ctx->Yield(2);
         const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         // Let the widget reload its draft from the new set before interacting.
         ctx->Yield(3);
         // Revision comparisons prove whether an Apply recorded a project edit,
@@ -2333,7 +2296,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
 
         const auto state = [&]() { return s_app->testReceiverRequirementsState(); };
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
         // Let the widget reload its draft from the new set before locating items.
         ctx->Yield(3);
         std::uint64_t clean_revision = s_app->projectRevision();
@@ -2530,7 +2493,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
         ctx->Yield(2);
-        setSingleModeRequirements(*s_app, ReceiverRequirementsConfig{});
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator",

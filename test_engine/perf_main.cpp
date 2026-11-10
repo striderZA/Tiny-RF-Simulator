@@ -11,8 +11,8 @@
 //   default     the project as loaded
 //   chain       generator -> attenuator -> amplifier, spectrum probe on the amplifier output
 //   analysis    chain; Network Analyzer window shown, points A/B set, sweep 50-150 MHz, 201 points
-//   receiver    analysis plus a receiver requirement with output-power limits and a 100 MHz
-//               reference tone, so the receiver measurement runs
+//   receiver    analysis plus a receiver requirement with output-power limits measured at a
+//               -30 dBm input level, so the receiver measurement runs
 //   drag        chain; the generator tone power changes every frame and the project is marked
 //               dirty. Engine-side proxy for a slider drag: no mouse input is simulated.
 //   nodes50     chain plus 50 unconnected attenuators
@@ -64,19 +64,6 @@ using Json = nlohmann::ordered_json;
 
 double microseconds(Clock::duration d) {
     return std::chrono::duration<double, std::micro>(d).count();
-}
-
-// Replaces the receiver requirement set with one "Default" mode; a default
-// config leaves it not configured.
-void setSingleModeRequirements(RfSimulatorApp &app, const ReceiverRequirementsConfig &config) {
-    auto &set = app.testReceiverRequirements();
-    set = ReceiverRequirementsSet{};
-    ReceiverRequirementsMode mode;
-    mode.name = "Default";
-    if (!(config == ReceiverRequirementsConfig{}))
-        mode.config = config;
-    set.modes.push_back(mode);
-    set.selected = 0;
 }
 
 // Every caller passes a non-empty vector.
@@ -693,7 +680,7 @@ int run(RfSimulatorApp &app, GLFWwindow *window, const std::string &scenario,
         config.band_stop_Hz = 150e6;
         config.output_power = ReceiverOutputPowerLimits{-200.0, 200.0};
         config.measurement_conditions.input_level_dBm = -30.0;
-        setSingleModeRequirements(app, config);
+        app.testSetSingleModeRequirements(config);
         std::printf("FIXTURE scenario=receiver config_set=%d invalid_reason_empty=%d\n",
                     app.testReceiverRequirementsState().config.has_value() ? 1 : 0,
                     app.testReceiverRequirementsState().invalid_reason.empty() ? 1 : 0);
