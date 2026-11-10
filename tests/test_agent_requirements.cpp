@@ -169,3 +169,38 @@ TEST_CASE("requirements tools report INTERNAL without host support", "[agent_req
     CHECK(errorFor(edit).at("code") == "INTERNAL");
     CHECK(fixture.host.checkpoint_begins == 0);
 }
+
+TEST_CASE("requirements_edit refuses misspelled nested keys and names the full path",
+          "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto before = fixture.commands.revision();
+    const auto refused = [&](nlohmann::json requirements) {
+        const auto result =
+            fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                               {"requirements", std::move(requirements)}});
+        const auto &error = errorFor(result);
+        CHECK(error.at("code") == "INVALID_ARGUMENT");
+        CHECK(*fixture.host.requirements == twoModeSet());
+        CHECK(fixture.commands.revision() == before);
+        CHECK(fixture.host.checkpoint_begins == 0);
+        return error.at("details").at("path");
+    };
+
+    SECTION("a misspelled gain key in a mode config") {
+        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        requirements["modes"][0]["config"]["gain_min_dB"] = 10.0;
+        CHECK(refused(requirements) == "/requirements/modes/0/config/gain_min_dB");
+    }
+    SECTION("a misspelled input level under measurement conditions") {
+        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        requirements["modes"][0]["config"]["measurement_conditions"]["input_level_dBm"] = -30.0;
+        CHECK(refused(requirements) ==
+              "/requirements/modes/0/config/measurement_conditions/input_level_dBm");
+    }
+    SECTION("an unknown key in the requirements object") {
+        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        requirements["extra"] = 1;
+        CHECK(refused(requirements) == "/requirements/extra");
+    }
+}

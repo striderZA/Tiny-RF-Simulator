@@ -2,8 +2,11 @@
 #include "agent_tools.h"
 #include "receiver_requirements.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,6 +33,53 @@ void checkArgumentKeys(const OrderedJson &arguments) {
         const std::string_view key = member.key();
         if (key != "epoch" && key != "requirements")
             invalid("/" + std::string(key), "unknown field");
+    }
+}
+
+// Rejects a member of `object` outside `allowed`, reported at its full JSON pointer.
+void checkMemberKeys(const OrderedJson &object, const std::string &path,
+                     std::initializer_list<std::string_view> allowed) {
+    for (const auto &member : object.items()) {
+        const std::string_view key = member.key();
+        if (std::find(allowed.begin(), allowed.end(), key) == allowed.end())
+            invalid(path + "/" + std::string(key), "unknown field");
+    }
+}
+
+// Checks a config object and its measurement conditions. Members of other types are left to the
+// shared parser, which reports them.
+void checkConfigKeys(const OrderedJson &config, const std::string &path) {
+    checkMemberKeys(config, path,
+                    {"band_start_hz", "band_stop_hz", "gain_min_db", "gain_max_db", "nf_max_db",
+                     "output_power_min_dbm", "output_power_max_dbm", "iip3_min_dbm",
+                     "measurement_conditions"});
+    const auto conditions = config.find("measurement_conditions");
+    if (conditions == config.end() || !conditions->is_object())
+        return;
+    const std::string conditions_path = path + "/measurement_conditions";
+    checkMemberKeys(*conditions, conditions_path, {"input_level_dbm", "iip3"});
+    const auto iip3 = conditions->find("iip3");
+    if (iip3 != conditions->end() && iip3->is_object())
+        checkMemberKeys(*iip3, conditions_path + "/iip3",
+                        {"tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"});
+}
+
+// Walks every nested member of the requirements object, so a misspelled key is refused with its
+// full path instead of being dropped. The shared file parser stays lenient for legacy files.
+void checkRequirementsKeys(const OrderedJson &requirements) {
+    checkMemberKeys(requirements, "/requirements", {"format", "selected_mode", "modes"});
+    const auto modes = requirements.find("modes");
+    if (modes == requirements.end() || !modes->is_array())
+        return;
+    for (std::size_t index = 0; index < modes->size(); ++index) {
+        const OrderedJson &mode = (*modes)[index];
+        if (!mode.is_object())
+            continue;
+        const std::string mode_path = "/requirements/modes/" + std::to_string(index);
+        checkMemberKeys(mode, mode_path, {"name", "config"});
+        const auto config = mode.find("config");
+        if (config != mode.end() && config->is_object())
+            checkConfigKeys(*config, mode_path + "/config");
     }
 }
 
@@ -85,6 +135,7 @@ AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall
         invalid("/requirements/format", "expected " + std::to_string(kReceiverRequirementsFormat));
     if (format->get<long long>() != kReceiverRequirementsFormat)
         invalid("/requirements/format", "expected " + std::to_string(kReceiverRequirementsFormat));
+    checkRequirementsKeys(*found);
 
     ReceiverRequirementsSet set = receiverRequirementsFromJson(*found);
     if (!set.invalid_reason.empty())
