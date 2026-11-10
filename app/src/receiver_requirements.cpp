@@ -58,7 +58,7 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
         const double frequency = frequencies[i];
         if (!std::isfinite(frequency) || frequency < low_Hz || frequency > high_Hz)
             continue;
-        if (!std::isfinite(values[i])) {
+        if (std::isnan(values[i])) {
             missing = true;
             continue;
         }

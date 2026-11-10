@@ -32,6 +32,7 @@ add_library(editor_services STATIC
     src/receiver_requirements.cpp
     src/rf_budget.cpp
     src/rf_budget_stage.cpp
+    src/rf_budget_cascade.cpp
     src/receiver_performance_measurement.cpp
     src/output_snr.cpp
 )

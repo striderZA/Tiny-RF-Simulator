@@ -629,6 +629,11 @@ add_standalone_test(test_rf_budget_stage
     SOURCES test_rf_budget_stage.cpp
     LIBS simulator::editor_services
 )
+# Standalone RF budget routes, cascade math, and per-mode verdicts.
+add_standalone_test(test_rf_budget_cascade
+    SOURCES test_rf_budget_cascade.cpp
+    LIBS simulator::editor_services
+)
 # Standalone real-engine coverage for the UI-free receiver measurement engine.
 add_standalone_test(test_receiver_performance_measurements
     SOURCES test_receiver_performance_measurements.cpp

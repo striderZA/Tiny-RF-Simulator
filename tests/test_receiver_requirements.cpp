@@ -302,6 +302,36 @@ TEST_CASE("ReceiverRequirements reports upper and lower limit violations over in
     CHECK(output_upper.gain.status == ReceiverRequirementStatus::Incomplete);
 }
 
+TEST_CASE("assess compares infinite values and treats only NaN as missing",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    state.config = config;
+
+    const std::vector<double> frequencies = {1.4e9, 1.6e9};
+    const std::vector<double> good_nf = {3.0, 3.0};
+    const std::vector<double> good_output = {-30.0, -30.0};
+    const std::vector<double> good_iip3 = {15.0, 15.0};
+    const double infinite = std::numeric_limits<double>::infinity();
+    const double missing = std::numeric_limits<double>::quiet_NaN();
+
+    const auto compared = evaluateReceiverRequirements(
+        state, 1.0e9, 2.0e9, frequencies, {-infinite, 15.0}, good_nf, good_output, good_iip3);
+    CHECK(compared.gain.status == ReceiverRequirementStatus::Fail);
+    REQUIRE(compared.gain.observed_min.has_value());
+    CHECK(*compared.gain.observed_min == -infinite);
+    REQUIRE(compared.gain.observed_max.has_value());
+    CHECK(*compared.gain.observed_max == 15.0);
+    CHECK(compared.overall == ReceiverRequirementStatus::Fail);
+
+    const auto incomplete = evaluateReceiverRequirements(
+        state, 1.0e9, 2.0e9, frequencies, {missing, 15.0}, good_nf, good_output, good_iip3);
+    CHECK(incomplete.gain.status == ReceiverRequirementStatus::Incomplete);
+}
+
 TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply clears diagnostic",
           "[receiver_requirements]") {
     auto state = configuredState();
