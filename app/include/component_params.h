@@ -45,3 +45,9 @@ struct ParamWriteResult {
 ParamWriteResult applyComponentParams(IComponentEngine &engine,
                                       const std::vector<ParameterField> &state_fields,
                                       const nlohmann::ordered_json &params);
+
+// One clause naming the key, for a refusal sentence: "unknown key 'gian_dB'", "'atten_dB' must be
+// number from 0 to 100", "the engine changed 'preset_index' from 0 to 4",
+// "'sparam_filepath' names a data file; idealized stages take no files". Empty when the write
+// applied or changed nothing.
+std::string paramWriteMessage(const ParamWriteResult &result);

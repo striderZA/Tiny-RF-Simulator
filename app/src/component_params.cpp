@@ -399,6 +399,36 @@ bool ParamWriteResult::ok() const {
     return status == ParamWriteStatus::Applied || status == ParamWriteStatus::Unchanged;
 }
 
+std::string paramWriteMessage(const ParamWriteResult &result) {
+    const std::string key = result.path.empty() ? std::string() : "'" + result.path + "'";
+    switch (result.status) {
+    case ParamWriteStatus::Applied:
+    case ParamWriteStatus::Unchanged:
+        return {};
+    case ParamWriteStatus::UnknownComponent:
+        return "the component was not found";
+    case ParamWriteStatus::UnknownKey:
+        return result.path.empty() ? "unknown key" : "unknown key " + key;
+    case ParamWriteStatus::PathParamUnsupported:
+        return key + " names a data file; idealized stages take no files";
+    case ParamWriteStatus::ReadOnly:
+        return key + " is read-only";
+    case ParamWriteStatus::TypeMismatch:
+        if (result.path.empty())
+            return result.expected.empty() ? "invalid value" : "must be " + result.expected;
+        return result.expected.empty() ? key + " has the wrong type"
+                                       : key + " must be " + result.expected;
+    case ParamWriteStatus::EngineAdjusted:
+        return "the engine changed " + key + " from " + result.requested.dump() + " to " +
+               result.stored.dump();
+    case ParamWriteStatus::DeserializeFailed:
+        return "the engine rejected the values: " + result.error;
+    case ParamWriteStatus::RestoreFailed:
+        return "the engine could not be restored: " + result.error;
+    }
+    return "the parameter write failed";
+}
+
 ParamWriteResult applyComponentParams(IComponentEngine &engine,
                                       const std::vector<ParameterField> &state_fields,
                                       const OrderedJson &params) {

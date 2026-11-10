@@ -623,6 +623,12 @@ add_standalone_test(test_rf_budget_project
     LIBS simulator::app
 )
 set_tests_properties(test_rf_budget_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone RF budget stage evaluation: each stage is built as a real engine in a private
+# scratch graph and driven with the Network Analyzer's comb.
+add_standalone_test(test_rf_budget_stage
+    SOURCES test_rf_budget_stage.cpp
+    LIBS simulator::editor_services
+)
 # Standalone real-engine coverage for the UI-free receiver measurement engine.
 add_standalone_test(test_receiver_performance_measurements
     SOURCES test_receiver_performance_measurements.cpp
