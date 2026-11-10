@@ -799,3 +799,13 @@ TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
     CHECK((encoded_marker == nlohmann::json{{"invalid_configuration", true}, {"diagnostic", "x"}}));
     check_invalid(receiverRequirementsFromJson(encoded_marker), "x");
 }
+
+TEST_CASE("ReceiverRequirements refuses '#' in mode names", "[receiver_requirements]") {
+    ReceiverRequirementsSet set;
+    set.modes.push_back({"HG##1", std::nullopt});
+    const auto reason = validateReceiverRequirementsSet(set);
+    REQUIRE(reason.has_value());
+    CHECK(*reason == "Mode name must not contain '#'.");
+    CHECK(receiverRequirementsModeNameError(ReceiverRequirementsSet{}, "Band #1", std::nullopt) ==
+          "Mode name must not contain '#'.");
+}

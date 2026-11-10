@@ -549,7 +549,7 @@ Json receiverRequirementConfigSchema() {
 
 Json receiverRequirementsModeSchema() {
     return objectSchema(
-        properties({{"name", stringSchema("Unique mode name, up to 64 characters.")},
+        properties({{"name", stringSchema("Unique mode name, up to 64 characters, without '#'.")},
                     {"config", nullableSchema(receiverRequirementConfigSchema())}}),
         {"name", "config"});
 }

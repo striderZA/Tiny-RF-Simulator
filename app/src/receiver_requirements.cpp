@@ -307,6 +307,8 @@ receiverRequirementsModeNameError(const ReceiverRequirementsSet &set, std::strin
         return "Mode name must not be empty.";
     if (trimmed_name.size() > kMaxReceiverRequirementModeNameLength)
         return "Mode name must be at most 64 characters.";
+    if (trimmed_name.find('#') != std::string_view::npos)
+        return "Mode name must not contain '#'.";
     for (std::size_t i = 0; i < set.modes.size(); ++i) {
         if (except_index && *except_index == i)
             continue;
@@ -327,6 +329,8 @@ std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequire
             return "Mode name must not be empty.";
         if (name.size() > kMaxReceiverRequirementModeNameLength)
             return "Mode name must be at most 64 characters.";
+        if (name.find('#') != std::string::npos)
+            return "Mode name must not contain '#'.";
         for (std::size_t earlier = 0; earlier < i; ++earlier) {
             if (modeNamesEqual(set.modes[earlier].name, name))
                 return "A mode named '" + name + "' already exists.";
