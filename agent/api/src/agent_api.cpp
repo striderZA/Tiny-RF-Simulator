@@ -253,6 +253,15 @@ AgentToolResult AgentApi::execute(const AgentCall &call) {
         } else if (call.tool == "requirements_edit") {
             result = executeRequirementsEditTool(*this, call);
             summary = "Edit receiver requirements";
+        } else if (call.tool == "budget_get") {
+            result = executeBudgetGetTool(*this, call);
+            summary = "Read RF budget";
+        } else if (call.tool == "budget_cascade") {
+            result = executeBudgetCascadeTool(*this, call);
+            summary = "Read RF budget cascade";
+        } else if (call.tool == "budget_edit") {
+            result = executeBudgetEditTool(*this, call);
+            summary = "Edit RF budget";
         } else {
             AgentError error{AgentErrorCode::InvalidArgument, "unknown tool " + call.tool};
             result = agentErrorResult(error, epoch());

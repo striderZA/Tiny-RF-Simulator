@@ -2,6 +2,7 @@
 
 ### Added
 
+- **RF budget model (agent only)** — the agent gains `budget_get`, `budget_cascade`, and `budget_edit`. `budget_get` evaluates every receiver requirements mode through the stored RF budget and reports each reached output's gain, noise-figure, output-power, and IIP3 verdict plus any unreached outputs; `budget_cascade` pages one mode/output's per-frequency series (at most 50 points) with an interned reasons table; `budget_edit` replaces the whole format-1 budget with a checkpoint, keeping stable mode ids so a rename keeps its budget. A budget Pass is a prediction, not a verification. The budget panel is not part of this change.
 - **The menu bar shows the running build's version** — the right edge of the menu bar ends with `0.30.0 (9cad3be)`: the project version from `CMakeLists.txt` and the short commit captured at configure time. The project and Git labels shorten to keep the stamp visible on a narrow window.
 
 ### Changed

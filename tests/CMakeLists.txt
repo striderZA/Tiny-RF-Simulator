@@ -742,6 +742,14 @@ add_standalone_test(test_agent_requirements
 )
 target_include_directories(test_agent_requirements PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
 
+# Standalone, UI-free coverage for the budget_get, budget_cascade, and budget_edit tools: verdict
+# encoding, paging and check order, checkpoint and revision behavior, and the protocol size cap.
+add_standalone_test(test_agent_budget
+    SOURCES test_agent_budget.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_budget PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+
 # Standalone app-level project_save and project_load round trips through RfSimulatorApp: real
 # .rfsim files, the GUI save and load paths, checkpoint clearing, and reset-on-failure.
 add_standalone_test(test_agent_project

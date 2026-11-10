@@ -56,6 +56,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_agent_app$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_project$' --output-on-failure`
 - `ctest --test-dir build -R '^test_agent_requirements$' --output-on-failure` — `requirements_get` and `requirements_edit` host routing, checkpoint and revision behavior, argument-check order, and invalid data.
+- `ctest --test-dir build -R '^test_agent_budget$' --output-on-failure` — `budget_get`, `budget_cascade`, and `budget_edit` verdict encoding, paging and check order, one-checkpoint edits, orphan mode records, and the 1 MiB protocol cap.
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_agent_packaged_acceptance$' --output-on-failure`
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)

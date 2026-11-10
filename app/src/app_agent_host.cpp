@@ -198,6 +198,19 @@ bool AppAgentHost::setReceiverRequirements(const ReceiverRequirementsSet &set) {
     return true;
 }
 
+std::optional<RfBudget> AppAgentHost::rfBudget() const {
+    if (!m_hooks.rf_budget)
+        return std::nullopt;
+    return m_hooks.rf_budget();
+}
+
+bool AppAgentHost::setRfBudget(const RfBudget &budget) {
+    if (!m_hooks.set_rf_budget)
+        return false;
+    m_hooks.set_rf_budget(budget);
+    return true;
+}
+
 // ======================================================================
 // Activity log
 // ======================================================================

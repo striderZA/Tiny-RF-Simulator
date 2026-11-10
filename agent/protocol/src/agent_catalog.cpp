@@ -578,6 +578,157 @@ Json receiverRequirementsSuccessSchema() {
         {"epoch", "revision", "dirty", "requirements", "invalid_reason"});
 }
 
+Json budgetStatusSchema() {
+    return enumSchema({"not_configured", "invalid_configuration", "incomplete", "pass", "fail"});
+}
+
+Json budgetMetricSchema() {
+    return objectSchema(
+        properties(
+            {{"status", budgetStatusSchema()},
+             {"min", nullableSchema(numberSchema("Smallest observed value; null when none."))},
+             {"max", nullableSchema(numberSchema("Largest observed value; null when none."))}}),
+        {"status", "min", "max"});
+}
+
+Json budgetVerdictSchema() {
+    return objectSchema(properties({{"overall", budgetStatusSchema()},
+                                    {"gain", budgetMetricSchema()},
+                                    {"noise_figure", budgetMetricSchema()},
+                                    {"output_power", budgetMetricSchema()},
+                                    {"iip3", budgetMetricSchema()}}),
+                        {"overall", "gain", "noise_figure", "output_power", "iip3"});
+}
+
+Json budgetModeResultSchema() {
+    return objectSchema(
+        properties({{"mode_id", integerSchema("Stable requirements mode id.", 1)},
+                    {"name", stringSchema("Mode name.")},
+                    {"status", enumSchema({"budgeted", "not_budgeted", "not_configured"})},
+                    {"outputs", arraySchema(objectSchema(
+                                    properties({{"output", stringSchema("Budget output name.")},
+                                                {"verdict", budgetVerdictSchema()}}),
+                                    {"output", "verdict"}))},
+                    {"unreached",
+                     arraySchema(objectSchema(
+                         properties({{"output", stringSchema("Budget output name.")},
+                                     {"reason", stringSchema("Why the output is not reached.")}}),
+                         {"output", "reason"}))}}),
+        {"mode_id", "name", "status", "outputs", "unreached"});
+}
+
+Json budgetSeriesSchema() {
+    return objectSchema(
+        properties(
+            {{"values", arraySchema(nullableSchema(
+                            numberSchema("Per-point value; null when the point has no value.")))},
+             {"reasons", arraySchema(integerSchema("Index into the result's reasons table.", 0))}}),
+        {"values", "reasons"});
+}
+
+Json budgetStageResultSchema() {
+    Json fields = properties({});
+    for (const std::string_view name :
+         {"gain_db", "nf_db", "oip3_dbm", "cumulative_gain_db", "cumulative_nf_db",
+          "cumulative_iip3_dbm", "level_dbm", "nf_share_percent", "p1db_headroom_db"}) {
+        fields[std::string(name)] = budgetSeriesSchema();
+    }
+    fields["stage"] = stringSchema("Stage name.");
+    fields["input_port"] = integerSchema("Input port index used on this route.", 0);
+    fields["output_port"] = integerSchema("Output port index used on this route.", 0);
+    return objectSchema(std::move(fields),
+                        {"stage", "input_port", "output_port", "gain_db", "nf_db", "oip3_dbm",
+                         "cumulative_gain_db", "cumulative_nf_db", "cumulative_iip3_dbm",
+                         "level_dbm", "nf_share_percent", "p1db_headroom_db"});
+}
+
+Json budgetFeedSchema() {
+    return nullableSchema(objectSchema(
+        properties({{"from", enumSchema({"input", "stage"})},
+                    {"stage", stringSchema("Source stage name; omitted for the budget input.")},
+                    {"port", integerSchema("Source stage output port.", 0)}}),
+        {"from"}));
+}
+
+Json budgetStageSchema() {
+    return objectSchema(
+        properties(
+            {{"name", stringSchema("Unique stage name.")},
+             {"type", stringSchema("Supported budget stage type.")},
+             {"source", enumSchema({"idealized", "library"})},
+             {"part_number", stringSchema("Library part number; library stages only.")},
+             {"params", Json{{"type", "object"},
+                             {"description", "Idealized engine parameters; idealized only."}}},
+             {"inputs", arraySchema(budgetFeedSchema(), 1, 2)}}),
+        {"name", "type", "inputs"});
+}
+
+Json budgetOutputSchema() {
+    return objectSchema(properties({{"name", stringSchema("Unique output name.")},
+                                    {"stage", stringSchema("Stage that feeds the output.")},
+                                    {"port", integerSchema("Stage output port.", 0)}}),
+                        {"name", "stage", "port"});
+}
+
+Json budgetModeRecordSchema() {
+    return objectSchema(
+        properties({{"mode_id", integerSchema("Stable requirements mode id.", 1)},
+                    {"overrides",
+                     Json{{"type", "object"},
+                          {"description",
+                           "Stage name to parameter overrides, applied for this mode only."}}}}),
+        {"mode_id", "overrides"});
+}
+
+Json rfBudgetObjectSchema() {
+    return objectSchema(
+        properties({{"format", integerSchema("Budget format: 1.")},
+                    {"point_count", integerSchema("Measured points per sweep.", 2, 401)},
+                    {"stages", arraySchema(budgetStageSchema(), 0, 32)},
+                    {"outputs", arraySchema(budgetOutputSchema(), 0, 8)},
+                    {"modes", arraySchema(budgetModeRecordSchema(), 0, 64)}}),
+        {"format", "point_count", "stages", "outputs", "modes"});
+}
+
+Json rfBudgetSuccessSchema() {
+    return objectSchema(
+        properties({{"epoch", integerSchema("Current project epoch.", 0)},
+                    {"revision", integerSchema("Project revision after the call.", 0)},
+                    {"dirty", booleanSchema("True while the project has unsaved changes.")},
+                    {"budget", rfBudgetObjectSchema()},
+                    {"invalid_reason",
+                     nullableSchema(stringSchema(
+                         "Diagnostic for retained malformed project data; null when the budget is "
+                         "valid. When set, `budget` is the empty format-1 object."))},
+                    {"not_evaluated_reason",
+                     nullableSchema(stringSchema(
+                         "Why no mode could be evaluated; null when the modes were evaluated."))},
+                    {"modes", arraySchema(budgetModeResultSchema())},
+                    {"orphaned_mode_ids", arraySchema(integerSchema(
+                                              "Budget record id with no requirements mode.", 1))}}),
+        {"epoch", "revision", "dirty", "budget", "invalid_reason", "not_evaluated_reason", "modes",
+         "orphaned_mode_ids"});
+}
+
+Json budgetCascadeSuccessSchema() {
+    return objectSchema(
+        properties(
+            {{"epoch", integerSchema("Current project epoch.", 0)},
+             {"mode_id", integerSchema("Evaluated requirements mode id.", 1)},
+             {"mode_name", stringSchema("Evaluated mode name.")},
+             {"output", stringSchema("Evaluated budget output name.")},
+             {"point_count", integerSchema("Measured points on the whole grid.", 0)},
+             {"start_index", integerSchema("First point in this page.", 0)},
+             {"next_index", nullableSchema(integerSchema(
+                                "First point of the next page; null on the last page.", 0))},
+             {"frequencies_Hz", arraySchema(numberSchema("Sweep frequency in Hz."))},
+             {"reasons", arraySchema(stringSchema("Interned refusal sentence; index 0 is empty."))},
+             {"stages", arraySchema(budgetStageResultSchema())},
+             {"verdict", budgetVerdictSchema()}}),
+        {"epoch", "mode_id", "mode_name", "output", "point_count", "start_index", "next_index",
+         "frequencies_Hz", "reasons", "stages", "verdict"});
+}
+
 Json projectFileSuccessSchema(bool include_copied_data_files = false) {
     if (include_copied_data_files) {
         return objectSchema(
@@ -653,7 +804,8 @@ nlohmann::json agentErrorSchema() {
                    {"reason",
                     enumSchema({"UNKNOWN_KEY", "TYPE_MISMATCH", "READ_ONLY", "ENGINE_ADJUSTED",
                                 "DESERIALIZE_FAILED", "RESTORE_FAILED", "INPUT_OCCUPIED", "CYCLE",
-                                "ADC_TO_PFB_ONLY", "POLICY", "NO_PATH", "NO_VALID_POINTS"})},
+                                "ADC_TO_PFB_ONLY", "POLICY", "NO_PATH", "NO_VALID_POINTS",
+                                "NOT_EVALUATED", "NOT_BUDGETED", "NOT_CONFIGURED", "NOT_REACHED"})},
                    {"requested", errorDetailValueSchema()},
                    {"stored", errorDetailValueSchema()},
                    {"limit", integerSchema("Maximum allowed value.", 0)}}))}}),
@@ -951,7 +1103,56 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                                                       {"band_stop_hz", 2.0e9},
                                                       {"gain_min_db", 10.0},
                                                       {"gain_max_db", 20.0}}}}})}}}}),
-             receiverRequirementsSuccessSchema(), destructiveAnnotations())};
+             receiverRequirementsSuccessSchema(), destructiveAnnotations()),
+        tool("budget_get", "Get RF Budget",
+             "Read the RF budget, its mode records, and each requirements mode's predicted "
+             "cascade verdict. A pass is a prediction, not a verification. Results carry the "
+             "project epoch, revision, and dirty state; edits never change the epoch. Use "
+             "requirements_get for mode ids.",
+             inputSchema(properties({}), {}, Json::object()), rfBudgetSuccessSchema(),
+             readOnlyAnnotations()),
+        tool("budget_cascade", "Read RF Budget Cascade",
+             "Read one mode's per-frequency cascade through one budget output. Series values are "
+             "null when a point has no value; the reasons table explains them. Page with "
+             "start_index and count (at most 50 points). Takes no epoch.",
+             inputSchema(
+                 properties(
+                     {{"mode_id", integerSchema("Stable requirements mode id from budget_get.", 1)},
+                      {"output", stringSchema("Budget output name.")},
+                      {"start_index", withDefault(integerSchema("First point to return.", 0), 0)},
+                      {"count",
+                       withDefault(integerSchema("Maximum points to return.", 1, 50), 50)}}),
+                 {"mode_id", "output"},
+                 Json{{"mode_id", 1}, {"output", "RX"}, {"start_index", 0}, {"count", 50}}),
+             budgetCascadeSuccessSchema(), readOnlyAnnotations()),
+        tool("budget_edit", "Edit RF Budget",
+             "Replace the whole RF budget with a complete format-1 object. An edit that matches "
+             "the stored budget changes nothing and opens no checkpoint. Use budget_get first; "
+             "send each mode record's id back to keep it, and send the current epoch with its "
+             "revision so a project change since that read returns BUSY.",
+             inputSchema(
+                 properties(
+                     {{"epoch", integerSchema("Epoch from the latest budget_get.", 0)},
+                      {"revision", integerSchema("Revision from the latest budget_get; optional. "
+                                                 "A project change since that read returns BUSY.",
+                                                 0)},
+                      {"budget", rfBudgetObjectSchema()}}),
+                 {"epoch", "budget"},
+                 Json{{"epoch", 0},
+                      {"budget",
+                       {{"format", 1},
+                        {"point_count", 201},
+                        {"stages",
+                         Json::array({Json{{"name", "LNA"},
+                                           {"type", "amplifier"},
+                                           {"source", "idealized"},
+                                           {"params", {{"gain_dB", 20.0}}},
+                                           {"inputs", Json::array({Json{{"from", "input"}}})}}})},
+                        {"outputs",
+                         Json::array({Json{{"name", "RX"}, {"stage", "LNA"}, {"port", 0}}})},
+                        {"modes",
+                         Json::array({Json{{"mode_id", 1}, {"overrides", Json::object()}}})}}}}),
+             rfBudgetSuccessSchema(), destructiveAnnotations())};
     return catalog;
 }
 
