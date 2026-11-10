@@ -254,20 +254,22 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     ImGui::SameLine();
     if (ImGui::Button("Remove mode")) {
         if (has_modes) {
-            m_remove_name = set.modes[selected_index].name;
+            m_remove_id = set.modes[selected_index].id;
             ImGui::OpenPopup(kRemoveModeTitle);
         } else {
             m_error = "Add a mode before removing.";
         }
     }
     ImGui::EndDisabled();
-    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by
-    // name when confirmed, so a set changed meanwhile never removes a different mode.
+    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
+    // id when confirmed, so a set changed meanwhile never removes a different mode.
     if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Remove mode \"%s\" and its requirement limits?", m_remove_name.c_str());
+        const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
+        ImGui::Text("Remove mode \"%s\" and its requirement limits?",
+                    pending ? pending->name.c_str() : "");
         if (ImGui::Button("Remove", ImVec2(120.0f, 0.0f))) {
             for (std::size_t index = 0; index < set.modes.size(); ++index) {
-                if (set.modes[index].name == m_remove_name &&
+                if (set.modes[index].id == m_remove_id &&
                     removeReceiverRequirementsMode(set, index)) {
                     resetDraft(set);
                     if (onChange)

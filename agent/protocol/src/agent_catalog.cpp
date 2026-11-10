@@ -549,14 +549,16 @@ Json receiverRequirementConfigSchema() {
 
 Json receiverRequirementsModeSchema() {
     return objectSchema(
-        properties({{"name", stringSchema("Unique mode name, up to 64 characters, without '#'.")},
-                    {"config", nullableSchema(receiverRequirementConfigSchema())}}),
+        properties(
+            {{"id", integerSchema("Stable mode id from requirements_get; omit to add a mode.", 1)},
+             {"name", stringSchema("Unique mode name, up to 64 characters, without '#'.")},
+             {"config", nullableSchema(receiverRequirementConfigSchema())}}),
         {"name", "config"});
 }
 
 Json receiverRequirementsObjectSchema() {
     return objectSchema(
-        properties({{"format", integerSchema("Requirements format; only 2 is accepted.")},
+        properties({{"format", integerSchema("Requirements format: 3, or 2 without mode ids.")},
                     {"selected_mode",
                      integerSchema("Zero-based selected mode; 0 when there are no modes.", 0)},
                     {"modes", arraySchema(receiverRequirementsModeSchema(), 0, 64)}}),
@@ -572,7 +574,7 @@ Json receiverRequirementsSuccessSchema() {
                     {"invalid_reason",
                      nullableSchema(stringSchema(
                          "Diagnostic for retained malformed project data; null when the modes are "
-                         "valid. When set, `requirements` is the empty format-2 object."))}}),
+                         "valid. When set, `requirements` is the empty format-3 object."))}}),
         {"epoch", "revision", "dirty", "requirements", "invalid_reason"});
 }
 
@@ -924,9 +926,11 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
              inputSchema(properties({}), {}, Json::object()), receiverRequirementsSuccessSchema(),
              readOnlyAnnotations()),
         tool("requirements_edit", "Edit Receiver Requirements",
-             "Replace every receiver requirement mode and the selection with a complete format-2 "
+             "Replace every receiver requirement mode and the selection with a complete format-3 "
              "object. An edit that matches the stored set changes nothing and opens no checkpoint. "
-             "Use requirements_get first, then send the edited object with the current epoch. "
+             "Use requirements_get first. Send each mode's id back to keep it, so a renamed mode "
+             "keeps its budget; omit id to add a mode. Send the edited object with the current "
+             "epoch. "
              "Pass its revision too, so a project change since that read returns BUSY.",
              inputSchema(
                  properties({{"epoch", integerSchema("Epoch from the latest requirements_get.", 0)},
@@ -938,9 +942,10 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                  {"epoch", "requirements"},
                  Json{{"epoch", 0},
                       {"requirements",
-                       {{"format", 2},
+                       {{"format", 3},
                         {"selected_mode", 0},
-                        {"modes", Json::array({Json{{"name", "Default"},
+                        {"modes", Json::array({Json{{"id", 1},
+                                                    {"name", "Default"},
                                                     {"config",
                                                      {{"band_start_hz", 1.0e9},
                                                       {"band_stop_hz", 2.0e9},

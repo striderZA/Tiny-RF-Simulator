@@ -205,6 +205,7 @@ class RfSimulatorApp {
         if (!(config == ReceiverRequirementsConfig{}))
             mode.config = config;
         m_receiver_requirements.modes.push_back(std::move(mode));
+        assignReceiverRequirementsModeIds(m_receiver_requirements);
     }
     const std::string &testReceiverRequirementsError() const {
         return m_receiver_requirements_widget->error();

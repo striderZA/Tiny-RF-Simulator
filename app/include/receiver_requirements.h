@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -62,13 +63,15 @@ constexpr std::size_t kMaxReceiverRequirementModeNameLength = 64;
 struct ReceiverRequirementsMode {
     std::string name;
     std::optional<ReceiverRequirementsConfig> config; // nullopt = not configured
+    std::uint32_t id = 0;                             // stable identity; 0 only before assignment
     bool operator==(const ReceiverRequirementsMode &) const = default;
 };
 
 struct ReceiverRequirementsSet {
     std::vector<ReceiverRequirementsMode> modes;
-    std::size_t selected = 0;   // 0 when modes is empty
-    std::string invalid_reason; // set only for retained malformed project data; modes empty
+    std::size_t selected = 0;       // 0 when modes is empty
+    std::string invalid_reason;     // set only for retained malformed project data; modes empty
+    std::uint32_t next_mode_id = 1; // the next id to assign; ids are never reused
     bool operator==(const ReceiverRequirementsSet &) const = default;
 };
 
@@ -122,9 +125,19 @@ receiverRequirementsModeNameError(const ReceiverRequirementsSet &set, std::strin
                                   std::optional<std::size_t> except_index);
 std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequirementsSet &set);
 
-constexpr int kReceiverRequirementsFormat = 2;
+constexpr int kReceiverRequirementsFormat = 3;
 nlohmann::json receiverRequirementsToJson(const ReceiverRequirementsSet &set);
 ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value);
+// Gives each mode with id 0 the next id, in list order, after raising next_mode_id past every id.
+void assignReceiverRequirementsModeIds(ReceiverRequirementsSet &set);
+const ReceiverRequirementsMode *findReceiverRequirementsMode(const ReceiverRequirementsSet &set,
+                                                             std::uint32_t id);
+// Decodes an agent edit (format 2 or 3) against the stored set. Format 3 modes name a stored id,
+// or omit it to add a mode. Format 2 modes keep the id of the stored mode with the same name,
+// ignoring case. Refusals set error_path (a JSON pointer) and error.
+std::optional<ReceiverRequirementsSet>
+receiverRequirementsFromEdit(const nlohmann::json &value, const ReceiverRequirementsSet &current,
+                             std::string &error_path, std::string &error);
 bool addReceiverRequirementsMode(ReceiverRequirementsSet &set, std::string_view name,
                                  std::string &error);
 bool renameReceiverRequirementsMode(ReceiverRequirementsSet &set, std::size_t index,
