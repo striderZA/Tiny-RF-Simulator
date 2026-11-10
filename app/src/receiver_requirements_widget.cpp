@@ -14,6 +14,7 @@ constexpr const char *kLabels[] = {
 
 constexpr ImVec4 kErrorColor(1.0f, 0.35f, 0.35f, 1.0f);
 constexpr ImVec4 kPassColor(0.25f, 0.85f, 0.35f, 1.0f);
+constexpr const char *kRemoveModeTitle = "Remove mode?";
 
 const char *statusText(ReceiverRequirementStatus status) {
     switch (status) {
@@ -252,13 +253,35 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     }
     ImGui::SameLine();
     if (ImGui::Button("Remove mode")) {
-        if (removeReceiverRequirementsMode(set, set.selected)) {
-            resetDraft(set);
-            if (onChange)
-                onChange();
+        if (has_modes) {
+            m_remove_name = set.modes[selected_index].name;
+            ImGui::OpenPopup(kRemoveModeTitle);
+        } else {
+            m_error = "Add a mode before removing.";
         }
     }
     ImGui::EndDisabled();
+    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by
+    // name when confirmed, so a set changed meanwhile never removes a different mode.
+    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Remove mode \"%s\" and its requirement limits?", m_remove_name.c_str());
+        if (ImGui::Button("Remove", ImVec2(120.0f, 0.0f))) {
+            for (std::size_t index = 0; index < set.modes.size(); ++index) {
+                if (set.modes[index].name == m_remove_name &&
+                    removeReceiverRequirementsMode(set, index)) {
+                    resetDraft(set);
+                    if (onChange)
+                        onChange();
+                    break;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
     // Both lines always occupy their space, so an appearing hint or error never
     // shifts the limit fields under the mouse or a scripted click.
     if (unapplied)

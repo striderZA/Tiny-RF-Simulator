@@ -2609,10 +2609,25 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(set.modes[1].name == "Band 1 Low Gain");
         IM_CHECK(s_app->projectRevision() > revision);
 
-        // 5. Removing the selected mode leaves the other one selected.
+        // 5. Removing asks first: Keep mode leaves the modes as they were, and Remove deletes the
+        // selected mode, leaving the other one selected.
         revision = s_app->projectRevision();
         ctx->ScrollToTop("//Receiver Requirements");
         ctx->ItemClick("Remove mode");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemClick("Keep mode");
+        ctx->Yield(3);
+        IM_CHECK(set.modes.size() == 2);
+        IM_CHECK_EQ(s_app->projectRevision(), revision);
+
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemClick("Remove mode");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemClick("Remove");
         waitForUi(ctx, [&]() { return set.modes.size() == 1; });
         IM_CHECK(set.modes.size() == 1);
         IM_CHECK(set.modes[0].name == "Band 1 Low Gain");

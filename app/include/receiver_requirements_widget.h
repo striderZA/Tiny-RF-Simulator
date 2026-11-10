@@ -35,4 +35,5 @@ class ReceiverRequirementsWidget {
     bool m_initialized = false;
     std::string m_error;
     std::string m_notice;
+    std::string m_remove_name;
 };
