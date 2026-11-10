@@ -906,7 +906,7 @@ std::string normalizeReceiverRequirementsOverflowNumbers(const std::string &text
         const auto value_end = jsonValueEnd(text, value_start);
         if (!value_end)
             return text;
-        if (key == "receiver_requirements")
+        if (key == "receiver_requirements" || key == "rf_budget")
             values.push_back({value_start, *value_end});
         cursor = *value_end;
         while (cursor < text.size() && isJsonWhitespace(text[cursor]))
@@ -934,13 +934,15 @@ std::string normalizeReceiverRequirementsOverflowNumbers(const std::string &text
 
 ProjectSerializer::ProjectSerializer(CircuitRuntime &runtime, GraphEditorActions &editor_actions,
                                      NodeGraphWidget &graph_widget, PFBViewManager &pfb_views,
-                                     ReceiverRequirementsSet &receiver_requirements, bool &show_log,
-                                     bool &show_spectrum, bool &show_properties,
-                                     bool &show_node_editor, NetworkAnalyzerEngine &na_engine)
+                                     ReceiverRequirementsSet &receiver_requirements,
+                                     RfBudget &rf_budget, bool &show_log, bool &show_spectrum,
+                                     bool &show_properties, bool &show_node_editor,
+                                     NetworkAnalyzerEngine &na_engine)
     : m_runtime(runtime), m_editor_actions(editor_actions), m_graph_widget(graph_widget),
-      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements), m_show_log(show_log),
-      m_show_spectrum(show_spectrum), m_show_properties(show_properties),
-      m_show_node_editor(show_node_editor), m_na_engine(na_engine) {}
+      m_pfb_views(pfb_views), m_receiver_requirements(receiver_requirements),
+      m_rf_budget(rf_budget), m_show_log(show_log), m_show_spectrum(show_spectrum),
+      m_show_properties(show_properties), m_show_node_editor(show_node_editor),
+      m_na_engine(na_engine) {}
 
 const ComponentRegistry &ProjectSerializer::components() const { return m_runtime.components(); }
 
@@ -1066,6 +1068,8 @@ nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
     root["version"] = 1;
     if (!m_receiver_requirements.modes.empty() || !m_receiver_requirements.invalid_reason.empty())
         root["receiver_requirements"] = receiverRequirementsToJson(m_receiver_requirements);
+    if (!m_rf_budget.empty())
+        root["rf_budget"] = rfBudgetToJson(m_rf_budget);
 
     // Synchronize engine nodes before saving, including nodes added without a render frame.
     // editorPositionForSave() gates live reads to registered visible nodes; unregistered nodes
@@ -1375,6 +1379,12 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
             if (!m_receiver_requirements.invalid_reason.empty())
                 LOG_WARN("Invalid receiver requirements in project file %s: %s", path.c_str(),
                          m_receiver_requirements.invalid_reason.c_str());
+        }
+        if (root.contains("rf_budget")) {
+            m_rf_budget = rfBudgetFromJson(root["rf_budget"]);
+            if (!m_rf_budget.invalid_reason.empty())
+                LOG_WARN("Invalid RF budget in project file %s: %s", path.c_str(),
+                         m_rf_budget.invalid_reason.c_str());
         }
 
         // Map: type string \u2192 factory lambda
@@ -1741,6 +1751,7 @@ void ProjectSerializer::reset() {
     m_runtime.clearComponentsAndResetIds();
     m_editor_actions.resetForProjectReplacement();
     m_receiver_requirements = {};
+    m_rf_budget = {};
 
     // Clear the Network Analyzer's probe points too — otherwise a stale pin
     // id survives into the next project and can alias a newly allocated pin.

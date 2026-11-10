@@ -40,6 +40,7 @@
 #include "receiver_performance_measurement.h"
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
+#include "rf_budget.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -194,6 +195,7 @@ class RfSimulatorApp {
     LayoutManager &testLayoutManager() { return m_layout_manager; }
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsSet &testReceiverRequirements() { return m_receiver_requirements; }
+    RfBudget &testRfBudget() { return m_rf_budget; }
     ReceiverRequirementsState testReceiverRequirementsState() {
         return selectedReceiverRequirementsState(m_receiver_requirements);
     }
@@ -323,6 +325,7 @@ class RfSimulatorApp {
                                                                        m_na_host};
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsSet m_receiver_requirements;
+    RfBudget m_rf_budget;
     std::unique_ptr<ProjectSerializer> m_serializer;
     std::vector<std::string> m_last_saved_data_files;
     GitStatusMonitor m_git_status_monitor;

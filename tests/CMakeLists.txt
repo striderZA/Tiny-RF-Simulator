@@ -611,6 +611,18 @@ add_standalone_test(test_receiver_requirements_project
     LIBS simulator::app
 )
 set_tests_properties(test_receiver_requirements_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone UI-free RF budget model, validation, and JSON coverage.
+add_standalone_test(test_rf_budget
+    SOURCES test_rf_budget.cpp
+    LIBS simulator::editor_services
+)
+# Standalone app/serializer persistence coverage for the RF budget; constructs
+# RfSimulatorApp, so it runs serially like the requirements project test.
+add_standalone_test(test_rf_budget_project
+    SOURCES test_rf_budget_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_rf_budget_project PROPERTIES RUN_SERIAL TRUE)
 # Standalone real-engine coverage for the UI-free receiver measurement engine.
 add_standalone_test(test_receiver_performance_measurements
     SOURCES test_receiver_performance_measurements.cpp

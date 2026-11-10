@@ -30,6 +30,7 @@ add_library(editor_services STATIC
     src/component_type_registry.cpp
     src/component_library.cpp
     src/receiver_requirements.cpp
+    src/rf_budget.cpp
     src/receiver_performance_measurement.cpp
     src/output_snr.cpp
 )
