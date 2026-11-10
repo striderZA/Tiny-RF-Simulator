@@ -11,6 +11,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -126,6 +128,63 @@ CappedBudget cappedBudget() {
 
 double asNumber(const nlohmann::json &value) { return value.get<double>(); }
 
+// A per-process library folder holding definitions the shipped library does not.
+class TempLibrary {
+  public:
+    TempLibrary()
+        : m_root(std::filesystem::temp_directory_path() /
+                 ("agent_budget_library_" + test_temp_paths::processTag() + "_" +
+                  std::to_string(++s_count))) {
+        std::filesystem::create_directories(m_root);
+    }
+    ~TempLibrary() {
+        std::error_code ec;
+        std::filesystem::remove_all(m_root, ec);
+    }
+    TempLibrary(const TempLibrary &) = delete;
+    TempLibrary &operator=(const TempLibrary &) = delete;
+
+    void writeDefinition(const std::string &name, const nlohmann::json &definition) const {
+        std::ofstream out(m_root / name, std::ios::binary);
+        out << definition.dump(2);
+    }
+
+    const std::filesystem::path &root() const { return m_root; }
+
+  private:
+    static inline int s_count = 0;
+    std::filesystem::path m_root;
+};
+
+nlohmann::json amplifierDefinition(const std::string &part_number,
+                                   const nlohmann::json &parameters) {
+    return {{"schema_version", 2},
+            {"type", "amplifier"},
+            {"part_number", part_number},
+            {"manufacturer", "Test"},
+            {"description", "budget agent fixture"},
+            {"parameters", parameters},
+            {"test_conditions", nlohmann::json::object()},
+            {"data_files", nlohmann::json::array()},
+            {"notes", ""}};
+}
+
+// One library amplifier stage with one output, budgeted for mode 1.
+RfBudget libraryBudget(const std::string &part_number) {
+    RfBudget budget;
+    budget.point_count = 5;
+    RfBudgetStage stage;
+    stage.name = "BAD";
+    stage.type = "amplifier";
+    stage.source = RfBudgetStageSource::Library;
+    stage.part_number = part_number;
+    stage.inputs = {fromInput()};
+    budget.stages.push_back(std::move(stage));
+    budget.outputs.push_back({"RX", "BAD", 0});
+    budget.modes.push_back(RfBudgetModeRecord{1, {}});
+    return budget;
+}
+
 } // namespace
 
 TEST_CASE("budget_get reports verdicts per mode and output", "[agent_budget]") {
@@ -194,7 +253,7 @@ TEST_CASE("budget_cascade pages per-frequency series", "[agent_budget]") {
     CHECK(last.structured.at("frequencies_Hz").size() == 1);
 }
 
-TEST_CASE("budget_cascade shows no transmission as null with its reason", "[agent_budget]") {
+TEST_CASE("budget_cascade writes infinities as strings and NaN as null", "[agent_budget]") {
     ApiFixture fixture;
     fixture.host.requirements = twoModeSet();
     fixture.host.rf_budget = stopbandBudget();
@@ -205,10 +264,60 @@ TEST_CASE("budget_cascade shows no transmission as null with its reason", "[agen
     REQUIRE(stages.size() == 2);
     const auto &bpf = stages.at(1);
     CHECK(bpf.at("stage") == "BPF");
-    CHECK(bpf.at("gain_db").at("values").at(0).is_null());
+    // A stopband point is a real -infinity, not an absent value.
+    CHECK(bpf.at("gain_db").at("values").at(0) == "-Infinity");
+    CHECK(bpf.at("nf_db").at("values").at(0) == "Infinity");
+    // NaN still marks a point with no value, and its reason explains it.
+    CHECK(bpf.at("nf_share_percent").at("values").at(0).is_null());
     const auto reason = bpf.at("gain_db").at("reasons").at(0).get<std::uint16_t>();
     CHECK(result.structured.at("reasons").at(reason) ==
           "Stage 'BPF' passes no signal at this frequency.");
+
+    const auto get = fixture.call("budget_get");
+    REQUIRE_FALSE(get.is_error);
+    const auto &gain =
+        get.structured.at("modes").at(0).at("outputs").at(0).at("verdict").at("gain");
+    CHECK(gain.at("min") == "-Infinity");
+}
+
+TEST_CASE("budget_get reports a library part whose engine params throw", "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    TempLibrary library_dir;
+    // `enable_nonlinear` is unchecked by the library schema, so this definition loads but its
+    // engine deserialize() throws; the budget must report a stage reason, not an INTERNAL error.
+    library_dir.writeDefinition(
+        "badnl.json",
+        amplifierDefinition("BADNL-3", {{"gain_dB", 10.0}, {"enable_nonlinear", "yes"}}));
+    fixture.library.scan(library_dir.root().string());
+    fixture.host.rf_budget = libraryBudget("BADNL-3");
+
+    const auto result = fixture.call("budget_get");
+    REQUIRE_FALSE(result.is_error);
+    const auto &mode = result.structured.at("modes").at(0);
+    CHECK(mode.at("mode_id") == 1);
+    CHECK(mode.at("outputs").empty());
+    REQUIRE(mode.at("unreached").size() == 1);
+    const auto reason = mode.at("unreached").at(0).at("reason").get<std::string>();
+    CHECK(reason.find("Library part 'BADNL-3' did not load: ") == 0);
+    CHECK(reason.find("type must be boolean") != std::string::npos);
+}
+
+TEST_CASE("budget_edit treats an integer parameter equal to its float value", "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.rf_budget = stageBudget();
+    const auto before = fixture.commands.revision();
+
+    Json payload = rfBudgetToJson(stageBudget());
+    REQUIRE(payload["stages"][0]["params"]["gain_dB"] == 14.0);
+    payload["stages"][0]["params"]["gain_dB"] = 14; // same number, integer JSON type
+    const auto result =
+        fixture.call("budget_edit", {{"epoch", fixture.api.epoch()}, {"budget", payload}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 0);
+    CHECK(fixture.host.checkpoint_commits == 0);
 }
 
 TEST_CASE("budget_cascade refuses an unreached output with NOT_REACHED", "[agent_budget]") {

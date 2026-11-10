@@ -327,6 +327,16 @@ TEST_CASE("refusals name the offending stage", "[rf_budget][model]") {
         cases.push_back({"mode_unknown_stage", budget, "Mode 1 overrides unknown stage 'NOPE'."});
     }
     {
+        // Stage names are unique case-insensitively, but an override key is matched exactly:
+        // 'amp1' is not a name the budget can apply, so accepting it would silently drop it.
+        RfBudget budget = chainBudget();
+        budget.stages[0].name = "AMP1";
+        budget.stages[1].inputs = {fromStage("AMP1")};
+        budget.modes.push_back({1, {{"amp1", {{"atten_dB", 4.0}}}}});
+        cases.push_back(
+            {"mode_override_case_mismatch", budget, "Mode 1 overrides unknown stage 'amp1'."});
+    }
+    {
         RfBudget budget = chainBudget();
         budget.modes.push_back(
             {1, {{"ATT", {{"atten_dB", std::numeric_limits<double>::infinity()}}}}});
@@ -370,6 +380,24 @@ TEST_CASE("decode errors keep only the reason", "[rf_budget][model]") {
                          {"outputs", nlohmann::json::array(
                                          {{{"name", "RX"}, {"stage", "LNA"}, {"port", 1}}})}},
           "Output 'RX' reads port 1 of stage 'LNA', which has 1 outputs."}},
+        {"input_port_above_int",
+         {nlohmann::json{
+              {"format", 1},
+              {"stages", nlohmann::json::array(
+                             {{{"name", "LNA"},
+                               {"type", "amplifier"},
+                               {"source", "idealized"},
+                               {"inputs", nlohmann::json::array(
+                                              {{{"from", "input"}, {"port", 4294967296}}})}}})},
+              {"outputs", nlohmann::json::array({output})}},
+          "Stage 1: Stage input 0: port must be a non-negative integer."}},
+        {"output_port_above_int",
+         {nlohmann::json{
+              {"format", 1},
+              {"stages", nlohmann::json::array({stage})},
+              {"outputs",
+               nlohmann::json::array({{{"name", "RX"}, {"stage", "LNA"}, {"port", 4294967296}}})}},
+          "Output 1: Output port must be a non-negative integer."}},
     };
 
     for (const auto &[label, entry] : cases) {
@@ -388,6 +416,17 @@ TEST_CASE("decode errors keep only the reason", "[rf_budget][model]") {
                                       {"outputs", nlohmann::json::array({output})}};
     CHECK(rfBudgetFromJson(duplicate_names).invalid_reason ==
           "A stage named 'LNA' already exists.");
+}
+
+TEST_CASE("budget equality compares numbers by value, not by JSON type", "[rf_budget][model]") {
+    RfBudget left = chainBudget();
+    RfBudget right = chainBudget();
+    // ordered_json keeps 20 as an integer and 20.0 as a float, but a parameter means the number.
+    right.stages[0].params["gain_dB"] = 20;
+    CHECK(left == right);
+
+    right.stages[0].params["gain_dB"] = 20.5;
+    CHECK_FALSE(left == right);
 }
 
 TEST_CASE("stage type table matches the engines", "[rf_budget][model]") {

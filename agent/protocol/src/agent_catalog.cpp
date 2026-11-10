@@ -582,12 +582,19 @@ Json budgetStatusSchema() {
     return enumSchema({"not_configured", "invalid_configuration", "incomplete", "pass", "fail"});
 }
 
+// A budget value is a finite number, an infinite value written as a string (JSON has no infinity
+// literal), or null when the point has no value.
+Json budgetValueSchema(std::string_view description) {
+    return Json{
+        {"anyOf", Json::array({numberSchema(description), enumSchema({"Infinity", "-Infinity"}),
+                               Json{{"type", "null"}}})}};
+}
+
 Json budgetMetricSchema() {
     return objectSchema(
-        properties(
-            {{"status", budgetStatusSchema()},
-             {"min", nullableSchema(numberSchema("Smallest observed value; null when none."))},
-             {"max", nullableSchema(numberSchema("Largest observed value; null when none."))}}),
+        properties({{"status", budgetStatusSchema()},
+                    {"min", budgetValueSchema("Smallest observed value; null when none.")},
+                    {"max", budgetValueSchema("Largest observed value; null when none.")}}),
         {"status", "min", "max"});
 }
 
@@ -620,8 +627,8 @@ Json budgetModeResultSchema() {
 Json budgetSeriesSchema() {
     return objectSchema(
         properties(
-            {{"values", arraySchema(nullableSchema(
-                            numberSchema("Per-point value; null when the point has no value.")))},
+            {{"values", arraySchema(budgetValueSchema("Per-point value; null when the "
+                                                      "point has no value."))},
              {"reasons", arraySchema(integerSchema("Index into the result's reasons table.", 0))}}),
         {"values", "reasons"});
 }
@@ -1112,8 +1119,9 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
              readOnlyAnnotations()),
         tool("budget_cascade", "Read RF Budget Cascade",
              "Read one mode's per-frequency cascade through one budget output. Series values are "
-             "null when a point has no value; the reasons table explains them. Page with "
-             "start_index and count (at most 50 points). Takes no epoch.",
+             "numbers; an infinite value is the string \"Infinity\" or \"-Infinity\", and null "
+             "means the point has no value; the reasons table explains null and infinite points. "
+             "Page with start_index and count (at most 50 points). Takes no epoch.",
              inputSchema(
                  properties(
                      {{"mode_id", integerSchema("Stable requirements mode id from budget_get.", 1)},

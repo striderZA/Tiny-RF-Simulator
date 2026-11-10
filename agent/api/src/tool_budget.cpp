@@ -6,6 +6,7 @@
 #include "rf_budget_stage.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -158,10 +159,21 @@ std::string_view modeStatusName(RfBudgetModeStatus status) {
     return "not_budgeted";
 }
 
+// Budget results keep ±infinity as a real value. JSON has no infinity literal, so the protocol
+// writes them as strings; NaN still marks a point with no value. Other tools keep the shared
+// agentNumber() contract, where every non-finite value reads as null.
+Json budgetNumber(double value) {
+    if (std::isnan(value))
+        return Json(nullptr);
+    if (std::isinf(value))
+        return value > 0.0 ? Json("Infinity") : Json("-Infinity");
+    return Json(value);
+}
+
 Json metricJson(const ReceiverMetricEvaluation &metric) {
     return {{"status", std::string(requirementStatusName(metric.status))},
-            {"min", metric.observed_min ? agentNumber(*metric.observed_min) : Json(nullptr)},
-            {"max", metric.observed_max ? agentNumber(*metric.observed_max) : Json(nullptr)}};
+            {"min", metric.observed_min ? budgetNumber(*metric.observed_min) : Json(nullptr)},
+            {"max", metric.observed_max ? budgetNumber(*metric.observed_max) : Json(nullptr)}};
 }
 
 Json verdictJson(const ReceiverRequirementsEvaluation &verdict) {
@@ -183,7 +195,7 @@ Json seriesJson(const RfBudgetSeries &series, std::size_t start, std::size_t cou
     Json values = Json::array();
     Json reasons = Json::array();
     for (std::size_t index = start; index < start + count; ++index) {
-        values.push_back(agentNumber(series.values[index]));
+        values.push_back(budgetNumber(series.values[index]));
         reasons.push_back(series.reasons[index]);
     }
     return {{"values", std::move(values)}, {"reasons", std::move(reasons)}};

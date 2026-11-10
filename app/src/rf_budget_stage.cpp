@@ -153,9 +153,17 @@ RfBudgetStageEvaluator::buildEntry(const RfBudgetStage &stage,
                 m_reasons.add("Library part '" + stage.part_number + "' (" + stage.type +
                               ") matches " + std::to_string(matches.size()) + " library entries.");
         } else {
-            const std::vector<std::string> issues =
-                m_library.applyDefinition(*matches.front(), *engine);
-            if (!issues.empty())
+            std::vector<std::string> issues;
+            try {
+                issues = m_library.applyDefinition(*matches.front(), *engine);
+            } catch (const std::exception &e) {
+                // A library JSON can carry a wrong-typed engine-state key; the library's own
+                // instantiate() path rolls back on this throw, so it is kept there and turned
+                // into a per-stage reason here.
+                entry->stage_reason = m_reasons.add("Library part '" + stage.part_number +
+                                                    "' did not load: " + e.what() + ".");
+            }
+            if (entry->stage_reason == 0 && !issues.empty())
                 entry->stage_reason = m_reasons.add(join(issues));
         }
     } else {

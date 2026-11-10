@@ -368,6 +368,36 @@ TEST_CASE("library part whose file does not load has no values", "[rf_budget][st
     }
 }
 
+TEST_CASE("a library part whose engine params throw becomes a per-stage reason",
+          "[rf_budget][stage]") {
+    LibraryDir dir;
+    // `enable_nonlinear` is an engine-state key the library schema does not type-check, so a
+    // hand-written definition can carry a string and make deserialize() throw.
+    dir.writeDefinition(
+        "badnl.json",
+        amplifierDefinition("BADNL-1", {{"gain_dB", 10.0}, {"enable_nonlinear", "yes"}}));
+    ComponentLibrary library;
+    library.scan(dir.root().string());
+    REQUIRE(findPart(library, "BADNL-1"));
+
+    RfBudgetReasonTable reasons;
+    RfBudgetStageEvaluator evaluator(library, reasons);
+    const auto frequencies = grid(1.0e9, 2.0e9, 5);
+    RfBudgetStageResponse response;
+    REQUIRE_NOTHROW(response = evaluator.evaluate(libraryStage("BAD", "amplifier", "BADNL-1"),
+                                                  nullptr, frequencies, 0));
+
+    REQUIRE(response.stage_reason != 0);
+    const std::string reason = reasons.at(response.stage_reason);
+    CHECK(reason.find("Library part 'BADNL-1' did not load: ") == 0);
+    CHECK(reason.find("type must be boolean") != std::string::npos);
+    REQUIRE(response.gain_dB.size() == 1);
+    for (std::size_t i = 0; i < frequencies.size(); ++i) {
+        CHECK(std::isnan(response.gain_dB[0].values[i]));
+        CHECK(response.gain_dB[0].reasons[i] == response.stage_reason);
+    }
+}
+
 TEST_CASE("AMP intercept outside the file band has no OIP3 value", "[rf_budget][stage]") {
     LibraryDir dir;
     dir.writeFile("table.amp", "S RI R 50\nFREQ GHZ\n1.0 0.5 0.0 2.0 0.0 0.0 0.0 0.3 0.0\n"

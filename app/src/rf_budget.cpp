@@ -67,6 +67,16 @@ std::optional<std::size_t> findStageIndex(const RfBudget &budget, const std::str
     return std::nullopt;
 }
 
+// Mode override keys name a stage exactly: validation accepts only keys the cascade can apply, and
+// the cascade looks the record up with std::map::find, so a case-different key is never applied.
+std::optional<std::size_t> findStageIndexExact(const RfBudget &budget, const std::string &name) {
+    for (std::size_t i = 0; i < budget.stages.size(); ++i) {
+        if (budget.stages[i].name == name)
+            return i;
+    }
+    return std::nullopt;
+}
+
 RfBudget invalidBudget(const std::string &reason) {
     RfBudget budget;
     budget.invalid_reason = reason;
@@ -81,6 +91,9 @@ bool jsonContentEqual(const nlohmann::ordered_json &left, const nlohmann::ordere
     };
     if (absent(left) && absent(right))
         return true;
+    // 20 and 20.0 are the same parameter value; only the JSON number type differs.
+    if (left.is_number() && right.is_number())
+        return left.get<long double>() == right.get<long double>();
     if (left.type() != right.type())
         return false;
     if (left.is_object()) {
@@ -321,7 +334,7 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget) {
                 return "Mode id " + mode_text + " has two budget records.";
         }
         for (const auto &[stage_name, overrides] : record.overrides) {
-            if (!findStageIndex(budget, stage_name))
+            if (!findStageIndexExact(budget, stage_name))
                 return "Mode " + mode_text + " overrides unknown stage '" + stage_name + "'.";
             for (const auto &[key, value] : overrides) {
                 if (!std::isfinite(value))
@@ -493,7 +506,9 @@ RfBudget rfBudgetFromJson(const nlohmann::json &value) {
                     }
                     if (json_input.contains("port")) {
                         long long port = 0;
-                        if (!nonNegativeInteger(json_input["port"], port))
+                        // A value above int range would wrap in the cast and pass the port check.
+                        if (!nonNegativeInteger(json_input["port"], port) ||
+                            port > std::numeric_limits<int>::max())
                             return invalidBudget(input_prefix +
                                                  "port must be a non-negative integer.");
                         feed.port = static_cast<int>(port);
@@ -523,7 +538,9 @@ RfBudget rfBudgetFromJson(const nlohmann::json &value) {
             output.stage = json_output["stage"].get<std::string>();
             if (json_output.contains("port")) {
                 long long port = 0;
-                if (!nonNegativeInteger(json_output["port"], port))
+                // A value above int range would wrap in the cast and pass the port check.
+                if (!nonNegativeInteger(json_output["port"], port) ||
+                    port > std::numeric_limits<int>::max())
                     return invalidBudget(prefix + "Output port must be a non-negative integer.");
                 output.port = static_cast<int>(port);
             }
