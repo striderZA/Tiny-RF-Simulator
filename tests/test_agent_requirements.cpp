@@ -204,3 +204,50 @@ TEST_CASE("requirements_edit refuses misspelled nested keys and names the full p
         CHECK(refused(requirements) == "/requirements/extra");
     }
 }
+
+TEST_CASE("requirements_edit refuses an edit made against an older read", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const std::uint64_t revision = fixture.call("requirements_get").structured.at("revision");
+    // A GUI Apply or circuit edit after the read advances the project revision.
+    fixture.commands.markModified();
+    const auto before = fixture.commands.revision();
+
+    auto next = twoModeSet();
+    next.modes[0].config->nf_max_dB = 9.0;
+    const auto result =
+        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                           {"revision", revision},
+                                           {"requirements", receiverRequirementsToJson(next)}});
+    CHECK(errorFor(result).at("code") == "BUSY");
+    CHECK(*fixture.host.requirements == twoModeSet());
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 0);
+}
+
+TEST_CASE("requirements_edit applies when the revision is current", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const std::uint64_t revision = fixture.call("requirements_get").structured.at("revision");
+
+    auto next = twoModeSet();
+    next.modes[0].config->nf_max_dB = 9.0;
+    const auto result =
+        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                           {"revision", revision},
+                                           {"requirements", receiverRequirementsToJson(next)}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(*fixture.host.requirements == next);
+}
+
+TEST_CASE("requirements_edit rejects a malformed revision", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()},
+                                      {"revision", -1},
+                                      {"requirements", receiverRequirementsToJson(twoModeSet())}});
+    CHECK(errorFor(result).at("code") == "INVALID_ARGUMENT");
+    CHECK(errorFor(result).at("details").at("path") == "/revision");
+    CHECK(fixture.host.checkpoint_begins == 0);
+}

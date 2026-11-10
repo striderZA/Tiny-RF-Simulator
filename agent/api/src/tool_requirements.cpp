@@ -31,7 +31,7 @@ void checkArgumentKeys(const OrderedJson &arguments) {
         invalid("/", "expected an object");
     for (const auto &member : arguments.items()) {
         const std::string_view key = member.key();
-        if (key != "epoch" && key != "requirements")
+        if (key != "epoch" && key != "requirements" && key != "revision")
             invalid("/" + std::string(key), "unknown field");
     }
 }
@@ -83,6 +83,18 @@ void checkRequirementsKeys(const OrderedJson &requirements) {
     }
 }
 
+// The optional revision precondition from requirements_get; absent means no precondition.
+std::optional<std::uint64_t> optionalRevision(const OrderedJson &arguments) {
+    const auto found = arguments.find("revision");
+    if (found == arguments.end())
+        return std::nullopt;
+    if (found->is_number_unsigned())
+        return found->get<std::uint64_t>();
+    if (found->is_number_integer() && found->get<std::int64_t>() >= 0)
+        return static_cast<std::uint64_t>(found->get<std::int64_t>());
+    invalid("/revision", "expected a non-negative integer");
+}
+
 AgentToolResult unavailable(const AgentApi &api) {
     return agentErrorResult(
         AgentError{AgentErrorCode::Internal, "receiver requirements are unavailable"}, api.epoch());
@@ -121,6 +133,7 @@ AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall
         return staleMeasurementEpochError(epoch, api.m_last_replacement_cause,
                                           api.m_undone_summaries);
     checkArgumentKeys(call.arguments);
+    const std::optional<std::uint64_t> revision = optionalRevision(call.arguments);
 
     const auto found = call.arguments.find("requirements");
     if (found == call.arguments.end())
@@ -145,6 +158,13 @@ AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall
         api.m_context.host.receiverRequirements();
     if (!current)
         return unavailable(api);
+    // A revision from requirements_get refuses an edit made against an older read, so a GUI Apply
+    // or circuit edit since then survives. Mode selection does not advance the revision.
+    if (revision && *revision != api.m_context.commands.revision())
+        return agentErrorResult(AgentError{AgentErrorCode::Busy,
+                                           "the project changed since requirements_get; read the "
+                                           "requirements again and retry"},
+                                epoch);
     // An edit that changes nothing opens no checkpoint and leaves the revision alone.
     if (*current == set)
         return requirementsResult(api.epoch(), api.m_context.commands.revision(),

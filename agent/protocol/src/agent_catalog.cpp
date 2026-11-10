@@ -926,9 +926,14 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
         tool("requirements_edit", "Edit Receiver Requirements",
              "Replace every receiver requirement mode and the selection with a complete format-2 "
              "object. An edit that matches the stored set changes nothing and opens no checkpoint. "
-             "Use requirements_get first, then send the edited object with the current epoch.",
+             "Use requirements_get first, then send the edited object with the current epoch. "
+             "Pass its revision too, so a project change since that read returns BUSY.",
              inputSchema(
                  properties({{"epoch", integerSchema("Epoch from the latest requirements_get.", 0)},
+                             {"revision",
+                              integerSchema("Revision from the latest requirements_get; optional. "
+                                            "A project change since that read returns BUSY.",
+                                            0)},
                              {"requirements", receiverRequirementsObjectSchema()}}),
                  {"epoch", "requirements"},
                  Json{{"epoch", 0},
