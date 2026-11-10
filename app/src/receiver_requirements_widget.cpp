@@ -50,6 +50,21 @@ bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDra
            a.input_level_dBm == b.input_level_dBm;
 }
 
+// True when both sets select the same mode with the same name and config, so an unapplied draft
+// of that mode still describes it. A retained invalid set matches only the same diagnostic.
+bool sameSelectedMode(const ReceiverRequirementsSet &a, const ReceiverRequirementsSet &b) {
+    if (a.invalid_reason != b.invalid_reason)
+        return false;
+    const bool has_mode = a.selected < a.modes.size();
+    if (has_mode != (b.selected < b.modes.size()))
+        return false;
+    if (!has_mode)
+        return true;
+    const ReceiverRequirementsMode &mode_a = a.modes[a.selected];
+    const ReceiverRequirementsMode &mode_b = b.modes[b.selected];
+    return mode_a.name == mode_b.name && mode_a.config == mode_b.config;
+}
+
 void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
     switch (receiverRequirementStatusTone(metric.status)) {
     case ReceiverRequirementStatusTone::PassGreen:
@@ -159,15 +174,25 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     fillModeName(set);
     m_initialized = true;
     m_error.clear();
+    m_notice.clear();
 }
 
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
                                       const ReceiverRequirementsEvaluation &result) {
-    // The snapshot covers the whole set, so an external edit (for example an
-    // agent change or a different selection) reloads the draft from the
-    // selected mode instead of overwriting the new state.
-    if (!m_initialized || !(set == m_snapshot))
+    // An external change reloads the draft only when it changes the selected mode.
+    // Edits to other modes keep the unapplied draft, which still describes the selected mode.
+    if (!m_initialized) {
         resetDraft(set);
+    } else if (!(set == m_snapshot)) {
+        if (sameSelectedMode(set, m_snapshot)) {
+            m_snapshot = set;
+        } else {
+            const bool discarded_edits = !sameDraft(makeDraft(), m_baseline);
+            resetDraft(set);
+            if (discarded_edits)
+                m_notice = "Selected mode changed elsewhere; unapplied edits were discarded.";
+        }
+    }
 
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -245,6 +270,8 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
     if (!m_error.empty())
         ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
+    else if (!m_notice.empty())
+        ImGui::TextDisabled("%s", m_notice.c_str());
     else
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
 

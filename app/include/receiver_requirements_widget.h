@@ -34,4 +34,5 @@ class ReceiverRequirementsWidget {
     bool m_iip3_enabled = false;
     bool m_initialized = false;
     std::string m_error;
+    std::string m_notice;
 };

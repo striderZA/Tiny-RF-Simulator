@@ -2625,6 +2625,72 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         set = ReceiverRequirementsSet{};
     };
 
+    t = IM_REGISTER_TEST(e, "rf_simulator", "receiver_requirements_agent_edits_respect_the_draft");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+        ctx->ScrollToTop("//Receiver Requirements");
+        ctx->Yield(2);
+
+        // Two configured modes; "LG" is selected, so the draft describes LG.
+        auto &set = s_app->testReceiverRequirements();
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e9;
+        config.band_stop_Hz = 2.0e9;
+        config.gain = ReceiverGainLimits{0.0, 5.0};
+        set = ReceiverRequirementsSet{};
+        set.modes.push_back({"HG", config});
+        set.modes.push_back({"LG", config});
+        set.selected = 1;
+        ctx->Yield(3);
+
+        // 1. An agent edit to the other mode leaves the selected mode's unapplied draft in place.
+        ctx->SetRef("Receiver Requirements");
+        ctx->ItemInputValue("Band stop (Hz)", "3000000000");
+        ctx->Yield(2);
+        set.modes[0].config->nf_max_dB = 4.0;
+        ctx->Yield(3);
+        settlePanelScrollToBottom(ctx);
+        ctx->ItemClick("Apply requirements");
+        waitForUi(ctx, [&]() { return set.modes[1].config->band_stop_Hz == 3.0e9; });
+        IM_CHECK_EQ(set.modes[1].config->band_stop_Hz, 3.0e9);
+        IM_CHECK(set.modes[0].config->nf_max_dB == 4.0);
+
+        // 2. An agent edit to the selected mode discards its unapplied draft instead of applying
+        // it.
+        ctx->ItemInputValue("Band stop (Hz)", "4000000000");
+        ctx->Yield(2);
+        set.modes[1].config->band_stop_Hz = 2.5e9;
+        ctx->Yield(3);
+        const std::uint64_t revision = s_app->projectRevision();
+        settlePanelScrollToBottom(ctx);
+        ctx->ItemClick("Apply requirements");
+        ctx->Yield(6);
+        // Applying the reloaded draft changes nothing, so the agent's limit is kept.
+        IM_CHECK_EQ(set.modes[1].config->band_stop_Hz, 2.5e9);
+        IM_CHECK_EQ(s_app->projectRevision(), revision);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
+    };
+
     // Agent panel control callbacks are replaced here, so the tests exercise
     // the UI without enabling the production listener or persisting a setting.
     t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_server_toggle_callback");
