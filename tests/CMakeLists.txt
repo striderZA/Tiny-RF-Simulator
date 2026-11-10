@@ -200,6 +200,11 @@ add_standalone_test(test_network_analyzer
          simulator::app
 )
 
+add_standalone_test(test_sweep_response
+    SOURCES test_sweep_response.cpp
+    LIBS simulator::network_analyzer_engine
+)
+
 set_tests_properties(test_network_analyzer PROPERTIES RUN_SERIAL TRUE)
 add_standalone_test(test_power_meter
     SOURCES test_power_meter.cpp
