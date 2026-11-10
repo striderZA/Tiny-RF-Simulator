@@ -270,3 +270,72 @@ TEST_CASE("instantiate() of a part with a missing file still returns an engine",
     IComponentEngine *engine = library.instantiate(*def, runtime, actions);
     CHECK(engine != nullptr);
 }
+
+TEST_CASE("a non-boolean sparam_mode is dropped, not thrown at the engine",
+          "[library_load_status]") {
+    LibraryDir dir;
+    // The library schema types only the numeric fields, so a hand-written sparam_mode can be any
+    // JSON type; it must never reach AmplifierEngine::deserialize().
+    dir.writeDefinition("strmode.json",
+                        amplifierDefinition("STRMODE-1",
+                                            {{"gain_dB", 10.0}, {"sparam_mode", "yes"}},
+                                            nlohmann::json::array()));
+    ComponentLibrary library;
+    library.scan(dir.root().string());
+    const ComponentDefinition *def = findPart(library, "STRMODE-1");
+    REQUIRE(def);
+
+    CircuitRuntime runtime;
+    IComponentEngine *engine = createAmplifier(runtime);
+    REQUIRE(engine);
+    std::vector<std::string> sentences;
+    REQUIRE_NOTHROW(sentences = library.applyDefinition(*def, *engine));
+    CHECK(sentences.empty());
+    CHECK_FALSE(engine->serialize().value("sparam_mode", true));
+
+    GraphEditorActions actions{runtime};
+    CHECK(library.instantiate(*def, runtime, actions) != nullptr);
+}
+
+TEST_CASE("applyDefinition still throws when an engine key has the wrong type",
+          "[library_load_status]") {
+    LibraryDir dir;
+    dir.writeDefinition("badnl.json",
+                        amplifierDefinition("BADNL-2",
+                                            {{"gain_dB", 10.0}, {"enable_nonlinear", "yes"}},
+                                            nlohmann::json::array()));
+    ComponentLibrary library;
+    library.scan(dir.root().string());
+    const ComponentDefinition *def = findPart(library, "BADNL-2");
+    REQUIRE(def);
+
+    CircuitRuntime runtime;
+    IComponentEngine *engine = createAmplifier(runtime);
+    REQUIRE(engine);
+    // instantiate() relies on this throw to roll a half-applied component back.
+    CHECK_THROWS_AS(library.applyDefinition(*def, *engine), std::exception);
+
+    GraphEditorActions actions{runtime};
+    CHECK(library.instantiate(*def, runtime, actions) == nullptr);
+}
+
+TEST_CASE("a rejected S-parameter data file gives one sentence with sparam_mode declared",
+          "[library_load_status]") {
+    LibraryDir dir;
+    dir.writeDefinition(
+        "out2.json",
+        amplifierDefinition(
+            "OUT-2", {{"gain_dB", 10.0}, {"sparam_mode", true}, {"sparam_filepath", "inside.s2p"}},
+            sparamFile("../x.s2p")));
+    ComponentLibrary library;
+    library.scan(dir.root().string());
+    const ComponentDefinition *def = findPart(library, "OUT-2");
+    REQUIRE(def);
+
+    CircuitRuntime runtime;
+    IComponentEngine *engine = createAmplifier(runtime);
+    REQUIRE(engine);
+    const auto sentences = library.applyDefinition(*def, *engine);
+    REQUIRE(sentences.size() == 1);
+    CHECK(sentences[0] == "Data file '../x.s2p' for OUT-2 is outside the library folder.");
+}

@@ -767,6 +767,19 @@ std::vector<std::string> ComponentLibrary::applyDefinition(const ComponentDefini
             }
         }
     }
+    // `sparam_mode` is an engine-state key the library schema does not type-check, so a library
+    // JSON can carry any type for it. Read it through find() and is_boolean(), and drop a
+    // non-boolean value: the engine's deserialize() accepts only a boolean.
+    bool declared_sparam_mode = false;
+    if (params.is_object()) {
+        const auto sparam_mode = params.find("sparam_mode");
+        if (sparam_mode != params.end()) {
+            if (sparam_mode->is_boolean())
+                declared_sparam_mode = sparam_mode->get<bool>();
+            else
+                params.erase(sparam_mode);
+        }
+    }
     engine.deserialize(params);
 
     bool sparam_data_file_consumed = false;
@@ -809,6 +822,8 @@ std::vector<std::string> ComponentLibrary::applyDefinition(const ComponentDefini
                      df.path.c_str(), def.part_number.c_str());
             not_applied.push_back("Data file '" + df.path + "' for " + def.part_number +
                                   " is outside the library folder.");
+            // This file is the one the S-parameter mode reported; do not add a second sentence.
+            sparam_reported = true;
             continue;
         }
 
@@ -827,8 +842,7 @@ std::vector<std::string> ComponentLibrary::applyDefinition(const ComponentDefini
 
     // deserialize() turns S-parameter mode on only when the declared file loads with two or
     // more ports. A declared mode that stays off therefore means the declared path did not load.
-    if (!sparam_reported && def.parameters.is_object() &&
-        def.parameters.value("sparam_mode", false) &&
+    if (!sparam_reported && declared_sparam_mode &&
         !engine.serialize().value("sparam_mode", false)) {
         for (const char *key : {"sparam_filepath", "sparam_path"}) {
             if (params.contains(key) && params[key].is_string() &&
