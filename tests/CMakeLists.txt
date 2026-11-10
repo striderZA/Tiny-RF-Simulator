@@ -175,6 +175,13 @@ add_standalone_test(test_amplifier_intercept_coverage
     LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
+# Library parts report declared files that fail to load. Standalone for the MinGW-w64
+# registration ceiling.
+add_standalone_test(test_component_library_load_status
+    SOURCES test_component_library_load_status.cpp
+    LIBS simulator::editor_services
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine
