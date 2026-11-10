@@ -31,6 +31,13 @@ std::vector<Indexed> sortedByFrequency(const std::vector<double> &frequencies_Hz
 
 // The lowest index whose frequency lies within kFreqEpsilonHz of f, if any.
 std::optional<std::size_t> lowestNear(const std::vector<Indexed> &sorted, double f) {
+    // A frequency whose 1 Hz cell lies outside the 64-bit range matches nothing, so such a sweep
+    // point reads as no data rather than as a match on a value that cannot be cell-indexed.
+    const double cell = std::floor(f / kFreqEpsilonHz);
+    constexpr double kMinCell = static_cast<double>(std::numeric_limits<long long>::min());
+    constexpr double kMaxCell = static_cast<double>(std::numeric_limits<long long>::max());
+    if (!std::isfinite(cell) || cell <= kMinCell || cell >= kMaxCell)
+        return std::nullopt;
     auto it =
         std::lower_bound(sorted.begin(), sorted.end(), f - 2.0 * kFreqEpsilonHz,
                          [](const Indexed &entry, double value) { return entry.freq_Hz < value; });

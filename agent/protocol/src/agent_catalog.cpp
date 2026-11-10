@@ -1096,8 +1096,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                       {"requirements",
                        {{"format", 3},
                         {"selected_mode", 0},
-                        {"modes", Json::array({Json{{"id", 1},
-                                                    {"name", "Default"},
+                        {"modes", Json::array({Json{{"name", "Default"},
                                                     {"config",
                                                      {{"band_start_hz", 1.0e9},
                                                       {"band_stop_hz", 2.0e9},
@@ -1151,7 +1150,7 @@ const std::vector<AgentToolDefinition> &agentToolCatalog() {
                         {"outputs",
                          Json::array({Json{{"name", "RX"}, {"stage", "LNA"}, {"port", 0}}})},
                         {"modes",
-                         Json::array({Json{{"mode_id", 1}, {"overrides", Json::object()}}})}}}}),
+                         Json::array()}}}}),
              rfBudgetSuccessSchema(), destructiveAnnotations())};
     return catalog;
 }
