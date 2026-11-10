@@ -1,9 +1,12 @@
+#include "common.h"
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
 
+#include <cmath>
 #include <limits>
 #include <string>
 #include <vector>
@@ -19,7 +22,7 @@ ReceiverRequirementsConfig allConfigured() {
     c.nf_max_dB = 5.0;
     c.output_power = ReceiverOutputPowerLimits{-30.0, 0.0};
     c.iip3_min_dBm = 10.0;
-    c.measurement_conditions.output_reference_tone_frequency_Hz = 1.5e9;
+    c.measurement_conditions.input_level_dBm = -30.0;
     c.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -30.0, -20.0, 5.0};
     return c;
 }
@@ -49,19 +52,43 @@ ReceiverRequirementsDraft gainDraft() {
     return d;
 }
 } // namespace
-TEST_CASE("ReceiverRequirements applies gain-only draft with an invalid hidden output tone",
-          "[receiver_requirements]") {
-    ReceiverRequirementsState state;
-    ReceiverRequirementsDraft draft = gainDraft();
-    draft.output_reference_tone_frequency_Hz = -5.0e6;
-    std::string error;
+TEST_CASE("ReceiverRequirements validates the input level range", "[receiver_requirements]") {
+    auto c = allConfigured();
+    c.measurement_conditions.input_level_dBm = MIN_POWER;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.measurement_conditions.input_level_dBm = MAX_POWER;
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    for (double bad : {MIN_POWER - 1.0, MAX_POWER + 1.0, std::nan("")}) {
+        c.measurement_conditions.input_level_dBm = bad;
+        CHECK(validateReceiverRequirementsConfig(c) ==
+              std::optional<std::string>("Input level must be between -174 and 10 dBm."));
+    }
+}
 
-    CHECK(applyReceiverRequirementsDraft(state, draft, error));
-    CHECK(error.empty());
-    REQUIRE(state.config.has_value());
-    CHECK(state.config->gain.has_value());
-    CHECK_FALSE(state.config->output_power.has_value());
-    CHECK_FALSE(state.config->measurement_conditions.output_reference_tone_frequency_Hz);
+TEST_CASE("ReceiverRequirements draft requires an input level for output power",
+          "[receiver_requirements]") {
+    auto d = gainDraft();
+    d.output_power_enabled = true;
+    d.output_power_min_dBm = "-40";
+    d.output_power_max_dBm = "0";
+    std::string error;
+    CHECK_FALSE(parseReceiverRequirementsDraft(d, error).has_value());
+    CHECK(error == "Output power needs an input level (dBm).");
+    d.input_level_dBm = "-30";
+    const auto config = parseReceiverRequirementsDraft(d, error);
+    REQUIRE(config.has_value());
+    CHECK(config->measurement_conditions.input_level_dBm == -30.0);
+}
+
+TEST_CASE("ReceiverRequirements draft keeps an input level without output power",
+          "[receiver_requirements]") {
+    auto d = gainDraft();
+    d.input_level_dBm = "-25";
+    std::string error;
+    CHECK(parseReceiverRequirementsDraft(d, error)->measurement_conditions.input_level_dBm ==
+          -25.0);
+    d.input_level_dBm = "";
+    CHECK_FALSE(parseReceiverRequirementsDraft(d, error)->measurement_conditions.input_level_dBm);
 }
 
 TEST_CASE("ReceiverRequirements supports independent optional metric limits",
@@ -150,8 +177,7 @@ TEST_CASE("ReceiverRequirements validates finite ordered metric bounds and IIP3 
     c.measurement_conditions.iip3->input_step_dB = 6.0;
     CHECK(validateReceiverRequirementsConfig(c).has_value());
     c = allConfigured();
-    c.measurement_conditions.output_reference_tone_frequency_Hz =
-        std::numeric_limits<double>::quiet_NaN();
+    c.measurement_conditions.input_level_dBm = std::numeric_limits<double>::quiet_NaN();
     CHECK(validateReceiverRequirementsConfig(c).has_value());
     c = allConfigured();
     c.band_start_Hz = std::numeric_limits<double>::quiet_NaN();
@@ -181,15 +207,14 @@ TEST_CASE(
 
     config = allConfigured();
     config.output_power.reset();
-    config.measurement_conditions.output_reference_tone_frequency_Hz =
-        std::numeric_limits<double>::quiet_NaN();
+    config.measurement_conditions.input_level_dBm = std::numeric_limits<double>::quiet_NaN();
     CHECK(validateReceiverRequirementsConfig(config).has_value());
 }
 
-TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone selector",
+TEST_CASE("ReceiverRequirements evaluates valid output samples with an input level",
           "[receiver_requirements]") {
     auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    state.config->measurement_conditions.input_level_dBm = -30.0;
     const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
                                  {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
                                   std::numeric_limits<double>::quiet_NaN()});
@@ -197,26 +222,15 @@ TEST_CASE("ReceiverRequirements evaluates valid output samples without a tone se
     CHECK(result.overall == ReceiverRequirementStatus::Pass);
 }
 
-TEST_CASE("ReceiverRequirements reports incomplete output data without a tone selector",
+TEST_CASE("ReceiverRequirements reports incomplete output data with an input level",
           "[receiver_requirements]") {
     auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz.reset();
+    state.config->measurement_conditions.input_level_dBm = -30.0;
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, nan, nan, nan, 0},
                                  {nan, 10, 15, 20, nan});
     CHECK(result.output_power.status == ReceiverRequirementStatus::Incomplete);
     CHECK(result.overall == ReceiverRequirementStatus::Incomplete);
-}
-
-TEST_CASE("ReceiverRequirements does not gate output samples by selector band location",
-          "[receiver_requirements]") {
-    auto state = configuredState();
-    state.config->measurement_conditions.output_reference_tone_frequency_Hz = 2.5e9;
-    const auto result = evaluate(state, {0, 10, 15, 20, 0}, {0, 3, 4, 5, 0}, {0, -30, -20, 0, 0},
-                                 {std::numeric_limits<double>::quiet_NaN(), 10, 15, 20,
-                                  std::numeric_limits<double>::quiet_NaN()});
-    CHECK(result.output_power.status == ReceiverRequirementStatus::Pass);
-    CHECK(result.overall == ReceiverRequirementStatus::Pass);
 }
 
 TEST_CASE("ReceiverRequirements returns Not configured when every metric is disabled",
@@ -306,7 +320,7 @@ TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply
     REQUIRE(state.config->output_power.has_value());
     CHECK(state.config->output_power->minimum_dBm == -30.0);
     CHECK(state.config->output_power->maximum_dBm == 0.0);
-    CHECK(state.config->measurement_conditions.output_reference_tone_frequency_Hz == 1.5e9);
+    CHECK(state.config->measurement_conditions.input_level_dBm == -30.0);
     REQUIRE(state.config->measurement_conditions.iip3.has_value());
     CHECK(state.config->measurement_conditions.iip3->tone_spacing_Hz == 1.0e6);
     CHECK(state.config->measurement_conditions.iip3->input_start_dBm == -30.0);
@@ -468,7 +482,7 @@ TEST_CASE("ReceiverRequirements draft parses enabled output and IIP3 settings",
     d.output_power_enabled = true;
     d.output_power_min_dBm = "-30";
     d.output_power_max_dBm = "0";
-    d.output_reference_tone_frequency_Hz = 1.5e9;
+    d.input_level_dBm = "-30";
     d.iip3_enabled = true;
     d.iip3_min_dBm = "10";
     d.iip3_tone_spacing_Hz = "1e6";
@@ -481,6 +495,7 @@ TEST_CASE("ReceiverRequirements draft parses enabled output and IIP3 settings",
     REQUIRE(parsed->output_power.has_value());
     CHECK(parsed->output_power->minimum_dBm == Approx(-30.0));
     CHECK(parsed->output_power->maximum_dBm == Approx(0.0));
+    CHECK(parsed->measurement_conditions.input_level_dBm == Approx(-30.0));
     REQUIRE(parsed->measurement_conditions.iip3.has_value());
     CHECK(parsed->measurement_conditions.iip3->input_stop_dBm == Approx(-20.0));
 }
@@ -512,4 +527,285 @@ TEST_CASE("ReceiverRequirements maps outcomes to status tones", "[receiver_requi
           ReceiverRequirementStatusTone::Neutral);
     CHECK(receiverRequirementStatusTone(ReceiverRequirementStatus::Incomplete) ==
           ReceiverRequirementStatusTone::Neutral);
+}
+
+TEST_CASE("Receiver requirement modes add copies of the selected mode",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "Band 1 High Gain", error));
+    CHECK(set.modes.size() == 1);
+    CHECK_FALSE(set.modes[0].config);
+    set.modes[0].config = allConfigured();
+    REQUIRE(addReceiverRequirementsMode(set, "  Band 1 Low Gain  ", error));
+    CHECK(set.selected == 1);
+    CHECK(set.modes[1].name == "Band 1 Low Gain");
+    CHECK(set.modes[1].config == set.modes[0].config);
+}
+
+TEST_CASE("Receiver requirement mode names are checked", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "Low Gain", error));
+    const auto before = set;
+    CHECK_FALSE(addReceiverRequirementsMode(set, " low gain ", error));
+    CHECK(error == "A mode named 'low gain' already exists.");
+    CHECK_FALSE(addReceiverRequirementsMode(set, "   ", error));
+    CHECK(error == "Mode name must not be empty.");
+    CHECK_FALSE(addReceiverRequirementsMode(set, std::string(65, 'x'), error));
+    CHECK(error == "Mode name must be at most 64 characters.");
+    CHECK(set == before);
+    CHECK(renameReceiverRequirementsMode(set, 0, "LOW GAIN", error)); // own name, new case
+    CHECK(set.modes[0].name == "LOW GAIN");
+}
+
+TEST_CASE("Receiver requirement mode count is capped", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    for (std::size_t i = 0; i < kMaxReceiverRequirementModes; ++i)
+        REQUIRE(addReceiverRequirementsMode(set, "M" + std::to_string(i), error));
+    CHECK_FALSE(addReceiverRequirementsMode(set, "extra", error));
+    CHECK(error == "At most 64 modes are allowed.");
+}
+
+TEST_CASE("Removing a receiver requirement mode keeps the selection valid",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    for (auto name : {"A", "B", "C"})
+        REQUIRE(addReceiverRequirementsMode(set, name, error));
+    REQUIRE(set.selected == 2);
+    REQUIRE(removeReceiverRequirementsMode(set, 2));
+    CHECK(set.selected == 1);
+    REQUIRE(removeReceiverRequirementsMode(set, 0));
+    CHECK(set.selected == 0);
+    CHECK(set.modes[0].name == "B");
+    REQUIRE(removeReceiverRequirementsMode(set, 0));
+    CHECK(set.modes.empty());
+    CHECK(set.selected == 0);
+    CHECK_FALSE(removeReceiverRequirementsMode(set, 0));
+}
+
+TEST_CASE("Applying a draft changes only the selected mode", "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    CHECK_FALSE(applyReceiverRequirementsDraftToSelectedMode(set, gainDraft(), error));
+    CHECK(error == "Add a mode before applying requirements.");
+
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    REQUIRE(selectReceiverRequirementsMode(set, 0));
+
+    REQUIRE(applyReceiverRequirementsDraftToSelectedMode(set, gainDraft(), error));
+    REQUIRE(set.modes[0].config.has_value());
+    CHECK(set.modes[0].config->band_start_Hz == 1.0e9);
+    CHECK(set.modes[0].config->band_stop_Hz == 2.0e9);
+    REQUIRE(set.modes[0].config->gain.has_value());
+    CHECK(set.modes[0].config->gain->minimum_dB == 10.0);
+    CHECK(set.modes[0].config->gain->maximum_dB == 20.0);
+    CHECK_FALSE(set.modes[1].config.has_value());
+
+    const auto before = set;
+    auto malformed = gainDraft();
+    malformed.band_start_Hz = "x";
+    CHECK_FALSE(applyReceiverRequirementsDraftToSelectedMode(set, malformed, error));
+    CHECK(error == "Requirement band endpoints must be finite numbers.");
+    CHECK(set == before);
+
+    ReceiverRequirementsDraft disabled;
+    disabled.band_start_Hz = "1e9";
+    disabled.band_stop_Hz = "2e9";
+    REQUIRE(applyReceiverRequirementsDraftToSelectedMode(set, disabled, error));
+    CHECK_FALSE(set.modes[0].config.has_value());
+    CHECK_FALSE(set.modes[1].config.has_value());
+}
+
+TEST_CASE("A successful mode edit clears a retained invalid diagnostic",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet set;
+    set.invalid_reason = "bad file";
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    CHECK(set.invalid_reason.empty());
+}
+
+TEST_CASE("Selected receiver requirements state follows the selection",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet empty;
+    auto state = selectedReceiverRequirementsState(empty);
+    CHECK_FALSE(state.config.has_value());
+    CHECK(state.invalid_reason.empty());
+
+    ReceiverRequirementsSet invalid;
+    invalid.invalid_reason = "bad file";
+    state = selectedReceiverRequirementsState(invalid);
+    CHECK_FALSE(state.config.has_value());
+    CHECK(state.invalid_reason == "bad file");
+
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    set.modes[1].config = allConfigured();
+    REQUIRE(selectReceiverRequirementsMode(set, 1));
+    state = selectedReceiverRequirementsState(set);
+    REQUIRE(state.config.has_value());
+    CHECK(state.config == set.modes[1].config);
+    CHECK(state.invalid_reason.empty());
+}
+
+TEST_CASE("Receiver requirements set validation reports the first problem",
+          "[receiver_requirements][modes]") {
+    ReceiverRequirementsSet duplicates;
+    duplicates.modes.push_back({"X", std::nullopt});
+    duplicates.modes.push_back({"x", std::nullopt});
+    CHECK(validateReceiverRequirementsSet(duplicates) ==
+          std::optional<std::string>("A mode named 'x' already exists."));
+
+    ReceiverRequirementsSet padded;
+    padded.modes.push_back({" A", std::nullopt});
+    CHECK(validateReceiverRequirementsSet(padded) ==
+          std::optional<std::string>("Mode name must not have leading or trailing spaces."));
+
+    ReceiverRequirementsSet out_of_range;
+    out_of_range.modes.push_back({"A", std::nullopt});
+    out_of_range.selected = 1;
+    CHECK(validateReceiverRequirementsSet(out_of_range) ==
+          std::optional<std::string>("Selected mode is out of range."));
+
+    ReceiverRequirementsSet bad_config;
+    bad_config.modes.push_back({"A", allConfigured()});
+    auto broken = allConfigured();
+    broken.band_start_Hz = 2.0e9;
+    broken.band_stop_Hz = 1.0e9;
+    bad_config.modes.push_back({"B", broken});
+    CHECK(validateReceiverRequirementsSet(bad_config) ==
+          std::optional<std::string>("Mode 'B': Requirement band start must be below band stop."));
+
+    ReceiverRequirementsSet valid;
+    valid.modes.push_back({"A", allConfigured()});
+    valid.modes.push_back({"B", std::nullopt});
+    CHECK_FALSE(validateReceiverRequirementsSet(valid).has_value());
+}
+
+TEST_CASE("Receiver requirements JSON round-trips modes and selection",
+          "[receiver_requirements][json]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "HG", error));
+    set.modes[0].config = allConfigured();
+    set.modes[0].config->measurement_conditions.input_level_dBm = -30.0;
+    REQUIRE(addReceiverRequirementsMode(set, "LG", error));
+    set.modes[1].config.reset();
+    const auto encoded = receiverRequirementsToJson(set);
+    CHECK(encoded.at("format") == 2);
+    CHECK(encoded.at("selected_mode") == 1);
+    CHECK(encoded.at("modes")[1].at("config").is_null());
+    CHECK(encoded.at("modes")[0].at("config").at("measurement_conditions").at("input_level_dbm") ==
+          -30.0);
+    CHECK(receiverRequirementsFromJson(encoded) == set);
+
+    ReceiverRequirementsSet empty;
+    const auto encoded_empty = receiverRequirementsToJson(empty);
+    CHECK(
+        (encoded_empty ==
+         nlohmann::json{{"format", 2}, {"selected_mode", 0}, {"modes", nlohmann::json::array()}}));
+}
+
+TEST_CASE("Receiver requirements JSON migrates a format 1 object to one Default mode",
+          "[receiver_requirements][json]") {
+    const nlohmann::json legacy = {
+        {"band_start_hz", 1.0e9},
+        {"band_stop_hz", 2.0e9},
+        {"gain_min_db", 10.0},
+        {"gain_max_db", 20.0},
+        {"measurement_conditions", {{"output_reference_tone_frequency_hz", 1.0e9}}}};
+    const auto set = receiverRequirementsFromJson(legacy);
+    REQUIRE(set.invalid_reason.empty());
+    REQUIRE(set.modes.size() == 1);
+    CHECK(set.modes[0].name == "Default");
+    CHECK(set.selected == 0);
+    CHECK(set.modes[0].config->gain->maximum_dB == 20.0);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.input_level_dBm);
+
+    auto with_input_level = legacy;
+    with_input_level["measurement_conditions"]["input_level_dbm"] = -30.0;
+    const auto with_level = receiverRequirementsFromJson(with_input_level);
+    REQUIRE(with_level.invalid_reason.empty());
+    REQUIRE(with_level.modes.size() == 1);
+    CHECK(with_level.modes[0].name == "Default");
+    CHECK(with_level.modes[0].config->measurement_conditions.input_level_dBm == -30.0);
+}
+
+TEST_CASE("Receiver requirements JSON migrates a band-only legacy object",
+          "[receiver_requirements][json]") {
+    const nlohmann::json legacy = {{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}};
+    const auto set = receiverRequirementsFromJson(legacy);
+    REQUIRE(set.invalid_reason.empty());
+    REQUIRE(set.modes.size() == 1);
+    CHECK(set.modes[0].name == "Default");
+    CHECK(set.selected == 0);
+    REQUIRE(set.modes[0].config.has_value());
+    CHECK(set.modes[0].config->band_start_Hz == 1.0e9);
+    CHECK(set.modes[0].config->band_stop_Hz == 2.0e9);
+    CHECK_FALSE(set.modes[0].config->gain);
+    CHECK_FALSE(set.modes[0].config->nf_max_dB);
+    CHECK_FALSE(set.modes[0].config->output_power);
+    CHECK_FALSE(set.modes[0].config->iip3_min_dBm);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.input_level_dBm);
+    CHECK_FALSE(set.modes[0].config->measurement_conditions.iip3);
+}
+
+TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
+          "[receiver_requirements][json]") {
+    const auto check_invalid = [](const ReceiverRequirementsSet &set, const std::string &reason) {
+        CHECK(set.invalid_reason == reason);
+        CHECK(set.modes.empty());
+        CHECK(set.selected == 0);
+    };
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{{"format", 3}}),
+                  "Unsupported receiver requirements format 3.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"selected_mode", 5},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}}})}}),
+                  "Selected mode is out of range.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}},
+                                                       {{"config", nullptr}}})}}),
+                  "Mode 2: Mode name must be a string.");
+
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{
+                      {"format", 2},
+                      {"modes", nlohmann::json::array({{{"name", "A"}, {"config", nullptr}},
+                                                       {{"name", "a"}, {"config", nullptr}}})}}),
+                  "A mode named 'a' already exists.");
+
+    auto bad_input_level = allConfigured();
+    const auto encoded_bad_level = receiverRequirementsToJson(
+        ReceiverRequirementsSet{{ReceiverRequirementsMode{"A", bad_input_level}}, 0, {}});
+    auto malformed_level = encoded_bad_level;
+    malformed_level["modes"][0]["config"]["measurement_conditions"]["input_level_dbm"] = "loud";
+    check_invalid(receiverRequirementsFromJson(malformed_level),
+                  "Mode 1: Input level must be a number.");
+
+    ReceiverRequirementsSet marker;
+    marker.invalid_reason = "x";
+    const auto encoded_marker = receiverRequirementsToJson(marker);
+    CHECK((encoded_marker == nlohmann::json{{"invalid_configuration", true}, {"diagnostic", "x"}}));
+    check_invalid(receiverRequirementsFromJson(encoded_marker), "x");
+}
+
+TEST_CASE("ReceiverRequirements refuses '#' in mode names", "[receiver_requirements]") {
+    ReceiverRequirementsSet set;
+    set.modes.push_back({"HG##1", std::nullopt});
+    const auto reason = validateReceiverRequirementsSet(set);
+    REQUIRE(reason.has_value());
+    CHECK(*reason == "Mode name must not contain '#'.");
+    CHECK(receiverRequirementsModeNameError(ReceiverRequirementsSet{}, "Band #1", std::nullopt) ==
+          "Mode name must not contain '#'.");
 }

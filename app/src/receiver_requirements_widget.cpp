@@ -1,6 +1,5 @@
 #include "receiver_requirements_widget.h"
 #include "imgui.h"
-#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <string>
@@ -10,7 +9,12 @@ constexpr const char *kLabels[] = {
     "Band start (Hz)",        "Band stop (Hz)",        "Gain min (dB)",
     "Gain max (dB)",          "NF max (dB)",           "Output power min (dBm)",
     "Output power max (dBm)", "IIP3 min (dBm)",        "IIP3 tone spacing (Hz)",
-    "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)"};
+    "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)",
+    "Input level (dBm)"};
+
+constexpr ImVec4 kErrorColor(1.0f, 0.35f, 0.35f, 1.0f);
+constexpr ImVec4 kPassColor(0.25f, 0.85f, 0.35f, 1.0f);
+constexpr const char *kRemoveModeTitle = "Remove mode?";
 
 const char *statusText(ReceiverRequirementStatus status) {
     switch (status) {
@@ -44,28 +48,31 @@ bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDra
            a.iip3_input_step_dB == b.iip3_input_step_dB && a.gain_enabled == b.gain_enabled &&
            a.noise_figure_enabled == b.noise_figure_enabled &&
            a.output_power_enabled == b.output_power_enabled && a.iip3_enabled == b.iip3_enabled &&
-           a.output_reference_tone_frequency_Hz == b.output_reference_tone_frequency_Hz;
+           a.input_level_dBm == b.input_level_dBm;
 }
 
-std::string toneLabel(double frequency_Hz) {
-    char label[64]{};
-    std::snprintf(label, sizeof(label), "%g MHz", frequency_Hz / 1.0e6);
-    return label;
-}
-
-bool isValidReferenceTone(double frequency_Hz) {
-    return std::isfinite(frequency_Hz) && frequency_Hz > 0.0;
+// True when both sets select the same mode with the same name and config, so an unapplied draft
+// of that mode still describes it. A retained invalid set matches only the same diagnostic.
+bool sameSelectedMode(const ReceiverRequirementsSet &a, const ReceiverRequirementsSet &b) {
+    if (a.invalid_reason != b.invalid_reason)
+        return false;
+    const bool has_mode = a.selected < a.modes.size();
+    if (has_mode != (b.selected < b.modes.size()))
+        return false;
+    if (!has_mode)
+        return true;
+    const ReceiverRequirementsMode &mode_a = a.modes[a.selected];
+    const ReceiverRequirementsMode &mode_b = b.modes[b.selected];
+    return mode_a.name == mode_b.name && mode_a.config == mode_b.config;
 }
 
 void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
     switch (receiverRequirementStatusTone(metric.status)) {
     case ReceiverRequirementStatusTone::PassGreen:
-        ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "%s: %s", label,
-                           statusText(metric.status));
+        ImGui::TextColored(kPassColor, "%s: %s", label, statusText(metric.status));
         break;
     case ReceiverRequirementStatusTone::FailRed:
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s: %s", label,
-                           statusText(metric.status));
+        ImGui::TextColored(kErrorColor, "%s: %s", label, statusText(metric.status));
         break;
     case ReceiverRequirementStatusTone::Neutral:
         ImGui::TextDisabled("%s: %s", label, statusText(metric.status));
@@ -95,36 +102,6 @@ ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementS
     return ReceiverRequirementStatusTone::Neutral;
 }
 
-bool ReceiverRequirementsWidget::stateMatchesSnapshot(
-    const ReceiverRequirementsState &state) const {
-    if (state.invalid_reason != m_snapshot.invalid_reason ||
-        state.config.has_value() != m_snapshot.config.has_value())
-        return false;
-    if (!state.config)
-        return true;
-    const auto &a = *state.config;
-    const auto &b = *m_snapshot.config;
-    return a.band_start_Hz == b.band_start_Hz && a.band_stop_Hz == b.band_stop_Hz &&
-           a.gain.has_value() == b.gain.has_value() &&
-           (!a.gain || (a.gain->minimum_dB == b.gain->minimum_dB &&
-                        a.gain->maximum_dB == b.gain->maximum_dB)) &&
-           a.nf_max_dB == b.nf_max_dB && a.output_power.has_value() == b.output_power.has_value() &&
-           (!a.output_power || (a.output_power->minimum_dBm == b.output_power->minimum_dBm &&
-                                a.output_power->maximum_dBm == b.output_power->maximum_dBm)) &&
-           a.iip3_min_dBm == b.iip3_min_dBm &&
-           a.measurement_conditions.output_reference_tone_frequency_Hz ==
-               b.measurement_conditions.output_reference_tone_frequency_Hz &&
-           a.measurement_conditions.iip3.has_value() == b.measurement_conditions.iip3.has_value() &&
-           (!a.measurement_conditions.iip3 || (a.measurement_conditions.iip3->tone_spacing_Hz ==
-                                                   b.measurement_conditions.iip3->tone_spacing_Hz &&
-                                               a.measurement_conditions.iip3->input_start_dBm ==
-                                                   b.measurement_conditions.iip3->input_start_dBm &&
-                                               a.measurement_conditions.iip3->input_stop_dBm ==
-                                                   b.measurement_conditions.iip3->input_stop_dBm &&
-                                               a.measurement_conditions.iip3->input_step_dB ==
-                                                   b.measurement_conditions.iip3->input_step_dB));
-}
-
 ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
     ReceiverRequirementsDraft draft;
     draft.band_start_Hz = m_buffers[0].data();
@@ -143,17 +120,24 @@ ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
     draft.noise_figure_enabled = m_nf_enabled;
     draft.output_power_enabled = m_output_power_enabled;
     draft.iip3_enabled = m_iip3_enabled;
-    draft.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
+    draft.input_level_dBm = m_buffers[12].data();
     return draft;
 }
 
-void ReceiverRequirementsWidget::resetDraft(
-    const ReceiverRequirementsState &state,
-    const std::vector<ReceiverGeneratorToneOption> &source_tones) {
+void ReceiverRequirementsWidget::fillModeName(const ReceiverRequirementsSet &set) {
+    m_mode_name.fill('\0');
+    m_name_selected = set.selected;
+    if (set.selected < set.modes.size()) {
+        const std::string &name = set.modes[set.selected].name;
+        std::snprintf(m_mode_name.data(), m_mode_name.size(), "%s", name.c_str());
+    }
+}
+
+void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) {
     for (auto &buffer : m_buffers)
         buffer.fill('\0');
     m_gain_enabled = m_nf_enabled = m_output_power_enabled = m_iip3_enabled = false;
-    m_source_tone_frequency_Hz.reset();
+    const auto state = selectedReceiverRequirementsState(set);
     if (state.config && state.invalid_reason.empty()) {
         const auto &config = *state.config;
         setNumber(m_buffers[0], config.band_start_Hz);
@@ -183,124 +167,207 @@ void ReceiverRequirementsWidget::resetDraft(
             setNumber(m_buffers[10], settings.input_stop_dBm);
             setNumber(m_buffers[11], settings.input_step_dB);
         }
-        m_source_tone_frequency_Hz =
-            config.measurement_conditions.output_reference_tone_frequency_Hz;
+        if (config.measurement_conditions.input_level_dBm)
+            setNumber(m_buffers[12], *config.measurement_conditions.input_level_dBm);
     }
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
-        isValidReferenceTone(source_tones.front().frequency_Hz))
-        m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
     m_baseline = makeDraft();
-    m_snapshot = state;
+    m_snapshot = set;
+    fillModeName(set);
     m_initialized = true;
     m_error.clear();
+    m_notice.clear();
 }
 
-void ReceiverRequirementsWidget::draw(
-    const char *title, bool *p_open, ReceiverRequirementsState &state,
-    const ReceiverRequirementsEvaluation &result,
-    const std::vector<ReceiverGeneratorToneOption> &source_tones) {
-    if (!m_initialized || !stateMatchesSnapshot(state))
-        resetDraft(state, source_tones);
+void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
+                                      const ReceiverRequirementsEvaluation &result) {
+    // An external change reloads the draft only when it changes the selected mode.
+    // Edits to other modes keep the unapplied draft, which still describes the selected mode.
+    if (!m_initialized) {
+        resetDraft(set);
+    } else if (!(set == m_snapshot)) {
+        if (sameSelectedMode(set, m_snapshot)) {
+            m_snapshot = set;
+        } else {
+            const bool discarded_edits = !sameDraft(makeDraft(), m_baseline);
+            resetDraft(set);
+            if (discarded_edits)
+                m_notice = "Selected mode changed elsewhere; unapplied edits were discarded.";
+        }
+    }
 
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
         return;
     }
 
-    ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
-    ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
-    ImGui::Checkbox("Enable gain", &m_gain_enabled);
-    if (m_gain_enabled) {
-        ImGui::InputText(kLabels[2], m_buffers[2].data(), m_buffers[2].size());
-        ImGui::InputText(kLabels[3], m_buffers[3].data(), m_buffers[3].size());
-    }
-    ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
-    if (m_nf_enabled)
-        ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
-    if (!m_source_tone_frequency_Hz && source_tones.size() == 1 &&
-        isValidReferenceTone(source_tones.front().frequency_Hz)) {
-        m_source_tone_frequency_Hz = source_tones.front().frequency_Hz;
-        m_baseline.output_reference_tone_frequency_Hz = m_source_tone_frequency_Hz;
-    }
-    ImGui::Checkbox("Enable output power", &m_output_power_enabled);
-    if (m_output_power_enabled) {
-        ImGui::InputText(kLabels[5], m_buffers[5].data(), m_buffers[5].size());
-        ImGui::InputText(kLabels[6], m_buffers[6].data(), m_buffers[6].size());
-        if (source_tones.empty()) {
-            ImGui::TextDisabled("Output reference tone: unavailable");
-        } else {
-            std::string preview = "Select tone";
-            if (m_source_tone_frequency_Hz) {
-                std::size_t matches = 0;
-                for (const auto &tone : source_tones)
-                    matches += tone.frequency_Hz == *m_source_tone_frequency_Hz ? 1 : 0;
-                preview = matches == 1 ? toneLabel(*m_source_tone_frequency_Hz)
-                                       : toneLabel(*m_source_tone_frequency_Hz) + " (unavailable)";
-            }
-            if (ImGui::BeginCombo("Output reference tone", preview.c_str())) {
-                for (std::size_t i = 0; i < source_tones.size(); ++i) {
-                    const auto &tone = source_tones[i];
-                    const std::string label = toneLabel(tone.frequency_Hz);
-                    ImGui::PushID(static_cast<int>(i));
-                    const bool selected = m_source_tone_frequency_Hz == tone.frequency_Hz;
-                    if (ImGui::Selectable(label.c_str(), selected))
-                        m_source_tone_frequency_Hz = tone.frequency_Hz;
-                    ImGui::PopID();
-                }
-                ImGui::EndCombo();
-            }
-        }
-    }
-    ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
-    if (m_iip3_enabled) {
-        ImGui::InputText(kLabels[7], m_buffers[7].data(), m_buffers[7].size());
-        ImGui::InputText(kLabels[8], m_buffers[8].data(), m_buffers[8].size());
-        ImGui::InputText(kLabels[9], m_buffers[9].data(), m_buffers[9].size());
-        ImGui::InputText(kLabels[10], m_buffers[10].data(), m_buffers[10].size());
-        ImGui::InputText(kLabels[11], m_buffers[11].data(), m_buffers[11].size());
-    }
+    const bool has_modes = !set.modes.empty();
+    // validateReceiverRequirementsSet() keeps selected in range; clamp anyway so
+    // a test seam writing the set directly cannot index past the modes.
+    const std::size_t selected_index =
+        has_modes && set.selected < set.modes.size() ? set.selected : 0;
+    if (has_modes && set.selected != m_name_selected)
+        fillModeName(set);
+    const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
-    const auto draft = makeDraft();
-    if (ImGui::Button("Apply requirements")) {
-        if (applyReceiverRequirementsDraft(state, draft, m_error)) {
-            const bool changed = !stateMatchesSnapshot(state);
-            resetDraft(state, source_tones);
-            if (changed && onChange)
+    ImGui::BeginDisabled(unapplied);
+    const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
+    if (ImGui::BeginCombo("Mode", preview)) {
+        for (std::size_t index = 0; index < set.modes.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
+            const bool selected = index == selected_index;
+            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
+            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
+                selectReceiverRequirementsMode(set, index))
+                resetDraft(set);
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size());
+    if (ImGui::Button("Add mode")) {
+        std::string error;
+        if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
+            resetDraft(set);
+            if (onChange)
                 onChange();
+        } else {
+            m_error = std::move(error);
         }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
-        resetDraft(state, source_tones);
-    const bool unapplied = !sameDraft(makeDraft(), m_baseline);
-
+    if (ImGui::Button("Rename mode")) {
+        if (!has_modes) {
+            m_error = "Add a mode before renaming.";
+        } else {
+            std::string error;
+            if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
+                resetDraft(set);
+                if (onChange)
+                    onChange();
+            } else {
+                m_error = std::move(error);
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove mode")) {
+        if (has_modes) {
+            m_remove_name = set.modes[selected_index].name;
+            ImGui::OpenPopup(kRemoveModeTitle);
+        } else {
+            m_error = "Add a mode before removing.";
+        }
+    }
+    ImGui::EndDisabled();
+    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by
+    // name when confirmed, so a set changed meanwhile never removes a different mode.
+    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Remove mode \"%s\" and its requirement limits?", m_remove_name.c_str());
+        if (ImGui::Button("Remove", ImVec2(120.0f, 0.0f))) {
+            for (std::size_t index = 0; index < set.modes.size(); ++index) {
+                if (set.modes[index].name == m_remove_name &&
+                    removeReceiverRequirementsMode(set, index)) {
+                    resetDraft(set);
+                    if (onChange)
+                        onChange();
+                    break;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    // Both lines always occupy their space, so an appearing hint or error never
+    // shifts the limit fields under the mouse or a scripted click.
+    if (unapplied)
+        ImGui::TextDisabled("Apply or cancel edits to change modes");
+    else
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
     if (!m_error.empty())
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", m_error.c_str());
-    else if (!state.invalid_reason.empty())
-        ImGui::TextDisabled("Invalid configuration: %s", state.invalid_reason.c_str());
-    else if (!state.config)
-        ImGui::TextDisabled("Not configured");
+        ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
+    else if (!m_notice.empty())
+        ImGui::TextDisabled("%s", m_notice.c_str());
+    else
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
 
-    if (unapplied) {
+    if (!has_modes) {
+        ImGui::TextDisabled("No modes. Add a mode to define requirements.");
+    } else {
+        ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
+        ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
+        ImGui::Checkbox("Enable gain", &m_gain_enabled);
+        if (m_gain_enabled) {
+            ImGui::InputText(kLabels[2], m_buffers[2].data(), m_buffers[2].size());
+            ImGui::InputText(kLabels[3], m_buffers[3].data(), m_buffers[3].size());
+        }
+        ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
+        if (m_nf_enabled)
+            ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
+        ImGui::Checkbox("Enable output power", &m_output_power_enabled);
+        if (m_output_power_enabled) {
+            ImGui::InputText(kLabels[5], m_buffers[5].data(), m_buffers[5].size());
+            ImGui::InputText(kLabels[6], m_buffers[6].data(), m_buffers[6].size());
+        }
+        ImGui::InputText(kLabels[12], m_buffers[12].data(), m_buffers[12].size());
+        ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
+        if (m_iip3_enabled) {
+            ImGui::InputText(kLabels[7], m_buffers[7].data(), m_buffers[7].size());
+            ImGui::InputText(kLabels[8], m_buffers[8].data(), m_buffers[8].size());
+            ImGui::InputText(kLabels[9], m_buffers[9].data(), m_buffers[9].size());
+            ImGui::InputText(kLabels[10], m_buffers[10].data(), m_buffers[10].size());
+            ImGui::InputText(kLabels[11], m_buffers[11].data(), m_buffers[11].size());
+        }
+
+        const auto draft = makeDraft();
+        if (ImGui::Button("Apply requirements")) {
+            std::string error;
+            if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
+                const bool changed = !(set == m_snapshot);
+                resetDraft(set);
+                if (changed && onChange)
+                    onChange();
+            } else {
+                m_error = std::move(error);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel"))
+            resetDraft(set);
+    }
+
+    const bool pending_edits = !sameDraft(makeDraft(), m_baseline);
+    if (pending_edits) {
         ImGui::TextDisabled("Unapplied edits");
-    } else if (state.invalid_reason.empty() && state.config) {
-        ImGui::Separator();
-        drawStatusRow("Gain", result.gain, "dB");
-        drawStatusRow("Noise figure", result.noise_figure, "dB");
-        drawStatusRow("Output power", result.output_power, "dBm");
-        drawStatusRow("IIP3", result.iip3, "dBm");
-        switch (receiverRequirementStatusTone(result.overall)) {
-        case ReceiverRequirementStatusTone::PassGreen:
-            ImGui::TextColored(ImVec4(0.25f, 0.85f, 0.35f, 1.0f), "Overall: %s",
-                               statusText(result.overall));
-            break;
-        case ReceiverRequirementStatusTone::FailRed:
-            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "Overall: %s",
-                               statusText(result.overall));
-            break;
-        case ReceiverRequirementStatusTone::Neutral:
-            ImGui::TextDisabled("Overall: %s", statusText(result.overall));
-            break;
+    } else {
+        const auto state = selectedReceiverRequirementsState(set);
+        if (!state.invalid_reason.empty()) {
+            ImGui::TextDisabled("Invalid configuration: %s", state.invalid_reason.c_str());
+        } else if (!state.config) {
+            ImGui::TextDisabled("Not configured");
+        } else {
+            ImGui::Separator();
+            drawStatusRow("Gain", result.gain, "dB");
+            drawStatusRow("Noise figure", result.noise_figure, "dB");
+            drawStatusRow("Output power", result.output_power, "dBm");
+            if (state.config->output_power && !state.config->measurement_conditions.input_level_dBm)
+                ImGui::TextDisabled("Needs input level");
+            drawStatusRow("IIP3", result.iip3, "dBm");
+            switch (receiverRequirementStatusTone(result.overall)) {
+            case ReceiverRequirementStatusTone::PassGreen:
+                ImGui::TextColored(kPassColor, "Overall: %s", statusText(result.overall));
+                break;
+            case ReceiverRequirementStatusTone::FailRed:
+                ImGui::TextColored(kErrorColor, "Overall: %s", statusText(result.overall));
+                break;
+            case ReceiverRequirementStatusTone::Neutral:
+                ImGui::TextDisabled("Overall: %s", statusText(result.overall));
+                break;
+            }
         }
     }
     ImGui::End();

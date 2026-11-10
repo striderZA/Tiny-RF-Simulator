@@ -40,6 +40,8 @@ class AppAgentHost final : public IAgentHost {
         std::function<bool(const std::string &)> save_project;
         std::function<AgentProjectLoadResult(const std::string &)> load_project;
         std::function<std::vector<std::string>()> saved_project_data_files;
+        std::function<ReceiverRequirementsSet()> receiver_requirements;
+        std::function<void(const ReceiverRequirementsSet &)> set_receiver_requirements;
     };
 
     AppAgentHost(NodeGraphWidget &graph_widget, Hooks hooks);
@@ -67,6 +69,8 @@ class AppAgentHost final : public IAgentHost {
     bool saveProjectFile(const std::string &path) override;
     std::vector<std::string> savedProjectDataFiles() const override;
     AgentProjectLoadResult loadProjectFile(const std::string &path) override;
+    std::optional<ReceiverRequirementsSet> receiverRequirements() const override;
+    bool setReceiverRequirements(const ReceiverRequirementsSet &set) override;
     void recordActivity(const AgentActivity &activity) override;
 
   private:

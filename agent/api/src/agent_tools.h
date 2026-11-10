@@ -18,12 +18,17 @@ std::unique_ptr<IAgentCallTask> startTestFlowRunTask(AgentApi &api, const AgentC
 AgentToolResult executeReceiverMeasureTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeProjectSaveTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeRequirementsGetTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 
 IComponentEngine *findById(const CircuitRuntime &runtime, int component_id);
 AgentToolResult staleMeasurementEpochError(std::uint64_t epoch, const std::string &cause,
                                            const std::vector<std::string> &undone);
+// The epoch every edit or measurement call carries. Judged before any other argument, so a stale
+// call reports STALE_EPOCH even when its other arguments are also invalid.
+std::uint64_t requiredEpoch(const nlohmann::ordered_json &arguments);
 
 // A measured output endpoint: a live component, its output port index, and its graph pin.
 struct AgentEndpoint {

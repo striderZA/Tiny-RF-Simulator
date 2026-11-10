@@ -2,41 +2,38 @@
 
 #include "receiver_requirements.h"
 #include <array>
+#include <cstddef>
 #include <functional>
-#include <optional>
 #include <string>
-#include <vector>
 
 enum class ReceiverRequirementStatusTone { Neutral, PassGreen, FailRed };
-
-struct ReceiverGeneratorToneOption {
-    double frequency_Hz;
-    double power_dBm;
-};
 
 ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementStatus status);
 
 class ReceiverRequirementsWidget {
   public:
-    void draw(const char *title, bool *p_open, ReceiverRequirementsState &state,
-              const ReceiverRequirementsEvaluation &result,
-              const std::vector<ReceiverGeneratorToneOption> &source_tones);
+    void draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
+              const ReceiverRequirementsEvaluation &result);
 
     std::function<void()> onChange;
+    // The validation error shown under the mode controls; empty when there is none.
+    const std::string &error() const { return m_error; }
 
   private:
-    void resetDraft(const ReceiverRequirementsState &state,
-                    const std::vector<ReceiverGeneratorToneOption> &source_tones);
-    bool stateMatchesSnapshot(const ReceiverRequirementsState &state) const;
+    void resetDraft(const ReceiverRequirementsSet &set);
+    void fillModeName(const ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft makeDraft() const;
     ReceiverRequirementsDraft m_baseline;
-    std::array<std::array<char, 128>, 12> m_buffers{};
-    ReceiverRequirementsState m_snapshot;
-    std::optional<double> m_source_tone_frequency_Hz;
+    std::array<std::array<char, 128>, 13> m_buffers{};
+    std::array<char, 128> m_mode_name{};
+    ReceiverRequirementsSet m_snapshot;
+    std::size_t m_name_selected = 0;
     bool m_gain_enabled = false;
     bool m_nf_enabled = false;
     bool m_output_power_enabled = false;
     bool m_iip3_enabled = false;
     bool m_initialized = false;
     std::string m_error;
+    std::string m_notice;
+    std::string m_remove_name;
 };

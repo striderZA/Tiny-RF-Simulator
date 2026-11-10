@@ -214,6 +214,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     };
     agent_hooks.save_project = [this](const std::string &path) { return saveProject(path); };
     agent_hooks.saved_project_data_files = [this]() { return m_last_saved_data_files; };
+    agent_hooks.receiver_requirements = [this]() { return m_receiver_requirements; };
+    // The agent API opens the checkpoint and calls EditorCommands::markModified() itself.
+    agent_hooks.set_receiver_requirements = [this](const ReceiverRequirementsSet &set) {
+        m_receiver_requirements = set;
+    };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);
@@ -1882,35 +1887,21 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
     if (m_show_receiver_requirements) {
+        const auto measurement_state = selectedReceiverRequirementsState(m_receiver_requirements);
         ReceiverRequirementsConfig measurement_config;
-        if (m_receiver_requirements.config && m_receiver_requirements.invalid_reason.empty())
-            measurement_config = *m_receiver_requirements.config;
-        // The engine can auto-select a lone tone for UI-free callers. The
-        // app's applied selector is authoritative: a missing selection must
-        // remain incomplete until the editor applies its preselection.
-        if (measurement_config.output_power &&
-            !measurement_config.measurement_conditions.output_reference_tone_frequency_Hz)
-            measurement_config.measurement_conditions.output_reference_tone_frequency_Hz = -1.0;
+        if (measurement_state.config && measurement_state.invalid_reason.empty())
+            measurement_config = *measurement_state.config;
         m_receiver_performance_engine.update(measurement_config, m_na_engine.pointAPin(),
                                              m_na_engine.pointBPin(),
                                              m_na_engine.sweepFrequencies());
 
-        std::vector<ReceiverGeneratorToneOption> source_tones;
-        const int source_node_id = m_circuit_runtime.graph().nodeIdForPin(m_na_engine.pointAPin());
-        if (IComponentEngine *source = m_circuit_runtime.components().find(source_node_id);
-            source && source->type_name() == "generator") {
-            const auto *generator = static_cast<const SignalGeneratorEngine *>(source);
-            source_tones.reserve(generator->tones().size());
-            for (const auto &tone : generator->tones())
-                source_tones.push_back({tone.freq_Hz, tone.power_dBm});
-        }
         const auto &measurements = m_receiver_performance_engine.measurements();
         const auto result = evaluateReceiverRequirements(
-            m_receiver_requirements, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
+            measurement_state, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
             m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
             measurements.output_power_dBm, measurements.iip3_dBm);
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
-                                             m_receiver_requirements, result, source_tones);
+                                             m_receiver_requirements, result);
     }
 
     if (m_show_power_meter)

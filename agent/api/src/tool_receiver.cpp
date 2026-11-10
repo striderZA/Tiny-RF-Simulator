@@ -70,21 +70,6 @@ std::optional<double> optionalFinite(const OrderedJson &arguments, std::string_v
     return requiredFinite(arguments, "", key);
 }
 
-// The epoch every call carries. It is judged before any other argument, so a stale call reports
-// STALE_EPOCH even when its other arguments are also invalid.
-std::uint64_t requiredEpoch(const OrderedJson &arguments) {
-    if (!arguments.is_object())
-        invalid("/", "expected an object");
-    const auto found = arguments.find("epoch");
-    if (found == arguments.end())
-        invalid("/epoch", "required argument is missing");
-    if (found->is_number_unsigned())
-        return found->get<std::uint64_t>();
-    if (found->is_number_integer() && found->get<std::int64_t>() >= 0)
-        return static_cast<std::uint64_t>(found->get<std::int64_t>());
-    invalid("/epoch", "expected a non-negative integer");
-}
-
 // The optional iip3 object: absent turns IIP3 off; present requires every field.
 std::optional<ReceiverIIP3TestSettings> parseIip3(const OrderedJson &arguments) {
     const auto found = arguments.find("iip3");

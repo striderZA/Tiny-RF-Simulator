@@ -148,6 +148,9 @@ std::string requestKey(const ReceiverMeasurementRequest &request, int point_a_pi
     key["tone_selector"] = request.output_power && request.reference_tone_Hz
                                ? nlohmann::json(*request.reference_tone_Hz)
                                : nlohmann::json(nullptr);
+    key["input_level"] = request.output_power && request.input_level_dBm
+                             ? nlohmann::json(*request.input_level_dBm)
+                             : nlohmann::json(nullptr);
     key["iip3_enabled"] = request.iip3;
     if (request.iip3 && request.iip3_settings) {
         const auto &settings = *request.iip3_settings;
@@ -174,9 +177,10 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverRequirementsConf
                                                   const std::vector<double> &sweep_frequencies_Hz) {
     const auto &conditions = config.measurement_conditions;
     ReceiverMeasurementRequest request;
-    request.output_power = config.output_power.has_value();
+    request.output_power =
+        config.output_power.has_value() && conditions.input_level_dBm.has_value();
     if (request.output_power)
-        request.reference_tone_Hz = conditions.output_reference_tone_frequency_Hz;
+        request.input_level_dBm = conditions.input_level_dBm;
     request.iip3 = config.iip3_min_dBm.has_value() && conditions.iip3.has_value();
     if (request.iip3)
         request.iip3_settings = conditions.iip3;
@@ -187,13 +191,16 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverMeasurementReque
                                                   int point_a_pin, int point_b_pin,
                                                   const std::vector<double> &sweep_frequencies_Hz) {
     const auto path = findMeasurementChainPath(m_graph, m_host, point_a_pin, point_b_pin);
-    IComponentEngine *generator_component = nullptr;
-    const int source_node = m_graph.nodeIdForPin(point_a_pin);
-    if (source_node >= 0)
-        generator_component = m_host.componentForNode(source_node);
-    auto *generator = generator_component && generator_component->type_name() == "generator"
-                          ? dynamic_cast<SignalGeneratorEngine *>(generator_component)
-                          : nullptr;
+    // An explicit input level supplies the source power, so Point A's generator is
+    // neither required nor read.
+    SignalGeneratorEngine *generator = nullptr;
+    if (request.output_power && !request.input_level_dBm) {
+        const int source_node = m_graph.nodeIdForPin(point_a_pin);
+        IComponentEngine *source =
+            source_node >= 0 ? m_host.componentForNode(source_node) : nullptr;
+        if (source && source->type_name() == "generator")
+            generator = dynamic_cast<SignalGeneratorEngine *>(source);
+    }
     const std::string key =
         requestKey(request, point_a_pin, point_b_pin, sweep_frequencies_Hz, path);
     const bool same_request = m_has_cached_request && key == m_cached_request;
@@ -252,25 +259,29 @@ void ReceiverPerformanceMeasurementEngine::update(const ReceiverMeasurementReque
             return;
         m_runner = std::move(runner);
 
-        if (request.output_power && generator) {
-            const auto &tones = generator->tones();
-            const auto selector = request.reference_tone_Hz;
-            const Spectrum::Tone *selected_tone = nullptr;
-            if (selector || tones.size() == 1) {
-                const double frequency = selector ? *selector : tones.front().freq_Hz;
-                for (const auto &tone : tones) {
-                    if (tone.freq_Hz != frequency)
-                        continue;
-                    if (selected_tone) {
-                        selected_tone = nullptr;
-                        break;
+        if (request.output_power) {
+            if (request.input_level_dBm) {
+                m_output_tone_power_phase = std::pair{*request.input_level_dBm, 0.0};
+            } else if (generator) {
+                const auto &tones = generator->tones();
+                const auto selector = request.reference_tone_Hz;
+                const Spectrum::Tone *selected_tone = nullptr;
+                if (selector || tones.size() == 1) {
+                    const double frequency = selector ? *selector : tones.front().freq_Hz;
+                    for (const auto &tone : tones) {
+                        if (tone.freq_Hz != frequency)
+                            continue;
+                        if (selected_tone) {
+                            selected_tone = nullptr;
+                            break;
+                        }
+                        selected_tone = &tone;
                     }
-                    selected_tone = &tone;
                 }
+                if (selected_tone)
+                    m_output_tone_power_phase =
+                        std::pair{selected_tone->power_dBm, selected_tone->phase_deg};
             }
-            if (selected_tone)
-                m_output_tone_power_phase =
-                    std::pair{selected_tone->power_dBm, selected_tone->phase_deg};
         }
 
         if (request.iip3 && request.iip3_settings) {

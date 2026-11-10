@@ -6,6 +6,7 @@
 
 ### Changed
 
+- **Receiver requirements use named modes** — the Receiver Requirements view edits one mode at a time. Each mode has its own band, gain, noise-figure, output-power, and IIP3 limits, and its own input level. Output power is measured from that input level, not from a generator tone, so an output-power limit with no input level stays Incomplete until one is set. A project saved with the old single set loads as one mode named "Default". The Network Analyzer checks the selected mode only. The agent gains `requirements_get` and `requirements_edit`.
 - **CPack packages include the Windows MinGW runtime DLLs** — on Windows, CMake installs `libgcc_s_seh-1.dll`, `libstdc++-6.dll` and `libwinpthread-1.dll` beside `tiny-rf-simulator.exe`, the same three the release zip copies by hand, and `CPACK_PACKAGE_EXECUTABLES` names `tiny-rf-simulator`. The `rf-sim-mcp` install rule moved into the top-level `CMakeLists.txt` beside the GUI install, with no change to the installed files. CPack output stays a CI artifact: release assets are still packaged by hand, and the CPack archive still differs from them in layout.
 - **Windows DLL lookup reads the MINGW64 bin** — CMake now resolves the three MinGW runtime DLLs from `$MSYSTEM_PREFIX/bin` (`/mingw64/bin` in a MINGW64 shell), the directory `release.yml` copies from, instead of the compiler's directory. Configure fails outside an MSYS2 shell. Not built on Windows here; the Windows package job is the first check.
 

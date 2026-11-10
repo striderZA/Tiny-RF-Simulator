@@ -692,6 +692,14 @@ add_standalone_test(test_agent_api_project
 )
 target_include_directories(test_agent_api_project PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
 
+# Standalone, UI-free coverage for the requirements_get and requirements_edit tools: host
+# routing, checkpoint and revision behavior, the argument-check order, and invalid data.
+add_standalone_test(test_agent_requirements
+    SOURCES test_agent_requirements.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_requirements PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+
 # Standalone app-level project_save and project_load round trips through RfSimulatorApp: real
 # .rfsim files, the GUI save and load paths, checkpoint clearing, and reset-on-failure.
 add_standalone_test(test_agent_project

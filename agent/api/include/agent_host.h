@@ -1,5 +1,7 @@
 #pragma once
 
+#include "receiver_requirements.h"
+
 #include <nlohmann/json.hpp>
 
 #include <array>
@@ -63,5 +65,13 @@ class IAgentHost {
     // Project-relative external RF data files preserved by the most recent successful save.
     virtual std::vector<std::string> savedProjectDataFiles() const { return {}; }
     virtual AgentProjectLoadResult loadProjectFile(const std::string &path) = 0;
+    // The receiver requirement modes shown in the Receiver Requirements panel. nullopt when the
+    // host has no such state; the tools then report INTERNAL.
+    virtual std::optional<ReceiverRequirementsSet> receiverRequirements() const {
+        return std::nullopt;
+    }
+    // Replaces every mode and the selection. The caller opens the checkpoint and marks the project
+    // modified; implementations only assign the stored set and never mark it dirty themselves.
+    virtual bool setReceiverRequirements(const ReceiverRequirementsSet &) { return false; }
     virtual void recordActivity(const AgentActivity &) = 0;
 };
