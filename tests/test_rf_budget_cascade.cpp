@@ -702,3 +702,24 @@ TEST_CASE("a chain below the readout floor still fails its gain minimum", "[rf_b
     for (std::size_t i = 0; i < cascade.frequencies_Hz.size(); ++i)
         CHECK(std::isnan(cascade.stages.back().cumulative_gain_dB.values[i]));
 }
+
+TEST_CASE("a chain below the readout floor still fails its NF and output power limits",
+          "[rf_budget][cascade]") {
+    // The 130 dB pad makes the NF about 110 dB and the output level about -140 dBm. Both limits
+    // judge the unfloored values, so both must Fail rather than read Incomplete.
+    RfBudget budget = chainBudget();
+    budget.stages[1].params["atten_dB"] = 130.0;
+    budget.modes.push_back(emptyRecord(1));
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->nf_max_dB = 10.0;
+    requirements.modes[0].config->output_power = ReceiverOutputPowerLimits{-50.0, 20.0};
+    ComponentLibrary library;
+
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    const ReceiverRequirementsEvaluation &verdict = evaluation.modes[0].cascades[0].verdict;
+
+    CHECK(verdict.noise_figure.status == ReceiverRequirementStatus::Fail);
+    CHECK(verdict.output_power.status == ReceiverRequirementStatus::Fail);
+}
