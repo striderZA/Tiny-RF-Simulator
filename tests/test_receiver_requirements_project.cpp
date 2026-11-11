@@ -152,6 +152,22 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements with no modes are not save
     std::filesystem::remove(path);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "An emptied receiver requirements set keeps its mode id counter",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_emptied_counter");
+    {
+        // Modes 1 and 2 were added and then removed, so the next id is 3.
+        RfSimulatorApp app;
+        app.testReceiverRequirements().next_mode_id = 3;
+        app.saveProject(path);
+    }
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.testReceiverRequirements().modes.empty());
+    CHECK(app.testReceiverRequirements().next_mode_id == 3);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements format 2 file saves as format 3 with ids",
                  "[receiver_requirements][project]") {
     const auto path = tempPath("_format2_to_3");

@@ -1066,7 +1066,9 @@ bool ProjectSerializer::save(const std::string &path, std::vector<std::string> *
 nlohmann::json ProjectSerializer::toJson(const ProjectJsonOptions &options) {
     nlohmann::json root;
     root["version"] = 1;
-    if (!m_receiver_requirements.modes.empty() || !m_receiver_requirements.invalid_reason.empty())
+    // Keep the id counter even without modes, so an id removed with the last mode is not reissued.
+    if (!m_receiver_requirements.modes.empty() || m_receiver_requirements.next_mode_id > 1 ||
+        !m_receiver_requirements.invalid_reason.empty())
         root["receiver_requirements"] = receiverRequirementsToJson(m_receiver_requirements);
     if (!m_rf_budget.empty())
         root["rf_budget"] = rfBudgetToJson(m_rf_budget);
@@ -1385,6 +1387,13 @@ bool ProjectSerializer::fromJson(nlohmann::json root, const ProjectJsonOptions &
             if (!m_rf_budget.invalid_reason.empty())
                 LOG_WARN("Invalid RF budget in project file %s: %s", path.c_str(),
                          m_rf_budget.invalid_reason.c_str());
+        }
+        // Budget records name requirements mode ids. Keep the counter above each of them, so a
+        // requirements section that lost its counter cannot reissue one.
+        for (const RfBudgetModeRecord &record : m_rf_budget.modes) {
+            if (record.mode_id < std::numeric_limits<std::uint32_t>::max() &&
+                record.mode_id >= m_receiver_requirements.next_mode_id)
+                m_receiver_requirements.next_mode_id = record.mode_id + 1;
         }
 
         // Map: type string \u2192 factory lambda

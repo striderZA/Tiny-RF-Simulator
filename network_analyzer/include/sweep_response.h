@@ -5,8 +5,8 @@
 #include <optional>
 #include <vector>
 
-// Sweep helpers shared by the Network Analyzer and the RF budget, so both read one grid and one
-// readout rule.
+// Sweep helpers shared by the Network Analyzer and the RF budget: one grid, one stimulus, and one
+// per-point tone and bin lookup. Each caller applies its own gain and noise rules.
 
 // f_i = std::lerp(start_Hz, stop_Hz, i / (points - 1)); one point gives {start_Hz}; points <= 0
 // gives an empty grid.

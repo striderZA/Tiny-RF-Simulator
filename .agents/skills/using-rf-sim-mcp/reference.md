@@ -50,7 +50,7 @@ Results are JSON in `structuredContent`; the same JSON is the text of `content`.
 | PATH_PARAMS_UNSUPPORTED | A file-reference parameter was set. These are refused. |
 | UNKNOWN_TYPE | Unknown component type. Check `component_types`. |
 | UNKNOWN_PART, AMBIGUOUS_PART | Library lookup failed. `details.candidates` lists up to five matches; pass `type` to disambiguate. |
-| NO_MEASUREMENT | `details.reason` is `NO_PATH` (no forward path between the points), `NO_VALID_POINTS` (the sweep has no valid points), or, from `budget_cascade`, `NOT_EVALUATED` (budget/requirements unavailable or no stages), `NOT_BUDGETED`, `NOT_CONFIGURED`, or `NOT_REACHED` (the message carries the unreached reason). |
+| NO_MEASUREMENT | `details.reason` is `NO_PATH` (no forward path between the points), `NO_VALID_POINTS` (the sweep has no valid points), or, from `budget_cascade`, `NOT_EVALUATED` (the budget or requirements are invalid, or the budget has no stages or outputs), `NOT_BUDGETED`, `NOT_CONFIGURED`, or `NOT_REACHED` (the message carries the unreached reason). |
 | UNSAVED_CHANGES | The open project has unsaved changes, so `project_load` did not run. Save with `project_save` (with `path` if the project is untitled), or ask the user to save or discard the changes in RF Simulator. |
 | INTERNAL | Unexpected failure, or a reply over the 1 MiB protocol limit. Re-read with `circuit_get`, then report it. |
 
@@ -146,4 +146,4 @@ Use `component_types {type}` first. Its `library_fields` list registered keys an
 
 - You cannot open file dialogs or revert projects. `.rfsim` project files are read and written only by `project_save` and `project_load`; `library_create` writes only a validated JSON definition under an existing library root, and `data_file_read` reads only files that a component or library part already references.
 - RF Simulator admits one agent client at a time.
-- Each reply is capped at 1 MiB. An oversized result becomes `INTERNAL`; request fewer points. `budget_cascade` pages at most 50 points per call, so page through larger budgets.
+- Each reply is capped at 1 MiB. An oversized result becomes `INTERNAL`. `budget_cascade` pages at most 50 points per call, so page through larger budgets. `budget_get` and `budget_edit` echo the whole budget and cannot page: an oversized budget reads back as `INTERNAL`. After an `INTERNAL` from `budget_edit`, the edit may already be stored, so re-read with `budget_get` before retrying.

@@ -469,6 +469,40 @@ TEST_CASE("switched bank follows the selected 2:1 input", "[rf_budget][cascade]"
     CHECK(evaluation.modes[1].unreached.empty());
 }
 
+TEST_CASE("a blocked branch does not claim an output that a live branch reaches",
+          "[rf_budget][cascade]") {
+    // SPLIT's first port feeds J's first input, which J blocks. Its second port feeds the input J
+    // selects, so RX is reached through A2 and must not be reported unreached.
+    RfBudget budget;
+    budget.point_count = 3;
+    budget.stages.push_back(idealStage("SPLIT", "splitter", {}, {fromInput()}));
+    budget.stages.push_back(
+        idealStage("A1", "amplifier", {{"gain_dB", 3.0}}, {fromStage("SPLIT", 0)}));
+    budget.stages.push_back(
+        idealStage("A2", "amplifier", {{"gain_dB", 7.0}}, {fromStage("SPLIT", 1)}));
+    budget.stages.push_back(
+        idealStage("J", "rf_switch_spdt_2to1", {}, {fromStage("A1", 0), fromStage("A2", 0)}));
+    budget.outputs.push_back({"RX", "J", 0});
+    budget.modes.push_back({1, {{"J", {{"active_throw", 1.0}}}}});
+
+    ComponentLibrary library;
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirementSet(), library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    CHECK(stageNames(evaluation.modes[0].cascades[0]) ==
+          std::vector<std::string>{"SPLIT", "A2", "J"});
+    CHECK(evaluation.modes[0].unreached.empty());
+}
+
+TEST_CASE("a budget with no outputs is not evaluated", "[rf_budget][cascade]") {
+    RfBudget budget = chainBudget();
+    budget.outputs.clear();
+    ComponentLibrary library;
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirementSet(), library);
+    CHECK(evaluation.not_evaluated_reason == "The budget has no outputs.");
+    CHECK(evaluation.modes.empty());
+}
+
 TEST_CASE("mode without a record is not budgeted; a record for a removed mode is orphaned",
           "[rf_budget][cascade]") {
     RfBudget budget = chainBudget();

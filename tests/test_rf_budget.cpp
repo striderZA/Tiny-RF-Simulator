@@ -337,6 +337,19 @@ TEST_CASE("refusals name the offending stage", "[rf_budget][model]") {
             {"mode_override_case_mismatch", budget, "Mode 1 overrides unknown stage 'amp1'."});
     }
     {
+        // Feeds and outputs name a stage exactly, as the cascade walk does.
+        RfBudget budget = chainBudget();
+        budget.stages[1].inputs = {fromStage("lna")};
+        cases.push_back({"feed_stage_case_mismatch", budget,
+                         "Stage 'ATT' input 0 is fed from unknown stage 'lna'."});
+    }
+    {
+        RfBudget budget = chainBudget();
+        budget.outputs[0] = {"RX", "att", 0};
+        cases.push_back(
+            {"output_stage_case_mismatch", budget, "Output 'RX' reads unknown stage 'att'."});
+    }
+    {
         RfBudget budget = chainBudget();
         budget.modes.push_back(
             {1, {{"ATT", {{"atten_dB", std::numeric_limits<double>::infinity()}}}}});

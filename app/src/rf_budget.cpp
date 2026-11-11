@@ -59,16 +59,8 @@ std::optional<std::string> nameError(const std::string &name, const char *kind) 
     return std::nullopt;
 }
 
-std::optional<std::size_t> findStageIndex(const RfBudget &budget, const std::string &name) {
-    for (std::size_t i = 0; i < budget.stages.size(); ++i) {
-        if (namesEqual(budget.stages[i].name, name))
-            return i;
-    }
-    return std::nullopt;
-}
-
-// Mode override keys name a stage exactly: validation accepts only keys the cascade can apply, and
-// the cascade looks the record up with std::map::find, so a case-different key is never applied.
+// Every stage reference (feed, output, mode override) names a stage exactly, as the cascade
+// walk compares names exactly; a case-different reference would validate but never be followed.
 std::optional<std::size_t> findStageIndexExact(const RfBudget &budget, const std::string &name) {
     for (std::size_t i = 0; i < budget.stages.size(); ++i) {
         if (budget.stages[i].name == name)
@@ -216,12 +208,12 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget) {
             any_fed = true;
             if (!feed->stage)
                 continue;
-            const auto source_index = findStageIndex(budget, *feed->stage);
+            const auto source_index = findStageIndexExact(budget, *feed->stage);
             if (!source_index)
                 return "Stage '" + stage.name + "' input " + port_text +
                        " is fed from unknown stage '" + *feed->stage + "'.";
             const RfBudgetStage &source = budget.stages[*source_index];
-            if (namesEqual(source.name, stage.name))
+            if (source.name == stage.name)
                 return "Stage '" + stage.name + "' feeds itself.";
             const RfBudgetStageType *source_type = stageTypeInfo(source.type);
             const int source_outputs = source_type ? source_type->outputs : 0;
@@ -256,7 +248,7 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget) {
         for (const auto &feed : budget.stages[i].inputs) {
             if (!feed || !feed->stage)
                 continue;
-            const auto source_index = findStageIndex(budget, *feed->stage);
+            const auto source_index = findStageIndexExact(budget, *feed->stage);
             if (!source_index)
                 continue;
             ++consumption[{*source_index, feed->port}];
@@ -264,7 +256,7 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget) {
         }
     }
     for (const RfBudgetOutput &output : budget.outputs) {
-        const auto stage_index = findStageIndex(budget, output.stage);
+        const auto stage_index = findStageIndexExact(budget, output.stage);
         if (!stage_index)
             continue;
         const RfBudgetStageType *type = stageTypeInfo(budget.stages[*stage_index].type);
@@ -312,7 +304,7 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget) {
     }
 
     for (const RfBudgetOutput &output : budget.outputs) {
-        const auto stage_index = findStageIndex(budget, output.stage);
+        const auto stage_index = findStageIndexExact(budget, output.stage);
         if (!stage_index)
             return "Output '" + output.name + "' reads unknown stage '" + output.stage + "'.";
         const RfBudgetStage &stage = budget.stages[*stage_index];

@@ -348,6 +348,7 @@ struct RouteState {
     RfBudgetReasonTable &reasons;
     std::map<std::pair<std::size_t, int>, RfBudgetStageResponse> responses;
     std::vector<char> done;
+    std::vector<std::uint16_t> blocked_reason; // first blocked reason per output; 0 if none
     std::vector<RfBudgetCascade> cascades;
     std::vector<RfBudgetUnreachedOutput> unreached;
 };
@@ -399,8 +400,9 @@ void walk(RouteState &state, std::size_t stage_index, int input_port,
                 const RfBudgetOutput &output = state.budget.outputs[o];
                 if (state.done[o] || output.stage != stage.name || output.port != port)
                     continue;
-                state.unreached.push_back({output.name, state.reasons.at(blocked_reason)});
-                state.done[o] = true;
+                // A blocked route does not claim the output: a live route may reach it later.
+                if (state.blocked_reason[o] == 0)
+                    state.blocked_reason[o] = blocked_reason;
             }
             for (std::size_t next = 0; next < state.budget.stages.size(); ++next) {
                 if (on_path[next])
@@ -478,11 +480,13 @@ void walk(RouteState &state, std::size_t stage_index, int input_port,
                 const RfBudgetOutput &output = state.budget.outputs[o];
                 if (state.done[o] || output.stage != stage.name || output.port != port)
                     continue;
-                state.done[o] = true;
                 if (child_blocked != 0) {
-                    state.unreached.push_back({output.name, state.reasons.at(child_blocked)});
+                    // A blocked route does not claim the output: a live route may reach it later.
+                    if (state.blocked_reason[o] == 0)
+                        state.blocked_reason[o] = child_blocked;
                     continue;
                 }
+                state.done[o] = true;
                 RfBudgetCascade cascade;
                 cascade.output = output.name;
                 cascade.frequencies_Hz = state.grid;
@@ -531,6 +535,10 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
         evaluation.not_evaluated_reason = "The budget has no stages.";
         return evaluation;
     }
+    if (budget.outputs.empty()) {
+        evaluation.not_evaluated_reason = "The budget has no outputs.";
+        return evaluation;
+    }
 
     std::vector<std::uint32_t> mode_ids;
     mode_ids.reserve(requirements.modes.size());
@@ -563,12 +571,19 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
 
         const std::vector<double> grid = linearSweepFrequencies(
             mode.config->band_start_Hz, mode.config->band_stop_Hz, budget.point_count);
-        RouteState state{budget,       record->overrides,
-                         evaluator,    grid,
-                         *mode.config, mode.config->measurement_conditions.input_level_dBm,
-                         mode.name,    evaluation.reasons,
-                         {},           std::vector<char>(budget.outputs.size(), 0),
-                         {},           {}};
+        RouteState state{budget,
+                         record->overrides,
+                         evaluator,
+                         grid,
+                         *mode.config,
+                         mode.config->measurement_conditions.input_level_dBm,
+                         mode.name,
+                         evaluation.reasons,
+                         {},
+                         std::vector<char>(budget.outputs.size(), 0),
+                         std::vector<std::uint16_t>(budget.outputs.size(), 0),
+                         {},
+                         {}};
 
         std::vector<char> on_path(budget.stages.size(), 0);
         for (std::size_t index = 0; index < budget.stages.size(); ++index) {
@@ -584,10 +599,15 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
             }
         }
         for (std::size_t o = 0; o < budget.outputs.size(); ++o) {
-            if (!state.done[o])
-                state.unreached.push_back(
-                    {budget.outputs[o].name,
-                     "Output '" + budget.outputs[o].name + "' is not reached."});
+            if (state.done[o])
+                continue;
+            const std::uint16_t blocked = state.blocked_reason[o];
+            if (blocked != 0) {
+                state.unreached.push_back({budget.outputs[o].name, state.reasons.at(blocked)});
+                continue;
+            }
+            state.unreached.push_back({budget.outputs[o].name,
+                                       "Output '" + budget.outputs[o].name + "' is not reached."});
         }
 
         mode_result.cascades = std::move(state.cascades);

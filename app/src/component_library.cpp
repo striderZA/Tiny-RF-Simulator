@@ -776,8 +776,11 @@ std::vector<std::string> ComponentLibrary::applyDefinition(const ComponentDefini
         if (sparam_mode != params.end()) {
             if (sparam_mode->is_boolean())
                 declared_sparam_mode = sparam_mode->get<bool>();
-            else
+            else {
+                LOG_WARN("ComponentLibrary: ignoring non-boolean sparam_mode for %s",
+                         def.part_number.c_str());
                 params.erase(sparam_mode);
+            }
         }
     }
     engine.deserialize(params);

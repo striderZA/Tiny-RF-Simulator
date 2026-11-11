@@ -122,6 +122,22 @@ TEST_CASE_METHOD(ImGuiFixture, "RF budget round-trips through a project file",
     std::filesystem::remove(path);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "A budget record keeps its mode id out of the next requirements id",
+                 "[rf_budget][project]") {
+    const auto path = tempPath("_id_floor");
+    {
+        // The budget names mode 1, but no requirements section is saved.
+        RfSimulatorApp app;
+        app.testRfBudget() = modelBudget();
+        app.saveProject(path);
+    }
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.testReceiverRequirements().modes.empty());
+    CHECK(app.testReceiverRequirements().next_mode_id == 2);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "Malformed RF budget keeps the rest of the project",
                  "[rf_budget][project]") {
     const auto path = tempPath("_malformed");
