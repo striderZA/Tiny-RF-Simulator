@@ -1,6 +1,7 @@
 #pragma once
 
 #include "receiver_requirements.h"
+#include "rf_budget_cascade.h"
 #include <array>
 #include <cstddef>
 #include <functional>
@@ -13,7 +14,8 @@ ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementS
 class ReceiverRequirementsWidget {
   public:
     void draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
-              const ReceiverRequirementsEvaluation &result);
+              const ReceiverRequirementsEvaluation &result,
+              const RfBudgetModeResult *budget = nullptr);
 
     std::function<void()> onChange;
     // The validation error shown under the mode controls; empty when there is none.

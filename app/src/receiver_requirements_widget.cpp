@@ -66,6 +66,78 @@ bool sameSelectedMode(const ReceiverRequirementsSet &a, const ReceiverRequiremen
     return mode_a.name == mode_b.name && mode_a.config == mode_b.config;
 }
 
+void drawMetricStatus(const ReceiverMetricEvaluation &metric) {
+    const char *text = statusText(metric.status);
+    switch (receiverRequirementStatusTone(metric.status)) {
+    case ReceiverRequirementStatusTone::PassGreen:
+        ImGui::TextColored(kPassColor, "%s", text);
+        break;
+    case ReceiverRequirementStatusTone::FailRed:
+        ImGui::TextColored(kErrorColor, "%s", text);
+        break;
+    case ReceiverRequirementStatusTone::Neutral:
+        ImGui::TextDisabled("%s", text);
+        break;
+    }
+    if (ImGui::IsItemHovered() && metric.observed_min && metric.observed_max) {
+        if (*metric.observed_min == *metric.observed_max)
+            ImGui::SetTooltip("Worst case: %.3f", *metric.observed_min);
+        else
+            ImGui::SetTooltip("Worst case: %.3f to %.3f", *metric.observed_min,
+                              *metric.observed_max);
+    }
+}
+
+void drawBudgetPrediction(const RfBudgetModeResult *budget) {
+    ImGui::SeparatorText("Budget prediction");
+    if (!budget) {
+        ImGui::TextDisabled("Not budgeted for this mode.");
+        return;
+    }
+    if (budget->status == RfBudgetModeStatus::NotConfigured) {
+        ImGui::TextDisabled("The mode has no requirements.");
+        return;
+    }
+    if (budget->status == RfBudgetModeStatus::NotBudgeted) {
+        ImGui::TextDisabled("Not budgeted for this mode.");
+        return;
+    }
+    if (budget->cascades.empty())
+        ImGui::TextDisabled("No output is reached by this mode.");
+    if (!budget->cascades.empty() &&
+        ImGui::BeginTable("budget_prediction", 6,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Output");
+        ImGui::TableSetupColumn("Overall");
+        ImGui::TableSetupColumn("Gain");
+        ImGui::TableSetupColumn("NF");
+        ImGui::TableSetupColumn("Output power");
+        ImGui::TableSetupColumn("IIP3");
+        ImGui::TableHeadersRow();
+        for (const RfBudgetCascade &cascade : budget->cascades) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(cascade.output.c_str());
+            ImGui::TableNextColumn();
+            drawMetricStatus(
+                ReceiverMetricEvaluation{cascade.verdict.overall, std::nullopt, std::nullopt});
+            ImGui::TableNextColumn();
+            drawMetricStatus(cascade.verdict.gain);
+            ImGui::TableNextColumn();
+            drawMetricStatus(cascade.verdict.noise_figure);
+            ImGui::TableNextColumn();
+            drawMetricStatus(cascade.verdict.output_power);
+            ImGui::TableNextColumn();
+            drawMetricStatus(cascade.verdict.iip3);
+        }
+        ImGui::EndTable();
+    }
+    for (const RfBudgetUnreachedOutput &unreached : budget->unreached)
+        ImGui::TextColored(kErrorColor, "%s: %s", unreached.output.c_str(),
+                           unreached.reason.c_str());
+}
+
 void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
     switch (receiverRequirementStatusTone(metric.status)) {
     case ReceiverRequirementStatusTone::PassGreen:
@@ -179,7 +251,8 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
 }
 
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
-                                      const ReceiverRequirementsEvaluation &result) {
+                                      const ReceiverRequirementsEvaluation &result,
+                                      const RfBudgetModeResult *budget) {
     // An external change reloads the draft only when it changes the selected mode.
     // Edits to other modes keep the unapplied draft, which still describes the selected mode.
     if (!m_initialized) {
@@ -371,6 +444,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
                 break;
             }
         }
+        drawBudgetPrediction(budget);
     }
     ImGui::End();
 }

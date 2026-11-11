@@ -175,7 +175,16 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
                                                                  m_circuit_runtime.viewManager());
     m_na_widget = std::make_unique<NetworkAnalyzerWidget>(m_na_engine, m_circuit_runtime.graph());
     m_receiver_requirements_widget = std::make_unique<ReceiverRequirementsWidget>();
-    m_receiver_requirements_widget->onChange = [this]() { markDirty(); };
+    m_receiver_requirements_widget->onChange = [this]() {
+        markDirty();
+        m_rf_budget_evaluation_dirty = true;
+    };
+    m_rf_budget_widget = std::make_unique<RfBudgetWidget>();
+    m_rf_budget_widget->onChange = [this]() {
+        markDirty();
+        m_rf_budget_evaluation_dirty = true;
+    };
+    m_rf_budget_widget->onRefresh = [this]() { m_rf_budget_evaluation_dirty = true; };
     m_power_meter_widget =
         std::make_unique<PowerMeterWidget>(m_power_meter_engine, m_circuit_runtime.graph());
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
@@ -218,9 +227,13 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     // The agent API opens the checkpoint and calls EditorCommands::markModified() itself.
     agent_hooks.set_receiver_requirements = [this](const ReceiverRequirementsSet &set) {
         m_receiver_requirements = set;
+        m_rf_budget_evaluation_dirty = true;
     };
     agent_hooks.rf_budget = [this]() { return m_rf_budget; };
-    agent_hooks.set_rf_budget = [this](const RfBudget &budget) { m_rf_budget = budget; };
+    agent_hooks.set_rf_budget = [this](const RfBudget &budget) {
+        m_rf_budget = budget;
+        m_rf_budget_evaluation_dirty = true;
+    };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);
@@ -372,6 +385,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
     m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
+    m_show_rf_budget = m_state.loadBool("WindowState", "RfBudget", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
     m_show_test_flow = m_state.loadBool("WindowState", "TestFlow", false);
     m_show_agent = m_state.loadBool("WindowState", "Agent", false);
@@ -605,8 +619,19 @@ bool RfSimulatorApp::testSetGroupCollapsed(int group_id, bool collapsed) {
 }
 
 void RfSimulatorApp::markDirty() { m_editor_commands.markModified(); }
+
+void RfSimulatorApp::refreshRfBudgetEvaluation() {
+    if (!m_rf_budget_evaluation_dirty && m_rf_budget_library_revision == m_library_revision)
+        return;
+    m_rf_budget_evaluation = evaluateRfBudget(m_rf_budget, m_receiver_requirements, m_library);
+    m_rf_budget_evaluation_dirty = false;
+    m_rf_budget_library_revision = m_library_revision;
+}
+
 void RfSimulatorApp::refreshExtensions() {
     namespace fs = std::filesystem;
+    ++m_library_revision;
+    m_rf_budget_evaluation_dirty = true;
 
     fs::path project_root = m_current_project_path.empty()
                                 ? fs::current_path()
@@ -1521,6 +1546,7 @@ void RfSimulatorApp::draw_ui() {
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
             ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
+            ImGui::MenuItem("RF Budget", nullptr, &m_show_rf_budget);
             ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
@@ -1888,6 +1914,12 @@ void RfSimulatorApp::draw_ui() {
         m_na_engine.update();
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
+    if (m_show_receiver_requirements || m_show_rf_budget)
+        refreshRfBudgetEvaluation();
+    if (m_show_rf_budget) {
+        m_rf_budget_widget->draw("RF Budget", &m_show_rf_budget, m_rf_budget,
+                                 m_receiver_requirements, m_library, m_rf_budget_evaluation);
+    }
     if (m_show_receiver_requirements) {
         const auto measurement_state = selectedReceiverRequirementsState(m_receiver_requirements);
         ReceiverRequirementsConfig measurement_config;
@@ -1902,8 +1934,14 @@ void RfSimulatorApp::draw_ui() {
             measurement_state, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
             m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
             measurements.output_power_dBm, measurements.iip3_dBm);
+        const RfBudgetModeResult *budget_mode = nullptr;
+        const std::size_t selected = m_receiver_requirements.selected;
+        if (selected < m_receiver_requirements.modes.size()) {
+            budget_mode = findRfBudgetModeResult(m_rf_budget_evaluation,
+                                                 m_receiver_requirements.modes[selected].id);
+        }
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
-                                             m_receiver_requirements, result);
+                                             m_receiver_requirements, result, budget_mode);
     }
 
     if (m_show_power_meter)
@@ -1977,6 +2015,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "NetworkAnalyzer", m_show_na);
     m_state.saveBool("WindowState", "PowerMeter", m_show_power_meter);
     m_state.saveBool("WindowState", "ReceiverRequirements", m_show_receiver_requirements);
+    m_state.saveBool("WindowState", "RfBudget", m_show_rf_budget);
     m_state.saveBool("WindowState", "Properties", m_show_properties);
     m_pfb_views.saveVisibility(m_circuit_runtime.components(), m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);

@@ -41,6 +41,8 @@
 #include "receiver_requirements.h"
 #include "receiver_requirements_widget.h"
 #include "rf_budget.h"
+#include "rf_budget_cascade.h"
+#include "rf_budget_widget.h"
 #include "session_state.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
@@ -80,6 +82,7 @@ class RfSimulatorApp {
     bool m_show_spectrum = true;
     bool m_show_na = false;
     bool m_show_receiver_requirements = false;
+    bool m_show_rf_budget = false;
     bool m_show_power_meter = false;
     // Test Flow panel visibility; persisted through SessionState
     // (WindowState/TestFlow) exactly like the other panel toggles.
@@ -141,6 +144,8 @@ class RfSimulatorApp {
     size_t componentCount() const { return m_circuit_runtime.components().size(); }
     std::string m_current_project_path;
     void markDirty();
+    // Re-evaluates the budget only when an input changed since the last evaluation.
+    void refreshRfBudgetEvaluation();
     void testMakeDirty();
     // Test-only access to checkpoint serialization and the replacement epoch.
     ProjectSerializer &testProjectSerializer() { return *m_serializer; }
@@ -196,6 +201,8 @@ class RfSimulatorApp {
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsSet &testReceiverRequirements() { return m_receiver_requirements; }
     RfBudget &testRfBudget() { return m_rf_budget; }
+    const RfBudgetEvaluation &testRfBudgetEvaluation() const { return m_rf_budget_evaluation; }
+    const std::string &testRfBudgetWidgetError() const { return m_rf_budget_widget->error(); }
     ReceiverRequirementsState testReceiverRequirementsState() {
         return selectedReceiverRequirementsState(m_receiver_requirements);
     }
@@ -208,6 +215,7 @@ class RfSimulatorApp {
             mode.config = config;
         m_receiver_requirements.modes.push_back(std::move(mode));
         assignReceiverRequirementsModeIds(m_receiver_requirements);
+        m_rf_budget_evaluation_dirty = true;
     }
     const std::string &testReceiverRequirementsError() const {
         return m_receiver_requirements_widget->error();
@@ -300,6 +308,7 @@ class RfSimulatorApp {
     std::unique_ptr<NetworkAnalyzerWidget> m_na_widget;
     std::unique_ptr<PowerMeterWidget> m_power_meter_widget;
     std::unique_ptr<ReceiverRequirementsWidget> m_receiver_requirements_widget;
+    std::unique_ptr<RfBudgetWidget> m_rf_budget_widget;
     std::unique_ptr<NodeGraphWidget> m_graph_widget;
 
     std::vector<std::unique_ptr<SignalGeneratorWidget>> m_generator_widgets;
@@ -326,6 +335,10 @@ class RfSimulatorApp {
     NetworkAnalyzerEngine m_na_engine{m_circuit_runtime.graph(), m_na_host};
     ReceiverRequirementsSet m_receiver_requirements;
     RfBudget m_rf_budget;
+    RfBudgetEvaluation m_rf_budget_evaluation;
+    bool m_rf_budget_evaluation_dirty = true;
+    std::uint64_t m_rf_budget_library_revision = 0;
+    std::uint64_t m_library_revision = 0;
     std::unique_ptr<ProjectSerializer> m_serializer;
     std::vector<std::string> m_last_saved_data_files;
     GitStatusMonitor m_git_status_monitor;
