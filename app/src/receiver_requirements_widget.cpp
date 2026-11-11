@@ -1,5 +1,8 @@
 #include "receiver_requirements_widget.h"
+
 #include "imgui.h"
+#include "rf_view_ui.h"
+
 #include <cstdio>
 #include <limits>
 #include <string>
@@ -12,25 +15,12 @@ constexpr const char *kLabels[] = {
     "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)",
     "Input level (dBm)"};
 
-constexpr ImVec4 kErrorColor(1.0f, 0.35f, 0.35f, 1.0f);
-constexpr ImVec4 kPassColor(0.25f, 0.85f, 0.35f, 1.0f);
 constexpr const char *kRemoveModeTitle = "Remove mode?";
+constexpr float kFieldWidth = 200.0f;
+constexpr float kNameWidth = 260.0f;
 
-const char *statusText(ReceiverRequirementStatus status) {
-    switch (status) {
-    case ReceiverRequirementStatus::NotConfigured:
-        return "Not configured";
-    case ReceiverRequirementStatus::InvalidConfiguration:
-        return "Invalid configuration";
-    case ReceiverRequirementStatus::Incomplete:
-        return "Incomplete";
-    case ReceiverRequirementStatus::Pass:
-        return "Pass";
-    case ReceiverRequirementStatus::Fail:
-        return "Fail";
-    }
-    return "Incomplete";
-}
+const char *const kNoModesHint =
+    "Type a name in Mode name, then choose Add mode to define the first mode.";
 
 void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
@@ -66,47 +56,112 @@ bool sameSelectedMode(const ReceiverRequirementsSet &a, const ReceiverRequiremen
     return mode_a.name == mode_b.name && mode_a.config == mode_b.config;
 }
 
-void drawMetricStatus(const ReceiverMetricEvaluation &metric) {
-    const char *text = statusText(metric.status);
-    switch (receiverRequirementStatusTone(metric.status)) {
-    case ReceiverRequirementStatusTone::PassGreen:
-        ImGui::TextColored(kPassColor, "%s", text);
-        break;
-    case ReceiverRequirementStatusTone::FailRed:
-        ImGui::TextColored(kErrorColor, "%s", text);
-        break;
-    case ReceiverRequirementStatusTone::Neutral:
-        ImGui::TextDisabled("%s", text);
-        break;
+// A limit rendered for the result table: "0 to 20 dB", "max 5 dB", "min 10 dBm", or "-" when the
+// metric is not required.
+std::string limitRange(const std::optional<double> &low, const std::optional<double> &high,
+                       const char *unit) {
+    char text[96];
+    if (low && high)
+        std::snprintf(text, sizeof(text), "%.3g to %.3g %s", *low, *high, unit);
+    else if (high)
+        std::snprintf(text, sizeof(text), "max %.3g %s", *high, unit);
+    else if (low)
+        std::snprintf(text, sizeof(text), "min %.3g %s", *low, unit);
+    else
+        std::snprintf(text, sizeof(text), "-");
+    return text;
+}
+
+void drawMetricRow(const char *label, const std::string &limit,
+                   const ReceiverMetricEvaluation &metric, const char *unit) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::TextUnformatted(label);
+    ImGui::TableNextColumn();
+    if (limit == "-")
+        ImGui::TextDisabled("-");
+    else
+        ImGui::TextUnformatted(limit.c_str());
+    ImGui::TableNextColumn();
+    rf_view_ui::observedText(metric, unit);
+    ImGui::TableNextColumn();
+    rf_view_ui::metricStatus(metric);
+}
+
+void drawEvaluation(const ReceiverRequirementsState &state,
+                    const ReceiverRequirementsEvaluation &result) {
+    if (!state.invalid_reason.empty()) {
+        rf_view_ui::hint(state.invalid_reason.c_str());
+        return;
     }
-    if (ImGui::IsItemHovered() && metric.observed_min && metric.observed_max) {
-        if (*metric.observed_min == *metric.observed_max)
-            ImGui::SetTooltip("Worst case: %.3f", *metric.observed_min);
-        else
-            ImGui::SetTooltip("Worst case: %.3f to %.3f", *metric.observed_min,
-                              *metric.observed_max);
+    if (!state.config) {
+        rf_view_ui::hint("Not configured. Fill the limits above and choose Apply requirements.");
+        return;
     }
+    const ReceiverRequirementsConfig &config = *state.config;
+
+    rf_view_ui::sectionHeader("Measured result");
+    if (ImGui::BeginTable("requirements_evaluation", 4,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::TableSetupColumn("Metric", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Limit", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Observed", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableHeadersRow();
+        drawMetricRow(
+            "Gain",
+            limitRange(config.gain ? std::optional<double>(config.gain->minimum_dB) : std::nullopt,
+                       config.gain ? std::optional<double>(config.gain->maximum_dB) : std::nullopt,
+                       "dB"),
+            result.gain, "dB");
+        drawMetricRow("Noise figure", limitRange(std::nullopt, config.nf_max_dB, "dB"),
+                      result.noise_figure, "dB");
+        drawMetricRow(
+            "Output power",
+            limitRange(config.output_power ? std::optional<double>(config.output_power->minimum_dBm)
+                                           : std::nullopt,
+                       config.output_power ? std::optional<double>(config.output_power->maximum_dBm)
+                                           : std::nullopt,
+                       "dBm"),
+            result.output_power, "dBm");
+        drawMetricRow("IIP3", limitRange(config.iip3_min_dBm, std::nullopt, "dBm"), result.iip3,
+                      "dBm");
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Overall");
+        ImGui::TableNextColumn();
+        ImGui::TableNextColumn();
+        ImGui::TableNextColumn();
+        rf_view_ui::statusBadge(result.overall);
+        ImGui::EndTable();
+    }
+    if (config.output_power && !config.measurement_conditions.input_level_dBm)
+        rf_view_ui::hint("Output power is measured only with an input level set above.");
 }
 
 void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetModeResult *budget) {
-    ImGui::SeparatorText("Budget prediction");
-    // An invalid or unevaluated budget returns no mode results at all. Saying "not budgeted"
-    // there would hide the real reason.
-    if (!evaluation.not_evaluated_reason.empty()) {
-        ImGui::TextDisabled("%s", evaluation.not_evaluated_reason.c_str());
+    if (!evaluation.not_evaluated_reason.empty() ||
+        (budget && budget->status == RfBudgetModeStatus::NotConfigured)) {
+        rf_view_ui::sectionHeader("Budget prediction");
+        // An invalid or unevaluated budget returns no mode results at all. Saying "not budgeted"
+        // there would hide the real reason.
+        if (!evaluation.not_evaluated_reason.empty()) {
+            rf_view_ui::hint(evaluation.not_evaluated_reason.c_str());
+            return;
+        }
+        rf_view_ui::hint("The mode has no requirements.");
         return;
     }
+    rf_view_ui::sectionHeader("Budget prediction");
     if (!budget) {
-        ImGui::TextDisabled("Not budgeted for this mode.");
-        return;
-    }
-    if (budget->status == RfBudgetModeStatus::NotConfigured) {
-        ImGui::TextDisabled("The mode has no requirements.");
+        rf_view_ui::hint("No budget record for this mode. View > RF Budget adds one.");
         return;
     }
     if (budget->status == RfBudgetModeStatus::NotBudgeted) {
-        ImGui::TextDisabled(
-            "Not budgeted for this mode. Use View > RF Budget's Budget this mode button.");
+        rf_view_ui::hint("Not budgeted for this mode. Use View > RF Budget's Budget this mode "
+                         "button.");
         return;
     }
     if (budget->cascades.empty())
@@ -114,7 +169,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
     if (!budget->cascades.empty() &&
         ImGui::BeginTable("budget_prediction", 6,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_SizingFixedFit)) {
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Output");
         ImGui::TableSetupColumn("Overall");
         ImGui::TableSetupColumn("Gain");
@@ -127,43 +182,28 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(cascade.output.c_str());
             ImGui::TableNextColumn();
-            drawMetricStatus(
+            rf_view_ui::metricStatus(
                 ReceiverMetricEvaluation{cascade.verdict.overall, std::nullopt, std::nullopt});
             ImGui::TableNextColumn();
-            drawMetricStatus(cascade.verdict.gain);
+            rf_view_ui::metricStatus(cascade.verdict.gain);
             ImGui::TableNextColumn();
-            drawMetricStatus(cascade.verdict.noise_figure);
+            rf_view_ui::metricStatus(cascade.verdict.noise_figure);
             ImGui::TableNextColumn();
-            drawMetricStatus(cascade.verdict.output_power);
+            rf_view_ui::metricStatus(cascade.verdict.output_power);
             ImGui::TableNextColumn();
-            drawMetricStatus(cascade.verdict.iip3);
+            rf_view_ui::metricStatus(cascade.verdict.iip3);
         }
         ImGui::EndTable();
     }
     for (const RfBudgetUnreachedOutput &unreached : budget->unreached)
-        ImGui::TextColored(kErrorColor, "%s: %s", unreached.output.c_str(),
+        ImGui::TextColored(rf_view_ui::failColor(), "%s: %s", unreached.output.c_str(),
                            unreached.reason.c_str());
 }
 
-void drawStatusRow(const char *label, const ReceiverMetricEvaluation &metric, const char *unit) {
-    switch (receiverRequirementStatusTone(metric.status)) {
-    case ReceiverRequirementStatusTone::PassGreen:
-        ImGui::TextColored(kPassColor, "%s: %s", label, statusText(metric.status));
-        break;
-    case ReceiverRequirementStatusTone::FailRed:
-        ImGui::TextColored(kErrorColor, "%s: %s", label, statusText(metric.status));
-        break;
-    case ReceiverRequirementStatusTone::Neutral:
-        ImGui::TextDisabled("%s: %s", label, statusText(metric.status));
-        break;
-    }
-    if (metric.observed_min && metric.observed_max) {
-        if (*metric.observed_min == *metric.observed_max)
-            ImGui::Text("Observed %s: %.3f %s", label, *metric.observed_min, unit);
-        else
-            ImGui::Text("Observed %s: %.3f to %.3f %s", label, *metric.observed_min,
-                        *metric.observed_max, unit);
-    }
+// One numeric limit field, indented under its section heading.
+void drawNumberField(const char *label, std::array<char, 128> &buffer, float width) {
+    ImGui::SetNextItemWidth(width);
+    ImGui::InputText(label, buffer.data(), buffer.size());
 }
 } // namespace
 
@@ -254,6 +294,7 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     fillModeName(set);
     m_initialized = true;
     m_error.clear();
+    m_mode_error.clear();
     m_notice.clear();
 }
 
@@ -289,8 +330,11 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         fillModeName(set);
     const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
+    // --- Mode selection and naming -------------------------------------------------------------
+    rf_view_ui::sectionHeader("Mode");
     ImGui::BeginDisabled(unapplied);
     const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
+    ImGui::SetNextItemWidth(kNameWidth);
     if (ImGui::BeginCombo("Mode", preview)) {
         for (std::size_t index = 0; index < set.modes.size(); ++index) {
             ImGui::PushID(static_cast<int>(index));
@@ -305,7 +349,9 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         }
         ImGui::EndCombo();
     }
+    ImGui::SetNextItemWidth(kNameWidth);
     ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size());
+    ImGui::SameLine();
     if (ImGui::Button("Add mode")) {
         std::string error;
         if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
@@ -313,13 +359,13 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
             if (onChange)
                 onChange();
         } else {
-            m_error = std::move(error);
+            m_mode_error = std::move(error);
         }
     }
     ImGui::SameLine();
     if (ImGui::Button("Rename mode")) {
         if (!has_modes) {
-            m_error = "Add a mode before renaming.";
+            m_mode_error = "Add a mode before renaming.";
         } else {
             std::string error;
             if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
@@ -327,7 +373,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
                 if (onChange)
                     onChange();
             } else {
-                m_error = std::move(error);
+                m_mode_error = std::move(error);
             }
         }
     }
@@ -337,7 +383,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
             m_remove_id = set.modes[selected_index].id;
             ImGui::OpenPopup(kRemoveModeTitle);
         } else {
-            m_error = "Add a mode before removing.";
+            m_mode_error = "Add a mode before removing.";
         }
     }
     ImGui::EndDisabled();
@@ -366,95 +412,124 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     }
     // Both lines always occupy their space, so an appearing hint or error never
     // shifts the limit fields under the mouse or a scripted click.
-    if (unapplied)
+    if (!m_mode_error.empty())
+        ImGui::TextColored(rf_view_ui::failColor(), "%s", m_mode_error.c_str());
+    else if (unapplied)
         ImGui::TextDisabled("Apply or cancel edits to change modes");
     else
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
-    if (!m_error.empty())
-        ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
-    else if (!m_notice.empty())
+        ImGui::TextDisabled(has_modes ? "Add mode uses the name in Mode name." : kNoModesHint);
+    if (!m_notice.empty())
         ImGui::TextDisabled("%s", m_notice.c_str());
     else
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
 
     if (!has_modes) {
-        ImGui::TextDisabled("No modes. Add a mode to define requirements.");
-    } else {
-        ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
-        ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
-        ImGui::Checkbox("Enable gain", &m_gain_enabled);
-        if (m_gain_enabled) {
-            ImGui::InputText(kLabels[2], m_buffers[2].data(), m_buffers[2].size());
-            ImGui::InputText(kLabels[3], m_buffers[3].data(), m_buffers[3].size());
-        }
-        ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
-        if (m_nf_enabled)
-            ImGui::InputText(kLabels[4], m_buffers[4].data(), m_buffers[4].size());
-        ImGui::Checkbox("Enable output power", &m_output_power_enabled);
-        if (m_output_power_enabled) {
-            ImGui::InputText(kLabels[5], m_buffers[5].data(), m_buffers[5].size());
-            ImGui::InputText(kLabels[6], m_buffers[6].data(), m_buffers[6].size());
-        }
-        ImGui::InputText(kLabels[12], m_buffers[12].data(), m_buffers[12].size());
-        ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
-        if (m_iip3_enabled) {
-            ImGui::InputText(kLabels[7], m_buffers[7].data(), m_buffers[7].size());
-            ImGui::InputText(kLabels[8], m_buffers[8].data(), m_buffers[8].size());
-            ImGui::InputText(kLabels[9], m_buffers[9].data(), m_buffers[9].size());
-            ImGui::InputText(kLabels[10], m_buffers[10].data(), m_buffers[10].size());
-            ImGui::InputText(kLabels[11], m_buffers[11].data(), m_buffers[11].size());
-        }
-
-        const auto draft = makeDraft();
-        if (ImGui::Button("Apply requirements")) {
-            std::string error;
-            if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
-                const bool changed = !(set == m_snapshot);
-                resetDraft(set);
-                if (changed && onChange)
-                    onChange();
-            } else {
-                m_error = std::move(error);
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel"))
-            resetDraft(set);
+        ImGui::End();
+        return;
     }
 
-    const bool pending_edits = !sameDraft(makeDraft(), m_baseline);
+    // --- Limits ---------------------------------------------------------------------------------
+    rf_view_ui::sectionHeader("Band");
+    ImGui::PushItemWidth(kFieldWidth);
+    ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
+    ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
+    ImGui::PopItemWidth();
+
+    rf_view_ui::sectionHeader("Gain");
+    ImGui::Checkbox("Enable gain", &m_gain_enabled);
+    ImGui::BeginDisabled(!m_gain_enabled);
+    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    drawNumberField(kLabels[2], m_buffers[2], kFieldWidth);
+    drawNumberField(kLabels[3], m_buffers[3], kFieldWidth);
+    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::EndDisabled();
+
+    rf_view_ui::sectionHeader("Noise figure");
+    ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
+    ImGui::BeginDisabled(!m_nf_enabled);
+    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    drawNumberField(kLabels[4], m_buffers[4], kFieldWidth);
+    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::EndDisabled();
+
+    rf_view_ui::sectionHeader("Output power");
+    ImGui::Checkbox("Enable output power", &m_output_power_enabled);
+    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::BeginDisabled(!m_output_power_enabled);
+    drawNumberField(kLabels[5], m_buffers[5], kFieldWidth);
+    drawNumberField(kLabels[6], m_buffers[6], kFieldWidth);
+    ImGui::EndDisabled();
+    // The input level is a measurement condition, but it only gates output power, so it stays
+    // next to the limit it feeds and remains editable when the limit is off.
+    drawNumberField(kLabels[12], m_buffers[12], kFieldWidth);
+    if (m_output_power_enabled)
+        ImGui::TextDisabled("Output power is measured at this input level.");
+    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+
+    rf_view_ui::sectionHeader("IIP3");
+    ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
+    ImGui::BeginDisabled(!m_iip3_enabled);
+    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    drawNumberField(kLabels[7], m_buffers[7], kFieldWidth);
+    ImGui::Spacing();
+    ImGui::TextDisabled("Two-tone test");
+    drawNumberField(kLabels[8], m_buffers[8], kFieldWidth);
+    drawNumberField(kLabels[9], m_buffers[9], kFieldWidth);
+    drawNumberField(kLabels[10], m_buffers[10], kFieldWidth);
+    drawNumberField(kLabels[11], m_buffers[11], kFieldWidth);
+    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::EndDisabled();
+
+    // --- Actions -------------------------------------------------------------------------------
+    rf_view_ui::sectionHeader("Apply");
+    const auto draft = makeDraft();
+    const bool pending_edits = !sameDraft(draft, m_baseline);
     if (pending_edits) {
-        ImGui::TextDisabled("Unapplied edits");
-    } else {
-        const auto state = selectedReceiverRequirementsState(set);
-        if (!state.invalid_reason.empty()) {
-            ImGui::TextDisabled("Invalid configuration: %s", state.invalid_reason.c_str());
-        } else if (!state.config) {
-            ImGui::TextDisabled("Not configured");
-        } else {
-            ImGui::Separator();
-            drawStatusRow("Gain", result.gain, "dB");
-            drawStatusRow("Noise figure", result.noise_figure, "dB");
-            drawStatusRow("Output power", result.output_power, "dBm");
-            if (state.config->output_power && !state.config->measurement_conditions.input_level_dBm)
-                ImGui::TextDisabled("Needs input level");
-            drawStatusRow("IIP3", result.iip3, "dBm");
-            switch (receiverRequirementStatusTone(result.overall)) {
-            case ReceiverRequirementStatusTone::PassGreen:
-                ImGui::TextColored(kPassColor, "Overall: %s", statusText(result.overall));
-                break;
-            case ReceiverRequirementStatusTone::FailRed:
-                ImGui::TextColored(kErrorColor, "Overall: %s", statusText(result.overall));
-                break;
-            case ReceiverRequirementStatusTone::Neutral:
-                ImGui::TextDisabled("Overall: %s", statusText(result.overall));
-                break;
-            }
-        }
-        const RfBudgetModeResult *budget_mode = nullptr;
-        if (has_modes)
-            budget_mode = findRfBudgetModeResult(budget, set.modes[selected_index].id);
-        drawBudgetPrediction(budget, budget_mode);
+        // The theme's hover/active shades make the primary action stand out while an edit is
+        // pending, without introducing a colour outside the design system.
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
     }
+    if (ImGui::Button("Apply requirements")) {
+        std::string error;
+        if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
+            const bool changed = !(set == m_snapshot);
+            resetDraft(set);
+            if (changed && onChange)
+                onChange();
+        } else {
+            m_error = std::move(error);
+        }
+    }
+    if (pending_edits)
+        ImGui::PopStyleColor(3);
+    // Applying resets the draft, so the pending state is re-read: the result table appears in the
+    // same frame the edit was accepted instead of one frame later.
+    const bool still_pending = !sameDraft(makeDraft(), m_baseline);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!still_pending);
+    if (ImGui::Button("Cancel"))
+        resetDraft(set);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    rf_view_ui::reservedLine(still_pending ? "Unapplied edits" : "");
+    // The refusal sits under the row that produced it and wraps, so it never clips and never
+    // moves a control that is under the pointer.
+    if (!m_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_error.c_str());
+        ImGui::PopStyleColor();
+    }
+
+    if (!still_pending)
+        drawEvaluation(selectedReceiverRequirementsState(set), result);
+
+    const RfBudgetModeResult *budget_mode = nullptr;
+    if (!still_pending && has_modes)
+        budget_mode = findRfBudgetModeResult(budget, set.modes[selected_index].id);
+    if (!still_pending)
+        drawBudgetPrediction(budget, budget_mode);
     ImGui::End();
 }
