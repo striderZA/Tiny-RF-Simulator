@@ -837,6 +837,52 @@ TEST_CASE_METHOD(AppFixture, "Revert restores the checkpoint and tells the agent
 // After reverting the second of two edits, the amplifier must still
 // report sparamMode() as true.
 // ======================================================================
+TEST_CASE_METHOD(AppFixture, "Revert refreshes the budget evaluation", "[agent_app]") {
+    app.newProject();
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e6;
+    config.band_stop_Hz = 2.0e6;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    app.testSetSingleModeRequirements(config);
+
+    const auto budgetWithGain = [](double gain_dB) {
+        RfBudget budget;
+        budget.point_count = 5;
+        RfBudgetStage stage;
+        stage.name = "LNA";
+        stage.type = "amplifier";
+        stage.params = {{"gain_dB", gain_dB}, {"nf_dB", 2.0}};
+        stage.inputs = {RfBudgetFeed{std::nullopt, 0}};
+        budget.stages.push_back(std::move(stage));
+        budget.outputs = {{"RX", "LNA", 0}};
+        budget.modes = {{1, {}}};
+        return budget;
+    };
+    const auto gainStatus = [this]() {
+        const auto &modes = app.testRfBudgetEvaluation().modes;
+        if (modes.size() != 1 || modes[0].cascades.size() != 1)
+            return ReceiverRequirementStatus::NotConfigured;
+        return modes[0].cascades[0].verdict.gain.status;
+    };
+
+    app.testRfBudget() = budgetWithGain(15.0);
+    app.refreshRfBudgetEvaluation();
+    REQUIRE(gainStatus() == ReceiverRequirementStatus::Pass);
+
+    const auto edit = app.testAgentCall(
+        "budget_edit", ordered_json{{"epoch", app.testProjectEpoch()},
+                                    {"budget", rfBudgetToJson(budgetWithGain(5.0))}});
+    REQUIRE_FALSE(edit.is_error);
+    app.refreshRfBudgetEvaluation();
+    REQUIRE(gainStatus() == ReceiverRequirementStatus::Fail);
+
+    app.revertAgentCheckpoint(app.testAgentHost().checkpoints().back().id);
+    CHECK(app.testRfBudget() == budgetWithGain(15.0));
+    // The revert path must invalidate the cache; this call must not be the only refresh.
+    app.refreshRfBudgetEvaluation();
+    CHECK(gainStatus() == ReceiverRequirementStatus::Pass);
+}
+
 TEST_CASE_METHOD(AppFixture,
                  "Revert keeps S-parameter data from outside the project "
                  "folder",

@@ -981,6 +981,9 @@ void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {
     syncComponentViews();
     m_power_meter_widget->clearSource();
     m_test_flow_widget->resetAfterCircuitReload();
+    // The restored snapshot replaces the budget and requirements. Refresh the library/evaluation
+    // inputs so both views show the restored state instead of the pre-revert verdicts.
+    refreshExtensions();
     markDirty();
     m_agent_api->noteProjectReplaced(AgentReplacementCause::Reverted,
                                      m_agent_host->removeCheckpointsFrom(checkpoint_id));
