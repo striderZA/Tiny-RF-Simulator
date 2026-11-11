@@ -44,6 +44,12 @@ std::vector<RfBudgetStageResult> cascadeRfBudgetPath(const std::vector<RfBudgetP
                                                      std::string_view mode_name,
                                                      RfBudgetReasonTable &reasons);
 
+// Blanks the readouts of each point whose finite cumulative gain is below the Network Analyzer's
+// -100 dB floor: cumulative gain, cumulative NF, level, and headroom. A value that is already
+// blank keeps its reason. The running sums and IIP3 keep the true gain. Call it after the verdict,
+// which judges the unfloored values.
+void floorRfBudgetReadouts(std::vector<RfBudgetStageResult> &stages, RfBudgetReasonTable &reasons);
+
 // One output a mode reaches, and the requirements verdict for its cascade totals.
 struct RfBudgetCascade {
     std::string output;

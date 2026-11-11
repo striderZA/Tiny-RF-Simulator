@@ -93,13 +93,6 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
             cumulative_gain = gain_sum_dB + g;
         }
 
-        // The Network Analyzer's floor: a finite cumulative gain below -100 dB has no readout.
-        // The running sums keep the true gain, so a later stage can bring a readout back up.
-        const bool below_floor = std::isfinite(cumulative_gain) && cumulative_gain < kGainFloor_dB;
-        std::uint16_t floor_reason = 0;
-        if (below_floor)
-            floor_reason = reasons.add("Output of '" + out.stage + "' is below -100 dB here.");
-
         // Cumulative NF (Friis). The current stage's own gain is not an input, so a missing gain
         // here leaves this point's NF intact and only empties later stages.
         double cumulative_nf = kNaN;
@@ -168,8 +161,6 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
             level_reason = stop_reason;
         } else if (std::isnan(cumulative_gain)) {
             level_reason = cumulative_gain_reason;
-        } else if (below_floor) {
-            level_reason = floor_reason;
         } else {
             level = *input_level_dBm + cumulative_gain;
         }
@@ -197,10 +188,10 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
                 headroom_reason = oip3_reason;
         }
 
-        out.cumulative_gain_dB.values[point] = below_floor ? kNaN : cumulative_gain;
-        out.cumulative_gain_dB.reasons[point] = below_floor ? floor_reason : cumulative_gain_reason;
-        out.cumulative_nf_dB.values[point] = below_floor ? kNaN : cumulative_nf;
-        out.cumulative_nf_dB.reasons[point] = below_floor ? floor_reason : cumulative_nf_reason;
+        out.cumulative_gain_dB.values[point] = cumulative_gain;
+        out.cumulative_gain_dB.reasons[point] = cumulative_gain_reason;
+        out.cumulative_nf_dB.values[point] = cumulative_nf;
+        out.cumulative_nf_dB.reasons[point] = cumulative_nf_reason;
         out.cumulative_iip3_dBm.values[point] = cumulative_iip3;
         out.cumulative_iip3_dBm.reasons[point] = cumulative_iip3_reason;
         out.level_dBm.values[point] = level;
@@ -344,6 +335,29 @@ std::vector<RfBudgetStageResult> cascadeRfBudgetPath(const std::vector<RfBudgetP
     for (std::size_t point = 0; point < point_count; ++point)
         fillPoint(results, point, input_level_dBm, no_level_reason, reasons);
     return results;
+}
+
+void floorRfBudgetReadouts(std::vector<RfBudgetStageResult> &stages, RfBudgetReasonTable &reasons) {
+    for (RfBudgetStageResult &out : stages) {
+        for (std::size_t point = 0; point < out.cumulative_gain_dB.values.size(); ++point) {
+            const double gain = out.cumulative_gain_dB.values[point];
+            if (!std::isfinite(gain) || gain >= kGainFloor_dB)
+                continue;
+            const std::uint16_t reason =
+                reasons.add("Output of '" + out.stage + "' is below -100 dB here.");
+            // A value that is already blank keeps the reason it has.
+            const auto blank = [point, reason](RfBudgetSeries &series) {
+                if (!std::isfinite(series.values[point]))
+                    return;
+                series.values[point] = kNaN;
+                series.reasons[point] = reason;
+            };
+            blank(out.cumulative_gain_dB);
+            blank(out.cumulative_nf_dB);
+            blank(out.level_dBm);
+            blank(out.p1db_headroom_dB);
+        }
+    }
 }
 
 namespace {
@@ -504,6 +518,7 @@ void walk(RouteState &state, std::size_t stage_index, int input_port,
                 cascade.stages = cascadeRfBudgetPath(child_hops, state.input_level_dBm,
                                                      state.mode_name, state.reasons);
                 finalizeVerdict(cascade, state.config, state.reasons);
+                floorRfBudgetReadouts(cascade.stages, state.reasons);
                 state.cascades.push_back(std::move(cascade));
             }
 

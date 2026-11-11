@@ -278,7 +278,8 @@ TEST_CASE("the -100 dB floor blanks a readout, not the running path", "[rf_budge
     const RfBudgetStageResponse amp =
         responseOf("AMP", flat(points, 20.0), flat(points, 2.0), flat(points, 30.0));
 
-    const auto stages = cascadeRfBudgetPath({{&pad, 0, 0}, {&amp, 0, 0}}, -30.0, "Band 1", reasons);
+    auto stages = cascadeRfBudgetPath({{&pad, 0, 0}, {&amp, 0, 0}}, -30.0, "Band 1", reasons);
+    floorRfBudgetReadouts(stages, reasons);
     REQUIRE(stages.size() == 2);
 
     for (std::size_t i = 0; i < points; ++i) {
@@ -679,4 +680,25 @@ TEST_CASE("uncovered points make a passing verdict Incomplete", "[rf_budget][cas
         CHECK(evaluation.reasons.at(cascade.stages[0].gain_dB.reasons[index]) ==
               "Stage 'LNA': S-parameter data does not cover this frequency.");
     }
+}
+
+TEST_CASE("a chain below the readout floor still fails its gain minimum", "[rf_budget][cascade]") {
+    // A 130 dB pad takes the chain to -110 dB, below the -100 dB readout floor. The readout is
+    // blank, but the 10 dB gain minimum is still violated, so the verdict must Fail.
+    RfBudget budget = chainBudget();
+    budget.stages[1].params["atten_dB"] = 130.0;
+    budget.modes.push_back(emptyRecord(1));
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->gain = ReceiverGainLimits{10.0, 20.0};
+    ComponentLibrary library;
+
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    const RfBudgetCascade &cascade = evaluation.modes[0].cascades[0];
+
+    CHECK(cascade.verdict.gain.status == ReceiverRequirementStatus::Fail);
+    CHECK(cascade.verdict.overall == ReceiverRequirementStatus::Fail);
+    for (std::size_t i = 0; i < cascade.frequencies_Hz.size(); ++i)
+        CHECK(std::isnan(cascade.stages.back().cumulative_gain_dB.values[i]));
 }
