@@ -387,12 +387,6 @@ TEST_CASE("decode errors keep only the reason", "[rf_budget][model]") {
         {"outputs_not_list",
          {nlohmann::json{{"format", 1}, {"stages", nlohmann::json::array({stage})}, {"outputs", 3}},
           "RF budget outputs must be a list."}},
-        {"output_unknown_port",
-         {nlohmann::json{{"format", 1},
-                         {"stages", nlohmann::json::array({stage})},
-                         {"outputs", nlohmann::json::array(
-                                         {{{"name", "RX"}, {"stage", "LNA"}, {"port", 1}}})}},
-          "Output 'RX' reads port 1 of stage 'LNA', which has 1 outputs."}},
         {"input_port_above_int",
          {nlohmann::json{
               {"format", 1},
@@ -423,12 +417,39 @@ TEST_CASE("decode errors keep only the reason", "[rf_budget][model]") {
         CHECK(decoded.point_count == kDefaultRfBudgetPoints);
     }
 
-    // A structurally valid object still runs the model validation.
+    // An unknown output port is a model refusal, not a shape error: the table loads intact and
+    // the live validation names the port.
+    const nlohmann::json unknown_port = {
+        {"format", 1},
+        {"stages", nlohmann::json::array({stage})},
+        {"outputs", nlohmann::json::array({{{"name", "RX"}, {"stage", "LNA"}, {"port", 1}}})}};
+    const RfBudget loaded_unknown_port = rfBudgetFromJson(unknown_port);
+    CHECK(loaded_unknown_port.invalid_reason.empty());
+    CHECK(loaded_unknown_port.outputs.size() == 1);
+    const auto port_reason = validateRfBudget(loaded_unknown_port);
+    REQUIRE(port_reason.has_value());
+    CHECK(*port_reason == "Output 'RX' reads port 1 of stage 'LNA', which has 1 outputs.");
+
+    // A structurally valid table is returned intact even when the model validation refuses it,
+    // so a budget built in steps keeps its table; the view shows the live refusal.
     nlohmann::json duplicate_names = {{"format", 1},
                                       {"stages", nlohmann::json::array({stage, stage})},
                                       {"outputs", nlohmann::json::array({output})}};
-    CHECK(rfBudgetFromJson(duplicate_names).invalid_reason ==
-          "A stage named 'LNA' already exists.");
+    const RfBudget duplicated = rfBudgetFromJson(duplicate_names);
+    CHECK(duplicated.invalid_reason.empty());
+    CHECK(duplicated.stages.size() == 2);
+    const auto duplicate_reason = validateRfBudget(duplicated);
+    REQUIRE(duplicate_reason.has_value());
+    CHECK(*duplicate_reason == "A stage named 'LNA' already exists.");
+
+    RfBudget partial;
+    std::string error;
+    REQUIRE(addRfBudgetStage(partial, "amplifier", error));
+    REQUIRE(addRfBudgetStage(partial, "attenuator", error));
+    REQUIRE(validateRfBudget(partial).has_value()); // no output yet
+    const RfBudget partial_reloaded = rfBudgetFromJson(rfBudgetToJson(partial));
+    CHECK(partial_reloaded.invalid_reason.empty());
+    CHECK(partial_reloaded == partial);
 }
 
 TEST_CASE("budget equality compares numbers by value, not by JSON type", "[rf_budget][model]") {
@@ -541,6 +562,44 @@ TEST_CASE("stage type change resizes feeds and clears source fields", "[rf_budge
     setRfBudgetStageType(budget, 0, "splitter");
     REQUIRE(budget.stages[0].inputs.size() == 1);
     CHECK(budget.stages[0].inputs[0].has_value());
+}
+
+TEST_CASE("stage type change drops references to vanished output ports", "[rf_budget][edit]") {
+    RfBudget budget;
+    std::string error;
+    REQUIRE(addRfBudgetStage(budget, "splitter", error));
+    REQUIRE(addRfBudgetStage(budget, "amplifier", error));
+    budget.stages[1].inputs[0] = RfBudgetFeed{budget.stages[0].name, 1};
+    REQUIRE(addRfBudgetOutput(budget, 0, 1, error));
+    budget.modes.push_back(RfBudgetModeRecord{1, {{budget.stages[0].name, {{"x", 1.0}}}}});
+    REQUIRE(budget.outputs.size() == 1);
+
+    setRfBudgetStageType(budget, 0, "amplifier");
+    CHECK(budget.stages[0].type == "amplifier");
+    CHECK_FALSE(budget.stages[1].inputs[0].has_value());
+    CHECK(budget.outputs.empty());
+    REQUIRE(budget.modes.size() == 1);
+    CHECK(budget.modes[0].overrides.empty());
+}
+
+TEST_CASE("output rename validates names like stage rename", "[rf_budget][edit]") {
+    RfBudget budget = chainBudget();
+    budget.outputs.push_back({"RX2", "ATT", 0});
+    std::string error;
+
+    REQUIRE(renameRfBudgetOutput(budget, 0, "ANT", error));
+    CHECK(budget.outputs[0].name == "ANT");
+    CHECK_FALSE(renameRfBudgetOutput(budget, 0, "", error));
+    CHECK(error == "Output name must not be empty.");
+    CHECK_FALSE(renameRfBudgetOutput(budget, 0, "#", error));
+    CHECK(error == "Output name must not contain '#'.");
+    CHECK_FALSE(renameRfBudgetOutput(budget, 0, " ANT", error));
+    CHECK(error == "Output name must not have leading or trailing spaces.");
+    CHECK_FALSE(renameRfBudgetOutput(budget, 0, "rx2", error));
+    CHECK(error == "An output named 'rx2' already exists.");
+    CHECK_FALSE(renameRfBudgetOutput(budget, 9, "X", error));
+    CHECK(error == "Output index is out of range.");
+    CHECK(budget.outputs[0].name == "ANT");
 }
 
 TEST_CASE("outputs are added with unique names and validated ports", "[rf_budget][edit]") {

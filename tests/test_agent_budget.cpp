@@ -303,6 +303,25 @@ TEST_CASE("budget_get reports a library part whose engine params throw", "[agent
     CHECK(reason.find("type must be boolean") != std::string::npos);
 }
 
+TEST_CASE("budget_edit refuses an incomplete but well-formed budget", "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.rf_budget = stageBudget();
+    const auto before = fixture.commands.revision();
+
+    Json payload = rfBudgetToJson(stageBudget());
+    payload["outputs"] = Json::array();
+    const auto result =
+        fixture.call("budget_edit", {{"epoch", fixture.api.epoch()}, {"budget", payload}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INVALID_ARGUMENT");
+    CHECK(error.at("details").at("path") == "/budget");
+    CHECK(error.at("message") == "The budget needs at least one output.");
+    CHECK(*fixture.host.rf_budget == stageBudget());
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 0);
+}
+
 TEST_CASE("budget_edit treats an integer parameter equal to its float value", "[agent_budget]") {
     ApiFixture fixture;
     fixture.host.requirements = twoModeSet();

@@ -578,13 +578,22 @@ RfBudget rfBudgetFromJson(const nlohmann::json &value) {
         }
     }
 
-    if (auto reason = validateRfBudget(budget))
-        return invalidBudget(*reason);
+    // A well-formed table is returned even when validateRfBudget() refuses it: the view builds
+    // a budget one stage at a time, and those intermediate states must survive a reload. The
+    // view shows the live refusal, and the agent tool validates explicitly.
     return budget;
 }
 
 const RfBudgetModeRecord *findRfBudgetModeRecord(const RfBudget &budget, std::uint32_t mode_id) {
     for (const auto &record : budget.modes) {
+        if (record.mode_id == mode_id)
+            return &record;
+    }
+    return nullptr;
+}
+
+RfBudgetModeRecord *findRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id) {
+    for (auto &record : budget.modes) {
         if (record.mode_id == mode_id)
             return &record;
     }
@@ -697,6 +706,32 @@ bool renameRfBudgetStage(RfBudget &budget, std::size_t index, std::string_view n
     return true;
 }
 
+bool renameRfBudgetOutput(RfBudget &budget, std::size_t index, std::string_view name,
+                          std::string &error) {
+    if (index >= budget.outputs.size()) {
+        error = "Output index is out of range.";
+        return false;
+    }
+    const std::string new_name(name);
+    if (auto reason = nameError(new_name, "Output")) {
+        error = *reason;
+        return false;
+    }
+    if (budget.outputs[index].name == new_name) {
+        error.clear();
+        return true;
+    }
+    for (std::size_t other = 0; other < budget.outputs.size(); ++other) {
+        if (other != index && namesEqual(budget.outputs[other].name, new_name)) {
+            error = "An output named '" + new_name + "' already exists.";
+            return false;
+        }
+    }
+    budget.outputs[index].name = new_name;
+    error.clear();
+    return true;
+}
+
 bool removeRfBudgetStage(RfBudget &budget, std::size_t index) {
     if (index >= budget.stages.size())
         return false;
@@ -728,6 +763,20 @@ void setRfBudgetStageType(RfBudget &budget, std::size_t index, std::string_view 
     stage.inputs.resize(static_cast<std::size_t>(info->inputs));
     stage.params = nlohmann::ordered_json::object();
     stage.part_number.clear();
+
+    // Feeds and outputs that name an output port the new type lacks can never be followed
+    // again. The per-mode overrides keep keys from the old type, which the evaluator refuses.
+    for (RfBudgetStage &other : budget.stages) {
+        for (auto &feed : other.inputs) {
+            if (feed && feed->stage && *feed->stage == stage.name && feed->port >= info->outputs)
+                feed.reset();
+        }
+    }
+    std::erase_if(budget.outputs, [&stage, info](const RfBudgetOutput &output) {
+        return output.stage == stage.name && output.port >= info->outputs;
+    });
+    for (RfBudgetModeRecord &record : budget.modes)
+        record.overrides.erase(stage.name);
 }
 
 bool addRfBudgetOutput(RfBudget &budget, std::size_t stage_index, int port, std::string &error) {
