@@ -196,7 +196,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
         ImGui::EndTable();
     }
     for (const RfBudgetUnreachedOutput &unreached : budget->unreached)
-        ImGui::TextColored(rf_view_ui::failColor(), "%s: %s", unreached.output.c_str(),
+        ImGui::TextColored(rf_view_ui::warnColor(), "%s: %s", unreached.output.c_str(),
                            unreached.reason.c_str());
 }
 
@@ -350,7 +350,8 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         ImGui::EndCombo();
     }
     ImGui::SetNextItemWidth(kNameWidth);
-    ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size());
+    if (ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size()))
+        m_mode_error.clear();
     ImGui::SameLine();
     if (ImGui::Button("Add mode")) {
         std::string error;
@@ -509,7 +510,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     // same frame the edit was accepted instead of one frame later.
     const bool still_pending = !sameDraft(makeDraft(), m_baseline);
     ImGui::SameLine();
-    ImGui::BeginDisabled(!still_pending);
+    ImGui::BeginDisabled(!still_pending && m_error.empty());
     if (ImGui::Button("Cancel"))
         resetDraft(set);
     ImGui::EndDisabled();

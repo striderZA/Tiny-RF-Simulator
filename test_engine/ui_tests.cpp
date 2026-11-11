@@ -1932,6 +1932,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(s_app->testRfBudgetEvaluation().modes[0].cascades[0].verdict.gain.status,
                     ReceiverRequirementStatus::Pass);
 
+        // Add override refuses to replace an existing override for the same setting.
+        ctx->SetRef("RF Budget");
+        ctx->ScrollToItem("Add override", ImGuiAxis_Y);
+        ctx->Yield(2);
+        IM_CHECK((ctx->ItemInfo("Add override").ItemFlags & ImGuiItemFlags_Disabled) == 0);
+        ctx->ItemClick("Add override");
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testRfBudget().modes.size(), 1u);
+        IM_CHECK_EQ(s_app->testRfBudget().modes[0].overrides.count("Stage 1"), 1u);
+        IM_CHECK((ctx->ItemInfo("Add override").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        s_app->testRfBudget().modes[0].overrides.clear();
+        ctx->Yield(2);
+
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/Receiver Requirements");
         ctx->SetRef("");
@@ -1945,6 +1958,85 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         window = ImGui::FindWindowByName("RF Budget");
         IM_CHECK(window == nullptr || !window->Active);
 
+        s_app->testRfBudget() = {};
+        ctx->Yield(2);
+    };
+    // A retained invalid marker shows its diagnostic with a Discard action; an empty budget is
+    // not an error, so a fresh project shows the hint instead of a red refusal.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "rf_budget_view_invalid_marker_discard");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->m_show_rf_budget = false;
+        s_app->testRfBudget() = {};
+        ctx->Yield(2);
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/RF Budget");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_show_rf_budget);
+        IM_CHECK(s_app->testRfBudget().empty());
+        ImGuiWindow *window = ImGui::FindWindowByName("RF Budget");
+        IM_CHECK(window != nullptr && window->Active);
+        ctx->WindowFocus("RF Budget");
+        ctx->Yield(2);
+        IM_CHECK(!ctx->ItemExists("Discard invalid budget"));
+
+        RfBudget invalid;
+        invalid.invalid_reason = "RF budget stages must be a list.";
+        s_app->testRfBudget() = invalid;
+        ctx->Yield(3);
+        ctx->SetRef("RF Budget");
+        ctx->ScrollToItem("Discard invalid budget", ImGuiAxis_Y);
+        ctx->Yield(2);
+        IM_CHECK(ctx->ItemInfo("Discard invalid budget").ID != 0);
+        const std::uint64_t before = s_app->projectRevision();
+        ctx->ItemClick("Discard invalid budget");
+        ctx->Yield(2);
+        IM_CHECK(s_app->testRfBudget().empty());
+        IM_CHECK(s_app->projectRevision() > before);
+        IM_CHECK(!ctx->ItemExists("Discard invalid budget"));
+
+        s_app->m_show_rf_budget = false;
+        ctx->Yield(2);
+    };
+    // A bounded field is clamped into its range before Add override stores the initial value.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "rf_budget_view_add_override_clamps");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->m_show_rf_budget = false;
+        s_app->testRfBudget() = {};
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 2.0e6;
+        config.gain = ReceiverGainLimits{5.0, 30.0};
+        s_app->testSetSingleModeRequirements(config);
+        RfBudget budget;
+        budget.point_count = 5;
+        RfBudgetStage stage;
+        stage.name = "EQ";
+        stage.type = "equalizer";
+        stage.params = {{"ref_gain_dB", 500.0}};
+        stage.inputs = {RfBudgetFeed{std::nullopt, 0}};
+        budget.stages.push_back(stage);
+        budget.outputs = {{"RX", "EQ", 0}};
+        budget.modes = {{s_app->testReceiverRequirements().modes[0].id, {}}};
+        s_app->testRfBudget() = budget;
+        ctx->Yield(2);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/RF Budget");
+        ctx->SetRef("RF Budget");
+        ctx->Yield(3);
+        ctx->ScrollToItem("Add override", ImGuiAxis_Y);
+        ctx->Yield(2);
+        IM_CHECK((ctx->ItemInfo("Add override").ItemFlags & ImGuiItemFlags_Disabled) == 0);
+        ctx->ItemClick("Add override");
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testRfBudget().modes.size(), 1u);
+        IM_CHECK_EQ(s_app->testRfBudget().modes[0].overrides.count("EQ"), 1u);
+        // ref_gain_dB is bounded -40..40.
+        IM_CHECK_EQ(s_app->testRfBudget().modes[0].overrides.at("EQ").at("ref_gain_dB"), 40.0);
+        IM_CHECK((ctx->ItemInfo("Add override").ItemFlags & ImGuiItemFlags_Disabled) != 0);
+
+        s_app->m_show_rf_budget = false;
         s_app->testRfBudget() = {};
         ctx->Yield(2);
     };

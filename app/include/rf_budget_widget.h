@@ -33,7 +33,7 @@ class RfBudgetWidget {
     enum class Modal { None, RenameStage, StageFeeds, StageParams, RenameOutput };
 
     void drawToolbar(RfBudget &budget);
-    void drawStatus(const RfBudget &budget, const RfBudgetEvaluation &evaluation) const;
+    void drawStatus(RfBudget &budget, const RfBudgetEvaluation &evaluation);
     void drawStages(RfBudget &budget, const ComponentLibrary &library);
     void drawOutputs(RfBudget &budget);
     void drawOverrides(RfBudget &budget, const ReceiverRequirementsSet &requirements);

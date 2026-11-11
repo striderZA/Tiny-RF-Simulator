@@ -329,17 +329,30 @@ void RfBudgetWidget::drawToolbar(RfBudget &budget) {
     }
 }
 
-void RfBudgetWidget::drawStatus(const RfBudget &budget,
-                                const RfBudgetEvaluation &evaluation) const {
+void RfBudgetWidget::drawStatus(RfBudget &budget, const RfBudgetEvaluation &evaluation) {
+    // A retained invalid marker is a decoded shape failure with no table behind it. Show it
+    // before the empty hint and offer the only way out: discard the marker.
+    if (!budget.invalid_reason.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", budget.invalid_reason.c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::Button("Discard invalid budget")) {
+            budget = RfBudget{};
+            m_error.clear();
+            markChanged();
+        }
+        return;
+    }
+    // An empty budget is not an error: a fresh project opens the view with the hint below.
+    if (budget.empty()) {
+        rf_view_ui::hint("No stages yet. Add a stage to describe the chain, then add an output "
+                         "and budget a requirement mode.");
+        return;
+    }
     if (auto reason = validateRfBudget(budget)) {
         ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
         ImGui::TextWrapped("%s", reason->c_str());
         ImGui::PopStyleColor();
-        return;
-    }
-    if (budget.empty()) {
-        rf_view_ui::hint("No stages yet. Add a stage to describe the chain, then add an output "
-                         "and budget a requirement mode.");
         return;
     }
     if (!evaluation.not_evaluated_reason.empty()) {
@@ -439,7 +452,8 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
                 ImGui::EndCombo();
             }
             if (parts.empty())
-                ImGui::TextDisabled("No %s parts in the library.", stageTypeLabel(stage.type));
+                ImGui::TextDisabled("No %s parts in the library.",
+                                    stageTypeLabel(stage.type).c_str());
         } else if (ImGui::Button("Params...")) {
             m_modal = Modal::StageParams;
             m_modal_stage = index;
@@ -590,14 +604,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     }
 
     const std::uint32_t mode_id = requirements.modes[m_override_mode].id;
-    const auto find_record = [&budget](std::uint32_t id) -> RfBudgetModeRecord * {
-        for (RfBudgetModeRecord &candidate : budget.modes) {
-            if (candidate.mode_id == id)
-                return &candidate;
-        }
-        return nullptr;
-    };
-    RfBudgetModeRecord *record = find_record(mode_id);
+    RfBudgetModeRecord *record = findRfBudgetModeRecord(budget, mode_id);
     bool clear_record = false;
     if (record) {
         rf_view_ui::tag("Budgeted", rf_view_ui::passColor(), true);
@@ -605,7 +612,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
         if (ImGui::Button("Clear budget record"))
             clear_record = true;
         ImGui::EndDisabled();
-        if (!record->overrides.empty() && ImGui::IsItemHovered())
+        if (!record->overrides.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove the overrides first.");
     } else {
         rf_view_ui::tag("Not budgeted", rf_view_ui::warnColor(), true);
@@ -732,7 +739,13 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    ImGui::BeginDisabled(fields.empty());
+    bool already_overridden = false;
+    if (record && !fields.empty()) {
+        const auto stage_it = record->overrides.find(budget.stages[m_override_stage].name);
+        already_overridden = stage_it != record->overrides.end() &&
+                             stage_it->second.contains(fields[m_override_key]->key);
+    }
+    ImGui::BeginDisabled(fields.empty() || already_overridden);
     if (ImGui::Button("Add override")) {
         const ParameterField &field = *fields[m_override_key];
         double value = 0.0;
@@ -741,11 +754,20 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
             if (stored.is_number())
                 value = stored.get<double>();
         }
+        // An override the evaluator refuses is useless; the base param may be unset (0.0) or a
+        // number outside the field's range.
+        if (field.kind == FieldKind::Enum && !field.enum_values.empty()) {
+            value = std::clamp(value, 0.0, static_cast<double>(field.enum_values.size() - 1));
+        } else {
+            value = std::clamp(value, field.min, field.max);
+        }
         setRfBudgetOverride(budget, mode_id, budget.stages[m_override_stage].name, field.key,
                             value);
         markChanged();
     }
     ImGui::EndDisabled();
+    if (already_overridden && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("This setting already has an override; edit its row above.");
 }
 
 void RfBudgetWidget::drawCascade(const RfBudget &budget,
@@ -1054,12 +1076,14 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
             if (!m_error.empty())
                 ImGui::TextColored(rf_view_ui::failColor(), "%s", m_error.c_str());
             if (ImGui::Button("OK", ImVec2(100.0f, 0.0f))) {
-                if (m_modal_output < budget.outputs.size()) {
-                    budget.outputs[m_modal_output].name = m_name_buffer.data();
+                std::string error;
+                if (renameRfBudgetOutput(budget, m_modal_output, m_name_buffer.data(), error)) {
                     m_modal = Modal::None;
                     m_error.clear();
                     markChanged();
                     ImGui::CloseCurrentPopup();
+                } else {
+                    m_error = std::move(error);
                 }
             }
             ImGui::SameLine();
