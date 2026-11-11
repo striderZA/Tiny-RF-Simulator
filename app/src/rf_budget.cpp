@@ -590,3 +590,218 @@ const RfBudgetModeRecord *findRfBudgetModeRecord(const RfBudget &budget, std::ui
     }
     return nullptr;
 }
+
+namespace {
+
+std::string uniqueName(const std::function<bool(std::string_view)> &taken, const char *prefix) {
+    for (std::size_t index = 1;; ++index) {
+        std::string candidate = std::string(prefix) + " " + std::to_string(index);
+        if (!taken(candidate))
+            return candidate;
+    }
+}
+
+bool anyBudgetInputFeed(const RfBudget &budget) {
+    for (const RfBudgetStage &stage : budget.stages) {
+        for (const auto &feed : stage.inputs) {
+            if (feed && !feed->stage)
+                return true;
+        }
+    }
+    return false;
+}
+
+bool stageNameTaken(const RfBudget &budget, std::string_view name, std::size_t except_index) {
+    for (std::size_t i = 0; i < budget.stages.size(); ++i) {
+        if (i != except_index && namesEqual(budget.stages[i].name, name))
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+bool addRfBudgetStage(RfBudget &budget, std::string_view type, std::string &error) {
+    if (type == "mixer") {
+        error = "Mixer stages are not supported: the budget keeps every signal at its input "
+                "frequency.";
+        return false;
+    }
+    const RfBudgetStageType *info = stageTypeInfo(type);
+    if (!info) {
+        error = "Stage type '" + std::string(type) + "' is not supported in a budget.";
+        return false;
+    }
+    if (budget.stages.size() >= kMaxRfBudgetStages) {
+        error = "At most 32 stages are allowed.";
+        return false;
+    }
+
+    RfBudgetStage stage;
+    stage.name = uniqueName(
+        [&budget](std::string_view name) {
+            return stageNameTaken(budget, name, budget.stages.size());
+        },
+        "Stage");
+    stage.type = std::string(type);
+    stage.source = RfBudgetStageSource::Idealized;
+    stage.inputs.assign(static_cast<std::size_t>(info->inputs), std::nullopt);
+    if (info->inputs > 0 && !anyBudgetInputFeed(budget))
+        stage.inputs[0] = RfBudgetFeed{std::nullopt, 0};
+    budget.stages.push_back(std::move(stage));
+    error.clear();
+    return true;
+}
+
+bool renameRfBudgetStage(RfBudget &budget, std::size_t index, std::string_view name,
+                         std::string &error) {
+    if (index >= budget.stages.size()) {
+        error = "Stage index is out of range.";
+        return false;
+    }
+    const std::string new_name(name);
+    if (auto reason = nameError(new_name, "Stage")) {
+        error = *reason;
+        return false;
+    }
+    RfBudgetStage &stage = budget.stages[index];
+    if (stage.name == new_name) {
+        error.clear();
+        return true;
+    }
+    if (stageNameTaken(budget, new_name, index)) {
+        error = "A stage named '" + new_name + "' already exists.";
+        return false;
+    }
+
+    const std::string old_name = stage.name;
+    stage.name = new_name;
+    for (RfBudgetStage &other : budget.stages) {
+        for (auto &feed : other.inputs) {
+            if (feed && feed->stage && *feed->stage == old_name)
+                feed->stage = new_name;
+        }
+    }
+    for (RfBudgetOutput &output : budget.outputs) {
+        if (output.stage == old_name)
+            output.stage = new_name;
+    }
+    for (RfBudgetModeRecord &record : budget.modes) {
+        auto node = record.overrides.extract(old_name);
+        if (node.empty())
+            continue;
+        node.key() = new_name;
+        record.overrides.insert(std::move(node));
+    }
+    error.clear();
+    return true;
+}
+
+bool removeRfBudgetStage(RfBudget &budget, std::size_t index) {
+    if (index >= budget.stages.size())
+        return false;
+    const std::string name = budget.stages[index].name;
+    budget.stages.erase(budget.stages.begin() + static_cast<std::ptrdiff_t>(index));
+    for (RfBudgetStage &stage : budget.stages) {
+        for (auto &feed : stage.inputs) {
+            if (feed && feed->stage && *feed->stage == name)
+                feed.reset();
+        }
+    }
+    std::erase_if(budget.outputs,
+                  [&name](const RfBudgetOutput &output) { return output.stage == name; });
+    for (RfBudgetModeRecord &record : budget.modes)
+        record.overrides.erase(name);
+    return true;
+}
+
+void setRfBudgetStageType(RfBudget &budget, std::size_t index, std::string_view type) {
+    if (index >= budget.stages.size())
+        return;
+    const RfBudgetStageType *info = stageTypeInfo(type);
+    if (!info)
+        return;
+    RfBudgetStage &stage = budget.stages[index];
+    if (stage.type == type)
+        return;
+    stage.type = std::string(type);
+    stage.inputs.resize(static_cast<std::size_t>(info->inputs));
+    stage.params = nlohmann::ordered_json::object();
+    stage.part_number.clear();
+}
+
+bool addRfBudgetOutput(RfBudget &budget, std::size_t stage_index, int port, std::string &error) {
+    if (stage_index >= budget.stages.size()) {
+        error = "Stage index is out of range.";
+        return false;
+    }
+    if (budget.outputs.size() >= kMaxRfBudgetOutputs) {
+        error = "At most 8 outputs are allowed.";
+        return false;
+    }
+    const RfBudgetStage &stage = budget.stages[stage_index];
+    const RfBudgetStageType *info = stageTypeInfo(stage.type);
+    const int outputs = info ? info->outputs : 0;
+    if (port < 0 || port >= outputs) {
+        error = "Output port must be between 0 and " + std::to_string(outputs - 1) + ".";
+        return false;
+    }
+    RfBudgetOutput output;
+    output.name = uniqueName(
+        [&budget](std::string_view name) {
+            for (const auto &existing : budget.outputs) {
+                if (namesEqual(existing.name, name))
+                    return true;
+            }
+            return false;
+        },
+        "OUT");
+    output.stage = stage.name;
+    output.port = port;
+    budget.outputs.push_back(std::move(output));
+    error.clear();
+    return true;
+}
+
+bool removeRfBudgetOutput(RfBudget &budget, std::size_t index) {
+    if (index >= budget.outputs.size())
+        return false;
+    budget.outputs.erase(budget.outputs.begin() + static_cast<std::ptrdiff_t>(index));
+    return true;
+}
+
+RfBudgetModeRecord &ensureRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id) {
+    for (RfBudgetModeRecord &record : budget.modes) {
+        if (record.mode_id == mode_id)
+            return record;
+    }
+    budget.modes.push_back(RfBudgetModeRecord{mode_id, {}});
+    return budget.modes.back();
+}
+
+void eraseRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id) {
+    std::erase_if(budget.modes, [mode_id](const RfBudgetModeRecord &record) {
+        return record.mode_id == mode_id;
+    });
+}
+
+void setRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                         const std::string &key, double value) {
+    ensureRfBudgetModeRecord(budget, mode_id).overrides[stage][key] = value;
+}
+
+bool eraseRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                           const std::string &key) {
+    for (RfBudgetModeRecord &record : budget.modes) {
+        if (record.mode_id != mode_id)
+            continue;
+        const auto stage_it = record.overrides.find(stage);
+        if (stage_it == record.overrides.end())
+            return false;
+        const bool erased = stage_it->second.erase(key) > 0;
+        if (stage_it->second.empty())
+            record.overrides.erase(stage_it);
+        return erased;
+    }
+    return false;
+}

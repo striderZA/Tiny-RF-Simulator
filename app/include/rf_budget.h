@@ -84,3 +84,21 @@ nlohmann::json rfBudgetToJson(const RfBudget &budget);
 RfBudget rfBudgetFromJson(const nlohmann::json &value);
 
 const RfBudgetModeRecord *findRfBudgetModeRecord(const RfBudget &budget, std::uint32_t mode_id);
+
+// Table editing helpers. They keep references consistent: a stage rename rewrites every feed,
+// output, and mode override key; a removal drops the references to the removed stage. A refusal
+// leaves the budget unchanged and writes one sentence to `error`.
+bool addRfBudgetStage(RfBudget &budget, std::string_view type, std::string &error);
+bool renameRfBudgetStage(RfBudget &budget, std::size_t index, std::string_view name,
+                         std::string &error);
+bool removeRfBudgetStage(RfBudget &budget, std::size_t index);
+// Keeps the input feeds that still exist and clears source-specific fields (params, part number).
+void setRfBudgetStageType(RfBudget &budget, std::size_t index, std::string_view type);
+bool addRfBudgetOutput(RfBudget &budget, std::size_t stage_index, int port, std::string &error);
+bool removeRfBudgetOutput(RfBudget &budget, std::size_t index);
+RfBudgetModeRecord &ensureRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id);
+void eraseRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id);
+void setRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                         const std::string &key, double value);
+bool eraseRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                           const std::string &key);

@@ -87,3 +87,7 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
                                     const ReceiverRequirementsSet &requirements,
                                     const ComponentLibrary &library,
                                     std::optional<std::uint32_t> only_mode_id = std::nullopt);
+
+// The evaluated mode with `mode_id`, or nullptr when the evaluation does not contain it.
+const RfBudgetModeResult *findRfBudgetModeResult(const RfBudgetEvaluation &evaluation,
+                                                 std::uint32_t mode_id);

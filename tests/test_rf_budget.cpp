@@ -456,3 +456,130 @@ TEST_CASE("stage type table matches the engines", "[rf_budget][model]") {
         CHECK(engine->numOutputPins() == entry.outputs);
     }
 }
+
+TEST_CASE("add stage feeds the first stage from the budget input", "[rf_budget][edit]") {
+    RfBudget budget;
+    std::string error;
+    REQUIRE(addRfBudgetStage(budget, "amplifier", error));
+    REQUIRE(budget.stages.size() == 1);
+    CHECK(budget.stages[0].name == "Stage 1");
+    CHECK(budget.stages[0].type == "amplifier");
+    REQUIRE(budget.stages[0].inputs.size() == 1);
+    REQUIRE(budget.stages[0].inputs[0].has_value());
+    CHECK_FALSE(budget.stages[0].inputs[0]->stage.has_value());
+
+    REQUIRE(addRfBudgetStage(budget, "rf_switch_spdt_2to1", error));
+    REQUIRE(budget.stages.size() == 2);
+    CHECK(budget.stages[1].name == "Stage 2");
+    REQUIRE(budget.stages[1].inputs.size() == 2);
+    // Only one stage may be fed from the budget input.
+    CHECK_FALSE(budget.stages[1].inputs[0].has_value());
+    CHECK_FALSE(budget.stages[1].inputs[1].has_value());
+
+    CHECK_FALSE(addRfBudgetStage(budget, "mixer", error));
+    CHECK(error == "Mixer stages are not supported: the budget keeps every signal at its input "
+                   "frequency.");
+    CHECK_FALSE(addRfBudgetStage(budget, "combiner", error));
+    CHECK(error == "Stage type 'combiner' is not supported in a budget.");
+}
+
+TEST_CASE("stage rename rewrites feeds, outputs, and mode overrides", "[rf_budget][edit]") {
+    RfBudget budget = chainBudget();
+    budget.modes.push_back(RfBudgetModeRecord{7, {{"ATT", {{"atten_dB", 3.0}}}}});
+    std::string error;
+
+    REQUIRE(renameRfBudgetStage(budget, 1, "ATT2", error));
+    CHECK(budget.stages[1].name == "ATT2");
+    CHECK(budget.outputs[0].stage == "ATT2");
+    REQUIRE(budget.modes.size() == 1);
+    CHECK(budget.modes[0].overrides.count("ATT2") == 1);
+    CHECK(budget.modes[0].overrides.count("ATT") == 0);
+
+    // A case-insensitive duplicate and an invalid name are refused and change nothing.
+    CHECK_FALSE(renameRfBudgetStage(budget, 0, "att2", error));
+    CHECK(error == "A stage named 'att2' already exists.");
+    CHECK(budget.stages[0].name == "LNA");
+    CHECK_FALSE(renameRfBudgetStage(budget, 0, " bad name ", error));
+    CHECK(error == "Stage name must not have leading or trailing spaces.");
+    CHECK(budget.stages[0].name == "LNA");
+}
+
+TEST_CASE("stage removal drops the references to it", "[rf_budget][edit]") {
+    RfBudget budget = chainBudget();
+    budget.modes.push_back(RfBudgetModeRecord{3, {{"ATT", {{"atten_dB", 1.0}}}}});
+    REQUIRE(removeRfBudgetStage(budget, 1));
+    REQUIRE(budget.stages.size() == 1);
+    CHECK(budget.outputs.empty());
+    CHECK(budget.modes[0].overrides.empty());
+
+    RfBudget unfed = chainBudget();
+    REQUIRE(removeRfBudgetStage(unfed, 0));
+    REQUIRE(unfed.stages.size() == 1);
+    CHECK_FALSE(unfed.stages[0].inputs[0].has_value());
+    CHECK_FALSE(removeRfBudgetStage(unfed, 5));
+}
+
+TEST_CASE("stage type change resizes feeds and clears source fields", "[rf_budget][edit]") {
+    RfBudget budget;
+    RfBudgetStage stage;
+    stage.name = "S";
+    stage.type = "amplifier";
+    stage.source = RfBudgetStageSource::Library;
+    stage.part_number = "AMP-1";
+    stage.params = {{"gain_dB", 10.0}};
+    stage.inputs = {fromInput()};
+    budget.stages.push_back(stage);
+    budget.outputs.push_back({"RX", "S", 0});
+
+    setRfBudgetStageType(budget, 0, "rf_switch_spdt_2to1");
+    CHECK(budget.stages[0].type == "rf_switch_spdt_2to1");
+    REQUIRE(budget.stages[0].inputs.size() == 2);
+    REQUIRE(budget.stages[0].inputs[0].has_value());
+    CHECK(budget.stages[0].params.empty());
+    CHECK(budget.stages[0].part_number.empty());
+
+    setRfBudgetStageType(budget, 0, "splitter");
+    REQUIRE(budget.stages[0].inputs.size() == 1);
+    CHECK(budget.stages[0].inputs[0].has_value());
+}
+
+TEST_CASE("outputs are added with unique names and validated ports", "[rf_budget][edit]") {
+    RfBudget budget = chainBudget();
+    budget.outputs.clear();
+    std::string error;
+    REQUIRE(addRfBudgetOutput(budget, 1, 0, error));
+    REQUIRE(addRfBudgetOutput(budget, 0, 0, error));
+    REQUIRE(budget.outputs.size() == 2);
+    CHECK(budget.outputs[0].name == "OUT 1");
+    CHECK(budget.outputs[1].name == "OUT 2");
+    CHECK(budget.outputs[0].stage == "ATT");
+
+    CHECK_FALSE(addRfBudgetOutput(budget, 1, 1, error));
+    CHECK(error == "Output port must be between 0 and 0.");
+    CHECK_FALSE(addRfBudgetOutput(budget, 9, 0, error));
+    CHECK(error == "Stage index is out of range.");
+
+    REQUIRE(removeRfBudgetOutput(budget, 0));
+    CHECK(budget.outputs.size() == 1);
+    CHECK_FALSE(removeRfBudgetOutput(budget, 4));
+}
+
+TEST_CASE("mode records and overrides are created and erased in place", "[rf_budget][edit]") {
+    RfBudget budget = chainBudget();
+    RfBudgetModeRecord &record = ensureRfBudgetModeRecord(budget, 5);
+    CHECK(record.mode_id == 5);
+    CHECK(&ensureRfBudgetModeRecord(budget, 5) == &record);
+    CHECK(budget.modes.size() == 1);
+
+    setRfBudgetOverride(budget, 5, "ATT", "atten_dB", 6.0);
+    REQUIRE(budget.modes[0].overrides.count("ATT") == 1);
+    CHECK(budget.modes[0].overrides.at("ATT").at("atten_dB") == 6.0);
+
+    REQUIRE(eraseRfBudgetOverride(budget, 5, "ATT", "atten_dB"));
+    CHECK(budget.modes[0].overrides.empty());
+    CHECK(budget.modes.size() == 1); // the record still marks the mode as budgeted
+    CHECK_FALSE(eraseRfBudgetOverride(budget, 5, "ATT", "atten_dB"));
+
+    eraseRfBudgetModeRecord(budget, 5);
+    CHECK(budget.modes.empty());
+}

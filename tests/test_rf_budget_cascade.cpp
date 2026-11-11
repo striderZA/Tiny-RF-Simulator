@@ -723,3 +723,14 @@ TEST_CASE("a chain below the readout floor still fails its NF and output power l
     CHECK(verdict.noise_figure.status == ReceiverRequirementStatus::Fail);
     CHECK(verdict.output_power.status == ReceiverRequirementStatus::Fail);
 }
+
+TEST_CASE("mode result lookup returns the evaluated mode or null", "[rf_budget][cascade]") {
+    RfBudgetEvaluation evaluation;
+    evaluation.modes.push_back(RfBudgetModeResult{});
+    evaluation.modes.back().mode_id = 4;
+    evaluation.modes.back().mode_name = "Band 1";
+
+    REQUIRE(findRfBudgetModeResult(evaluation, 4) != nullptr);
+    CHECK(findRfBudgetModeResult(evaluation, 4)->mode_name == "Band 1");
+    CHECK(findRfBudgetModeResult(evaluation, 5) == nullptr);
+}
