@@ -30,7 +30,7 @@ The first build takes 60-90s while FetchContent clones dependencies. Subsequent 
 
 **Where dependency sources live:** all FetchContent dependencies (imgui, implot, catch2, imgui_test_engine, …) are fetched into `build/_deps/<name>-src/` inside the active build directory. A fresh git worktree has **no** `build/` yet — run `cmake -B build -G Ninja` once (~90 s) to fetch them there, or browse the canonical checkout's copy. Never search the filesystem for headers like `imgui_internal.h` — a `find /`-style scan hangs far past any agent timeout on Windows. Read `CMakeLists.txt`'s `FetchContent_Declare` block for pinned versions.
 
-**One-time setup — enable the local git hooks** (`.githooks/pre-commit` blocks commits that would fail the release workflow's `format` job; `.githooks/commit-msg` enforces the commit message format below):
+**One-time setup — enable the local git hooks** (`.githooks/pre-commit` blocks commits that would fail the release workflow's `format` job or exceed the commit size cap; `.githooks/commit-msg` enforces the commit message format below):
 
 ```bash
 git config core.hooksPath .githooks
@@ -178,6 +178,7 @@ Never move the tag of a published release. Ship the fix as the next patch releas
 ### Commits
 
 - **Atomic commits:** one logical change per commit (feature, fix, refactor, or docs).
+- **Size cap:** a commit over 100 lines prints a warning, and a commit over 200 lines is blocked (insertions + deletions of the staged diff; binary files and a merge in progress are not counted; a deleted file counts as one line). [`.githooks/pre-commit`](.githooks/pre-commit) lists the largest files in a blocked commit: split the work into commits of one logical change each. For a commit that must be larger, prefix the command with `RFSIM_ALLOW_LARGE_COMMIT=1`; `git commit --no-verify` skips every hook.
 - **Commit early, commit often** — a commit should represent a working state.
 - **Verify the build and tests pass** before committing.
 - **Subject format:** `<type>[(<scope>)][!]: <imperative summary>`, under 70 characters. `type` is one of `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`; `scope` is optional lowercase (e.g. `test(pfb): cover grid invariance`); `!` marks a breaking change. A body is optional — leave a blank line after the subject and wrap it at 72 characters.

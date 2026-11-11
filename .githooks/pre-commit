@@ -1,7 +1,38 @@
 #!/usr/bin/env bash
-# Blocks commits that would fail the release workflow's `format` job (see .github/workflows/release.yml).
+# Blocks commits that would fail the release workflow's `format` job (see .github/workflows/release.yml)
+# and commits whose staged diff exceeds the size cap (CONTRIBUTING.md, Git Workflow > Commits).
 # Enable once per clone with:  git config core.hooksPath .githooks
 set -u
+
+# Staged size check: insertions + deletions of the staged diff, binary files excluded. A deleted
+# file counts as one line. Above WARN_COMMIT_LINES the commit goes ahead with a warning; above
+# MAX_COMMIT_LINES it is blocked. It runs before the format check so it covers every commit, not
+# only C++ ones. A merge in progress is exempt because its changes were already committed on the
+# merged branch.
+WARN_COMMIT_LINES=100
+MAX_COMMIT_LINES=200
+if [ -z "${RFSIM_ALLOW_LARGE_COMMIT:-}" ] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  STAT="$(git diff --cached --numstat --diff-filter=d)"
+  DELETED="$(git diff --cached --name-only --diff-filter=D | grep -c . || true)"
+  LINES="$(printf '%s\n' "$STAT" | awk '$1 != "-" { n += $1 + $2 } END { print n + 0 }')"
+  LINES=$((LINES + DELETED))
+  if [ "$LINES" -gt "$MAX_COMMIT_LINES" ]; then
+    {
+      echo "pre-commit: this commit changes ${LINES} lines; the limit is ${MAX_COMMIT_LINES} (insertions + deletions; a deleted file counts as 1)."
+      echo
+      echo "Largest files in the commit:"
+      printf '%s\n' "$STAT" | awk '$1 != "-" { print ($1 + $2) "\t" $3 }' | sort -rn | head -5 | sed 's/^/  /'
+      echo
+      echo "Split it into commits of one logical change each: unstage with 'git reset', then stage"
+      echo "and commit one part at a time (git add -p)."
+      echo "To allow this one commit (NOT recommended):  RFSIM_ALLOW_LARGE_COMMIT=1 git commit ..."
+    } >&2
+    exit 1
+  fi
+  if [ "$LINES" -gt "$WARN_COMMIT_LINES" ]; then
+    echo "pre-commit: warning: this commit changes ${LINES} lines (warning above ${WARN_COMMIT_LINES}, blocked above ${MAX_COMMIT_LINES}); consider splitting it." >&2
+  fi
+fi
 
 # The checked directory set is defined once in scripts/format-dirs.sh, shared
 # with scripts/format.sh and the release workflow's format job.
