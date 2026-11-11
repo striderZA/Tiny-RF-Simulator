@@ -8,7 +8,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
+#include <vector>
 
 class ComponentLibrary;
 
@@ -37,8 +39,14 @@ class RfBudgetWidget {
     void drawOverrides(RfBudget &budget, const ReceiverRequirementsSet &requirements);
     void drawCascade(const RfBudget &budget, const ReceiverRequirementsSet &requirements,
                      const RfBudgetEvaluation &evaluation);
+    void drawBandSummary(const RfBudgetCascade &cascade,
+                         const RfBudgetEvaluation &evaluation) const;
+    void drawPointDetail(const RfBudgetCascade &cascade, const RfBudgetEvaluation &evaluation);
     void drawModals(RfBudget &budget);
-    void drawSeriesPlot(const char *label, const RfBudgetSeries &series, float height);
+    void drawSeriesPlot(const char *label, const char *y_label,
+                        const std::vector<double> &frequencies, const RfBudgetSeries &series,
+                        std::optional<double> low_limit, std::optional<double> high_limit,
+                        float height) const;
 
     void markChanged();
     void openRenameStage(std::size_t index, const RfBudget &budget);

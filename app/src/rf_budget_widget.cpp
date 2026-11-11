@@ -3,7 +3,8 @@
 #include "component_library.h"
 #include "component_type_registry.h"
 #include "imgui.h"
-#include "receiver_requirements_widget.h"
+#include "implot.h"
+#include "rf_view_ui.h"
 #include "utils.h"
 
 #include <algorithm>
@@ -18,8 +19,6 @@
 
 namespace {
 
-constexpr ImVec4 kErrorColor(1.0f, 0.35f, 0.35f, 1.0f);
-constexpr ImVec4 kPassColor(0.25f, 0.85f, 0.35f, 1.0f);
 constexpr const char *kRenameStageTitle = "Rename stage";
 constexpr const char *kRenameOutputTitle = "Rename output";
 constexpr const char *kFeedsTitle = "Stage feeds";
@@ -35,6 +34,14 @@ const RfBudgetStageType *stageTypeInfo(std::string_view type) {
 
 const ComponentTypeDescriptor *descriptorFor(std::string_view type) {
     return ComponentTypeRegistry::instance().find(type);
+}
+
+// The registry's display name, so the stage table reads "Amplifier" rather than "amplifier".
+std::string stageTypeLabel(std::string_view type) {
+    const ComponentTypeDescriptor *descriptor = descriptorFor(type);
+    if (descriptor && !descriptor->display_name.empty())
+        return descriptor->display_name;
+    return std::string(type);
 }
 
 // Fields a stage's params editor offers. Data-file paths and read-only metadata are project
@@ -92,65 +99,6 @@ std::string modeLabel(const ReceiverRequirementsSet &requirements, const RfBudge
     return label;
 }
 
-std::string feedText(const std::optional<RfBudgetFeed> &feed) {
-    if (!feed)
-        return "unfed";
-    if (!feed->stage)
-        return "budget input";
-    return *feed->stage + " out " + std::to_string(feed->port);
-}
-
-const char *statusText(ReceiverRequirementStatus status) {
-    switch (status) {
-    case ReceiverRequirementStatus::NotConfigured:
-        return "Not configured";
-    case ReceiverRequirementStatus::InvalidConfiguration:
-        return "Invalid configuration";
-    case ReceiverRequirementStatus::Incomplete:
-        return "Incomplete";
-    case ReceiverRequirementStatus::Pass:
-        return "Pass";
-    case ReceiverRequirementStatus::Fail:
-        return "Fail";
-    }
-    return "Incomplete";
-}
-
-void textColoredByStatus(ReceiverRequirementStatus status, const char *text) {
-    switch (receiverRequirementStatusTone(status)) {
-    case ReceiverRequirementStatusTone::PassGreen:
-        ImGui::TextColored(kPassColor, "%s", text);
-        break;
-    case ReceiverRequirementStatusTone::FailRed:
-        ImGui::TextColored(kErrorColor, "%s", text);
-        break;
-    case ReceiverRequirementStatusTone::Neutral:
-        ImGui::TextDisabled("%s", text);
-        break;
-    }
-}
-
-// One cascade cell. A NaN point is blank and carries a reason; an infinity is a real value
-// (no transmission, linear OIP3, infinite headroom) and carries its reason too.
-void drawSeriesCell(const RfBudgetSeries &series, std::size_t point,
-                    const RfBudgetReasonTable &reasons) {
-    if (point >= series.values.size()) {
-        ImGui::TextDisabled("—");
-        return;
-    }
-    const double value = series.values[point];
-    const std::uint16_t reason_index = point < series.reasons.size() ? series.reasons[point] : 0;
-    const std::string &reason = reasons.at(reason_index);
-    if (std::isnan(value))
-        ImGui::TextDisabled("—");
-    else if (std::isinf(value))
-        ImGui::Text("%s", value > 0.0 ? "+inf" : "-inf");
-    else
-        ImGui::Text("%.2f", value);
-    if (!reason.empty() && ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", reason.c_str());
-}
-
 std::optional<RfBudgetFeed> feedFromOption(int option, const RfBudget &budget,
                                            std::size_t self_index) {
     if (option == 0)
@@ -204,6 +152,70 @@ int feedOptionIndex(const RfBudget &budget, std::size_t self_index,
         }
     }
     return 0;
+}
+
+// One cascade cell. A NaN point is blank and carries a reason; an infinity is a real value
+// (no transmission, linear OIP3, infinite headroom) and carries its reason too.
+void drawSeriesCell(const RfBudgetSeries &series, std::size_t point,
+                    const RfBudgetReasonTable &reasons) {
+    if (point >= series.values.size()) {
+        ImGui::TextDisabled("-");
+        return;
+    }
+    const double value = series.values[point];
+    const std::uint16_t reason_index = point < series.reasons.size() ? series.reasons[point] : 0;
+    const std::string &reason = reasons.at(reason_index);
+    if (std::isnan(value)) {
+        ImGui::TextDisabled("-");
+    } else {
+        char text[32];
+        rf_view_ui::formatSeriesValue(value, text, sizeof(text));
+        ImGui::TextUnformatted(text);
+    }
+    if (!reason.empty() && ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", reason.c_str());
+}
+
+// The same cell over the whole band: "low .. high" of the finite points, blank when none.
+void drawSeriesRangeCell(const RfBudgetSeries &series, const RfBudgetReasonTable &reasons) {
+    double low = 0.0;
+    double high = 0.0;
+    std::size_t high_index = 0;
+    bool any = false;
+    for (std::size_t index = 0; index < series.values.size(); ++index) {
+        const double value = series.values[index];
+        if (std::isnan(value))
+            continue;
+        if (!any) {
+            low = high = value;
+            high_index = index;
+            any = true;
+            continue;
+        }
+        if (value < low)
+            low = value;
+        if (value > high) {
+            high = value;
+            high_index = index;
+        }
+    }
+    if (!any) {
+        ImGui::TextDisabled("-");
+        return;
+    }
+    char low_text[32];
+    char high_text[32];
+    rf_view_ui::formatSeriesValue(low, low_text, sizeof(low_text));
+    rf_view_ui::formatSeriesValue(high, high_text, sizeof(high_text));
+    if (low == high)
+        ImGui::TextUnformatted(low_text);
+    else
+        ImGui::Text("%s .. %s", low_text, high_text);
+    const std::uint16_t reason_index =
+        high_index < series.reasons.size() ? series.reasons[high_index] : 0;
+    const std::string &reason = reasons.at(reason_index);
+    if (!reason.empty() && ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", reason.c_str());
 }
 
 } // namespace
@@ -299,7 +311,7 @@ void RfBudgetWidget::drawToolbar(RfBudget &budget) {
     }
     ImGui::SameLine();
     int points = budget.point_count;
-    ImGui::SetNextItemWidth(120.0f);
+    ImGui::SetNextItemWidth(110.0f);
     if (ImGui::InputInt("Points", &points)) {
         points = std::clamp(points, kMinRfBudgetPoints, kMaxRfBudgetPoints);
         if (points != budget.point_count) {
@@ -307,35 +319,60 @@ void RfBudgetWidget::drawToolbar(RfBudget &budget) {
             markChanged();
         }
     }
-    if (!m_error.empty())
-        ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
+    // A refusal takes its own line below the toolbar: it is a sentence, so it wraps rather than
+    // clipping at the window edge. Nothing below the toolbar was under the pointer when the
+    // refusal was produced.
+    if (!m_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_error.c_str());
+        ImGui::PopStyleColor();
+    }
 }
 
 void RfBudgetWidget::drawStatus(const RfBudget &budget,
                                 const RfBudgetEvaluation &evaluation) const {
-    if (auto reason = validateRfBudget(budget))
-        ImGui::TextColored(kErrorColor, "%s", reason->c_str());
-    else if (budget.empty())
-        ImGui::TextDisabled("No stages yet. Add a stage to describe the chain.");
-    else if (!evaluation.not_evaluated_reason.empty())
-        ImGui::TextDisabled("%s", evaluation.not_evaluated_reason.c_str());
-    else
-        ImGui::TextDisabled("Evaluated %zu mode(s).", evaluation.modes.size());
+    if (auto reason = validateRfBudget(budget)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", reason->c_str());
+        ImGui::PopStyleColor();
+        return;
+    }
+    if (budget.empty()) {
+        rf_view_ui::hint("No stages yet. Add a stage to describe the chain, then add an output "
+                         "and budget a requirement mode.");
+        return;
+    }
+    if (!evaluation.not_evaluated_reason.empty()) {
+        rf_view_ui::hint(evaluation.not_evaluated_reason.c_str());
+    } else {
+        ImGui::TextDisabled("%zu stage(s), %zu output(s), %zu mode(s) evaluated",
+                            budget.stages.size(), budget.outputs.size(), evaluation.modes.size());
+    }
+    if (!evaluation.orphaned_mode_ids.empty())
+        ImGui::TextColored(rf_view_ui::warnColor(),
+                           "%zu budget record(s) name a mode that no longer exists.",
+                           evaluation.orphaned_mode_ids.size());
 }
 
 void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &library) {
-    ImGui::SeparatorText("Stages");
-    if (!ImGui::BeginTable("budget_stages", 6,
-                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
+    rf_view_ui::sectionHeader("Stages");
+    if (budget.stages.empty()) {
+        rf_view_ui::hint("Add Stage appends an amplifier. Choose its type, source, and feeds "
+                         "here, and give it a name you recognize.");
         return;
     }
-    ImGui::TableSetupColumn("Name");
-    ImGui::TableSetupColumn("Type");
-    ImGui::TableSetupColumn("Source");
-    ImGui::TableSetupColumn("Part / Params");
-    ImGui::TableSetupColumn("Feeds");
-    ImGui::TableSetupColumn("##actions");
+    if (!ImGui::BeginTable("budget_stages", 6,
+                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
+                               ImGuiTableFlags_NoSavedSettings)) {
+        return;
+    }
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+    ImGui::TableSetupColumn("Part / Params", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Feeds", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 150.0f);
     ImGui::TableHeadersRow();
 
     for (std::size_t index = 0; index < budget.stages.size(); ++index) {
@@ -345,13 +382,15 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
 
         ImGui::TableNextColumn();
         ImGui::TextUnformatted(stage.name.c_str());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", stage.name.c_str());
 
         ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(130.0f);
-        if (ImGui::BeginCombo("##type", stage.type.c_str())) {
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##type", stageTypeLabel(stage.type).c_str())) {
             for (const RfBudgetStageType &type : rfBudgetStageTypes()) {
                 const bool selected = type.type == stage.type;
-                if (ImGui::Selectable(std::string(type.type).c_str(), selected) && !selected) {
+                if (ImGui::Selectable(stageTypeLabel(type.type).c_str(), selected) && !selected) {
                     setRfBudgetStageType(budget, index, type.type);
                     markChanged();
                 }
@@ -360,7 +399,7 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
         }
 
         ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(110.0f);
+        ImGui::SetNextItemWidth(-FLT_MIN);
         const char *source_preview =
             stage.source == RfBudgetStageSource::Library ? "Library" : "Idealized";
         if (ImGui::BeginCombo("##source", source_preview)) {
@@ -384,7 +423,7 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
         ImGui::TableNextColumn();
         if (stage.source == RfBudgetStageSource::Library) {
             const auto parts = library.byType(stage.type);
-            ImGui::SetNextItemWidth(160.0f);
+            ImGui::SetNextItemWidth(-FLT_MIN);
             const char *part_preview =
                 stage.part_number.empty() ? "(choose part)" : stage.part_number.c_str();
             if (ImGui::BeginCombo("##part", part_preview)) {
@@ -400,7 +439,7 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
                 ImGui::EndCombo();
             }
             if (parts.empty())
-                ImGui::TextDisabled("No %s parts in the library.", stage.type.c_str());
+                ImGui::TextDisabled("No %s parts in the library.", stageTypeLabel(stage.type));
         } else if (ImGui::Button("Params...")) {
             m_modal = Modal::StageParams;
             m_modal_stage = index;
@@ -408,16 +447,20 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
         }
 
         ImGui::TableNextColumn();
-        std::string feeds;
-        for (std::size_t port = 0; port < stage.inputs.size(); ++port) {
-            if (port > 0)
-                feeds += "\n";
-            feeds += "in " + std::to_string(port) + ": " + feedText(stage.inputs[port]);
+        if (stage.inputs.empty()) {
+            ImGui::TextDisabled("no inputs");
         }
-        if (feeds.empty())
-            feeds = "no inputs";
-        ImGui::TextUnformatted(feeds.c_str());
-        ImGui::SameLine();
+        for (std::size_t port = 0; port < stage.inputs.size(); ++port) {
+            const std::optional<RfBudgetFeed> &feed = stage.inputs[port];
+            ImGui::TextDisabled("in %zu", port);
+            ImGui::SameLine();
+            if (!feed)
+                ImGui::TextColored(rf_view_ui::warnColor(), "unfed");
+            else if (!feed->stage)
+                ImGui::TextUnformatted("budget input");
+            else
+                ImGui::Text("%s out %d", feed->stage->c_str(), feed->port);
+        }
         if (ImGui::SmallButton("Feeds...")) {
             m_modal = Modal::StageFeeds;
             m_modal_stage = index;
@@ -442,20 +485,22 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
 }
 
 void RfBudgetWidget::drawOutputs(RfBudget &budget) {
-    ImGui::SeparatorText("Outputs");
+    rf_view_ui::sectionHeader("Outputs");
     if (budget.outputs.empty()) {
-        ImGui::TextDisabled("No outputs. Add one to evaluate a cascade.");
+        rf_view_ui::hint("No outputs. An output names a stage port, and each reached output gets "
+                         "its own cascade and verdict.");
         return;
     }
     if (!ImGui::BeginTable("budget_outputs", 4,
                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
+                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
+                               ImGuiTableFlags_NoSavedSettings)) {
         return;
     }
-    ImGui::TableSetupColumn("Name");
-    ImGui::TableSetupColumn("Stage");
-    ImGui::TableSetupColumn("Port");
-    ImGui::TableSetupColumn("##actions");
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+    ImGui::TableSetupColumn("Stage", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Port", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 150.0f);
     ImGui::TableHeadersRow();
 
     for (std::size_t index = 0; index < budget.outputs.size(); ++index) {
@@ -465,9 +510,11 @@ void RfBudgetWidget::drawOutputs(RfBudget &budget) {
 
         ImGui::TableNextColumn();
         ImGui::TextUnformatted(output.name.c_str());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", output.name.c_str());
 
         ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(140.0f);
+        ImGui::SetNextItemWidth(-FLT_MIN);
         const char *stage_preview = output.stage.empty() ? "(choose stage)" : output.stage.c_str();
         if (ImGui::BeginCombo("##stage", stage_preview)) {
             for (const RfBudgetStage &stage : budget.stages) {
@@ -490,7 +537,7 @@ void RfBudgetWidget::drawOutputs(RfBudget &budget) {
         }
         const RfBudgetStageType *info = stage ? stageTypeInfo(stage->type) : nullptr;
         const int ports = info ? info->outputs : 0;
-        ImGui::SetNextItemWidth(80.0f);
+        ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##port", std::to_string(output.port).c_str())) {
             for (int port = 0; port < ports; ++port) {
                 const bool selected = port == output.port;
@@ -519,13 +566,13 @@ void RfBudgetWidget::drawOutputs(RfBudget &budget) {
 }
 
 void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsSet &requirements) {
-    ImGui::SeparatorText("Mode overrides");
+    rf_view_ui::sectionHeader("Mode overrides");
     if (requirements.modes.empty()) {
-        ImGui::TextDisabled("No requirement modes. Add a mode first.");
+        rf_view_ui::hint("No requirement modes. Add a mode in Receiver Requirements first.");
         return;
     }
     m_override_mode = std::min(m_override_mode, requirements.modes.size() - 1);
-    ImGui::SetNextItemWidth(220.0f);
+    ImGui::SetNextItemWidth(240.0f);
     const std::string override_preview = modeLabel(requirements, budget, m_override_mode);
     if (ImGui::BeginCombo("Mode##override_mode", override_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
@@ -553,8 +600,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     RfBudgetModeRecord *record = find_record(mode_id);
     bool clear_record = false;
     if (record) {
-        ImGui::TextDisabled("Budgeted");
-        ImGui::SameLine();
+        rf_view_ui::tag("Budgeted", rf_view_ui::passColor(), true);
         ImGui::BeginDisabled(!record->overrides.empty());
         if (ImGui::Button("Clear budget record"))
             clear_record = true;
@@ -562,6 +608,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
         if (!record->overrides.empty() && ImGui::IsItemHovered())
             ImGui::SetTooltip("Remove the overrides first.");
     } else {
+        rf_view_ui::tag("Not budgeted", rf_view_ui::warnColor(), true);
         if (ImGui::Button("Budget this mode")) {
             record = &ensureRfBudgetModeRecord(budget, mode_id);
             markChanged();
@@ -577,11 +624,12 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     if (record &&
         ImGui::BeginTable("budget_overrides", 4,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
-        ImGui::TableSetupColumn("Stage");
-        ImGui::TableSetupColumn("Setting");
-        ImGui::TableSetupColumn("Value");
-        ImGui::TableSetupColumn("##actions");
+                              ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::TableSetupColumn("Stage", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("Setting", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 90.0f);
         ImGui::TableHeadersRow();
 
         std::optional<std::pair<std::string, std::string>> erase;
@@ -608,7 +656,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
                 ImGui::TableNextColumn();
                 if (field && field->kind == FieldKind::Enum) {
                     const int current = static_cast<int>(value);
-                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::SetNextItemWidth(-FLT_MIN);
                     const char *preview =
                         current >= 0 &&
                                 static_cast<std::size_t>(current) < field->enum_values.size()
@@ -628,6 +676,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
                 } else {
                     double edited = value;
                     const std::string label = "##value";
+                    ImGui::SetNextItemWidth(-FLT_MIN);
                     if (utils::inputDouble(
                             label, edited, 0.1, 1.0, "%.6g",
                             field ? field->min : -std::numeric_limits<double>::infinity(),
@@ -650,11 +699,12 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
 
     ImGui::Separator();
     if (budget.stages.empty()) {
-        ImGui::TextDisabled("Add a stage before overriding a setting.");
+        rf_view_ui::hint("Add a stage before overriding a setting.");
         return;
     }
     m_override_stage = std::min(m_override_stage, budget.stages.size() - 1);
-    ImGui::SetNextItemWidth(160.0f);
+    ImGui::TextDisabled("One setting of one stage, for this mode only");
+    ImGui::SetNextItemWidth(180.0f);
     if (ImGui::BeginCombo("Stage##override_stage", budget.stages[m_override_stage].name.c_str())) {
         for (std::size_t index = 0; index < budget.stages.size(); ++index) {
             const bool selected = index == m_override_stage;
@@ -671,7 +721,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     m_override_key = fields.empty() ? 0 : std::min(m_override_key, fields.size() - 1);
     const char *key_preview =
         fields.empty() ? "(no numeric settings)" : fields[m_override_key]->label.c_str();
-    ImGui::SetNextItemWidth(160.0f);
+    ImGui::SetNextItemWidth(180.0f);
     if (ImGui::BeginCombo("Setting##override_key", key_preview)) {
         for (std::size_t index = 0; index < fields.size(); ++index) {
             const bool selected = index == m_override_key;
@@ -701,13 +751,13 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
 void RfBudgetWidget::drawCascade(const RfBudget &budget,
                                  const ReceiverRequirementsSet &requirements,
                                  const RfBudgetEvaluation &evaluation) {
-    ImGui::SeparatorText("Cascade");
+    rf_view_ui::sectionHeader("Cascade");
     if (requirements.modes.empty()) {
-        ImGui::TextDisabled("No requirement modes.");
+        rf_view_ui::hint("No requirement modes.");
         return;
     }
     m_cascade_mode = std::min(m_cascade_mode, requirements.modes.size() - 1);
-    ImGui::SetNextItemWidth(220.0f);
+    ImGui::SetNextItemWidth(240.0f);
     const std::string cascade_preview = modeLabel(requirements, budget, m_cascade_mode);
     if (ImGui::BeginCombo("Mode##cascade_mode", cascade_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
@@ -727,28 +777,29 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     const RfBudgetModeResult *mode =
         findRfBudgetModeResult(evaluation, requirements.modes[m_cascade_mode].id);
     if (!mode) {
-        ImGui::TextDisabled("This mode has not been evaluated.");
+        rf_view_ui::hint("This mode has not been evaluated.");
         return;
     }
     if (mode->status == RfBudgetModeStatus::NotConfigured) {
-        ImGui::TextDisabled("The mode has no requirements.");
+        rf_view_ui::hint("The mode has no requirements. Set them in Receiver Requirements.");
         return;
     }
     if (mode->status == RfBudgetModeStatus::NotBudgeted) {
-        ImGui::TextDisabled("Not budgeted for this mode.");
+        rf_view_ui::hint("Not budgeted for this mode. Add a record in Mode overrides above.");
         return;
     }
-    if (mode->cascades.empty())
-        ImGui::TextDisabled("No output is reached by this mode.");
+    if (mode->cascades.empty()) {
+        rf_view_ui::hint("No output is reached by this mode.");
+    }
 
     for (const RfBudgetUnreachedOutput &unreached : mode->unreached)
-        ImGui::TextColored(kErrorColor, "%s: %s", unreached.output.c_str(),
+        ImGui::TextColored(rf_view_ui::failColor(), "%s: %s", unreached.output.c_str(),
                            unreached.reason.c_str());
 
     if (mode->cascades.empty())
         return;
     m_cascade_output = std::min(m_cascade_output, mode->cascades.size() - 1);
-    ImGui::SetNextItemWidth(180.0f);
+    ImGui::SetNextItemWidth(200.0f);
     if (ImGui::BeginCombo("Output##cascade_output",
                           mode->cascades[m_cascade_output].output.c_str())) {
         for (std::size_t index = 0; index < mode->cascades.size(); ++index) {
@@ -764,22 +815,135 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     const RfBudgetCascade &cascade = mode->cascades[m_cascade_output];
     const std::size_t count = cascade.frequencies_Hz.size();
     if (count == 0 || cascade.stages.empty()) {
-        ImGui::TextDisabled("No cascade points.");
+        rf_view_ui::hint("No cascade points.");
         return;
     }
+
+    // The four requirement verdicts and the aggregate, side by side, so the outcome is readable
+    // before the numbers.
+    if (ImGui::BeginTable("budget_verdict", 5,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingFixedFit |
+                              ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::TableSetupColumn("Overall");
+        ImGui::TableSetupColumn("Gain");
+        ImGui::TableSetupColumn("Noise figure");
+        ImGui::TableSetupColumn("Output power");
+        ImGui::TableSetupColumn("IIP3");
+        ImGui::TableHeadersRow();
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        rf_view_ui::statusBadge(cascade.verdict.overall);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.gain);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.noise_figure);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.output_power);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.iip3);
+        ImGui::EndTable();
+    }
+
+    // --- Sweep ----------------------------------------------------------------------------------
+    // The sweep comes before the band tables: it is what a user tunes against, so it stays above
+    // the fold instead of being pushed off the bottom by two long tables.
+    ImGui::SeparatorText("Sweep");
+    const auto &session_config = requirements.modes[m_cascade_mode].config;
+    std::optional<double> gain_min;
+    std::optional<double> gain_max;
+    std::optional<double> nf_max;
+    if (session_config) {
+        if (session_config->gain) {
+            gain_min = session_config->gain->minimum_dB;
+            gain_max = session_config->gain->maximum_dB;
+        }
+        nf_max = session_config->nf_max_dB;
+    }
+    const float plot_height = std::clamp(ImGui::GetContentRegionAvail().y * 0.4f, 140.0f, 240.0f);
+    if (ImGui::GetContentRegionAvail().x >= 760.0f) {
+        // Side by side when there is room: two stacked plots cost twice the vertical space.
+        if (ImGui::BeginTable("budget_sweep_plots", 2,
+                              ImGuiTableFlags_SizingStretchSame |
+                                  ImGuiTableFlags_NoSavedSettings)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            drawSeriesPlot("Total gain over the band", "Gain (dB)", cascade.frequencies_Hz,
+                           cascade.stages.back().cumulative_gain_dB, gain_min, gain_max,
+                           plot_height);
+            ImGui::TableNextColumn();
+            drawSeriesPlot("Total noise figure over the band", "NF (dB)", cascade.frequencies_Hz,
+                           cascade.stages.back().cumulative_nf_dB, std::nullopt, nf_max,
+                           plot_height);
+            ImGui::EndTable();
+        }
+    } else {
+        drawSeriesPlot("Total gain over the band", "Gain (dB)", cascade.frequencies_Hz,
+                       cascade.stages.back().cumulative_gain_dB, gain_min, gain_max, plot_height);
+        drawSeriesPlot("Total noise figure over the band", "NF (dB)", cascade.frequencies_Hz,
+                       cascade.stages.back().cumulative_nf_dB, std::nullopt, nf_max, plot_height);
+    }
+
+    // --- Band detail ----------------------------------------------------------------------------
+    // Collapsible: the verdict and the sweep above are the answer, these tables are the support.
+    ImGui::PushID(cascade.output.c_str());
+    if (ImGui::CollapsingHeader("Worst case over the band", ImGuiTreeNodeFlags_DefaultOpen)) {
+        drawBandSummary(cascade, evaluation);
+    }
+    if (ImGui::CollapsingHeader("At one frequency")) {
+        drawPointDetail(cascade, evaluation);
+    }
+    ImGui::PopID();
+}
+
+void RfBudgetWidget::drawBandSummary(const RfBudgetCascade &cascade,
+                                     const RfBudgetEvaluation &evaluation) const {
+    if (ImGui::BeginTable("budget_band_summary", 7,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX |
+                              ImGuiTableFlags_NoSavedSettings)) {
+        ImGui::TableSetupColumn("Stage");
+        ImGui::TableSetupColumn("Gain dB");
+        ImGui::TableSetupColumn("NF dB");
+        ImGui::TableSetupColumn("Cum gain dB");
+        ImGui::TableSetupColumn("Cum NF dB");
+        ImGui::TableSetupColumn("Level dBm");
+        ImGui::TableSetupColumn("P1dB head dB");
+        ImGui::TableHeadersRow();
+        for (const RfBudgetStageResult &stage : cascade.stages) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%s (%d/%d)", stage.stage.c_str(), stage.input_port, stage.output_port);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.gain_dB, evaluation.reasons);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.nf_dB, evaluation.reasons);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.cumulative_gain_dB, evaluation.reasons);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.cumulative_nf_dB, evaluation.reasons);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.level_dBm, evaluation.reasons);
+            ImGui::TableNextColumn();
+            drawSeriesRangeCell(stage.p1db_headroom_dB, evaluation.reasons);
+        }
+        ImGui::EndTable();
+    }
+}
+
+void RfBudgetWidget::drawPointDetail(const RfBudgetCascade &cascade,
+                                     const RfBudgetEvaluation &evaluation) {
+    const std::size_t count = cascade.frequencies_Hz.size();
     m_cascade_point = std::clamp(m_cascade_point, 0, static_cast<int>(count) - 1);
-    ImGui::SetNextItemWidth(240.0f);
+    ImGui::SetNextItemWidth(260.0f);
     ImGui::SliderInt("Point", &m_cascade_point, 0, static_cast<int>(count) - 1);
     ImGui::SameLine();
     ImGui::Text("%.6g Hz", cascade.frequencies_Hz[static_cast<std::size_t>(m_cascade_point)]);
 
-    const std::string verdict = std::string("Verdict: ") + statusText(cascade.verdict.overall);
-    textColoredByStatus(cascade.verdict.overall, verdict.c_str());
-
     const std::size_t point = static_cast<std::size_t>(m_cascade_point);
     if (ImGui::BeginTable("budget_cascade", 10,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX)) {
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX |
+                              ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Stage");
         ImGui::TableSetupColumn("Gain dB");
         ImGui::TableSetupColumn("NF dB");
@@ -794,7 +958,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         for (const RfBudgetStageResult &stage : cascade.stages) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::Text("%s (%d→%d)", stage.stage.c_str(), stage.input_port, stage.output_port);
+            ImGui::Text("%s (%d/%d)", stage.stage.c_str(), stage.input_port, stage.output_port);
             ImGui::TableNextColumn();
             drawSeriesCell(stage.gain_dB, point, evaluation.reasons);
             ImGui::TableNextColumn();
@@ -816,59 +980,42 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         }
         ImGui::EndTable();
     }
-
-    drawSeriesPlot("Cumulative gain (dB)", cascade.stages.back().cumulative_gain_dB, 110.0f);
-    drawSeriesPlot("Cumulative noise figure (dB)", cascade.stages.back().cumulative_nf_dB, 110.0f);
 }
 
-void RfBudgetWidget::drawSeriesPlot(const char *label, const RfBudgetSeries &series, float height) {
-    double minimum = std::numeric_limits<double>::infinity();
-    double maximum = -std::numeric_limits<double>::infinity();
-    for (double value : series.values) {
-        if (!std::isfinite(value))
-            continue;
-        minimum = std::min(minimum, value);
-        maximum = std::max(maximum, value);
+void RfBudgetWidget::drawSeriesPlot(const char *label, const char *y_label,
+                                    const std::vector<double> &frequencies,
+                                    const RfBudgetSeries &series, std::optional<double> low_limit,
+                                    std::optional<double> high_limit, float height) const {
+    const std::size_t count = std::min(frequencies.size(), series.values.size());
+    std::vector<double> values(count, std::numeric_limits<double>::quiet_NaN());
+    bool any_finite = false;
+    for (std::size_t index = 0; index < count; ++index) {
+        // NaN and infinities break the line: a stage that passes no signal has no curve there.
+        if (std::isfinite(series.values[index])) {
+            values[index] = series.values[index];
+            any_finite = true;
+        }
     }
-    ImGui::TextUnformatted(label);
-    if (!std::isfinite(minimum) || !std::isfinite(maximum)) {
-        ImGui::TextDisabled("No values.");
+    if (count < 2 || !any_finite) {
+        ImGui::TextDisabled("%s: no finite sweep values.", label);
         return;
     }
-    if (maximum == minimum) {
-        minimum -= 1.0;
-        maximum += 1.0;
-    }
-    ImGui::TextDisabled("%+.2f to %+.2f", minimum, maximum);
-    const ImVec2 size(ImGui::GetContentRegionAvail().x, height);
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(size);
-    ImDrawList *draw = ImGui::GetWindowDrawList();
-    draw->AddRect(origin, ImVec2(origin.x + size.x, origin.y + size.y),
-                  ImGui::GetColorU32(ImGuiCol_Border));
-    for (int line = 1; line < 4; ++line) {
-        const float y = origin.y + size.y * static_cast<float>(line) / 4.0f;
-        draw->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + size.x, y),
-                      ImGui::GetColorU32(ImGuiCol_Border, 0.35f));
-    }
-    const std::size_t count = series.values.size();
-    if (count < 2)
+    if (!ImPlot::BeginPlot(label, ImVec2(-1.0f, height)))
         return;
-    const auto point = [&](std::size_t index, double value) {
-        const float x =
-            origin.x + size.x * static_cast<float>(index) / static_cast<float>(count - 1);
-        const float y =
-            origin.y + size.y * static_cast<float>((maximum - value) / (maximum - minimum));
-        return ImVec2(x, y);
-    };
-    for (std::size_t index = 1; index < count; ++index) {
-        const double previous = series.values[index - 1];
-        const double current = series.values[index];
-        if (!std::isfinite(previous) || !std::isfinite(current))
-            continue;
-        draw->AddLine(point(index - 1, previous), point(index, current),
-                      ImGui::GetColorU32(ImGuiCol_PlotLines), 1.5f);
+    ImPlot::SetupAxes("Frequency (Hz)", y_label, ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
+    ImPlotSpec limit_spec;
+    limit_spec.Flags = ImPlotInfLinesFlags_Horizontal;
+    limit_spec.LineColor = rf_view_ui::warnColor();
+    if (low_limit) {
+        const double limit = *low_limit;
+        ImPlot::PlotInfLines("Requirement min", &limit, 1, limit_spec);
     }
+    if (high_limit) {
+        const double limit = *high_limit;
+        ImPlot::PlotInfLines("Requirement max", &limit, 1, limit_spec);
+    }
+    ImPlot::PlotLine("Cumulative", frequencies.data(), values.data(), static_cast<int>(count));
+    ImPlot::EndPlot();
 }
 
 void RfBudgetWidget::drawModals(RfBudget &budget) {
@@ -878,7 +1025,7 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
         if (ImGui::BeginPopupModal(kRenameStageTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::InputText("Name", m_name_buffer.data(), m_name_buffer.size());
             if (!m_error.empty())
-                ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
+                ImGui::TextColored(rf_view_ui::failColor(), "%s", m_error.c_str());
             if (ImGui::Button("OK", ImVec2(100.0f, 0.0f))) {
                 std::string error;
                 if (renameRfBudgetStage(budget, m_modal_stage, m_name_buffer.data(), error)) {
@@ -905,7 +1052,7 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                                    ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::InputText("Name", m_name_buffer.data(), m_name_buffer.size());
             if (!m_error.empty())
-                ImGui::TextColored(kErrorColor, "%s", m_error.c_str());
+                ImGui::TextColored(rf_view_ui::failColor(), "%s", m_error.c_str());
             if (ImGui::Button("OK", ImVec2(100.0f, 0.0f))) {
                 if (m_modal_output < budget.outputs.size()) {
                     budget.outputs[m_modal_output].name = m_name_buffer.data();
@@ -932,13 +1079,16 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                 ImGui::CloseCurrentPopup();
             } else {
                 ImGui::TextUnformatted(budget.stages[m_modal_stage].name.c_str());
+                ImGui::TextDisabled("What drives each input port");
                 const auto options = feedOptions(budget, m_modal_stage);
                 for (std::size_t port = 0; port < budget.stages[m_modal_stage].inputs.size();
                      ++port) {
                     const int current = feedOptionIndex(budget, m_modal_stage,
                                                         budget.stages[m_modal_stage].inputs[port]);
                     ImGui::PushID(static_cast<int>(port));
-                    ImGui::SetNextItemWidth(240.0f);
+                    ImGui::TextDisabled("in %zu", port);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(260.0f);
                     if (ImGui::BeginCombo("##feed",
                                           options[static_cast<std::size_t>(current)].c_str())) {
                         for (std::size_t option = 0; option < options.size(); ++option) {
@@ -969,7 +1119,7 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                 ImGui::CloseCurrentPopup();
             } else {
                 RfBudgetStage &stage = budget.stages[m_modal_stage];
-                ImGui::Text("%s (%s)", stage.name.c_str(), stage.type.c_str());
+                ImGui::Text("%s (%s)", stage.name.c_str(), stageTypeLabel(stage.type).c_str());
                 if (stage.source == RfBudgetStageSource::Library) {
                     ImGui::TextDisabled("A library stage takes no params; edit the part instead.");
                 } else {
@@ -1074,7 +1224,8 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                             unknown.push_back(it.key());
                     }
                     for (const std::string &key : unknown) {
-                        ImGui::TextColored(kErrorColor, "Unknown setting '%s'", key.c_str());
+                        ImGui::TextColored(rf_view_ui::failColor(), "Unknown setting '%s'",
+                                           key.c_str());
                         ImGui::SameLine();
                         ImGui::PushID(key.c_str());
                         if (ImGui::SmallButton("Remove")) {
