@@ -50,6 +50,8 @@ class RfBudgetWidget {
     std::array<char, 96> m_name_buffer{};
     std::string m_error;
 
+    bool m_initialized = false;
+    std::size_t m_last_requirements_selected = 0;
     std::size_t m_override_mode = 0;
     std::size_t m_override_stage = 0;
     std::size_t m_override_key = 0;

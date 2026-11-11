@@ -15,7 +15,7 @@ class ReceiverRequirementsWidget {
   public:
     void draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
               const ReceiverRequirementsEvaluation &result,
-              const RfBudgetModeResult *budget = nullptr);
+              const RfBudgetEvaluation &budget = RfBudgetEvaluation{});
 
     std::function<void()> onChange;
     // The validation error shown under the mode controls; empty when there is none.

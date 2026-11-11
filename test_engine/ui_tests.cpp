@@ -1904,6 +1904,39 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(s_app->testRfBudget().outputs.size(), 1u);
         IM_CHECK(s_app->testRfBudgetWidgetError().empty());
 
+        // A mode needs its own budget record; "Budget this mode" is the explicit
+        // control, and the Requirements view's prediction follows it.
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 2.0e6;
+        config.gain = ReceiverGainLimits{5.0, 30.0};
+        s_app->testSetSingleModeRequirements(config);
+        s_app->testRfBudget().stages[0].params = {{"gain_dB", 20.0}, {"nf_dB", 2.0}};
+        ctx->Yield(2);
+        ctx->SetRef("RF Budget");
+        ctx->ScrollToItem("Budget this mode", ImGuiAxis_Y);
+        ctx->Yield(2);
+        ctx->ItemClick("Budget this mode");
+        ctx->Yield(3);
+        IM_CHECK_EQ(s_app->testRfBudget().modes.size(), 1u);
+        IM_CHECK_EQ(s_app->testRfBudget().modes[0].mode_id,
+                    s_app->testReceiverRequirements().modes[0].id);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(4);
+        IM_CHECK_EQ(s_app->testRfBudgetEvaluation().modes.size(), 1u);
+        IM_CHECK_EQ(s_app->testRfBudgetEvaluation().modes[0].status, RfBudgetModeStatus::Budgeted);
+        IM_CHECK_EQ(s_app->testRfBudgetEvaluation().modes[0].cascades.size(), 1u);
+        IM_CHECK_EQ(s_app->testRfBudgetEvaluation().modes[0].cascades[0].verdict.gain.status,
+                    ReceiverRequirementStatus::Pass);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("View/RF Budget");
         ctx->SetRef("");

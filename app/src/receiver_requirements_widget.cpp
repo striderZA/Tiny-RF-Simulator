@@ -88,8 +88,14 @@ void drawMetricStatus(const ReceiverMetricEvaluation &metric) {
     }
 }
 
-void drawBudgetPrediction(const RfBudgetModeResult *budget) {
+void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetModeResult *budget) {
     ImGui::SeparatorText("Budget prediction");
+    // An invalid or unevaluated budget returns no mode results at all. Saying "not budgeted"
+    // there would hide the real reason.
+    if (!evaluation.not_evaluated_reason.empty()) {
+        ImGui::TextDisabled("%s", evaluation.not_evaluated_reason.c_str());
+        return;
+    }
     if (!budget) {
         ImGui::TextDisabled("Not budgeted for this mode.");
         return;
@@ -99,7 +105,8 @@ void drawBudgetPrediction(const RfBudgetModeResult *budget) {
         return;
     }
     if (budget->status == RfBudgetModeStatus::NotBudgeted) {
-        ImGui::TextDisabled("Not budgeted for this mode.");
+        ImGui::TextDisabled(
+            "Not budgeted for this mode. Use View > RF Budget's Budget this mode button.");
         return;
     }
     if (budget->cascades.empty())
@@ -252,7 +259,7 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
 
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
                                       const ReceiverRequirementsEvaluation &result,
-                                      const RfBudgetModeResult *budget) {
+                                      const RfBudgetEvaluation &budget) {
     // An external change reloads the draft only when it changes the selected mode.
     // Edits to other modes keep the unapplied draft, which still describes the selected mode.
     if (!m_initialized) {
@@ -444,7 +451,10 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
                 break;
             }
         }
-        drawBudgetPrediction(budget);
+        const RfBudgetModeResult *budget_mode = nullptr;
+        if (has_modes)
+            budget_mode = findRfBudgetModeResult(budget, set.modes[selected_index].id);
+        drawBudgetPrediction(budget, budget_mode);
     }
     ImGui::End();
 }

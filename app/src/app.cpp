@@ -1934,14 +1934,9 @@ void RfSimulatorApp::draw_ui() {
             measurement_state, m_na_engine.startFrequency(), m_na_engine.stopFrequency(),
             m_na_engine.sweepFrequencies(), m_na_engine.gainDb(), m_na_engine.noiseFigureDb(),
             measurements.output_power_dBm, measurements.iip3_dBm);
-        const RfBudgetModeResult *budget_mode = nullptr;
-        const std::size_t selected = m_receiver_requirements.selected;
-        if (selected < m_receiver_requirements.modes.size()) {
-            budget_mode = findRfBudgetModeResult(m_rf_budget_evaluation,
-                                                 m_receiver_requirements.modes[selected].id);
-        }
         m_receiver_requirements_widget->draw("Receiver Requirements", &m_show_receiver_requirements,
-                                             m_receiver_requirements, result, budget_mode);
+                                             m_receiver_requirements, result,
+                                             m_rf_budget_evaluation);
     }
 
     if (m_show_power_meter)

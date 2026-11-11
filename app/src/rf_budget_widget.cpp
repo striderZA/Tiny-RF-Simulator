@@ -82,6 +82,16 @@ bool paramsHas(const RfBudgetStage &stage, const std::string &key) {
     return stage.params.contains(key) && !stage.params[key].is_null();
 }
 
+// A mode combo entry says whether the mode has a budget record, so the difference between
+// "no overrides" and "not budgeted" is visible before opening the Requirements view.
+std::string modeLabel(const ReceiverRequirementsSet &requirements, const RfBudget &budget,
+                      std::size_t index) {
+    std::string label = requirements.modes[index].name;
+    if (findRfBudgetModeRecord(budget, requirements.modes[index].id))
+        label += " (budgeted)";
+    return label;
+}
+
 std::string feedText(const std::optional<RfBudgetFeed> &feed) {
     if (!feed)
         return "unfed";
@@ -230,6 +240,25 @@ void RfBudgetWidget::draw(const char *title, bool *p_open, RfBudget &budget,
         ImGui::End();
         return;
     }
+
+    // The Budget view opens on the receiver mode selected in the Requirements view, and follows
+    // that selection. Choosing another mode here edits that mode's record without changing the
+    // Requirements view's selection.
+    const std::size_t selected =
+        requirements.selected < requirements.modes.size() ? requirements.selected : 0;
+    if (!m_initialized) {
+        m_override_mode = selected;
+        m_cascade_mode = selected;
+        m_initialized = true;
+    } else if (requirements.selected != m_last_requirements_selected) {
+        m_override_mode = selected;
+        m_cascade_mode = selected;
+        m_override_stage = 0;
+        m_override_key = 0;
+        m_cascade_output = 0;
+        m_cascade_point = 0;
+    }
+    m_last_requirements_selected = requirements.selected;
 
     drawToolbar(budget);
     drawStatus(budget, evaluation);
@@ -497,32 +526,58 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     }
     m_override_mode = std::min(m_override_mode, requirements.modes.size() - 1);
     ImGui::SetNextItemWidth(220.0f);
-    if (ImGui::BeginCombo("Mode##override_mode",
-                          requirements.modes[m_override_mode].name.c_str())) {
+    const std::string override_preview = modeLabel(requirements, budget, m_override_mode);
+    if (ImGui::BeginCombo("Mode##override_mode", override_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
             const bool selected = index == m_override_mode;
-            if (ImGui::Selectable(requirements.modes[index].name.c_str(), selected) && !selected) {
+            const std::string label = modeLabel(requirements, budget, index);
+            if (ImGui::Selectable(label.c_str(), selected) && !selected) {
                 m_override_mode = index;
                 m_override_stage = 0;
                 m_override_key = 0;
             }
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }
 
     const std::uint32_t mode_id = requirements.modes[m_override_mode].id;
-    RfBudgetModeRecord *record = nullptr;
-    for (RfBudgetModeRecord &candidate : budget.modes) {
-        if (candidate.mode_id == mode_id) {
-            record = &candidate;
-            break;
+    const auto find_record = [&budget](std::uint32_t id) -> RfBudgetModeRecord * {
+        for (RfBudgetModeRecord &candidate : budget.modes) {
+            if (candidate.mode_id == id)
+                return &candidate;
         }
+        return nullptr;
+    };
+    RfBudgetModeRecord *record = find_record(mode_id);
+    bool clear_record = false;
+    if (record) {
+        ImGui::TextDisabled("Budgeted");
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!record->overrides.empty());
+        if (ImGui::Button("Clear budget record"))
+            clear_record = true;
+        ImGui::EndDisabled();
+        if (!record->overrides.empty() && ImGui::IsItemHovered())
+            ImGui::SetTooltip("Remove the overrides first.");
+    } else {
+        if (ImGui::Button("Budget this mode")) {
+            record = &ensureRfBudgetModeRecord(budget, mode_id);
+            markChanged();
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("A mode is budgeted only after it has a record.");
     }
-    if (!record) {
-        ImGui::TextDisabled("Not budgeted for this mode.");
-    } else if (ImGui::BeginTable("budget_overrides", 4,
-                                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                     ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
+    if (clear_record) {
+        eraseRfBudgetModeRecord(budget, mode_id);
+        record = nullptr;
+        markChanged();
+    }
+    if (record &&
+        ImGui::BeginTable("budget_overrides", 4,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
         ImGui::TableSetupColumn("Stage");
         ImGui::TableSetupColumn("Setting");
         ImGui::TableSetupColumn("Value");
@@ -653,14 +708,18 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     }
     m_cascade_mode = std::min(m_cascade_mode, requirements.modes.size() - 1);
     ImGui::SetNextItemWidth(220.0f);
-    if (ImGui::BeginCombo("Mode##cascade_mode", requirements.modes[m_cascade_mode].name.c_str())) {
+    const std::string cascade_preview = modeLabel(requirements, budget, m_cascade_mode);
+    if (ImGui::BeginCombo("Mode##cascade_mode", cascade_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
             const bool selected = index == m_cascade_mode;
-            if (ImGui::Selectable(requirements.modes[index].name.c_str(), selected) && !selected) {
+            const std::string label = modeLabel(requirements, budget, index);
+            if (ImGui::Selectable(label.c_str(), selected) && !selected) {
                 m_cascade_mode = index;
                 m_cascade_output = 0;
                 m_cascade_point = 0;
             }
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }
