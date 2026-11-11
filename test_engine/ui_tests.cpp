@@ -2672,6 +2672,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         set.modes.push_back({"HG", config});
         set.modes.push_back({"LG", config});
         set.selected = 1;
+        assignReceiverRequirementsModeIds(set);
         ctx->Yield(3);
 
         // 1. An agent edit to the other mode leaves the selected mode's unapplied draft in place.

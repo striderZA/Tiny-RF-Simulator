@@ -66,7 +66,7 @@ void checkConfigKeys(const OrderedJson &config, const std::string &path) {
 
 // Walks every nested member of the requirements object, so a misspelled key is refused with its
 // full path instead of being dropped. The shared file parser stays lenient for legacy files.
-void checkRequirementsKeys(const OrderedJson &requirements) {
+void checkRequirementsKeys(const OrderedJson &requirements, bool with_ids) {
     checkMemberKeys(requirements, "/requirements", {"format", "selected_mode", "modes"});
     const auto modes = requirements.find("modes");
     if (modes == requirements.end() || !modes->is_array())
@@ -76,7 +76,9 @@ void checkRequirementsKeys(const OrderedJson &requirements) {
         if (!mode.is_object())
             continue;
         const std::string mode_path = "/requirements/modes/" + std::to_string(index);
-        checkMemberKeys(mode, mode_path, {"name", "config"});
+        checkMemberKeys(mode, mode_path,
+                        with_ids ? std::initializer_list<std::string_view>{"name", "config", "id"}
+                                 : std::initializer_list<std::string_view>{"name", "config"});
         const auto config = mode.find("config");
         if (config != mode.end() && config->is_object())
             checkConfigKeys(*config, mode_path + "/config");
@@ -104,13 +106,16 @@ AgentToolResult unavailable(const AgentApi &api) {
 // empty format-2 object is sent and the diagnostic travels in `invalid_reason`.
 AgentToolResult requirementsResult(std::uint64_t epoch, std::uint64_t revision, bool dirty,
                                    const ReceiverRequirementsSet &set) {
+    // Results omit next_mode_id: the host assigns it, and an edit never sends it.
+    Json requirements =
+        receiverRequirementsToJson(set.invalid_reason.empty() ? set : ReceiverRequirementsSet{});
+    requirements.erase("next_mode_id");
     AgentToolResult result;
     result.structured = Json{
         {"epoch", epoch},
         {"revision", revision},
         {"dirty", dirty},
-        {"requirements",
-         receiverRequirementsToJson(set.invalid_reason.empty() ? set : ReceiverRequirementsSet{})},
+        {"requirements", std::move(requirements)},
         {"invalid_reason", set.invalid_reason.empty() ? Json(nullptr) : Json(set.invalid_reason)}};
     return result;
 }
@@ -145,19 +150,23 @@ AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall
     if (format == found->end())
         invalid("/requirements/format", "required field is missing");
     if (!format->is_number_integer() && !format->is_number_unsigned())
-        invalid("/requirements/format", "expected " + std::to_string(kReceiverRequirementsFormat));
-    if (format->get<long long>() != kReceiverRequirementsFormat)
-        invalid("/requirements/format", "expected " + std::to_string(kReceiverRequirementsFormat));
-    checkRequirementsKeys(*found);
-
-    ReceiverRequirementsSet set = receiverRequirementsFromJson(*found);
-    if (!set.invalid_reason.empty())
-        invalid("/requirements", set.invalid_reason);
+        invalid("/requirements/format", "expected 2 or 3");
+    const long long format_number = format->get<long long>();
+    if (format_number != 2 && format_number != kReceiverRequirementsFormat)
+        invalid("/requirements/format", "expected 2 or 3");
+    checkRequirementsKeys(*found, format_number == kReceiverRequirementsFormat);
 
     const std::optional<ReceiverRequirementsSet> current =
         api.m_context.host.receiverRequirements();
     if (!current)
         return unavailable(api);
+    std::string error_path;
+    std::string error;
+    std::optional<ReceiverRequirementsSet> decoded =
+        receiverRequirementsFromEdit(*found, *current, error_path, error);
+    if (!decoded)
+        invalid(error_path, error);
+    ReceiverRequirementsSet set = std::move(*decoded);
     // A revision from requirements_get refuses an edit made against an older read, so a GUI Apply
     // or circuit edit since then survives. Mode selection does not advance the revision.
     if (revision && *revision != api.m_context.commands.revision())

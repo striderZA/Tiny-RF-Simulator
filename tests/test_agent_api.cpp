@@ -1463,8 +1463,11 @@ TEST_CASE("Every catalog tool input example passes API argument validation", "[a
                                     .string();
         }
         const auto result = fixture.call(tool.name, arguments);
-        if (result.is_error)
+        if (result.is_error) {
+            INFO("tool " << tool.name << " rejected its example: "
+                         << errorFor(result).at("message").get<std::string>());
             CHECK(errorFor(result).at("code") != "INVALID_ARGUMENT");
+        }
         CHECK(result.structured.contains("epoch"));
         CHECK(result.structured.at("epoch") == fixture.api.epoch());
     }

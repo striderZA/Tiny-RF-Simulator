@@ -144,6 +144,13 @@ class FakeAgentHost final : public IAgentHost {
         requirements = set;
         return true;
     }
+    std::optional<RfBudget> rfBudget() const override { return rf_budget; }
+    bool setRfBudget(const RfBudget &budget) override {
+        if (!rf_budget_write_succeeds)
+            return false;
+        rf_budget = budget;
+        return true;
+    }
     void recordActivity(const AgentActivity &entry) override {
         ++activity_attempts;
         if (throw_on_activity)
@@ -166,6 +173,8 @@ class FakeAgentHost final : public IAgentHost {
         [](const std::string &) { return AgentProjectLoadResult{true, false}; };
     std::optional<ReceiverRequirementsSet> requirements = ReceiverRequirementsSet{};
     bool requirements_write_succeeds = true;
+    std::optional<RfBudget> rf_budget = RfBudget{};
+    bool rf_budget_write_succeeds = true;
     int checkpoint_begins = 0;
     int checkpoint_commits = 0;
     int checkpoint_discards = 0;

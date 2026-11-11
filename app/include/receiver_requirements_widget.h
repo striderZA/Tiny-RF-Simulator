@@ -35,5 +35,5 @@ class ReceiverRequirementsWidget {
     bool m_initialized = false;
     std::string m_error;
     std::string m_notice;
-    std::string m_remove_name;
+    std::uint32_t m_remove_id = 0; // the mode the open Remove popup would delete
 };

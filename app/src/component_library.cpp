@@ -1,4 +1,5 @@
 #include "component_library.h"
+#include "amplifier_engine.h"
 #include "component_params.h"
 #include "component_type_registry.h"
 #include "logging_core.h"
@@ -736,6 +737,137 @@ std::vector<const ComponentDefinition *> ComponentLibrary::byType(const std::str
     return result;
 }
 
+std::vector<std::string> ComponentLibrary::applyDefinition(const ComponentDefinition &def,
+                                                           IComponentEngine &engine) const {
+    std::vector<std::string> not_applied;
+    const auto *descriptor = ComponentTypeRegistry::instance().find(def.type);
+    if (!descriptor)
+        return not_applied;
+
+    const std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
+    // Issue #79: path-bearing *parameters* are resolved against the library
+    // JSON's directory and containment-checked like data_files entries;
+    // escaping paths are dropped so engine deserialize() never loads an
+    // arbitrary file (mirrors the project-file load boundary).
+    nlohmann::json params = def.parameters;
+    if (params.is_object() && !def.source_path.empty()) {
+        for (const char *key : kPathParameterKeys) {
+            if (!params.contains(key) || !params[key].is_string())
+                continue;
+            const std::string value = params[key].get<std::string>();
+            if (auto resolved = resolveDataFilePath(json_dir, value)) {
+                params[key] = resolved->string();
+            } else {
+                LOG_WARN("ComponentLibrary: rejecting path parameter '%s' for "
+                         "%s (must stay within the library directory)",
+                         value.c_str(), def.part_number.c_str());
+                params.erase(key);
+                not_applied.push_back("Data file '" + value + "' for " + def.part_number +
+                                      " is outside the library folder.");
+            }
+        }
+    }
+    // `sparam_mode` is an engine-state key the library schema does not type-check, so a library
+    // JSON can carry any type for it. Read it through find() and is_boolean(), and drop a
+    // non-boolean value: the engine's deserialize() accepts only a boolean.
+    bool declared_sparam_mode = false;
+    if (params.is_object()) {
+        const auto sparam_mode = params.find("sparam_mode");
+        if (sparam_mode != params.end()) {
+            if (sparam_mode->is_boolean())
+                declared_sparam_mode = sparam_mode->get<bool>();
+            else {
+                LOG_WARN("ComponentLibrary: ignoring non-boolean sparam_mode for %s",
+                         def.part_number.c_str());
+                params.erase(sparam_mode);
+            }
+        }
+    }
+    engine.deserialize(params);
+
+    bool sparam_data_file_consumed = false;
+    bool sparam_reported = false;
+    for (const auto &df : def.data_files) {
+        if (df.type != "s_parameters")
+            continue;
+        if (!descriptor->supports_sparam_file) {
+            LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
+                     "component type '%s' (%s)",
+                     df.path.c_str(), def.type.c_str(), def.part_number.c_str());
+            continue;
+        }
+        if (!descriptor->load_sparam_file) {
+            LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
+                     def.type.c_str(), def.part_number.c_str());
+            continue;
+        }
+        if (sparam_data_file_consumed) {
+            LOG_WARN("ComponentLibrary: ignoring additional S-param data file '%s' for %s "
+                     "(only one S-param file can be loaded)",
+                     df.path.c_str(), def.part_number.c_str());
+            continue;
+        }
+        if (def.source_path.empty()) {
+            LOG_WARN("ComponentLibrary: no library folder to resolve S-param data file '%s' "
+                     "for %s",
+                     df.path.c_str(), def.part_number.c_str());
+            not_applied.push_back(def.part_number + " has no library folder to resolve '" +
+                                  df.path + "' against.");
+            continue;
+        }
+
+        // Keep data-file reads confined to the library JSON's directory;
+        // absolute paths and '..' escapes are rejected rather than used.
+        const auto sparam_path = resolveDataFilePath(json_dir, df.path);
+        if (!sparam_path) {
+            LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
+                     "(must stay within the library directory)",
+                     df.path.c_str(), def.part_number.c_str());
+            not_applied.push_back("Data file '" + df.path + "' for " + def.part_number +
+                                  " is outside the library folder.");
+            // This file is the one the S-parameter mode reported; do not add a second sentence.
+            sparam_reported = true;
+            continue;
+        }
+
+        sparam_data_file_consumed = true;
+        if (descriptor->load_sparam_file(engine, sparam_path->string())) {
+            LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
+                     sparam_path->string().c_str());
+        } else {
+            LOG_WARN("Failed to load S-param file for %s: %s (S-param mode remains disabled)",
+                     def.part_number.c_str(), sparam_path->string().c_str());
+            not_applied.push_back("S-parameter file '" + sparam_path->string() + "' for " +
+                                  def.part_number + " did not load.");
+            sparam_reported = true;
+        }
+    }
+
+    // deserialize() turns S-parameter mode on only when the declared file loads with two or
+    // more ports. A declared mode that stays off therefore means the declared path did not load.
+    if (!sparam_reported && declared_sparam_mode &&
+        !engine.serialize().value("sparam_mode", false)) {
+        for (const char *key : {"sparam_filepath", "sparam_path"}) {
+            if (params.contains(key) && params[key].is_string() &&
+                !params[key].get<std::string>().empty()) {
+                not_applied.push_back("S-parameter file '" + params[key].get<std::string>() +
+                                      "' for " + def.part_number + " did not load.");
+                break;
+            }
+        }
+    }
+
+    if (const auto *amp = dynamic_cast<const AmplifierEngine *>(&engine)) {
+        if (!amp->ampFilepath().empty() && !amp->ampLoaded())
+            not_applied.push_back("AMP file '" + amp->ampFilepath() + "' for " + def.part_number +
+                                  " did not load: " + amp->ampError() + ".");
+        if (!amp->ampfFilepath().empty() && !amp->ampfBlockSelected())
+            not_applied.push_back("amp-f file '" + amp->ampfFilepath() + "' for " +
+                                  def.part_number + ": " + amp->ampfError() + ".");
+    }
+    return not_applied;
+}
+
 IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
                                                 CircuitRuntime &runtime,
                                                 GraphEditorActions &editor_actions,
@@ -768,70 +900,7 @@ IComponentEngine *ComponentLibrary::instantiate(const ComponentDefinition &def,
     // any failure below rolls it back through runtime removal so no partial
     // component survives and no post-creation exception escapes to the caller.
     try {
-        const std::filesystem::path json_dir = std::filesystem::path(def.source_path).parent_path();
-        // Issue #79: path-bearing *parameters* are resolved against the library
-        // JSON's directory and containment-checked like data_files entries;
-        // escaping paths are dropped so engine deserialize() never loads an
-        // arbitrary file (mirrors the project-file load boundary).
-        nlohmann::json params = def.parameters;
-        if (params.is_object() && !def.source_path.empty()) {
-            for (const char *key : kPathParameterKeys) {
-                if (!params.contains(key) || !params[key].is_string())
-                    continue;
-                const std::string value = params[key].get<std::string>();
-                if (auto resolved = resolveDataFilePath(json_dir, value)) {
-                    params[key] = resolved->string();
-                } else {
-                    LOG_WARN("ComponentLibrary: rejecting path parameter '%s' for "
-                             "%s (must stay within the library directory)",
-                             value.c_str(), def.part_number.c_str());
-                    params.erase(key);
-                }
-            }
-        }
-        result->deserialize(params);
-
-        bool sparam_data_file_consumed = false;
-        for (const auto &df : def.data_files) {
-            if (df.type != "s_parameters")
-                continue;
-            if (!descriptor->supports_sparam_file) {
-                LOG_WARN("ComponentLibrary: ignoring S-param data file '%s' for unsupported "
-                         "component type '%s' (%s)",
-                         df.path.c_str(), def.type.c_str(), def.part_number.c_str());
-                continue;
-            }
-            if (!descriptor->load_sparam_file) {
-                LOG_WARN("ComponentLibrary: no S-param loader registered for '%s' (%s)",
-                         def.type.c_str(), def.part_number.c_str());
-                continue;
-            }
-            if (sparam_data_file_consumed) {
-                LOG_WARN("ComponentLibrary: ignoring additional S-param data file '%s' for %s "
-                         "(only one S-param file can be loaded)",
-                         df.path.c_str(), def.part_number.c_str());
-                continue;
-            }
-
-            // Keep data-file reads confined to the library JSON's directory;
-            // absolute paths and '..' escapes are rejected rather than used.
-            const auto sparam_path = resolveDataFilePath(json_dir, df.path);
-            if (!sparam_path) {
-                LOG_WARN("ComponentLibrary: rejecting S-param data file path '%s' for %s "
-                         "(must stay within the library directory)",
-                         df.path.c_str(), def.part_number.c_str());
-                continue;
-            }
-
-            sparam_data_file_consumed = true;
-            if (descriptor->load_sparam_file(*result, sparam_path->string())) {
-                LOG_INFO("Loaded S-param file for %s: %s", def.part_number.c_str(),
-                         sparam_path->string().c_str());
-            } else {
-                LOG_WARN("Failed to load S-param file for %s: %s (S-param mode remains disabled)",
-                         def.part_number.c_str(), sparam_path->string().c_str());
-            }
-        }
+        applyDefinition(def, *result);
 
         if (!def.part_number.empty() &&
             !editor_actions.setNodePartNumber(result->graphNodeId(), def.part_number))

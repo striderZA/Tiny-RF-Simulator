@@ -17,6 +17,7 @@ add_library(agent_api STATIC
     src/tool_receiver.cpp
     src/tool_project.cpp
     src/tool_requirements.cpp
+    src/tool_budget.cpp
 )
 add_library(simulator::agent_api ALIAS agent_api)
 

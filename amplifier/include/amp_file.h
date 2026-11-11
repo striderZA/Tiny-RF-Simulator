@@ -42,6 +42,8 @@ struct AmpIp3Curve {
 
     // Linear in frequency between points; held at the nearest point outside them.
     double dBmAt(double freq_Hz) const;
+    // True when freq_Hz lies inside the curve's [front, back] band. dBmAt holds the edge outside.
+    bool covers(double freq_Hz) const;
 };
 
 struct AmpFile {

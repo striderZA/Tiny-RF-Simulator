@@ -46,6 +46,9 @@ class IAgentCallExecutor {
     virtual std::uint64_t epoch() const = 0;
 };
 
+// The protocol line for `result` fits the 1 MiB cap, reserving room for the request id.
+bool agentReplyFitsProtocolLine(const AgentToolResult &result);
+
 struct AgentApiContext {
     EditorCommands &commands;
     CircuitRuntime &runtime;
@@ -90,6 +93,9 @@ class AgentApi final : public IAgentCallExecutor {
     friend AgentToolResult executeProjectLoadTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeRequirementsGetTool(const AgentApi &, const AgentCall &);
     friend AgentToolResult executeRequirementsEditTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeBudgetGetTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeBudgetCascadeTool(const AgentApi &, const AgentCall &);
+    friend AgentToolResult executeBudgetEditTool(const AgentApi &, const AgentCall &);
 
     IComponentEngine *scratchTypeEngine(std::string_view type) const;
 

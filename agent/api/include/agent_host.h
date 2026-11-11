@@ -1,6 +1,7 @@
 #pragma once
 
 #include "receiver_requirements.h"
+#include "rf_budget.h"
 
 #include <nlohmann/json.hpp>
 
@@ -73,5 +74,11 @@ class IAgentHost {
     // Replaces every mode and the selection. The caller opens the checkpoint and marks the project
     // modified; implementations only assign the stored set and never mark it dirty themselves.
     virtual bool setReceiverRequirements(const ReceiverRequirementsSet &) { return false; }
+    // The RF budget shown in the Budget panel. nullopt when the host has no such state; the tools
+    // then report INTERNAL.
+    virtual std::optional<RfBudget> rfBudget() const { return std::nullopt; }
+    // Replaces the stored budget. The caller opens the checkpoint and marks the project modified;
+    // implementations only assign the stored value and never mark it dirty themselves.
+    virtual bool setRfBudget(const RfBudget &) { return false; }
     virtual void recordActivity(const AgentActivity &) = 0;
 };

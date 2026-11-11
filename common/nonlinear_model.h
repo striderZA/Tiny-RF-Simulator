@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <vector>
 
 namespace detail {
@@ -24,6 +25,15 @@ class NonlinearModel {
 
     // While OIP3 is at its default, setting P1dB sets OIP3 this many dB above it.
     static constexpr double kOip3OverP1dB_dB = 9.6;
+
+    // Output level (dBm) at which process() compresses a tone by compression_dB (positive): the
+    // inverse of 20*log10(1 - 10^((P - OIP3)/10)). NaN outside 0 < compression_dB < 3.0103, the
+    // range process() can represent before its -3.01 dB floor.
+    static double outputLevelForCompression_dBm(double oip3_dBm, double compression_dB) {
+        if (!(compression_dB > 0.0) || compression_dB >= 3.0103)
+            return std::numeric_limits<double>::quiet_NaN();
+        return oip3_dBm + 10.0 * std::log10(1.0 - std::pow(10.0, -compression_dB / 20.0));
+    }
 
     void setOIP2_dBm(double oip2) {
         if (oip2 != m_oip2_dBm) {

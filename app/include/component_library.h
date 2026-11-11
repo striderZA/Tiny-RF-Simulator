@@ -77,6 +77,11 @@ class ComponentLibrary {
     IComponentEngine *instantiate(const ComponentDefinition &def, CircuitRuntime &runtime,
                                   GraphEditorActions &editor_actions,
                                   std::optional<int> component_id = std::nullopt);
+    // Applies def's parameters and data files to `engine` exactly as instantiate() does, with the
+    // same resolution, containment, and logging. It does not set the part number. Returns one
+    // sentence per declared file that was rejected or did not load.
+    std::vector<std::string> applyDefinition(const ComponentDefinition &def,
+                                             IComponentEngine &engine) const;
     std::vector<ValidationIssue> validate(const std::string &type,
                                           const nlohmann::json &parameters) const;
     void upsert(const ComponentDefinition &def);

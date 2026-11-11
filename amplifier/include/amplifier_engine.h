@@ -9,6 +9,15 @@
 #include "signal_node.h"
 #include <algorithm>
 #include <optional>
+#include <string>
+
+// Third-order intercept at one frequency and whether the file data covers it. oip3_dBm is the
+// value the simulation applies. When covered is false, reason says why the data does not.
+struct AmplifierInterceptAt {
+    double oip3_dBm = 0.0;
+    bool covered = true;
+    std::string reason;
+};
 
 class AmplifierEngine : public ComponentEngineBase {
   public:
@@ -99,6 +108,10 @@ class AmplifierEngine : public ComponentEngineBase {
     const AmpfValues &ampfSelection() const { return m_ampf_selection; }
     bool ampfBlockSelected() const { return m_ampf_block >= 0; }
 
+    // OIP3 at freq_Hz through update()'s chain (amp-f block, AMP file, scalar), with the active
+    // mode's small-signal gain. Independent of enableNonlinear().
+    AmplifierInterceptAt oip3At_Hz(double freq_Hz) const;
+
   private:
     double m_gain_dB = 0.0;
     double m_nf_dB = 0.0;
@@ -130,8 +143,10 @@ class AmplifierEngine : public ComponentEngineBase {
     const AmpfBlock *activeAmpfBlock() const {
         return ampfBlockSelected() ? &m_ampf->blocks[static_cast<size_t>(m_ampf_block)] : nullptr;
     }
+    NonlinearModel::GainFn smallSignalGain() const;
+    AmplifierInterceptAt interceptAt3(double freq_Hz, const NonlinearModel::GainFn &gain) const;
+    AmplifierInterceptAt ampfInterceptAt(double freq_Hz, const NonlinearModel::GainFn &gain) const;
     NonlinearModel::Oip3Fn intercept3Function(const NonlinearModel::GainFn &gain) const;
-    NonlinearModel::Oip3Fn ampfOip3Function(const NonlinearModel::GainFn &gain) const;
     NonlinearModel::Oip2Fn intercept2Function(const NonlinearModel::GainFn &gain) const;
     NonlinearModel::Oip2Fn ampfOip2Function(const NonlinearModel::GainFn &gain) const;
 };

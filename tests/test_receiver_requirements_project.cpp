@@ -93,7 +93,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements load a legacy object as on
     const json saved = loadJson(path);
     REQUIRE(saved.contains("receiver_requirements"));
     const auto &requirements = saved["receiver_requirements"];
-    CHECK(requirements["format"] == 2);
+    CHECK(requirements["format"] == 3);
     REQUIRE(requirements["modes"].is_array());
     REQUIRE(requirements["modes"].size() == 1);
     CHECK(requirements["modes"][0]["name"] == "Default");
@@ -118,8 +118,11 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements round-trip two modes and t
     low_config.gain = ReceiverGainLimits{0.0, 5.0};
     low_config.measurement_conditions.input_level_dBm = -30.0;
     low.config = low_config;
+    high.id = 1;
+    low.id = 2;
     original.modes = {high, low};
     original.selected = 1;
+    original.next_mode_id = 3;
     {
         RfSimulatorApp app;
         app.testReceiverRequirements() = original;
@@ -146,6 +149,45 @@ TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements with no modes are not save
     app.loadProject(path);
     CHECK(app.testReceiverRequirements().modes.empty());
     CHECK(app.testReceiverRequirementsState().invalid_reason.empty());
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "An emptied receiver requirements set keeps its mode id counter",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_emptied_counter");
+    {
+        // Modes 1 and 2 were added and then removed, so the next id is 3.
+        RfSimulatorApp app;
+        app.testReceiverRequirements().next_mode_id = 3;
+        app.saveProject(path);
+    }
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.testReceiverRequirements().modes.empty());
+    CHECK(app.testReceiverRequirements().next_mode_id == 3);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements format 2 file saves as format 3 with ids",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_format2_to_3");
+    savedProjectWithRequirements(path, json{{"format", 2},
+                                            {"selected_mode", 1},
+                                            {"modes",
+                                             {{{"name", "HG"}, {"config", nullptr}},
+                                              {{"name", "LG"}, {"config", nullptr}}}}});
+    RfSimulatorApp app;
+    app.loadProject(path);
+    const auto &set = app.testReceiverRequirements();
+    REQUIRE(set.modes.size() == 2);
+    CHECK(set.modes[0].id == 1);
+    CHECK(set.modes[1].id == 2);
+    CHECK(set.next_mode_id == 3);
+    app.saveProject(path);
+    const json saved = loadJson(path);
+    CHECK(saved["receiver_requirements"]["format"] == 3);
+    CHECK(saved["receiver_requirements"]["next_mode_id"] == 3);
+    CHECK(saved["receiver_requirements"]["modes"][1]["id"] == 2);
     std::filesystem::remove(path);
 }
 

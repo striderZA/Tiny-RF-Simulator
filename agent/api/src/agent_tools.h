@@ -20,6 +20,9 @@ AgentToolResult executeProjectSaveTool(const AgentApi &api, const AgentCall &cal
 AgentToolResult executeProjectLoadTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeRequirementsGetTool(const AgentApi &api, const AgentCall &call);
 AgentToolResult executeRequirementsEditTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeBudgetGetTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeBudgetCascadeTool(const AgentApi &api, const AgentCall &call);
+AgentToolResult executeBudgetEditTool(const AgentApi &api, const AgentCall &call);
 
 AgentError agentParamError(const ParamWriteResult &result, int op_index);
 

@@ -168,6 +168,20 @@ add_standalone_test(test_amplifier_amp_file
     LIBS simulator::amplifier_engine simulator::node_graph_engine
 )
 
+# AMP and amp-f intercept coverage per frequency, and the compression-level inverse. Standalone
+# for the MinGW-w64 registration ceiling.
+add_standalone_test(test_amplifier_intercept_coverage
+    SOURCES test_amplifier_intercept_coverage.cpp
+    LIBS simulator::amplifier_engine simulator::node_graph_engine
+)
+
+# Library parts report declared files that fail to load. Standalone for the MinGW-w64
+# registration ceiling.
+add_standalone_test(test_component_library_load_status
+    SOURCES test_component_library_load_status.cpp
+    LIBS simulator::editor_services
+)
+
 add_standalone_test(test_rf_switch
     SOURCES test_rf_switch.cpp
     LIBS simulator::rf_switch_engine simulator::node_graph_engine
@@ -198,6 +212,11 @@ add_standalone_test(test_network_analyzer
          simulator::ideal_filter_engine
          simulator::node_graph_engine
          simulator::app
+)
+
+add_standalone_test(test_sweep_response
+    SOURCES test_sweep_response.cpp
+    LIBS simulator::network_analyzer_engine
 )
 
 set_tests_properties(test_network_analyzer PROPERTIES RUN_SERIAL TRUE)
@@ -592,6 +611,29 @@ add_standalone_test(test_receiver_requirements_project
     LIBS simulator::app
 )
 set_tests_properties(test_receiver_requirements_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone UI-free RF budget model, validation, and JSON coverage.
+add_standalone_test(test_rf_budget
+    SOURCES test_rf_budget.cpp
+    LIBS simulator::editor_services
+)
+# Standalone app/serializer persistence coverage for the RF budget; constructs
+# RfSimulatorApp, so it runs serially like the requirements project test.
+add_standalone_test(test_rf_budget_project
+    SOURCES test_rf_budget_project.cpp
+    LIBS simulator::app
+)
+set_tests_properties(test_rf_budget_project PROPERTIES RUN_SERIAL TRUE)
+# Standalone RF budget stage evaluation: each stage is built as a real engine in a private
+# scratch graph and driven with the Network Analyzer's comb.
+add_standalone_test(test_rf_budget_stage
+    SOURCES test_rf_budget_stage.cpp
+    LIBS simulator::editor_services
+)
+# Standalone RF budget routes, cascade math, and per-mode verdicts.
+add_standalone_test(test_rf_budget_cascade
+    SOURCES test_rf_budget_cascade.cpp
+    LIBS simulator::editor_services
+)
 # Standalone real-engine coverage for the UI-free receiver measurement engine.
 add_standalone_test(test_receiver_performance_measurements
     SOURCES test_receiver_performance_measurements.cpp
@@ -699,6 +741,14 @@ add_standalone_test(test_agent_requirements
     LIBS simulator::agent_api
 )
 target_include_directories(test_agent_requirements PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
+
+# Standalone, UI-free coverage for the budget_get, budget_cascade, and budget_edit tools: verdict
+# encoding, paging and check order, checkpoint and revision behavior, and the protocol size cap.
+add_standalone_test(test_agent_budget
+    SOURCES test_agent_budget.cpp
+    LIBS simulator::agent_api
+)
+target_include_directories(test_agent_budget PRIVATE ${CMAKE_SOURCE_DIR}/agent/api/src)
 
 # Standalone app-level project_save and project_load round trips through RfSimulatorApp: real
 # .rfsim files, the GUI save and load paths, checkpoint clearing, and reset-on-failure.

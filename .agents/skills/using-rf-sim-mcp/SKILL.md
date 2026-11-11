@@ -10,7 +10,7 @@ Tools act on the open project. Use `tools/list` for arguments and [reference.md]
 ## Before the first call
 
 - Enable Agent Server (**View > Agent > Agent Server**) or calls return `SIMULATOR_UNAVAILABLE`.
-- The catalog has 15 tools; report any missing from `tools/list`.
+- The catalog has 18 tools; report any missing from `tools/list`.
 - For library entries, call `component_types {type}`; create only when `authorable` is true and use non-file `library_fields` in `library_create`. It writes validated JSON only; no circuit placement, state/checkpoint changes, or overwrite. See the reference for roots and limits.
 - Only `project_save`/`project_load` read or write `.rfsim`; MCP offers no dialogs or checkpoint reverts.
 
@@ -20,9 +20,13 @@ Tools act on the open project. Use `tools/list` for arguments and [reference.md]
 2. Before changing a component, call `component_get {epoch, component}` for its `param_info`.
 3. Make changes in one `circuit_edit` (1 to 64 ops, applied in order). `move` takes an existing id and an absolute position; `add.position` places a new component.
 4. Measure with `measure_port` or `network_analyzer_sweep`. `null` means unavailable, never zero.
-5. For receiver requirements, call `requirements_get`, edit the whole format-2 object, and send it back with `requirements_edit {epoch, revision, requirements}`, using that read's `revision`.
+5. For receiver requirements, call `requirements_get`, edit the whole format-3 object keeping each mode's `id` (omit `id` to add a mode), and send it back with `requirements_edit {epoch, revision, requirements}`, using that read's `revision`.
    - Never invent an output-power `input_level_dbm`. Without one the limit reads Incomplete, so ask the user for the level first.
    - If you must leave part of a request out, say so. Never send a partial edit silently.
+6. For the RF budget, call `budget_get` after `requirements_get` to learn each mode's ids, records, and predicted verdicts. `budget_cascade {mode_id, output, start_index?, count?}` reads one output's per-frequency series (at most 50 points).
+   - **A budget Pass is a prediction from the component models, never verification.** Verify with `measure_port`, `network_analyzer_sweep`, or `receiver_measure`.
+   - Change the budget only through `budget_edit {epoch, revision?, budget}` with the whole format-1 object, keeping each record's `mode_id`. A per-mode change belongs in that mode record's `overrides`; do not insert a component into the shared circuit to scope a mode.
+   - `budget_cascade` takes no epoch. A `null` series value is no value at that point; the `reasons` table says why.
 
 ## Epochs
 

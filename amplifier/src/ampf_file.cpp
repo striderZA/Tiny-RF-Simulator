@@ -467,6 +467,10 @@ double AmpfBlock::valueAt(size_t column, double f_Hz) const {
     return y0 + (y1 - y0) * (f_Hz - x0) / (x1 - x0);
 }
 
+bool AmpfBlock::covers(double f_Hz) const {
+    return !freq_Hz.empty() && f_Hz >= freq_Hz.front() && f_Hz <= freq_Hz.back();
+}
+
 int AmpfFile::columnIndex(const std::string &name) const {
     for (size_t i = 0; i < columns.size(); ++i) {
         if (columns[i] == name)

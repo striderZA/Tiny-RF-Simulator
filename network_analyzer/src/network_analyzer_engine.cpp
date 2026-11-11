@@ -1,13 +1,13 @@
 #include "network_analyzer_engine.h"
 
 #include "common.h"
+#include "sweep_response.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
 #include <optional>
-#include <unordered_map>
 
 NetworkAnalyzerEngine::NetworkAnalyzerEngine(const NodeGraphEngine &graph,
                                              IMeasurementChainHost &host)
@@ -46,27 +46,8 @@ void NetworkAnalyzerEngine::setPointA(int pin_id) { m_point_a_pin = pin_id; }
 void NetworkAnalyzerEngine::setPointB(int pin_id) { m_point_b_pin = pin_id; }
 
 void NetworkAnalyzerEngine::rebuildStimulus() {
-    const int n = m_points;
-    m_stimulus_freqs.resize(static_cast<size_t>(n));
-    for (int i = 0; i < n; ++i) {
-        const double t = (n > 1) ? static_cast<double>(i) / (n - 1) : 0.0;
-        m_stimulus_freqs[static_cast<size_t>(i)] = std::lerp(m_start_freq, m_stop_freq, t);
-    }
-
-    auto &out = m_stimulus;
-    out.frequencies = m_stimulus_freqs;
-    out.tones.resize(m_stimulus_freqs.size());
-    for (size_t i = 0; i < m_stimulus_freqs.size(); ++i)
-        out.tones[i] = {m_stimulus_freqs[i], m_stimulus_power_dBm, 0.0};
-
-    out.noise_W.assign(m_stimulus_freqs.size(), k * T);
-    out.noise_added_W.assign(m_stimulus_freqs.size(), 0.0);
-    out.phase_deg.assign(m_stimulus_freqs.size(), 0.0);
-    out.computeTotalNoise();
-    out.fs_Hz = 0.0;
-    out.is_complex_baseband = false;
-    out.bumpGeneration();
-
+    m_stimulus_freqs = linearSweepFrequencies(m_start_freq, m_stop_freq, m_points);
+    m_stimulus = sweepStimulus(m_stimulus_freqs, m_stimulus_power_dBm);
     m_gain_dB.assign(m_stimulus_freqs.size(), std::numeric_limits<double>::quiet_NaN());
     m_nf_dB.assign(m_stimulus_freqs.size(), std::numeric_limits<double>::quiet_NaN());
 }
@@ -99,82 +80,26 @@ void NetworkAnalyzerEngine::computeMeasurement() {
     const Spectrum *response = runner.run(m_stimulus);
     if (!response)
         return;
-    constexpr double kFreqEpsilonHz = 1.0;
-    const auto cell_of = [](double f) -> std::optional<long long> {
-        const double cell = std::floor(f / kFreqEpsilonHz);
-        const double min_cell = static_cast<double>(std::numeric_limits<long long>::min());
-        const double max_cell = static_cast<double>(std::numeric_limits<long long>::max());
-        // Reserve neighbor cells for the +/-1 Hz scan and avoid out-of-range FP-to-int casts.
-        if (!std::isfinite(cell) || cell <= min_cell || cell >= max_cell)
-            return std::nullopt;
-        return static_cast<long long>(cell);
-    };
 
-    std::unordered_multimap<long long, size_t> tone_cells;
-    tone_cells.reserve(response->tones.size());
-    for (size_t t = 0; t < response->tones.size(); ++t) {
-        if (const auto cell = cell_of(response->tones[t].freq_Hz))
-            tone_cells.emplace(*cell, t);
-    }
-    std::unordered_multimap<long long, size_t> freq_cells;
-    freq_cells.reserve(response->frequencies.size());
-    for (size_t j = 0; j < response->frequencies.size(); ++j) {
-        if (const auto cell = cell_of(response->frequencies[j]))
-            freq_cells.emplace(*cell, j);
-    }
+    // Gain reads the first matching tone at f (see the header): at a 2:1 switch that is the
+    // selected throw's tone when present, otherwise the other throw's leakage if any, and never a
+    // sum of throws.
+    const auto points = readSweepResponse(m_stimulus_freqs, *response);
     for (size_t i = 0; i < N; ++i) {
-        const double f = m_stimulus_freqs[i];
-        const auto cell = cell_of(f);
-        if (!cell)
+        const SweepPointResponse &point = points[i];
+        // A tone an S-parameter block flagged out of band carries a held edge value, not a
+        // measurement: leave the point NaN.
+        if (!point.tone_dBm || point.tone_out_of_band)
             continue;
-        const long long c = *cell;
-        // Gain reads the first matching tone at f (see the header): at a 2:1
-        // switch that is the selected throw's tone when present, otherwise the
-        // other throw's leakage if any, and never a sum of throws.
-        std::optional<size_t> tone_idx;
-        for (int offset = -1; offset <= 1; ++offset) {
-            const long long cc = c + offset;
-            auto range = tone_cells.equal_range(cc);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (std::abs(response->tones[it->second].freq_Hz - f) <= kFreqEpsilonHz &&
-                    (!tone_idx || it->second < *tone_idx))
-                    tone_idx = it->second;
-            }
-        }
-        if (!tone_idx)
-            continue;
-
-        const double gain_dB = response->tones[*tone_idx].power_dBm - m_stimulus_power_dBm;
+        const double gain_dB = *point.tone_dBm - m_stimulus_power_dBm;
         if (gain_dB < -100.0)
             continue; // indistinguishable from noise floor -> no data
-
-        std::optional<size_t> noise_idx;
-        for (int offset = -1; offset <= 1; ++offset) {
-            const long long cc = c + offset;
-            auto range = freq_cells.equal_range(cc);
-            for (auto it = range.first; it != range.second; ++it) {
-                if (std::abs(response->frequencies[it->second] - f) <= kFreqEpsilonHz &&
-                    (!noise_idx || it->second < *noise_idx))
-                    noise_idx = it->second;
-            }
-        }
-
-        // A tone or bin an S-parameter block flagged out of band carries a held edge value,
-        // not a measurement: leave the point NaN (gain and NF).
-        if (response->tones[*tone_idx].out_of_band)
-            continue;
-
         m_gain_dB[i] = gain_dB;
 
-        const bool noise_held = noise_idx && *noise_idx < response->out_of_band.size() &&
-                                response->out_of_band[*noise_idx];
-        if (noise_idx && !noise_held && *noise_idx < response->noise_total_W.size()) {
-            const double gain_linear = dbToLinear(gain_dB);
-            const double noise_out_W = response->noise_total_W[*noise_idx];
-            const double nf_linear = (noise_out_W / gain_linear) / (k * T);
-            if (nf_linear > 0.0)
-                m_nf_dB[i] = 10.0 * std::log10(nf_linear);
-        }
+        // Likewise a bin flagged out of band leaves NF NaN.
+        if (!point.noise_total_W || point.noise_out_of_band)
+            continue;
+        m_nf_dB[i] = sweepNoiseFigure_dB(*point.noise_total_W, gain_dB);
     }
 }
 

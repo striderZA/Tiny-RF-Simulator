@@ -115,8 +115,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     };
     m_serializer = std::make_unique<ProjectSerializer>(
         m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
-        m_receiver_requirements, m_show_log, m_show_spectrum, m_show_properties, m_show_node_editor,
-        m_na_engine);
+        m_receiver_requirements, m_rf_budget, m_show_log, m_show_spectrum, m_show_properties,
+        m_show_node_editor, m_na_engine);
 
     std::vector<NodeGraphWidget::AddableComponent> addable;
     for (const auto *desc : ComponentTypeRegistry::instance().all()) {
@@ -219,6 +219,8 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     agent_hooks.set_receiver_requirements = [this](const ReceiverRequirementsSet &set) {
         m_receiver_requirements = set;
     };
+    agent_hooks.rf_budget = [this]() { return m_rf_budget; };
+    agent_hooks.set_rf_budget = [this](const RfBudget &budget) { m_rf_budget = budget; };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);

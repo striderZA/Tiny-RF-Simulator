@@ -58,7 +58,7 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
         const double frequency = frequencies[i];
         if (!std::isfinite(frequency) || frequency < low_Hz || frequency > high_Hz)
             continue;
-        if (!std::isfinite(values[i])) {
+        if (std::isnan(values[i])) {
             missing = true;
             continue;
         }
@@ -236,6 +236,23 @@ ReceiverRequirementsSet invalidRequirementsSet(std::string reason) {
     set.invalid_reason = std::move(reason);
     return set;
 }
+
+// A mode id from a file or an edit: a positive integer that fits the 32-bit id.
+std::optional<std::uint32_t> positiveModeId(const nlohmann::json &value) {
+    if (value.is_number_unsigned()) {
+        const auto number = value.get<unsigned long long>();
+        if (number > 0 && number <= std::numeric_limits<std::uint32_t>::max())
+            return static_cast<std::uint32_t>(number);
+        return std::nullopt;
+    }
+    if (value.is_number_integer()) {
+        const auto number = value.get<long long>();
+        if (number > 0 &&
+            static_cast<unsigned long long>(number) <= std::numeric_limits<std::uint32_t>::max())
+            return static_cast<std::uint32_t>(number);
+    }
+    return std::nullopt;
+}
 } // namespace
 
 std::optional<std::size_t> receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
@@ -336,6 +353,18 @@ std::optional<std::string> validateReceiverRequirementsSet(const ReceiverRequire
                 return "A mode named '" + name + "' already exists.";
         }
     }
+    for (std::size_t i = 0; i < set.modes.size(); ++i) {
+        const std::uint32_t id = set.modes[i].id;
+        if (id == 0)
+            continue;
+        if (id >= set.next_mode_id)
+            return "Mode id " + std::to_string(id) + " is not below next_mode_id " +
+                   std::to_string(set.next_mode_id) + ".";
+        for (std::size_t earlier = 0; earlier < i; ++earlier) {
+            if (set.modes[earlier].id == id)
+                return "Mode id " + std::to_string(id) + " is used twice.";
+        }
+    }
     if (set.modes.empty() ? set.selected != 0 : set.selected >= set.modes.size())
         return "Selected mode is out of range.";
     for (const auto &mode : set.modes) {
@@ -353,11 +382,14 @@ nlohmann::json receiverRequirementsToJson(const ReceiverRequirementsSet &set) {
     nlohmann::json modes = nlohmann::json::array();
     for (const auto &mode : set.modes) {
         nlohmann::json encoded_mode = {{"name", mode.name}};
+        if (mode.id != 0)
+            encoded_mode["id"] = mode.id;
         encoded_mode["config"] = mode.config ? configToJson(*mode.config) : nlohmann::json(nullptr);
         modes.push_back(std::move(encoded_mode));
     }
     return {{"format", kReceiverRequirementsFormat},
             {"selected_mode", set.selected},
+            {"next_mode_id", set.next_mode_id},
             {"modes", std::move(modes)}};
 }
 
@@ -381,7 +413,8 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
         auto config = parseConfigObject(value, error);
         if (!config)
             return invalidRequirementsSet(std::move(error));
-        set.modes.push_back({"Default", std::move(config)});
+        set.modes.push_back({"Default", std::move(config), 1});
+        set.next_mode_id = 2;
         if (auto reason = validateReceiverRequirementsSet(set))
             return invalidRequirementsSet(std::move(*reason));
         return set;
@@ -392,7 +425,7 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
     const auto &format = value["format"];
     if (format.is_number_integer() || format.is_number_unsigned()) {
         const long long format_number = format.get<long long>();
-        supported_format = format_number == kReceiverRequirementsFormat;
+        supported_format = format_number == 2 || format_number == kReceiverRequirementsFormat;
         format_text = std::to_string(format_number);
     } else {
         format_text = format.dump();
@@ -400,6 +433,8 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
     if (!supported_format)
         return invalidRequirementsSet("Unsupported receiver requirements format " + format_text +
                                       ".");
+    // Format 3 carries a stable id per mode and the next id to assign; format 2 has neither.
+    const bool with_ids = format.get<long long>() == kReceiverRequirementsFormat;
 
     if (!value.contains("modes") || !value["modes"].is_array())
         return invalidRequirementsSet("Receiver requirements modes must be a list.");
@@ -415,6 +450,12 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
         selected = static_cast<std::size_t>(selected_number);
     }
     set.selected = selected;
+    if (with_ids) {
+        const auto next_id = positiveModeId(value.value("next_mode_id", nlohmann::json()));
+        if (!next_id)
+            return invalidRequirementsSet("Next mode id must be a positive integer.");
+        set.next_mode_id = *next_id;
+    }
 
     std::size_t index = 0;
     for (const auto &json_mode : value["modes"]) {
@@ -426,6 +467,13 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
             return invalidRequirementsSet(prefix + "Mode name must be a string.");
         ReceiverRequirementsMode mode;
         mode.name = json_mode["name"].get<std::string>();
+        if (with_ids) {
+            const auto id =
+                json_mode.contains("id") ? positiveModeId(json_mode["id"]) : std::nullopt;
+            if (!id)
+                return invalidRequirementsSet(prefix + "Mode id must be a positive integer.");
+            mode.id = *id;
+        }
         if (json_mode.contains("config") && !json_mode["config"].is_null()) {
             std::string error;
             mode.config = parseConfigObject(json_mode["config"], error);
@@ -434,8 +482,120 @@ ReceiverRequirementsSet receiverRequirementsFromJson(const nlohmann::json &value
         }
         set.modes.push_back(std::move(mode));
     }
+    if (!with_ids)
+        assignReceiverRequirementsModeIds(set);
     if (auto reason = validateReceiverRequirementsSet(set))
         return invalidRequirementsSet(std::move(*reason));
+    return set;
+}
+
+void assignReceiverRequirementsModeIds(ReceiverRequirementsSet &set) {
+    for (const auto &mode : set.modes) {
+        if (mode.id >= set.next_mode_id)
+            set.next_mode_id = mode.id + 1;
+    }
+    for (auto &mode : set.modes) {
+        if (mode.id == 0)
+            mode.id = set.next_mode_id++;
+    }
+}
+
+const ReceiverRequirementsMode *findReceiverRequirementsMode(const ReceiverRequirementsSet &set,
+                                                             std::uint32_t id) {
+    for (const auto &mode : set.modes) {
+        if (mode.id == id)
+            return &mode;
+    }
+    return nullptr;
+}
+
+std::optional<ReceiverRequirementsSet>
+receiverRequirementsFromEdit(const nlohmann::json &value, const ReceiverRequirementsSet &current,
+                             std::string &error_path, std::string &error) {
+    error_path = "/requirements";
+    error.clear();
+    const bool with_ids = value.contains("format") && value["format"].is_number_integer() &&
+                          value["format"].get<long long>() == kReceiverRequirementsFormat;
+    if (!value.contains("modes") || !value["modes"].is_array()) {
+        error = "Receiver requirements modes must be a list.";
+        return std::nullopt;
+    }
+    ReceiverRequirementsSet set;
+    set.next_mode_id = current.next_mode_id;
+    if (value.contains("selected_mode")) {
+        const auto &json_selected = value["selected_mode"];
+        if (!json_selected.is_number_integer() && !json_selected.is_number_unsigned()) {
+            error = "Selected mode must be a non-negative integer.";
+            return std::nullopt;
+        }
+        const long long selected_number = json_selected.get<long long>();
+        if (selected_number < 0) {
+            error = "Selected mode must be a non-negative integer.";
+            return std::nullopt;
+        }
+        set.selected = static_cast<std::size_t>(selected_number);
+    }
+    std::vector<std::uint32_t> used;
+    std::size_t index = 0;
+    for (const auto &json_mode : value["modes"]) {
+        const std::string prefix = "Mode " + std::to_string(index + 1) + ": ";
+        const std::string mode_path = "/requirements/modes/" + std::to_string(index);
+        ++index;
+        if (!json_mode.is_object()) {
+            error = prefix + "Mode must be a JSON object.";
+            return std::nullopt;
+        }
+        if (!json_mode.contains("name") || !json_mode["name"].is_string()) {
+            error = prefix + "Mode name must be a string.";
+            return std::nullopt;
+        }
+        ReceiverRequirementsMode mode;
+        mode.name = json_mode["name"].get<std::string>();
+        if (with_ids && json_mode.contains("id")) {
+            const auto id = positiveModeId(json_mode["id"]);
+            if (!id) {
+                error_path = mode_path + "/id";
+                error = "Mode id must be a positive integer.";
+                return std::nullopt;
+            }
+            if (!findReceiverRequirementsMode(current, *id)) {
+                error_path = mode_path + "/id";
+                error = "no mode has id " + std::to_string(*id) + "; omit id to add a mode";
+                return std::nullopt;
+            }
+            if (std::find(used.begin(), used.end(), *id) != used.end()) {
+                error_path = mode_path + "/id";
+                error = "id " + std::to_string(*id) + " is used twice";
+                return std::nullopt;
+            }
+            used.push_back(*id);
+            mode.id = *id;
+        } else if (!with_ids) {
+            // Format 2 has no ids: a mode keeps the id of the stored mode with the same name.
+            for (const auto &stored : current.modes) {
+                if (modeNamesEqual(stored.name, mode.name) &&
+                    std::find(used.begin(), used.end(), stored.id) == used.end()) {
+                    mode.id = stored.id;
+                    used.push_back(stored.id);
+                    break;
+                }
+            }
+        }
+        if (json_mode.contains("config") && !json_mode["config"].is_null()) {
+            std::string config_error;
+            mode.config = parseConfigObject(json_mode["config"], config_error);
+            if (!mode.config) {
+                error = prefix + config_error;
+                return std::nullopt;
+            }
+        }
+        set.modes.push_back(std::move(mode));
+    }
+    assignReceiverRequirementsModeIds(set);
+    if (auto reason = validateReceiverRequirementsSet(set)) {
+        error = std::move(*reason);
+        return std::nullopt;
+    }
     return set;
 }
 
@@ -450,8 +610,10 @@ bool addReceiverRequirementsMode(ReceiverRequirementsSet &set, std::string_view 
         error = *reason;
         return false;
     }
+    assignReceiverRequirementsModeIds(set);
     ReceiverRequirementsMode mode;
     mode.name = trimmed;
+    mode.id = set.next_mode_id++;
     if (!set.modes.empty() && set.selected < set.modes.size())
         mode.config = set.modes[set.selected].config;
     set.modes.push_back(std::move(mode));

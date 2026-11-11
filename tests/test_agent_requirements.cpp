@@ -17,7 +17,7 @@
 namespace {
 
 // Mode "HG" carries a configured limit set; mode "LG" stays unconfigured, and the selected mode is
-// the unconfigured one.
+// the unconfigured one. Both carry the ids the stored set assigned.
 ReceiverRequirementsSet twoModeSet() {
     ReceiverRequirementsSet set;
     ReceiverRequirementsConfig high;
@@ -25,10 +25,18 @@ ReceiverRequirementsSet twoModeSet() {
     high.band_stop_Hz = 2.0e9;
     high.gain = ReceiverGainLimits{10.0, 20.0};
     high.nf_max_dB = 5.0;
-    set.modes.push_back({"HG", high});
-    set.modes.push_back({"LG", std::nullopt});
+    set.modes.push_back({"HG", high, 1});
+    set.modes.push_back({"LG", std::nullopt, 2});
     set.selected = 1;
+    set.next_mode_id = 3;
     return set;
+}
+
+// The edit payload: the encoded set without next_mode_id, which requirements_edit refuses.
+nlohmann::json editPayload(const ReceiverRequirementsSet &set) {
+    nlohmann::json payload = receiverRequirementsToJson(set);
+    payload.erase("next_mode_id");
+    return payload;
 }
 
 } // namespace
@@ -48,12 +56,19 @@ TEST_CASE("requirements_edit replaces the requirements with one checkpoint",
           "[agent_requirements]") {
     ApiFixture fixture;
     const auto before = fixture.commands.revision();
-    auto next = twoModeSet();
-    const auto result =
-        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
-                                           {"requirements", receiverRequirementsToJson(next)}});
+    // The empty host has no modes to match, so the sent modes carry no ids and get new ones.
+    auto payload = editPayload(twoModeSet());
+    for (auto &mode : payload["modes"])
+        mode.erase("id");
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()}, {"requirements", payload}});
     REQUIRE_FALSE(result.is_error);
-    CHECK(*fixture.host.requirements == next);
+    auto expected = twoModeSet();
+    for (auto &mode : expected.modes)
+        mode.id = 0;
+    expected.next_mode_id = 1;
+    assignReceiverRequirementsModeIds(expected);
+    CHECK(*fixture.host.requirements == expected);
     CHECK(fixture.commands.revision() == before + 1);
     CHECK(fixture.host.checkpoint_begins == 1);
     CHECK(fixture.host.checkpoint_commits == 1);
@@ -64,9 +79,9 @@ TEST_CASE("requirements_edit with identical requirements changes nothing", "[age
     ApiFixture fixture;
     fixture.host.requirements = twoModeSet();
     const auto before = fixture.commands.revision();
-    const auto result = fixture.call("requirements_edit",
-                                     {{"epoch", fixture.api.epoch()},
-                                      {"requirements", receiverRequirementsToJson(twoModeSet())}});
+    const auto result =
+        fixture.call("requirements_edit",
+                     {{"epoch", fixture.api.epoch()}, {"requirements", editPayload(twoModeSet())}});
     REQUIRE_FALSE(result.is_error);
     CHECK(*fixture.host.requirements == twoModeSet());
     CHECK(fixture.commands.revision() == before);
@@ -93,7 +108,7 @@ TEST_CASE("requirements_edit refuses invalid requirements without a checkpoint",
         ReceiverRequirementsSet duplicate;
         duplicate.modes.push_back({"A", std::nullopt});
         duplicate.modes.push_back({"a", std::nullopt});
-        const auto result = edit(receiverRequirementsToJson(duplicate));
+        const auto result = edit(editPayload(duplicate));
         const auto &error = errorFor(result);
         CHECK(error.at("code") == "INVALID_ARGUMENT");
         CHECK(error.at("details").at("path") == "/requirements");
@@ -115,7 +130,7 @@ TEST_CASE("requirements_edit refuses invalid requirements without a checkpoint",
         config.band_stop_Hz = 2.0e9;
         config.measurement_conditions.input_level_dBm = 20.0;
         invalid.modes.push_back({"A", config});
-        const auto result = edit(receiverRequirementsToJson(invalid));
+        const auto result = edit(editPayload(invalid));
         const auto &error = errorFor(result);
         CHECK(error.at("code") == "INVALID_ARGUMENT");
         CHECK(error.at("details").at("path") == "/requirements");
@@ -143,9 +158,8 @@ TEST_CASE("requirements_edit reports a host that refuses the write", "[agent_req
     ReceiverRequirementsSet next;
     next.modes.push_back({"Default", std::nullopt});
 
-    const auto result =
-        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
-                                           {"requirements", receiverRequirementsToJson(next)}});
+    const auto result = fixture.call(
+        "requirements_edit", {{"epoch", fixture.api.epoch()}, {"requirements", editPayload(next)}});
     const auto &error = errorFor(result);
     CHECK(error.at("code") == "INTERNAL");
     CHECK(error.at("message") == "the host rejected the receiver requirements");
@@ -163,9 +177,9 @@ TEST_CASE("requirements tools report INTERNAL without host support", "[agent_req
     fixture.host.requirements = std::nullopt;
     const auto get = fixture.call("requirements_get");
     CHECK(errorFor(get).at("code") == "INTERNAL");
-    const auto edit = fixture.call("requirements_edit",
-                                   {{"epoch", fixture.api.epoch()},
-                                    {"requirements", receiverRequirementsToJson(twoModeSet())}});
+    const auto edit =
+        fixture.call("requirements_edit",
+                     {{"epoch", fixture.api.epoch()}, {"requirements", editPayload(twoModeSet())}});
     CHECK(errorFor(edit).at("code") == "INTERNAL");
     CHECK(fixture.host.checkpoint_begins == 0);
 }
@@ -188,18 +202,18 @@ TEST_CASE("requirements_edit refuses misspelled nested keys and names the full p
     };
 
     SECTION("a misspelled gain key in a mode config") {
-        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        nlohmann::json requirements = editPayload(twoModeSet());
         requirements["modes"][0]["config"]["gain_min_dB"] = 10.0;
         CHECK(refused(requirements) == "/requirements/modes/0/config/gain_min_dB");
     }
     SECTION("a misspelled input level under measurement conditions") {
-        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        nlohmann::json requirements = editPayload(twoModeSet());
         requirements["modes"][0]["config"]["measurement_conditions"]["input_level_dBm"] = -30.0;
         CHECK(refused(requirements) ==
               "/requirements/modes/0/config/measurement_conditions/input_level_dBm");
     }
     SECTION("an unknown key in the requirements object") {
-        nlohmann::json requirements = receiverRequirementsToJson(twoModeSet());
+        nlohmann::json requirements = editPayload(twoModeSet());
         requirements["extra"] = 1;
         CHECK(refused(requirements) == "/requirements/extra");
     }
@@ -215,10 +229,9 @@ TEST_CASE("requirements_edit refuses an edit made against an older read", "[agen
 
     auto next = twoModeSet();
     next.modes[0].config->nf_max_dB = 9.0;
-    const auto result =
-        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
-                                           {"revision", revision},
-                                           {"requirements", receiverRequirementsToJson(next)}});
+    const auto result = fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                                           {"revision", revision},
+                                                           {"requirements", editPayload(next)}});
     CHECK(errorFor(result).at("code") == "BUSY");
     CHECK(*fixture.host.requirements == twoModeSet());
     CHECK(fixture.commands.revision() == before);
@@ -232,10 +245,9 @@ TEST_CASE("requirements_edit applies when the revision is current", "[agent_requ
 
     auto next = twoModeSet();
     next.modes[0].config->nf_max_dB = 9.0;
-    const auto result =
-        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
-                                           {"revision", revision},
-                                           {"requirements", receiverRequirementsToJson(next)}});
+    const auto result = fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                                           {"revision", revision},
+                                                           {"requirements", editPayload(next)}});
     REQUIRE_FALSE(result.is_error);
     CHECK(*fixture.host.requirements == next);
 }
@@ -243,11 +255,56 @@ TEST_CASE("requirements_edit applies when the revision is current", "[agent_requ
 TEST_CASE("requirements_edit rejects a malformed revision", "[agent_requirements]") {
     ApiFixture fixture;
     fixture.host.requirements = twoModeSet();
-    const auto result = fixture.call("requirements_edit",
-                                     {{"epoch", fixture.api.epoch()},
-                                      {"revision", -1},
-                                      {"requirements", receiverRequirementsToJson(twoModeSet())}});
+    const auto result =
+        fixture.call("requirements_edit", {{"epoch", fixture.api.epoch()},
+                                           {"revision", -1},
+                                           {"requirements", editPayload(twoModeSet())}});
     CHECK(errorFor(result).at("code") == "INVALID_ARGUMENT");
     CHECK(errorFor(result).at("details").at("path") == "/revision");
+    CHECK(fixture.host.checkpoint_begins == 0);
+}
+
+TEST_CASE("requirements_get reports format 3 ids without next_mode_id", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto result = fixture.call("requirements_get");
+    REQUIRE_FALSE(result.is_error);
+    const auto &requirements = result.structured.at("requirements");
+    CHECK(requirements.at("format") == 3);
+    CHECK(requirements.at("modes")[0].at("id") == 1);
+    CHECK(requirements.at("modes")[1].at("id") == 2);
+    CHECK_FALSE(requirements.contains("next_mode_id"));
+}
+
+TEST_CASE("requirements_edit renames a mode and keeps its id", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto before = fixture.commands.revision();
+    auto payload = editPayload(twoModeSet());
+    payload["modes"][0]["name"] = "Alpha";
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()}, {"requirements", payload}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(fixture.host.requirements->modes.size() == 2);
+    CHECK(fixture.host.requirements->modes[0].id == 1);
+    CHECK(fixture.host.requirements->modes[0].name == "Alpha");
+    CHECK(fixture.commands.revision() == before + 1);
+}
+
+TEST_CASE("requirements_edit refuses an unknown mode id without a checkpoint",
+          "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto before = fixture.commands.revision();
+    auto payload = editPayload(twoModeSet());
+    payload["modes"][0]["id"] = 9;
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()}, {"requirements", payload}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INVALID_ARGUMENT");
+    CHECK(error.at("details").at("path") == "/requirements/modes/0/id");
+    CHECK(error.at("message") == "no mode has id 9; omit id to add a mode");
+    CHECK(*fixture.host.requirements == twoModeSet());
+    CHECK(fixture.commands.revision() == before);
     CHECK(fixture.host.checkpoint_begins == 0);
 }

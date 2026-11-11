@@ -283,6 +283,10 @@ double AmpIp3Curve::dBmAt(double freq_Hz) const {
     return lower->dBm + t * (upper->dBm - lower->dBm);
 }
 
+bool AmpIp3Curve::covers(double freq_Hz) const {
+    return !points.empty() && freq_Hz >= points.front().freq_Hz && freq_Hz <= points.back().freq_Hz;
+}
+
 AmpParseResult AmpFileParser::parse(const std::string &path) {
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open())

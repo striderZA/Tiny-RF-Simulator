@@ -302,6 +302,36 @@ TEST_CASE("ReceiverRequirements reports upper and lower limit violations over in
     CHECK(output_upper.gain.status == ReceiverRequirementStatus::Incomplete);
 }
 
+TEST_CASE("assess compares infinite values and treats only NaN as missing",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    state.config = config;
+
+    const std::vector<double> frequencies = {1.4e9, 1.6e9};
+    const std::vector<double> good_nf = {3.0, 3.0};
+    const std::vector<double> good_output = {-30.0, -30.0};
+    const std::vector<double> good_iip3 = {15.0, 15.0};
+    const double infinite = std::numeric_limits<double>::infinity();
+    const double missing = std::numeric_limits<double>::quiet_NaN();
+
+    const auto compared = evaluateReceiverRequirements(
+        state, 1.0e9, 2.0e9, frequencies, {-infinite, 15.0}, good_nf, good_output, good_iip3);
+    CHECK(compared.gain.status == ReceiverRequirementStatus::Fail);
+    REQUIRE(compared.gain.observed_min.has_value());
+    CHECK(*compared.gain.observed_min == -infinite);
+    REQUIRE(compared.gain.observed_max.has_value());
+    CHECK(*compared.gain.observed_max == 15.0);
+    CHECK(compared.overall == ReceiverRequirementStatus::Fail);
+
+    const auto incomplete = evaluateReceiverRequirements(
+        state, 1.0e9, 2.0e9, frequencies, {missing, 15.0}, good_nf, good_output, good_iip3);
+    CHECK(incomplete.gain.status == ReceiverRequirementStatus::Incomplete);
+}
+
 TEST_CASE("ReceiverRequirements rejected draft preserves state while valid Apply clears diagnostic",
           "[receiver_requirements]") {
     auto state = configuredState();
@@ -698,7 +728,7 @@ TEST_CASE("Receiver requirements JSON round-trips modes and selection",
     REQUIRE(addReceiverRequirementsMode(set, "LG", error));
     set.modes[1].config.reset();
     const auto encoded = receiverRequirementsToJson(set);
-    CHECK(encoded.at("format") == 2);
+    CHECK(encoded.at("format") == 3);
     CHECK(encoded.at("selected_mode") == 1);
     CHECK(encoded.at("modes")[1].at("config").is_null());
     CHECK(encoded.at("modes")[0].at("config").at("measurement_conditions").at("input_level_dbm") ==
@@ -707,9 +737,10 @@ TEST_CASE("Receiver requirements JSON round-trips modes and selection",
 
     ReceiverRequirementsSet empty;
     const auto encoded_empty = receiverRequirementsToJson(empty);
-    CHECK(
-        (encoded_empty ==
-         nlohmann::json{{"format", 2}, {"selected_mode", 0}, {"modes", nlohmann::json::array()}}));
+    CHECK((encoded_empty == nlohmann::json{{"format", 3},
+                                           {"selected_mode", 0},
+                                           {"next_mode_id", 1},
+                                           {"modes", nlohmann::json::array()}}));
 }
 
 TEST_CASE("Receiver requirements JSON migrates a format 1 object to one Default mode",
@@ -764,8 +795,8 @@ TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
         CHECK(set.selected == 0);
     };
 
-    check_invalid(receiverRequirementsFromJson(nlohmann::json{{"format", 3}}),
-                  "Unsupported receiver requirements format 3.");
+    check_invalid(receiverRequirementsFromJson(nlohmann::json{{"format", 4}}),
+                  "Unsupported receiver requirements format 4.");
 
     check_invalid(receiverRequirementsFromJson(nlohmann::json{
                       {"format", 2},
@@ -787,7 +818,7 @@ TEST_CASE("Receiver requirements JSON keeps malformed data as invalid",
 
     auto bad_input_level = allConfigured();
     const auto encoded_bad_level = receiverRequirementsToJson(
-        ReceiverRequirementsSet{{ReceiverRequirementsMode{"A", bad_input_level}}, 0, {}});
+        ReceiverRequirementsSet{{ReceiverRequirementsMode{"A", bad_input_level, 1}}, 0, {}, 2});
     auto malformed_level = encoded_bad_level;
     malformed_level["modes"][0]["config"]["measurement_conditions"]["input_level_dbm"] = "loud";
     check_invalid(receiverRequirementsFromJson(malformed_level),
@@ -808,4 +839,122 @@ TEST_CASE("ReceiverRequirements refuses '#' in mode names", "[receiver_requireme
     CHECK(*reason == "Mode name must not contain '#'.");
     CHECK(receiverRequirementsModeNameError(ReceiverRequirementsSet{}, "Band #1", std::nullopt) ==
           "Mode name must not contain '#'.");
+}
+
+TEST_CASE("ReceiverRequirements ids are assigned once and never reused",
+          "[receiver_requirements][ids]") {
+    ReceiverRequirementsSet set;
+    std::string error;
+    REQUIRE(addReceiverRequirementsMode(set, "A", error));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    CHECK(set.modes[0].id == 1);
+    CHECK(set.modes[1].id == 2);
+    CHECK(set.next_mode_id == 3);
+    REQUIRE(removeReceiverRequirementsMode(set, 1));
+    REQUIRE(addReceiverRequirementsMode(set, "B", error));
+    CHECK(set.modes[1].id == 3);
+    REQUIRE(renameReceiverRequirementsMode(set, 0, "A2", error));
+    CHECK(set.modes[0].id == 1);
+}
+
+TEST_CASE("ReceiverRequirements legacy and format 2 objects migrate to ids",
+          "[receiver_requirements][ids]") {
+    const auto legacy = receiverRequirementsFromJson(
+        nlohmann::json{{"band_start_hz", 1.0e9}, {"band_stop_hz", 2.0e9}});
+    REQUIRE(legacy.invalid_reason.empty());
+    REQUIRE(legacy.modes.size() == 1);
+    CHECK(legacy.modes[0].name == "Default");
+    CHECK(legacy.modes[0].id == 1);
+    CHECK(legacy.next_mode_id == 2);
+
+    const nlohmann::json format2 = {
+        {"format", 2},
+        {"selected_mode", 0},
+        {"modes", {{{"name", "HG"}, {"config", nullptr}}, {{"name", "LG"}, {"config", nullptr}}}}};
+    const auto set = receiverRequirementsFromJson(format2);
+    REQUIRE(set.invalid_reason.empty());
+    REQUIRE(set.modes.size() == 2);
+    CHECK(set.modes[0].id == 1);
+    CHECK(set.modes[1].id == 2);
+    CHECK(set.next_mode_id == 3);
+}
+
+TEST_CASE("ReceiverRequirements format 3 round-trips ids", "[receiver_requirements][ids]") {
+    ReceiverRequirementsSet set;
+    set.modes = {{"A", std::nullopt, 4}, {"B", std::nullopt, 7}};
+    set.next_mode_id = 9;
+    const auto encoded = receiverRequirementsToJson(set);
+    CHECK(encoded["format"] == 3);
+    CHECK(encoded["next_mode_id"] == 9);
+    CHECK(encoded["modes"][0]["id"] == 4);
+    CHECK(receiverRequirementsFromJson(encoded) == set);
+}
+
+TEST_CASE("ReceiverRequirements format 3 refuses missing, repeated, or stale ids",
+          "[receiver_requirements][ids]") {
+    const nlohmann::json base_mode = {{"name", "A"}, {"config", nullptr}};
+    const auto format3 = [&](nlohmann::json modes, nlohmann::json next) {
+        return nlohmann::json{
+            {"format", 3}, {"selected_mode", 0}, {"modes", modes}, {"next_mode_id", next}};
+    };
+    auto missing = base_mode;
+    CHECK(receiverRequirementsFromJson(format3({missing}, 2)).invalid_reason ==
+          "Mode 1: Mode id must be a positive integer.");
+    CHECK(receiverRequirementsFromJson(
+              format3({{{"id", 1}, {"name", "A"}, {"config", nullptr}}}, nlohmann::json(nullptr)))
+              .invalid_reason == "Next mode id must be a positive integer.");
+
+    ReceiverRequirementsSet repeated;
+    repeated.modes = {{"A", std::nullopt, 4}, {"B", std::nullopt, 4}};
+    repeated.next_mode_id = 9;
+    CHECK(validateReceiverRequirementsSet(repeated) ==
+          std::optional<std::string>("Mode id 4 is used twice."));
+
+    ReceiverRequirementsSet stale;
+    stale.modes = {{"A", std::nullopt, 9}};
+    stale.next_mode_id = 9;
+    CHECK(validateReceiverRequirementsSet(stale) ==
+          std::optional<std::string>("Mode id 9 is not below next_mode_id 9."));
+}
+
+TEST_CASE("Requirements edits keep ids by id in format 3 and by name in format 2",
+          "[receiver_requirements][ids]") {
+    ReceiverRequirementsSet current;
+    current.modes = {{"A", std::nullopt, 1}, {"B", std::nullopt, 2}};
+    current.next_mode_id = 3;
+    std::string path;
+    std::string error;
+
+    const auto format3 = receiverRequirementsFromEdit(
+        nlohmann::json{{"format", 3},
+                       {"selected_mode", 0},
+                       {"modes",
+                        {{{"id", 2}, {"name", "Bee"}, {"config", nullptr}},
+                         {{"name", "C"}, {"config", nullptr}}}}},
+        current, path, error);
+    REQUIRE(format3.has_value());
+    CHECK(format3->modes[0].id == 2);
+    CHECK(format3->modes[1].id == 3);
+    CHECK(format3->next_mode_id == 4);
+
+    const auto format2 =
+        receiverRequirementsFromEdit(nlohmann::json{{"format", 2},
+                                                    {"selected_mode", 0},
+                                                    {"modes",
+                                                     {{{"name", "a"}, {"config", nullptr}},
+                                                      {{"name", "D"}, {"config", nullptr}}}}},
+                                     current, path, error);
+    REQUIRE(format2.has_value());
+    CHECK(format2->modes[0].id == 1);
+    CHECK(format2->modes[1].id == 3);
+    CHECK(format2->next_mode_id == 4);
+
+    const auto unknown = receiverRequirementsFromEdit(
+        nlohmann::json{{"format", 3},
+                       {"selected_mode", 0},
+                       {"modes", {{{"id", 9}, {"name", "X"}, {"config", nullptr}}}}},
+        current, path, error);
+    CHECK_FALSE(unknown.has_value());
+    CHECK(path == "/requirements/modes/0/id");
+    CHECK(error == "no mode has id 9; omit id to add a mode");
 }

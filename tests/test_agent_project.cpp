@@ -349,9 +349,10 @@ TEST_CASE_METHOD(ProjectFixture, "requirements_edit is revertable through its ch
     next.modes.push_back({"Default", std::nullopt});
     next.selected = 0;
 
+    nlohmann::json payload = receiverRequirementsToJson(next);
+    payload.erase("next_mode_id");
     const AgentToolResult result =
-        call("requirements_edit", {{"epoch", app.testProjectEpoch()},
-                                   {"requirements", receiverRequirementsToJson(next)}});
+        call("requirements_edit", {{"epoch", app.testProjectEpoch()}, {"requirements", payload}});
     REQUIRE_FALSE(result.is_error);
     REQUIRE(app.testReceiverRequirements().modes.size() == 1);
 
