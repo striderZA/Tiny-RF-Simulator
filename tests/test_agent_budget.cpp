@@ -437,3 +437,29 @@ TEST_CASE("budget results stay under the protocol cap", "[agent_budget]") {
     CHECK(page.structured.at("next_index") == 50);
     CHECK(fits(page.structured));
 }
+
+TEST_CASE("budget_edit refuses a budget whose reply would not fit, and stores nothing",
+          "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.rf_budget = stageBudget();
+    const RfBudget stored = *fixture.host.rf_budget;
+    const auto before = fixture.commands.revision();
+    // The echo carries a part number in full. This one makes the reply larger than a protocol line,
+    // which the server would turn into INTERNAL after the budget was already stored.
+    const std::string long_part(600 * 1024, 'P');
+    TempLibrary library_dir;
+    library_dir.writeDefinition("long.json", amplifierDefinition(long_part, {{"gain_dB", 10.0}}));
+    fixture.library.scan(library_dir.root().string());
+
+    const auto result =
+        fixture.call("budget_edit", {{"epoch", fixture.api.epoch()},
+                                     {"budget", rfBudgetToJson(libraryBudget(long_part))}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INVALID_ARGUMENT");
+    CHECK(error.at("details").at("path") == "/budget");
+    CHECK(error.at("message").get<std::string>().find("too large") != std::string::npos);
+    CHECK(*fixture.host.rf_budget == stored);
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 0);
+}

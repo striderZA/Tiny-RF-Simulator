@@ -127,6 +127,17 @@ long long currentProcessId() {
 
 } // namespace
 
+bool agentReplyFitsProtocolLine(const AgentToolResult &result) {
+    // The request id is not known to the tool; the reserve covers an id of ordinary length.
+    constexpr std::size_t kReplyIdReserve = 4096;
+    try {
+        const std::size_t envelope = rpcCallResult(AgentJson(0), result).dump().size();
+        return envelope + kReplyIdReserve <= kAgentMaxLineBytes;
+    } catch (...) {
+        return false;
+    }
+}
+
 struct AgentServer::Impl {
     struct PendingCall {
         AgentCall call;

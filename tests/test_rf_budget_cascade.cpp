@@ -269,6 +269,33 @@ TEST_CASE("a missing gain point empties later cumulative values with its reason"
     }
 }
 
+TEST_CASE("the -100 dB floor blanks a readout, not the running path", "[rf_budget][cascade]") {
+    RfBudgetReasonTable reasons;
+    const std::size_t points = 2;
+    // A 110 dB pad takes the chain below the floor; a 20 dB amplifier after it brings it back.
+    const RfBudgetStageResponse pad =
+        responseOf("PAD", flat(points, -110.0), flat(points, 110.0), flat(points, kInf));
+    const RfBudgetStageResponse amp =
+        responseOf("AMP", flat(points, 20.0), flat(points, 2.0), flat(points, 30.0));
+
+    const auto stages = cascadeRfBudgetPath({{&pad, 0, 0}, {&amp, 0, 0}}, -30.0, "Band 1", reasons);
+    REQUIRE(stages.size() == 2);
+
+    for (std::size_t i = 0; i < points; ++i) {
+        CHECK(std::isnan(stages[0].cumulative_gain_dB.values[i]));
+        CHECK(reasons.at(stages[0].cumulative_gain_dB.reasons[i]).find("below -100 dB") !=
+              std::string::npos);
+        CHECK(std::isnan(stages[0].cumulative_nf_dB.values[i]));
+        CHECK(std::isnan(stages[0].level_dBm.values[i]));
+        CHECK(std::isnan(stages[0].p1db_headroom_dB.values[i]));
+        CHECK(stages[0].level_dBm.reasons[i] == stages[0].cumulative_gain_dB.reasons[i]);
+
+        CHECK(stages[1].cumulative_gain_dB.values[i] == Approx(-90.0).margin(kMargin));
+        CHECK(stages[1].cumulative_gain_dB.reasons[i] == 0);
+        CHECK(stages[1].level_dBm.values[i] == Approx(-120.0).margin(kMargin));
+    }
+}
+
 TEST_CASE("no transmission stays infinite, never NaN", "[rf_budget][cascade]") {
     RfBudgetReasonTable reasons;
     const std::uint16_t stop = reasons.add("Stage 'BPF' passes no signal at this frequency.");

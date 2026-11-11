@@ -15,6 +15,8 @@ namespace {
 
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double kInf = std::numeric_limits<double>::infinity();
+// Below this cumulative gain a readout has no value (the Network Analyzer's floor).
+constexpr double kGainFloor_dB = -100.0;
 
 RfBudgetSeries makeSeries(std::size_t count) {
     RfBudgetSeries series;
@@ -91,6 +93,13 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
             cumulative_gain = gain_sum_dB + g;
         }
 
+        // The Network Analyzer's floor: a finite cumulative gain below -100 dB has no readout.
+        // The running sums keep the true gain, so a later stage can bring a readout back up.
+        const bool below_floor = std::isfinite(cumulative_gain) && cumulative_gain < kGainFloor_dB;
+        std::uint16_t floor_reason = 0;
+        if (below_floor)
+            floor_reason = reasons.add("Output of '" + out.stage + "' is below -100 dB here.");
+
         // Cumulative NF (Friis). The current stage's own gain is not an input, so a missing gain
         // here leaves this point's NF intact and only empties later stages.
         double cumulative_nf = kNaN;
@@ -159,6 +168,8 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
             level_reason = stop_reason;
         } else if (std::isnan(cumulative_gain)) {
             level_reason = cumulative_gain_reason;
+        } else if (below_floor) {
+            level_reason = floor_reason;
         } else {
             level = *input_level_dBm + cumulative_gain;
         }
@@ -186,10 +197,10 @@ void fillPoint(std::vector<RfBudgetStageResult> &results, std::size_t point,
                 headroom_reason = oip3_reason;
         }
 
-        out.cumulative_gain_dB.values[point] = cumulative_gain;
-        out.cumulative_gain_dB.reasons[point] = cumulative_gain_reason;
-        out.cumulative_nf_dB.values[point] = cumulative_nf;
-        out.cumulative_nf_dB.reasons[point] = cumulative_nf_reason;
+        out.cumulative_gain_dB.values[point] = below_floor ? kNaN : cumulative_gain;
+        out.cumulative_gain_dB.reasons[point] = below_floor ? floor_reason : cumulative_gain_reason;
+        out.cumulative_nf_dB.values[point] = below_floor ? kNaN : cumulative_nf;
+        out.cumulative_nf_dB.reasons[point] = below_floor ? floor_reason : cumulative_nf_reason;
         out.cumulative_iip3_dBm.values[point] = cumulative_iip3;
         out.cumulative_iip3_dBm.reasons[point] = cumulative_iip3_reason;
         out.level_dBm.values[point] = level;

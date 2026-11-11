@@ -460,6 +460,15 @@ AgentToolResult executeBudgetEditTool(const AgentApi &api, const AgentCall &call
                             api.m_context.commands.isDirty(), decoded, *requirements,
                             api.m_context.library);
 
+    // The reply must fit one protocol line. The check runs before the commit: a reply the server
+    // cannot send becomes INTERNAL after the budget is stored. The revision and dirty flag are the
+    // pre-commit values; the reserve in agentReplyFitsProtocolLine covers the difference.
+    if (!agentReplyFitsProtocolLine(budgetResult(api.epoch(), api.m_context.commands.revision(),
+                                                 api.m_context.commands.isDirty(), decoded,
+                                                 *requirements, api.m_context.library)))
+        invalid("/budget", "the budget is too large to read back in one reply; shorten its part "
+                           "numbers or remove entries");
+
     api.m_context.host.beginCheckpoint(call);
     bool applied = false;
     try {

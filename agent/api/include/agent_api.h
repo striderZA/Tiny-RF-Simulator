@@ -46,6 +46,9 @@ class IAgentCallExecutor {
     virtual std::uint64_t epoch() const = 0;
 };
 
+// The protocol line for `result` fits the 1 MiB cap, reserving room for the request id.
+bool agentReplyFitsProtocolLine(const AgentToolResult &result);
+
 struct AgentApiContext {
     EditorCommands &commands;
     CircuitRuntime &runtime;
