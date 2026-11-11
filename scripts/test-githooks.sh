@@ -266,5 +266,85 @@ else
   echo "FAIL: an overridden force push did not move the remote ref"
 fi
 
+# --- pre-commit: staged size cap ----------------------------------------------
+# The cap counts insertions + deletions of the staged diff; binary files are excluded and a deleted
+# file counts as one line. Warn above 100 lines, block above 200.
+# Each case runs the real hook, as shipped, from a scratch repository.
+SIZE_HOOKS="$TMP/hooks-size"
+mkdir -p "$SIZE_HOOKS"
+cp "$ROOT/.githooks/pre-commit" "$SIZE_HOOKS/pre-commit"
+
+# size_repo <name>: scratch repo with a committed 1200-line file. The format check
+# sources two scripts, so the scratch repo carries copies of them.
+size_repo() {
+  local dir="$TMP/size-$1"
+  git init -q "$dir"
+  git -C "$dir" config user.name "Hook Test"
+  git -C "$dir" config user.email "hook@test.invalid"
+  git -C "$dir" config commit.gpgsign false
+  mkdir -p "$dir/scripts"
+  cp "$ROOT/scripts/format-dirs.sh" "$ROOT/scripts/clang-format-resolve.sh" "$dir/scripts/"
+  seq 1 1200 >"$dir/legacy.txt"
+  git -C "$dir" add legacy.txt
+  git -C "$dir" commit -q --no-verify -m "feat: seed fixture"
+  git -C "$dir" config core.hooksPath "$SIZE_HOOKS"
+  echo "$dir"
+}
+
+# size_case <pass|warn|block> <label> <name> <setup>: runs the hook on the index <setup> stages.
+size_case() {
+  local expect="$1" label="$2" dir out rc got
+  dir="$(size_repo "$3")"
+  (cd "$dir" && eval "$4")
+  out="$(cd "$dir" && bash "$SIZE_HOOKS/pre-commit" 2>&1)"
+  rc=$?
+  if [ "$rc" = 0 ] && printf '%s\n' "$out" | grep -q 'warning:'; then
+    got=warn
+  elif [ "$rc" = 0 ]; then
+    got=pass
+  elif printf '%s\n' "$out" | grep -q 'limit is'; then
+    got=block
+  else
+    got="error (exit $rc)"
+  fi
+  if [ "$got" = "$expect" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: pre-commit size cap: ${label} (expected ${expect}, got ${got})"
+  fi
+}
+
+size_case pass "100 lines passes silently" small 'seq 1 100 >small.txt && git add small.txt'
+size_case warn "101 lines warns" warn-low 'seq 1 101 >warn-low.txt && git add warn-low.txt'
+size_case warn "exactly the block limit warns" at-cap 'seq 1 200 >at-cap.txt && git add at-cap.txt'
+size_case block "one line over the block limit is blocked" over-cap 'seq 1 201 >over-cap.txt && git add over-cap.txt'
+size_case block "deletions count toward the cap" deletions ': >legacy.txt && git add legacy.txt'
+size_case pass "deleting a whole file counts as one line" file-delete 'git rm -q legacy.txt'
+size_case pass "binary files are not counted" binary '{ printf "\0"; seq 1 2000; } >blob.bin && git add blob.bin'
+size_case pass "merge in progress is exempt" merge 'seq 1 1001 >merged.txt && git add merged.txt && git rev-parse HEAD >.git/MERGE_HEAD'
+
+# End-to-end: a real `git commit` over the cap aborts without a commit; the documented
+# override lets the same commit through.
+E2E_SIZE="$(size_repo e2e)"
+seq 1 1001 >"$E2E_SIZE/e2e-big.txt"
+git -C "$E2E_SIZE" add e2e-big.txt
+before="$(git -C "$E2E_SIZE" rev-parse HEAD)"
+e2e_out="$(git -C "$E2E_SIZE" commit -q -m "feat: add big file" 2>&1)"
+if printf '%s\n' "$e2e_out" | grep -q 'limit is' && [ "$(git -C "$E2E_SIZE" rev-parse HEAD)" = "$before" ]; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: e2e over-cap commit was not aborted by the size cap"
+fi
+
+if RFSIM_ALLOW_LARGE_COMMIT=1 git -C "$E2E_SIZE" commit -q -m "feat: add big file" >/dev/null 2>&1; then
+  PASS=$((PASS + 1))
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: RFSIM_ALLOW_LARGE_COMMIT did not let the over-cap commit through"
+fi
+
+
 echo "test-githooks: ${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]
