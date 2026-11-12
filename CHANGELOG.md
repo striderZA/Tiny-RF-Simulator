@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-12
+
 ### Added
 
 - **RF budget view** — **View > RF Budget** opens a dockable table editor for the requirements-driven budget. Stages are added as amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch rows; each row picks a library part or edits the idealized engine settings, and each input port selects the budget input, another stage's output, or unfed. Outputs name a `(stage, port)` pair, the point count sets the shared frequency grid, and a mode selector edits per-mode numeric settings (including the switch throw). **Budget this mode** creates a mode's budget record explicitly, so a budget with no overrides still predicts for that mode; **Clear budget record** removes it. A cascade table shows every stage's gain, noise figure, OIP3, cumulative Friis/IIP3, level, NF share, and P1dB headroom at a selected frequency, with the band totals plotted and every refusal/reason shown. The Receiver Requirements view gains a Budget prediction table per output, coloured independently of the measured status; it shows an invalid/unevaluated budget's reason instead of reporting the mode as unbudgeted. Evaluation reruns only when the budget, requirements, or component library changes.
