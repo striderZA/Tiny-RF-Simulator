@@ -897,11 +897,14 @@ TEST_CASE("ReceiverRequirements format 3 refuses missing, repeated, or stale ids
         return nlohmann::json{
             {"format", 3}, {"selected_mode", 0}, {"modes", modes}, {"next_mode_id", next}};
     };
-    auto missing = base_mode;
-    CHECK(receiverRequirementsFromJson(format3({missing}, 2)).invalid_reason ==
-          "Mode 1: Mode id must be a positive integer.");
+    // Build the mode list as an explicit array: brace-initialising a json parameter with
+    // {object} resolves to the copy constructor under Clang, which turns the list into a
+    // single object and trips "modes must be a list" instead of the per-mode error.
+    CHECK(receiverRequirementsFromJson(format3(nlohmann::json::array({base_mode}), 2))
+              .invalid_reason == "Mode 1: Mode id must be a positive integer.");
     CHECK(receiverRequirementsFromJson(
-              format3({{{"id", 1}, {"name", "A"}, {"config", nullptr}}}, nlohmann::json(nullptr)))
+              format3(nlohmann::json::array({{{"id", 1}, {"name", "A"}, {"config", nullptr}}}),
+                      nlohmann::json(nullptr)))
               .invalid_reason == "Next mode id must be a positive integer.");
 
     ReceiverRequirementsSet repeated;
