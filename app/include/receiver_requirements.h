@@ -46,6 +46,19 @@ struct ReceiverMeasurementConditions {
     bool operator==(const ReceiverMeasurementConditions &) const = default;
 };
 
+enum class ReceiverOOBSuppressionAnchor { BandStart, BandStop };
+
+// One out-of-band suppression point: the cascade gain at anchor + offset must be at least
+// min_dB below the in-band gain minimum.
+struct ReceiverOOBSuppressionPoint {
+    ReceiverOOBSuppressionAnchor anchor = ReceiverOOBSuppressionAnchor::BandStart;
+    double offset_Hz = 0.0;
+    double min_dB = 0.0;
+    bool operator==(const ReceiverOOBSuppressionPoint &) const = default;
+};
+
+constexpr std::size_t kMaxReceiverOOBSuppressionPoints = 16;
+
 struct ReceiverRequirementsConfig {
     double band_start_Hz = 0.0;
     double band_stop_Hz = 0.0;
@@ -54,8 +67,13 @@ struct ReceiverRequirementsConfig {
     std::optional<ReceiverOutputPowerLimits> output_power;
     std::optional<double> iip3_min_dBm;
     ReceiverMeasurementConditions measurement_conditions;
+    std::vector<ReceiverOOBSuppressionPoint> oob_suppression;
     bool operator==(const ReceiverRequirementsConfig &) const = default;
 };
+
+// The frequency a suppression point names; the anchor picks the band edge.
+double receiverOOBSuppressionFrequency_Hz(const ReceiverRequirementsConfig &config,
+                                          const ReceiverOOBSuppressionPoint &point);
 
 constexpr std::size_t kMaxReceiverRequirementModes = 64;
 constexpr std::size_t kMaxReceiverRequirementModeNameLength = 64;
@@ -80,6 +98,12 @@ struct ReceiverRequirementsState {
     std::string invalid_reason;
 };
 
+struct ReceiverOOBSuppressionDraft {
+    int anchor = 0; // 0 = band start, 1 = band stop
+    std::string offset_Hz;
+    std::string min_dB;
+};
+
 struct ReceiverRequirementsDraft {
     std::string band_start_Hz;
     std::string band_stop_Hz;
@@ -93,6 +117,7 @@ struct ReceiverRequirementsDraft {
     std::string iip3_input_start_dBm;
     std::string iip3_input_stop_dBm;
     std::string iip3_input_step_dB;
+    std::vector<ReceiverOOBSuppressionDraft> oob_suppression;
     bool gain_enabled = false;
     bool noise_figure_enabled = false;
     bool output_power_enabled = false;
@@ -106,11 +131,25 @@ struct ReceiverMetricEvaluation {
     std::optional<double> observed_max;
 };
 
+// One configured suppression point's result. observed_gain_dB and suppression_dB are captured
+// before the budget readouts are floored, so a deep suppression still reports its true value.
+struct ReceiverOOBSuppressionEvaluation {
+    ReceiverOOBSuppressionAnchor anchor = ReceiverOOBSuppressionAnchor::BandStart;
+    double offset_Hz = 0.0;
+    double frequency_Hz = 0.0;
+    double min_dB = 0.0;
+    ReceiverRequirementStatus status = ReceiverRequirementStatus::Incomplete;
+    std::optional<double> observed_gain_dB;
+    std::optional<double> suppression_dB;
+};
+
 struct ReceiverRequirementsEvaluation {
     ReceiverMetricEvaluation gain;
     ReceiverMetricEvaluation noise_figure;
     ReceiverMetricEvaluation output_power;
     ReceiverMetricEvaluation iip3;
+    ReceiverMetricEvaluation oob_suppression;
+    std::vector<ReceiverOOBSuppressionEvaluation> oob_points;
     ReceiverRequirementStatus overall = ReceiverRequirementStatus::Incomplete;
 };
 
@@ -152,4 +191,4 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     const ReceiverRequirementsState &state, double sweep_start_Hz, double sweep_stop_Hz,
     const std::vector<double> &frequencies_Hz, const std::vector<double> &gain_dB,
     const std::vector<double> &noise_figure_dB, const std::vector<double> &output_power_dBm,
-    const std::vector<double> &iip3_dBm);
+    const std::vector<double> &iip3_dBm, bool include_oob_suppression = false);

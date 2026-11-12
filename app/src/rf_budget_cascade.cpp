@@ -408,7 +408,7 @@ void finalizeVerdict(RfBudgetCascade &cascade, const ReceiverRequirementsConfig 
     cascade.verdict = evaluateReceiverRequirements(
         state, cascade.frequencies_Hz.front(), cascade.frequencies_Hz.back(),
         cascade.frequencies_Hz, last.cumulative_gain_dB.values, last.cumulative_nf_dB.values,
-        last.level_dBm.values, iip3);
+        last.level_dBm.values, iip3, true);
 }
 
 void walk(RouteState &state, std::size_t stage_index, int input_port,
@@ -595,8 +595,15 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
         }
         mode_result.status = RfBudgetModeStatus::Budgeted;
 
-        const std::vector<double> grid = linearSweepFrequencies(
-            mode.config->band_start_Hz, mode.config->band_stop_Hz, budget.point_count);
+        const std::vector<double> grid = [&] {
+            std::vector<double> points = linearSweepFrequencies(
+                mode.config->band_start_Hz, mode.config->band_stop_Hz, budget.point_count);
+            for (const auto &point : mode.config->oob_suppression)
+                points.push_back(receiverOOBSuppressionFrequency_Hz(*mode.config, point));
+            std::sort(points.begin(), points.end());
+            points.erase(std::unique(points.begin(), points.end()), points.end());
+            return points;
+        }();
         RouteState state{budget,
                          record->overrides,
                          evaluator,
