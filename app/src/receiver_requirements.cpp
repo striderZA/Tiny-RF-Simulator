@@ -943,16 +943,19 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
             evaluation.frequency_Hz = receiverOOBSuppressionFrequency_Hz(config, point);
             evaluation.min_dB = point.min_dB;
 
-            // The budget grid carries the exact point; the analyzer's 1 Hz match tolerance
-            // keeps a float round trip from turning it into a missing sample.
+            // The budget grid carries the exact point; the 1 Hz tolerance only rescues a float
+            // round trip. Take the nearest sample, never a farther one that happens to sort first.
             std::optional<double> observed;
+            double nearest_Hz = std::numeric_limits<double>::infinity();
             for (std::size_t i = 0; i < aligned; ++i) {
-                if (!std::isfinite(frequencies_Hz[i]) ||
-                    std::abs(frequencies_Hz[i] - evaluation.frequency_Hz) > 1.0)
+                if (!std::isfinite(frequencies_Hz[i]))
                     continue;
-                if (!std::isnan(gain_dB[i]))
-                    observed = gain_dB[i];
-                break;
+                const double distance_Hz = std::abs(frequencies_Hz[i] - evaluation.frequency_Hz);
+                if (distance_Hz > 1.0 || distance_Hz >= nearest_Hz)
+                    continue;
+                nearest_Hz = distance_Hz;
+                observed =
+                    std::isnan(gain_dB[i]) ? std::nullopt : std::optional<double>(gain_dB[i]);
             }
             if (!observed) {
                 evaluation.status = ReceiverRequirementStatus::Incomplete;

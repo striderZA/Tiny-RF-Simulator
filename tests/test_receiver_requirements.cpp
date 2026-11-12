@@ -1119,6 +1119,28 @@ TEST_CASE("out-of-band suppression compares against the in-band gain minimum",
     CHECK(ignored.overall == ReceiverRequirementStatus::Pass);
 }
 
+TEST_CASE("out-of-band suppression reads its own sample near a band edge",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    config.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStop, 0.5, 110.0}};
+    state.config = config;
+
+    // The in-band band-stop sample sorts first and lies inside the 1 Hz match tolerance; the
+    // point's own sample must win, so the verdict reads -105 dB instead of the edge's +15 dB.
+    const std::vector<double> frequencies = {2.0e9, 2.0e9 + 0.5};
+    const auto result = evaluateReceiverRequirements(state, 1.0e9, 2.0e9 + 0.5, frequencies,
+                                                     {15.0, -105.0}, {}, {}, {}, true);
+    REQUIRE(result.oob_points.size() == 1);
+    CHECK(result.oob_points[0].frequency_Hz == 2.0e9 + 0.5);
+    CHECK(result.oob_points[0].observed_gain_dB == Approx(-105.0));
+    CHECK(result.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(result.oob_suppression.status == ReceiverRequirementStatus::Pass);
+}
+
 TEST_CASE("out-of-band suppression draft parses rows and refuses malformed numbers",
           "[receiver_requirements]") {
     auto draft = gainDraft();
