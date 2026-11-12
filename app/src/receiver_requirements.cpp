@@ -82,9 +82,9 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
 }
 
 ReceiverRequirementStatus aggregate(const ReceiverRequirementsEvaluation &result) {
-    const ReceiverMetricEvaluation *metrics[] = {&result.gain, &result.noise_figure,
+    const ReceiverMetricEvaluation *metrics[] = {&result.gain,         &result.noise_figure,
                                                  &result.output_power, &result.iip3,
-                                                 &result.oob_suppression};
+                                                 &result.snr,          &result.oob_suppression};
     bool any_enabled = false;
     bool all_pass = true;
     for (const auto *metric : metrics) {
@@ -115,6 +115,9 @@ nlohmann::json configToJson(const ReceiverRequirementsConfig &config) {
     }
     if (config.iip3_min_dBm)
         result["iip3_min_dbm"] = *config.iip3_min_dBm;
+    if (config.snr)
+        result["snr"] = {{"min_db", config.snr->minimum_dB},
+                         {"bandwidth_hz", config.snr->bandwidth_Hz}};
     if (!config.oob_suppression.empty()) {
         nlohmann::json points = nlohmann::json::array();
         for (const auto &point : config.oob_suppression) {
@@ -200,6 +203,20 @@ std::optional<ReceiverRequirementsConfig> parseConfigObject(const nlohmann::json
     if (!readOptionalNumber("iip3_min_dbm", config.iip3_min_dBm)) {
         error = "Receiver IIP3 limit must be a number.";
         return std::nullopt;
+    }
+    if (value.contains("snr")) {
+        const auto &snr = value["snr"];
+        if (!snr.is_object()) {
+            error = "Receiver SNR limit must be an object.";
+            return std::nullopt;
+        }
+        if (!snr.contains("min_db") || !snr["min_db"].is_number() ||
+            !snr.contains("bandwidth_hz") || !snr["bandwidth_hz"].is_number()) {
+            error = "Receiver SNR limit must carry min_db and bandwidth_hz numbers.";
+            return std::nullopt;
+        }
+        config.snr =
+            ReceiverSNRLimit{snr["min_db"].get<double>(), snr["bandwidth_hz"].get<double>()};
     }
 
     if (value.contains("oob_suppression")) {
@@ -388,6 +405,10 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
         if (!count)
             return "IIP3 input sweep must have 3–101 finite, advancing levels.";
     }
+    if (config.snr && !std::isfinite(config.snr->minimum_dB))
+        return "SNR minimum must be finite.";
+    if (config.snr && (!std::isfinite(config.snr->bandwidth_Hz) || config.snr->bandwidth_Hz <= 0.0))
+        return "SNR bandwidth must be finite and positive.";
     if (config.measurement_conditions.input_level_dBm &&
         (!std::isfinite(*config.measurement_conditions.input_level_dBm) ||
          *config.measurement_conditions.input_level_dBm < MIN_POWER ||
@@ -820,6 +841,17 @@ parseReceiverRequirementsDraft(const ReceiverRequirementsDraft &draft, std::stri
         config.measurement_conditions.iip3 =
             ReceiverIIP3TestSettings{*spacing, *start, *stop, *step};
     }
+    if (draft.snr_enabled) {
+        auto minimum = required(draft.snr_min_dB, "SNR minimum");
+        auto bandwidth = required(draft.snr_bandwidth_Hz, "SNR bandwidth");
+        if (!minimum || !bandwidth)
+            return std::nullopt;
+        config.snr = ReceiverSNRLimit{*minimum, *bandwidth};
+    }
+    if (draft.snr_enabled && draft.input_level_dBm.empty()) {
+        error = "SNR needs an input level (dBm).";
+        return std::nullopt;
+    }
     if (!draft.input_level_dBm.empty()) {
         auto level = parseNumber(draft.input_level_dBm);
         if (!level) {
@@ -864,7 +896,7 @@ bool applyReceiverRequirementsDraft(ReceiverRequirementsState &state,
     if (!config)
         return false;
     if (!config->gain && !config->nf_max_dB && !config->output_power && !config->iip3_min_dBm &&
-        config->oob_suppression.empty())
+        !config->snr && config->oob_suppression.empty())
         state.config.reset();
     else
         state.config = *config;
@@ -876,23 +908,24 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     const ReceiverRequirementsState &state, double sweep_start_Hz, double sweep_stop_Hz,
     const std::vector<double> &frequencies_Hz, const std::vector<double> &gain_dB,
     const std::vector<double> &noise_figure_dB, const std::vector<double> &output_power_dBm,
-    const std::vector<double> &iip3_dBm, bool include_oob_suppression) {
+    const std::vector<double> &iip3_dBm, bool include_oob_suppression,
+    const std::vector<double> &snr_dB) {
     ReceiverRequirementsEvaluation result;
     if (!state.invalid_reason.empty()) {
-        result.gain = result.noise_figure = result.output_power = result.iip3 =
+        result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
             result.oob_suppression = unavailable(ReceiverRequirementStatus::InvalidConfiguration);
         result.overall = ReceiverRequirementStatus::InvalidConfiguration;
         return result;
     }
     if (!state.config) {
-        result.gain = result.noise_figure = result.output_power = result.iip3 =
+        result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
             result.oob_suppression = unavailable(ReceiverRequirementStatus::NotConfigured);
         result.overall = ReceiverRequirementStatus::NotConfigured;
         return result;
     }
     const auto &config = *state.config;
     if (auto reason = validateReceiverRequirementsConfig(config)) {
-        result.gain = result.noise_figure = result.output_power = result.iip3 =
+        result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
             result.oob_suppression = unavailable(ReceiverRequirementStatus::InvalidConfiguration);
         result.overall = ReceiverRequirementStatus::InvalidConfiguration;
         return result;
@@ -906,6 +939,8 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
                               : unavailable(ReceiverRequirementStatus::NotConfigured);
     result.iip3 = config.iip3_min_dBm ? unavailable(ReceiverRequirementStatus::Incomplete)
                                       : unavailable(ReceiverRequirementStatus::NotConfigured);
+    result.snr = config.snr ? unavailable(ReceiverRequirementStatus::Incomplete)
+                            : unavailable(ReceiverRequirementStatus::NotConfigured);
     result.oob_suppression = include_oob_suppression && !config.oob_suppression.empty()
                                  ? unavailable(ReceiverRequirementStatus::Incomplete)
                                  : unavailable(ReceiverRequirementStatus::NotConfigured);
@@ -928,6 +963,9 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     if (config.iip3_min_dBm)
         result.iip3 = assess(frequencies_Hz, iip3_dBm, config.band_start_Hz, config.band_stop_Hz,
                              *config.iip3_min_dBm, std::nullopt, band_covered);
+    if (config.snr)
+        result.snr = assess(frequencies_Hz, snr_dB, config.band_start_Hz, config.band_stop_Hz,
+                            config.snr->minimum_dB, std::nullopt, band_covered);
 
     if (include_oob_suppression && !config.oob_suppression.empty() && config.gain) {
         bool any = false;

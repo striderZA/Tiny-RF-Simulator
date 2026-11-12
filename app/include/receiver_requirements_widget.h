@@ -33,7 +33,7 @@ class ReceiverRequirementsWidget {
     void fillModeName(const ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft makeDraft() const;
     ReceiverRequirementsDraft m_baseline;
-    std::array<std::array<char, 128>, 13> m_buffers{};
+    std::array<std::array<char, 128>, 15> m_buffers{};
     std::array<char, 128> m_mode_name{};
     std::vector<OobRow> m_oob_rows;
     ReceiverRequirementsSet m_snapshot;
@@ -42,6 +42,7 @@ class ReceiverRequirementsWidget {
     bool m_nf_enabled = false;
     bool m_output_power_enabled = false;
     bool m_iip3_enabled = false;
+    bool m_snr_enabled = false;
     bool m_initialized = false;
     std::string m_error;      // the last Apply refusal, shown next to Apply
     std::string m_mode_error; // the last Add/Rename/Remove refusal, shown under the mode controls

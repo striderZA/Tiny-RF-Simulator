@@ -52,7 +52,10 @@ void checkConfigKeys(const OrderedJson &config, const std::string &path) {
     checkMemberKeys(config, path,
                     {"band_start_hz", "band_stop_hz", "gain_min_db", "gain_max_db", "nf_max_db",
                      "output_power_min_dbm", "output_power_max_dbm", "iip3_min_dbm",
-                     "measurement_conditions", "oob_suppression"});
+                     "measurement_conditions", "oob_suppression", "snr"});
+    const auto snr = config.find("snr");
+    if (snr != config.end() && snr->is_object())
+        checkMemberKeys(*snr, path + "/snr", {"min_db", "bandwidth_hz"});
     const auto conditions = config.find("measurement_conditions");
     if (conditions != config.end() && conditions->is_object()) {
         const std::string conditions_path = path + "/measurement_conditions";

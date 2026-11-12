@@ -13,7 +13,7 @@ constexpr const char *kLabels[] = {
     "Gain max (dB)",          "NF max (dB)",           "Output power min (dBm)",
     "Output power max (dBm)", "IIP3 min (dBm)",        "IIP3 tone spacing (Hz)",
     "IIP3 input start (dBm)", "IIP3 input stop (dBm)", "IIP3 input step (dB)",
-    "Input level (dBm)"};
+    "Input level (dBm)",      "SNR minimum (dB)",      "SNR bandwidth (Hz)"};
 
 constexpr const char *kRemoveModeTitle = "Remove mode?";
 constexpr float kFieldWidth = 200.0f;
@@ -46,7 +46,8 @@ bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDra
            a.iip3_input_step_dB == b.iip3_input_step_dB && a.gain_enabled == b.gain_enabled &&
            a.noise_figure_enabled == b.noise_figure_enabled &&
            a.output_power_enabled == b.output_power_enabled && a.iip3_enabled == b.iip3_enabled &&
-           a.input_level_dBm == b.input_level_dBm;
+           a.input_level_dBm == b.input_level_dBm && a.snr_enabled == b.snr_enabled &&
+           a.snr_min_dB == b.snr_min_dB && a.snr_bandwidth_Hz == b.snr_bandwidth_Hz;
 }
 
 // True when both sets select the same mode with the same name and config, so an unapplied draft
@@ -136,6 +137,11 @@ void drawEvaluation(const ReceiverRequirementsState &state,
             result.output_power, "dBm");
         drawMetricRow("IIP3", limitRange(config.iip3_min_dBm, std::nullopt, "dBm"), result.iip3,
                       "dBm");
+        drawMetricRow(
+            "SNR",
+            limitRange(config.snr ? std::optional<double>(config.snr->minimum_dB) : std::nullopt,
+                       std::nullopt, "dB"),
+            result.snr, "dB");
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
         ImGui::TextUnformatted("Overall");
@@ -147,6 +153,9 @@ void drawEvaluation(const ReceiverRequirementsState &state,
     }
     if (config.output_power && !config.measurement_conditions.input_level_dBm)
         rf_view_ui::hint("Output power is measured only with an input level set above.");
+    if (config.snr)
+        rf_view_ui::hint("SNR is judged by the budget prediction; the measured view does not "
+                         "measure it.");
 }
 
 void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetModeResult *budget) {
@@ -175,7 +184,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
     if (budget->cascades.empty())
         ImGui::TextDisabled("No output is reached by this mode.");
     if (!budget->cascades.empty() &&
-        ImGui::BeginTable("budget_prediction", 7,
+        ImGui::BeginTable("budget_prediction", 8,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Output");
@@ -184,6 +193,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
         ImGui::TableSetupColumn("NF");
         ImGui::TableSetupColumn("Output power");
         ImGui::TableSetupColumn("IIP3");
+        ImGui::TableSetupColumn("SNR");
         ImGui::TableSetupColumn("OOB");
         ImGui::TableHeadersRow();
         for (const RfBudgetCascade &cascade : budget->cascades) {
@@ -201,6 +211,8 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
             rf_view_ui::metricStatus(cascade.verdict.output_power);
             ImGui::TableNextColumn();
             rf_view_ui::metricStatus(cascade.verdict.iip3);
+            ImGui::TableNextColumn();
+            rf_view_ui::metricStatus(cascade.verdict.snr);
             ImGui::TableNextColumn();
             rf_view_ui::metricStatus(cascade.verdict.oob_suppression);
         }
@@ -251,6 +263,9 @@ ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
     draft.output_power_enabled = m_output_power_enabled;
     draft.iip3_enabled = m_iip3_enabled;
     draft.input_level_dBm = m_buffers[12].data();
+    draft.snr_enabled = m_snr_enabled;
+    draft.snr_min_dB = m_buffers[13].data();
+    draft.snr_bandwidth_Hz = m_buffers[14].data();
     draft.oob_suppression.reserve(m_oob_rows.size());
     for (const auto &row : m_oob_rows)
         draft.oob_suppression.push_back({row.anchor, row.offset.data(), row.min.data()});
@@ -271,6 +286,7 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
         buffer.fill('\0');
     m_oob_rows.clear();
     m_gain_enabled = m_nf_enabled = m_output_power_enabled = m_iip3_enabled = false;
+    m_snr_enabled = false;
     const auto state = selectedReceiverRequirementsState(set);
     if (state.config && state.invalid_reason.empty()) {
         const auto &config = *state.config;
@@ -300,6 +316,11 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
             setNumber(m_buffers[9], settings.input_start_dBm);
             setNumber(m_buffers[10], settings.input_stop_dBm);
             setNumber(m_buffers[11], settings.input_step_dB);
+        }
+        if (config.snr) {
+            m_snr_enabled = true;
+            setNumber(m_buffers[13], config.snr->minimum_dB);
+            setNumber(m_buffers[14], config.snr->bandwidth_Hz);
         }
         if (config.measurement_conditions.input_level_dBm)
             setNumber(m_buffers[12], *config.measurement_conditions.input_level_dBm);
@@ -530,6 +551,17 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     drawNumberField(kLabels[11], m_buffers[11], kFieldWidth);
     ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
     ImGui::EndDisabled();
+
+    rf_view_ui::sectionHeader("SNR");
+    ImGui::Checkbox("Enable SNR", &m_snr_enabled);
+    ImGui::BeginDisabled(!m_snr_enabled);
+    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    drawNumberField(kLabels[13], m_buffers[13], kFieldWidth);
+    drawNumberField(kLabels[14], m_buffers[14], kFieldWidth);
+    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::EndDisabled();
+    if (m_snr_enabled)
+        ImGui::TextDisabled("SNR uses the input level set under Output power.");
 
     // --- Actions -------------------------------------------------------------------------------
     rf_view_ui::sectionHeader("Apply");

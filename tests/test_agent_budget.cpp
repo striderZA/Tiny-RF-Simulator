@@ -216,6 +216,7 @@ TEST_CASE("budget_get reports verdicts per mode and output", "[agent_budget]") {
     CHECK(asNumber(verdict.at("gain").at("min")) == 14.0);
     CHECK(asNumber(verdict.at("gain").at("max")) == 14.0);
     CHECK(verdict.at("noise_figure").at("status") == "not_configured");
+    CHECK(verdict.at("snr").at("status") == "not_configured");
     CHECK(verdict.at("oob_suppression").at("status") == "not_configured");
     CHECK(verdict.at("oob_suppression").at("min").is_null());
     CHECK(verdict.at("oob_suppression").at("max").is_null());

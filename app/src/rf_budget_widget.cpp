@@ -849,7 +849,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
 
     // The requirement verdicts and the aggregate, side by side, so the outcome is readable
     // before the numbers.
-    if (ImGui::BeginTable("budget_verdict", 6,
+    if (ImGui::BeginTable("budget_verdict", 7,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingFixedFit |
                               ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Overall");
@@ -857,6 +857,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         ImGui::TableSetupColumn("Noise figure");
         ImGui::TableSetupColumn("Output power");
         ImGui::TableSetupColumn("IIP3");
+        ImGui::TableSetupColumn("SNR");
         ImGui::TableSetupColumn("OOB");
         ImGui::TableHeadersRow();
         ImGui::TableNextRow();
@@ -870,6 +871,8 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         rf_view_ui::metricStatus(cascade.verdict.output_power);
         ImGui::TableNextColumn();
         rf_view_ui::metricStatus(cascade.verdict.iip3);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.snr);
         ImGui::TableNextColumn();
         rf_view_ui::metricStatus(cascade.verdict.oob_suppression);
         ImGui::EndTable();

@@ -1,5 +1,6 @@
 #include "rf_budget_cascade.h"
 
+#include "common.h"
 #include "nonlinear_model.h"
 #include "sweep_response.h"
 
@@ -378,6 +379,22 @@ struct RouteState {
     std::vector<RfBudgetUnreachedOutput> unreached;
 };
 
+// Output SNR in dB at each point: the input level less kTB at the config's noise bandwidth, less
+// the cumulative NF. Gain cancels, since the signal and the output noise both carry it. Without an
+// input level the series is NaN; a path that passes no signal (infinite NF) gives -inf.
+std::vector<double> outputSnrSeries(const RfBudgetStageResult &last,
+                                    const ReceiverRequirementsConfig &config) {
+    std::vector<double> snr(last.cumulative_nf_dB.values.size(), kNaN);
+    const auto input_level = config.measurement_conditions.input_level_dBm;
+    if (!config.snr || !input_level)
+        return snr;
+    const double kTB_dBm =
+        10.0 * std::log10(k * T) + 30.0 + 10.0 * std::log10(config.snr->bandwidth_Hz);
+    for (std::size_t i = 0; i < snr.size(); ++i)
+        snr[i] = *input_level - kTB_dBm - last.cumulative_nf_dB.values[i];
+    return snr;
+}
+
 void finalizeVerdict(RfBudgetCascade &cascade, const ReceiverRequirementsConfig &config,
                      RfBudgetReasonTable &reasons) {
     if (cascade.stages.empty() || cascade.frequencies_Hz.empty())
@@ -408,7 +425,7 @@ void finalizeVerdict(RfBudgetCascade &cascade, const ReceiverRequirementsConfig 
     cascade.verdict = evaluateReceiverRequirements(
         state, cascade.frequencies_Hz.front(), cascade.frequencies_Hz.back(),
         cascade.frequencies_Hz, last.cumulative_gain_dB.values, last.cumulative_nf_dB.values,
-        last.level_dBm.values, iip3, true);
+        last.level_dBm.values, iip3, true, outputSnrSeries(last, config));
 }
 
 void walk(RouteState &state, std::size_t stage_index, int input_port,
