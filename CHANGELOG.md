@@ -1,8 +1,11 @@
 ## [Unreleased]
 
+## [0.31.1] - 2026-11-12
+
 ### Added
 
 - **Out-of-band receiver requirements** — a requirements mode's format-3 config accepts up to 16 `oob_suppression` points anchored to the band edges (`{anchor, offset_hz, min_db}`). The RF budget verdict fails unless the cascade gain at a point is at least `min_db` below `gain_min_db`; deep suppression is judged on the unfloored gain. The points round-trip through project files and `requirements_edit`, and the budget view shows an OOB column. The live Receiver Requirements measurement stays in-band-only.
+- **SNR limit for receiver requirements** — a requirements mode's format-3 config accepts `snr: {min_db, bandwidth_hz}`. The RF budget computes output SNR at each in-band point as the input level minus thermal noise (kTB) at `bandwidth_hz` minus the cumulative noise figure, and the verdict fails when any point falls below `min_db`. The limit needs an input level; without one the verdict is Incomplete. The live Receiver Requirements measurement shows SNR as Incomplete, since it has no SNR series. The limit round-trips through project files, `requirements_edit` and `budget_get` accept and report it, and the budget prediction table and RF Budget verdict strip show an SNR column.
 
 ## [0.31.0] - 2026-11-12
 
