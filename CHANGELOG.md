@@ -2,7 +2,7 @@
 
 ### Added
 
-- **Out-of-band receiver requirements** — a requirements mode's format-3 config accepts up to 16 `oob_suppression` points anchored to the band edges (`{anchor, offset_hz, min_db}`). The RF budget verdict fails when the cascade gain at a point is less than `min_db` below `gain_min_db`; deep suppression is judged on the unfloored gain. The points round-trip through project files and `requirements_edit`, and the budget view shows an OOB column. The live Receiver Requirements measurement stays in-band-only.
+- **Out-of-band receiver requirements** — a requirements mode's format-3 config accepts up to 16 `oob_suppression` points anchored to the band edges (`{anchor, offset_hz, min_db}`). The RF budget verdict fails unless the cascade gain at a point is at least `min_db` below `gain_min_db`; deep suppression is judged on the unfloored gain. The points round-trip through project files and `requirements_edit`, and the budget view shows an OOB column. The live Receiver Requirements measurement stays in-band-only.
 
 ## [0.31.0] - 2026-11-12
 
