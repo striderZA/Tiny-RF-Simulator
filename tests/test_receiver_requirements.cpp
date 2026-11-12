@@ -898,8 +898,8 @@ TEST_CASE("ReceiverRequirements format 3 refuses missing, repeated, or stale ids
             {"format", 3}, {"selected_mode", 0}, {"modes", modes}, {"next_mode_id", next}};
     };
     // Build the mode list as an explicit array: brace-initialising a json parameter with
-    // {object} resolves to the copy constructor under Clang, which turns the list into a
-    // single object and trips "modes must be a list" instead of the per-mode error.
+    // {object} is compiler-dependent and can arrive as one object, which trips "modes must
+    // be a list" instead of the per-mode error.
     CHECK(receiverRequirementsFromJson(format3(nlohmann::json::array({base_mode}), 2))
               .invalid_reason == "Mode 1: Mode id must be a positive integer.");
     CHECK(receiverRequirementsFromJson(
