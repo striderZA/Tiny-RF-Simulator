@@ -734,3 +734,54 @@ TEST_CASE("mode result lookup returns the evaluated mode or null", "[rf_budget][
     CHECK(findRfBudgetModeResult(evaluation, 4)->mode_name == "Band 1");
     CHECK(findRfBudgetModeResult(evaluation, 5) == nullptr);
 }
+
+TEST_CASE("SNR verdict is input level minus kTB at the config bandwidth and cumulative NF",
+          "[rf_budget][cascade]") {
+    RfBudget budget;
+    budget.point_count = 3;
+    budget.stages.push_back(idealStage(
+        "LNA", "amplifier",
+        {{"gain_dB", 20.0}, {"nf_dB", 3.0}, {"enable_nonlinear", true}, {"oip3_dBm", 30.0}},
+        {fromInput()}));
+    budget.outputs.push_back({"RX", "LNA", 0});
+    budget.modes.push_back(emptyRecord(1));
+
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->snr = ReceiverSNRLimit{80.0, 1.0e6};
+    ComponentLibrary library;
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    const RfBudgetCascade &cascade = evaluation.modes[0].cascades[0];
+    // kTB at 290 K over 1 MHz is -113.98 dBm and the LNA NF is 3 dB. With a -30 dBm input,
+    // SNR = -30 - (-110.98) = 80.98 dB at every point; the 20 dB gain cancels.
+    CHECK(cascade.verdict.snr.status == ReceiverRequirementStatus::Pass);
+    REQUIRE(cascade.verdict.snr.observed_min.has_value());
+    CHECK(*cascade.verdict.snr.observed_min == Approx(80.976).margin(0.01));
+    CHECK(*cascade.verdict.snr.observed_max == Approx(80.976).margin(0.01));
+
+    requirements.modes[0].config->snr = ReceiverSNRLimit{81.0, 1.0e6};
+    const RfBudgetEvaluation strict = evaluateRfBudget(budget, requirements, library);
+    CHECK(strict.modes[0].cascades[0].verdict.snr.status == ReceiverRequirementStatus::Fail);
+}
+
+TEST_CASE("a missing input level leaves the SNR verdict Incomplete", "[rf_budget][cascade]") {
+    RfBudget budget;
+    budget.point_count = 3;
+    budget.stages.push_back(idealStage(
+        "LNA", "amplifier",
+        {{"gain_dB", 20.0}, {"nf_dB", 3.0}, {"enable_nonlinear", true}, {"oip3_dBm", 30.0}},
+        {fromInput()}));
+    budget.outputs.push_back({"RX", "LNA", 0});
+    budget.modes.push_back(emptyRecord(1));
+
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->snr = ReceiverSNRLimit{80.0, 1.0e6};
+    requirements.modes[0].config->measurement_conditions.input_level_dBm.reset();
+    ComponentLibrary library;
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    CHECK(evaluation.modes[0].cascades[0].verdict.snr.status ==
+          ReceiverRequirementStatus::Incomplete);
+}
