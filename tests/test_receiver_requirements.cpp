@@ -961,3 +961,133 @@ TEST_CASE("Requirements edits keep ids by id in format 3 and by name in format 2
     CHECK(path == "/requirements/modes/0/id");
     CHECK(error == "no mode has id 9; omit id to add a mode");
 }
+
+TEST_CASE("ReceiverRequirements judges an SNR minimum over the band, worst case",
+          "[receiver_requirements]") {
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.snr = ReceiverSNRLimit{10.0, 1.0e6};
+    ReceiverRequirementsState state;
+    state.config = config;
+    const std::vector<double> frequencies{0.9e9, 1.0e9, 1.5e9, 2.0e9, 2.1e9};
+    const std::vector<double> unused(frequencies.size(), std::numeric_limits<double>::quiet_NaN());
+    // The 0.9 GHz and 2.1 GHz points lie outside the band and do not count toward the verdict.
+    const auto snrAt = [&](const std::vector<double> &snr_dB) {
+        return evaluateReceiverRequirements(state, 0.9e9, 2.1e9, frequencies, unused, unused,
+                                            unused, unused, snr_dB);
+    };
+
+    const auto pass = snrAt({50.0, 12.0, 11.0, 30.0, 40.0});
+    CHECK(pass.snr.status == ReceiverRequirementStatus::Pass);
+    REQUIRE(pass.snr.observed_min.has_value());
+    CHECK(*pass.snr.observed_min == Approx(11.0));
+    CHECK(*pass.snr.observed_max == Approx(30.0));
+    CHECK(pass.overall == ReceiverRequirementStatus::Pass);
+
+    const auto fail = snrAt({50.0, 12.0, 9.0, 30.0, 40.0});
+    CHECK(fail.snr.status == ReceiverRequirementStatus::Fail);
+    CHECK(fail.overall == ReceiverRequirementStatus::Fail);
+
+    // A measured view without an SNR series cannot judge the limit.
+    const auto missing = snrAt({});
+    CHECK(missing.snr.status == ReceiverRequirementStatus::Incomplete);
+    CHECK(missing.overall == ReceiverRequirementStatus::Incomplete);
+}
+
+TEST_CASE("ReceiverRequirements fails the mode when only the SNR limit fails",
+          "[receiver_requirements]") {
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    config.snr = ReceiverSNRLimit{10.0, 1.0e6};
+    ReceiverRequirementsState state;
+    state.config = config;
+    const std::vector<double> frequencies{1.0e9, 1.5e9, 2.0e9};
+    const std::vector<double> gain(frequencies.size(), 15.0);
+    const std::vector<double> unused(frequencies.size(), std::numeric_limits<double>::quiet_NaN());
+    const auto result = evaluateReceiverRequirements(state, 1.0e9, 2.0e9, frequencies, gain, unused,
+                                                     unused, unused, {5.0, 5.0, 5.0});
+    CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
+    CHECK(result.snr.status == ReceiverRequirementStatus::Fail);
+    CHECK(result.overall == ReceiverRequirementStatus::Fail);
+}
+
+TEST_CASE("ReceiverRequirements validates the SNR limit", "[receiver_requirements]") {
+    auto c = allConfigured();
+    c.snr = ReceiverSNRLimit{10.0, 1.0e6};
+    CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    c.snr = ReceiverSNRLimit{std::numeric_limits<double>::quiet_NaN(), 1.0e6};
+    CHECK(validateReceiverRequirementsConfig(c) ==
+          std::optional<std::string>("SNR minimum must be finite."));
+    for (double bad : {0.0, -1.0e6, std::numeric_limits<double>::quiet_NaN()}) {
+        c.snr = ReceiverSNRLimit{10.0, bad};
+        CHECK(validateReceiverRequirementsConfig(c) ==
+              std::optional<std::string>("SNR bandwidth must be finite and positive."));
+    }
+}
+
+TEST_CASE("ReceiverRequirements stores the SNR limit as an snr object", "[receiver_requirements]") {
+    ReceiverRequirementsSet set;
+    ReceiverRequirementsMode mode;
+    mode.name = "Band 1";
+    mode.id = 1;
+    mode.config = allConfigured();
+    mode.config->snr = ReceiverSNRLimit{10.0, 1.0e6};
+    set.modes.push_back(mode);
+    set.next_mode_id = 2;
+
+    nlohmann::json json = receiverRequirementsToJson(set);
+    CHECK(json["modes"][0]["config"]["snr"] ==
+          nlohmann::json({{"min_db", 10.0}, {"bandwidth_hz", 1.0e6}}));
+    const ReceiverRequirementsSet loaded = receiverRequirementsFromJson(json);
+    REQUIRE(loaded.invalid_reason.empty());
+    REQUIRE(loaded.modes.size() == 1);
+    REQUIRE(loaded.modes[0].config.has_value());
+    CHECK(loaded.modes[0].config->snr == mode.config->snr);
+
+    json["modes"][0]["config"]["snr"]["min_db"] = "10";
+    CHECK_FALSE(receiverRequirementsFromJson(json).invalid_reason.empty());
+    json["modes"][0]["config"]["snr"] = {{"min_db", 10.0}};
+    CHECK_FALSE(receiverRequirementsFromJson(json).invalid_reason.empty());
+}
+
+TEST_CASE("ReceiverRequirements drafts an SNR limit that needs an input level",
+          "[receiver_requirements]") {
+    ReceiverRequirementsDraft draft;
+    draft.band_start_Hz = "1e9";
+    draft.band_stop_Hz = "2e9";
+    draft.snr_enabled = true;
+    draft.snr_min_dB = "10";
+    draft.snr_bandwidth_Hz = "1e6";
+    std::string error;
+    CHECK_FALSE(parseReceiverRequirementsDraft(draft, error).has_value());
+    CHECK(error == "SNR needs an input level (dBm).");
+
+    draft.input_level_dBm = "-30";
+    const auto config = parseReceiverRequirementsDraft(draft, error);
+    REQUIRE(config.has_value());
+    REQUIRE(config->snr.has_value());
+    CHECK(config->snr->minimum_dB == 10.0);
+    CHECK(config->snr->bandwidth_Hz == 1.0e6);
+
+    draft.snr_bandwidth_Hz = "0";
+    CHECK_FALSE(parseReceiverRequirementsDraft(draft, error).has_value());
+    CHECK(error == "SNR bandwidth must be finite and positive.");
+}
+
+TEST_CASE("an SNR-only draft keeps the mode configured", "[receiver_requirements]") {
+    ReceiverRequirementsDraft draft;
+    draft.band_start_Hz = "1e9";
+    draft.band_stop_Hz = "2e9";
+    draft.snr_enabled = true;
+    draft.snr_min_dB = "10";
+    draft.snr_bandwidth_Hz = "1e6";
+    draft.input_level_dBm = "-30";
+    ReceiverRequirementsState state;
+    std::string error;
+    REQUIRE(applyReceiverRequirementsDraft(state, draft, error));
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->snr.has_value());
+}

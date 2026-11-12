@@ -28,6 +28,14 @@ struct ReceiverOutputPowerLimits {
     bool operator==(const ReceiverOutputPowerLimits &) const = default;
 };
 
+// SNR minimum at the output, judged over the band. The noise bandwidth is the kTB reference the
+// verdict uses, so the mode config alone determines the result.
+struct ReceiverSNRLimit {
+    double minimum_dB;
+    double bandwidth_Hz;
+    bool operator==(const ReceiverSNRLimit &) const = default;
+};
+
 struct ReceiverIIP3TestSettings {
     double tone_spacing_Hz;
     double input_start_dBm;
@@ -53,6 +61,7 @@ struct ReceiverRequirementsConfig {
     std::optional<double> nf_max_dB;
     std::optional<ReceiverOutputPowerLimits> output_power;
     std::optional<double> iip3_min_dBm;
+    std::optional<ReceiverSNRLimit> snr;
     ReceiverMeasurementConditions measurement_conditions;
     bool operator==(const ReceiverRequirementsConfig &) const = default;
 };
@@ -98,6 +107,9 @@ struct ReceiverRequirementsDraft {
     bool output_power_enabled = false;
     bool iip3_enabled = false;
     std::string input_level_dBm;
+    bool snr_enabled = false;
+    std::string snr_min_dB;
+    std::string snr_bandwidth_Hz;
 };
 
 struct ReceiverMetricEvaluation {
@@ -111,6 +123,7 @@ struct ReceiverRequirementsEvaluation {
     ReceiverMetricEvaluation noise_figure;
     ReceiverMetricEvaluation output_power;
     ReceiverMetricEvaluation iip3;
+    ReceiverMetricEvaluation snr;
     ReceiverRequirementStatus overall = ReceiverRequirementStatus::Incomplete;
 };
 
@@ -152,4 +165,4 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     const ReceiverRequirementsState &state, double sweep_start_Hz, double sweep_stop_Hz,
     const std::vector<double> &frequencies_Hz, const std::vector<double> &gain_dB,
     const std::vector<double> &noise_figure_dB, const std::vector<double> &output_power_dBm,
-    const std::vector<double> &iip3_dBm);
+    const std::vector<double> &iip3_dBm, const std::vector<double> &snr_dB = {});
