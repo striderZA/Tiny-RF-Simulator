@@ -7,6 +7,7 @@
 #include "rf_budget_cascade.h"
 #include "rf_budget_stage.h"
 #include "sweep_response.h"
+#include "test_temp_paths.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -14,6 +15,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <optional>
@@ -122,6 +125,62 @@ RfBudgetModeRecord emptyRecord(std::uint32_t mode_id) {
     RfBudgetModeRecord record;
     record.mode_id = mode_id;
     return record;
+}
+
+// A per-process library folder, removed when the test ends.
+class LibraryDir {
+  public:
+    LibraryDir()
+        : m_root(std::filesystem::temp_directory_path() /
+                 ("rfsim_budget_cascade_" + test_temp_paths::processTag() + "_" +
+                  std::to_string(++s_count))) {
+        std::filesystem::create_directories(m_root);
+    }
+    ~LibraryDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(m_root, ec);
+    }
+    LibraryDir(const LibraryDir &) = delete;
+    LibraryDir &operator=(const LibraryDir &) = delete;
+
+    void writeFile(const std::string &name, const std::string &text) const {
+        std::ofstream out(m_root / name, std::ios::binary);
+        out << text;
+    }
+
+    void writeDefinition(const std::string &name, const nlohmann::json &definition) const {
+        writeFile(name, definition.dump(2));
+    }
+
+    const std::filesystem::path &root() const { return m_root; }
+
+  private:
+    static inline int s_count = 0;
+    std::filesystem::path m_root;
+};
+
+nlohmann::json amplifierDefinition(const std::string &part_number, const nlohmann::json &parameters,
+                                   const nlohmann::json &data_files = nlohmann::json::array()) {
+    return {{"schema_version", 2},
+            {"type", "amplifier"},
+            {"part_number", part_number},
+            {"manufacturer", "Test"},
+            {"description", "budget cascade fixture"},
+            {"parameters", parameters},
+            {"test_conditions", nlohmann::json::object()},
+            {"data_files", data_files},
+            {"notes", ""}};
+}
+
+RfBudgetStage libraryStage(const std::string &name, const std::string &type,
+                           const std::string &part_number) {
+    RfBudgetStage stage;
+    stage.name = name;
+    stage.type = type;
+    stage.source = RfBudgetStageSource::Library;
+    stage.part_number = part_number;
+    stage.inputs = {fromInput()};
+    return stage;
 }
 
 const RfBudgetModeResult &modeById(const RfBudgetEvaluation &evaluation, std::uint32_t id) {
@@ -733,6 +792,93 @@ TEST_CASE("mode result lookup returns the evaluated mode or null", "[rf_budget][
     REQUIRE(findRfBudgetModeResult(evaluation, 4) != nullptr);
     CHECK(findRfBudgetModeResult(evaluation, 4)->mode_name == "Band 1");
     CHECK(findRfBudgetModeResult(evaluation, 5) == nullptr);
+}
+
+TEST_CASE("out-of-band points join the budget cascade grid", "[rf_budget][cascade]") {
+    RfBudget budget;
+    budget.point_count = 5;
+    budget.stages.push_back(idealStage(
+        "BPF", "filter", {{"filter_type", "BPF"}, {"fc_low_Hz", 1.0e9}, {"fc_high_Hz", 2.0e9}},
+        {fromInput()}));
+    budget.outputs.push_back({"RX", "BPF", 0});
+    budget.modes.push_back(emptyRecord(1));
+
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->gain = ReceiverGainLimits{0.0, 0.0};
+    requirements.modes[0].config->oob_suppression = {
+        {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0}};
+
+    ComponentLibrary library;
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    const RfBudgetCascade &cascade = evaluation.modes[0].cascades[0];
+
+    // The in-band grid is unchanged and the exact OOB point is inserted, not snapped.
+    REQUIRE(cascade.frequencies_Hz.size() == 6);
+    CHECK(cascade.frequencies_Hz.front() == 0.995e9);
+    CHECK(cascade.frequencies_Hz[1] == 1.0e9);
+    CHECK(cascade.frequencies_Hz.back() == 2.0e9);
+
+    REQUIRE(cascade.verdict.oob_points.size() == 1);
+    CHECK(cascade.verdict.oob_points[0].frequency_Hz == 0.995e9);
+    CHECK(cascade.verdict.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(cascade.verdict.oob_points[0].observed_gain_dB == -kInf);
+    CHECK(cascade.verdict.oob_suppression.status == ReceiverRequirementStatus::Pass);
+    CHECK(cascade.verdict.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("out-of-band suppression judges unfloored gain below the readout floor",
+          "[rf_budget][cascade]") {
+    // The notch is -105 dB at 0.995 GHz and 10 dB in band. The published readout is floored to
+    // NaN there, so the verdict must have captured the true value before flooring.
+    LibraryDir dir;
+    dir.writeFile("notch.s2p", "# GHz S RI R 50\n"
+                               "0.995 0 0 5.6234133e-6 0 0 0 0 0\n"
+                               "1.0 0 0 3.1622777 0 0 0 0 0\n"
+                               "1.25 0 0 3.1622777 0 0 0 0 0\n"
+                               "1.5 0 0 3.1622777 0 0 0 0 0\n"
+                               "1.75 0 0 3.1622777 0 0 0 0 0\n"
+                               "2.0 0 0 3.1622777 0 0 0 0 0\n");
+    dir.writeDefinition(
+        "notch.json",
+        amplifierDefinition(
+            "NOTCH-1", {{"gain_dB", 10.0}, {"nf_dB", 3.0}, {"enable_nonlinear", false}},
+            nlohmann::json::array({{{"type", "s_parameters"}, {"path", "notch.s2p"}}})));
+    ComponentLibrary library;
+    library.scan(dir.root().string());
+
+    RfBudget budget;
+    budget.point_count = 5;
+    budget.stages.push_back(libraryStage("LNA", "amplifier", "NOTCH-1"));
+    budget.outputs.push_back({"RX", "LNA", 0});
+    budget.modes.push_back(emptyRecord(1));
+
+    ReceiverRequirementsSet requirements = requirementSet();
+    requirements.modes[0].config->gain = ReceiverGainLimits{9.5, 10.5};
+    requirements.modes[0].config->oob_suppression = {
+        {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 120.0}};
+
+    const RfBudgetEvaluation evaluation = evaluateRfBudget(budget, requirements, library);
+    REQUIRE(evaluation.modes.size() == 1);
+    REQUIRE(evaluation.modes[0].status == RfBudgetModeStatus::Budgeted);
+    REQUIRE(evaluation.modes[0].cascades.size() == 1);
+    const RfBudgetCascade &cascade = evaluation.modes[0].cascades[0];
+
+    const auto point = std::find_if(cascade.frequencies_Hz.begin(), cascade.frequencies_Hz.end(),
+                                    [](double f) { return std::abs(f - 0.995e9) < 1.0; });
+    REQUIRE(point != cascade.frequencies_Hz.end());
+    const std::size_t index =
+        static_cast<std::size_t>(std::distance(cascade.frequencies_Hz.begin(), point));
+    CHECK(std::isnan(cascade.stages.back().cumulative_gain_dB.values[index]));
+
+    // gain_min 9.5 - 120 = -110.5 dB threshold; the true -105 dB fails.
+    REQUIRE(cascade.verdict.oob_points.size() == 1);
+    CHECK(cascade.verdict.oob_points[0].observed_gain_dB == Approx(-105.0).margin(1e-6));
+    CHECK(cascade.verdict.oob_points[0].status == ReceiverRequirementStatus::Fail);
+    CHECK(cascade.verdict.oob_suppression.status == ReceiverRequirementStatus::Fail);
+    CHECK(cascade.verdict.gain.status == ReceiverRequirementStatus::Pass);
+    CHECK(cascade.verdict.overall == ReceiverRequirementStatus::Fail);
 }
 
 TEST_CASE("SNR verdict is input level minus kTB at the config bandwidth and cumulative NF",

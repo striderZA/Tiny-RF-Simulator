@@ -309,6 +309,67 @@ TEST_CASE("requirements_edit refuses an unknown mode id without a checkpoint",
     CHECK(fixture.host.checkpoint_begins == 0);
 }
 
+TEST_CASE("requirements_edit stores out-of-band suppression points", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    auto next = twoModeSet();
+    next.modes[0].config->oob_suppression = {
+        {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0},
+        {ReceiverOOBSuppressionAnchor::BandStop, 2.5e6, 40.0}};
+
+    const auto result = fixture.call(
+        "requirements_edit", {{"epoch", fixture.api.epoch()}, {"requirements", editPayload(next)}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(fixture.host.requirements->modes[0].config.has_value());
+    CHECK(fixture.host.requirements->modes[0].config->oob_suppression ==
+          next.modes[0].config->oob_suppression);
+
+    const auto read = fixture.call("requirements_get");
+    REQUIRE_FALSE(read.is_error);
+    const auto &points =
+        read.structured.at("requirements").at("modes").at(0).at("config").at("oob_suppression");
+    REQUIRE(points.size() == 2);
+    CHECK(points[0].at("anchor") == "band_start");
+    CHECK(points[1].at("anchor") == "band_stop");
+}
+
+TEST_CASE("requirements_edit refuses a misspelled out-of-band point key", "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    const auto before = fixture.commands.revision();
+    auto payload = editPayload(twoModeSet());
+    payload["modes"][0]["config"]["oob_suppression"] = nlohmann::json::array(
+        {{{"anchor", "band_start"}, {"offset_hz", -5.0e6}, {"min_db", 60.0}, {"spacing", 1.0}}});
+
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()}, {"requirements", payload}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INVALID_ARGUMENT");
+    CHECK(error.at("details").at("path") ==
+          "/requirements/modes/0/config/oob_suppression/0/spacing");
+    CHECK(*fixture.host.requirements == twoModeSet());
+    CHECK(fixture.commands.revision() == before);
+    CHECK(fixture.host.checkpoint_begins == 0);
+}
+
+TEST_CASE("requirements_edit refuses an out-of-band point inside the band",
+          "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    auto payload = editPayload(twoModeSet());
+    payload["modes"][0]["config"]["oob_suppression"] = nlohmann::json::array(
+        {{{"anchor", "band_start"}, {"offset_hz", 10.0e6}, {"min_db", 60.0}}});
+
+    const auto result = fixture.call("requirements_edit",
+                                     {{"epoch", fixture.api.epoch()}, {"requirements", payload}});
+    const auto &error = errorFor(result);
+    CHECK(error.at("code") == "INVALID_ARGUMENT");
+    CHECK(error.at("details").at("path") == "/requirements");
+    CHECK(error.at("message") ==
+          "Mode 1: Out-of-band suppression frequency must lie outside the requirement band.");
+    CHECK(fixture.host.checkpoint_begins == 0);
+}
+
 TEST_CASE("requirements_edit stores an SNR limit and refuses a misspelled SNR key",
           "[agent_requirements]") {
     ApiFixture fixture;

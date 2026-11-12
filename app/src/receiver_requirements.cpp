@@ -82,8 +82,9 @@ ReceiverMetricEvaluation assess(const std::vector<double> &frequencies,
 }
 
 ReceiverRequirementStatus aggregate(const ReceiverRequirementsEvaluation &result) {
-    const ReceiverMetricEvaluation *metrics[] = {&result.gain, &result.noise_figure,
-                                                 &result.output_power, &result.iip3, &result.snr};
+    const ReceiverMetricEvaluation *metrics[] = {&result.gain,         &result.noise_figure,
+                                                 &result.output_power, &result.iip3,
+                                                 &result.snr,          &result.oob_suppression};
     bool any_enabled = false;
     bool all_pass = true;
     for (const auto *metric : metrics) {
@@ -117,6 +118,17 @@ nlohmann::json configToJson(const ReceiverRequirementsConfig &config) {
     if (config.snr)
         result["snr"] = {{"min_db", config.snr->minimum_dB},
                          {"bandwidth_hz", config.snr->bandwidth_Hz}};
+    if (!config.oob_suppression.empty()) {
+        nlohmann::json points = nlohmann::json::array();
+        for (const auto &point : config.oob_suppression) {
+            points.push_back(
+                {{"anchor", point.anchor == ReceiverOOBSuppressionAnchor::BandStart ? "band_start"
+                                                                                    : "band_stop"},
+                 {"offset_hz", point.offset_Hz},
+                 {"min_db", point.min_dB}});
+        }
+        result["oob_suppression"] = std::move(points);
+    }
     nlohmann::json conditions = nlohmann::json::object();
     if (config.measurement_conditions.input_level_dBm)
         conditions["input_level_dbm"] = *config.measurement_conditions.input_level_dBm;
@@ -207,6 +219,51 @@ std::optional<ReceiverRequirementsConfig> parseConfigObject(const nlohmann::json
             ReceiverSNRLimit{snr["min_db"].get<double>(), snr["bandwidth_hz"].get<double>()};
     }
 
+    if (value.contains("oob_suppression")) {
+        const auto &points = value["oob_suppression"];
+        if (!points.is_array()) {
+            error = "Receiver out-of-band suppression must be a list.";
+            return std::nullopt;
+        }
+        for (const auto &entry : points) {
+            if (!entry.is_object()) {
+                error = "Out-of-band suppression point must be an object.";
+                return std::nullopt;
+            }
+            if (!entry.contains("anchor") || !entry.contains("offset_hz") ||
+                !entry.contains("min_db")) {
+                error = "Out-of-band suppression point must carry anchor, offset_hz, and min_db.";
+                return std::nullopt;
+            }
+            ReceiverOOBSuppressionPoint point;
+            if (entry["anchor"].is_string()) {
+                const std::string anchor = entry["anchor"].get<std::string>();
+                if (anchor == "band_start")
+                    point.anchor = ReceiverOOBSuppressionAnchor::BandStart;
+                else if (anchor == "band_stop")
+                    point.anchor = ReceiverOOBSuppressionAnchor::BandStop;
+                else {
+                    error = "Out-of-band suppression anchor must be 'band_start' or 'band_stop'.";
+                    return std::nullopt;
+                }
+            } else {
+                error = "Out-of-band suppression anchor must be 'band_start' or 'band_stop'.";
+                return std::nullopt;
+            }
+            if (!entry["offset_hz"].is_number()) {
+                error = "Out-of-band offset must be a number.";
+                return std::nullopt;
+            }
+            if (!entry["min_db"].is_number()) {
+                error = "Out-of-band suppression minimum must be a number.";
+                return std::nullopt;
+            }
+            point.offset_Hz = entry["offset_hz"].get<double>();
+            point.min_dB = entry["min_db"].get<double>();
+            config.oob_suppression.push_back(point);
+        }
+    }
+
     if (value.contains("measurement_conditions")) {
         const auto &conditions = value["measurement_conditions"];
         if (!conditions.is_object()) {
@@ -272,6 +329,13 @@ std::optional<std::uint32_t> positiveModeId(const nlohmann::json &value) {
 }
 } // namespace
 
+double receiverOOBSuppressionFrequency_Hz(const ReceiverRequirementsConfig &config,
+                                          const ReceiverOOBSuppressionPoint &point) {
+    return (point.anchor == ReceiverOOBSuppressionAnchor::BandStart ? config.band_start_Hz
+                                                                    : config.band_stop_Hz) +
+           point.offset_Hz;
+}
+
 std::optional<std::size_t> receiverIIP3LevelCount(const ReceiverIIP3TestSettings &settings) {
     if (!std::isfinite(settings.input_start_dBm) || !std::isfinite(settings.input_stop_dBm) ||
         !std::isfinite(settings.input_step_dB) || settings.input_step_dB <= 0.0 ||
@@ -307,6 +371,21 @@ validateReceiverRequirementsConfig(const ReceiverRequirementsConfig &config) {
         return "Gain limits must be finite.";
     if (config.gain && config.gain->minimum_dB > config.gain->maximum_dB)
         return "Minimum gain must not exceed maximum gain.";
+    if (!config.oob_suppression.empty() && !config.gain)
+        return "Out-of-band suppression requires gain limits.";
+    if (config.oob_suppression.size() > kMaxReceiverOOBSuppressionPoints)
+        return "At most 16 out-of-band suppression points are allowed.";
+    for (const auto &point : config.oob_suppression) {
+        if (!std::isfinite(point.offset_Hz))
+            return "Out-of-band offset must be finite.";
+        if (!std::isfinite(point.min_dB) || point.min_dB < 0.0)
+            return "Out-of-band suppression must be finite and non-negative.";
+        const double frequency = receiverOOBSuppressionFrequency_Hz(config, point);
+        if (!std::isfinite(frequency) || frequency <= 0.0)
+            return "Out-of-band suppression frequency must be finite and positive.";
+        if (frequency >= config.band_start_Hz && frequency <= config.band_stop_Hz)
+            return "Out-of-band suppression frequency must lie outside the requirement band.";
+    }
     if (config.nf_max_dB && !std::isfinite(*config.nf_max_dB))
         return "Noise figure limit must be finite.";
     if (config.output_power && (!std::isfinite(config.output_power->minimum_dBm) ||
@@ -784,6 +863,25 @@ parseReceiverRequirementsDraft(const ReceiverRequirementsDraft &draft, std::stri
         error = "Output power needs an input level (dBm).";
         return std::nullopt;
     }
+    for (const auto &row : draft.oob_suppression) {
+        if (row.anchor != 0 && row.anchor != 1) {
+            error = "Out-of-band anchor must be band start or band stop.";
+            return std::nullopt;
+        }
+        auto offset = parseNumber(row.offset_Hz);
+        if (!offset) {
+            error = "Out-of-band offset must be a finite number.";
+            return std::nullopt;
+        }
+        auto minimum = parseNumber(row.min_dB);
+        if (!minimum) {
+            error = "Out-of-band suppression must be a finite number.";
+            return std::nullopt;
+        }
+        config.oob_suppression.push_back({row.anchor == 0 ? ReceiverOOBSuppressionAnchor::BandStart
+                                                          : ReceiverOOBSuppressionAnchor::BandStop,
+                                          *offset, *minimum});
+    }
     if (auto reason = validateReceiverRequirementsConfig(config)) {
         error = *reason;
         return std::nullopt;
@@ -798,7 +896,7 @@ bool applyReceiverRequirementsDraft(ReceiverRequirementsState &state,
     if (!config)
         return false;
     if (!config->gain && !config->nf_max_dB && !config->output_power && !config->iip3_min_dBm &&
-        !config->snr)
+        !config->snr && config->oob_suppression.empty())
         state.config.reset();
     else
         state.config = *config;
@@ -810,24 +908,25 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     const ReceiverRequirementsState &state, double sweep_start_Hz, double sweep_stop_Hz,
     const std::vector<double> &frequencies_Hz, const std::vector<double> &gain_dB,
     const std::vector<double> &noise_figure_dB, const std::vector<double> &output_power_dBm,
-    const std::vector<double> &iip3_dBm, const std::vector<double> &snr_dB) {
+    const std::vector<double> &iip3_dBm, bool include_oob_suppression,
+    const std::vector<double> &snr_dB) {
     ReceiverRequirementsEvaluation result;
     if (!state.invalid_reason.empty()) {
         result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
-            unavailable(ReceiverRequirementStatus::InvalidConfiguration);
+            result.oob_suppression = unavailable(ReceiverRequirementStatus::InvalidConfiguration);
         result.overall = ReceiverRequirementStatus::InvalidConfiguration;
         return result;
     }
     if (!state.config) {
         result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
-            unavailable(ReceiverRequirementStatus::NotConfigured);
+            result.oob_suppression = unavailable(ReceiverRequirementStatus::NotConfigured);
         result.overall = ReceiverRequirementStatus::NotConfigured;
         return result;
     }
     const auto &config = *state.config;
     if (auto reason = validateReceiverRequirementsConfig(config)) {
         result.gain = result.noise_figure = result.output_power = result.iip3 = result.snr =
-            unavailable(ReceiverRequirementStatus::InvalidConfiguration);
+            result.oob_suppression = unavailable(ReceiverRequirementStatus::InvalidConfiguration);
         result.overall = ReceiverRequirementStatus::InvalidConfiguration;
         return result;
     }
@@ -842,6 +941,9 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
                                       : unavailable(ReceiverRequirementStatus::NotConfigured);
     result.snr = config.snr ? unavailable(ReceiverRequirementStatus::Incomplete)
                             : unavailable(ReceiverRequirementStatus::NotConfigured);
+    result.oob_suppression = include_oob_suppression && !config.oob_suppression.empty()
+                                 ? unavailable(ReceiverRequirementStatus::Incomplete)
+                                 : unavailable(ReceiverRequirementStatus::NotConfigured);
 
     const bool sweep_valid = std::isfinite(sweep_start_Hz) && std::isfinite(sweep_stop_Hz) &&
                              sweep_start_Hz <= sweep_stop_Hz;
@@ -864,6 +966,63 @@ ReceiverRequirementsEvaluation evaluateReceiverRequirements(
     if (config.snr)
         result.snr = assess(frequencies_Hz, snr_dB, config.band_start_Hz, config.band_stop_Hz,
                             config.snr->minimum_dB, std::nullopt, band_covered);
+
+    if (include_oob_suppression && !config.oob_suppression.empty() && config.gain) {
+        bool any = false;
+        bool missing = false;
+        bool failed = false;
+        double observed_min = 0.0;
+        double observed_max = 0.0;
+        const std::size_t aligned = std::min(frequencies_Hz.size(), gain_dB.size());
+        for (const auto &point : config.oob_suppression) {
+            ReceiverOOBSuppressionEvaluation evaluation;
+            evaluation.anchor = point.anchor;
+            evaluation.offset_Hz = point.offset_Hz;
+            evaluation.frequency_Hz = receiverOOBSuppressionFrequency_Hz(config, point);
+            evaluation.min_dB = point.min_dB;
+
+            // The budget grid carries the exact point; the 1 Hz tolerance only rescues a float
+            // round trip. Take the nearest sample, never a farther one that happens to sort first.
+            std::optional<double> observed;
+            double nearest_Hz = std::numeric_limits<double>::infinity();
+            for (std::size_t i = 0; i < aligned; ++i) {
+                if (!std::isfinite(frequencies_Hz[i]))
+                    continue;
+                const double distance_Hz = std::abs(frequencies_Hz[i] - evaluation.frequency_Hz);
+                if (distance_Hz > 1.0 || distance_Hz >= nearest_Hz)
+                    continue;
+                nearest_Hz = distance_Hz;
+                observed =
+                    std::isnan(gain_dB[i]) ? std::nullopt : std::optional<double>(gain_dB[i]);
+            }
+            if (!observed) {
+                evaluation.status = ReceiverRequirementStatus::Incomplete;
+                missing = true;
+            } else {
+                evaluation.observed_gain_dB = *observed;
+                evaluation.suppression_dB = config.gain->minimum_dB - *observed;
+                evaluation.status = *observed > config.gain->minimum_dB - point.min_dB
+                                        ? ReceiverRequirementStatus::Fail
+                                        : ReceiverRequirementStatus::Pass;
+                if (evaluation.status == ReceiverRequirementStatus::Fail)
+                    failed = true;
+                if (!any) {
+                    observed_min = observed_max = *evaluation.suppression_dB;
+                } else {
+                    observed_min = std::min(observed_min, *evaluation.suppression_dB);
+                    observed_max = std::max(observed_max, *evaluation.suppression_dB);
+                }
+                any = true;
+            }
+            result.oob_points.push_back(evaluation);
+        }
+        result.oob_suppression = {failed ? ReceiverRequirementStatus::Fail
+                                         : (!any || missing ? ReceiverRequirementStatus::Incomplete
+                                                            : ReceiverRequirementStatus::Pass),
+                                  any ? std::optional<double>(observed_min) : std::nullopt,
+                                  any ? std::optional<double>(observed_max) : std::nullopt};
+    }
+
     result.overall = aggregate(result);
     return result;
 }

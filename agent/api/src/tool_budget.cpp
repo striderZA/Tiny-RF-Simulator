@@ -182,7 +182,8 @@ Json verdictJson(const ReceiverRequirementsEvaluation &verdict) {
             {"noise_figure", metricJson(verdict.noise_figure)},
             {"output_power", metricJson(verdict.output_power)},
             {"iip3", metricJson(verdict.iip3)},
-            {"snr", metricJson(verdict.snr)}};
+            {"snr", metricJson(verdict.snr)},
+            {"oob_suppression", metricJson(verdict.oob_suppression)}};
 }
 
 Json reasonsJson(const RfBudgetReasonTable &reasons) {

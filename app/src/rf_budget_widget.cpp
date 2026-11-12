@@ -176,13 +176,19 @@ void drawSeriesCell(const RfBudgetSeries &series, std::size_t point,
         ImGui::SetTooltip("%s", reason.c_str());
 }
 
-// The same cell over the whole band: "low .. high" of the finite points, blank when none.
-void drawSeriesRangeCell(const RfBudgetSeries &series, const RfBudgetReasonTable &reasons) {
+// The same cell over the whole band: "low .. high" of the finite in-band points, blank when
+// none. Out-of-band suppression samples are not part of the in-band worst case.
+void drawSeriesRangeCell(const RfBudgetSeries &series, const RfBudgetReasonTable &reasons,
+                         const std::vector<double> &frequencies, double low_Hz, double high_Hz) {
     double low = 0.0;
     double high = 0.0;
     std::size_t high_index = 0;
     bool any = false;
-    for (std::size_t index = 0; index < series.values.size(); ++index) {
+    const std::size_t count = std::min(series.values.size(), frequencies.size());
+    for (std::size_t index = 0; index < count; ++index) {
+        const double frequency = frequencies[index];
+        if (!std::isfinite(frequency) || frequency < low_Hz || frequency > high_Hz)
+            continue;
         const double value = series.values[index];
         if (std::isnan(value))
             continue;
@@ -843,7 +849,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
 
     // The requirement verdicts and the aggregate, side by side, so the outcome is readable
     // before the numbers.
-    if (ImGui::BeginTable("budget_verdict", 6,
+    if (ImGui::BeginTable("budget_verdict", 7,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingFixedFit |
                               ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Overall");
@@ -852,6 +858,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         ImGui::TableSetupColumn("Output power");
         ImGui::TableSetupColumn("IIP3");
         ImGui::TableSetupColumn("SNR");
+        ImGui::TableSetupColumn("OOB");
         ImGui::TableHeadersRow();
         ImGui::TableNextRow();
         ImGui::TableNextColumn();
@@ -866,6 +873,8 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         rf_view_ui::metricStatus(cascade.verdict.iip3);
         ImGui::TableNextColumn();
         rf_view_ui::metricStatus(cascade.verdict.snr);
+        ImGui::TableNextColumn();
+        rf_view_ui::metricStatus(cascade.verdict.oob_suppression);
         ImGui::EndTable();
     }
 
@@ -885,6 +894,9 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         nf_max = session_config->nf_max_dB;
     }
     const float plot_height = std::clamp(ImGui::GetContentRegionAvail().y * 0.4f, 140.0f, 240.0f);
+    const double band_start_Hz = session_config ? session_config->band_start_Hz : 0.0;
+    const double band_stop_Hz =
+        session_config ? session_config->band_stop_Hz : std::numeric_limits<double>::infinity();
     if (ImGui::GetContentRegionAvail().x >= 760.0f) {
         // Side by side when there is room: two stacked plots cost twice the vertical space.
         if (ImGui::BeginTable("budget_sweep_plots", 2,
@@ -894,25 +906,27 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
             ImGui::TableNextColumn();
             drawSeriesPlot("Total gain over the band", "Gain (dB)", cascade.frequencies_Hz,
                            cascade.stages.back().cumulative_gain_dB, gain_min, gain_max,
-                           plot_height);
+                           band_start_Hz, band_stop_Hz, plot_height);
             ImGui::TableNextColumn();
             drawSeriesPlot("Total noise figure over the band", "NF (dB)", cascade.frequencies_Hz,
                            cascade.stages.back().cumulative_nf_dB, std::nullopt, nf_max,
-                           plot_height);
+                           band_start_Hz, band_stop_Hz, plot_height);
             ImGui::EndTable();
         }
     } else {
         drawSeriesPlot("Total gain over the band", "Gain (dB)", cascade.frequencies_Hz,
-                       cascade.stages.back().cumulative_gain_dB, gain_min, gain_max, plot_height);
+                       cascade.stages.back().cumulative_gain_dB, gain_min, gain_max, band_start_Hz,
+                       band_stop_Hz, plot_height);
         drawSeriesPlot("Total noise figure over the band", "NF (dB)", cascade.frequencies_Hz,
-                       cascade.stages.back().cumulative_nf_dB, std::nullopt, nf_max, plot_height);
+                       cascade.stages.back().cumulative_nf_dB, std::nullopt, nf_max, band_start_Hz,
+                       band_stop_Hz, plot_height);
     }
 
     // --- Band detail ----------------------------------------------------------------------------
     // Collapsible: the verdict and the sweep above are the answer, these tables are the support.
     ImGui::PushID(cascade.output.c_str());
     if (ImGui::CollapsingHeader("Worst case over the band", ImGuiTreeNodeFlags_DefaultOpen)) {
-        drawBandSummary(cascade, evaluation);
+        drawBandSummary(cascade, evaluation, band_start_Hz, band_stop_Hz);
     }
     if (ImGui::CollapsingHeader("At one frequency")) {
         drawPointDetail(cascade, evaluation);
@@ -921,7 +935,8 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
 }
 
 void RfBudgetWidget::drawBandSummary(const RfBudgetCascade &cascade,
-                                     const RfBudgetEvaluation &evaluation) const {
+                                     const RfBudgetEvaluation &evaluation, double band_start_Hz,
+                                     double band_stop_Hz) const {
     if (ImGui::BeginTable("budget_band_summary", 7,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX |
@@ -939,17 +954,23 @@ void RfBudgetWidget::drawBandSummary(const RfBudgetCascade &cascade,
             ImGui::TableNextColumn();
             ImGui::Text("%s (%d/%d)", stage.stage.c_str(), stage.input_port, stage.output_port);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.gain_dB, evaluation.reasons);
+            drawSeriesRangeCell(stage.gain_dB, evaluation.reasons, cascade.frequencies_Hz,
+                                band_start_Hz, band_stop_Hz);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.nf_dB, evaluation.reasons);
+            drawSeriesRangeCell(stage.nf_dB, evaluation.reasons, cascade.frequencies_Hz,
+                                band_start_Hz, band_stop_Hz);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.cumulative_gain_dB, evaluation.reasons);
+            drawSeriesRangeCell(stage.cumulative_gain_dB, evaluation.reasons,
+                                cascade.frequencies_Hz, band_start_Hz, band_stop_Hz);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.cumulative_nf_dB, evaluation.reasons);
+            drawSeriesRangeCell(stage.cumulative_nf_dB, evaluation.reasons, cascade.frequencies_Hz,
+                                band_start_Hz, band_stop_Hz);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.level_dBm, evaluation.reasons);
+            drawSeriesRangeCell(stage.level_dBm, evaluation.reasons, cascade.frequencies_Hz,
+                                band_start_Hz, band_stop_Hz);
             ImGui::TableNextColumn();
-            drawSeriesRangeCell(stage.p1db_headroom_dB, evaluation.reasons);
+            drawSeriesRangeCell(stage.p1db_headroom_dB, evaluation.reasons, cascade.frequencies_Hz,
+                                band_start_Hz, band_stop_Hz);
         }
         ImGui::EndTable();
     }
@@ -1010,18 +1031,26 @@ void RfBudgetWidget::drawPointDetail(const RfBudgetCascade &cascade,
 void RfBudgetWidget::drawSeriesPlot(const char *label, const char *y_label,
                                     const std::vector<double> &frequencies,
                                     const RfBudgetSeries &series, std::optional<double> low_limit,
-                                    std::optional<double> high_limit, float height) const {
-    const std::size_t count = std::min(frequencies.size(), series.values.size());
-    std::vector<double> values(count, std::numeric_limits<double>::quiet_NaN());
+                                    std::optional<double> high_limit, double band_start_Hz,
+                                    double band_stop_Hz, float height) const {
+    std::vector<double> band_frequencies;
+    std::vector<double> values;
     bool any_finite = false;
+    const std::size_t count = std::min(frequencies.size(), series.values.size());
     for (std::size_t index = 0; index < count; ++index) {
+        const double frequency = frequencies[index];
+        if (!std::isfinite(frequency) || frequency < band_start_Hz || frequency > band_stop_Hz)
+            continue;
+        band_frequencies.push_back(frequency);
         // NaN and infinities break the line: a stage that passes no signal has no curve there.
         if (std::isfinite(series.values[index])) {
-            values[index] = series.values[index];
+            values.push_back(series.values[index]);
             any_finite = true;
+        } else {
+            values.push_back(std::numeric_limits<double>::quiet_NaN());
         }
     }
-    if (count < 2 || !any_finite) {
+    if (band_frequencies.size() < 2 || !any_finite) {
         ImGui::TextDisabled("%s: no finite sweep values.", label);
         return;
     }
@@ -1039,7 +1068,8 @@ void RfBudgetWidget::drawSeriesPlot(const char *label, const char *y_label,
         const double limit = *high_limit;
         ImPlot::PlotInfLines("Requirement max", &limit, 1, limit_spec);
     }
-    ImPlot::PlotLine("Cumulative", frequencies.data(), values.data(), static_cast<int>(count));
+    ImPlot::PlotLine("Cumulative", band_frequencies.data(), values.data(),
+                     static_cast<int>(band_frequencies.size()));
     ImPlot::EndPlot();
 }
 

@@ -9,6 +9,7 @@
 
 #include "agent_api_test_support.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
@@ -21,6 +22,7 @@
 namespace {
 
 using Json = nlohmann::json;
+using Catch::Approx;
 
 ReceiverRequirementsConfig bandConfig() {
     ReceiverRequirementsConfig config;
@@ -215,6 +217,9 @@ TEST_CASE("budget_get reports verdicts per mode and output", "[agent_budget]") {
     CHECK(asNumber(verdict.at("gain").at("max")) == 14.0);
     CHECK(verdict.at("noise_figure").at("status") == "not_configured");
     CHECK(verdict.at("snr").at("status") == "not_configured");
+    CHECK(verdict.at("oob_suppression").at("status") == "not_configured");
+    CHECK(verdict.at("oob_suppression").at("min").is_null());
+    CHECK(verdict.at("oob_suppression").at("max").is_null());
     CHECK(modes.at(0).at("unreached").empty());
 
     CHECK(modes.at(1).at("mode_id") == 2);
@@ -279,6 +284,47 @@ TEST_CASE("budget_cascade writes infinities as strings and NaN as null", "[agent
     const auto &gain =
         get.structured.at("modes").at(0).at("outputs").at(0).at("verdict").at("gain");
     CHECK(gain.at("min") == "-Infinity");
+}
+
+TEST_CASE("budget_get encodes a failing out-of-band suppression point", "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.requirements->modes[0].config->oob_suppression = {
+        {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0}};
+    fixture.host.rf_budget = stageBudget();
+
+    const auto result = fixture.call("budget_get");
+    REQUIRE_FALSE(result.is_error);
+    const auto &verdict = result.structured.at("modes").at(0).at("outputs").at(0).at("verdict");
+    // The 14 dB stage sits 4 dB above gain_min_db, so 60 dB of suppression is not met.
+    REQUIRE(verdict.at("oob_suppression").at("status") == "fail");
+    CHECK(asNumber(verdict.at("oob_suppression").at("min")) == -4.0);
+    CHECK(asNumber(verdict.at("oob_suppression").at("max")) == -4.0);
+    CHECK(verdict.at("overall") == "fail");
+}
+
+TEST_CASE("budget_get passes a stopband out-of-band point as infinity", "[agent_budget]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    fixture.host.requirements->modes[0].config->oob_suppression = {
+        {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0}};
+    fixture.host.rf_budget = stopbandBudget();
+
+    const auto get = fixture.call("budget_get");
+    REQUIRE_FALSE(get.is_error);
+    const auto &verdict = get.structured.at("modes").at(0).at("outputs").at(0).at("verdict");
+    REQUIRE(verdict.at("oob_suppression").at("status") == "pass");
+    CHECK(verdict.at("oob_suppression").at("min") == "Infinity");
+    CHECK(verdict.at("oob_suppression").at("max") == "Infinity");
+
+    // The cascade grid is the in-band sweep plus the exact out-of-band point.
+    const auto cascade = fixture.call("budget_cascade", {{"mode_id", 1}, {"output", "RX"}});
+    REQUIRE_FALSE(cascade.is_error);
+    CHECK(cascade.structured.at("point_count") == 6);
+    const auto &frequencies = cascade.structured.at("frequencies_Hz");
+    REQUIRE(frequencies.size() == 6);
+    CHECK(asNumber(frequencies.at(0)) == Approx(0.995e9));
+    CHECK(asNumber(frequencies.at(1)) == Approx(1.0e9));
 }
 
 TEST_CASE("budget_get reports a library part whose engine params throw", "[agent_budget]") {

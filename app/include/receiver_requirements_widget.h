@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <vector>
 
 enum class ReceiverRequirementStatusTone { Neutral, PassGreen, FailRed };
 
@@ -22,12 +23,19 @@ class ReceiverRequirementsWidget {
     const std::string &error() const { return m_error; }
 
   private:
+    struct OobRow {
+        std::array<char, 128> offset{};
+        std::array<char, 128> min{};
+        int anchor = 0;
+    };
+
     void resetDraft(const ReceiverRequirementsSet &set);
     void fillModeName(const ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft makeDraft() const;
     ReceiverRequirementsDraft m_baseline;
     std::array<std::array<char, 128>, 15> m_buffers{};
     std::array<char, 128> m_mode_name{};
+    std::vector<OobRow> m_oob_rows;
     ReceiverRequirementsSet m_snapshot;
     std::size_t m_name_selected = 0;
     bool m_gain_enabled = false;

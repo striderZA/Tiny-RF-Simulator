@@ -52,19 +52,30 @@ void checkConfigKeys(const OrderedJson &config, const std::string &path) {
     checkMemberKeys(config, path,
                     {"band_start_hz", "band_stop_hz", "gain_min_db", "gain_max_db", "nf_max_db",
                      "output_power_min_dbm", "output_power_max_dbm", "iip3_min_dbm",
-                     "measurement_conditions", "snr"});
+                     "measurement_conditions", "oob_suppression", "snr"});
     const auto snr = config.find("snr");
     if (snr != config.end() && snr->is_object())
         checkMemberKeys(*snr, path + "/snr", {"min_db", "bandwidth_hz"});
     const auto conditions = config.find("measurement_conditions");
-    if (conditions == config.end() || !conditions->is_object())
+    if (conditions != config.end() && conditions->is_object()) {
+        const std::string conditions_path = path + "/measurement_conditions";
+        checkMemberKeys(*conditions, conditions_path, {"input_level_dbm", "iip3"});
+        const auto iip3 = conditions->find("iip3");
+        if (iip3 != conditions->end() && iip3->is_object())
+            checkMemberKeys(
+                *iip3, conditions_path + "/iip3",
+                {"tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"});
+    }
+    const auto oob = config.find("oob_suppression");
+    if (oob == config.end() || !oob->is_array())
         return;
-    const std::string conditions_path = path + "/measurement_conditions";
-    checkMemberKeys(*conditions, conditions_path, {"input_level_dbm", "iip3"});
-    const auto iip3 = conditions->find("iip3");
-    if (iip3 != conditions->end() && iip3->is_object())
-        checkMemberKeys(*iip3, conditions_path + "/iip3",
-                        {"tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"});
+    for (std::size_t index = 0; index < oob->size(); ++index) {
+        const OrderedJson &point = (*oob)[index];
+        if (!point.is_object())
+            continue;
+        checkMemberKeys(point, path + "/oob_suppression/" + std::to_string(index),
+                        {"anchor", "offset_hz", "min_db"});
+    }
 }
 
 // Walks every nested member of the requirements object, so a misspelled key is refused with its

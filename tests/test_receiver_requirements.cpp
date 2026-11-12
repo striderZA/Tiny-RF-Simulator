@@ -962,6 +962,223 @@ TEST_CASE("Requirements edits keep ids by id in format 3 and by name in format 2
     CHECK(error == "no mode has id 9; omit id to add a mode");
 }
 
+TEST_CASE("out-of-band suppression points round-trip through JSON",
+          "[receiver_requirements][json]") {
+    ReceiverRequirementsSet set;
+    ReceiverRequirementsConfig config = allConfigured();
+    config.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0},
+                              {ReceiverOOBSuppressionAnchor::BandStop, 2.5e6, 40.0}};
+    set.modes.push_back({"Wideband", config, 1});
+    set.next_mode_id = 2;
+
+    const auto encoded = receiverRequirementsToJson(set);
+    const auto &points = encoded.at("modes").at(0).at("config").at("oob_suppression");
+    REQUIRE(points.size() == 2);
+    CHECK(points[0].at("anchor") == "band_start");
+    CHECK(points[0].at("offset_hz") == -5.0e6);
+    CHECK(points[0].at("min_db") == 60.0);
+    CHECK(points[1].at("anchor") == "band_stop");
+    CHECK(receiverRequirementsFromJson(encoded) == set);
+}
+
+TEST_CASE("out-of-band suppression JSON requires a valid point shape",
+          "[receiver_requirements][json]") {
+    const auto decode = [](nlohmann::json points) {
+        return receiverRequirementsFromJson(nlohmann::json{
+            {"format", 3},
+            {"selected_mode", 0},
+            {"next_mode_id", 2},
+            {"modes", nlohmann::json::array({{{"id", 1},
+                                              {"name", "A"},
+                                              {"config",
+                                               {{"band_start_hz", 1.0e9},
+                                                {"band_stop_hz", 2.0e9},
+                                                {"gain_min_db", 10.0},
+                                                {"gain_max_db", 20.0},
+                                                {"oob_suppression", std::move(points)}}}}})}});
+    };
+
+    CHECK(decode(nlohmann::json::array({{{"anchor", "band_start"}}})).invalid_reason ==
+          "Mode 1: Out-of-band suppression point must carry anchor, offset_hz, and min_db.");
+    CHECK(decode(nlohmann::json::array(
+                     {nlohmann::json{{"anchor", "middle"}, {"offset_hz", 1.0}, {"min_db", 60.0}}}))
+              .invalid_reason ==
+          "Mode 1: Out-of-band suppression anchor must be 'band_start' or 'band_stop'.");
+    CHECK(decode(nlohmann::json::array({nlohmann::json{
+                     {"anchor", "band_start"}, {"offset_hz", "near"}, {"min_db", 60.0}}}))
+              .invalid_reason == "Mode 1: Out-of-band offset must be a number.");
+    CHECK(decode(nlohmann::json::array({nlohmann::json{
+                     {"anchor", "band_start"}, {"offset_hz", -5.0e6}, {"min_db", false}}}))
+              .invalid_reason == "Mode 1: Out-of-band suppression minimum must be a number.");
+}
+
+TEST_CASE("out-of-band suppression requires a point outside the band and a gain limit",
+          "[receiver_requirements]") {
+    const auto reason = [](const ReceiverOOBSuppressionPoint &point) {
+        auto config = allConfigured();
+        config.oob_suppression = {point};
+        return validateReceiverRequirementsConfig(config);
+    };
+
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, 0.0, 60.0}) ==
+          std::optional<std::string>(
+              "Out-of-band suppression frequency must lie outside the requirement band."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, 10.0e6, 60.0}) ==
+          std::optional<std::string>(
+              "Out-of-band suppression frequency must lie outside the requirement band."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStop, -10.0e6, 60.0}) ==
+          std::optional<std::string>(
+              "Out-of-band suppression frequency must lie outside the requirement band."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, -2.0e9, 60.0}) ==
+          std::optional<std::string>(
+              "Out-of-band suppression frequency must be finite and positive."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, std::numeric_limits<double>::quiet_NaN(),
+                  60.0}) == std::optional<std::string>("Out-of-band offset must be finite."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, -1.0}) ==
+          std::optional<std::string>("Out-of-band suppression must be finite and non-negative."));
+    CHECK(reason({ReceiverOOBSuppressionAnchor::BandStart, -5.0e6,
+                  std::numeric_limits<double>::quiet_NaN()}) ==
+          std::optional<std::string>("Out-of-band suppression must be finite and non-negative."));
+
+    auto without_gain = allConfigured();
+    without_gain.gain.reset();
+    without_gain.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0}};
+    CHECK(validateReceiverRequirementsConfig(without_gain) ==
+          std::optional<std::string>("Out-of-band suppression requires gain limits."));
+
+    auto too_many = allConfigured();
+    too_many.oob_suppression.assign(kMaxReceiverOOBSuppressionPoints + 1,
+                                    {ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0});
+    CHECK(validateReceiverRequirementsConfig(too_many) ==
+          std::optional<std::string>("At most 16 out-of-band suppression points are allowed."));
+
+    auto valid = allConfigured();
+    valid.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 60.0}};
+    CHECK_FALSE(validateReceiverRequirementsConfig(valid).has_value());
+}
+
+TEST_CASE("out-of-band suppression compares against the in-band gain minimum",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    config.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStart, -5.0e6, 120.0}};
+    state.config = config;
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    const std::vector<double> frequencies = {0.995e9, 1.0e9, 2.0e9};
+    const auto evaluate = [&](double oob_gain) {
+        return evaluateReceiverRequirements(state, 0.995e9, 2.0e9, frequencies,
+                                            {oob_gain, 15.0, 15.0}, {}, {}, {}, true);
+    };
+
+    // Threshold is gain_min - min_db = 10 - 120 = -110 dB. The gain maximum is irrelevant.
+    const auto at_limit = evaluate(-110.0);
+    REQUIRE(at_limit.oob_points.size() == 1);
+    CHECK(at_limit.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(at_limit.oob_points[0].frequency_Hz == 0.995e9);
+    CHECK(at_limit.oob_points[0].observed_gain_dB == Approx(-110.0));
+    CHECK(at_limit.oob_points[0].suppression_dB == Approx(120.0));
+    CHECK(at_limit.oob_suppression.status == ReceiverRequirementStatus::Pass);
+    CHECK(at_limit.oob_suppression.observed_min == Approx(120.0));
+    CHECK(at_limit.overall == ReceiverRequirementStatus::Pass);
+
+    const auto too_little = evaluate(-109.999);
+    CHECK(too_little.oob_points[0].status == ReceiverRequirementStatus::Fail);
+    CHECK(too_little.overall == ReceiverRequirementStatus::Fail);
+
+    // A value below the budget's -100 dB readout floor still fails on its true value.
+    const auto below_floor = evaluate(-105.0);
+    CHECK(below_floor.oob_points[0].status == ReceiverRequirementStatus::Fail);
+    CHECK(below_floor.oob_points[0].observed_gain_dB == Approx(-105.0));
+    CHECK(below_floor.overall == ReceiverRequirementStatus::Fail);
+
+    const auto deeper = evaluate(-115.0);
+    CHECK(deeper.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(deeper.oob_points[0].suppression_dB == Approx(125.0));
+
+    const auto missing = evaluate(nan);
+    CHECK(missing.oob_points[0].status == ReceiverRequirementStatus::Incomplete);
+    CHECK_FALSE(missing.oob_points[0].observed_gain_dB.has_value());
+    CHECK(missing.oob_points[0].suppression_dB.has_value() == false);
+    CHECK(missing.overall == ReceiverRequirementStatus::Incomplete);
+
+    const auto infinite = evaluate(-inf);
+    CHECK(infinite.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(infinite.oob_points[0].suppression_dB == inf);
+    CHECK(infinite.overall == ReceiverRequirementStatus::Pass);
+
+    // The live measurement path calls the evaluator without OOB and stays in-band-only.
+    const auto ignored = evaluateReceiverRequirements(state, 0.995e9, 2.0e9, frequencies,
+                                                      {-105.0, 15.0, 15.0}, {}, {}, {});
+    CHECK(ignored.oob_points.empty());
+    CHECK(ignored.oob_suppression.status == ReceiverRequirementStatus::NotConfigured);
+    CHECK(ignored.overall == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("out-of-band suppression reads its own sample near a band edge",
+          "[receiver_requirements]") {
+    ReceiverRequirementsState state;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e9;
+    config.band_stop_Hz = 2.0e9;
+    config.gain = ReceiverGainLimits{10.0, 20.0};
+    config.oob_suppression = {{ReceiverOOBSuppressionAnchor::BandStop, 0.5, 110.0}};
+    state.config = config;
+
+    // The in-band band-stop sample sorts first and lies inside the 1 Hz match tolerance; the
+    // point's own sample must win, so the verdict reads -105 dB instead of the edge's +15 dB.
+    const std::vector<double> frequencies = {2.0e9, 2.0e9 + 0.5};
+    const auto result = evaluateReceiverRequirements(state, 1.0e9, 2.0e9 + 0.5, frequencies,
+                                                     {15.0, -105.0}, {}, {}, {}, true);
+    REQUIRE(result.oob_points.size() == 1);
+    CHECK(result.oob_points[0].frequency_Hz == 2.0e9 + 0.5);
+    CHECK(result.oob_points[0].observed_gain_dB == Approx(-105.0));
+    CHECK(result.oob_points[0].status == ReceiverRequirementStatus::Pass);
+    CHECK(result.oob_suppression.status == ReceiverRequirementStatus::Pass);
+}
+
+TEST_CASE("out-of-band suppression draft parses rows and refuses malformed numbers",
+          "[receiver_requirements]") {
+    auto draft = gainDraft();
+    draft.oob_suppression = {{0, "-5000000", "60"}, {1, "2500000", "40"}};
+    std::string error;
+    const auto config = parseReceiverRequirementsDraft(draft, error);
+    REQUIRE(config.has_value());
+    REQUIRE(config->oob_suppression.size() == 2);
+    CHECK(config->oob_suppression[0].anchor == ReceiverOOBSuppressionAnchor::BandStart);
+    CHECK(config->oob_suppression[0].offset_Hz == -5.0e6);
+    CHECK(config->oob_suppression[0].min_dB == 60.0);
+    CHECK(config->oob_suppression[1].anchor == ReceiverOOBSuppressionAnchor::BandStop);
+    CHECK(config->oob_suppression[1].offset_Hz == 2.5e6);
+
+    draft.oob_suppression[0].offset_Hz = "x";
+    CHECK_FALSE(parseReceiverRequirementsDraft(draft, error).has_value());
+    CHECK(error == "Out-of-band offset must be a finite number.");
+
+    draft.oob_suppression[0].offset_Hz = "-5000000";
+    draft.oob_suppression[0].min_dB = "x";
+    CHECK_FALSE(parseReceiverRequirementsDraft(draft, error).has_value());
+    CHECK(error == "Out-of-band suppression must be a finite number.");
+
+    draft.oob_suppression[0].min_dB = "60";
+    ReceiverRequirementsState state;
+    state.config = allConfigured();
+    REQUIRE(applyReceiverRequirementsDraft(state, draft, error));
+    REQUIRE(state.config.has_value());
+    CHECK(state.config->oob_suppression == config->oob_suppression);
+
+    // A config without any limit, including OOB, clears the mode.
+    ReceiverRequirementsDraft empty;
+    empty.band_start_Hz = "1e9";
+    empty.band_stop_Hz = "2e9";
+    REQUIRE(applyReceiverRequirementsDraft(state, empty, error));
+    CHECK_FALSE(state.config.has_value());
+}
+
 TEST_CASE("ReceiverRequirements judges an SNR minimum over the band, worst case",
           "[receiver_requirements]") {
     ReceiverRequirementsConfig config;
@@ -975,7 +1192,7 @@ TEST_CASE("ReceiverRequirements judges an SNR minimum over the band, worst case"
     // The 0.9 GHz and 2.1 GHz points lie outside the band and do not count toward the verdict.
     const auto snrAt = [&](const std::vector<double> &snr_dB) {
         return evaluateReceiverRequirements(state, 0.9e9, 2.1e9, frequencies, unused, unused,
-                                            unused, unused, snr_dB);
+                                            unused, unused, false, snr_dB);
     };
 
     const auto pass = snrAt({50.0, 12.0, 11.0, 30.0, 40.0});
@@ -1008,7 +1225,7 @@ TEST_CASE("ReceiverRequirements fails the mode when only the SNR limit fails",
     const std::vector<double> gain(frequencies.size(), 15.0);
     const std::vector<double> unused(frequencies.size(), std::numeric_limits<double>::quiet_NaN());
     const auto result = evaluateReceiverRequirements(state, 1.0e9, 2.0e9, frequencies, gain, unused,
-                                                     unused, unused, {5.0, 5.0, 5.0});
+                                                     unused, unused, false, {5.0, 5.0, 5.0});
     CHECK(result.gain.status == ReceiverRequirementStatus::Pass);
     CHECK(result.snr.status == ReceiverRequirementStatus::Fail);
     CHECK(result.overall == ReceiverRequirementStatus::Fail);

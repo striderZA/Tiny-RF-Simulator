@@ -537,6 +537,24 @@ Json receiverSNRSchema() {
         {"min_db", "bandwidth_hz"});
 }
 
+Json receiverOOBSuppressionPointSchema() {
+    return objectSchema(
+        properties(
+            {{"anchor", enumSchema({"band_start", "band_stop"})},
+             {"offset_hz", numberSchema("Signed offset from the anchored edge, in Hz. The resolved "
+                                        "frequency must lie outside the band.")},
+             {"min_db", numberSchema("Suppression below gain_min_db, in dB; non-negative.")}}),
+        {"anchor", "offset_hz", "min_db"});
+}
+
+Json receiverOOBSuppressionSchema() {
+    Json result = arraySchema(receiverOOBSuppressionPointSchema(), 0, 16);
+    result["description"] =
+        "Out-of-band suppression points anchored to the band edges. Each requires gain limits; "
+        "the cascade gain at a point must be at least min_db below gain_min_db.";
+    return result;
+}
+
 Json receiverRequirementConfigSchema() {
     return objectSchema(
         properties(
@@ -551,7 +569,8 @@ Json receiverRequirementConfigSchema() {
               numberSchema("Maximum output power in dBm; sent with output_power_min_dbm.")},
              {"iip3_min_dbm", numberSchema("Minimum IIP3 in dBm.")},
              {"snr", receiverSNRSchema()},
-             {"measurement_conditions", receiverMeasurementConditionsSchema()}}),
+             {"measurement_conditions", receiverMeasurementConditionsSchema()},
+             {"oob_suppression", receiverOOBSuppressionSchema()}}),
         {"band_start_hz", "band_stop_hz"});
 }
 
@@ -607,13 +626,15 @@ Json budgetMetricSchema() {
 }
 
 Json budgetVerdictSchema() {
-    return objectSchema(properties({{"overall", budgetStatusSchema()},
-                                    {"gain", budgetMetricSchema()},
-                                    {"noise_figure", budgetMetricSchema()},
-                                    {"output_power", budgetMetricSchema()},
-                                    {"iip3", budgetMetricSchema()},
-                                    {"snr", budgetMetricSchema()}}),
-                        {"overall", "gain", "noise_figure", "output_power", "iip3", "snr"});
+    return objectSchema(
+        properties({{"overall", budgetStatusSchema()},
+                    {"gain", budgetMetricSchema()},
+                    {"noise_figure", budgetMetricSchema()},
+                    {"output_power", budgetMetricSchema()},
+                    {"iip3", budgetMetricSchema()},
+                    {"snr", budgetMetricSchema()},
+                    {"oob_suppression", budgetMetricSchema()}}),
+        {"overall", "gain", "noise_figure", "output_power", "iip3", "snr", "oob_suppression"});
 }
 
 Json budgetModeResultSchema() {
