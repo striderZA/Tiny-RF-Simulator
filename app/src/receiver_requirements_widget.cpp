@@ -28,6 +28,14 @@ void setNumber(std::array<char, 128> &buffer, double value) {
 }
 
 bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDraft &b) {
+    if (a.oob_suppression.size() != b.oob_suppression.size())
+        return false;
+    for (std::size_t i = 0; i < a.oob_suppression.size(); ++i) {
+        if (a.oob_suppression[i].anchor != b.oob_suppression[i].anchor ||
+            a.oob_suppression[i].offset_Hz != b.oob_suppression[i].offset_Hz ||
+            a.oob_suppression[i].min_dB != b.oob_suppression[i].min_dB)
+            return false;
+    }
     return a.band_start_Hz == b.band_start_Hz && a.band_stop_Hz == b.band_stop_Hz &&
            a.gain_min_dB == b.gain_min_dB && a.gain_max_dB == b.gain_max_dB &&
            a.nf_max_dB == b.nf_max_dB && a.output_power_min_dBm == b.output_power_min_dBm &&
@@ -167,7 +175,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
     if (budget->cascades.empty())
         ImGui::TextDisabled("No output is reached by this mode.");
     if (!budget->cascades.empty() &&
-        ImGui::BeginTable("budget_prediction", 6,
+        ImGui::BeginTable("budget_prediction", 7,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
         ImGui::TableSetupColumn("Output");
@@ -176,6 +184,7 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
         ImGui::TableSetupColumn("NF");
         ImGui::TableSetupColumn("Output power");
         ImGui::TableSetupColumn("IIP3");
+        ImGui::TableSetupColumn("OOB");
         ImGui::TableHeadersRow();
         for (const RfBudgetCascade &cascade : budget->cascades) {
             ImGui::TableNextRow();
@@ -192,6 +201,8 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
             rf_view_ui::metricStatus(cascade.verdict.output_power);
             ImGui::TableNextColumn();
             rf_view_ui::metricStatus(cascade.verdict.iip3);
+            ImGui::TableNextColumn();
+            rf_view_ui::metricStatus(cascade.verdict.oob_suppression);
         }
         ImGui::EndTable();
     }
@@ -240,6 +251,9 @@ ReceiverRequirementsDraft ReceiverRequirementsWidget::makeDraft() const {
     draft.output_power_enabled = m_output_power_enabled;
     draft.iip3_enabled = m_iip3_enabled;
     draft.input_level_dBm = m_buffers[12].data();
+    draft.oob_suppression.reserve(m_oob_rows.size());
+    for (const auto &row : m_oob_rows)
+        draft.oob_suppression.push_back({row.anchor, row.offset.data(), row.min.data()});
     return draft;
 }
 
@@ -255,6 +269,7 @@ void ReceiverRequirementsWidget::fillModeName(const ReceiverRequirementsSet &set
 void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) {
     for (auto &buffer : m_buffers)
         buffer.fill('\0');
+    m_oob_rows.clear();
     m_gain_enabled = m_nf_enabled = m_output_power_enabled = m_iip3_enabled = false;
     const auto state = selectedReceiverRequirementsState(set);
     if (state.config && state.invalid_reason.empty()) {
@@ -288,6 +303,13 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
         }
         if (config.measurement_conditions.input_level_dBm)
             setNumber(m_buffers[12], *config.measurement_conditions.input_level_dBm);
+        for (const auto &point : config.oob_suppression) {
+            OobRow row;
+            row.anchor = point.anchor == ReceiverOOBSuppressionAnchor::BandStart ? 0 : 1;
+            setNumber(row.offset, point.offset_Hz);
+            setNumber(row.min, point.min_dB);
+            m_oob_rows.push_back(row);
+        }
     }
     m_baseline = makeDraft();
     m_snapshot = set;
@@ -443,6 +465,34 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     drawNumberField(kLabels[2], m_buffers[2], kFieldWidth);
     drawNumberField(kLabels[3], m_buffers[3], kFieldWidth);
     ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
+    ImGui::EndDisabled();
+
+    rf_view_ui::sectionHeader("Out-of-band suppression");
+    ImGui::TextDisabled("Each point needs gain limits: the cascade gain at the point must be");
+    ImGui::TextDisabled("at least its minimum below the gain minimum.");
+    for (std::size_t row = 0; row < m_oob_rows.size(); ++row) {
+        ImGui::PushID(static_cast<int>(row));
+        const char *anchors[] = {"Band start", "Band stop"};
+        ImGui::SetNextItemWidth(130.0f);
+        ImGui::Combo("Anchor", &m_oob_rows[row].anchor, anchors, 2);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(kFieldWidth);
+        ImGui::InputText("Offset (Hz)", m_oob_rows[row].offset.data(),
+                         m_oob_rows[row].offset.size());
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::InputText("Min (dB)", m_oob_rows[row].min.data(), m_oob_rows[row].min.size());
+        ImGui::SameLine();
+        if (ImGui::Button("Remove point")) {
+            m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
+            ImGui::PopID();
+            break;
+        }
+        ImGui::PopID();
+    }
+    ImGui::BeginDisabled(m_oob_rows.size() >= kMaxReceiverOOBSuppressionPoints);
+    if (ImGui::Button("Add out-of-band point"))
+        m_oob_rows.push_back(OobRow{});
     ImGui::EndDisabled();
 
     rf_view_ui::sectionHeader("Noise figure");

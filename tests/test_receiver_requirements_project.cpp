@@ -731,3 +731,68 @@ TEST_CASE_METHOD(ImGuiFixture, "BOM-prefixed receiver overflow remains field-inv
     CHECK_FALSE(app.testReceiverRequirementsState().invalid_reason.empty());
     std::filesystem::remove(path);
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "Receiver requirements round-trip out-of-band suppression",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_oob_round_trip");
+    const json requirements = {
+        {"format", 3},
+        {"selected_mode", 0},
+        {"next_mode_id", 2},
+        {"modes", json::array({{{"id", 1},
+                                {"name", "Band 1"},
+                                {"config",
+                                 {{"band_start_hz", 1.0e9},
+                                  {"band_stop_hz", 2.0e9},
+                                  {"gain_min_db", 10.0},
+                                  {"gain_max_db", 20.0},
+                                  {"oob_suppression", json::array({{{"anchor", "band_start"},
+                                                                    {"offset_hz", -5.0e6},
+                                                                    {"min_db", 60.0}}})}}}}})}};
+    savedProjectWithRequirements(path, requirements);
+
+    RfSimulatorApp app;
+    app.loadProject(path);
+    const auto state = app.testReceiverRequirementsState();
+    REQUIRE(state.config.has_value());
+    REQUIRE(state.config->oob_suppression.size() == 1);
+    CHECK(state.config->oob_suppression[0].anchor == ReceiverOOBSuppressionAnchor::BandStart);
+    CHECK(state.config->oob_suppression[0].offset_Hz == -5.0e6);
+    CHECK(state.config->oob_suppression[0].min_dB == 60.0);
+
+    app.saveProject(path);
+    const json saved = loadJson(path);
+    const auto &saved_config = saved["receiver_requirements"]["modes"][0]["config"];
+    CHECK(saved_config["oob_suppression"] ==
+          json::array({{{"anchor", "band_start"}, {"offset_hz", -5.0e6}, {"min_db", 60.0}}}));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Malformed out-of-band suppression keeps the requirements invalid",
+                 "[receiver_requirements][project]") {
+    const auto path = tempPath("_oob_invalid");
+    savedProjectWithRequirements(
+        path,
+        {{"format", 3},
+         {"selected_mode", 0},
+         {"next_mode_id", 2},
+         {"modes", json::array({{{"id", 1},
+                                 {"name", "A"},
+                                 {"config",
+                                  {{"band_start_hz", 1.0e9},
+                                   {"band_stop_hz", 2.0e9},
+                                   {"gain_min_db", 10.0},
+                                   {"gain_max_db", 20.0},
+                                   {"oob_suppression", json::array({{{"anchor", "band_start"},
+                                                                     {"offset_hz", 10.0e6},
+                                                                     {"min_db", 60.0}}})}}}}})}});
+
+    RfSimulatorApp app;
+    app.loadProject(path);
+    CHECK(app.componentCount() == 2);
+    const auto state = app.testReceiverRequirementsState();
+    CHECK_FALSE(state.config.has_value());
+    CHECK(state.invalid_reason ==
+          "Mode 1: Out-of-band suppression frequency must lie outside the requirement band.");
+    std::filesystem::remove(path);
+}
