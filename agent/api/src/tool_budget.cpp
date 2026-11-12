@@ -181,7 +181,8 @@ Json verdictJson(const ReceiverRequirementsEvaluation &verdict) {
             {"gain", metricJson(verdict.gain)},
             {"noise_figure", metricJson(verdict.noise_figure)},
             {"output_power", metricJson(verdict.output_power)},
-            {"iip3", metricJson(verdict.iip3)}};
+            {"iip3", metricJson(verdict.iip3)},
+            {"snr", metricJson(verdict.snr)}};
 }
 
 Json reasonsJson(const RfBudgetReasonTable &reasons) {

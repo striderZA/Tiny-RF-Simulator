@@ -530,6 +530,13 @@ Json receiverMeasurementConditionsSchema() {
               {"tone_spacing_hz", "input_start_dbm", "input_stop_dbm", "input_step_db"})}}));
 }
 
+Json receiverSNRSchema() {
+    return objectSchema(
+        properties({{"min_db", numberSchema("Minimum output SNR in dB over the band.")},
+                    {"bandwidth_hz", numberSchema("Noise bandwidth in Hz for kTB; positive.")}}),
+        {"min_db", "bandwidth_hz"});
+}
+
 Json receiverRequirementConfigSchema() {
     return objectSchema(
         properties(
@@ -543,6 +550,7 @@ Json receiverRequirementConfigSchema() {
              {"output_power_max_dbm",
               numberSchema("Maximum output power in dBm; sent with output_power_min_dbm.")},
              {"iip3_min_dbm", numberSchema("Minimum IIP3 in dBm.")},
+             {"snr", receiverSNRSchema()},
              {"measurement_conditions", receiverMeasurementConditionsSchema()}}),
         {"band_start_hz", "band_stop_hz"});
 }
@@ -603,8 +611,9 @@ Json budgetVerdictSchema() {
                                     {"gain", budgetMetricSchema()},
                                     {"noise_figure", budgetMetricSchema()},
                                     {"output_power", budgetMetricSchema()},
-                                    {"iip3", budgetMetricSchema()}}),
-                        {"overall", "gain", "noise_figure", "output_power", "iip3"});
+                                    {"iip3", budgetMetricSchema()},
+                                    {"snr", budgetMetricSchema()}}),
+                        {"overall", "gain", "noise_figure", "output_power", "iip3", "snr"});
 }
 
 Json budgetModeResultSchema() {

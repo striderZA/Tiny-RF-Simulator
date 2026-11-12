@@ -308,3 +308,22 @@ TEST_CASE("requirements_edit refuses an unknown mode id without a checkpoint",
     CHECK(fixture.commands.revision() == before);
     CHECK(fixture.host.checkpoint_begins == 0);
 }
+
+TEST_CASE("requirements_edit stores an SNR limit and refuses a misspelled SNR key",
+          "[agent_requirements]") {
+    ApiFixture fixture;
+    fixture.host.requirements = twoModeSet();
+    auto next = twoModeSet();
+    next.modes[0].config->snr = ReceiverSNRLimit{10.0, 1.0e6};
+    const auto result = fixture.call(
+        "requirements_edit", {{"epoch", fixture.api.epoch()}, {"requirements", editPayload(next)}});
+    REQUIRE_FALSE(result.is_error);
+    CHECK(*fixture.host.requirements == next);
+
+    nlohmann::json misspelled = editPayload(next);
+    misspelled["modes"][0]["config"]["snr"] = {{"min_dB", 10.0}, {"bandwidth_hz", 1.0e6}};
+    const auto refused = fixture.call(
+        "requirements_edit", {{"epoch", fixture.api.epoch()}, {"requirements", misspelled}});
+    REQUIRE(refused.is_error);
+    CHECK(errorFor(refused).at("details").at("path") == "/requirements/modes/0/config/snr/min_dB");
+}

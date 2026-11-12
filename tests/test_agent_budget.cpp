@@ -214,6 +214,7 @@ TEST_CASE("budget_get reports verdicts per mode and output", "[agent_budget]") {
     CHECK(asNumber(verdict.at("gain").at("min")) == 14.0);
     CHECK(asNumber(verdict.at("gain").at("max")) == 14.0);
     CHECK(verdict.at("noise_figure").at("status") == "not_configured");
+    CHECK(verdict.at("snr").at("status") == "not_configured");
     CHECK(modes.at(0).at("unreached").empty());
 
     CHECK(modes.at(1).at("mode_id") == 2);
