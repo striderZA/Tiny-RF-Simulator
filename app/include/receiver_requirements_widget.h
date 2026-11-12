@@ -1,6 +1,7 @@
 #pragma once
 
 #include "receiver_requirements.h"
+#include "rf_budget_cascade.h"
 #include <array>
 #include <cstddef>
 #include <functional>
@@ -13,10 +14,11 @@ ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementS
 class ReceiverRequirementsWidget {
   public:
     void draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
-              const ReceiverRequirementsEvaluation &result);
+              const ReceiverRequirementsEvaluation &result,
+              const RfBudgetEvaluation &budget = RfBudgetEvaluation{});
 
     std::function<void()> onChange;
-    // The validation error shown under the mode controls; empty when there is none.
+    // The last Apply refusal, shown next to the Apply button; empty when there is none.
     const std::string &error() const { return m_error; }
 
   private:
@@ -33,7 +35,8 @@ class ReceiverRequirementsWidget {
     bool m_output_power_enabled = false;
     bool m_iip3_enabled = false;
     bool m_initialized = false;
-    std::string m_error;
+    std::string m_error;      // the last Apply refusal, shown next to Apply
+    std::string m_mode_error; // the last Add/Rename/Remove refusal, shown under the mode controls
     std::string m_notice;
     std::uint32_t m_remove_id = 0; // the mode the open Remove popup would delete
 };

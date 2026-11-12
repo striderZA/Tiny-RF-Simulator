@@ -642,3 +642,12 @@ RfBudgetEvaluation evaluateRfBudget(const RfBudget &budget,
     }
     return evaluation;
 }
+
+const RfBudgetModeResult *findRfBudgetModeResult(const RfBudgetEvaluation &evaluation,
+                                                 std::uint32_t mode_id) {
+    for (const auto &mode : evaluation.modes) {
+        if (mode.mode_id == mode_id)
+            return &mode;
+    }
+    return nullptr;
+}

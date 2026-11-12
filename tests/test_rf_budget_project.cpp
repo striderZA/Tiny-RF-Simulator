@@ -122,6 +122,35 @@ TEST_CASE_METHOD(ImGuiFixture, "RF budget round-trips through a project file",
     std::filesystem::remove(path);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "An incomplete budget survives a project round trip",
+                 "[rf_budget][project]") {
+    const auto path = tempPath("_partial");
+    RfBudget partial;
+    std::string error;
+    REQUIRE(addRfBudgetStage(partial, "amplifier", error));
+    REQUIRE(addRfBudgetStage(partial, "attenuator", error));
+    // No output yet: the model refuses it, but the table must survive a save and load.
+    REQUIRE(validateRfBudget(partial).has_value());
+    {
+        RfSimulatorApp app;
+        app.testRfBudget() = partial;
+        app.saveProject(path);
+    }
+    const json saved = loadJson(path);
+    REQUIRE(saved.contains("rf_budget"));
+    CHECK_FALSE(saved["rf_budget"].contains("invalid_configuration"));
+    {
+        RfSimulatorApp app;
+        app.loadProject(path);
+        CHECK(app.testRfBudget().invalid_reason.empty());
+        CHECK(app.testRfBudget() == partial);
+        // Saving again keeps the table instead of collapsing it to the invalid marker.
+        app.saveProject(path);
+        CHECK_FALSE(loadJson(path)["rf_budget"].contains("invalid_configuration"));
+    }
+    std::filesystem::remove(path);
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "A budget record keeps its mode id out of the next requirements id",
                  "[rf_budget][project]") {
     const auto path = tempPath("_id_floor");

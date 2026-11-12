@@ -416,6 +416,10 @@ AgentToolResult executeBudgetEditTool(const AgentApi &api, const AgentCall &call
     RfBudget decoded = rfBudgetFromJson(*found);
     if (!decoded.invalid_reason.empty())
         invalid("/budget", decoded.invalid_reason);
+    // Decoding accepts a partial table so the view can build one in steps; the agent contract
+    // still accepts only a complete budget.
+    if (auto reason = validateRfBudget(decoded))
+        invalid("/budget", *reason);
 
     const std::optional<RfBudget> current_budget = api.m_context.host.rfBudget();
     const std::optional<ReceiverRequirementsSet> requirements =

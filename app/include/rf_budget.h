@@ -80,7 +80,31 @@ std::optional<std::string> validateRfBudget(const RfBudget &budget);
 
 // Format-1 project JSON; an invalid budget writes the invalid marker instead.
 nlohmann::json rfBudgetToJson(const RfBudget &budget);
-// Never throws on shape: a malformed object decodes to `invalid_reason` only.
+// Never throws on shape: a malformed object decodes to `invalid_reason` only. A well-formed
+// table is returned intact even when `validateRfBudget()` refuses it, so a budget built in
+// steps survives a reload; callers that require completeness validate explicitly.
 RfBudget rfBudgetFromJson(const nlohmann::json &value);
 
 const RfBudgetModeRecord *findRfBudgetModeRecord(const RfBudget &budget, std::uint32_t mode_id);
+RfBudgetModeRecord *findRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id);
+
+// Table editing helpers. They keep references consistent: a stage rename rewrites every feed,
+// output, and mode override key; a removal drops the references to the removed stage. A refusal
+// leaves the budget unchanged and writes one sentence to `error`.
+bool addRfBudgetStage(RfBudget &budget, std::string_view type, std::string &error);
+bool renameRfBudgetStage(RfBudget &budget, std::size_t index, std::string_view name,
+                         std::string &error);
+bool removeRfBudgetStage(RfBudget &budget, std::size_t index);
+// Keeps the input feeds that still exist, drops feeds and outputs that name a vanished output
+// port, erases the stage's per-mode overrides, and clears params/part_number.
+void setRfBudgetStageType(RfBudget &budget, std::size_t index, std::string_view type);
+bool addRfBudgetOutput(RfBudget &budget, std::size_t stage_index, int port, std::string &error);
+bool renameRfBudgetOutput(RfBudget &budget, std::size_t index, std::string_view name,
+                          std::string &error);
+bool removeRfBudgetOutput(RfBudget &budget, std::size_t index);
+RfBudgetModeRecord &ensureRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id);
+void eraseRfBudgetModeRecord(RfBudget &budget, std::uint32_t mode_id);
+void setRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                         const std::string &key, double value);
+bool eraseRfBudgetOverride(RfBudget &budget, std::uint32_t mode_id, const std::string &stage,
+                           const std::string &key);
