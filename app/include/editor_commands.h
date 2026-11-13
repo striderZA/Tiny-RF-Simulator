@@ -80,9 +80,11 @@ class EditorCommands {
     bool endEditGroup(std::optional<std::string> label = std::nullopt);
 
     std::size_t undoCount() const { return m_history.undoCount(); }
-    // False when nothing is undoable or an edit group is open. A step that fails leaves the record
-    // consumed: undo and redo always advance the cursor, so the next commit records only its own
-    // change instead of re-recording a partial undo.
+    std::size_t redoCount() const { return m_history.redoCount(); }
+    // False when nothing is undoable, an edit group is open, or a delta step failed. A failed
+    // delta step keeps the record on the stack so a retry resumes where it stopped; the baseline
+    // is recaptured to the actual state, so the next commit records only the user's own change. A
+    // closing-sequence failure still consumes the record and returns true. Never throws.
     bool undo();
     bool redo();
     bool canUndo() const;
@@ -152,10 +154,13 @@ class EditorCommands {
     // baseline must still show where the group started.
     void refreshPositionBaseline();
     // Applies `forward` against one capture taken at its start; every changed key applies only
-    // where the current value equals the record's before side. A step that throws is logged and
-    // skipped; the closing sequence and the baseline recapture always run.
-    void apply(const EditorDelta &forward);
-    void applyDeltas(const EditorDelta &forward);
+    // where the current value equals the record's before side. Returns false when a delta step
+    // throws: the record then stays on the stack (a retry resumes where it stopped) and the
+    // baseline is recaptured to the actual state. Closing-sequence failures log their step, keep
+    // the record consumed, and still return true. Never throws.
+    bool apply(const EditorDelta &forward);
+    // One step of apply(); `step` names the step in progress for the failure log.
+    void applyDeltas(const EditorDelta &forward, std::string &step);
     bool commitNow(const std::string &label);
     ComponentAddResult finishComponentAdd(IComponentEngine *component,
                                           const nlohmann::ordered_json &params, std::string label);

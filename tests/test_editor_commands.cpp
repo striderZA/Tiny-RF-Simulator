@@ -371,20 +371,20 @@ namespace {
 // Stands in for the widget's imnodes positions: the command reads and writes through the hooks.
 struct PositionStore {
     std::map<int, LayoutPoint> positions;
-    // Set to make a write throw, so a test can fail an undo midway.
-    bool fail_writes = false;
+    // Number of writes that throw before they store, so a test can fail one undo/redo step once.
+    int fail_next_writes = 0;
 
     void attach(EditorCommands &commands) {
         commands.readNodePosition = [this](int node_id) { return positions[node_id]; };
         commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
-            if (fail_writes)
+            if (fail_next_writes-- > 0)
                 throw std::runtime_error("position write failed");
             positions[node_id] = position;
         };
         // Pan is zero here, so a node's editor position is its grid position.
         commands.readNodeGridPosition = [this](int node_id) { return positions[node_id]; };
         commands.writeNodeGridPosition = [this](int node_id, LayoutPoint grid_position) {
-            if (fail_writes)
+            if (fail_next_writes-- > 0)
                 throw std::runtime_error("position write failed");
             positions[node_id] = grid_position;
         };
@@ -1430,8 +1430,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Undoing a connect keeps a canvas-placed node in 
     CHECK(widget.editorPositionForSave(added).y == 96.0f);
 }
 
-TEST_CASE("A throw during undo recaptures the baseline and steps the history",
-          "[editor_commands][undo]") {
+TEST_CASE("A failed undo keeps its record and the next undo retries", "[editor_commands][undo]") {
     CommandFixture f;
     PositionStore store;
     store.attach(f.commands);
@@ -1444,21 +1443,56 @@ TEST_CASE("A throw during undo recaptures the baseline and steps the history",
     f.commands.createComponent(descriptor("amplifier").create);
     REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
     REQUIRE(f.commands.endEditGroup());
-    const std::size_t records = f.commands.undoCount();
+    const std::size_t undo_records = f.commands.undoCount();
+    const std::size_t redo_records = f.commands.redoCount();
 
-    store.fail_writes = true;
-    REQUIRE(f.commands.undo());
-    store.fail_writes = false;
-
-    // The record is consumed even though a step failed, so the next commit cannot re-record the
-    // partial undo.
-    REQUIRE(f.commands.undoCount() == records - 1);
+    store.fail_next_writes = 1;
+    REQUIRE_FALSE(f.commands.undo());
+    // The record stays on the stack, ready for a retry.
+    REQUIRE(f.commands.undoCount() == undo_records);
+    REQUIRE(f.commands.redoCount() == redo_records);
+    REQUIRE(f.commands.undoLabel() == "Add and move");
+    // The circuit is the partially undone state.
     REQUIRE(f.runtime.components().size() == 1);
+    REQUIRE(store.at(node, 50.0f, 20.0f));
+    // The baseline matches the actual circuit, so nothing else is re-recorded.
+    REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
+
+    // The retry resumes where it stopped and completes the record.
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.undoCount() == undo_records - 1);
+    REQUIRE(store.at(node, 10.0f, 20.0f));
     REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
 }
 
-TEST_CASE("A throw from the closing view sync still steps the undo history",
-          "[editor_commands][undo]") {
+TEST_CASE("A failed redo keeps its record and the next redo retries", "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    store.positions[node] = LayoutPoint{10.0f, 20.0f};
+    f.commands.beginEditGroup("Add and move");
+    f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
+    REQUIRE(f.commands.endEditGroup());
+    REQUIRE(f.commands.undo());
+    const std::size_t undo_records = f.commands.undoCount();
+
+    store.fail_next_writes = 1;
+    REQUIRE_FALSE(f.commands.redo());
+    REQUIRE(f.commands.undoCount() == undo_records);
+    REQUIRE(f.commands.redoLabel() == "Add and move");
+    REQUIRE(f.runtime.components().size() == 2);
+    REQUIRE(store.at(node, 10.0f, 20.0f));
+    REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.commands.undoCount() == undo_records + 1);
+    REQUIRE(store.at(node, 50.0f, 20.0f));
+    REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
+}
+
+TEST_CASE("A failed closing call during undo consumes the record", "[editor_commands][undo]") {
     CommandFixture f;
     f.commands.createComponent(descriptor("amplifier").create);
     const std::size_t records = f.commands.undoCount();
@@ -1473,8 +1507,7 @@ TEST_CASE("A throw from the closing view sync still steps the undo history",
     CHECK_FALSE(f.commands.commitEdit("Nothing"));
 }
 
-TEST_CASE("A throw from the closing view sync still steps the redo history",
-          "[editor_commands][undo]") {
+TEST_CASE("A failed closing call during redo consumes the record", "[editor_commands][undo]") {
     CommandFixture f;
     f.commands.createComponent(descriptor("amplifier").create);
     REQUIRE(f.commands.undo());

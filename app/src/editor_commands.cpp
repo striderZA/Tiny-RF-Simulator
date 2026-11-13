@@ -509,12 +509,9 @@ bool EditorCommands::undo() {
     const HistoryRecord *record = m_history.nextUndo();
     if (!record)
         return false;
-    try {
-        apply(reversed(record->delta));
-    } catch (...) {
-        // The record is consumed even on a failure, so the next commit records only its own change.
-        LOG_WARN("Undo skipped: applying the reversed delta");
-    }
+    // A failed delta step keeps the record, so the user can retry it.
+    if (!apply(reversed(record->delta)))
+        return false;
     m_history.stepBack();
     return true;
 }
@@ -525,11 +522,8 @@ bool EditorCommands::redo() {
     const HistoryRecord *record = m_history.nextRedo();
     if (!record)
         return false;
-    try {
-        apply(record->delta);
-    } catch (...) {
-        LOG_WARN("Redo skipped: applying the delta");
-    }
+    if (!apply(record->delta))
+        return false;
     m_history.stepForward();
     return true;
 }
@@ -541,7 +535,7 @@ void EditorCommands::clearHistory() {
     m_baseline = capture();
 }
 
-void EditorCommands::applyDeltas(const EditorDelta &forward) {
+void EditorCommands::applyDeltas(const EditorDelta &forward, std::string &step) {
     // One capture for the whole pass: each key applies only where the current value still equals
     // the record's before side, so a key edited since the record is left alone.
     const EditorSnapshot current = capture();
@@ -549,6 +543,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         return lhs.x == rhs.x && lhs.y == rhs.y;
     };
 
+    step = "disconnecting removed links";
     // 1. Links the record removed: found by pin pair, since a redo reallocates link ids.
     for (const LinkEnds &ends : forward.links_removed) {
         if (!current.links.contains(ends))
@@ -561,6 +556,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         }
     }
 
+    step = "removing ended groups";
     // 2. Groups the record ended. Removing the last members of a group drops it with them, so this
     // runs before the component removals.
     for (const auto &[group_id, change] : forward.groups) {
@@ -572,6 +568,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         (void)m_editor_actions.removeGroup(group_id);
     }
 
+    step = "removing components";
     // 3. Components the record removed.
     for (const auto &[node_id, change] : forward.components) {
         if (change.after || !change.before)
@@ -582,6 +579,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         (void)m_runtime.removeComponent(node_id);
     }
 
+    step = "restoring components";
     // 4. Components the record brings back, under their original component, node, and pin ids.
     for (const auto &[node_id, change] : forward.components) {
         if (!change.after || change.before || current.components.contains(node_id))
@@ -619,6 +617,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         (void)m_editor_actions.setNodePartNumber(node_id, state.part_number);
     }
 
+    step = "restoring component state";
     // 5. Changed component state. The runtime rewires nothing here, so links are untouched.
     for (const auto &[node_id, change] : forward.components) {
         if (!change.before || !change.after)
@@ -638,6 +637,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         }
     }
 
+    step = "reconnecting links";
     // 6. Links the record added.
     for (const LinkEnds &ends : forward.links_added) {
         if (current.links.contains(ends))
@@ -646,6 +646,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
             LOG_WARN("Undo could not reconnect pins %d -> %d", ends.start_pin, ends.end_pin);
     }
 
+    step = "restoring groups";
     // 7. Groups the record brings back, or restores to an earlier membership, name, or collapse.
     for (const auto &[group_id, change] : forward.groups) {
         if (!change.after)
@@ -684,12 +685,14 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
             (void)m_editor_actions.setGroupCollapsed(group_id, change.after->collapsed);
     }
 
+    step = "restoring probes";
     // 8. Probe slots, in recorded order.
     if (forward.probes && forward.probes->before && forward.probes->after &&
         current.probes == *forward.probes->before) {
         m_editor_actions.setProbePins(*forward.probes->after);
     }
 
+    step = "restoring positions";
     // 9. Grid positions of present nodes.
     if (writeNodeGridPosition) {
         for (const auto &[node_id, change] : forward.positions) {
@@ -706,6 +709,7 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         }
     }
 
+    step = "restoring app state";
     // 10. App-owned values. A value the record removed has no removal hook, so it is left as is.
     if (applyAppState) {
         for (const auto &[key, change] : forward.app_state) {
@@ -723,9 +727,9 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
     }
 }
 
-void EditorCommands::apply(const EditorDelta &forward) {
-    // Recaptures the baseline on every exit, including a throw from a closing call, so a partial
-    // undo is never recorded again by the following commit.
+bool EditorCommands::apply(const EditorDelta &forward) {
+    // Recaptures the baseline on every exit, including a failing step, so the following commit
+    // records only the user's own change.
     struct BaselineGuard {
         EditorCommands &commands;
         ~BaselineGuard() {
@@ -737,22 +741,27 @@ void EditorCommands::apply(const EditorDelta &forward) {
         }
     } baseline_guard{*this};
 
+    std::string step = "applying the delta";
     try {
-        applyDeltas(forward);
+        applyDeltas(forward, step);
+    } catch (const std::exception &error) {
+        LOG_WARN("Undo or redo stopped at '%s': %s", step.c_str(), error.what());
+        return false;
     } catch (...) {
-        LOG_WARN("Undo skipped: applying the delta");
+        LOG_WARN("Undo or redo stopped at '%s'", step.c_str());
+        return false;
     }
 
-    // Each closing step is guarded: one failure must neither skip the rest nor escape to undo() or
-    // redo(), which step the cursor only after this returns.
-    const auto guarded = [](const char *step, const auto &call) {
+    // Every key applied; a failing closing step is logged and the record stays consumed.
+    const auto guarded = [](const char *closing_step, const auto &call) {
         try {
             call();
         } catch (...) {
-            LOG_WARN("Undo skipped: %s", step);
+            LOG_WARN("Undo skipped: %s", closing_step);
         }
     };
     guarded("component view sync", [this]() { componentsChanged(); });
     guarded("group boundary rebuild", [this]() { m_editor_actions.topologyChanged(); });
     guarded("revision advance", [this]() { markModified(); });
+    return true;
 }
