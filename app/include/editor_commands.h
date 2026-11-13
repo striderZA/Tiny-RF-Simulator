@@ -80,7 +80,9 @@ class EditorCommands {
     bool endEditGroup(std::optional<std::string> label = std::nullopt);
 
     std::size_t undoCount() const { return m_history.undoCount(); }
-    // False when nothing is undoable or an edit group is open.
+    // False when nothing is undoable or an edit group is open. A step that fails leaves the record
+    // consumed: undo and redo always advance the cursor, so the next commit records only its own
+    // change instead of re-recording a partial undo.
     bool undo();
     bool redo();
     bool canUndo() const;
@@ -150,9 +152,10 @@ class EditorCommands {
     // baseline must still show where the group started.
     void refreshPositionBaseline();
     // Applies `forward` against one capture taken at its start; every changed key applies only
-    // where the current value equals the record's before side. Repairs ids, links, probes, groups,
-    // positions, and app state, then syncs views and recaptures the baseline.
+    // where the current value equals the record's before side. A step that throws is logged and
+    // skipped; the closing sequence and the baseline recapture always run.
     void apply(const EditorDelta &forward);
+    void applyDeltas(const EditorDelta &forward);
     bool commitNow(const std::string &label);
     ComponentAddResult finishComponentAdd(IComponentEngine *component,
                                           const nlohmann::ordered_json &params, std::string label);

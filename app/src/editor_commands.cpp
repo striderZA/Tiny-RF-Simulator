@@ -532,7 +532,7 @@ void EditorCommands::clearHistory() {
     m_baseline = capture();
 }
 
-void EditorCommands::apply(const EditorDelta &forward) {
+void EditorCommands::applyDeltas(const EditorDelta &forward) {
     // One capture for the whole pass: each key applies only where the current value still equals
     // the record's before side, so a key edited since the record is left alone.
     const EditorSnapshot current = capture();
@@ -589,8 +589,8 @@ void EditorCommands::apply(const EditorDelta &forward) {
         try {
             component = m_runtime.restoreComponent(descriptor->create, state.component_id, node_id,
                                                    state.input_pins, state.output_pins);
-        } catch (const std::exception &error) {
-            LOG_WARN("Undo could not restore component %d: %s", node_id, error.what());
+        } catch (...) {
+            LOG_WARN("Undo could not restore component %d", node_id);
             continue;
         }
         if (!component) {
@@ -599,8 +599,8 @@ void EditorCommands::apply(const EditorDelta &forward) {
         }
         try {
             component->deserialize(state.state);
-        } catch (const std::exception &error) {
-            LOG_WARN("Undo could not restore component %d state: %s", node_id, error.what());
+        } catch (...) {
+            LOG_WARN("Undo could not restore component %d state", node_id);
         }
         (void)m_editor_actions.setNodePartNumber(node_id, state.part_number);
     }
@@ -617,8 +617,8 @@ void EditorCommands::apply(const EditorDelta &forward) {
             continue;
         try {
             component->deserialize(change.after->state);
-        } catch (const std::exception &error) {
-            LOG_WARN("Undo skipped component %d state: %s", node_id, error.what());
+        } catch (...) {
+            LOG_WARN("Undo skipped component %d state", node_id);
         }
     }
 
@@ -641,8 +641,8 @@ void EditorCommands::apply(const EditorDelta &forward) {
             try {
                 if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
                     LOG_WARN("Undo could not restore group %d", group_id);
-            } catch (const std::exception &error) {
-                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
+            } catch (...) {
+                LOG_WARN("Undo could not restore group %d", group_id);
             }
             continue;
         }
@@ -653,8 +653,8 @@ void EditorCommands::apply(const EditorDelta &forward) {
             try {
                 if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
                     LOG_WARN("Undo could not restore group %d", group_id);
-            } catch (const std::exception &error) {
-                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
+            } catch (...) {
+                LOG_WARN("Undo could not restore group %d", group_id);
             }
             continue;
         }
@@ -701,9 +701,19 @@ void EditorCommands::apply(const EditorDelta &forward) {
             applyAppState(key, *change.after);
         }
     }
+}
 
+void EditorCommands::apply(const EditorDelta &forward) {
+    try {
+        applyDeltas(forward);
+    } catch (...) {
+        // A failing step must not escape, or undo/redo would never step the cursor and the baseline
+        // would keep describing the pre-undo circuit.
+        LOG_WARN("Undo or redo step failed; the circuit may be partially restored");
+    }
     componentsChanged();
     m_editor_actions.topologyChanged();
     markModified();
+    // Recaptured on every exit, so a later commit records only its own change.
     m_baseline = capture();
 }

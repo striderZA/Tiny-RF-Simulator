@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -370,15 +371,21 @@ namespace {
 // Stands in for the widget's imnodes positions: the command reads and writes through the hooks.
 struct PositionStore {
     std::map<int, LayoutPoint> positions;
+    // Set to make a write throw, so a test can fail an undo midway.
+    bool fail_writes = false;
 
     void attach(EditorCommands &commands) {
         commands.readNodePosition = [this](int node_id) { return positions[node_id]; };
         commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
+            if (fail_writes)
+                throw std::runtime_error("position write failed");
             positions[node_id] = position;
         };
         // Pan is zero here, so a node's editor position is its grid position.
         commands.readNodeGridPosition = [this](int node_id) { return positions[node_id]; };
         commands.writeNodeGridPosition = [this](int node_id, LayoutPoint grid_position) {
+            if (fail_writes)
+                throw std::runtime_error("position write failed");
             positions[node_id] = grid_position;
         };
     }
@@ -1421,4 +1428,31 @@ TEST_CASE_METHOD(ImGuiFixture, "Undoing a connect keeps a canvas-placed node in 
     CHECK(app.testGraphEngine().links().empty());
     CHECK(widget.editorPositionForSave(added).x == 240.0f);
     CHECK(widget.editorPositionForSave(added).y == 96.0f);
+}
+
+TEST_CASE("A throw during undo recaptures the baseline and steps the history",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    store.positions[node] = LayoutPoint{10.0f, 20.0f};
+
+    // One record that both adds a component and moves an existing node, so the undo changes the
+    // circuit before the position write fails.
+    f.commands.beginEditGroup("Add and move");
+    f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
+    REQUIRE(f.commands.endEditGroup());
+    const std::size_t records = f.commands.undoCount();
+
+    store.fail_writes = true;
+    REQUIRE(f.commands.undo());
+    store.fail_writes = false;
+
+    // The record is consumed even though a step failed, so the next commit cannot re-record the
+    // partial undo.
+    REQUIRE(f.commands.undoCount() == records - 1);
+    REQUIRE(f.runtime.components().size() == 1);
+    REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
 }
