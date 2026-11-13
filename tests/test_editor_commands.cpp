@@ -956,6 +956,61 @@ TEST_CASE("Undo and redo a component add", "[editor_commands][undo]") {
     CHECK(f.runtime.components().size() == 1);
 }
 
+TEST_CASE("Undoing a removal restores ids, links, probes, groups and position",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    auto *mixer = f.commands.createComponent(descriptor("mixer").create);
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(mixer != nullptr);
+
+    const int amplifier_id = amplifier->id();
+    const int amplifier_node = amplifier->graphNodeId();
+    const std::vector<int> inputs = nodePins(f.runtime, amplifier_node, false);
+    const std::vector<int> outputs = nodePins(f.runtime, amplifier_node, true);
+    const int generator_output = generator->outputPinId();
+    const int mixer_input = nodePins(f.runtime, mixer->graphNodeId(), false).front();
+    REQUIRE(f.commands.connect(generator_output, inputs.front()).has_value());
+    REQUIRE(f.commands.connect(outputs.front(), mixer_input).has_value());
+    REQUIRE(f.commands.addProbePin(outputs.front()));
+    const int group = f.commands.createGroup("Chain", {generator->graphNodeId(), amplifier_node});
+    REQUIRE(group != -1);
+    store.positions[amplifier_node] = LayoutPoint{240.0f, 96.0f};
+    // Start from a baseline that already holds the placed position.
+    f.commands.clearHistory();
+    const std::vector<int> probes_before = f.runtime.graph().probePins();
+
+    REQUIRE(f.commands.removeComponent(amplifier_node));
+    REQUIRE(f.commands.undoLabel() == "Remove Amplifier " + std::to_string(amplifier_id));
+    REQUIRE(findNode(f.runtime, amplifier_node) == nullptr);
+    REQUIRE(f.runtime.graph().groupById(group) == nullptr);
+
+    REQUIRE(f.commands.undo());
+    const IComponentEngine *restored = f.runtime.components().find(amplifier_node);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->id() == amplifier_id);
+    CHECK(restored->graphNodeId() == amplifier_node);
+    CHECK(nodePins(f.runtime, amplifier_node, false) == inputs);
+    CHECK(nodePins(f.runtime, amplifier_node, true) == outputs);
+    CHECK(hasLink(f.runtime, generator_output, inputs.front()));
+    CHECK(hasLink(f.runtime, outputs.front(), mixer_input));
+    CHECK(f.runtime.graph().probePins() == probes_before);
+    const Group *restored_group = f.runtime.graph().groupById(group);
+    REQUIRE(restored_group != nullptr);
+    CHECK(restored_group->member_node_ids ==
+          std::vector<int>{generator->graphNodeId(), amplifier_node});
+    CHECK(store.at(amplifier_node, 240.0f, 96.0f));
+
+    REQUIRE(f.commands.redo());
+    CHECK(findNode(f.runtime, amplifier_node) == nullptr);
+    CHECK(f.runtime.graph().groupById(group) == nullptr);
+    CHECK(f.runtime.graph().links().empty());
+}
+
 TEST_CASE("Undo and redo connect and disconnect", "[editor_commands][undo]") {
     CommandFixture f;
     auto *generator = f.commands.createComponent(descriptor("generator").create);
@@ -1002,6 +1057,99 @@ TEST_CASE("Undo a parameter edit restores the serialized state", "[editor_comman
 
     REQUIRE(f.commands.undo());
     REQUIRE(gainOf(f.runtime, node_id) == 0.0);
+}
+
+TEST_CASE("Undo and redo probe add and remove keep slot order", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    const int first = generator->outputPinId();
+    const int second = amplifier->outputPinId();
+
+    REQUIRE(f.commands.addProbePin(first));
+    REQUIRE(f.commands.addProbePin(second));
+    REQUIRE(f.commands.undoLabel() == "Add probe");
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{first, second});
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{first});
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().probePins().empty());
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{first, second});
+
+    // Removing the first probe leaves the second in slot 0; undo restores both slots.
+    REQUIRE(f.commands.removeProbePin(first));
+    REQUIRE(f.commands.undoLabel() == "Remove probe");
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{second});
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{first, second});
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.runtime.graph().probePins() == std::vector<int>{second});
+}
+
+TEST_CASE("Undo group create, rename, collapse and remove", "[editor_commands][undo]") {
+    CommandFixture f;
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    const int group = f.commands.createGroup("Chain", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(f.commands.undoLabel() == "Create group Chain");
+    REQUIRE(f.commands.renameGroup(group, "Front end"));
+    REQUIRE(f.commands.undoLabel() == "Rename group");
+    REQUIRE(f.commands.setGroupCollapsed(group, false));
+    REQUIRE(f.commands.undoLabel() == "Expand group");
+    REQUIRE(f.commands.removeGroup(group));
+    REQUIRE(f.commands.undoLabel() == "Remove group Front end");
+    REQUIRE(f.runtime.graph().groupById(group) == nullptr);
+
+    REQUIRE(f.commands.undo());
+    const Group *restored = f.runtime.graph().groupById(group);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->name == "Front end");
+    CHECK(restored->member_node_ids == std::vector<int>{a, b});
+    CHECK_FALSE(restored->collapsed);
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().groupById(group) != nullptr);
+    CHECK(f.runtime.graph().isGroupCollapsed(group));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().groupById(group) != nullptr);
+    CHECK(f.runtime.graph().groupById(group)->name == "Chain");
+
+    REQUIRE(f.commands.undo());
+    CHECK(f.runtime.graph().groupById(group) == nullptr);
+}
+
+TEST_CASE("Undo a group collapse restores members and their positions", "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int a = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
+    store.positions[a] = LayoutPoint{10.0f, 20.0f};
+    store.positions[b] = LayoutPoint{30.0f, 40.0f};
+    const int group = f.commands.createGroup("Front end", {a, b});
+    REQUIRE(group != -1);
+    REQUIRE(f.commands.setGroupCollapsed(group, false));
+
+    // Collapsing hides the members; the widget stops reporting their grid positions until they
+    // are drawn again.
+    store.positions.erase(a);
+    store.positions.erase(b);
+    REQUIRE(f.commands.setGroupCollapsed(group, true));
+    REQUIRE(f.runtime.graph().isGroupCollapsed(group));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE_FALSE(f.runtime.graph().isGroupCollapsed(group));
+    const Group *restored = f.runtime.graph().groupById(group);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->member_node_ids == std::vector<int>{a, b});
+    CHECK(store.at(a, 10.0f, 20.0f));
+    CHECK(store.at(b, 30.0f, 40.0f));
 }
 
 TEST_CASE("A new edit clears the redo stack", "[editor_commands][undo]") {
