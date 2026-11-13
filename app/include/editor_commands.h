@@ -143,6 +143,12 @@ class EditorCommands {
   private:
     void componentsChanged();
     EditorSnapshot capture() const;
+    // Grid positions only, for the position baseline refresh below.
+    std::map<int, LayoutPoint> capturePositions() const;
+    // Copies the current grid positions into the baseline at depth 0, so a node placed outside a
+    // command is not rolled back by the next record. A no-op inside an open edit group, whose
+    // baseline must still show where the group started.
+    void refreshPositionBaseline();
     // Applies `forward` against one capture taken at its start; every changed key applies only
     // where the current value equals the record's before side. Repairs ids, links, probes, groups,
     // positions, and app state, then syncs views and recaptures the baseline.

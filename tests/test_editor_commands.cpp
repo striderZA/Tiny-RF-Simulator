@@ -1136,10 +1136,8 @@ TEST_CASE("Undo a group collapse restores members and their positions", "[editor
     REQUIRE(group != -1);
     REQUIRE(f.commands.setGroupCollapsed(group, false));
 
-    // Collapsing hides the members; the widget stops reporting their grid positions until they
-    // are drawn again.
-    store.positions.erase(a);
-    store.positions.erase(b);
+    // Collapsing hides the members, but the widget keeps their cached grid positions, so the
+    // collapse itself changes no position.
     REQUIRE(f.commands.setGroupCollapsed(group, true));
     REQUIRE(f.runtime.graph().isGroupCollapsed(group));
 
@@ -1306,4 +1304,65 @@ TEST_CASE_METHOD(ImGuiFixture, "The seeded default circuit is not part of the fi
     // Undoing the connect must keep both seeded components and only drop the link.
     CHECK(app.componentCount() == 2);
     CHECK(app.testGraphEngine().links().empty());
+}
+
+TEST_CASE("A placed node keeps its position when an unrelated command is undone",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    const int node = amplifier->graphNodeId();
+    // Placed after its add, the way the canvas places a new node: no command records it yet.
+    store.positions[node] = LayoutPoint{240.0f, 96.0f};
+
+    REQUIRE(f.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    REQUIRE(f.commands.undo());
+
+    // The connect never touched the node, so undoing it must not move the node.
+    REQUIRE(f.runtime.components().size() == 2);
+    CHECK(store.at(node, 240.0f, 96.0f));
+}
+
+TEST_CASE("A grouped double move undoes to the position before the group",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    store.positions[node] = LayoutPoint{10.0f, 20.0f};
+
+    f.commands.beginEditGroup("Arrange twice");
+    REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
+    REQUIRE(f.commands.moveNodes({{node, {90.0f, 20.0f}}}).empty());
+    REQUIRE(f.commands.endEditGroup());
+    REQUIRE(store.at(node, 90.0f, 20.0f));
+
+    REQUIRE(f.commands.undo());
+    CHECK(store.at(node, 10.0f, 20.0f));
+}
+
+TEST_CASE("A node added and arranged inside a group is redone at its arranged position",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+
+    f.commands.beginEditGroup("Add and arrange");
+    auto *added = f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(added != nullptr);
+    const int node = added->graphNodeId();
+    REQUIRE(f.commands.moveNodes({{node, {120.0f, 40.0f}}}).empty());
+    REQUIRE(f.commands.endEditGroup());
+    REQUIRE(store.at(node, 120.0f, 40.0f));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.components().size() == 0);
+    // The widget stops reporting a removed node's position until it is drawn again.
+    store.positions.erase(node);
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.runtime.components().size() == 1);
+    CHECK(store.at(node, 120.0f, 40.0f));
 }

@@ -40,6 +40,7 @@ EditorCommands::EditorCommands(CircuitRuntime &runtime, GraphEditorActions &edit
 }
 
 IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factory) {
+    refreshPositionBaseline();
     IComponentEngine *component = m_runtime.createComponent(factory);
     if (!component)
         return nullptr;
@@ -71,6 +72,7 @@ ComponentAddResult EditorCommands::finishComponentAdd(IComponentEngine *componen
 
 ComponentAddResult EditorCommands::createComponentWithParams(const ComponentFactory &factory,
                                                              const nlohmann::ordered_json &params) {
+    refreshPositionBaseline();
     IComponentEngine *component = m_runtime.createComponent(factory);
     return finishComponentAdd(
         component, params,
@@ -80,6 +82,7 @@ ComponentAddResult EditorCommands::createComponentWithParams(const ComponentFact
 ComponentAddResult EditorCommands::addLibraryPart(ComponentLibrary &library,
                                                   const ComponentDefinition &definition,
                                                   const nlohmann::ordered_json &params) {
+    refreshPositionBaseline();
     return finishComponentAdd(library.instantiate(definition, m_runtime, m_editor_actions), params,
                               "Add " + definition.part_number);
 }
@@ -88,6 +91,7 @@ ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
                                                     const ComponentDefinition &definition,
                                                     int graph_node_id,
                                                     const std::vector<int> &instrument_pins) {
+    refreshPositionBaseline();
     ComponentSwapResult result;
     const IComponentEngine *predecessor = m_runtime.components().find(graph_node_id);
     const GraphNode *node = findGraphNode(m_runtime.graph(), graph_node_id);
@@ -226,6 +230,7 @@ ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
 
 ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,
                                                     const nlohmann::ordered_json &params) {
+    refreshPositionBaseline();
     IComponentEngine *engine = m_runtime.components().find(graph_node_id);
     if (!engine) {
         ParamWriteResult result;
@@ -245,6 +250,7 @@ ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,
 }
 
 bool EditorCommands::removeComponent(int graph_node_id) {
+    refreshPositionBaseline();
     // The label is read before the node is gone; the record needs it for its undo label.
     const std::string label = nodeLabel(m_runtime.graph(), graph_node_id);
     // The runtime rewires surviving inputs before returning; views are then
@@ -259,6 +265,7 @@ bool EditorCommands::removeComponent(int graph_node_id) {
 }
 
 void EditorCommands::componentsAdded() {
+    refreshPositionBaseline();
     componentsChanged();
     markModified();
     commitEdit("Add " + addedComponentLabel());
@@ -273,6 +280,7 @@ std::string EditorCommands::addedComponentLabel() const {
 }
 
 std::optional<int> EditorCommands::connect(int start_pin_id, int end_pin_id) {
+    refreshPositionBaseline();
     const auto link_id = m_runtime.connect(start_pin_id, end_pin_id);
     if (!link_id)
         return std::nullopt;
@@ -283,6 +291,7 @@ std::optional<int> EditorCommands::connect(int start_pin_id, int end_pin_id) {
 }
 
 bool EditorCommands::disconnect(int link_id) {
+    refreshPositionBaseline();
     if (!m_runtime.disconnect(link_id))
         return false;
     m_editor_actions.topologyChanged();
@@ -294,6 +303,7 @@ bool EditorCommands::disconnect(int link_id) {
 // Probe add and remove are project edits: they are saved in .rfsim, so an accepted one advances
 // the revision and the project reads as unsaved until the next save.
 bool EditorCommands::addProbePin(int pin_id) {
+    refreshPositionBaseline();
     if (!m_editor_actions.addProbePin(pin_id))
         return false;
     markModified();
@@ -302,6 +312,7 @@ bool EditorCommands::addProbePin(int pin_id) {
 }
 
 bool EditorCommands::removeProbePin(int pin_id) {
+    refreshPositionBaseline();
     if (!m_editor_actions.removeProbePin(pin_id))
         return false;
     markModified();
@@ -310,6 +321,7 @@ bool EditorCommands::removeProbePin(int pin_id) {
 }
 
 int EditorCommands::createGroup(std::string name, std::vector<int> member_node_ids) {
+    refreshPositionBaseline();
     const std::string label = name;
     const int group_id = m_editor_actions.createGroup(std::move(name), std::move(member_node_ids));
     if (group_id >= 0) {
@@ -320,6 +332,7 @@ int EditorCommands::createGroup(std::string name, std::vector<int> member_node_i
 }
 
 bool EditorCommands::removeGroup(int group_id) {
+    refreshPositionBaseline();
     const Group *group = m_runtime.graph().groupById(group_id);
     const std::string label = group ? group->name : std::string();
     if (!m_editor_actions.removeGroup(group_id))
@@ -330,6 +343,7 @@ bool EditorCommands::removeGroup(int group_id) {
 }
 
 bool EditorCommands::renameGroup(int group_id, std::string name) {
+    refreshPositionBaseline();
     if (!m_editor_actions.renameGroup(group_id, std::move(name)))
         return false;
     markModified();
@@ -338,6 +352,7 @@ bool EditorCommands::renameGroup(int group_id, std::string name) {
 }
 
 bool EditorCommands::setGroupCollapsed(int group_id, bool collapsed) {
+    refreshPositionBaseline();
     if (!m_editor_actions.setGroupCollapsed(group_id, collapsed))
         return false;
     markModified();
@@ -348,6 +363,7 @@ bool EditorCommands::setGroupCollapsed(int group_id, bool collapsed) {
 void EditorCommands::selectGroup(int group_id) { m_editor_actions.selectGroup(group_id); }
 
 std::string EditorCommands::moveNodes(const std::vector<LayoutMove> &moves) {
+    refreshPositionBaseline();
     // Validate the whole list before touching anything, so a refusal changes nothing.
     const NodeGraphEngine &graph = m_runtime.graph();
     std::set<int> listed;
@@ -373,12 +389,6 @@ std::string EditorCommands::moveNodes(const std::vector<LayoutMove> &moves) {
     }
     if (changed.empty())
         return {};
-
-    // A node placed outside a command (a drag the app has not committed, or a programmatic
-    // placement) belongs to this record's before side, so undo restores the positions this
-    // command replaced rather than the positions of the last commit.
-    if (readNodeGridPosition)
-        m_baseline.positions = capture().positions;
 
     for (const LayoutMove &move : changed)
         writeNodePosition(move.node_id, move.position);
@@ -419,13 +429,25 @@ EditorSnapshot EditorCommands::capture() const {
     for (const Group &group : m_runtime.graph().groups())
         snapshot.groups.emplace(group.id,
                                 GroupState{group.name, group.member_node_ids, group.collapsed});
-    if (readNodeGridPosition) {
-        for (const GraphNode &node : m_runtime.graph().nodes())
-            snapshot.positions.emplace(node.node_id, readNodeGridPosition(node.node_id));
-    }
+    snapshot.positions = capturePositions();
     if (captureAppState)
         snapshot.app_state = captureAppState();
     return snapshot;
+}
+
+std::map<int, LayoutPoint> EditorCommands::capturePositions() const {
+    std::map<int, LayoutPoint> positions;
+    if (!readNodeGridPosition)
+        return positions;
+    for (const GraphNode &node : m_runtime.graph().nodes())
+        positions.emplace(node.node_id, readNodeGridPosition(node.node_id));
+    return positions;
+}
+
+void EditorCommands::refreshPositionBaseline() {
+    if (m_group_depth > 0 || !readNodeGridPosition)
+        return;
+    m_baseline.positions = capturePositions();
 }
 
 bool EditorCommands::commitNow(const std::string &label) {
@@ -446,8 +468,10 @@ bool EditorCommands::commitEdit(const std::string &label) {
 }
 
 void EditorCommands::beginEditGroup(std::string label) {
-    if (m_group_depth == 0)
+    if (m_group_depth == 0) {
+        refreshPositionBaseline();
         m_group_label = std::move(label);
+    }
     ++m_group_depth;
 }
 
