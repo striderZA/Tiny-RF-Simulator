@@ -1,6 +1,7 @@
 #include "editor_history.h"
 #include <algorithm>
 #include <iterator>
+#include <utility>
 
 namespace {
 
@@ -78,3 +79,42 @@ EditorDelta reversed(const EditorDelta &delta) {
     reversed_delta.app_state = reverseChanges(delta.app_state);
     return reversed_delta;
 }
+
+void EditorHistory::push(HistoryRecord record) {
+    m_records.erase(m_records.begin() + static_cast<std::ptrdiff_t>(m_cursor), m_records.end());
+    m_records.push_back(std::move(record));
+    if (m_records.size() > kMaxRecords)
+        m_records.pop_front();
+    m_cursor = m_records.size();
+}
+
+const HistoryRecord *EditorHistory::nextUndo() const {
+    if (m_cursor == 0)
+        return nullptr;
+    return &m_records[m_cursor - 1];
+}
+
+const HistoryRecord *EditorHistory::nextRedo() const {
+    if (m_cursor >= m_records.size())
+        return nullptr;
+    return &m_records[m_cursor];
+}
+
+void EditorHistory::stepBack() {
+    if (m_cursor > 0)
+        --m_cursor;
+}
+
+void EditorHistory::stepForward() {
+    if (m_cursor < m_records.size())
+        ++m_cursor;
+}
+
+void EditorHistory::clear() {
+    m_records.clear();
+    m_cursor = 0;
+}
+
+std::size_t EditorHistory::undoCount() const { return m_cursor; }
+
+std::size_t EditorHistory::redoCount() const { return m_records.size() - m_cursor; }

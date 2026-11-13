@@ -2,6 +2,8 @@
 
 #include "node_layout.h"
 #include <compare>
+#include <cstddef>
+#include <deque>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -70,3 +72,33 @@ EditorDelta diffSnapshots(const EditorSnapshot &before, const EditorSnapshot &af
 
 // Swaps every before/after side and the removed/added link sets.
 EditorDelta reversed(const EditorDelta &delta);
+
+struct HistoryRecord {
+    std::string label;
+    EditorDelta delta;
+};
+
+// Linear undo history: a push after an undo drops the records that were redoable, and the oldest
+// record is evicted beyond kMaxRecords.
+class EditorHistory {
+  public:
+    static constexpr std::size_t kMaxRecords = 100;
+
+    // Clears redo; evicts the oldest record beyond kMaxRecords.
+    void push(HistoryRecord record);
+    // nullptr when empty.
+    const HistoryRecord *nextUndo() const;
+    const HistoryRecord *nextRedo() const;
+    // After a successful undo.
+    void stepBack();
+    // After a successful redo.
+    void stepForward();
+    void clear();
+    std::size_t undoCount() const;
+    std::size_t redoCount() const;
+
+  private:
+    std::deque<HistoryRecord> m_records;
+    // Number of records applied: the next undo is m_cursor - 1, the next redo is m_cursor.
+    std::size_t m_cursor = 0;
+};
