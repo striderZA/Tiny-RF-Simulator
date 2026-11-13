@@ -509,7 +509,12 @@ bool EditorCommands::undo() {
     const HistoryRecord *record = m_history.nextUndo();
     if (!record)
         return false;
-    apply(reversed(record->delta));
+    try {
+        apply(reversed(record->delta));
+    } catch (...) {
+        // The record is consumed even on a failure, so the next commit records only its own change.
+        LOG_WARN("Undo skipped: applying the reversed delta");
+    }
     m_history.stepBack();
     return true;
 }
@@ -520,7 +525,11 @@ bool EditorCommands::redo() {
     const HistoryRecord *record = m_history.nextRedo();
     if (!record)
         return false;
-    apply(record->delta);
+    try {
+        apply(record->delta);
+    } catch (...) {
+        LOG_WARN("Redo skipped: applying the delta");
+    }
     m_history.stepForward();
     return true;
 }
@@ -704,16 +713,35 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
 }
 
 void EditorCommands::apply(const EditorDelta &forward) {
+    // Recaptures the baseline on every exit, including a throw from a closing call, so a partial
+    // undo is never recorded again by the following commit.
+    struct BaselineGuard {
+        EditorCommands &commands;
+        ~BaselineGuard() {
+            try {
+                commands.m_baseline = commands.capture();
+            } catch (...) {
+                LOG_WARN("Undo skipped: recapturing the baseline");
+            }
+        }
+    } baseline_guard{*this};
+
     try {
         applyDeltas(forward);
     } catch (...) {
-        // A failing step must not escape, or undo/redo would never step the cursor and the baseline
-        // would keep describing the pre-undo circuit.
-        LOG_WARN("Undo or redo step failed; the circuit may be partially restored");
+        LOG_WARN("Undo skipped: applying the delta");
     }
-    componentsChanged();
-    m_editor_actions.topologyChanged();
-    markModified();
-    // Recaptured on every exit, so a later commit records only its own change.
-    m_baseline = capture();
+
+    // Each closing step is guarded: one failure must neither skip the rest nor escape to undo() or
+    // redo(), which step the cursor only after this returns.
+    const auto guarded = [](const char *step, const auto &call) {
+        try {
+            call();
+        } catch (...) {
+            LOG_WARN("Undo skipped: %s", step);
+        }
+    };
+    guarded("component view sync", [this]() { componentsChanged(); });
+    guarded("group boundary rebuild", [this]() { m_editor_actions.topologyChanged(); });
+    guarded("revision advance", [this]() { markModified(); });
 }

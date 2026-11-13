@@ -1456,3 +1456,35 @@ TEST_CASE("A throw during undo recaptures the baseline and steps the history",
     REQUIRE(f.runtime.components().size() == 1);
     REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
 }
+
+TEST_CASE("A throw from the closing view sync still steps the undo history",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    f.commands.createComponent(descriptor("amplifier").create);
+    const std::size_t records = f.commands.undoCount();
+    f.commands.onComponentsChanged = []() { throw std::runtime_error("view sync failed"); };
+
+    REQUIRE(f.commands.undo());
+    f.commands.onComponentsChanged = nullptr;
+
+    CHECK(f.commands.undoCount() == records - 1);
+    CHECK(f.runtime.components().size() == 0);
+    // The baseline was recaptured on the failed exit, so nothing is re-recorded.
+    CHECK_FALSE(f.commands.commitEdit("Nothing"));
+}
+
+TEST_CASE("A throw from the closing view sync still steps the redo history",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.canRedo());
+    f.commands.onComponentsChanged = []() { throw std::runtime_error("view sync failed"); };
+
+    REQUIRE(f.commands.redo());
+    f.commands.onComponentsChanged = nullptr;
+
+    CHECK(f.commands.undoCount() == 1);
+    CHECK(f.runtime.components().size() == 1);
+    CHECK_FALSE(f.commands.commitEdit("Nothing"));
+}
