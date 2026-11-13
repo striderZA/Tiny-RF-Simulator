@@ -509,3 +509,81 @@ TEST_CASE("reversed(diff(a, b)) equals diff(b, a)", "[editor_history][diff]") {
     CHECK(sameDelta(reversed(forward), diffSnapshots(after, before)));
     CHECK(sameDelta(reversed(reversed(forward)), forward));
 }
+
+TEST_CASE("push clears the redo stack", "[editor_history][stack]") {
+    EditorHistory history;
+    history.push(HistoryRecord{"A", EditorDelta{}});
+    history.push(HistoryRecord{"B", EditorDelta{}});
+    REQUIRE(history.undoCount() == 2);
+    REQUIRE(history.nextUndo() != nullptr);
+    REQUIRE(history.nextUndo()->label == "B");
+
+    history.stepBack();
+    REQUIRE(history.undoCount() == 1);
+    REQUIRE(history.redoCount() == 1);
+    REQUIRE(history.nextRedo() != nullptr);
+    CHECK(history.nextRedo()->label == "B");
+
+    history.push(HistoryRecord{"C", EditorDelta{}});
+
+    CHECK(history.redoCount() == 0);
+    CHECK(history.nextRedo() == nullptr);
+    REQUIRE(history.nextUndo() != nullptr);
+    CHECK(history.nextUndo()->label == "C");
+    // The record that was undone before the push is dropped with the rest of the redo stack.
+    CHECK(history.undoCount() == 2);
+    history.stepBack();
+    REQUIRE(history.nextUndo() != nullptr);
+    CHECK(history.nextUndo()->label == "A");
+}
+
+TEST_CASE("History keeps the newest 100 records", "[editor_history][stack]") {
+    EditorHistory history;
+    for (int index = 0; index <= 100; ++index)
+        history.push(HistoryRecord{std::to_string(index), EditorDelta{}});
+
+    CHECK(EditorHistory::kMaxRecords == 100);
+    CHECK(history.undoCount() == 100);
+    CHECK(history.redoCount() == 0);
+
+    std::string last_undo_label;
+    for (std::size_t step = 0; step < EditorHistory::kMaxRecords; ++step) {
+        REQUIRE(history.nextUndo() != nullptr);
+        last_undo_label = history.nextUndo()->label;
+        history.stepBack();
+    }
+
+    // Record "0" was evicted, so the oldest reachable record is "1".
+    CHECK(last_undo_label == "1");
+    CHECK(history.nextUndo() == nullptr);
+    CHECK(history.undoCount() == 0);
+    CHECK(history.redoCount() == 100);
+
+    // Redo walks back to the newest record and stops there.
+    history.stepForward();
+    REQUIRE(history.nextUndo() != nullptr);
+    CHECK(history.nextUndo()->label == "1");
+    CHECK(history.redoCount() == 99);
+}
+
+TEST_CASE("clear empties both stacks", "[editor_history][stack]") {
+    EditorHistory history;
+    history.push(HistoryRecord{"A", EditorDelta{}});
+    history.push(HistoryRecord{"B", EditorDelta{}});
+    history.stepBack();
+    REQUIRE(history.undoCount() == 1);
+    REQUIRE(history.redoCount() == 1);
+
+    history.clear();
+
+    CHECK(history.undoCount() == 0);
+    CHECK(history.redoCount() == 0);
+    CHECK(history.nextUndo() == nullptr);
+    CHECK(history.nextRedo() == nullptr);
+
+    // A push after clear starts a fresh history with no redo.
+    history.push(HistoryRecord{"C", EditorDelta{}});
+    CHECK(history.undoCount() == 1);
+    CHECK(history.redoCount() == 0);
+    CHECK(history.nextUndo()->label == "C");
+}
