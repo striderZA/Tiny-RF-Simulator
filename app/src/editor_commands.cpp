@@ -4,6 +4,7 @@
 #include "graph_link_policy.h"
 #include <algorithm>
 #include <set>
+#include <string>
 #include <utility>
 
 namespace {
@@ -16,24 +17,6 @@ ParamWriteResult applyParamsToNewComponent(IComponentEngine &component,
     return applyComponentParams(component, state_fields, params);
 }
 
-ComponentAddResult finishComponentAdd(CircuitRuntime &runtime, EditorCommands &commands,
-                                      IComponentEngine *component,
-                                      const nlohmann::ordered_json &params) {
-    ComponentAddResult result;
-    if (!component)
-        return result;
-
-    result.params = applyParamsToNewComponent(*component, params);
-    if (!result.params.ok()) {
-        (void)runtime.removeComponent(component->graphNodeId());
-        return result;
-    }
-
-    result.component = component;
-    commands.componentsAdded();
-    return result;
-}
-
 const GraphNode *findGraphNode(const NodeGraphEngine &graph, int node_id) {
     for (const GraphNode &node : graph.nodes()) {
         if (node.node_id == node_id)
@@ -42,10 +25,17 @@ const GraphNode *findGraphNode(const NodeGraphEngine &graph, int node_id) {
     return nullptr;
 }
 
+std::string nodeLabel(const NodeGraphEngine &graph, int node_id) {
+    const GraphNode *node = findGraphNode(graph, node_id);
+    return node ? node->label : std::string("component");
+}
+
 } // namespace
 
 EditorCommands::EditorCommands(CircuitRuntime &runtime, GraphEditorActions &editor_actions)
-    : m_runtime(runtime), m_editor_actions(editor_actions) {}
+    : m_runtime(runtime), m_editor_actions(editor_actions) {
+    m_baseline = capture();
+}
 
 IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factory) {
     IComponentEngine *component = m_runtime.createComponent(factory);
@@ -53,19 +43,43 @@ IComponentEngine *EditorCommands::createComponent(const ComponentFactory &factor
         return nullptr;
     componentsChanged();
     markModified();
+    commitEdit("Add " + nodeLabel(m_runtime.graph(), component->graphNodeId()));
     return component;
+}
+
+ComponentAddResult EditorCommands::finishComponentAdd(IComponentEngine *component,
+                                                      const nlohmann::ordered_json &params,
+                                                      std::string label) {
+    ComponentAddResult result;
+    if (!component)
+        return result;
+
+    result.params = applyParamsToNewComponent(*component, params);
+    if (!result.params.ok()) {
+        (void)m_runtime.removeComponent(component->graphNodeId());
+        return result;
+    }
+
+    result.component = component;
+    componentsChanged();
+    markModified();
+    commitEdit(label);
+    return result;
 }
 
 ComponentAddResult EditorCommands::createComponentWithParams(const ComponentFactory &factory,
                                                              const nlohmann::ordered_json &params) {
-    return finishComponentAdd(m_runtime, *this, m_runtime.createComponent(factory), params);
+    IComponentEngine *component = m_runtime.createComponent(factory);
+    return finishComponentAdd(
+        component, params,
+        "Add " + nodeLabel(m_runtime.graph(), component ? component->graphNodeId() : -1));
 }
 
 ComponentAddResult EditorCommands::addLibraryPart(ComponentLibrary &library,
                                                   const ComponentDefinition &definition,
                                                   const nlohmann::ordered_json &params) {
-    return finishComponentAdd(m_runtime, *this,
-                              library.instantiate(definition, m_runtime, m_editor_actions), params);
+    return finishComponentAdd(library.instantiate(definition, m_runtime, m_editor_actions), params,
+                              "Add " + definition.part_number);
 }
 
 ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
@@ -83,6 +97,7 @@ ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
     // Copy what the swap reads from the graph: instantiating the successor appends to the node
     // vector, which invalidates `node`.
     const int component_id = predecessor->id();
+    const std::string old_label = node->label;
     const std::vector<int> old_inputs = node->input_pin_ids;
     const std::vector<int> old_outputs = node->output_pin_ids;
     const auto owns = [&](int pin) {
@@ -198,6 +213,7 @@ ComponentSwapResult EditorCommands::swapLibraryPart(ComponentLibrary &library,
     componentsChanged();
     m_editor_actions.topologyChanged();
     markModified();
+    commitEdit("Change " + old_label + " to " + part);
 
     result.component = successor;
     result.old_graph_node_id = graph_node_id;
@@ -219,12 +235,16 @@ ParamWriteResult EditorCommands::setComponentParams(int graph_node_id,
     const auto *descriptor = ComponentTypeRegistry::instance().find(engine->type_name());
     const auto &state_fields = descriptor ? descriptor->state_fields : no_state_fields;
     ParamWriteResult result = applyComponentParams(*engine, state_fields, params);
-    if (result.status == ParamWriteStatus::Applied)
+    if (result.status == ParamWriteStatus::Applied) {
         markModified();
+        commitEdit("Edit " + nodeLabel(m_runtime.graph(), graph_node_id));
+    }
     return result;
 }
 
 bool EditorCommands::removeComponent(int graph_node_id) {
+    // The label is read before the node is gone; the record needs it for its undo label.
+    const std::string label = nodeLabel(m_runtime.graph(), graph_node_id);
     // The runtime rewires surviving inputs before returning; views are then
     // re-synchronized before any caller can draw them.
     if (!m_runtime.removeComponent(graph_node_id))
@@ -232,12 +252,22 @@ bool EditorCommands::removeComponent(int graph_node_id) {
     componentsChanged();
     m_editor_actions.topologyChanged();
     markModified();
+    commitEdit("Remove " + label);
     return true;
 }
 
 void EditorCommands::componentsAdded() {
     componentsChanged();
     markModified();
+    commitEdit("Add " + addedComponentLabel());
+}
+
+std::string EditorCommands::addedComponentLabel() const {
+    for (const GraphNode &node : m_runtime.graph().nodes()) {
+        if (!m_baseline.components.contains(node.node_id))
+            return node.label;
+    }
+    return "component";
 }
 
 std::optional<int> EditorCommands::connect(int start_pin_id, int end_pin_id) {
@@ -246,6 +276,7 @@ std::optional<int> EditorCommands::connect(int start_pin_id, int end_pin_id) {
         return std::nullopt;
     m_editor_actions.topologyChanged();
     markModified();
+    commitEdit("Connect");
     return link_id;
 }
 
@@ -254,6 +285,7 @@ bool EditorCommands::disconnect(int link_id) {
         return false;
     m_editor_actions.topologyChanged();
     markModified();
+    commitEdit("Disconnect");
     return true;
 }
 
@@ -263,6 +295,7 @@ bool EditorCommands::addProbePin(int pin_id) {
     if (!m_editor_actions.addProbePin(pin_id))
         return false;
     markModified();
+    commitEdit("Add probe");
     return true;
 }
 
@@ -270,20 +303,27 @@ bool EditorCommands::removeProbePin(int pin_id) {
     if (!m_editor_actions.removeProbePin(pin_id))
         return false;
     markModified();
+    commitEdit("Remove probe");
     return true;
 }
 
 int EditorCommands::createGroup(std::string name, std::vector<int> member_node_ids) {
+    const std::string label = name;
     const int group_id = m_editor_actions.createGroup(std::move(name), std::move(member_node_ids));
-    if (group_id >= 0)
+    if (group_id >= 0) {
         markModified();
+        commitEdit("Create group " + label);
+    }
     return group_id;
 }
 
 bool EditorCommands::removeGroup(int group_id) {
+    const Group *group = m_runtime.graph().groupById(group_id);
+    const std::string label = group ? group->name : std::string();
     if (!m_editor_actions.removeGroup(group_id))
         return false;
     markModified();
+    commitEdit("Remove group " + label);
     return true;
 }
 
@@ -291,6 +331,7 @@ bool EditorCommands::renameGroup(int group_id, std::string name) {
     if (!m_editor_actions.renameGroup(group_id, std::move(name)))
         return false;
     markModified();
+    commitEdit("Rename group");
     return true;
 }
 
@@ -298,6 +339,7 @@ bool EditorCommands::setGroupCollapsed(int group_id, bool collapsed) {
     if (!m_editor_actions.setGroupCollapsed(group_id, collapsed))
         return false;
     markModified();
+    commitEdit(collapsed ? "Collapse group" : "Expand group");
     return true;
 }
 
@@ -365,4 +407,75 @@ void EditorCommands::markClean() { m_clean_revision = m_revision; }
 void EditorCommands::componentsChanged() {
     if (onComponentsChanged)
         onComponentsChanged();
+}
+
+EditorSnapshot EditorCommands::capture() const {
+    EditorSnapshot snapshot;
+    for (IComponentEngine *component : m_runtime.components().all()) {
+        if (!component)
+            continue;
+        const int node_id = component->graphNodeId();
+        ComponentState state;
+        state.component_id = component->id();
+        state.type_name = std::string(component->type_name());
+        state.state = component->serialize();
+        if (const GraphNode *node = findGraphNode(m_runtime.graph(), node_id)) {
+            state.input_pins = node->input_pin_ids;
+            state.output_pins = node->output_pin_ids;
+            state.part_number = node->part_number;
+        }
+        snapshot.components.emplace(node_id, std::move(state));
+    }
+    for (const GraphLink &link : m_runtime.graph().links())
+        snapshot.links.insert(LinkEnds{link.start_pin_id, link.end_pin_id});
+    snapshot.probes = m_runtime.graph().probePins();
+    for (const Group &group : m_runtime.graph().groups())
+        snapshot.groups.emplace(group.id,
+                                GroupState{group.name, group.member_node_ids, group.collapsed});
+    if (readNodeGridPosition) {
+        for (const GraphNode &node : m_runtime.graph().nodes())
+            snapshot.positions.emplace(node.node_id, readNodeGridPosition(node.node_id));
+    }
+    if (captureAppState)
+        snapshot.app_state = captureAppState();
+    return snapshot;
+}
+
+bool EditorCommands::commitNow(const std::string &label) {
+    EditorSnapshot after = capture();
+    EditorDelta delta = diffSnapshots(m_baseline, after);
+    m_baseline = std::move(after);
+    if (delta.empty())
+        return false;
+    m_history.push(HistoryRecord{label, std::move(delta)});
+    return true;
+}
+
+bool EditorCommands::commitEdit(const std::string &label) {
+    // Inside a group the outermost endEditGroup() records the whole group as one delta.
+    if (m_group_depth > 0)
+        return false;
+    return commitNow(label);
+}
+
+void EditorCommands::beginEditGroup(std::string label) {
+    if (m_group_depth == 0)
+        m_group_label = std::move(label);
+    ++m_group_depth;
+}
+
+bool EditorCommands::endEditGroup(std::optional<std::string> label) {
+    if (m_group_depth == 0)
+        return false;
+    --m_group_depth;
+    if (m_group_depth > 0)
+        return false;
+    return commitNow(label.value_or(m_group_label));
+}
+
+void EditorCommands::clearHistory() {
+    m_history.clear();
+    m_group_depth = 0;
+    m_group_label.clear();
+    m_baseline = capture();
 }

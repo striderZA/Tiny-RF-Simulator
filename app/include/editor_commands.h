@@ -2,10 +2,12 @@
 
 #include "circuit_runtime.h"
 #include "component_params.h"
+#include "editor_history.h"
 #include "node_layout.h"
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -53,10 +55,31 @@ class EditorCommands {
     // Runs after every change to the set of live components.
     std::function<void()> onComponentsChanged;
 
-    // Editor-space node positions for moveNodes() and undoLayout(). The app wires them to the
-    // widget, which owns the imnodes positions; both must be set before a layout command runs.
+    // Editor-space node positions for moveNodes(). The app wires them to the widget, which owns
+    // the imnodes positions; both must be set before a layout command runs.
     std::function<LayoutPoint(int node_id)> readNodePosition;
     std::function<void(int node_id, LayoutPoint position)> writeNodePosition;
+
+    // Grid-space node positions for undo snapshots (pan-independent). The app wires them to the
+    // widget.
+    std::function<LayoutPoint(int node_id)> readNodeGridPosition;
+    std::function<void(int node_id, LayoutPoint grid_position)> writeNodeGridPosition;
+    // App-owned undoable values (Task 5 keys: "receiver_requirements", "rf_budget", "na_points").
+    std::function<std::map<std::string, nlohmann::json>()> captureAppState;
+    std::function<void(const std::string &key, const nlohmann::json &value)> applyAppState;
+
+    // Records the change since the last commit as one undo record. Pushes only when the snapshot
+    // differs from the baseline; inside an edit group every commit defers to the outermost group.
+    // Returns true when a record was pushed.
+    bool commitEdit(const std::string &label);
+    // Nests: commands that commit inside a group are recorded by the outermost endEditGroup().
+    void beginEditGroup(std::string label);
+    // At depth 0: commits with `label`, or the outermost group's label when it is absent. Returns
+    // true when a record was pushed.
+    bool endEditGroup(std::optional<std::string> label = std::nullopt);
+
+    // Drops the records and group depth, and recaptures the baseline.
+    void clearHistory();
 
     IComponentEngine *createComponent(const ComponentFactory &factory);
     ComponentAddResult createComponentWithParams(const ComponentFactory &factory,
@@ -111,6 +134,11 @@ class EditorCommands {
 
   private:
     void componentsChanged();
+    EditorSnapshot capture() const;
+    bool commitNow(const std::string &label);
+    ComponentAddResult finishComponentAdd(IComponentEngine *component,
+                                          const nlohmann::ordered_json &params, std::string label);
+    std::string addedComponentLabel() const;
 
     CircuitRuntime &m_runtime;
     GraphEditorActions &m_editor_actions;
@@ -120,4 +148,9 @@ class EditorCommands {
     // The record is valid only while the revision still matches.
     std::vector<LayoutMove> m_layout_undo;
     std::uint64_t m_layout_undo_revision = 0;
+    EditorSnapshot m_baseline;
+    EditorHistory m_history;
+    // The outermost open group's label; commits are deferred while m_group_depth is above zero.
+    std::string m_group_label;
+    int m_group_depth = 0;
 };
