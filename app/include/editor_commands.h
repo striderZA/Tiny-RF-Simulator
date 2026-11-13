@@ -130,12 +130,10 @@ class EditorCommands {
     // accepted without advancing the revision. Refused, with nothing changed, when a listed node is
     // unknown or belongs to a collapsed subcircuit.
     std::string moveNodes(const std::vector<LayoutMove> &moves);
-    // Restores the positions the last accepted moveNodes() replaced. Available only while no other
-    // project edit has been accepted since, so it never overwrites a later edit.
-    bool undoLayout();
-    bool canUndoLayout() const;
-    // Drops the undo record. Called when the project is replaced, since node ids are reused.
-    void clearLayoutUndo() { m_layout_undo.clear(); }
+    // Task 4 forwarders so the app keeps building until Task 5 removes them with their callers.
+    bool undoLayout() { return undo(); }
+    bool canUndoLayout() const { return canUndo(); }
+    void clearLayoutUndo() { clearHistory(); }
 
     void markModified();
     void markClean();
@@ -158,10 +156,6 @@ class EditorCommands {
     GraphEditorActions &m_editor_actions;
     std::uint64_t m_revision = 0;
     std::uint64_t m_clean_revision = 0;
-    // Positions the last accepted layout command replaced, and the revision it was accepted at.
-    // The record is valid only while the revision still matches.
-    std::vector<LayoutMove> m_layout_undo;
-    std::uint64_t m_layout_undo_revision = 0;
     EditorSnapshot m_baseline;
     EditorHistory m_history;
     // The outermost open group's label; commits are deferred while m_group_depth is above zero.

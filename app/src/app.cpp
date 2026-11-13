@@ -113,6 +113,14 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_editor_commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
         m_graph_widget->setNodeEditorSpacePosition(node_id, ImVec2(position.x, position.y));
     };
+    // Interim for editor-safety Task 4: grid positions alias editor positions until Task 5 wires
+    // gridPositionForSave/setNodeGridPosition. Pan is not compensated; Task 5 replaces this.
+    m_editor_commands.readNodeGridPosition = [this](int node_id) {
+        return m_editor_commands.readNodePosition(node_id);
+    };
+    m_editor_commands.writeNodeGridPosition = [this](int node_id, LayoutPoint position) {
+        m_editor_commands.writeNodePosition(node_id, position);
+    };
     m_serializer = std::make_unique<ProjectSerializer>(
         m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
         m_receiver_requirements, m_rf_budget, m_show_log, m_show_spectrum, m_show_properties,

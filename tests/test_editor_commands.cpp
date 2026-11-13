@@ -11,6 +11,7 @@
 #include "session_state.h"
 #include "test_temp_paths.h"
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -375,6 +376,11 @@ struct PositionStore {
         commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
             positions[node_id] = position;
         };
+        // Pan is zero here, so a node's editor position is its grid position.
+        commands.readNodeGridPosition = [this](int node_id) { return positions[node_id]; };
+        commands.writeNodeGridPosition = [this](int node_id, LayoutPoint grid_position) {
+            positions[node_id] = grid_position;
+        };
     }
 
     bool at(int node_id, float x, float y) const {
@@ -394,24 +400,33 @@ TEST_CASE("moveNodes places every listed node as one revision and one-step undo 
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    // Start from a baseline that already holds the placed positions.
+    f.commands.clearHistory();
 
     const std::uint64_t before = f.commands.revision();
+    const std::size_t records_before = f.commands.undoCount();
     REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
     REQUIRE(store.at(a, 50.0f, 20.0f));
     REQUIRE(store.at(b, 50.0f, 40.0f));
     REQUIRE(f.commands.revision() == before + 1);
-    REQUIRE(f.commands.canUndoLayout());
+    REQUIRE(f.commands.undoCount() == records_before + 1);
+    REQUIRE(f.commands.canUndo());
+    REQUIRE(f.commands.undoLabel() == "Arrange nodes");
 
-    REQUIRE(f.commands.undoLayout());
+    REQUIRE(f.commands.undo());
     REQUIRE(store.at(a, 10.0f, 20.0f));
     REQUIRE(store.at(b, 300.0f, 40.0f));
     REQUIRE(f.commands.revision() == before + 2);
 
-    SECTION("undo is one step: a second undo has nothing to restore") {
-        REQUIRE_FALSE(f.commands.canUndoLayout());
-        REQUIRE_FALSE(f.commands.undoLayout());
-        REQUIRE(store.at(a, 10.0f, 20.0f));
-    }
+    // Undo is one step: the layout record is consumed, and the earlier component adds are next.
+    REQUIRE(f.commands.undoCount() == records_before);
+    REQUIRE(f.commands.undoLabel() != "Arrange nodes");
+    REQUIRE(f.commands.redoLabel() == "Arrange nodes");
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(store.at(a, 50.0f, 20.0f));
+    REQUIRE(store.at(b, 50.0f, 40.0f));
+    REQUIRE(f.commands.undoLabel() == "Arrange nodes");
 }
 
 TEST_CASE("moveNodes refuses a node inside a collapsed subcircuit and changes nothing",
@@ -427,6 +442,7 @@ TEST_CASE("moveNodes refuses a node inside a collapsed subcircuit and changes no
     REQUIRE(group != -1);
     REQUIRE(f.commands.setGroupCollapsed(group, true));
     const std::uint64_t revision = f.commands.revision();
+    const std::size_t records = f.commands.undoCount();
 
     const std::string error = f.commands.moveNodes({{a, {99.0f, 99.0f}}, {b, {99.0f, 40.0f}}});
     REQUIRE_FALSE(error.empty());
@@ -434,7 +450,7 @@ TEST_CASE("moveNodes refuses a node inside a collapsed subcircuit and changes no
     REQUIRE(store.at(a, 10.0f, 20.0f));
     REQUIRE(store.at(b, 300.0f, 40.0f));
     REQUIRE(f.commands.revision() == revision);
-    REQUIRE_FALSE(f.commands.canUndoLayout());
+    REQUIRE(f.commands.undoCount() == records);
 }
 
 TEST_CASE("a layout that moves nothing leaves the revision and the undo record alone",
@@ -446,17 +462,32 @@ TEST_CASE("a layout that moves nothing leaves the revision and the undo record a
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    f.commands.clearHistory();
     REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
     const std::uint64_t revision = f.commands.revision();
+    const std::size_t records = f.commands.undoCount();
 
-    REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
-    REQUIRE(f.commands.revision() == revision);
-    REQUIRE(f.commands.canUndoLayout());
-    REQUIRE(f.commands.undoLayout());
-    REQUIRE(store.at(a, 10.0f, 20.0f));
+    SECTION("the earlier layout stays undoable and the no-op adds no record") {
+        REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+        REQUIRE(f.commands.revision() == revision);
+        REQUIRE(f.commands.undoCount() == records);
+        REQUIRE(f.commands.undoLabel() == "Arrange nodes");
+        REQUIRE(f.commands.undo());
+        REQUIRE(store.at(a, 10.0f, 20.0f));
+        REQUIRE(store.at(b, 300.0f, 40.0f));
+    }
+
+    SECTION("a no-op layout from an empty history leaves nothing to undo") {
+        f.commands.clearHistory();
+        REQUIRE_FALSE(f.commands.canUndo());
+
+        REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
+        REQUIRE(f.commands.revision() == revision);
+        REQUIRE_FALSE(f.commands.canUndo());
+    }
 }
 
-TEST_CASE("a later project edit makes the layout undo unavailable", "[editor_commands][layout]") {
+TEST_CASE("a later project edit is undone before the layout", "[editor_commands][layout]") {
     CommandFixture f;
     PositionStore store;
     store.attach(f.commands);
@@ -464,12 +495,25 @@ TEST_CASE("a later project edit makes the layout undo unavailable", "[editor_com
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
+    f.commands.clearHistory();
     REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
 
-    f.commands.createComponent(descriptor("generator").create);
-    REQUIRE_FALSE(f.commands.canUndoLayout());
-    REQUIRE_FALSE(f.commands.undoLayout());
+    auto *later = f.commands.createComponent(descriptor("generator").create);
+    REQUIRE(later != nullptr);
+    const int later_node = later->graphNodeId();
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.undoLabel() == "Arrange nodes");
+    REQUIRE(f.runtime.components().size() == 2);
+    bool later_present = false;
+    for (const GraphNode &node : f.runtime.graph().nodes())
+        later_present = later_present || node.node_id == later_node;
+    REQUIRE_FALSE(later_present);
     REQUIRE(store.at(a, 50.0f, 20.0f));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(store.at(a, 10.0f, 20.0f));
+    REQUIRE(store.at(b, 300.0f, 40.0f));
 }
 
 TEST_CASE("moveNodes refuses a list that names the same node twice", "[editor_commands][layout]") {
@@ -557,21 +601,28 @@ TEST_CASE_METHOD(ImGuiFixture,
                  "[editor_commands][app][layout]") {
     RfSimulatorApp app;
     NodeGraphWidget &widget = app.testGraphWidget();
+    // The app wires the grid position hooks in Task 5; until then the test supplies them. Pan is
+    // zero, so editor and grid positions are equal.
+    PositionStore store;
+    store.attach(app.testEditorCommands());
     const int a = app.testCreateComponent("generator", 9201)->graphNodeId();
     const int b = app.testCreateComponent("amplifier", 9202)->graphNodeId();
     widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
     widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    store.positions[a] = LayoutPoint{100.0f, 40.0f};
+    store.positions[b] = LayoutPoint{300.0f, 60.0f};
+    app.testEditorCommands().clearHistory();
     selectNodes(widget, {a, b});
 
     widget.alignSelection(AlignMode::Top);
     REQUIRE(widget.layoutMessage().empty());
-    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
-    REQUIRE(widget.editorPositionForSave(b).y == 40.0f);
-    REQUIRE(widget.editorPositionForSave(b).x == 300.0f);
+    REQUIRE(store.at(a, 100.0f, 40.0f));
+    REQUIRE(store.at(b, 300.0f, 40.0f));
+    REQUIRE(app.testEditorCommands().undoLabel() == "Arrange nodes");
 
-    REQUIRE(app.testEditorCommands().undoLayout());
-    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
-    REQUIRE(widget.editorPositionForSave(b).y == 60.0f);
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(store.at(a, 100.0f, 40.0f));
+    REQUIRE(store.at(b, 300.0f, 60.0f));
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -597,11 +648,12 @@ TEST_CASE_METHOD(ImGuiFixture,
 
     // Only C is a live entry, so the Align entries must not count the two stale ones.
     REQUIRE(widget.layoutSelectionCount() == 1);
+    const std::size_t records = app.testEditorCommands().undoCount();
     widget.alignSelection(AlignMode::Top);
     REQUIRE(widget.layoutMessage().find("\"Front end\"") != std::string::npos);
     REQUIRE(widget.layoutMessage().find("no longer") == std::string::npos);
     REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
-    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+    REQUIRE(app.testEditorCommands().undoCount() == records);
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -620,10 +672,11 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(group != -1);
     REQUIRE(app.testSetGroupCollapsed(group, true));
 
+    const std::size_t records = app.testEditorCommands().undoCount();
     widget.alignSelection(AlignMode::Top);
     REQUIRE(widget.layoutMessage().find("\"Front end\"") != std::string::npos);
     REQUIRE(widget.editorPositionForSave(c).y == 80.0f);
-    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+    REQUIRE(app.testEditorCommands().undoCount() == records);
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -686,16 +739,24 @@ TEST_CASE_METHOD(ImGuiFixture, "New project drops the layout undo record",
                  "[editor_commands][app][layout]") {
     RfSimulatorApp app;
     NodeGraphWidget &widget = app.testGraphWidget();
+    // Grid position hooks arrive in Task 5; the test supplies them with pan at zero.
+    PositionStore store;
+    store.attach(app.testEditorCommands());
     const int a = app.testCreateComponent("generator", 9401)->graphNodeId();
     const int b = app.testCreateComponent("amplifier", 9402)->graphNodeId();
     widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
     widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
+    store.positions[a] = LayoutPoint{100.0f, 40.0f};
+    store.positions[b] = LayoutPoint{300.0f, 60.0f};
+    app.testEditorCommands().clearHistory();
     selectNodes(widget, {a, b});
     widget.alignSelection(AlignMode::Top);
-    REQUIRE(app.testEditorCommands().canUndoLayout());
+    REQUIRE(app.testEditorCommands().undoLabel() == "Arrange nodes");
+    REQUIRE(app.testEditorCommands().canUndo());
 
     app.newProject();
-    REQUIRE_FALSE(app.testEditorCommands().canUndoLayout());
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+    REQUIRE(app.testEditorCommands().undoCount() == 0);
 }
 
 TEST_CASE_METHOD(ImGuiFixture, "Grid snapping is off by default and the widget toggle sets it",

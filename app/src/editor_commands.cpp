@@ -363,44 +363,28 @@ std::string EditorCommands::moveNodes(const std::vector<LayoutMove> &moves) {
         }
     }
 
-    // Only nodes that actually move are written and recorded for undo.
-    std::vector<LayoutMove> replaced;
+    // Only nodes that actually move are written; the commit records exactly those.
     std::vector<LayoutMove> changed;
     for (const LayoutMove &move : moves) {
         const LayoutPoint current = readNodePosition(move.node_id);
         if (current.x == move.position.x && current.y == move.position.y)
             continue;
-        replaced.push_back({move.node_id, current});
         changed.push_back(move);
     }
     if (changed.empty())
         return {};
 
+    // A node placed outside a command (a drag the app has not committed, or a programmatic
+    // placement) belongs to this record's before side, so undo restores the positions this
+    // command replaced rather than the positions of the last commit.
+    if (readNodeGridPosition)
+        m_baseline.positions = capture().positions;
+
     for (const LayoutMove &move : changed)
         writeNodePosition(move.node_id, move.position);
     markModified();
     commitEdit("Arrange nodes");
-    m_layout_undo = std::move(replaced);
-    m_layout_undo_revision = m_revision;
     return {};
-}
-
-bool EditorCommands::canUndoLayout() const {
-    return !m_layout_undo.empty() && m_layout_undo_revision == m_revision;
-}
-
-bool EditorCommands::undoLayout() {
-    if (!canUndoLayout())
-        return false;
-    for (const LayoutMove &move : m_layout_undo) {
-        if (!findGraphNode(m_runtime.graph(), move.node_id))
-            return false;
-    }
-    for (const LayoutMove &move : m_layout_undo)
-        writeNodePosition(move.node_id, move.position);
-    m_layout_undo.clear();
-    markModified();
-    return true;
 }
 
 void EditorCommands::markModified() { ++m_revision; }
