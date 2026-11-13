@@ -1488,3 +1488,30 @@ TEST_CASE("A throw from the closing view sync still steps the redo history",
     CHECK(f.runtime.components().size() == 1);
     CHECK_FALSE(f.commands.commitEdit("Nothing"));
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "A swap undo label names the predecessor and the new part",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9501);
+    REQUIRE(amplifier != nullptr);
+    const int node = amplifier->graphNodeId();
+    const int component_id = amplifier->id();
+    std::string old_label;
+    for (const GraphNode &graph_node : app.testGraphEngine().nodes()) {
+        if (graph_node.node_id == node)
+            old_label = graph_node.label;
+    }
+    REQUIRE_FALSE(old_label.empty());
+
+    ComponentDefinition definition{};
+    definition.type = "amplifier";
+    definition.part_number = "TEST-ZX60";
+    definition.parameters = nlohmann::json{{"gain_dB", 12.0}};
+    REQUIRE(app.testSwapLibraryPart(node, definition).empty());
+    REQUIRE(app.testEditorCommands().undoLabel() == "Change " + old_label + " to TEST-ZX60");
+
+    REQUIRE(app.testEditorCommands().undo());
+    const IComponentEngine *restored = app.testComponents().find(node);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->id() == component_id);
+}

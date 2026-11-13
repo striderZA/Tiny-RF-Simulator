@@ -472,6 +472,12 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     // The replacement takes the predecessor's canvas spot and keeps its instrument points. The
     // Network Analyzer Point A/B and the Power Meter source are app state the command cannot see.
     const ImVec2 position = m_graph_widget->editorPositionForSave(graph_node_id);
+    // The predecessor's label is read now: the swap retires its graph node.
+    std::string old_label = "component";
+    for (const GraphNode &node : m_circuit_runtime.graph().nodes()) {
+        if (node.node_id == graph_node_id)
+            old_label = node.label;
+    }
     const std::vector<int> instrument_pins = {m_na_engine.pointAPin(), m_na_engine.pointBPin(),
                                               m_power_meter_widget->sourcePin()};
     // The successor is a new engine under a new graph node, so sync() builds its views with the
@@ -498,7 +504,7 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
     m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
     m_graph_widget->selectNode(swap.new_graph_node_id);
-    m_editor_commands.endEditGroup("Change component to " + definition.part_number);
+    m_editor_commands.endEditGroup("Change " + old_label + " to " + definition.part_number);
     return {};
 }
 
