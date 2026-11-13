@@ -1152,6 +1152,51 @@ TEST_CASE("Undo a group collapse restores members and their positions", "[editor
     CHECK(store.at(b, 30.0f, 40.0f));
 }
 
+TEST_CASE("Undo a library part swap restores the predecessor under its ids",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    ComponentLibrary library;
+    library.loadFile(zx60DefinitionPath());
+    ComponentLibrary whole_library;
+    whole_library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    const auto definitions = library.all();
+    REQUIRE(definitions.size() == 1);
+    const ComponentDefinition *successor = nullptr;
+    for (const ComponentDefinition *definition : whole_library.all()) {
+        if (definition && definition->part_number == "AM1143")
+            successor = definition;
+    }
+    REQUIRE(successor != nullptr);
+
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    const ComponentAddResult placed = f.commands.addLibraryPart(library, *definitions.front());
+    REQUIRE(placed.component != nullptr);
+    const int predecessor_id = placed.component->id();
+    const int predecessor_node = placed.component->graphNodeId();
+    const std::vector<int> predecessor_inputs = nodePins(f.runtime, predecessor_node, false);
+    const std::vector<int> predecessor_outputs = nodePins(f.runtime, predecessor_node, true);
+    const int generator_output = generator->outputPinId();
+    REQUIRE(f.commands.connect(generator_output, predecessor_inputs.front()).has_value());
+
+    const ComponentSwapResult swap =
+        f.commands.swapLibraryPart(whole_library, *successor, predecessor_node);
+    REQUIRE(swap.component != nullptr);
+    REQUIRE(swap.new_graph_node_id != predecessor_node);
+    REQUIRE(findNode(f.runtime, predecessor_node) == nullptr);
+    REQUIRE(hasLink(f.runtime, generator_output,
+                    nodePins(f.runtime, swap.new_graph_node_id, false).front()));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(findNode(f.runtime, swap.new_graph_node_id) == nullptr);
+    const IComponentEngine *restored = f.runtime.components().find(predecessor_node);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->id() == predecessor_id);
+    CHECK(nodePins(f.runtime, predecessor_node, false) == predecessor_inputs);
+    CHECK(nodePins(f.runtime, predecessor_node, true) == predecessor_outputs);
+    CHECK(hasLink(f.runtime, generator_output, predecessor_inputs.front()));
+    CHECK(f.runtime.graph().links().size() == 1);
+}
+
 TEST_CASE("A new edit clears the redo stack", "[editor_commands][undo]") {
     CommandFixture f;
     f.commands.createComponent(descriptor("generator").create);
@@ -1176,4 +1221,62 @@ TEST_CASE("Undo and redo never change the runtime epoch", "[editor_commands][und
     REQUIRE(f.commands.redo());
 
     CHECK(f.runtime.epoch() == epoch);
+}
+
+TEST_CASE("An edit group pushes one record labelled by the outermost group",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    const std::size_t records = f.commands.undoCount();
+    f.commands.beginEditGroup("Outer");
+    f.commands.createComponent(descriptor("generator").create);
+    f.commands.createComponent(descriptor("amplifier").create);
+    f.commands.beginEditGroup("Inner");
+    REQUIRE_FALSE(f.commands.endEditGroup());
+    REQUIRE(f.commands.undoCount() == records);
+    // A group is open, so undo must not split it.
+    REQUIRE_FALSE(f.commands.undo());
+
+    REQUIRE(f.commands.endEditGroup());
+    REQUIRE(f.commands.undoCount() == records + 1);
+    REQUIRE(f.commands.undoLabel() == "Outer");
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.components().size() == 0);
+}
+
+TEST_CASE("Undo leaves a key that changed since the record", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    const int node_id = amplifier->graphNodeId();
+
+    // A direct runtime write is not a command, so the record still holds the original state.
+    f.runtime.components().find(node_id)->deserialize(nlohmann::json{{"gain_dB", 9.0}});
+    REQUIRE(gainOf(f.runtime, node_id) == 9.0);
+
+    REQUIRE(f.commands.undo());
+    const IComponentEngine *still_there = f.runtime.components().find(node_id);
+    REQUIRE(still_there != nullptr);
+    CHECK(gainOf(f.runtime, node_id) == 9.0);
+    CHECK(f.runtime.components().size() == 1);
+}
+
+TEST_CASE("Undo and redo advance the revision and keep the project dirty",
+          "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    f.commands.markClean();
+    REQUIRE_FALSE(f.commands.isDirty());
+
+    REQUIRE(f.commands.setComponentParams(amplifier->graphNodeId(), {{"gain_dB", 3.0}}).status ==
+            ParamWriteStatus::Applied);
+    const std::uint64_t edited = f.commands.revision();
+    REQUIRE(f.commands.isDirty());
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.isDirty());
+    CHECK(f.commands.revision() > edited);
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.commands.isDirty());
+    CHECK(f.commands.revision() > edited + 1);
 }
