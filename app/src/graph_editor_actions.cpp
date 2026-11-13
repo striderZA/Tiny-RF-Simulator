@@ -12,8 +12,30 @@ bool GraphEditorActions::removeProbePin(int pin_id) {
 
 void GraphEditorActions::clearProbes() { m_runtime.m_graph.clearProbes(); }
 
+void GraphEditorActions::setProbePins(const std::vector<int> &pins) {
+    m_runtime.m_graph.clearProbes();
+    for (int pin_id : pins)
+        m_runtime.m_graph.addProbePin(pin_id);
+}
+
 int GraphEditorActions::createGroup(std::string name, std::vector<int> member_node_ids) {
     return m_runtime.m_graph.addGroup(std::move(name), std::move(member_node_ids));
+}
+
+int GraphEditorActions::restoreGroup(int group_id, const GroupState &state) {
+    if (m_runtime.m_graph.groupById(group_id))
+        return -1;
+
+    const int prior_next_group_id = m_runtime.m_graph.nextGroupId();
+    // addGroup() allocates from the counter, so seeding it with group_id recreates the old id.
+    m_runtime.m_graph.setNextGroupId(group_id);
+    const int created = m_runtime.m_graph.addGroup(state.name, state.members);
+    // addGroup() always creates the group collapsed; apply the recorded flag.
+    if (created >= 0)
+        m_runtime.m_graph.setGroupCollapsed(created, state.collapsed);
+    m_runtime.m_graph.setNextGroupId(
+        std::max(prior_next_group_id, m_runtime.m_graph.nextGroupId()));
+    return created;
 }
 
 bool GraphEditorActions::removeGroup(int group_id) {
