@@ -4,6 +4,7 @@
 #include "component_params.h"
 #include "editor_history.h"
 #include "node_layout.h"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -78,6 +79,15 @@ class EditorCommands {
     // true when a record was pushed.
     bool endEditGroup(std::optional<std::string> label = std::nullopt);
 
+    std::size_t undoCount() const { return m_history.undoCount(); }
+    // False when nothing is undoable or an edit group is open.
+    bool undo();
+    bool redo();
+    bool canUndo() const;
+    bool canRedo() const;
+    // Empty when the direction is unavailable.
+    std::string undoLabel() const;
+    std::string redoLabel() const;
     // Drops the records and group depth, and recaptures the baseline.
     void clearHistory();
 
@@ -135,6 +145,10 @@ class EditorCommands {
   private:
     void componentsChanged();
     EditorSnapshot capture() const;
+    // Applies `forward` against one capture taken at its start; every changed key applies only
+    // where the current value equals the record's before side. Repairs ids, links, probes, groups,
+    // positions, and app state, then syncs views and recaptures the baseline.
+    void apply(const EditorDelta &forward);
     bool commitNow(const std::string &label);
     ComponentAddResult finishComponentAdd(IComponentEngine *component,
                                           const nlohmann::ordered_json &params, std::string label);

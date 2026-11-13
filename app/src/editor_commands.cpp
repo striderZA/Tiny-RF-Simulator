@@ -2,7 +2,9 @@
 #include "component_library.h"
 #include "graph_editor_actions.h"
 #include "graph_link_policy.h"
+#include "logging_core.h"
 #include <algorithm>
+#include <exception>
 #include <set>
 #include <string>
 #include <utility>
@@ -473,9 +475,108 @@ bool EditorCommands::endEditGroup(std::optional<std::string> label) {
     return commitNow(label.value_or(m_group_label));
 }
 
+bool EditorCommands::canUndo() const {
+    return m_group_depth == 0 && m_history.nextUndo() != nullptr;
+}
+
+bool EditorCommands::canRedo() const {
+    return m_group_depth == 0 && m_history.nextRedo() != nullptr;
+}
+
+std::string EditorCommands::undoLabel() const {
+    const HistoryRecord *record = m_group_depth == 0 ? m_history.nextUndo() : nullptr;
+    return record ? record->label : std::string();
+}
+
+std::string EditorCommands::redoLabel() const {
+    const HistoryRecord *record = m_group_depth == 0 ? m_history.nextRedo() : nullptr;
+    return record ? record->label : std::string();
+}
+
+bool EditorCommands::undo() {
+    // Undoing inside a group would split the record the group is still building.
+    if (m_group_depth > 0)
+        return false;
+    const HistoryRecord *record = m_history.nextUndo();
+    if (!record)
+        return false;
+    apply(reversed(record->delta));
+    m_history.stepBack();
+    return true;
+}
+
+bool EditorCommands::redo() {
+    if (m_group_depth > 0)
+        return false;
+    const HistoryRecord *record = m_history.nextRedo();
+    if (!record)
+        return false;
+    apply(record->delta);
+    m_history.stepForward();
+    return true;
+}
+
 void EditorCommands::clearHistory() {
     m_history.clear();
     m_group_depth = 0;
     m_group_label.clear();
+    m_baseline = capture();
+}
+
+void EditorCommands::apply(const EditorDelta &forward) {
+    // One capture for the whole pass: each key applies only where the current value still equals
+    // the record's before side, so a key edited since the record is left alone.
+    const EditorSnapshot current = capture();
+
+    // 1. Links the record removed: found by pin pair, since a redo reallocates link ids.
+    for (const LinkEnds &ends : forward.links_removed) {
+        if (!current.links.contains(ends))
+            continue;
+        for (const GraphLink &link : m_runtime.graph().links()) {
+            if (link.start_pin_id == ends.start_pin && link.end_pin_id == ends.end_pin) {
+                (void)m_runtime.disconnect(link.link_id);
+                break;
+            }
+        }
+    }
+
+    // 3. Components the record removed.
+    for (const auto &[node_id, change] : forward.components) {
+        if (change.after || !change.before)
+            continue;
+        const auto found = current.components.find(node_id);
+        if (found == current.components.end() || !(found->second == *change.before))
+            continue;
+        (void)m_runtime.removeComponent(node_id);
+    }
+
+    // 5. Changed component state. The runtime rewires nothing here, so links are untouched.
+    for (const auto &[node_id, change] : forward.components) {
+        if (!change.before || !change.after)
+            continue;
+        const auto found = current.components.find(node_id);
+        if (found == current.components.end() || !(found->second == *change.before))
+            continue;
+        IComponentEngine *component = m_runtime.components().find(node_id);
+        if (!component)
+            continue;
+        try {
+            component->deserialize(change.after->state);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo skipped component %d state: %s", node_id, error.what());
+        }
+    }
+
+    // 6. Links the record added.
+    for (const LinkEnds &ends : forward.links_added) {
+        if (current.links.contains(ends))
+            continue;
+        if (!m_runtime.connect(ends.start_pin, ends.end_pin))
+            LOG_WARN("Undo could not reconnect pins %d -> %d", ends.start_pin, ends.end_pin);
+    }
+
+    componentsChanged();
+    m_editor_actions.topologyChanged();
+    markModified();
     m_baseline = capture();
 }
