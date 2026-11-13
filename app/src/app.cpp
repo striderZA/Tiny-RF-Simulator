@@ -377,10 +377,20 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
 }
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
+    // One record: the node, where the canvas placed it, and anything the factory configured.
+    m_editor_commands.beginEditGroup("Add component");
     IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
-    if (!comp)
+    if (!comp) {
+        m_editor_commands.endEditGroup();
         return;
+    }
     m_graph_widget->setNodeEditorSpacePosition(comp->graphNodeId(), pos);
+    std::string label = "Add component";
+    for (const GraphNode &node : m_circuit_runtime.graph().nodes()) {
+        if (node.node_id == comp->graphNodeId())
+            label = "Add " + node.label;
+    }
+    m_editor_commands.endEditGroup(label);
 }
 
 void RfSimulatorApp::syncComponentViews() {
@@ -413,11 +423,13 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     ImVec2 src_pos = ImNodes::GetNodeEditorSpacePos(graph_node_id);
     constexpr float OFFSET = 40.0f;
 
-    // Capture source part number for copying to the duplicate
+    // Capture the source label and part number for the duplicate and its undo label.
     std::string src_part_number;
+    std::string src_label = "component";
     for (const auto &gn : m_circuit_runtime.graph().nodes()) {
         if (gn.node_id == graph_node_id) {
             src_part_number = gn.part_number;
+            src_label = gn.label;
             break;
         }
     }
@@ -428,6 +440,8 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
     if (!desc)
         return false;
+    // One record: the copy, its placement, and the library part number it carries.
+    m_editor_commands.beginEditGroup("Duplicate component");
     const nlohmann::json params = src->serialize();
     IComponentEngine *copy = m_editor_commands.createComponent(
         [desc, &params](ComponentRegistry &components, NodeGraphEngine &graph, int id) {
@@ -436,8 +450,10 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
                 engine->deserialize(params);
             return engine;
         });
-    if (!copy)
+    if (!copy) {
+        m_editor_commands.endEditGroup();
         return false;
+    }
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
     m_graph_widget->setNodeEditorSpacePosition(new_nid,
@@ -445,6 +461,7 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
+    m_editor_commands.endEditGroup("Duplicate " + src_label);
     return true;
 }
 
@@ -460,10 +477,14 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     // The successor is a new engine under a new graph node, so sync() builds its views with the
     // defaults for a new PFB. Read the IQ Plot and Grid visibility set on the predecessor first.
     const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
+    // One record: the swap and the canvas spot the successor inherits.
+    m_editor_commands.beginEditGroup("Change component");
     const ComponentSwapResult swap =
         m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
-    if (!swap.component)
+    if (!swap.component) {
+        m_editor_commands.endEditGroup();
         return swap.error;
+    }
 
     if (visibility)
         m_pfb_views.setVisibilityFor(swap.new_graph_node_id, *visibility);
@@ -477,6 +498,7 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
     m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
     m_graph_widget->selectNode(swap.new_graph_node_id);
+    m_editor_commands.endEditGroup("Change component to " + definition.part_number);
     return {};
 }
 

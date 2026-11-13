@@ -1366,3 +1366,37 @@ TEST_CASE("A node added and arranged inside a group is redone at its arranged po
     REQUIRE(f.runtime.components().size() == 1);
     CHECK(store.at(node, 120.0f, 40.0f));
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "A canvas add records its placement for undo and redo",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const std::size_t components = app.componentCount();
+
+    const NodeGraphWidget::AddableComponent *add_generator = nullptr;
+    for (const auto &addable : widget.addableComponents()) {
+        if (addable.menu_label.find("Generator") != std::string::npos)
+            add_generator = &addable;
+    }
+    REQUIRE(add_generator != nullptr);
+    add_generator->on_add(ImVec2(240.0f, 96.0f));
+    REQUIRE(app.componentCount() == components + 1);
+    REQUIRE(app.testEditorCommands().undoLabel().rfind("Add Generator", 0) == 0);
+
+    int added = -1;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (node.label.rfind("Generator", 0) == 0 &&
+            widget.editorPositionForSave(node.node_id).x == 240.0f) {
+            added = node.node_id;
+        }
+    }
+    REQUIRE(added != -1);
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == components);
+    REQUIRE(app.testEditorCommands().redo());
+    REQUIRE(app.componentCount() == components + 1);
+    // The placement is part of the record, so the redone node returns to the canvas spot.
+    CHECK(widget.editorPositionForSave(added).x == 240.0f);
+    CHECK(widget.editorPositionForSave(added).y == 96.0f);
+}
