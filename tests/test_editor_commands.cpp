@@ -898,3 +898,134 @@ TEST_CASE_METHOD(ImGuiFixture, "Delete is ignored while a text field owns the ke
     drawFrameTakingFocusFromTextInput(widget);
     CHECK(app.componentCount() == before);
 }
+
+namespace {
+
+const GraphNode *findNode(const CircuitRuntime &runtime, int node_id) {
+    for (const GraphNode &node : runtime.graph().nodes()) {
+        if (node.node_id == node_id)
+            return &node;
+    }
+    return nullptr;
+}
+
+std::vector<int> nodePins(const CircuitRuntime &runtime, int node_id, bool outputs) {
+    const GraphNode *node = findNode(runtime, node_id);
+    return node ? (outputs ? node->output_pin_ids : node->input_pin_ids) : std::vector<int>{};
+}
+
+bool hasLink(const CircuitRuntime &runtime, int start_pin, int end_pin) {
+    for (const GraphLink &link : runtime.graph().links()) {
+        if (link.start_pin_id == start_pin && link.end_pin_id == end_pin)
+            return true;
+    }
+    return false;
+}
+
+double gainOf(const CircuitRuntime &runtime, int node_id) {
+    const IComponentEngine *component = runtime.components().find(node_id);
+    REQUIRE(component != nullptr);
+    return component->serialize().at("gain_dB").get<double>();
+}
+
+} // namespace
+
+TEST_CASE("Undo and redo a component add", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(amplifier != nullptr);
+    const int component_id = amplifier->id();
+    const int node_id = amplifier->graphNodeId();
+    const int input_pin = amplifier->inputPinId();
+    const int output_pin = amplifier->outputPinId();
+    REQUIRE(f.commands.undoLabel() == "Add Amplifier " + std::to_string(component_id));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.components().size() == 0);
+    REQUIRE(findNode(f.runtime, node_id) == nullptr);
+    REQUIRE(f.commands.canRedo());
+    REQUIRE(f.commands.redoLabel() == "Add Amplifier " + std::to_string(component_id));
+
+    REQUIRE(f.commands.redo());
+    const IComponentEngine *restored = f.runtime.components().find(node_id);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->id() == component_id);
+    CHECK(restored->graphNodeId() == node_id);
+    CHECK(restored->inputPinId() == input_pin);
+    CHECK(restored->outputPinId() == output_pin);
+    CHECK(f.runtime.components().size() == 1);
+}
+
+TEST_CASE("Undo and redo connect and disconnect", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    const int output = generator->outputPinId();
+    const int input = amplifier->inputPinId();
+
+    REQUIRE(f.commands.connect(output, input).has_value());
+    REQUIRE(f.commands.undoLabel() == "Connect");
+    REQUIRE(f.runtime.graph().links().size() == 1);
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.runtime.graph().links().empty());
+    REQUIRE(amplifier->node().inputs[0] == nullptr);
+
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.runtime.graph().links().size() == 1);
+    REQUIRE(hasLink(f.runtime, output, input));
+    REQUIRE(amplifier->node().inputs[0] == &generator->node().outputs[0]);
+
+    // Redo created a fresh link id, so read the live one before disconnecting.
+    const int link_id = f.runtime.graph().links().front().link_id;
+    REQUIRE(f.commands.disconnect(link_id));
+    REQUIRE(f.commands.undoLabel() == "Disconnect");
+    REQUIRE(f.runtime.graph().links().empty());
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(hasLink(f.runtime, output, input));
+    REQUIRE(amplifier->node().inputs[0] == &generator->node().outputs[0]);
+    REQUIRE(f.commands.redo());
+    REQUIRE(f.runtime.graph().links().empty());
+}
+
+TEST_CASE("Undo a parameter edit restores the serialized state", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    const int node_id = amplifier->graphNodeId();
+    REQUIRE(gainOf(f.runtime, node_id) == 0.0);
+
+    REQUIRE(f.commands.setComponentParams(node_id, {{"gain_dB", 15.0}}).status ==
+            ParamWriteStatus::Applied);
+    REQUIRE(gainOf(f.runtime, node_id) == 15.0);
+    REQUIRE(f.commands.undoLabel() == "Edit Amplifier " + std::to_string(amplifier->id()));
+
+    REQUIRE(f.commands.undo());
+    REQUIRE(gainOf(f.runtime, node_id) == 0.0);
+}
+
+TEST_CASE("A new edit clears the redo stack", "[editor_commands][undo]") {
+    CommandFixture f;
+    f.commands.createComponent(descriptor("generator").create);
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.canRedo());
+
+    f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE_FALSE(f.commands.canRedo());
+    REQUIRE(f.commands.redoLabel().empty());
+    REQUIRE_FALSE(f.commands.redo());
+}
+
+TEST_CASE("Undo and redo never change the runtime epoch", "[editor_commands][undo]") {
+    CommandFixture f;
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
+    const std::uint64_t epoch = f.runtime.epoch();
+
+    REQUIRE(f.commands.removeComponent(generator->graphNodeId()));
+    REQUIRE(f.commands.undo());
+    REQUIRE(f.commands.redo());
+
+    CHECK(f.runtime.epoch() == epoch);
+}
