@@ -45,6 +45,9 @@ class NodeGraphEngine {
 
     // Set internal ID counters for project save/load
     void setNextIds(int node_id, int pin_id, int link_id);
+    int nextNodeId() const { return m_next_node_id; }
+    int nextPinId() const { return m_next_pin_id; }
+    int nextLinkId() const { return m_next_link_id; }
 
     int inputPinId(int node_id) const;
     int outputPinId(int node_id) const;

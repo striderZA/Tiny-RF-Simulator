@@ -60,6 +60,64 @@ IComponentEngine *CircuitRuntime::createComponentWithId(const ComponentFactory &
     return factory(m_components, m_graph, component_id);
 }
 
+IComponentEngine *CircuitRuntime::restoreComponent(const ComponentFactory &factory,
+                                                   int component_id, int graph_node_id,
+                                                   const std::vector<int> &input_pins,
+                                                   const std::vector<int> &output_pins) {
+    if (m_components.find(graph_node_id))
+        return nullptr;
+    for (IComponentEngine *component : m_components.all()) {
+        if (component && component->id() == component_id)
+            return nullptr;
+    }
+    for (const GraphNode &node : m_graph.nodes()) {
+        if (node.node_id == graph_node_id)
+            return nullptr;
+    }
+
+    const int prior_next_node_id = m_graph.nextNodeId();
+    const int prior_next_pin_id = m_graph.nextPinId();
+    const int prior_next_link_id = m_graph.nextLinkId();
+    const int prior_next_component_id = m_next_component_id;
+
+    // addNode() allocates inputs before outputs, so the first input pin (or the
+    // first output pin of a source) seeds the pin counter.
+    const int first_pin_id = !input_pins.empty()    ? input_pins.front()
+                             : !output_pins.empty() ? output_pins.front()
+                                                    : prior_next_pin_id;
+    m_graph.setNextIds(graph_node_id, first_pin_id, prior_next_link_id);
+
+    const auto restore_counters = [&]() {
+        m_graph.setNextIds(std::max(prior_next_node_id, m_graph.nextNodeId()),
+                           std::max(prior_next_pin_id, m_graph.nextPinId()),
+                           std::max(prior_next_link_id, m_graph.nextLinkId()));
+        m_next_component_id = std::max(prior_next_component_id, component_id + 1);
+    };
+
+    IComponentEngine *component = factory(m_components, m_graph, component_id);
+    if (!component) {
+        restore_counters();
+        return nullptr;
+    }
+
+    const auto &nodes = m_graph.nodes();
+    const auto built = std::find_if(nodes.begin(), nodes.end(), [&](const GraphNode &node) {
+        return node.node_id == component->graphNodeId();
+    });
+    const bool rebuilt_as_requested = built != nodes.end() && built->node_id == graph_node_id &&
+                                      built->input_pin_ids == input_pins &&
+                                      built->output_pin_ids == output_pins;
+    if (!rebuilt_as_requested) {
+        m_components.remove(component->graphNodeId());
+        restore_counters();
+        return nullptr;
+    }
+
+    restore_counters();
+    rewireComponentInputs(m_components.all(), m_graph);
+    return component;
+}
+
 bool CircuitRuntime::removeComponent(int graph_node_id) {
     if (!m_components.remove(graph_node_id))
         return false;
