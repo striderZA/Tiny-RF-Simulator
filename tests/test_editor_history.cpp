@@ -29,6 +29,11 @@ const GraphNode *findNode(const CircuitRuntime &runtime, int node_id) {
     return nullptr;
 }
 
+// LayoutPoint is compared by exact value here and in the delta implementation.
+bool operator==(const LayoutPoint &lhs, const LayoutPoint &rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
 ComponentState componentState(int component_id, std::string type_name, std::vector<int> input_pins,
                               std::vector<int> output_pins, nlohmann::json state,
                               std::string part_number) {
@@ -52,6 +57,69 @@ EditorSnapshot sampleSnapshot() {
     snapshot.app_state["receiver_requirements"] = nlohmann::json{{"nf_dB", 2.5}};
     snapshot.app_state["rf_budget"] = nlohmann::json{{"stages", nlohmann::json::array()}};
     return snapshot;
+}
+
+// Two snapshots that differ in every key class: a component added, removed, and changed; a link
+// removed and added; a probe reorder; groups, positions, and app state changed, added, and
+// removed.
+std::pair<EditorSnapshot, EditorSnapshot> changedSnapshotPair() {
+    EditorSnapshot before = sampleSnapshot();
+    EditorSnapshot after = sampleSnapshot();
+
+    after.components.erase(11);
+    after.components[12] =
+        componentState(3, "mixer", {105, 106}, {107}, nlohmann::json::object(), "MIX-1");
+    after.components[10].state = {{"gain_dB", 12.0}};
+
+    after.links.erase(LinkEnds{101, 103});
+    after.links.insert(LinkEnds{101, 105});
+
+    after.probes = {102, 101};
+
+    after.groups[3].collapsed = true;
+    after.groups[4] = GroupState{"Other", {12}, false};
+
+    after.positions[10] = LayoutPoint{256.0f, 112.0f};
+    after.positions.erase(11);
+    after.positions[12] = LayoutPoint{32.0f, 8.0f};
+
+    after.app_state["receiver_requirements"] = nlohmann::json{{"nf_dB", 3.5}};
+    after.app_state.erase("rf_budget");
+    after.app_state["na_points"] = nlohmann::json::array({1, 2});
+    return {before, after};
+}
+
+template <class V> bool sameChange(const Change<V> &lhs, const Change<V> &rhs) {
+    if (lhs.before.has_value() != rhs.before.has_value() ||
+        lhs.after.has_value() != rhs.after.has_value())
+        return false;
+    if (lhs.before.has_value() && !(*lhs.before == *rhs.before))
+        return false;
+    return !lhs.after.has_value() || *lhs.after == *rhs.after;
+}
+
+template <class Key, class V>
+bool sameChanges(const std::map<Key, Change<V>> &lhs, const std::map<Key, Change<V>> &rhs) {
+    if (lhs.size() != rhs.size())
+        return false;
+    for (auto left = lhs.begin(), right = rhs.begin(); left != lhs.end(); ++left, ++right) {
+        if (!(left->first == right->first) || !sameChange(left->second, right->second))
+            return false;
+    }
+    return true;
+}
+
+bool sameDelta(const EditorDelta &lhs, const EditorDelta &rhs) {
+    if (!sameChanges(lhs.components, rhs.components))
+        return false;
+    if (lhs.links_removed != rhs.links_removed || lhs.links_added != rhs.links_added)
+        return false;
+    if (lhs.probes.has_value() != rhs.probes.has_value())
+        return false;
+    if (lhs.probes.has_value() && !sameChange(*lhs.probes, *rhs.probes))
+        return false;
+    return sameChanges(lhs.groups, rhs.groups) && sameChanges(lhs.positions, rhs.positions) &&
+           sameChanges(lhs.app_state, rhs.app_state);
 }
 
 } // namespace
@@ -311,6 +379,51 @@ TEST_CASE("Identical snapshots give an empty delta", "[editor_history][diff]") {
     CHECK(delta.app_state.empty());
 }
 
+TEST_CASE(
+    "A component present only after is an add; only before is a removal; a state change keeps "
+    "both sides",
+    "[editor_history][diff]") {
+    const ComponentState removed =
+        componentState(1, "amplifier", {100}, {101}, {{"gain_dB", 0.0}}, "AMP-1");
+    const ComponentState changed_before =
+        componentState(2, "generator", {}, {102}, {{"level_dBm", 0.0}}, "GEN-1");
+    const ComponentState changed_after =
+        componentState(2, "generator", {}, {102}, {{"level_dBm", 3.0}}, "GEN-1");
+    const ComponentState added =
+        componentState(3, "mixer", {105, 106}, {107}, nlohmann::json::object(), "MIX-1");
+    const ComponentState unchanged =
+        componentState(4, "adder", {108}, {109}, nlohmann::json::object(), "ADD-1");
+
+    EditorSnapshot before;
+    before.components[1] = removed;
+    before.components[2] = changed_before;
+    before.components[4] = unchanged;
+
+    EditorSnapshot after;
+    after.components[2] = changed_after;
+    after.components[3] = added;
+    after.components[4] = unchanged;
+
+    const EditorDelta delta = diffSnapshots(before, after);
+
+    REQUIRE(delta.components.size() == 3);
+    CHECK_FALSE(delta.empty());
+
+    REQUIRE(delta.components.contains(1));
+    CHECK(delta.components.at(1).before == removed);
+    CHECK_FALSE(delta.components.at(1).after.has_value());
+
+    REQUIRE(delta.components.contains(3));
+    CHECK_FALSE(delta.components.at(3).before.has_value());
+    CHECK(delta.components.at(3).after == added);
+
+    REQUIRE(delta.components.contains(2));
+    CHECK(delta.components.at(2).before == changed_before);
+    CHECK(delta.components.at(2).after == changed_after);
+
+    CHECK_FALSE(delta.components.contains(4));
+}
+
 TEST_CASE("Link set differences split into removed and added", "[editor_history][diff]") {
     EditorSnapshot before;
     before.links = {LinkEnds{101, 103}, LinkEnds{103, 104}};
@@ -335,4 +448,64 @@ TEST_CASE("A probe reorder is a probe change", "[editor_history][diff]") {
     REQUIRE(delta.probes.has_value());
     CHECK(delta.probes->before == std::vector<int>{1, 2});
     CHECK(delta.probes->after == std::vector<int>{2, 1});
+}
+
+TEST_CASE("Group, position, and app_state keys diff independently", "[editor_history][diff]") {
+    EditorSnapshot before;
+    before.groups[7] = GroupState{"Chain", {1, 2}, false};
+    before.positions[3] = LayoutPoint{0.0f, 0.0f};
+    before.app_state["rf_budget"] = nlohmann::json{{"gain", 1}};
+
+    EditorSnapshot after;
+    after.groups[7] = GroupState{"Chain", {1, 2}, true};
+    after.groups[8] = GroupState{"Other", {3}, false};
+    after.positions[3] = LayoutPoint{32.0f, 16.0f};
+    after.positions[4] = LayoutPoint{64.0f, 0.0f};
+    after.app_state["rf_budget"] = nlohmann::json{{"gain", 2}};
+    after.app_state["na_points"] = nlohmann::json::array({1, 2});
+
+    const EditorDelta delta = diffSnapshots(before, after);
+
+    REQUIRE(delta.groups.size() == 2);
+    REQUIRE(delta.groups.contains(7));
+    CHECK(delta.groups.at(7).before ==
+          std::optional<GroupState>{GroupState{"Chain", {1, 2}, false}});
+    CHECK(delta.groups.at(7).after == std::optional<GroupState>{GroupState{"Chain", {1, 2}, true}});
+    REQUIRE(delta.groups.contains(8));
+    CHECK_FALSE(delta.groups.at(8).before.has_value());
+    CHECK(delta.groups.at(8).after == std::optional<GroupState>{GroupState{"Other", {3}, false}});
+
+    REQUIRE(delta.positions.size() == 2);
+    REQUIRE(delta.positions.contains(3));
+    // std::optional's operator== cannot see the file-local LayoutPoint equality, so compare the
+    // sides directly.
+    CHECK(sameChange(delta.positions.at(3),
+                     Change<LayoutPoint>{LayoutPoint{0.0f, 0.0f}, LayoutPoint{32.0f, 16.0f}}));
+    REQUIRE(delta.positions.contains(4));
+    CHECK_FALSE(delta.positions.at(4).before.has_value());
+    REQUIRE(delta.positions.at(4).after.has_value());
+    CHECK(delta.positions.at(4).after->x == 64.0f);
+    CHECK(delta.positions.at(4).after->y == 0.0f);
+
+    REQUIRE(delta.app_state.size() == 2);
+    REQUIRE(delta.app_state.contains("rf_budget"));
+    CHECK(delta.app_state.at("rf_budget").before == nlohmann::json{{"gain", 1}});
+    CHECK(delta.app_state.at("rf_budget").after == nlohmann::json{{"gain", 2}});
+    REQUIRE(delta.app_state.contains("na_points"));
+    CHECK_FALSE(delta.app_state.at("na_points").before.has_value());
+
+    CHECK(delta.components.empty());
+    CHECK(delta.links_removed.empty());
+    CHECK(delta.links_added.empty());
+    CHECK_FALSE(delta.probes.has_value());
+}
+
+TEST_CASE("reversed(diff(a, b)) equals diff(b, a)", "[editor_history][diff]") {
+    const auto [before, after] = changedSnapshotPair();
+
+    const EditorDelta forward = diffSnapshots(before, after);
+    REQUIRE_FALSE(forward.empty());
+
+    CHECK(sameDelta(reversed(forward), diffSnapshots(after, before)));
+    CHECK(sameDelta(reversed(reversed(forward)), forward));
 }
