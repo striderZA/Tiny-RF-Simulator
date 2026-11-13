@@ -148,6 +148,9 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     }
     if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
         m_circuit_runtime.createComponent(descriptor->create);
+    // The seed is the starting circuit, not an edit: without this the first undo record would
+    // contain it and undo would delete the default circuit.
+    m_editor_commands.clearHistory();
 
     m_inspector_panel = std::make_unique<InspectorPanel>(
         m_circuit_runtime.graph(), m_circuit_runtime.components(), m_editor_commands);
@@ -515,6 +518,8 @@ void RfSimulatorApp::startTutorial() {
     }
     if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
         m_circuit_runtime.createComponent(descriptor->create);
+    // The tutorial seed is the starting circuit, not an edit (see the constructor).
+    m_editor_commands.clearHistory();
     m_graph_widget->syncNodesFromEngine();
 
     // Every panel a step highlights must be on screen for the highlight to

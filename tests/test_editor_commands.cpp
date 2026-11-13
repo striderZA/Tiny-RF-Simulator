@@ -1280,3 +1280,30 @@ TEST_CASE("Undo and redo advance the revision and keep the project dirty",
     REQUIRE(f.commands.isDirty());
     CHECK(f.commands.revision() > edited + 1);
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "The seeded default circuit is not part of the first undo record",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    // The app seeds a generator and an amplifier outside the command service.
+    REQUIRE(app.componentCount() == 2);
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+
+    const NodeGraphEngine &graph = app.testGraphEngine();
+    int generator_output = -1;
+    int amplifier_input = -1;
+    for (const GraphNode &node : graph.nodes()) {
+        if (node.label.rfind("Generator", 0) == 0)
+            generator_output = node.output_pin_ids.front();
+        if (node.label.rfind("Amplifier", 0) == 0)
+            amplifier_input = node.input_pin_ids.front();
+    }
+    REQUIRE(generator_output != -1);
+    REQUIRE(amplifier_input != -1);
+
+    REQUIRE(app.testEditorCommands().connect(generator_output, amplifier_input).has_value());
+    REQUIRE(app.testEditorCommands().undo());
+
+    // Undoing the connect must keep both seeded components and only drop the link.
+    CHECK(app.componentCount() == 2);
+    CHECK(app.testGraphEngine().links().empty());
+}
