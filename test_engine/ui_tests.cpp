@@ -104,6 +104,36 @@ struct AgentPanelUiCleanup {
 
 static RfSimulatorApp *s_app = nullptr;
 
+namespace {
+
+// Shift-drags a rubber band over two ungrouped nodes, which opens the canvas-hosted
+// CreateSubcircuit modal when both fall inside the rectangle.
+void rubberBandOverNodes(ImGuiTestContext *ctx, int first, int second) {
+    NodeGraphWidget &widget = s_app->testGraphWidget();
+    ImNodes::EditorContextSet(widget.context());
+    const ImVec2 first_pos = ImNodes::GetNodeScreenSpacePos(first);
+    const ImVec2 first_size = ImNodes::GetNodeDimensions(first);
+    const ImVec2 second_pos = ImNodes::GetNodeScreenSpacePos(second);
+    const ImVec2 second_size = ImNodes::GetNodeDimensions(second);
+    const ImVec2 min(std::min(first_pos.x, second_pos.x), std::min(first_pos.y, second_pos.y));
+    const ImVec2 max(std::max(first_pos.x + first_size.x, second_pos.x + second_size.x),
+                     std::max(first_pos.y + first_size.y, second_pos.y + second_size.y));
+
+    ctx->KeyDown(ImGuiKey_LeftShift);
+    ctx->MouseMoveToPos(ImVec2(min.x - 24.0f, min.y - 24.0f));
+    ctx->Yield(1);
+    ctx->MouseDown(ImGuiMouseButton_Left);
+    ctx->Yield(1);
+    ctx->MouseMoveToPos(ImVec2(max.x + 24.0f, max.y + 24.0f));
+    ctx->Yield(1);
+    ctx->MouseUp(ImGuiMouseButton_Left);
+    ctx->Yield(1);
+    ctx->KeyUp(ImGuiKey_LeftShift);
+    ctx->Yield(2);
+}
+
+} // namespace
+
 void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     s_app = &app;
 
@@ -755,6 +785,108 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(1);
         ctx->SetRef("");
         IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
+    // ES-1: a canvas-hosted modal (CreateSubcircuit) is not the Node Editor even though the
+    // canvas owns it, so Delete pressed while the modal has focus must not reach the nodes
+    // selected behind it.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_canvas_modal_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        IComponentEngine *first = s_app->testCreateComponent("generator", 9711);
+        IComponentEngine *second = s_app->testCreateComponent("amplifier", 9712);
+        IM_CHECK(first != nullptr && second != nullptr);
+        if (!first || !second)
+            return;
+        const int member_a = first->graphNodeId();
+        const int member_b = second->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(member_a, ImVec2(260.0f, 300.0f));
+        widget.setNodeEditorSpacePosition(member_b, ImVec2(520.0f, 300.0f));
+        ctx->Yield(4);
+
+        rubberBandOverNodes(ctx, member_a, member_b);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+        // No text field is active: the modal window itself owns the keyboard.
+        IM_CHECK(!ImGui::GetIO().WantTextInput);
+
+        // Both members stay selected behind the modal.
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(member_a);
+        ImNodes::SelectNode(member_b);
+        ctx->Yield(2);
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 2);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(member_a) != nullptr);
+        IM_CHECK(s_app->testComponents().find(member_b) != nullptr);
+
+        // Close the modal and remove the fixture.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        ImNodes::ClearNodeSelection();
+        IM_CHECK(s_app->testRemoveComponent(member_a));
+        IM_CHECK(s_app->testRemoveComponent(member_b));
+        ctx->Yield(2);
+    };
+
+    // ES-1: while the canvas-hosted Name field is being edited, Delete belongs to that field
+    // and must not remove the nodes selected behind it.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_canvas_name_field_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        IComponentEngine *first = s_app->testCreateComponent("generator", 9721);
+        IComponentEngine *second = s_app->testCreateComponent("amplifier", 9722);
+        IM_CHECK(first != nullptr && second != nullptr);
+        if (!first || !second)
+            return;
+        const int member_a = first->graphNodeId();
+        const int member_b = second->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(member_a, ImVec2(260.0f, 300.0f));
+        widget.setNodeEditorSpacePosition(member_b, ImVec2(520.0f, 300.0f));
+        ctx->Yield(4);
+
+        rubberBandOverNodes(ctx, member_a, member_b);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+
+        // Both members stay selected while the canvas-hosted Name field takes the keyboard.
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(member_a);
+        ImNodes::SelectNode(member_b);
+        ctx->Yield(2);
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemInput("Name");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 2);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(member_a) != nullptr);
+        IM_CHECK(s_app->testComponents().find(member_b) != nullptr);
+
+        // Leave the field, close the modal and remove the fixture.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        ctx->SetRef("");
+        ImNodes::ClearNodeSelection();
+        IM_CHECK(s_app->testRemoveComponent(member_a));
+        IM_CHECK(s_app->testRemoveComponent(member_b));
         ctx->Yield(2);
     };
 

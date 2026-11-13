@@ -521,6 +521,35 @@ void drawFrameFocusing(NodeGraphWidget &widget, bool focus_editor, bool delete_d
     ImGui::Render();
 }
 
+// Draws one headless frame in which a text field in another window takes the keyboard, so the
+// next frame starts with io.WantTextInput set.
+void drawFrameActivatingTextInput() {
+    static char name_buffer[32] = "field";
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Delete, false);
+    ImGui::NewFrame();
+    ImGui::SetNextWindowFocus();
+    ImGui::Begin("Other");
+    ImGui::SetKeyboardFocusHere();
+    ImGui::InputText("Name", name_buffer, sizeof(name_buffer));
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::Render();
+}
+
+// Draws one headless frame in which Delete is down, a text field still holds the keyboard
+// (ImGui publishes io.WantTextInput at frame start), and the Node Editor takes focus. A
+// canvas-hosted Name field and the Delete that follows it arrive in exactly this order.
+void drawFrameTakingFocusFromTextInput(NodeGraphWidget &widget) {
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Delete, true);
+    ImGui::NewFrame();
+    REQUIRE(ImGui::GetIO().WantTextInput);
+    ImGui::SetNextWindowFocus();
+    bool open = true;
+    widget.draw("Node Editor", &open);
+    ImGui::EndFrame();
+    ImGui::Render();
+}
+
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -788,4 +817,23 @@ TEST_CASE_METHOD(ImGuiFixture, "Delete removes the selection only while the Node
     drawFrameFocusing(widget, true, false);
     drawFrameFocusing(widget, true, true);
     CHECK(app.componentCount() == before - 1);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Delete is ignored while a text field owns the keyboard",
+                 "[editor_commands][app][delete]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int node = app.testCreateComponent("amplifier", 9711)->graphNodeId();
+    // Registers the node in the ImNodes pool, which a selection needs before the first draw.
+    widget.setNodeEditorSpacePosition(node, ImVec2(100.0f, 40.0f));
+    const size_t before = app.componentCount();
+    selectNodes(widget, {node});
+
+    // The field holds the keyboard when the canvas takes focus and Delete arrives. The first
+    // frame requests the field's focus, the second activates it, so the third starts with
+    // io.WantTextInput set.
+    drawFrameActivatingTextInput();
+    drawFrameActivatingTextInput();
+    drawFrameTakingFocusFromTextInput(widget);
+    CHECK(app.componentCount() == before);
 }

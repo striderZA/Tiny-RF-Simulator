@@ -689,10 +689,13 @@ void NodeGraphWidget::removeLink(int link_id) {
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
-    // Delete belongs to the focused canvas only: another window's selection (and a text
-    // field's editing keys, as in the Properties panel) must not remove graph nodes.
+    // Delete belongs to the focused canvas only: another window's selection, a popup hosted
+    // by the canvas (CreateSubcircuit/RenameSubcircuit), and a text field's editing keys (as
+    // in the Properties panel) must not remove graph nodes. NoPopupHierarchy keeps a focused
+    // canvas popup from counting as the Node Editor, because that popup is not the canvas.
     // The query reads the Node Editor because this runs inside its own Begin/End.
-    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
+                                ImGuiFocusedFlags_NoPopupHierarchy) ||
         ImGui::GetIO().WantTextInput)
         return;
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
