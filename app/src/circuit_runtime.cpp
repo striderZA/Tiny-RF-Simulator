@@ -94,7 +94,15 @@ IComponentEngine *CircuitRuntime::restoreComponent(const ComponentFactory &facto
         m_next_component_id = std::max(prior_next_component_id, component_id + 1);
     };
 
-    IComponentEngine *component = factory(m_components, m_graph, component_id);
+    IComponentEngine *component = nullptr;
+    try {
+        component = factory(m_components, m_graph, component_id);
+    } catch (...) {
+        // The counters were lowered before the call; restore them before the
+        // exception leaves, so live ids are never reissued.
+        restore_counters();
+        throw;
+    }
     if (!component) {
         restore_counters();
         return nullptr;

@@ -29,7 +29,16 @@ int GraphEditorActions::restoreGroup(int group_id, const GroupState &state) {
     const int prior_next_group_id = m_runtime.m_graph.nextGroupId();
     // addGroup() allocates from the counter, so seeding it with group_id recreates the old id.
     m_runtime.m_graph.setNextGroupId(group_id);
-    const int created = m_runtime.m_graph.addGroup(state.name, state.members);
+    int created = -1;
+    try {
+        created = m_runtime.m_graph.addGroup(state.name, state.members);
+    } catch (...) {
+        // The counter was lowered before the call; restore it before the
+        // exception leaves.
+        m_runtime.m_graph.setNextGroupId(
+            std::max(prior_next_group_id, m_runtime.m_graph.nextGroupId()));
+        throw;
+    }
     // addGroup() always creates the group collapsed; apply the recorded flag.
     if (created >= 0)
         m_runtime.m_graph.setGroupCollapsed(created, state.collapsed);
