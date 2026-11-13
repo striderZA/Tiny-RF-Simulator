@@ -4,9 +4,13 @@
 #include "graph_editor_actions.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <map>
+#include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -23,6 +27,31 @@ const GraphNode *findNode(const CircuitRuntime &runtime, int node_id) {
             return &node;
     }
     return nullptr;
+}
+
+ComponentState componentState(int component_id, std::string type_name, std::vector<int> input_pins,
+                              std::vector<int> output_pins, nlohmann::json state,
+                              std::string part_number) {
+    return ComponentState{component_id,           std::move(type_name), std::move(input_pins),
+                          std::move(output_pins), std::move(state),     std::move(part_number)};
+}
+
+// A fully populated snapshot, so a missing diff class cannot pass unnoticed.
+EditorSnapshot sampleSnapshot() {
+    EditorSnapshot snapshot;
+    snapshot.components[10] =
+        componentState(1, "amplifier", {100}, {101}, {{"gain_dB", 0.0}}, "AMP-1");
+    snapshot.components[11] =
+        componentState(2, "generator", {}, {102}, nlohmann::json::object(), "GEN-1");
+    snapshot.links.insert(LinkEnds{101, 103});
+    snapshot.links.insert(LinkEnds{103, 104});
+    snapshot.probes = {101, 102};
+    snapshot.groups[3] = GroupState{"Chain", {10, 11}, false};
+    snapshot.positions[10] = LayoutPoint{240.0f, 96.0f};
+    snapshot.positions[11] = LayoutPoint{0.0f, 0.0f};
+    snapshot.app_state["receiver_requirements"] = nlohmann::json{{"nf_dB", 2.5}};
+    snapshot.app_state["rf_budget"] = nlohmann::json{{"stages", nlohmann::json::array()}};
+    return snapshot;
 }
 
 } // namespace
@@ -265,4 +294,45 @@ TEST_CASE("restoreGroup recreates an expanded group as expanded", "[editor_histo
     CHECK(restored->member_node_ids == state.members);
     CHECK_FALSE(restored->collapsed);
     CHECK(runtime.graph().nextGroupId() == next_group_before);
+}
+
+TEST_CASE("Identical snapshots give an empty delta", "[editor_history][diff]") {
+    const EditorSnapshot snapshot = sampleSnapshot();
+
+    const EditorDelta delta = diffSnapshots(snapshot, snapshot);
+
+    CHECK(delta.empty());
+    CHECK(delta.components.empty());
+    CHECK(delta.links_removed.empty());
+    CHECK(delta.links_added.empty());
+    CHECK_FALSE(delta.probes.has_value());
+    CHECK(delta.groups.empty());
+    CHECK(delta.positions.empty());
+    CHECK(delta.app_state.empty());
+}
+
+TEST_CASE("Link set differences split into removed and added", "[editor_history][diff]") {
+    EditorSnapshot before;
+    before.links = {LinkEnds{101, 103}, LinkEnds{103, 104}};
+    EditorSnapshot after;
+    after.links = {LinkEnds{103, 104}, LinkEnds{104, 105}};
+
+    const EditorDelta delta = diffSnapshots(before, after);
+
+    CHECK(delta.links_removed == std::set<LinkEnds>{LinkEnds{101, 103}});
+    CHECK(delta.links_added == std::set<LinkEnds>{LinkEnds{104, 105}});
+    CHECK(delta.components.empty());
+}
+
+TEST_CASE("A probe reorder is a probe change", "[editor_history][diff]") {
+    EditorSnapshot before;
+    before.probes = {1, 2};
+    EditorSnapshot after;
+    after.probes = {2, 1};
+
+    const EditorDelta delta = diffSnapshots(before, after);
+
+    REQUIRE(delta.probes.has_value());
+    CHECK(delta.probes->before == std::vector<int>{1, 2});
+    CHECK(delta.probes->after == std::vector<int>{2, 1});
 }
