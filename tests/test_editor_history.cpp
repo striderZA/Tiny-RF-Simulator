@@ -3,6 +3,7 @@
 #include "editor_history.h"
 #include "graph_editor_actions.h"
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -435,6 +436,7 @@ TEST_CASE("Link set differences split into removed and added", "[editor_history]
     CHECK(delta.links_removed == std::set<LinkEnds>{LinkEnds{101, 103}});
     CHECK(delta.links_added == std::set<LinkEnds>{LinkEnds{104, 105}});
     CHECK(delta.components.empty());
+    CHECK_FALSE(delta.empty());
 }
 
 TEST_CASE("A probe reorder is a probe change", "[editor_history][diff]") {
@@ -448,6 +450,7 @@ TEST_CASE("A probe reorder is a probe change", "[editor_history][diff]") {
     REQUIRE(delta.probes.has_value());
     CHECK(delta.probes->before == std::vector<int>{1, 2});
     CHECK(delta.probes->after == std::vector<int>{2, 1});
+    CHECK_FALSE(delta.empty());
 }
 
 TEST_CASE("Group, position, and app_state keys diff independently", "[editor_history][diff]") {
@@ -498,6 +501,111 @@ TEST_CASE("Group, position, and app_state keys diff independently", "[editor_his
     CHECK(delta.links_removed.empty());
     CHECK(delta.links_added.empty());
     CHECK_FALSE(delta.probes.has_value());
+    CHECK_FALSE(delta.empty());
+}
+
+TEST_CASE("empty() is false for each key class alone", "[editor_history][diff]") {
+    const EditorSnapshot empty_snapshot;
+
+    EditorSnapshot link_removed_before;
+    link_removed_before.links.insert(LinkEnds{101, 103});
+    const EditorDelta link_removed_delta = diffSnapshots(link_removed_before, empty_snapshot);
+    REQUIRE(link_removed_delta.links_removed == std::set<LinkEnds>{LinkEnds{101, 103}});
+    CHECK(link_removed_delta.links_added.empty());
+    CHECK(link_removed_delta.components.empty());
+    CHECK_FALSE(link_removed_delta.probes.has_value());
+    CHECK(link_removed_delta.groups.empty());
+    CHECK(link_removed_delta.positions.empty());
+    CHECK(link_removed_delta.app_state.empty());
+    CHECK_FALSE(link_removed_delta.empty());
+
+    EditorSnapshot link_added_after;
+    link_added_after.links.insert(LinkEnds{104, 105});
+    const EditorDelta link_added_delta = diffSnapshots(empty_snapshot, link_added_after);
+    REQUIRE(link_added_delta.links_added == std::set<LinkEnds>{LinkEnds{104, 105}});
+    CHECK(link_added_delta.links_removed.empty());
+    CHECK(link_added_delta.components.empty());
+    CHECK_FALSE(link_added_delta.probes.has_value());
+    CHECK(link_added_delta.groups.empty());
+    CHECK(link_added_delta.positions.empty());
+    CHECK(link_added_delta.app_state.empty());
+    CHECK_FALSE(link_added_delta.empty());
+
+    EditorSnapshot probe_before;
+    probe_before.probes = {1, 2};
+    const EditorDelta probe_delta = diffSnapshots(probe_before, empty_snapshot);
+    REQUIRE(probe_delta.probes.has_value());
+    CHECK(probe_delta.components.empty());
+    CHECK(probe_delta.links_removed.empty());
+    CHECK(probe_delta.links_added.empty());
+    CHECK(probe_delta.groups.empty());
+    CHECK(probe_delta.positions.empty());
+    CHECK(probe_delta.app_state.empty());
+    CHECK_FALSE(probe_delta.empty());
+
+    EditorSnapshot group_before;
+    group_before.groups[7] = GroupState{"Chain", {1}, false};
+    const EditorDelta group_delta = diffSnapshots(group_before, empty_snapshot);
+    REQUIRE(group_delta.groups.contains(7));
+    CHECK(group_delta.components.empty());
+    CHECK(group_delta.links_removed.empty());
+    CHECK(group_delta.links_added.empty());
+    CHECK_FALSE(group_delta.probes.has_value());
+    CHECK(group_delta.positions.empty());
+    CHECK(group_delta.app_state.empty());
+    CHECK_FALSE(group_delta.empty());
+
+    EditorSnapshot position_before;
+    position_before.positions[3] = LayoutPoint{0.0f, 0.0f};
+    const EditorDelta position_delta = diffSnapshots(position_before, empty_snapshot);
+    REQUIRE(position_delta.positions.contains(3));
+    CHECK(position_delta.components.empty());
+    CHECK(position_delta.links_removed.empty());
+    CHECK(position_delta.links_added.empty());
+    CHECK_FALSE(position_delta.probes.has_value());
+    CHECK(position_delta.groups.empty());
+    CHECK(position_delta.app_state.empty());
+    CHECK_FALSE(position_delta.empty());
+
+    EditorSnapshot app_state_before;
+    app_state_before.app_state["rf_budget"] = nlohmann::json{{"gain", 1}};
+    const EditorDelta app_state_delta = diffSnapshots(app_state_before, empty_snapshot);
+    REQUIRE(app_state_delta.app_state.contains("rf_budget"));
+    CHECK(app_state_delta.components.empty());
+    CHECK(app_state_delta.links_removed.empty());
+    CHECK(app_state_delta.links_added.empty());
+    CHECK_FALSE(app_state_delta.probes.has_value());
+    CHECK(app_state_delta.groups.empty());
+    CHECK(app_state_delta.positions.empty());
+    CHECK_FALSE(app_state_delta.empty());
+}
+
+TEST_CASE("A y-only move and a one-ulp move are position changes", "[editor_history][diff]") {
+    EditorSnapshot origin;
+    origin.positions[3] = LayoutPoint{0.0f, 0.0f};
+    EditorSnapshot y_moved;
+    y_moved.positions[3] = LayoutPoint{0.0f, 1.0f};
+
+    const EditorDelta y_only = diffSnapshots(origin, y_moved);
+    REQUIRE(y_only.positions.contains(3));
+    CHECK(y_only.positions.at(3).before->x == 0.0f);
+    CHECK(y_only.positions.at(3).after->x == 0.0f);
+    CHECK(y_only.positions.at(3).before->y == 0.0f);
+    CHECK(y_only.positions.at(3).after->y == 1.0f);
+    CHECK_FALSE(y_only.empty());
+
+    const float one_ulp_above_one = std::nextafter(1.0f, 2.0f);
+    REQUIRE(one_ulp_above_one > 1.0f);
+    EditorSnapshot one;
+    one.positions[3] = LayoutPoint{1.0f, 1.0f};
+    EditorSnapshot two;
+    two.positions[3] = LayoutPoint{one_ulp_above_one, 1.0f};
+
+    const EditorDelta one_ulp_delta = diffSnapshots(one, two);
+    REQUIRE(one_ulp_delta.positions.contains(3));
+    CHECK(one_ulp_delta.positions.at(3).before->x == 1.0f);
+    CHECK(one_ulp_delta.positions.at(3).after->x == one_ulp_above_one);
+    CHECK_FALSE(one_ulp_delta.empty());
 }
 
 TEST_CASE("reversed(diff(a, b)) equals diff(b, a)", "[editor_history][diff]") {
