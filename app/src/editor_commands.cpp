@@ -598,6 +598,9 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         try {
             component = m_runtime.restoreComponent(descriptor->create, state.component_id, node_id,
                                                    state.input_pins, state.output_pins);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo could not restore component %d: %s", node_id, error.what());
+            continue;
         } catch (...) {
             LOG_WARN("Undo could not restore component %d", node_id);
             continue;
@@ -608,6 +611,8 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
         }
         try {
             component->deserialize(state.state);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo could not restore component %d state: %s", node_id, error.what());
         } catch (...) {
             LOG_WARN("Undo could not restore component %d state", node_id);
         }
@@ -626,6 +631,8 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
             continue;
         try {
             component->deserialize(change.after->state);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo skipped component %d state: %s", node_id, error.what());
         } catch (...) {
             LOG_WARN("Undo skipped component %d state", node_id);
         }
@@ -650,6 +657,8 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
             try {
                 if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
                     LOG_WARN("Undo could not restore group %d", group_id);
+            } catch (const std::exception &error) {
+                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
             } catch (...) {
                 LOG_WARN("Undo could not restore group %d", group_id);
             }
@@ -662,6 +671,8 @@ void EditorCommands::applyDeltas(const EditorDelta &forward) {
             try {
                 if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
                     LOG_WARN("Undo could not restore group %d", group_id);
+            } catch (const std::exception &error) {
+                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
             } catch (...) {
                 LOG_WARN("Undo could not restore group %d", group_id);
             }
