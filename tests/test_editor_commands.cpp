@@ -400,8 +400,6 @@ TEST_CASE("moveNodes places every listed node as one revision and one-step undo 
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
-    // Start from a baseline that already holds the placed positions.
-    f.commands.clearHistory();
 
     const std::uint64_t before = f.commands.revision();
     const std::size_t records_before = f.commands.undoCount();
@@ -462,7 +460,6 @@ TEST_CASE("a layout that moves nothing leaves the revision and the undo record a
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
-    f.commands.clearHistory();
     REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
     const std::uint64_t revision = f.commands.revision();
     const std::size_t records = f.commands.undoCount();
@@ -495,7 +492,6 @@ TEST_CASE("a later project edit is undone before the layout", "[editor_commands]
     const int b = f.commands.createComponent(descriptor("amplifier").create)->graphNodeId();
     store.positions[a] = LayoutPoint{10.0f, 20.0f};
     store.positions[b] = LayoutPoint{300.0f, 40.0f};
-    f.commands.clearHistory();
     REQUIRE(f.commands.moveNodes({{a, {50.0f, 20.0f}}, {b, {50.0f, 40.0f}}}).empty());
 
     auto *later = f.commands.createComponent(descriptor("generator").create);
@@ -601,28 +597,22 @@ TEST_CASE_METHOD(ImGuiFixture,
                  "[editor_commands][app][layout]") {
     RfSimulatorApp app;
     NodeGraphWidget &widget = app.testGraphWidget();
-    // The app wires the grid position hooks in Task 5; until then the test supplies them. Pan is
-    // zero, so editor and grid positions are equal.
-    PositionStore store;
-    store.attach(app.testEditorCommands());
     const int a = app.testCreateComponent("generator", 9201)->graphNodeId();
     const int b = app.testCreateComponent("amplifier", 9202)->graphNodeId();
     widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
     widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
-    store.positions[a] = LayoutPoint{100.0f, 40.0f};
-    store.positions[b] = LayoutPoint{300.0f, 60.0f};
-    app.testEditorCommands().clearHistory();
     selectNodes(widget, {a, b});
 
     widget.alignSelection(AlignMode::Top);
     REQUIRE(widget.layoutMessage().empty());
-    REQUIRE(store.at(a, 100.0f, 40.0f));
-    REQUIRE(store.at(b, 300.0f, 40.0f));
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).x == 300.0f);
     REQUIRE(app.testEditorCommands().undoLabel() == "Arrange nodes");
 
     REQUIRE(app.testEditorCommands().undo());
-    REQUIRE(store.at(a, 100.0f, 40.0f));
-    REQUIRE(store.at(b, 300.0f, 60.0f));
+    REQUIRE(widget.editorPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.editorPositionForSave(b).y == 60.0f);
 }
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -739,16 +729,10 @@ TEST_CASE_METHOD(ImGuiFixture, "New project drops the layout undo record",
                  "[editor_commands][app][layout]") {
     RfSimulatorApp app;
     NodeGraphWidget &widget = app.testGraphWidget();
-    // Grid position hooks arrive in Task 5; the test supplies them with pan at zero.
-    PositionStore store;
-    store.attach(app.testEditorCommands());
     const int a = app.testCreateComponent("generator", 9401)->graphNodeId();
     const int b = app.testCreateComponent("amplifier", 9402)->graphNodeId();
     widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
     widget.setNodeEditorSpacePosition(b, ImVec2(300.0f, 60.0f));
-    store.positions[a] = LayoutPoint{100.0f, 40.0f};
-    store.positions[b] = LayoutPoint{300.0f, 60.0f};
-    app.testEditorCommands().clearHistory();
     selectNodes(widget, {a, b});
     widget.alignSelection(AlignMode::Top);
     REQUIRE(app.testEditorCommands().undoLabel() == "Arrange nodes");
@@ -980,8 +964,6 @@ TEST_CASE("Undoing a removal restores ids, links, probes, groups and position",
     const int group = f.commands.createGroup("Chain", {generator->graphNodeId(), amplifier_node});
     REQUIRE(group != -1);
     store.positions[amplifier_node] = LayoutPoint{240.0f, 96.0f};
-    // Start from a baseline that already holds the placed position.
-    f.commands.clearHistory();
     const std::vector<int> probes_before = f.runtime.graph().probePins();
 
     REQUIRE(f.commands.removeComponent(amplifier_node));
@@ -1397,6 +1379,46 @@ TEST_CASE_METHOD(ImGuiFixture, "A canvas add records its placement for undo and 
     REQUIRE(app.testEditorCommands().redo());
     REQUIRE(app.componentCount() == components + 1);
     // The placement is part of the record, so the redone node returns to the canvas spot.
+    CHECK(widget.editorPositionForSave(added).x == 240.0f);
+    CHECK(widget.editorPositionForSave(added).y == 96.0f);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Undoing a connect keeps a canvas-placed node in place",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const std::size_t components = app.componentCount();
+
+    const NodeGraphWidget::AddableComponent *add_generator = nullptr;
+    for (const auto &addable : widget.addableComponents()) {
+        if (addable.menu_label.find("Generator") != std::string::npos)
+            add_generator = &addable;
+    }
+    REQUIRE(add_generator != nullptr);
+    add_generator->on_add(ImVec2(240.0f, 96.0f));
+
+    int added = -1;
+    int added_output = -1;
+    int amplifier_input = -1;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (node.label.rfind("Generator", 0) == 0 &&
+            widget.editorPositionForSave(node.node_id).x == 240.0f) {
+            added = node.node_id;
+            added_output = node.output_pin_ids.front();
+        }
+        if (node.label.rfind("Amplifier", 0) == 0)
+            amplifier_input = node.input_pin_ids.front();
+    }
+    REQUIRE(added != -1);
+    REQUIRE(added_output != -1);
+    REQUIRE(amplifier_input != -1);
+
+    REQUIRE(app.testEditorCommands().connect(added_output, amplifier_input).has_value());
+    REQUIRE(app.testEditorCommands().undo());
+
+    // The connect never touched the node, so the undo drops only the link and keeps the spot.
+    CHECK(app.componentCount() == components + 1);
+    CHECK(app.testGraphEngine().links().empty());
     CHECK(widget.editorPositionForSave(added).x == 240.0f);
     CHECK(widget.editorPositionForSave(added).y == 96.0f);
 }
