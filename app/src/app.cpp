@@ -376,21 +376,49 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
     return desc->create(m_registry, m_graph, id);
 }
 
+namespace {
+
+// Closes an app-level edit group on every exit, including a throw: a group left open would refuse
+// undo and redo and silence every later record until the project is replaced.
+class EditGroupGuard {
+  public:
+    explicit EditGroupGuard(EditorCommands &commands) : m_commands(commands) {}
+    ~EditGroupGuard() {
+        if (m_closed)
+            return;
+        try {
+            (void)m_commands.endEditGroup();
+        } catch (...) {
+        }
+    }
+    void close(std::optional<std::string> label = std::nullopt) {
+        if (m_closed)
+            return;
+        m_closed = true;
+        (void)m_commands.endEditGroup(std::move(label));
+    }
+
+  private:
+    EditorCommands &m_commands;
+    bool m_closed = false;
+};
+
+} // namespace
+
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
     // One record: the node, where the canvas placed it, and anything the factory configured.
     m_editor_commands.beginEditGroup("Add component");
+    EditGroupGuard group(m_editor_commands);
     IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
-    if (!comp) {
-        m_editor_commands.endEditGroup();
+    if (!comp)
         return;
-    }
     m_graph_widget->setNodeEditorSpacePosition(comp->graphNodeId(), pos);
     std::string label = "Add component";
     for (const GraphNode &node : m_circuit_runtime.graph().nodes()) {
         if (node.node_id == comp->graphNodeId())
             label = "Add " + node.label;
     }
-    m_editor_commands.endEditGroup(label);
+    group.close(label);
 }
 
 void RfSimulatorApp::syncComponentViews() {
@@ -442,6 +470,11 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
         return false;
     // One record: the copy, its placement, and the library part number it carries.
     m_editor_commands.beginEditGroup("Duplicate component");
+    EditGroupGuard group(m_editor_commands);
+    if (m_test_throw_on_next_duplicate) {
+        m_test_throw_on_next_duplicate = false;
+        throw std::runtime_error("test duplicate failure");
+    }
     const nlohmann::json params = src->serialize();
     IComponentEngine *copy = m_editor_commands.createComponent(
         [desc, &params](ComponentRegistry &components, NodeGraphEngine &graph, int id) {
@@ -450,10 +483,8 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
                 engine->deserialize(params);
             return engine;
         });
-    if (!copy) {
-        m_editor_commands.endEditGroup();
+    if (!copy)
         return false;
-    }
     int new_nid = copy->graphNodeId();
     // Register with imnodes pool and set position
     m_graph_widget->setNodeEditorSpacePosition(new_nid,
@@ -461,7 +492,7 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
-    m_editor_commands.endEditGroup("Duplicate " + src_label);
+    group.close("Duplicate " + src_label);
     return true;
 }
 
@@ -485,12 +516,11 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
     // One record: the swap and the canvas spot the successor inherits.
     m_editor_commands.beginEditGroup("Change component");
+    EditGroupGuard group(m_editor_commands);
     const ComponentSwapResult swap =
         m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
-    if (!swap.component) {
-        m_editor_commands.endEditGroup();
+    if (!swap.component)
         return swap.error;
-    }
 
     if (visibility)
         m_pfb_views.setVisibilityFor(swap.new_graph_node_id, *visibility);
@@ -504,7 +534,7 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
     m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
     m_graph_widget->selectNode(swap.new_graph_node_id);
-    m_editor_commands.endEditGroup("Change " + old_label + " to " + definition.part_number);
+    group.close("Change " + old_label + " to " + definition.part_number);
     return {};
 }
 

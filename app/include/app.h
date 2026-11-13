@@ -174,6 +174,8 @@ class RfSimulatorApp {
     IComponentEngine *testAddComponentAtPosition(std::string_view type, ImVec2 position);
     // Calls the context-menu duplicate path before its first draw.
     IComponentEngine *testDuplicateComponent(int graph_node_id);
+    // Makes the next duplicate throw after its edit group opens, to exercise the guard.
+    void testThrowOnNextDuplicate() { m_test_throw_on_next_duplicate = true; }
     // Replaces a placed component through the app's swap path, which also carries the canvas
     // position, selection, and instrument points over. Returns the refusal, or "" on success.
     std::string testSwapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
@@ -248,6 +250,8 @@ class RfSimulatorApp {
     void saveTestFlowDialog();
 
   private:
+    bool m_test_throw_on_next_duplicate = false;
+
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the
     // project is clean, otherwise via PendingAction::Tutorial).

@@ -1515,3 +1515,25 @@ TEST_CASE_METHOD(ImGuiFixture, "A swap undo label names the predecessor and the 
     REQUIRE(restored != nullptr);
     CHECK(restored->id() == component_id);
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "A throw inside a grouped app edit leaves the edit group closed",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9601);
+    REQUIRE(amplifier != nullptr);
+    // The duplicate path reads the source position from the widget pool.
+    app.testGraphWidget().setNodeEditorSpacePosition(amplifier->graphNodeId(),
+                                                     ImVec2(100.0f, 40.0f));
+    const std::size_t records = app.testEditorCommands().undoCount();
+    REQUIRE(app.testEditorCommands().canUndo());
+
+    app.testThrowOnNextDuplicate();
+    REQUIRE_THROWS(app.testDuplicateComponent(amplifier->graphNodeId()));
+
+    // The group was closed while the exception unwound.
+    REQUIRE(app.testEditorCommands().canUndo());
+    auto *generator = app.testCreateComponent("generator", 9602);
+    REQUIRE(generator != nullptr);
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+    REQUIRE(app.testEditorCommands().undo());
+}
