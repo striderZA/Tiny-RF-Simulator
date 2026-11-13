@@ -741,18 +741,7 @@ bool EditorCommands::apply(const EditorDelta &forward) {
         }
     } baseline_guard{*this};
 
-    std::string step = "applying the delta";
-    try {
-        applyDeltas(forward, step);
-    } catch (const std::exception &error) {
-        LOG_WARN("Undo or redo stopped at '%s': %s", step.c_str(), error.what());
-        return false;
-    } catch (...) {
-        LOG_WARN("Undo or redo stopped at '%s'", step.c_str());
-        return false;
-    }
-
-    // Every key applied; a failing closing step is logged and the record stays consumed.
+    // A failing closing step is logged and never changes the outcome.
     const auto guarded = [](const char *closing_step, const auto &call) {
         try {
             call();
@@ -760,8 +749,27 @@ bool EditorCommands::apply(const EditorDelta &forward) {
             LOG_WARN("Undo skipped: %s", closing_step);
         }
     };
-    guarded("component view sync", [this]() { componentsChanged(); });
-    guarded("group boundary rebuild", [this]() { m_editor_actions.topologyChanged(); });
-    guarded("revision advance", [this]() { markModified(); });
+    const auto run_closing_sequence = [&]() {
+        guarded("component view sync", [this]() { componentsChanged(); });
+        guarded("group boundary rebuild", [this]() { m_editor_actions.topologyChanged(); });
+        guarded("revision advance", [this]() { markModified(); });
+    };
+
+    std::string step = "applying the delta";
+    try {
+        applyDeltas(forward, step);
+    } catch (const std::exception &error) {
+        LOG_WARN("Undo or redo stopped at '%s': %s", step.c_str(), error.what());
+        // Keys before the failing step are already applied, so their views, boundaries, and
+        // revision must not be left behind; the record still stays on the stack.
+        run_closing_sequence();
+        return false;
+    } catch (...) {
+        LOG_WARN("Undo or redo stopped at '%s'", step.c_str());
+        run_closing_sequence();
+        return false;
+    }
+
+    run_closing_sequence();
     return true;
 }

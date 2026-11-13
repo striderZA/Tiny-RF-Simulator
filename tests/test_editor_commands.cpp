@@ -1434,13 +1434,15 @@ TEST_CASE("A failed undo keeps its record and the next undo retries", "[editor_c
     CommandFixture f;
     PositionStore store;
     store.attach(f.commands);
-    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    const int node = generator->graphNodeId();
     store.positions[node] = LayoutPoint{10.0f, 20.0f};
 
-    // One record that both adds a component and moves an existing node, so the undo changes the
-    // circuit before the position write fails.
+    // One record that adds a component, links it, and moves an existing node, so the undo changes
+    // the circuit before the position write fails.
     f.commands.beginEditGroup("Add and move");
-    f.commands.createComponent(descriptor("amplifier").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
     REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
     REQUIRE(f.commands.endEditGroup());
     const std::size_t undo_records = f.commands.undoCount();
@@ -1462,6 +1464,9 @@ TEST_CASE("A failed undo keeps its record and the next undo retries", "[editor_c
     REQUIRE(f.commands.undo());
     REQUIRE(f.commands.undoCount() == undo_records - 1);
     REQUIRE(store.at(node, 10.0f, 20.0f));
+    // The circuit is back to the pre-record state: one component and no link.
+    REQUIRE(f.runtime.components().size() == 1);
+    REQUIRE(f.runtime.graph().links().empty());
     REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
 }
 
@@ -1469,14 +1474,18 @@ TEST_CASE("A failed redo keeps its record and the next redo retries", "[editor_c
     CommandFixture f;
     PositionStore store;
     store.attach(f.commands);
-    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    auto *generator = f.commands.createComponent(descriptor("generator").create);
+    const int node = generator->graphNodeId();
     store.positions[node] = LayoutPoint{10.0f, 20.0f};
     f.commands.beginEditGroup("Add and move");
-    f.commands.createComponent(descriptor("amplifier").create);
+    auto *amplifier = f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.connect(generator->outputPinId(), amplifier->inputPinId()).has_value());
     REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
     REQUIRE(f.commands.endEditGroup());
     REQUIRE(f.commands.undo());
     const std::size_t undo_records = f.commands.undoCount();
+    REQUIRE(f.runtime.components().size() == 1);
+    REQUIRE(f.runtime.graph().links().empty());
 
     store.fail_next_writes = 1;
     REQUIRE_FALSE(f.commands.redo());
@@ -1489,6 +1498,9 @@ TEST_CASE("A failed redo keeps its record and the next redo retries", "[editor_c
     REQUIRE(f.commands.redo());
     REQUIRE(f.commands.undoCount() == undo_records + 1);
     REQUIRE(store.at(node, 50.0f, 20.0f));
+    // The circuit is back to the post-record state: both components and the link.
+    REQUIRE(f.runtime.components().size() == 2);
+    REQUIRE(f.runtime.graph().links().size() == 1);
     REQUIRE_FALSE(f.commands.commitEdit("Nothing"));
 }
 
@@ -1569,4 +1581,33 @@ TEST_CASE_METHOD(ImGuiFixture, "A throw inside a grouped app edit leaves the edi
     REQUIRE(generator != nullptr);
     REQUIRE(app.testEditorCommands().undoCount() == records + 1);
     REQUIRE(app.testEditorCommands().undo());
+}
+
+TEST_CASE("A kept undo still syncs views and advances the revision", "[editor_commands][undo]") {
+    CommandFixture f;
+    PositionStore store;
+    store.attach(f.commands);
+    const int node = f.commands.createComponent(descriptor("generator").create)->graphNodeId();
+    store.positions[node] = LayoutPoint{10.0f, 20.0f};
+    f.commands.beginEditGroup("Add and move");
+    f.commands.createComponent(descriptor("amplifier").create);
+    REQUIRE(f.commands.moveNodes({{node, {50.0f, 20.0f}}}).empty());
+    REQUIRE(f.commands.endEditGroup());
+    f.commands.markClean();
+    const std::uint64_t revision = f.commands.revision();
+    const int views = f.components_changed;
+    const std::size_t undo_records = f.commands.undoCount();
+
+    // The component is removed before the position write fails, so this attempt is a kept record
+    // over a partially undone circuit.
+    store.fail_next_writes = 1;
+    REQUIRE_FALSE(f.commands.undo());
+
+    REQUIRE(f.runtime.components().size() == 1);
+    REQUIRE(f.commands.undoCount() == undo_records);
+    // Everything already applied still reaches the views, the revision, and the dirty flag.
+    CHECK(f.components_changed > views);
+    CHECK(f.commands.revision() > revision);
+    CHECK(f.commands.isDirty());
+    CHECK_FALSE(f.commands.commitEdit("Nothing"));
 }

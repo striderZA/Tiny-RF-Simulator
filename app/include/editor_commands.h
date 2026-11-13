@@ -155,9 +155,9 @@ class EditorCommands {
     void refreshPositionBaseline();
     // Applies `forward` against one capture taken at its start; every changed key applies only
     // where the current value equals the record's before side. Returns false when a delta step
-    // throws: the record then stays on the stack (a retry resumes where it stopped) and the
-    // baseline is recaptured to the actual state. Closing-sequence failures log their step, keep
-    // the record consumed, and still return true. Never throws.
+    // throws: the record then stays on the stack (a retry resumes where it stopped), the closing
+    // sequence runs for the keys already applied, and the baseline is recaptured to the actual
+    // state. Closing-sequence failures log their step and never change the result. Never throws.
     bool apply(const EditorDelta &forward);
     // One step of apply(); `step` names the step in progress for the failure log.
     void applyDeltas(const EditorDelta &forward, std::string &step);
