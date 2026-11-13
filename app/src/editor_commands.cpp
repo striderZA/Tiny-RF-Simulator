@@ -379,6 +379,7 @@ std::string EditorCommands::moveNodes(const std::vector<LayoutMove> &moves) {
     for (const LayoutMove &move : changed)
         writeNodePosition(move.node_id, move.position);
     markModified();
+    commitEdit("Arrange nodes");
     m_layout_undo = std::move(replaced);
     m_layout_undo_revision = m_revision;
     return {};
@@ -527,6 +528,9 @@ void EditorCommands::apply(const EditorDelta &forward) {
     // One capture for the whole pass: each key applies only where the current value still equals
     // the record's before side, so a key edited since the record is left alone.
     const EditorSnapshot current = capture();
+    const auto samePoint = [](const LayoutPoint &lhs, const LayoutPoint &rhs) {
+        return lhs.x == rhs.x && lhs.y == rhs.y;
+    };
 
     // 1. Links the record removed: found by pin pair, since a redo reallocates link ids.
     for (const LinkEnds &ends : forward.links_removed) {
@@ -540,6 +544,17 @@ void EditorCommands::apply(const EditorDelta &forward) {
         }
     }
 
+    // 2. Groups the record ended. Removing the last members of a group drops it with them, so this
+    // runs before the component removals.
+    for (const auto &[group_id, change] : forward.groups) {
+        if (change.after || !change.before)
+            continue;
+        const auto found = current.groups.find(group_id);
+        if (found == current.groups.end() || !(found->second == *change.before))
+            continue;
+        (void)m_editor_actions.removeGroup(group_id);
+    }
+
     // 3. Components the record removed.
     for (const auto &[node_id, change] : forward.components) {
         if (change.after || !change.before)
@@ -548,6 +563,38 @@ void EditorCommands::apply(const EditorDelta &forward) {
         if (found == current.components.end() || !(found->second == *change.before))
             continue;
         (void)m_runtime.removeComponent(node_id);
+    }
+
+    // 4. Components the record brings back, under their original component, node, and pin ids.
+    for (const auto &[node_id, change] : forward.components) {
+        if (!change.after || change.before || current.components.contains(node_id))
+            continue;
+        const ComponentState &state = *change.after;
+        const ComponentTypeDescriptor *descriptor =
+            ComponentTypeRegistry::instance().find(state.type_name);
+        if (!descriptor) {
+            LOG_WARN("Undo skipped component %d: unknown type '%s'", node_id,
+                     state.type_name.c_str());
+            continue;
+        }
+        IComponentEngine *component = nullptr;
+        try {
+            component = m_runtime.restoreComponent(descriptor->create, state.component_id, node_id,
+                                                   state.input_pins, state.output_pins);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo could not restore component %d: %s", node_id, error.what());
+            continue;
+        }
+        if (!component) {
+            LOG_WARN("Undo could not restore component %d: its ids or pins changed", node_id);
+            continue;
+        }
+        try {
+            component->deserialize(state.state);
+        } catch (const std::exception &error) {
+            LOG_WARN("Undo could not restore component %d state: %s", node_id, error.what());
+        }
+        (void)m_editor_actions.setNodePartNumber(node_id, state.part_number);
     }
 
     // 5. Changed component state. The runtime rewires nothing here, so links are untouched.
@@ -573,6 +620,78 @@ void EditorCommands::apply(const EditorDelta &forward) {
             continue;
         if (!m_runtime.connect(ends.start_pin, ends.end_pin))
             LOG_WARN("Undo could not reconnect pins %d -> %d", ends.start_pin, ends.end_pin);
+    }
+
+    // 7. Groups the record brings back, or restores to an earlier membership, name, or collapse.
+    for (const auto &[group_id, change] : forward.groups) {
+        if (!change.after)
+            continue;
+        const auto found = current.groups.find(group_id);
+        if (!change.before) {
+            if (found != current.groups.end())
+                continue;
+            try {
+                if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
+                    LOG_WARN("Undo could not restore group %d", group_id);
+            } catch (const std::exception &error) {
+                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
+            }
+            continue;
+        }
+        if (found == current.groups.end() || !(found->second == *change.before))
+            continue;
+        if (found->second.members != change.after->members) {
+            (void)m_editor_actions.removeGroup(group_id);
+            try {
+                if (m_editor_actions.restoreGroup(group_id, *change.after) < 0)
+                    LOG_WARN("Undo could not restore group %d", group_id);
+            } catch (const std::exception &error) {
+                LOG_WARN("Undo could not restore group %d: %s", group_id, error.what());
+            }
+            continue;
+        }
+        if (found->second.name != change.after->name)
+            (void)m_editor_actions.renameGroup(group_id, change.after->name);
+        if (found->second.collapsed != change.after->collapsed)
+            (void)m_editor_actions.setGroupCollapsed(group_id, change.after->collapsed);
+    }
+
+    // 8. Probe slots, in recorded order.
+    if (forward.probes && forward.probes->before && forward.probes->after &&
+        current.probes == *forward.probes->before) {
+        m_editor_actions.setProbePins(*forward.probes->after);
+    }
+
+    // 9. Grid positions of present nodes.
+    if (writeNodeGridPosition) {
+        for (const auto &[node_id, change] : forward.positions) {
+            if (!change.after || !findGraphNode(m_runtime.graph(), node_id))
+                continue;
+            const auto found = current.positions.find(node_id);
+            if (change.before) {
+                if (found == current.positions.end() || !samePoint(found->second, *change.before))
+                    continue;
+            } else if (found != current.positions.end()) {
+                continue;
+            }
+            writeNodeGridPosition(node_id, *change.after);
+        }
+    }
+
+    // 10. App-owned values. A value the record removed has no removal hook, so it is left as is.
+    if (applyAppState) {
+        for (const auto &[key, change] : forward.app_state) {
+            if (!change.after)
+                continue;
+            const auto found = current.app_state.find(key);
+            if (change.before) {
+                if (found == current.app_state.end() || !(found->second == *change.before))
+                    continue;
+            } else if (found != current.app_state.end()) {
+                continue;
+            }
+            applyAppState(key, *change.after);
+        }
     }
 
     componentsChanged();
