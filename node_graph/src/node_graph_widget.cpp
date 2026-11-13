@@ -689,6 +689,12 @@ void NodeGraphWidget::removeLink(int link_id) {
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
+    // Delete belongs to the focused canvas only: another window's selection (and a text
+    // field's editing keys, as in the Properties panel) must not remove graph nodes.
+    // The query reads the Node Editor because this runs inside its own Begin/End.
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+        ImGui::GetIO().WantTextInput)
+        return;
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
         // Deleting selected links takes priority over nodes (imnodes clears the
         // other selection on click, but both may be selected programmatically).

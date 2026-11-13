@@ -727,6 +727,37 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(ImNodes::NumSelectedLinks(), 0);
     };
 
+    // ES-1: Delete pressed while a Properties field is being edited belongs to the
+    // field, not the canvas, even though the canvas still holds the selection.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_properties_field_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9702);
+        IM_CHECK(amplifier != nullptr);
+        const int node = amplifier->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        ctx->Yield(2);
+
+        // Activate the amplifier gain field, so the text input owns the keyboard.
+        ctx->SetRef("Properties");
+        ctx->ItemInput("Gain (dB)");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+        // The canvas still holds the selection; only the text field owns the keyboard.
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+
+        // Leave the field and drop the test component so later cases see the seeded circuit.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(1);
+        ctx->SetRef("");
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
     // Issue #67: right-clicking a link must offer a Remove entry (previously the
     // right-click fell through to the canvas "add component" menu). Uses the
     // seeded Generator/Amplifier (nodes 1/2), which are visible this early in

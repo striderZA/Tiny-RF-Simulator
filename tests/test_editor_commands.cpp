@@ -503,6 +503,24 @@ void drawFrame(NodeGraphWidget &widget) {
     ImGui::EndFrame();
 }
 
+// Draws one headless frame with a Delete key state and either the Node Editor or another
+// window owning focus, so tests can tell a canvas shortcut from a global one.
+void drawFrameFocusing(NodeGraphWidget &widget, bool focus_editor, bool delete_down) {
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Delete, delete_down);
+    ImGui::NewFrame();
+    if (focus_editor)
+        ImGui::SetNextWindowFocus();
+    bool open = true;
+    widget.draw("Node Editor", &open);
+    if (!focus_editor) {
+        ImGui::SetNextWindowFocus();
+        ImGui::Begin("Other");
+        ImGui::End();
+    }
+    ImGui::EndFrame();
+    ImGui::Render();
+}
+
 } // namespace
 
 TEST_CASE_METHOD(ImGuiFixture,
@@ -749,4 +767,25 @@ TEST_CASE_METHOD(ImGuiFixture, "Snap selection to grid refuses a selected collap
     REQUIRE(widget.layoutMessage().find("collapsed subcircuit \"Front end\"") != std::string::npos);
     REQUIRE(widget.editorPositionForSave(c).x == 101.0f);
     REQUIRE(app.projectRevision() == revision);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Delete removes the selection only while the Node Editor is focused",
+                 "[editor_commands][app][delete]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int node = app.testCreateComponent("amplifier", 9701)->graphNodeId();
+    // Registers the node in the ImNodes pool, which a selection needs before the first draw.
+    widget.setNodeEditorSpacePosition(node, ImVec2(100.0f, 40.0f));
+    const size_t before = app.componentCount();
+    selectNodes(widget, {node});
+
+    // Another window owns focus: Delete must not reach the canvas.
+    drawFrameFocusing(widget, /*focus_editor=*/false, /*delete_down=*/false);
+    drawFrameFocusing(widget, false, true);
+    CHECK(app.componentCount() == before);
+
+    // The Node Editor owns focus: Delete removes the selection.
+    drawFrameFocusing(widget, true, false);
+    drawFrameFocusing(widget, true, true);
+    CHECK(app.componentCount() == before - 1);
 }
