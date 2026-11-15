@@ -589,6 +589,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
         IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
 
+        // Ctrl+Z takes the redo back, then Ctrl+Y redoes it again.
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) != nullptr);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Y);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
+
         // Ctrl+Y with nothing left to redo changes nothing.
         const std::size_t records = s_app->testEditorCommands().undoCount();
         ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Y);
