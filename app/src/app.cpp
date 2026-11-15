@@ -113,13 +113,56 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_editor_commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
         m_graph_widget->setNodeEditorSpacePosition(node_id, ImVec2(position.x, position.y));
     };
-    // Interim for editor-safety Task 4: grid positions alias editor positions until Task 5 wires
-    // gridPositionForSave/setNodeGridPosition. Pan is not compensated; Task 5 replaces this.
+    // Undo records grid positions, so a pan never looks like an edit.
     m_editor_commands.readNodeGridPosition = [this](int node_id) {
-        return m_editor_commands.readNodePosition(node_id);
+        const ImVec2 position = m_graph_widget->gridPositionForSave(node_id);
+        return LayoutPoint{position.x, position.y};
     };
     m_editor_commands.writeNodeGridPosition = [this](int node_id, LayoutPoint position) {
-        m_editor_commands.writeNodePosition(node_id, position);
+        m_graph_widget->setNodeGridPosition(node_id, ImVec2(position.x, position.y));
+    };
+    // Undoable state the command layer cannot see. Every key is always present: a key missing on
+    // one side would make the creation of that state a one-sided record.
+    m_editor_commands.captureAppState = [this]() {
+        std::map<std::string, nlohmann::json> state;
+        nlohmann::json requirements = receiverRequirementsToJson(m_receiver_requirements);
+        // Which mode is selected is view state; an undo keeps the mode the user is looking at.
+        requirements.erase("selected_mode");
+        state["receiver_requirements"] = std::move(requirements);
+        state["rf_budget"] = rfBudgetToJson(m_rf_budget);
+        state["na_points"] =
+            nlohmann::json::array({m_na_engine.pointAPin(), m_na_engine.pointBPin()});
+        return state;
+    };
+    m_editor_commands.applyAppState = [this](const std::string &key, const nlohmann::json &value) {
+        if (key == "receiver_requirements") {
+            // Keep the selected mode across the restore while its id still exists.
+            std::uint32_t selected_id = 0;
+            if (m_receiver_requirements.selected < m_receiver_requirements.modes.size())
+                selected_id = m_receiver_requirements.modes[m_receiver_requirements.selected].id;
+            ReceiverRequirementsSet restored = receiverRequirementsFromJson(value);
+            restored.selected = 0;
+            if (selected_id != 0) {
+                for (std::size_t i = 0; i < restored.modes.size(); ++i) {
+                    if (restored.modes[i].id == selected_id) {
+                        restored.selected = i;
+                        break;
+                    }
+                }
+            }
+            m_receiver_requirements = std::move(restored);
+            m_rf_budget_evaluation_dirty = true;
+            return;
+        }
+        if (key == "rf_budget") {
+            m_rf_budget = rfBudgetFromJson(value);
+            m_rf_budget_evaluation_dirty = true;
+            return;
+        }
+        if (key == "na_points" && value.is_array() && value.size() == 2) {
+            m_na_engine.setPointA(value[0].get<int>());
+            m_na_engine.setPointB(value[1].get<int>());
+        }
     };
     m_serializer = std::make_unique<ProjectSerializer>(
         m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
