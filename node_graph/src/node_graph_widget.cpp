@@ -2,10 +2,12 @@
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include "logging_core.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -716,11 +718,16 @@ void NodeGraphWidget::handleNodeDeletion() {
             ~EditGroupCloser() {
                 if (!opened || !actions.endEditGroup)
                     return;
-                // A throw out of a destructor terminates the process, so the commit is guarded:
-                // the record is lost, the widget stays usable.
+                // A throw out of a destructor terminates the process, so the commit is guarded.
+                // A throw from capture() or diffSnapshots leaves the history's baseline
+                // un-advanced, so the delete's changes are absorbed into the next committed
+                // record; only a throw after the baseline advanced (in the push) loses them.
                 try {
                     actions.endEditGroup();
+                } catch (const std::exception &error) {
+                    LOG_ERROR("Canvas delete: the edit record was not committed: %s", error.what());
                 } catch (...) {
+                    LOG_ERROR("Canvas delete: the edit record was not committed");
                 }
             }
         } closer{m_actions, false};

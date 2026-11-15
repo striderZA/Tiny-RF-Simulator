@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include "imnodes.h"
 #include "implot.h"
+#include "logging_core.h"
 #include "pfb_view_manager.h"
 #include "session_state.h"
 #include "test_temp_paths.h"
@@ -1840,5 +1841,14 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(begins == 1);
     // The throw happened after the close was attempted, so a skipped close would report 0 here.
     REQUIRE(ends == 1);
+    // The failed commit is reported, not swallowed silently.
+    std::size_t logged = 0;
+    for (const auto &entry : LoggerCore::instance().entries()) {
+        if (entry.level == Level::Error &&
+            entry.message.find("Canvas delete: the edit record was not committed") !=
+                std::string::npos)
+            ++logged;
+    }
+    REQUIRE(logged == 1);
     REQUIRE(runtime.components().size() == 0);
 }
