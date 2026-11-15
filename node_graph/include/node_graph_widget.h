@@ -248,6 +248,8 @@ class NodeGraphWidget {
 
     // Internal rendering helpers
     void rebuildSynthMaps();
+    // Forgets ImNodes pool registrations for nodes the engine no longer has.
+    void pruneMissingRegistrations();
     void drawGroupBackgrounds();
     void drawGroupCollapsedBlocks();
     void drawGroupTitleBar(const Group &g, const ImVec2 &top_left);

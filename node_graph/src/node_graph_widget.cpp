@@ -148,6 +148,19 @@ void NodeGraphWidget::markNodesRegistered() {
     }
 }
 
+void NodeGraphWidget::pruneMissingRegistrations() {
+    for (auto it = m_registered_in_pool.begin(); it != m_registered_in_pool.end();) {
+        const int node_id = *it;
+        const bool present =
+            std::any_of(m_engine.nodes().begin(), m_engine.nodes().end(),
+                        [node_id](const GraphNode &node) { return node.node_id == node_id; });
+        if (present)
+            ++it;
+        else
+            it = m_registered_in_pool.erase(it);
+    }
+}
+
 ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
     ImNodes::EditorContextSet(m_context);
     if (!m_registered_in_pool.count(node_id) || m_hidden_last_frame.count(node_id)) {
@@ -230,6 +243,11 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         bool editor_hovered = ImNodes::IsEditorHovered();
 
         ImNodes::EndNodeEditor();
+
+        // Registrations outlive ImNodes' pool: a removed node stops being drawn, and ImNodes
+        // prunes it at EndNodeEditor. Drop those ids so a later position write (undo restoring
+        // the node) never reads a pool entry that is gone.
+        pruneMissingRegistrations();
 
         // The undo/removal notice sits on the canvas, painted after the editor closes its scope.
         drawNotice();
