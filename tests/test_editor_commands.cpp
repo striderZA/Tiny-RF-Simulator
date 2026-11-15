@@ -1804,3 +1804,31 @@ TEST_CASE_METHOD(ImGuiFixture, "Repeated widget edits before a flush make one re
     REQUIRE(restored != nullptr);
     REQUIRE(restored->serialize().at("gain_dB").get<double>() == 15.0);
 }
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "A throwing end-edit-group callback does not escape the canvas delete",
+                 "[editor_commands][app][delete]") {
+    CircuitRuntime runtime;
+    const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier");
+    REQUIRE(descriptor != nullptr);
+    IComponentEngine *component = runtime.createComponent(descriptor->create);
+    REQUIRE(component != nullptr);
+    const int node = component->graphNodeId();
+
+    NodeGraphWidgetActions actions;
+    int begins = 0;
+    actions.removeComponent = [&runtime](int id) { return runtime.removeComponent(id); };
+    actions.beginEditGroup = [&begins](std::string) { ++begins; };
+    actions.endEditGroup = []() -> bool { throw std::runtime_error("commit failed"); };
+    NodeGraphWidget widget(runtime.graph(), std::move(actions));
+    widget.setNodeEditorSpacePosition(node, ImVec2(100.0f, 40.0f));
+    selectNodes(widget, {node});
+    drawFrame(widget);
+    selectNodes(widget, {node});
+
+    // A throw out of the destructor would terminate the process instead of failing here.
+    REQUIRE_NOTHROW(drawFrameFocusing(widget, /*focus_editor=*/true, /*delete_down=*/false));
+    REQUIRE_NOTHROW(drawFrameFocusing(widget, true, true));
+    REQUIRE(begins == 1);
+    REQUIRE(runtime.components().size() == 0);
+}

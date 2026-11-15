@@ -714,8 +714,14 @@ void NodeGraphWidget::handleNodeDeletion() {
             const NodeGraphWidgetActions &actions;
             bool opened;
             ~EditGroupCloser() {
-                if (opened && actions.endEditGroup)
+                if (!opened || !actions.endEditGroup)
+                    return;
+                // A throw out of a destructor terminates the process, so the commit is guarded:
+                // the record is lost, the widget stays usable.
+                try {
                     actions.endEditGroup();
+                } catch (...) {
+                }
             }
         } closer{m_actions, false};
         if (num_selected_links + num_selected > 0 && m_actions.beginEditGroup) {
