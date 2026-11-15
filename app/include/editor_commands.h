@@ -81,6 +81,9 @@ class EditorCommands {
 
     std::size_t undoCount() const { return m_history.undoCount(); }
     std::size_t redoCount() const { return m_history.redoCount(); }
+    // Records ever pushed. Never decreases, even when a push evicts the oldest record, so a
+    // caller can tell "a record was pushed" apart from "the undo count changed".
+    std::size_t pushCount() const { return m_history.pushCount(); }
     // False when nothing is undoable, an edit group is open, or a delta step failed. A failed
     // delta step keeps the record on the stack so a retry resumes where it stopped; the baseline
     // is recaptured to the actual state, so the next commit records only the user's own change. A

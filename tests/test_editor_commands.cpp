@@ -1867,3 +1867,37 @@ TEST_CASE_METHOD(ImGuiFixture, "A notice is shown for four seconds and then clea
     REQUIRE(widget.noticeAt(14.0).empty());
     REQUIRE(widget.noticeAt(20.0).empty());
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "A removal notice appears after the undo history is full",
+                 "[editor_commands][app][notice]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    IComponentEngine *generator = app.testCreateComponent("generator", 9931);
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9932);
+    REQUIRE(generator != nullptr);
+    REQUIRE(amplifier != nullptr);
+    const int node = amplifier->graphNodeId();
+    const int probe_pin = generator->outputPinId();
+    REQUIRE(probe_pin >= 0);
+
+    // Fill the history to its cap so the removal's record evicts an older one instead of
+    // growing the undo count.
+    while (app.testEditorCommands().undoCount() < EditorHistory::kMaxRecords) {
+        REQUIRE(app.testAddProbePin(probe_pin));
+        REQUIRE(app.testRemoveProbePin(probe_pin));
+    }
+    REQUIRE(app.testEditorCommands().undoCount() == EditorHistory::kMaxRecords);
+
+    widget.setNodeEditorSpacePosition(node, ImVec2(100.0f, 40.0f));
+    drawFrame(widget); // registers the nodes in the ImNodes pool
+    selectNodes(widget, {node});
+    const std::size_t pushes = app.testEditorCommands().pushCount();
+    drawFrameFocusing(widget, /*focus_editor=*/true, /*delete_down=*/false);
+    drawFrameFocusing(widget, true, true);
+
+    REQUIRE(app.testComponents().find(node) == nullptr);
+    // The record was pushed even though the stack stayed at its cap.
+    REQUIRE(app.testEditorCommands().pushCount() == pushes + 1);
+    REQUIRE(app.testEditorCommands().undoCount() == EditorHistory::kMaxRecords);
+    REQUIRE(widget.noticeAt(ImGui::GetTime()) == "Removed Amplifier 9932 \xC2\xB7 Ctrl+Z to undo");
+}

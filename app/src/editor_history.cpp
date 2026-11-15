@@ -86,6 +86,7 @@ void EditorHistory::push(HistoryRecord record) {
     if (m_records.size() > kMaxRecords)
         m_records.pop_front();
     m_cursor = m_records.size();
+    ++m_pushes;
 }
 
 const HistoryRecord *EditorHistory::nextUndo() const {

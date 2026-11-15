@@ -106,10 +106,10 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         return m_editor_commands.disconnect(link_id);
     };
     editor_actions.removeComponent = [this](int id) {
-        const std::size_t before = m_editor_commands.undoCount();
+        const std::size_t pushes = m_editor_commands.pushCount();
         const bool removed = m_editor_commands.removeComponent(id);
         if (removed)
-            showRemovalNotice(before);
+            showRemovalNotice(pushes);
         return removed;
     };
     editor_actions.duplicateComponent = [this](int id) { return duplicateComponent(id); };
@@ -139,10 +139,9 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_editor_commands.beginEditGroup(std::move(label));
     };
     editor_actions.endEditGroup = [this]() {
-        const std::size_t before = m_editor_commands.undoCount();
+        const std::size_t pushes = m_editor_commands.pushCount();
         const bool committed = m_editor_commands.endEditGroup();
-        if (committed)
-            showRemovalNotice(before);
+        showRemovalNotice(pushes);
         return committed;
     };
     m_graph_widget =
@@ -246,9 +245,9 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_circuit_runtime.graph(), m_circuit_runtime.components(), m_editor_commands);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
-        const std::size_t before = m_editor_commands.undoCount();
+        const std::size_t pushes = m_editor_commands.pushCount();
         if (m_editor_commands.removeComponent(graph_node_id))
-            showRemovalNotice(before);
+            showRemovalNotice(pushes);
     };
     m_inspector_panel->libraryParts = [this]() { return m_library.all(); };
     m_inspector_panel->onSwapLibraryPart = [this](int graph_node_id,
@@ -816,10 +815,12 @@ void RfSimulatorApp::redoEdit() {
         m_graph_widget->showNotice("Redo: " + label, ImGui::GetTime());
 }
 
-void RfSimulatorApp::showRemovalNotice(std::size_t undo_count_before) {
-    // Only a record this entry point just pushed. Inside an open edit group the record is
-    // pushed later, by the group's close, which shows the notice itself.
-    if (m_editor_commands.undoCount() == undo_count_before)
+void RfSimulatorApp::showRemovalNotice(std::size_t pushes_before) {
+    // Only a record this entry point just pushed. The push counter is monotonic, so it still
+    // answers after the history reached its cap and the push evicted the oldest record. Inside
+    // an open edit group the record is pushed later, by the group's close, which shows the
+    // notice itself.
+    if (m_editor_commands.pushCount() == pushes_before)
         return;
     constexpr std::string_view kRemovePrefix = "Remove ";
     const std::string label = m_editor_commands.undoLabel();

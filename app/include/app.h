@@ -270,9 +270,9 @@ class RfSimulatorApp {
     void undoEdit();
     void redoEdit();
     // Shows the removal notice when this call is the one that pushed a "Remove ..." record.
-    // A removal inside an open edit group defers its record to the group's close, so the undo
-    // count says whether the record is already on the stack.
-    void showRemovalNotice(std::size_t undo_count_before);
+    // A removal inside an open edit group defers its record to the group's close, so the
+    // monotonic push count says whether the record has already been pushed.
+    void showRemovalNotice(std::size_t pushes_before);
 
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the

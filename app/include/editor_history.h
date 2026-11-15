@@ -96,9 +96,13 @@ class EditorHistory {
     void clear();
     std::size_t undoCount() const;
     std::size_t redoCount() const;
+    // Monotonic count of records ever pushed. Eviction and clear() do not reset it, so a caller
+    // holding a value from before an operation can tell a push apart from an eviction.
+    std::size_t pushCount() const { return m_pushes; }
 
   private:
     std::deque<HistoryRecord> m_records;
     // Number of records applied: the next undo is m_cursor - 1, the next redo is m_cursor.
     std::size_t m_cursor = 0;
+    std::size_t m_pushes = 0;
 };
