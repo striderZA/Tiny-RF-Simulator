@@ -617,6 +617,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             return;
         const int node = component->graphNodeId();
         ctx->Yield(2);
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        const std::string undo_record = s_app->testEditorCommands().undoLabel();
+        IM_CHECK_EQ(undo_record, "Add Amplifier 9911");
 
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("Edit");
@@ -628,6 +631,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->ItemClick(undo_item.ID);
         ctx->Yield(2);
         IM_CHECK(s_app->testComponents().find(node) == nullptr);
+        IM_CHECK_EQ(std::string(widget.noticeAt(ImGui::GetTime())), "Undo: " + undo_record);
 
         // With the edit reverted, the menu offers it back as a redo.
         ctx->SetRef("##MainMenuBar");
@@ -637,7 +641,16 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(redo_item.ID != 0);
         IM_CHECK((redo_item.ItemFlags & ImGuiItemFlags_Disabled) == 0);
 
+        // An undo with nothing to undo shows no notice.
         ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        s_app->testEditorCommands().clearHistory();
+        widget.showNotice("", ImGui::GetTime());
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), 0);
+        IM_CHECK(widget.noticeAt(ImGui::GetTime()).empty());
+
         ctx->SetRef("");
         ctx->Yield(2);
     };
