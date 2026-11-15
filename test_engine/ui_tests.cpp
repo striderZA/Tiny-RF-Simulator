@@ -739,9 +739,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->ItemClick("Remove");
         ctx->Yield(2);
         IM_CHECK(s_app->testComponents().find(node) == nullptr);
+        // The header names what it removed with the same label the undo record uses.
+        IM_CHECK_EQ(s_app->testEditorCommands().undoLabel(), "Remove Amplifier 9931");
 
         // The header Remove records through the editor command service, so undo restores it.
         ctx->SetRef("");
+        ctx->WindowFocus("Node Editor");
         ctx->Yield(1);
         ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
         ctx->Yield(2);
