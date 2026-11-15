@@ -629,12 +629,6 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
             layoutSelectionCount() >= 1 && ImNodes::IsNodeSelected(m_context_menu_node);
         if (ImGui::MenuItem("Snap selection to grid", nullptr, false, can_snap))
             snapSelectionToGrid();
-        ImGui::Separator();
-        const bool can_undo = m_actions.canUndoLayout && m_actions.canUndoLayout();
-        if (ImGui::MenuItem("Undo Layout", nullptr, false, can_undo)) {
-            if (m_actions.undoLayout)
-                m_actions.undoLayout();
-        }
         ImGui::EndPopup();
     }
 
@@ -712,9 +706,25 @@ void NodeGraphWidget::handleNodeDeletion() {
         ImGui::GetIO().WantTextInput)
         return;
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        // The removals below are individual commands, so the whole Delete is opened as one undo
+        // record; the guard closes it on every exit, including a throw from a callback.
+        const int num_selected_links = ImNodes::NumSelectedLinks();
+        const int num_selected = ImNodes::NumSelectedNodes();
+        struct EditGroupCloser {
+            const NodeGraphWidgetActions &actions;
+            bool opened;
+            ~EditGroupCloser() {
+                if (opened && actions.endEditGroup)
+                    actions.endEditGroup();
+            }
+        } closer{m_actions, false};
+        if (num_selected_links + num_selected > 0 && m_actions.beginEditGroup) {
+            m_actions.beginEditGroup(deletionLabel(num_selected_links, num_selected));
+            closer.opened = true;
+        }
+
         // Deleting selected links takes priority over nodes (imnodes clears the
         // other selection on click, but both may be selected programmatically).
-        int num_selected_links = ImNodes::NumSelectedLinks();
         if (num_selected_links > 0) {
             std::vector<int> selected_links(num_selected_links);
             ImNodes::GetSelectedLinks(selected_links.data());
@@ -723,7 +733,6 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::ClearLinkSelection();
         }
 
-        int num_selected = ImNodes::NumSelectedNodes();
         if (num_selected > 0) {
             std::vector<int> selected_nodes(num_selected);
             ImNodes::GetSelectedNodes(selected_nodes.data());
@@ -739,6 +748,19 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::ClearNodeSelection();
         }
     }
+}
+
+std::string NodeGraphWidget::deletionLabel(int num_selected_links, int num_selected_nodes) const {
+    const int total = num_selected_links + num_selected_nodes;
+    if (total == 1 && num_selected_nodes == 1) {
+        int node_id = -1;
+        ImNodes::GetSelectedNodes(&node_id);
+        for (const GraphNode &node : m_engine.nodes()) {
+            if (node.node_id == node_id)
+                return "Remove " + node.label;
+        }
+    }
+    return "Remove " + std::to_string(total) + (total == 1 ? " item" : " items");
 }
 
 void NodeGraphWidget::handleProbeClick() {

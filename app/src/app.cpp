@@ -130,8 +130,10 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     editor_actions.moveNodes = [this](const std::vector<LayoutMove> &moves) {
         return m_editor_commands.moveNodes(moves);
     };
-    editor_actions.undoLayout = [this]() { return m_editor_commands.undoLayout(); };
-    editor_actions.canUndoLayout = [this]() { return m_editor_commands.canUndoLayout(); };
+    editor_actions.beginEditGroup = [this](std::string label) {
+        m_editor_commands.beginEditGroup(std::move(label));
+    };
+    editor_actions.endEditGroup = [this]() { return m_editor_commands.endEditGroup(); };
     m_graph_widget =
         std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
     // Layout commands read and write node positions through the widget, which owns them.

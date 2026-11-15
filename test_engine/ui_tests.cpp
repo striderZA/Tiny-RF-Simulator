@@ -456,7 +456,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     };
 
     // Align and undo from the node right-click menu (TRS-79): two selected nodes, right-click the
-    // lower one, Align > Top moves it onto the upper node's top edge, and Undo Layout puts it back.
+    // lower one, Align > Top moves it onto the upper node's top edge, and Ctrl+Z puts it back.
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_align_menu");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
@@ -491,10 +491,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
         IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 300.0f);
 
-        ctx->MouseMoveToPos(centreOf(lower));
-        ctx->MouseClick(1);
-        ctx->Yield(2);
-        ctx->MenuClick("//$FOCUSED/Undo Layout");
+        // The canvas menu no longer offers Undo Layout; the global undo takes the record back.
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
         ctx->Yield(2);
         IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
         IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 380.0f);

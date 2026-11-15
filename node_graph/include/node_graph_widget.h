@@ -44,10 +44,11 @@ struct NodeGraphWidgetActions {
     std::function<bool(int, bool)> setGroupCollapsed;
     std::function<void(int)> selectGroup;
     // Align and distribute. moveNodes places the listed nodes and returns the refusal reason, or an
-    // empty string when accepted; undoLayout and canUndoLayout cover the last accepted layout.
+    // empty string when accepted.
     std::function<std::string(const std::vector<LayoutMove> &)> moveNodes;
-    std::function<bool()> undoLayout;
-    std::function<bool()> canUndoLayout;
+    // One undo record for a multi-item canvas delete, which is not a single command.
+    std::function<void(std::string)> beginEditGroup;
+    std::function<bool()> endEditGroup;
 };
 
 class NodeGraphWidget {
@@ -172,6 +173,8 @@ class NodeGraphWidget {
     void handleLinkCreation();
     void handleLinkDeletion();
     void handleNodeDeletion();
+    // Undo label for one Delete press: the node's label, or the item count for several.
+    std::string deletionLabel(int num_selected_links, int num_selected_nodes) const;
     void handleProbeClick();
     // Link mutation and boundary refresh are delegated to the action bundle.
     void removeLink(int link_id);
