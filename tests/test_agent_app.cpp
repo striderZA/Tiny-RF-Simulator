@@ -1271,3 +1271,66 @@ TEST_CASE_METHOD(AppFixture, "Checkpoints save collapsed-group members at grid p
     expectPos(expanded_snapshot, 0, expected0);
     expectPos(expanded_snapshot, 1, expected1);
 }
+// ======================================================================
+// Test: an agent circuit edit is one undo record
+//
+// The checkpoint group boundaries make the whole tool call (two adds and
+// a link) a single record, and undo must not advance the runtime epoch.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An agent circuit_edit is one undo record and undo keeps the epoch",
+                 "[agent_app][undo]") {
+    app.newProject();
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+    const std::size_t seed = app.componentCount();
+    const std::size_t seed_links = app.testGraphEngine().links().size();
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(app.componentCount() == seed + 2);
+    REQUIRE(app.testEditorCommands().undoCount() == 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Agent: circuit_edit");
+
+    const AgentToolResult read_before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(read_before.is_error);
+    const std::uint64_t epoch = read_before.structured.at("epoch").get<std::uint64_t>();
+    const std::uint64_t runtime_epoch = app.testProjectEpoch();
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == seed);
+    REQUIRE(app.testGraphEngine().links().size() == seed_links);
+    const AgentToolResult read_after = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(read_after.is_error);
+    REQUIRE(read_after.structured.at("epoch").get<std::uint64_t>() == epoch);
+    REQUIRE(app.testProjectEpoch() == runtime_epoch);
+}
+
+// ======================================================================
+// Test: an interrupted agent checkpoint leaves the edit group balanced
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An interrupted agent checkpoint leaves the edit group balanced",
+                 "[agent_app][undo]") {
+    app.newProject();
+    AgentCall first;
+    first.tool = "circuit_edit";
+    first.client = "test";
+    AgentCall second = first;
+    app.testAgentHost().beginCheckpoint(first);
+    app.testAgentHost().beginCheckpoint(second);
+    app.testAgentHost().commitCheckpoint("done");
+    // The interrupted begin committed its own checkpoint.
+    REQUIRE(app.testAgentHost().checkpoints().size() == 2);
+
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9401);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(app.testEditorCommands().canUndo());
+    REQUIRE(app.testEditorCommands().undoLabel().rfind("Add", 0) == 0);
+    REQUIRE(app.testEditorCommands().undoCount() == 1);
+}
