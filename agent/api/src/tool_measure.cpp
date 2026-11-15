@@ -414,10 +414,13 @@ AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const Agent
         if (stimulus)
             engine.setStimulusPower(*stimulus);
     } catch (...) {
-        // A throwing setter must not leak the checkpoint's undo group. Applied-mode changes stay
-        // revertable through the committed snapshot, as the budget tool does.
-        if (changed)
+        // A throwing setter must not leak the checkpoint's undo group, and the setters that ran
+        // before it already changed analyzer state, so the project is dirty even though the call
+        // fails. Applied-mode changes stay revertable through the committed snapshot.
+        if (changed) {
+            context.commands.markModified();
             context.host.commitCheckpoint("interrupted: network analyzer settings");
+        }
         throw;
     }
     if (changed) {
