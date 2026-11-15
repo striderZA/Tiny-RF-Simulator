@@ -20,6 +20,7 @@
 #include <fstream>
 #include <functional>
 #include <portable-file-dialogs.h>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #ifdef _WIN32
@@ -105,7 +106,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         return m_editor_commands.disconnect(link_id);
     };
     editor_actions.removeComponent = [this](int id) {
-        return m_editor_commands.removeComponent(id);
+        const std::size_t before = m_editor_commands.undoCount();
+        const bool removed = m_editor_commands.removeComponent(id);
+        if (removed)
+            showRemovalNotice(before);
+        return removed;
     };
     editor_actions.duplicateComponent = [this](int id) { return duplicateComponent(id); };
     editor_actions.addProbePin = [this](int pin_id) {
@@ -133,7 +138,13 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     editor_actions.beginEditGroup = [this](std::string label) {
         m_editor_commands.beginEditGroup(std::move(label));
     };
-    editor_actions.endEditGroup = [this]() { return m_editor_commands.endEditGroup(); };
+    editor_actions.endEditGroup = [this]() {
+        const std::size_t before = m_editor_commands.undoCount();
+        const bool committed = m_editor_commands.endEditGroup();
+        if (committed)
+            showRemovalNotice(before);
+        return committed;
+    };
     m_graph_widget =
         std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
     // Layout commands read and write node positions through the widget, which owns them.
@@ -235,7 +246,9 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_circuit_runtime.graph(), m_circuit_runtime.components(), m_editor_commands);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
-        (void)m_editor_commands.removeComponent(graph_node_id);
+        const std::size_t before = m_editor_commands.undoCount();
+        if (m_editor_commands.removeComponent(graph_node_id))
+            showRemovalNotice(before);
     };
     m_inspector_panel->libraryParts = [this]() { return m_library.all(); };
     m_inspector_panel->onSwapLibraryPart = [this](int graph_node_id,
@@ -788,6 +801,33 @@ void RfSimulatorApp::commitPendingWidgetEdit() {
     std::string label = std::move(m_pending_widget_edit);
     m_pending_widget_edit.clear();
     m_editor_commands.commitEdit(label);
+}
+
+void RfSimulatorApp::undoEdit() {
+    // The label names the record being undone, so it is read while the record still exists.
+    const std::string label = m_editor_commands.undoLabel();
+    if (m_editor_commands.undo())
+        m_graph_widget->showNotice("Undo: " + label, ImGui::GetTime());
+}
+
+void RfSimulatorApp::redoEdit() {
+    const std::string label = m_editor_commands.redoLabel();
+    if (m_editor_commands.redo())
+        m_graph_widget->showNotice("Redo: " + label, ImGui::GetTime());
+}
+
+void RfSimulatorApp::showRemovalNotice(std::size_t undo_count_before) {
+    // Only a record this entry point just pushed. Inside an open edit group the record is
+    // pushed later, by the group's close, which shows the notice itself.
+    if (m_editor_commands.undoCount() == undo_count_before)
+        return;
+    constexpr std::string_view kRemovePrefix = "Remove ";
+    const std::string label = m_editor_commands.undoLabel();
+    if (label.rfind(kRemovePrefix, 0) != 0)
+        return;
+    m_graph_widget->showNotice("Removed " + label.substr(kRemovePrefix.size()) +
+                                   " \xC2\xB7 Ctrl+Z to undo",
+                               ImGui::GetTime());
 }
 
 void RfSimulatorApp::refreshRfBudgetEvaluation() {
@@ -1719,6 +1759,22 @@ void RfSimulatorApp::draw_ui() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Edit")) {
+            const bool can_undo = m_editor_commands.canUndo();
+            const bool can_redo = m_editor_commands.canRedo();
+            // A stable "###" id keeps each item's identity while its visible label names the
+            // record it would act on. With nothing to act on the visible text is Undo / Redo.
+            const std::string undo_label =
+                can_undo ? "Undo " + m_editor_commands.undoLabel() : std::string("Undo");
+            if (ImGui::MenuItem((undo_label + "###edit_undo").c_str(), "Ctrl+Z", false, can_undo))
+                undoEdit();
+            const std::string redo_label =
+                can_redo ? "Redo " + m_editor_commands.redoLabel() : std::string("Redo");
+            if (ImGui::MenuItem((redo_label + "###edit_redo").c_str(), "Ctrl+Shift+Z", false,
+                                can_redo))
+                redoEdit();
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Log", nullptr, &m_show_log);
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
@@ -1878,11 +1934,16 @@ void RfSimulatorApp::draw_ui() {
 
     // Keyboard shortcuts (skip while editing text fields)
     if (!io.WantTextInput) {
-        // Undo is global, but never while a control owns the keyboard: a widget that handles the
-        // key first must keep it.
+        // Undo and redo are global, but never while a control owns the keyboard: a widget that
+        // handles the key first must keep it (a text field keeps Ctrl+Z for its own text undo).
         if (!ImGui::IsAnyItemActive() && io.KeyCtrl && !io.KeyShift &&
             ImGui::IsKeyPressed(ImGuiKey_Z))
-            (void)m_editor_commands.undo();
+            undoEdit();
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && io.KeyShift &&
+            ImGui::IsKeyPressed(ImGuiKey_Z))
+            redoEdit();
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y))
+            redoEdit();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
             if (!m_current_project_path.empty())
                 saveProject(m_current_project_path);

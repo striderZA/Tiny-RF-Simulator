@@ -265,6 +265,15 @@ class RfSimulatorApp {
     void commitPendingWidgetEdit();
     std::string m_pending_widget_edit;
 
+    // Undo and redo from the Edit menu and the keyboard. Each shows the record's label as a
+    // canvas notice.
+    void undoEdit();
+    void redoEdit();
+    // Shows the removal notice when this call is the one that pushed a "Remove ..." record.
+    // A removal inside an open edit group defers its record to the group's close, so the undo
+    // count says whether the record is already on the stack.
+    void showRemovalNotice(std::size_t undo_count_before);
+
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the
     // project is clean, otherwise via PendingAction::Tutorial).
