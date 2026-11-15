@@ -640,10 +640,15 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const ImGuiTestItemInfo redo_item = findMenuItem(ctx, "Redo Add Amplifier 9911");
         IM_CHECK(redo_item.ID != 0);
         IM_CHECK((redo_item.ItemFlags & ImGuiItemFlags_Disabled) == 0);
+        const std::string redo_record = s_app->testEditorCommands().redoLabel();
+        IM_CHECK_EQ(redo_record, "Add Amplifier 9911");
+        if (redo_item.ID != 0)
+            ctx->ItemClick(redo_item.ID);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+        IM_CHECK_EQ(std::string(widget.noticeAt(ImGui::GetTime())), "Redo: " + redo_record);
 
         // An undo with nothing to undo shows no notice.
-        ctx->KeyPress(ImGuiKey_Escape);
-        ctx->Yield(2);
         s_app->testEditorCommands().clearHistory();
         widget.showNotice("", ImGui::GetTime());
         ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
@@ -651,7 +656,24 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), 0);
         IM_CHECK(widget.noticeAt(ImGui::GetTime()).empty());
 
+        // With nothing in either direction the items read bare Undo / Redo and are disabled.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Edit");
+        ctx->Yield(2);
+        const ImGuiTestItemInfo bare_undo = findMenuItem(ctx, "Undo###edit_undo");
+        const ImGuiTestItemInfo bare_redo = findMenuItem(ctx, "Redo###edit_redo");
+        IM_CHECK(bare_undo.ID != 0);
+        IM_CHECK(bare_redo.ID != 0);
+        IM_CHECK_EQ(std::string(bare_undo.DebugLabel), std::string("Undo###edit_undo"));
+        IM_CHECK_EQ(std::string(bare_redo.DebugLabel), std::string("Redo###edit_redo"));
+        IM_CHECK((bare_undo.ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        IM_CHECK((bare_redo.ItemFlags & ImGuiItemFlags_Disabled) != 0);
+
+        ctx->KeyPress(ImGuiKey_Escape);
         ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK(s_app->testRemoveComponent(node));
         ctx->Yield(2);
     };
 
