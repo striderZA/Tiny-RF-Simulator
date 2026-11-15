@@ -1611,3 +1611,196 @@ TEST_CASE("A kept undo still syncs views and advances the revision", "[editor_co
     CHECK(f.commands.isDirty());
     CHECK_FALSE(f.commands.commitEdit("Nothing"));
 }
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Undo restores an applied requirements change and keeps the selected mode",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 1.0e6;
+    config.band_stop_Hz = 2.0e6;
+    app.testSetSingleModeRequirements(config);
+
+    ReceiverRequirementsSet &requirements = app.testReceiverRequirements();
+    ReceiverRequirementsMode second;
+    second.name = "Second";
+    second.config = config;
+    requirements.modes.push_back(second);
+    assignReceiverRequirementsModeIds(requirements);
+    REQUIRE(requirements.modes.size() == 2);
+    REQUIRE(selectReceiverRequirementsMode(requirements, 1));
+    const std::uint32_t selected_id = requirements.modes[1].id;
+    app.testEditorCommands().clearHistory();
+
+    requirements.modes[0].name = "Renamed";
+    app.testNoteWidgetEdit("Edit requirements");
+    app.testFlushWidgetEdit();
+
+    REQUIRE(app.testEditorCommands().undoLabel() == "Edit requirements");
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.testReceiverRequirements().modes[0].name == "Default");
+    REQUIRE(app.testReceiverRequirements().selected == 1);
+    REQUIRE(app.testReceiverRequirements().modes[1].id == selected_id);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Undo restores an RF budget edit", "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    app.testEditorCommands().clearHistory();
+    const std::size_t stages = app.testRfBudget().stages.size();
+    std::string error;
+    REQUIRE(addRfBudgetStage(app.testRfBudget(), "amplifier", error));
+    REQUIRE(app.testRfBudget().stages.size() == stages + 1);
+
+    app.testNoteWidgetEdit("Edit RF budget");
+    app.testFlushWidgetEdit();
+
+    REQUIRE(app.testEditorCommands().undoLabel() == "Edit RF budget");
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.testRfBudget().stages.size() == stages);
+}
+
+TEST_CASE_METHOD(ImGuiFixture,
+                 "Panning records nothing and undo after a pan restores grid positions",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9801)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9802)->graphNodeId();
+    ImNodes::EditorContextSet(widget.context());
+    ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+    widget.setNodeEditorSpacePosition(a, ImVec2(120.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(320.0f, 80.0f));
+    app.testEditorCommands().clearHistory();
+    const std::size_t records = app.testEditorCommands().undoCount();
+
+    // Panning moves every editor-space position; grid positions must not follow.
+    ImNodes::EditorContextResetPanning(ImVec2(120.0f, -40.0f));
+    REQUIRE(widget.editorPositionForSave(a).x == 240.0f);
+    app.testFlushWidgetEdit();
+    REQUIRE(app.testEditorCommands().undoCount() == records);
+    REQUIRE(widget.gridPositionForSave(a).x == 120.0f);
+    REQUIRE(widget.gridPositionForSave(a).y == 40.0f);
+
+    widget.setNodeEditorSpacePosition(a, ImVec2(220.0f, 120.0f));
+    app.testNoteWidgetEdit("Move nodes");
+    app.testFlushWidgetEdit();
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(widget.gridPositionForSave(a).x == 120.0f);
+    REQUIRE(widget.gridPositionForSave(a).y == 40.0f);
+    REQUIRE(widget.gridPositionForSave(b).x == 320.0f);
+    REQUIRE(widget.gridPositionForSave(b).y == 80.0f);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "A multi-item canvas delete is one undo record",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const int a = app.testCreateComponent("generator", 9811)->graphNodeId();
+    const int b = app.testCreateComponent("amplifier", 9812)->graphNodeId();
+    const int c = app.testCreateComponent("generator", 9813)->graphNodeId();
+    widget.setNodeEditorSpacePosition(a, ImVec2(100.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(b, ImVec2(320.0f, 40.0f));
+    widget.setNodeEditorSpacePosition(c, ImVec2(100.0f, 200.0f));
+    const auto pinsOf = [&app](int node_id, bool outputs) {
+        for (const GraphNode &node : app.testGraphEngine().nodes()) {
+            if (node.node_id == node_id)
+                return outputs ? node.output_pin_ids : node.input_pin_ids;
+        }
+        return std::vector<int>{};
+    };
+    const std::vector<int> outputs = pinsOf(a, true);
+    const std::vector<int> inputs = pinsOf(b, false);
+    REQUIRE_FALSE(outputs.empty());
+    REQUIRE_FALSE(inputs.empty());
+    const std::optional<int> link_id = app.testConnectLink(outputs.front(), inputs.front());
+    REQUIRE(link_id.has_value());
+    drawFrame(widget); // registers the three nodes and the link in the pool
+    const std::size_t components = app.componentCount();
+    const std::size_t records = app.testEditorCommands().undoCount();
+
+    ImNodes::EditorContextSet(widget.context());
+    ImNodes::ClearNodeSelection();
+    ImNodes::ClearLinkSelection();
+    ImNodes::SelectNode(a);
+    ImNodes::SelectNode(b);
+    ImNodes::SelectNode(c);
+    ImNodes::SelectLink(*link_id);
+    drawFrameFocusing(widget, /*focus_editor=*/true, /*delete_down=*/false);
+    drawFrameFocusing(widget, true, true);
+
+    REQUIRE(app.componentCount() == components - 3);
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Remove 4 items");
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == components);
+    const bool restored_link = std::any_of(
+        app.testGraphEngine().links().begin(), app.testGraphEngine().links().end(),
+        [&outputs, &inputs](const GraphLink &link) {
+            return link.start_pin_id == outputs.front() && link.end_pin_id == inputs.front();
+        });
+    REQUIRE(restored_link);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Undoing a PFB removal restores its views",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    IComponentEngine *pfb = app.testCreateComponent("pfb", 9821);
+    REQUIRE(pfb != nullptr);
+    const std::size_t views = app.testPfbViewCount();
+    const int node_id = pfb->graphNodeId();
+    REQUIRE(app.testRemoveComponent(node_id));
+    REQUIRE(app.testPfbViewCount() == views - 1);
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.testPfbViewCount() == views);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "New project and agent revert clear the history",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    app.testCreateComponent("amplifier", 9831);
+    REQUIRE(app.testEditorCommands().canUndo());
+
+    app.newProject();
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+    REQUIRE(app.testEditorCommands().undoCount() == 0);
+
+    const AgentToolResult added = app.testAgentCall(
+        "circuit_edit",
+        nlohmann::ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", nlohmann::ordered_json::array(
+                        {{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}}})}});
+    REQUIRE_FALSE(added.is_error);
+    REQUIRE(app.testAgentHost().checkpoints().size() == 1);
+    REQUIRE(app.testEditorCommands().canUndo());
+
+    app.revertAgentCheckpoint(app.testAgentHost().checkpoints().back().id);
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+    REQUIRE(app.testEditorCommands().undoCount() == 0);
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "Repeated widget edits before a flush make one record",
+                 "[editor_commands][app][undo]") {
+    RfSimulatorApp app;
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9841);
+    REQUIRE(amplifier != nullptr);
+    const int node_id = amplifier->graphNodeId();
+    app.testEditorCommands().clearHistory();
+    const std::size_t records = app.testEditorCommands().undoCount();
+
+    amplifier->deserialize(nlohmann::json{{"gain_dB", 12.0}});
+    app.testNoteWidgetEdit("Edit A");
+    amplifier->deserialize(nlohmann::json{{"gain_dB", 15.0}});
+    app.testNoteWidgetEdit("Edit B");
+    app.testFlushWidgetEdit();
+
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Edit A");
+    const IComponentEngine *restored = app.testComponents().find(node_id);
+    REQUIRE(restored != nullptr);
+    REQUIRE(restored->serialize().at("gain_dB").get<double>() == 15.0);
+}
