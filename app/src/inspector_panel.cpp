@@ -17,6 +17,7 @@
 #include "rf_switch_engine.h"
 #include "signal_generator_engine.h"
 #include "splitter_engine.h"
+#include "ui_theme.h"
 #include "utils.h"
 #include <cmath>
 #include <cstring>
@@ -207,6 +208,15 @@ void InspectorPanel::applyPendingPartSwap() {
     m_part_swap_error_node = node_id;
 }
 
+void InspectorPanel::applyPendingRemove() {
+    if (m_pending_remove_node < 0)
+        return;
+    const int node_id = m_pending_remove_node;
+    m_pending_remove_node = -1;
+    if (onRemoveNode)
+        onRemoveNode(node_id);
+}
+
 void InspectorPanel::draw(const char *title, bool *p_open) {
     if (!ImGui::Begin(title, p_open)) {
         ImGui::End();
@@ -270,7 +280,23 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
             edit_engine = m_pfb_ptrs[m_selected_pfb_index];
     }
 
-    ImGui::SeparatorText(labelForHit(Hit{hit.desc, edit_engine}).c_str());
+    // One destructive control for the whole panel, in the header: the per-drawer Delete buttons
+    // are gone. R2: the label comes from selectionLabel(), the same text the undo record uses.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(selectionLabel().c_str());
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const float remove_width = ImGui::CalcTextSize("Remove").x + 2.0f * style.FramePadding.x;
+    // The clamp only prevents a negative SameLine argument: at 0.0f SameLine takes its no-offset
+    // path, so the button follows the label. A panel narrower than the label plus the button
+    // still extends the button past the content edge, where it may be clipped.
+    const float raw_offset = ImGui::GetContentRegionMax().x - remove_width;
+    ImGui::SameLine(raw_offset > 0.0f ? raw_offset : 0.0f);
+    // The drawers still use edit_engine this frame, so the click records the node and
+    // applyPendingRemove() takes it away after them.
+    if (ui::dangerButton("Remove"))
+        m_pending_remove_node = edit_engine->graphNodeId();
+    ImGui::Separator();
+
     drawPartPicker(*edit_engine);
 
     if (hit.desc->type == "pfb" && !m_pfb_ptrs.empty()) {
@@ -298,6 +324,7 @@ void InspectorPanel::draw(const char *title, bool *p_open) {
         onParamChange();
 
     applyPendingPartSwap();
+    applyPendingRemove();
     ImGui::End();
 }
 
@@ -476,9 +503,6 @@ void InspectorPanel::drawAmplifierProperties(AmplifierEngine &engine, int index)
             ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", engine.ampfError().c_str());
         }
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
@@ -500,16 +524,11 @@ void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
         engine.setNF_dB(nf);
         m_param_edited = true;
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
     (void)index;
     ImGui::TextDisabled("Splitter: 1 input, 2 outputs, -3 dB split loss");
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
@@ -543,9 +562,6 @@ void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {
         engine.setNcoFsFraction(nco);
         m_param_edited = true;
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int index) {
@@ -610,9 +626,6 @@ void InspectorPanel::drawGeneratorProperties(SignalGeneratorEngine &engine, int 
         engine.addTone(100e6, -60.0);
         m_param_edited = true;
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index) {
@@ -689,9 +702,6 @@ void InspectorPanel::drawCoaxCableProperties(CoaxCableEngine &engine, int index)
 
     ImGui::TextDisabled("Max freq: %.2f GHz  |  Delay: %.3f ns/m  |  Diameter: %.1f mm",
                         p.max_freq_GHz, p.delay_ns_per_m, p.diameter_mm);
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index) {
@@ -749,9 +759,6 @@ void InspectorPanel::drawEqualizerProperties(EqualizerEngine &engine, int index)
 
     if (engine.sparamMode())
         ImGui::EndDisabled();
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int index) {
@@ -839,9 +846,6 @@ void InspectorPanel::drawIdealFilterProperties(IdealFilterEngine &engine, int in
     if (engine.sparamMode()) {
         ImGui::EndDisabled();
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int index) {
     (void)index;
@@ -875,9 +879,6 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
     }
 
     ImGui::Text("NF = %.2f dB", engine.attenuation());
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
@@ -914,9 +915,6 @@ void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {
     }
 
     ImGui::Text("Loss: -3 dB per input");
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawRFSwitchProperties(RFSwitchEngine &engine, int index) {
@@ -950,9 +948,6 @@ void InspectorPanel::drawRFSwitchProperties(RFSwitchEngine &engine, int index) {
     // Single source of truth for the throw/loss status line: the same string
     // the node's hover tooltip shows.
     ImGui::TextUnformatted(engine.hoverSummary().c_str());
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int index) {
@@ -986,9 +981,6 @@ void InspectorPanel::drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int 
     // Single source of truth for the throw/loss status line: the same string
     // the node's hover tooltip shows (mirrors drawRFSwitchProperties).
     ImGui::TextUnformatted(engine.hoverSummary().c_str());
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }
 
 void InspectorPanel::drawGroupPanel(int group_id) {
@@ -1117,7 +1109,4 @@ void InspectorPanel::drawPFBProperties(PFBChannelizerEngine &engine) {
         if (ImGui::Checkbox("Show Channelizer Grid", &show))
             (*m_pfb_grid_visible)[m_selected_pfb_index] = show;
     }
-
-    if (ImGui::Button("Delete") && onRemoveNode)
-        onRemoveNode(engine.graphNodeId());
 }

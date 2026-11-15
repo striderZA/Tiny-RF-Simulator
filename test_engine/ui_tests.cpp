@@ -719,6 +719,39 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Task 7 (ES-5): Properties owns one Remove in its header. The per-drawer Delete buttons
+    // are gone, the header Remove takes the selection away, and Ctrl+Z brings it back.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "properties_remove_in_header");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9931);
+        IM_CHECK(amplifier != nullptr);
+        if (!amplifier)
+            return;
+        const int node = amplifier->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        ctx->WindowFocus("Properties");
+        ctx->WindowResize("Properties", ImVec2(420, 560));
+        ctx->Yield(2);
+
+        ctx->SetRef("Properties");
+        IM_CHECK(!ctx->ItemExists("Delete"));
+        IM_CHECK(ctx->ItemExists("Remove"));
+        ctx->ItemClick("Remove");
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) == nullptr);
+
+        // The header Remove records through the editor command service, so undo restores it.
+        ctx->SetRef("");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+
+        ctx->SetRef("");
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_snap_menu");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
