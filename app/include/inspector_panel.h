@@ -71,6 +71,9 @@ class InspectorPanel {
     std::function<std::string(int graph_node_id, const ComponentDefinition &definition)>
         onSwapLibraryPart;
     std::function<void()> onParamChange;
+    // The label of what the panel currently edits: the selected component (the PFB the combo
+    // edits, when one is picked), the selected group's name, or "" when nothing is selected.
+    std::string selectionLabel() const;
     void setViewToggles(const ViewToggles &t) { m_viewToggles = t; }
     bool m_param_edited = false;
 

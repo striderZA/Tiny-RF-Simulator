@@ -135,6 +135,29 @@ std::string InspectorPanel::labelForHit(const Hit &hit) const {
     return hit.desc->display_name + " " + std::to_string(hit.engine->id());
 }
 
+std::string InspectorPanel::selectionLabel() const {
+    const int group_id = m_graph.selectedGroupId();
+    if (group_id >= 0) {
+        const Group *group = m_graph.groupById(group_id);
+        return group ? group->name : std::string();
+    }
+    const Hit hit = findSelected();
+    if (!hit.desc || !hit.engine)
+        return "";
+    // draw() may point the property controls at another PFB through the combo; the label names
+    // the engine they edit, not the graph selection. The anchor is valid only while it refers to
+    // this graph-selected PFB.
+    IComponentEngine *edit_engine = hit.engine;
+    if (hit.desc->type == "pfb") {
+        const auto *pfb = static_cast<const PFBChannelizerEngine *>(hit.engine);
+        if (m_pfb_combo_graph_id == pfb->id() && m_selected_pfb_index >= 0 &&
+            m_selected_pfb_index < static_cast<int>(m_pfb_ptrs.size()) &&
+            m_pfb_ptrs[m_selected_pfb_index])
+            edit_engine = m_pfb_ptrs[m_selected_pfb_index];
+    }
+    return labelForHit(Hit{hit.desc, edit_engine});
+}
+
 void InspectorPanel::drawPartPicker(const IComponentEngine &engine) {
     const int node_id = engine.graphNodeId();
     std::string current;

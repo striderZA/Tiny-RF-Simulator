@@ -147,6 +147,10 @@ class RfSimulatorApp {
     // Re-evaluates the budget only when an input changed since the last evaluation.
     void refreshRfBudgetEvaluation();
     void testMakeDirty();
+    // Drive the widget-edit coalescing directly: note keeps the first label, flush commits it
+    // without the "a widget is still active" guard the frame loop uses.
+    void testNoteWidgetEdit(std::string label) { noteWidgetEdit(std::move(label)); }
+    void testFlushWidgetEdit() { commitPendingWidgetEdit(); }
     // Test-only access to checkpoint serialization and the replacement epoch.
     ProjectSerializer &testProjectSerializer() { return *m_serializer; }
     std::uint64_t testProjectEpoch() const { return m_circuit_runtime.epoch(); }
@@ -251,6 +255,15 @@ class RfSimulatorApp {
 
   private:
     bool m_test_throw_on_next_duplicate = false;
+
+    // Widget parameter edits arrive as many small model writes while a control is dragged. The
+    // first label is kept until the edit is flushed, so one gesture is one undo record.
+    void noteWidgetEdit(std::string label);
+    // Commits a pending widget edit once no widget control is still being dragged.
+    void flushWidgetEdit();
+    // Commits a pending widget edit regardless of the active control (test seam and agent begin).
+    void commitPendingWidgetEdit();
+    std::string m_pending_widget_edit;
 
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the

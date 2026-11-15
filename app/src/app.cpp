@@ -62,6 +62,35 @@ static std::string appExeDir() {
     return parent.string();
 }
 
+namespace {
+
+// Closes an app-level edit group on every exit, including a throw: a group left open would refuse
+// undo and redo and silence every later record until the project is replaced.
+class EditGroupGuard {
+  public:
+    explicit EditGroupGuard(EditorCommands &commands) : m_commands(commands) {}
+    ~EditGroupGuard() {
+        if (m_closed)
+            return;
+        try {
+            (void)m_commands.endEditGroup();
+        } catch (...) {
+        }
+    }
+    void close(std::optional<std::string> label = std::nullopt) {
+        if (m_closed)
+            return;
+        m_closed = true;
+        (void)m_commands.endEditGroup(std::move(label));
+    }
+
+  private:
+    EditorCommands &m_commands;
+    bool m_closed = false;
+};
+
+} // namespace
+
 RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_editor_commands.onComponentsChanged = [this]() { syncComponentViews(); };
 
@@ -176,7 +205,12 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_graph_widget->registerNodeKind(desc->label_prefix, desc->kind);
     }
     m_graph_widget->setAddableComponents(std::move(addable));
-    m_graph_widget->onNodeMoved = [this]() { markDirty(); };
+    // A drag fires once on mouse release, and snapping moves nodes through the same path, so each
+    // is one record.
+    m_graph_widget->onNodeMoved = [this]() {
+        markDirty();
+        m_editor_commands.commitEdit("Move nodes");
+    };
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_circuit_runtime.components().hoverSummary(id);
@@ -210,13 +244,20 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
                                        nullptr, // iq_plot (per-PFB toggles used instead)
                                        &m_show_node_editor});
-    m_inspector_panel->onParamChange = [this]() { markDirty(); };
+    m_inspector_panel->onParamChange = [this]() {
+        markDirty();
+        noteWidgetEdit("Edit " + m_inspector_panel->selectionLabel());
+    };
 
     refreshExtensions();
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
+        // One record: the part, its part number, and the canvas spot it lands on.
+        m_editor_commands.beginEditGroup("Add " + def.part_number);
+        EditGroupGuard group(m_editor_commands);
         (void)m_editor_commands.addLibraryPart(m_library, def);
+        group.close();
     };
 
     m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
@@ -232,11 +273,13 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_receiver_requirements_widget->onChange = [this]() {
         markDirty();
         m_rf_budget_evaluation_dirty = true;
+        noteWidgetEdit("Edit requirements");
     };
     m_rf_budget_widget = std::make_unique<RfBudgetWidget>();
     m_rf_budget_widget->onChange = [this]() {
         markDirty();
         m_rf_budget_evaluation_dirty = true;
+        noteWidgetEdit("Edit RF budget");
     };
     m_rf_budget_widget->onRefresh = [this]() { m_rf_budget_evaluation_dirty = true; };
     m_power_meter_widget =
@@ -244,9 +287,15 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
     // state (persisted by ProjectSerializer) — mark the project dirty exactly
     // like InspectorPanel::onParamChange does for component params.
-    m_na_widget->onParamChange = [this]() { markDirty(); };
+    m_na_widget->onParamChange = [this]() {
+        markDirty();
+        noteWidgetEdit("Set analyzer points");
+    };
     m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_circuit_runtime.components());
-    m_calculator_widget->onParamChange = [this]() { markDirty(); };
+    m_calculator_widget->onParamChange = [this]() {
+        markDirty();
+        noteWidgetEdit("Edit filter design");
+    };
     m_test_flow_widget =
         std::make_unique<TestFlowWidget>(m_circuit_runtime.components(), m_circuit_runtime.graph());
 
@@ -418,35 +467,6 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
         return nullptr;
     return desc->create(m_registry, m_graph, id);
 }
-
-namespace {
-
-// Closes an app-level edit group on every exit, including a throw: a group left open would refuse
-// undo and redo and silence every later record until the project is replaced.
-class EditGroupGuard {
-  public:
-    explicit EditGroupGuard(EditorCommands &commands) : m_commands(commands) {}
-    ~EditGroupGuard() {
-        if (m_closed)
-            return;
-        try {
-            (void)m_commands.endEditGroup();
-        } catch (...) {
-        }
-    }
-    void close(std::optional<std::string> label = std::nullopt) {
-        if (m_closed)
-            return;
-        m_closed = true;
-        (void)m_commands.endEditGroup(std::move(label));
-    }
-
-  private:
-    EditorCommands &m_commands;
-    bool m_closed = false;
-};
-
-} // namespace
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
     // One record: the node, where the canvas placed it, and anything the factory configured.
@@ -733,6 +753,27 @@ bool RfSimulatorApp::testSetGroupCollapsed(int group_id, bool collapsed) {
 }
 
 void RfSimulatorApp::markDirty() { m_editor_commands.markModified(); }
+
+void RfSimulatorApp::noteWidgetEdit(std::string label) {
+    // The first label of a gesture names the whole gesture.
+    if (m_pending_widget_edit.empty())
+        m_pending_widget_edit = std::move(label);
+}
+
+void RfSimulatorApp::flushWidgetEdit() {
+    // A control that is still being dragged keeps writing; commit once it is released.
+    if (ImGui::IsAnyItemActive())
+        return;
+    commitPendingWidgetEdit();
+}
+
+void RfSimulatorApp::commitPendingWidgetEdit() {
+    if (m_pending_widget_edit.empty())
+        return;
+    std::string label = std::move(m_pending_widget_edit);
+    m_pending_widget_edit.clear();
+    m_editor_commands.commitEdit(label);
+}
 
 void RfSimulatorApp::refreshRfBudgetEvaluation() {
     if (!m_rf_budget_evaluation_dirty && m_rf_budget_library_revision == m_library_revision)
@@ -1551,6 +1592,8 @@ void RfSimulatorApp::drawComponentFormModal() {
             if (saveComponentForm()) {
                 m_show_component_form = false;
                 markDirty();
+                // The form writes a library entry, not the circuit: record it for undo too.
+                noteWidgetEdit("Edit component");
                 ImGui::CloseCurrentPopup();
             }
         }
