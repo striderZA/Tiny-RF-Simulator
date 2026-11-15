@@ -1673,11 +1673,15 @@ TEST_CASE_METHOD(ImGuiFixture,
     app.testEditorCommands().clearHistory();
     const std::size_t records = app.testEditorCommands().undoCount();
 
-    // Panning moves every editor-space position; grid positions must not follow.
+    // Panning moves every editor-space position; grid positions must not follow. A pending edit
+    // is noted first, so the flush really runs: the interim editor-space hooks would record the
+    // pan's four position changes here.
     ImNodes::EditorContextResetPanning(ImVec2(120.0f, -40.0f));
     REQUIRE(widget.editorPositionForSave(a).x == 240.0f);
+    app.testNoteWidgetEdit("Pan probe");
     app.testFlushWidgetEdit();
     REQUIRE(app.testEditorCommands().undoCount() == records);
+    REQUIRE(app.testEditorCommands().undoLabel().empty());
     REQUIRE(widget.gridPositionForSave(a).x == 120.0f);
     REQUIRE(widget.gridPositionForSave(a).y == 40.0f);
 
