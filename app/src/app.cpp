@@ -620,7 +620,7 @@ void RfSimulatorApp::newProject() {
     m_current_project_path.clear();
     refreshExtensions();
     m_editor_commands.markClean();
-    m_editor_commands.clearLayoutUndo();
+    m_editor_commands.clearHistory();
     // The reset replaced every engine, so the panel's snapshots and result refer
     // to a circuit that no longer exists. The retained flow selection is
     // revalidated against the new circuit by the panel itself.
@@ -1092,7 +1092,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
             // (issue #113). A failure that left state intact keeps the path.
             m_current_project_path.clear();
             m_editor_commands.markModified();
-            m_editor_commands.clearLayoutUndo();
+            m_editor_commands.clearHistory();
             // Extension discovery is rooted at the project directory, so it
             // must be re-derived once the path is gone: otherwise the
             // destroyed project's project-local tools and data packs stay
@@ -1116,7 +1116,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
     m_current_project_path = path;
     refreshExtensions();
     m_editor_commands.markClean();
-    m_editor_commands.clearLayoutUndo();
+    m_editor_commands.clearHistory();
     // A load that replaced the circuit — this successful one, or a failed one
     // that reset it (handled above) — is a circuit reload for the panel, so its
     // latch and stale result are cleared; a failed load that left the live
@@ -1151,6 +1151,9 @@ void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {
     // inputs so both views show the restored state instead of the pre-revert verdicts.
     refreshExtensions();
     markDirty();
+    // The reverted state replaces the live project: the old edits can no longer be undone onto
+    // it, so the history starts over from the restored checkpoint.
+    m_editor_commands.clearHistory();
     m_agent_api->noteProjectReplaced(AgentReplacementCause::Reverted,
                                      m_agent_host->removeCheckpointsFrom(checkpoint_id));
 }

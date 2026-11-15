@@ -134,10 +134,6 @@ class EditorCommands {
     // accepted without advancing the revision. Refused, with nothing changed, when a listed node is
     // unknown or belongs to a collapsed subcircuit.
     std::string moveNodes(const std::vector<LayoutMove> &moves);
-    // Task 4 forwarders so the app keeps building until Task 5 removes them with their callers.
-    bool undoLayout() { return undo(); }
-    bool canUndoLayout() const { return canUndo(); }
-    void clearLayoutUndo() { clearHistory(); }
 
     void markModified();
     void markClean();
