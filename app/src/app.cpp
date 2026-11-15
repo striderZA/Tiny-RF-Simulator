@@ -1854,8 +1854,17 @@ void RfSimulatorApp::draw_ui() {
         ImGui::EndMainMenuBar();
     }
 
+    // A widget gesture that has finished (no control still active) becomes one record before any
+    // shortcut can undo it.
+    flushWidgetEdit();
+
     // Keyboard shortcuts (skip while editing text fields)
     if (!io.WantTextInput) {
+        // Undo is global, but never while a control owns the keyboard: a widget that handles the
+        // key first must keep it. Task 6 adds the redo bindings and the result notices.
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && !io.KeyShift &&
+            ImGui::IsKeyPressed(ImGuiKey_Z))
+            (void)m_editor_commands.undo();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
             if (!m_current_project_path.empty())
                 saveProject(m_current_project_path);
