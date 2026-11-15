@@ -11,6 +11,7 @@
 #include "logging_widget.h"
 #include "output_snr.h"
 #include "pfb_channelizer_engine.h"
+#include "ui_theme.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -2042,7 +2043,13 @@ void RfSimulatorApp::draw_ui() {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard", ImVec2(120, 0))) {
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_pending_action = PendingAction::None;
+            m_show_unsaved_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Discard", ImVec2(120, 0))) {
             auto action = m_pending_action;
             m_pending_action = PendingAction::None;
             m_show_unsaved_dialog = false;
@@ -2064,12 +2071,6 @@ void RfSimulatorApp::draw_ui() {
             default:
                 break;
             }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            m_pending_action = PendingAction::None;
-            m_show_unsaved_dialog = false;
-            ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
@@ -2136,8 +2137,8 @@ void RfSimulatorApp::draw_ui() {
                     m_rename_target = name;
                     std::snprintf(m_rename_buf, sizeof(m_rename_buf), "%s", name.c_str());
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Delete"))
+                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                if (ui::dangerButton("Delete"))
                     m_layout_manager.deleteNamedLayout(name);
             }
             ImGui::PopID();
