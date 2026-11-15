@@ -1334,3 +1334,68 @@ TEST_CASE_METHOD(AppFixture, "An interrupted agent checkpoint leaves the edit gr
     REQUIRE(app.testEditorCommands().undoLabel().rfind("Add", 0) == 0);
     REQUIRE(app.testEditorCommands().undoCount() == 1);
 }
+
+// ======================================================================
+// Test: an agent placement belongs to the call's undo record
+//
+// planAgentPlacement() lays the added nodes out from the existing
+// circuit's right edge: on an empty project the origin is (0,0), the
+// generator adds no predecessor (column 0, row 0) and the amplifier
+// follows it (column 1, row 0), so the expected editor positions are
+// (0,0) and (kAgentGridColumnWidth, 0) = (260,0). The fixture never
+// pans, so grid and editor space coincide.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An agent placement is part of the call's undo record",
+                 "[agent_app][undo]") {
+    app.newProject();
+    std::vector<int> existing;
+    for (const GraphNode &node : app.testGraphEngine().nodes())
+        existing.push_back(node.node_id);
+    const std::size_t records = app.testEditorCommands().undoCount();
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+
+    // (a) The call is one record, labelled by its tool.
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Agent: circuit_edit");
+
+    std::vector<int> added;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (std::find(existing.begin(), existing.end(), node.node_id) == existing.end())
+            added.push_back(node.node_id);
+    }
+    REQUIRE(added.size() == 2);
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const ImVec2 first = widget.editorPositionForSave(added[0]);
+    const ImVec2 second = widget.editorPositionForSave(added[1]);
+    REQUIRE(first.x == 0.0f);
+    REQUIRE(first.y == 0.0f);
+    REQUIRE(second.x == kAgentGridColumnWidth);
+    REQUIRE(second.y == 0.0f);
+
+    // (b) The placement is inside the record: nothing is left pending for the next flush.
+    app.testNoteWidgetEdit("Probe");
+    app.testFlushWidgetEdit();
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+
+    // (c) Undo removes the nodes; redo restores them where they were.
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == 0);
+    REQUIRE(app.testEditorCommands().redo());
+    REQUIRE(app.componentCount() == 2);
+    const ImVec2 first_after = widget.editorPositionForSave(added[0]);
+    const ImVec2 second_after = widget.editorPositionForSave(added[1]);
+    REQUIRE(first_after.x == first.x);
+    REQUIRE(first_after.y == first.y);
+    REQUIRE(second_after.x == second.x);
+    REQUIRE(second_after.y == second.y);
+}

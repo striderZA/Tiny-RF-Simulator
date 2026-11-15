@@ -497,19 +497,24 @@ AgentToolResult executeCircuitEditTool(const AgentApi &api, const AgentCall &cal
     OpenCheckpointGuard open_checkpoint(context.host, summary);
 
     const auto finish = [&](bool preserve_empty_checkpoint = false) {
-        open_checkpoint.close();
         // No-op results do not create empty checkpoints or evict real history.
         const bool state_changed =
             std::any_of(applied.begin(), applied.end(),
                         [](const Json &entry) { return !entry.value("unchanged", false); });
         if (!state_changed && !preserve_empty_checkpoint) {
+            open_checkpoint.close();
             context.host.discardCheckpoint();
-        } else {
-            context.host.commitCheckpoint(summary.text());
-            if (!added_node_ids.empty())
-                context.host.placeComponents(
-                    planAgentPlacement(added_node_ids, positions, context.runtime.graph()));
+            return;
         }
+        // Placement is part of the call's edit: it must run while the checkpoint's undo group is
+        // still open, or the placed positions land in no record (redo would recreate the nodes at
+        // the origin) and leak into the next one. The guard is still armed here, so a throwing
+        // placement commits the call as interrupted and the group still closes.
+        if (!added_node_ids.empty())
+            context.host.placeComponents(
+                planAgentPlacement(added_node_ids, positions, context.runtime.graph()));
+        open_checkpoint.close();
+        context.host.commitCheckpoint(summary.text());
     };
 
     const auto process = [&](std::size_t index, const OrderedJson &operation) {
