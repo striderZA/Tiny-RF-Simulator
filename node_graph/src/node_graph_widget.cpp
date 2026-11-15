@@ -160,6 +160,19 @@ ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
     return ImNodes::GetNodeEditorSpacePos(node_id);
 }
 
+ImVec2 NodeGraphWidget::gridPositionForSave(int node_id) {
+    const ImVec2 editor = editorPositionForSave(node_id);
+    ImNodes::EditorContextSet(m_context);
+    const ImVec2 pan = ImNodes::EditorContextGetPanning();
+    return ImVec2(editor.x - pan.x, editor.y - pan.y);
+}
+
+void NodeGraphWidget::setNodeGridPosition(int node_id, ImVec2 grid_position) {
+    ImNodes::EditorContextSet(m_context);
+    const ImVec2 pan = ImNodes::EditorContextGetPanning();
+    setNodeEditorSpacePosition(node_id, ImVec2(grid_position.x + pan.x, grid_position.y + pan.y));
+}
+
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 

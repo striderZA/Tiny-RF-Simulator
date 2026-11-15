@@ -140,6 +140,10 @@ class NodeGraphWidget {
     // initialized pool position are read directly; unregistered nodes and collapsed-group
     // members use the cached grid position (or the origin) plus the current pan.
     ImVec2 editorPositionForSave(int node_id);
+    // Pan-independent grid position, for undo records: editorPositionForSave() minus the pan.
+    ImVec2 gridPositionForSave(int node_id);
+    // Places a node at a grid position, applying the current pan so undo is pan-independent.
+    void setNodeGridPosition(int node_id, ImVec2 grid_position);
 
     // Draws the schematic glyph for `kind` (and its label, if any) centred on `center`, inside the
     // shared 48x32 design box. Public so the geometry tests can measure the drawn vertices.
