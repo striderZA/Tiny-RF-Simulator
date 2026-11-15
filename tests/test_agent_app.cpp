@@ -1386,8 +1386,49 @@ TEST_CASE_METHOD(AppFixture, "An agent placement is part of the call's undo reco
     app.testNoteWidgetEdit("Probe");
     app.testFlushWidgetEdit();
     REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+}
 
-    // (c) Undo removes the nodes; redo restores them where they were.
+// ======================================================================
+// Test: redo restores the positions an agent placement recorded
+//
+// Runs on its own so the placement-in-the-record check reports its own
+// failure: planAgentPlacement() puts the generator at (0,0) and the
+// amplifier at (kAgentGridColumnWidth, 0) = (260,0) on the empty project
+// newProject() leaves. Without the placement in the record, redo would
+// recreate both nodes at the origin.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Redo restores the positions an agent placement recorded",
+                 "[agent_app][undo]") {
+    app.newProject();
+    std::vector<int> existing;
+    for (const GraphNode &node : app.testGraphEngine().nodes())
+        existing.push_back(node.node_id);
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+
+    std::vector<int> added;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (std::find(existing.begin(), existing.end(), node.node_id) == existing.end())
+            added.push_back(node.node_id);
+    }
+    REQUIRE(added.size() == 2);
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const ImVec2 first = widget.editorPositionForSave(added[0]);
+    const ImVec2 second = widget.editorPositionForSave(added[1]);
+    REQUIRE(first.x == 0.0f);
+    REQUIRE(first.y == 0.0f);
+    REQUIRE(second.x == kAgentGridColumnWidth);
+    REQUIRE(second.y == 0.0f);
+
     REQUIRE(app.testEditorCommands().undo());
     REQUIRE(app.componentCount() == 0);
     REQUIRE(app.testEditorCommands().redo());
