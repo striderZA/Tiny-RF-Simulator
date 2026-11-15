@@ -248,14 +248,18 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
                                        &m_show_node_editor});
     m_inspector_panel->onParamChange = [this]() {
         markDirty();
-        noteWidgetEdit("Edit " + m_inspector_panel->selectionLabel());
+        // A drawer can write while nothing it can name is selected (the group was just ungrouped,
+        // or the PFB anchor moved): the record still needs a label that reads as a sentence.
+        const std::string selected = m_inspector_panel->selectionLabel();
+        noteWidgetEdit(selected.empty() ? "Edit properties" : "Edit " + selected);
     };
 
     refreshExtensions();
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
-        // One record: the part, its part number, and the canvas spot it lands on.
+        // One record for the insert. A library part lands at the grid origin; the record carries
+        // that position so a redo puts it back there.
         m_editor_commands.beginEditGroup("Add " + def.part_number);
         EditGroupGuard group(m_editor_commands);
         (void)m_editor_commands.addLibraryPart(m_library, def);
@@ -1875,7 +1879,7 @@ void RfSimulatorApp::draw_ui() {
     // Keyboard shortcuts (skip while editing text fields)
     if (!io.WantTextInput) {
         // Undo is global, but never while a control owns the keyboard: a widget that handles the
-        // key first must keep it. Task 6 adds the redo bindings and the result notices.
+        // key first must keep it.
         if (!ImGui::IsAnyItemActive() && io.KeyCtrl && !io.KeyShift &&
             ImGui::IsKeyPressed(ImGuiKey_Z))
             (void)m_editor_commands.undo();

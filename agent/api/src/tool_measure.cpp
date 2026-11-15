@@ -402,16 +402,24 @@ AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const Agent
                          point_a.pin != engine.pointAPin() || point_b.pin != engine.pointBPin();
     if (changed)
         context.host.beginCheckpoint(call);
-    engine.setPointA(point_a.pin);
-    engine.setPointB(point_b.pin);
-    if (start)
-        engine.setStartFrequency(*start);
-    if (stop)
-        engine.setStopFrequency(*stop);
-    if (points)
-        engine.setPoints(*points);
-    if (stimulus)
-        engine.setStimulusPower(*stimulus);
+    try {
+        engine.setPointA(point_a.pin);
+        engine.setPointB(point_b.pin);
+        if (start)
+            engine.setStartFrequency(*start);
+        if (stop)
+            engine.setStopFrequency(*stop);
+        if (points)
+            engine.setPoints(*points);
+        if (stimulus)
+            engine.setStimulusPower(*stimulus);
+    } catch (...) {
+        // A throwing setter must not leak the checkpoint's undo group. Applied-mode changes stay
+        // revertable through the committed snapshot, as the budget tool does.
+        if (changed)
+            context.host.commitCheckpoint("interrupted: network analyzer settings");
+        throw;
+    }
     if (changed) {
         context.commands.markModified();
         context.host.commitCheckpoint("network analyzer settings");
