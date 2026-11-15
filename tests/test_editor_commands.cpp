@@ -1821,9 +1821,13 @@ TEST_CASE_METHOD(ImGuiFixture,
 
     NodeGraphWidgetActions actions;
     int begins = 0;
+    int ends = 0;
     actions.removeComponent = [&runtime](int id) { return runtime.removeComponent(id); };
     actions.beginEditGroup = [&begins](std::string) { ++begins; };
-    actions.endEditGroup = []() -> bool { throw std::runtime_error("commit failed"); };
+    actions.endEditGroup = [&ends]() -> bool {
+        ++ends;
+        throw std::runtime_error("commit failed");
+    };
     NodeGraphWidget widget(runtime.graph(), std::move(actions));
     widget.setNodeEditorSpacePosition(node, ImVec2(100.0f, 40.0f));
     selectNodes(widget, {node});
@@ -1834,5 +1838,7 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE_NOTHROW(drawFrameFocusing(widget, /*focus_editor=*/true, /*delete_down=*/false));
     REQUIRE_NOTHROW(drawFrameFocusing(widget, true, true));
     REQUIRE(begins == 1);
+    // The throw happened after the close was attempted, so a skipped close would report 0 here.
+    REQUIRE(ends == 1);
     REQUIRE(runtime.components().size() == 0);
 }
