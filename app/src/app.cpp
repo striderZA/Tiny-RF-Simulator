@@ -339,6 +339,15 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_rf_budget = budget;
         m_rf_budget_evaluation_dirty = true;
     };
+    // One undo record per tool call. A widget edit still pending when the call begins is committed
+    // into it rather than left for the next frame.
+    agent_hooks.begin_edit_group = [this]() {
+        commitPendingWidgetEdit();
+        m_editor_commands.beginEditGroup("Agent");
+    };
+    agent_hooks.end_edit_group = [this](const std::string &label) {
+        (void)m_editor_commands.endEditGroup(label);
+    };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
         result.loaded = loadProject(path);
