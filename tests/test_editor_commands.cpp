@@ -1852,3 +1852,18 @@ TEST_CASE_METHOD(ImGuiFixture,
     REQUIRE(logged == 1);
     REQUIRE(runtime.components().size() == 0);
 }
+
+TEST_CASE_METHOD(ImGuiFixture, "A notice is shown for four seconds and then clears",
+                 "[editor_commands][notice]") {
+    CircuitRuntime runtime;
+    NodeGraphWidget widget(runtime.graph(), NodeGraphWidgetActions{});
+    const std::string text = "Removed Amplifier 101 \xC2\xB7 Ctrl+Z to undo";
+
+    widget.showNotice(text, 10.0);
+
+    REQUIRE(widget.noticeAt(10.0) == text);
+    REQUIRE(widget.noticeAt(13.9) == text);
+    // Exactly four seconds after it was shown the notice is gone.
+    REQUIRE(widget.noticeAt(14.0).empty());
+    REQUIRE(widget.noticeAt(20.0).empty());
+}

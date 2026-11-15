@@ -8,6 +8,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -57,6 +58,12 @@ class NodeGraphWidget {
     ~NodeGraphWidget();
 
     void draw(const char *title, bool *p_open = nullptr);
+
+    // A short-lived message painted at the canvas's bottom-left corner, e.g. the notice after a
+    // removal. It lives for four seconds (ES-4) and never takes part in layout or input.
+    void showNotice(std::string text, double now);
+    // The notice text to show at `now`, or empty once the notice has expired.
+    std::string_view noticeAt(double now) const;
 
     std::function<void()> onNodeMoved;
     std::function<NodeHoverInfo(int graph_node_id)> onNodeHover;
@@ -232,6 +239,12 @@ class NodeGraphWidget {
     std::set<int> m_collapsed_selection_groups;
     // Drag snapping to the grid, applied to ImNodes' style at the start of each draw.
     bool m_grid_snapping = false;
+
+    // The active notice (text plus the ImGui time it was shown at). Painted as draw-list text,
+    // so it is never an item.
+    std::string m_notice_text;
+    double m_notice_shown_at = 0.0;
+    void drawNotice();
 
     // Internal rendering helpers
     void rebuildSynthMaps();

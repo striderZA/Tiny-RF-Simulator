@@ -175,6 +175,41 @@ void NodeGraphWidget::setNodeGridPosition(int node_id, ImVec2 grid_position) {
     setNodeEditorSpacePosition(node_id, ImVec2(grid_position.x + pan.x, grid_position.y + pan.y));
 }
 
+void NodeGraphWidget::showNotice(std::string text, double now) {
+    m_notice_text = std::move(text);
+    m_notice_shown_at = now;
+}
+
+std::string_view NodeGraphWidget::noticeAt(double now) const {
+    // Shown while now - shown_at < 4.0 (ES-4); the clock is monotonic, so a notice cannot
+    // expire before it was shown.
+    constexpr double kNoticeLifetime = 4.0;
+    if (m_notice_text.empty() || now - m_notice_shown_at >= kNoticeLifetime)
+        return {};
+    return m_notice_text;
+}
+
+void NodeGraphWidget::drawNotice() {
+    const std::string_view text = noticeAt(ImGui::GetTime());
+    if (text.empty())
+        return;
+    // Draw-list only: the notice must not take part in layout or input.
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const ImVec2 text_size = ImGui::CalcTextSize(text.data(), text.data() + text.size());
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+    const ImVec2 window_size = ImGui::GetWindowSize();
+    const ImVec2 text_pos(window_pos.x + style.WindowPadding.x,
+                          window_pos.y + window_size.y - style.WindowPadding.y - text_size.y);
+    const ImVec2 rect_min(text_pos.x - style.FramePadding.x, text_pos.y - style.FramePadding.y);
+    const ImVec2 rect_max(text_pos.x + text_size.x + style.FramePadding.x,
+                          window_pos.y + window_size.y - style.WindowPadding.y);
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(rect_min, rect_max, ImGui::GetColorU32(ImGuiCol_PopupBg),
+                             style.PopupRounding);
+    draw_list->AddText(text_pos, ImGui::GetColorU32(ImGuiCol_Text), text.data(),
+                       text.data() + text.size());
+}
+
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
     ImNodes::EditorContextSet(m_context);
 
@@ -195,6 +230,9 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         bool editor_hovered = ImNodes::IsEditorHovered();
 
         ImNodes::EndNodeEditor();
+
+        // The undo/removal notice sits on the canvas, painted after the editor closes its scope.
+        drawNotice();
 
         // Rubber-band selection (Shift+drag on empty space)
         handleRubberBand(editor_hovered);
