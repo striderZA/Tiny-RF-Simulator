@@ -242,20 +242,28 @@ install(TARGETS tiny-rf-simulator rf-sim-mcp RUNTIME DESTINATION bin)
 
 # MinGW runtime DLLs that the Windows release zip ships. The release workflow
 # copies the same three from /mingw64/bin, the MINGW64 prefix of its MSYS2 shell.
-# Resolve that same bin directory here: MSYSTEM_PREFIX is /mingw64 in a MINGW64
-# shell, and cygpath turns it into the Windows path find_file needs. A missing
-# DLL fails configure.
+# Resolve that same bin directory here from MSYSTEM_PREFIX. A MINGW64 shell
+# exports an MSYS path (/mingw64) that only cygpath turns into the Windows path
+# find_file needs; a native MinGW-w64 toolchain exports a Windows path
+# (C:/mingw64) that needs no conversion. A missing DLL fails configure.
 if(WIN32)
-    if(NOT DEFINED ENV{MSYSTEM_PREFIX})
-        message(FATAL_ERROR "MSYSTEM_PREFIX is not set: configure Windows builds from an MSYS2 MINGW64 shell")
+    if(NOT DEFINED ENV{MSYSTEM_PREFIX} OR "$ENV{MSYSTEM_PREFIX}" STREQUAL "")
+        message(FATAL_ERROR "MSYSTEM_PREFIX is not set: configure Windows builds from an MSYS2 MINGW64 shell, or point MSYSTEM_PREFIX at the MinGW-w64 prefix")
     endif()
-    find_program(RFSIM_CYGPATH cygpath REQUIRED)
-    execute_process(COMMAND "${RFSIM_CYGPATH}" -m "$ENV{MSYSTEM_PREFIX}/bin"
-        OUTPUT_VARIABLE RFSIM_MINGW_BIN_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE RFSIM_CYGPATH_RESULT)
-    if(NOT RFSIM_CYGPATH_RESULT EQUAL 0)
-        message(FATAL_ERROR "cygpath could not convert $ENV{MSYSTEM_PREFIX}/bin")
+    if("$ENV{MSYSTEM_PREFIX}" MATCHES "^/")
+        find_program(RFSIM_CYGPATH cygpath)
+        if(NOT RFSIM_CYGPATH)
+            message(FATAL_ERROR "MSYSTEM_PREFIX is $ENV{MSYSTEM_PREFIX}, an MSYS path, but cygpath was not found: configure from an MSYS2 MINGW64 shell, or set MSYSTEM_PREFIX to the Windows path of the MinGW-w64 prefix")
+        endif()
+        execute_process(COMMAND "${RFSIM_CYGPATH}" -m "$ENV{MSYSTEM_PREFIX}/bin"
+            OUTPUT_VARIABLE RFSIM_MINGW_BIN_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE RFSIM_CYGPATH_RESULT)
+        if(NOT RFSIM_CYGPATH_RESULT EQUAL 0)
+            message(FATAL_ERROR "cygpath could not convert $ENV{MSYSTEM_PREFIX}/bin")
+        endif()
+    else()
+        set(RFSIM_MINGW_BIN_DIR "$ENV{MSYSTEM_PREFIX}/bin")
     endif()
     set(RFSIM_MINGW_RUNTIME_DLLS libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
     set(RFSIM_MINGW_RUNTIME_DLL_PATHS "")
