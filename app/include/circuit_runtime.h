@@ -19,6 +19,13 @@ class CircuitRuntime {
     // in-place replacement uses it, while the component that held `component_id` is still
     // registered; that predecessor must be removed before the command returns.
     IComponentEngine *createComponentWithId(const ComponentFactory &factory, int component_id);
+    // Rebuilds a removed component under its original component, node, and pin ids, then rewires
+    // its inputs the way connect() does. Refuses (nullptr, nothing changed) when either id is
+    // live or the built node's pin lists differ from the arguments; the id counters are always
+    // restored to their prior values (or the rebuilt ids when those are larger).
+    IComponentEngine *restoreComponent(const ComponentFactory &factory, int component_id,
+                                       int graph_node_id, const std::vector<int> &input_pins,
+                                       const std::vector<int> &output_pins);
     bool removeComponent(int graph_node_id);
     std::optional<int> connect(int start_pin_id, int end_pin_id);
     bool disconnect(int link_id);

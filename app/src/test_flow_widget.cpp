@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "node_graph_engine.h"
 #include "signal_node.h"
+#include "ui_theme.h"
 
 #include <algorithm>
 #include <cmath>
@@ -843,8 +844,8 @@ void TestFlowWidget::draw(const char *title, bool *open, const std::function<voi
                 ImGui::TableNextColumn();
                 if (ImGui::SmallButton("Edit"))
                     beginEditingCondition(i);
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Remove"))
+                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                if (ui::dangerSmallButton("Remove"))
                     removeCondition(i);
                 ImGui::PopID();
             }
@@ -907,7 +908,7 @@ void TestFlowWidget::draw(const char *title, bool *open, const std::function<voi
                     ImGui::TextColored(kIssueColor, "unresolved");
 
                 ImGui::TableNextColumn();
-                if (ImGui::SmallButton("Remove"))
+                if (ui::dangerSmallButton("Remove"))
                     removeMeasurement(i);
                 ImGui::PopID();
             }

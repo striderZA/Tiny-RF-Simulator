@@ -29,6 +29,10 @@ void AppAgentHost::beginCheckpoint(const AgentCall &call) {
                  m_pending_tool.c_str());
         commitCheckpoint("interrupted: " + m_pending_tool);
     }
+    // One undo record per call: an interrupted commit above closed its own group, so the edits
+    // that follow belong to this one.
+    if (m_hooks.begin_edit_group)
+        m_hooks.begin_edit_group();
     m_pending_tool = call.tool;
     m_pending_client = call.client;
     m_pending_snapshot = m_hooks.capture();
@@ -40,6 +44,9 @@ void AppAgentHost::commitCheckpoint(const std::string &summary) {
         LOG_WARN("AppAgentHost::commitCheckpoint called without a pending checkpoint");
         return;
     }
+    const std::string undo_label = "Agent: " + m_pending_tool;
+    if (m_hooks.end_edit_group)
+        m_hooks.end_edit_group(undo_label);
 
     AgentCheckpoint cp;
     cp.id = m_next_checkpoint_id++;
@@ -58,6 +65,9 @@ void AppAgentHost::commitCheckpoint(const std::string &summary) {
 }
 
 void AppAgentHost::discardCheckpoint() {
+    // A discarded call's group commits nothing when its edits changed nothing.
+    if (m_has_pending && m_hooks.end_edit_group)
+        m_hooks.end_edit_group("Agent: " + m_pending_tool);
     m_has_pending = false;
     m_pending_tool.clear();
     m_pending_client.clear();

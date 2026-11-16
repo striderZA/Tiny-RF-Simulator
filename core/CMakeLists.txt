@@ -5,6 +5,7 @@ project(core LANGUAGES CXX)
 # Core UI subsystem (ImGui + ImPlot + backend)
 add_library(core STATIC
     src/core.cpp
+    src/ui_theme.cpp
 )
 
 add_library(simulator::core ALIAS core)

@@ -16,11 +16,11 @@ can also right-click empty canvas in the Node Editor to pick from a context menu
 
 ## Connect Pins
 
-In the Node Editor, click an output pin and drag to an input pin, then release to create a link. To remove one, select the link and press Delete.
+In the Node Editor, click an output pin and drag to an input pin, then release to create a link. To remove one, select the link and press Delete. Ctrl+Z brings it back.
 
 ## Configure Parameters
 
-Left-click a node to load it into the Properties panel, then adjust a parameter such as gain or frequency. Changes take effect immediately. To swap a library part for another one, open the **Part** list under the component's name and pick a part. The new part keeps the node's position, links, probes, and group membership, and starts from its own library parameters. If a connected port, probe, or instrument point has no matching port on the new part, the swap is refused and the reason appears under the list.
+Left-click a node to load it into the Properties panel, then adjust a parameter such as gain or frequency. Changes take effect immediately. To swap a library part for another one, open the **Part** list under the component's name and pick a part. The new part keeps the node's position, links, probes, and group membership, and starts from its own library parameters. If a connected port, probe, or instrument point has no matching port on the new part, the swap is refused and the reason appears under the list. To remove the selected component, click **Remove** in the Properties header; Ctrl+Z restores it.
 
 ## View Results
 
@@ -29,4 +29,4 @@ Noise traces show power integrated over the selected RBW. Changing RBW, VBW, or 
 
 ## Navigate the Graph
 
-Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete to remove them. With two or more selected, right-click one of them to align or distribute the selection, or to snap it to the grid. Turn on **View > Snap to Grid** to make dragged nodes snap too. That's the whole workflow — click Finish.
+Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete to remove them. Delete works only while the Node Editor has focus, so it does nothing while you are typing in a field. Press Ctrl+Z to undo your last edit, and Ctrl+Shift+Z or Ctrl+Y to redo it. **Edit** names the step each one will reverse. With two or more selected, right-click one of them to align or distribute the selection, or to snap it to the grid. Turn on **View > Snap to Grid** to make dragged nodes snap too. That's the whole workflow — click Finish.

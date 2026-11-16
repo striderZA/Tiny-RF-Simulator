@@ -585,6 +585,13 @@ add_standalone_test(test_editor_commands
     LIBS simulator::app
 )
 set_tests_properties(test_editor_commands PROPERTIES RUN_SERIAL TRUE)
+
+# Restore primitives with original ids. UI-free.
+add_standalone_test(test_editor_history
+    SOURCES test_editor_history.cpp
+    LIBS simulator::app
+)
+
 # Standalone, UI-free coverage for the editor-services public build boundary.
 add_standalone_test(test_editor_services_boundary
     SOURCES test_editor_services_boundary.cpp

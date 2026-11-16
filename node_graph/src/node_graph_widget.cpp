@@ -2,10 +2,12 @@
 #include "node_graph_widget.h"
 #include "imgui.h"
 #include "imnodes.h"
+#include "logging_core.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -146,6 +148,19 @@ void NodeGraphWidget::markNodesRegistered() {
     }
 }
 
+void NodeGraphWidget::pruneMissingRegistrations() {
+    for (auto it = m_registered_in_pool.begin(); it != m_registered_in_pool.end();) {
+        const int node_id = *it;
+        const bool present =
+            std::any_of(m_engine.nodes().begin(), m_engine.nodes().end(),
+                        [node_id](const GraphNode &node) { return node.node_id == node_id; });
+        if (present)
+            ++it;
+        else
+            it = m_registered_in_pool.erase(it);
+    }
+}
+
 ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
     ImNodes::EditorContextSet(m_context);
     if (!m_registered_in_pool.count(node_id) || m_hidden_last_frame.count(node_id)) {
@@ -158,6 +173,54 @@ ImVec2 NodeGraphWidget::editorPositionForSave(int node_id) {
         return grid + ImNodes::EditorContextGetPanning();
     }
     return ImNodes::GetNodeEditorSpacePos(node_id);
+}
+
+ImVec2 NodeGraphWidget::gridPositionForSave(int node_id) {
+    const ImVec2 editor = editorPositionForSave(node_id);
+    ImNodes::EditorContextSet(m_context);
+    const ImVec2 pan = ImNodes::EditorContextGetPanning();
+    return ImVec2(editor.x - pan.x, editor.y - pan.y);
+}
+
+void NodeGraphWidget::setNodeGridPosition(int node_id, ImVec2 grid_position) {
+    ImNodes::EditorContextSet(m_context);
+    const ImVec2 pan = ImNodes::EditorContextGetPanning();
+    setNodeEditorSpacePosition(node_id, ImVec2(grid_position.x + pan.x, grid_position.y + pan.y));
+}
+
+void NodeGraphWidget::showNotice(std::string text, double now) {
+    m_notice_text = std::move(text);
+    m_notice_shown_at = now;
+}
+
+std::string_view NodeGraphWidget::noticeAt(double now) const {
+    // Shown while now - shown_at < 4.0 (ES-4); the clock is monotonic, so a notice cannot
+    // expire before it was shown.
+    constexpr double kNoticeLifetime = 4.0;
+    if (m_notice_text.empty() || now - m_notice_shown_at >= kNoticeLifetime)
+        return {};
+    return m_notice_text;
+}
+
+void NodeGraphWidget::drawNotice() {
+    const std::string_view text = noticeAt(ImGui::GetTime());
+    if (text.empty())
+        return;
+    // Draw-list only: the notice must not take part in layout or input.
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const ImVec2 text_size = ImGui::CalcTextSize(text.data(), text.data() + text.size());
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+    const ImVec2 window_size = ImGui::GetWindowSize();
+    const ImVec2 text_pos(window_pos.x + style.WindowPadding.x,
+                          window_pos.y + window_size.y - style.WindowPadding.y - text_size.y);
+    const ImVec2 rect_min(text_pos.x - style.FramePadding.x, text_pos.y - style.FramePadding.y);
+    const ImVec2 rect_max(text_pos.x + text_size.x + style.FramePadding.x,
+                          window_pos.y + window_size.y - style.WindowPadding.y);
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(rect_min, rect_max, ImGui::GetColorU32(ImGuiCol_PopupBg),
+                             style.PopupRounding);
+    draw_list->AddText(text_pos, ImGui::GetColorU32(ImGuiCol_Text), text.data(),
+                       text.data() + text.size());
 }
 
 void NodeGraphWidget::draw(const char *title, bool *p_open) {
@@ -180,6 +243,14 @@ void NodeGraphWidget::draw(const char *title, bool *p_open) {
         bool editor_hovered = ImNodes::IsEditorHovered();
 
         ImNodes::EndNodeEditor();
+
+        // Registrations outlive ImNodes' pool: a removed node stops being drawn, and ImNodes
+        // prunes it at EndNodeEditor. Drop those ids so a later position write (undo restoring
+        // the node) never reads a pool entry that is gone.
+        pruneMissingRegistrations();
+
+        // The undo/removal notice sits on the canvas, painted after the editor closes its scope.
+        drawNotice();
 
         // Rubber-band selection (Shift+drag on empty space)
         handleRubberBand(editor_hovered);
@@ -616,12 +687,6 @@ void NodeGraphWidget::handleContextMenu(bool editor_hovered) {
             layoutSelectionCount() >= 1 && ImNodes::IsNodeSelected(m_context_menu_node);
         if (ImGui::MenuItem("Snap selection to grid", nullptr, false, can_snap))
             snapSelectionToGrid();
-        ImGui::Separator();
-        const bool can_undo = m_actions.canUndoLayout && m_actions.canUndoLayout();
-        if (ImGui::MenuItem("Undo Layout", nullptr, false, can_undo)) {
-            if (m_actions.undoLayout)
-                m_actions.undoLayout();
-        }
         ImGui::EndPopup();
     }
 
@@ -689,10 +754,46 @@ void NodeGraphWidget::removeLink(int link_id) {
 }
 
 void NodeGraphWidget::handleNodeDeletion() {
+    // Delete belongs to the focused canvas only: another window's selection, a popup hosted
+    // by the canvas (CreateSubcircuit/RenameSubcircuit), and a text field's editing keys (as
+    // in the Properties panel) must not remove graph nodes. NoPopupHierarchy keeps a focused
+    // canvas popup from counting as the Node Editor, because that popup is not the canvas.
+    // The query reads the Node Editor because this runs inside its own Begin/End.
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows |
+                                ImGuiFocusedFlags_NoPopupHierarchy) ||
+        ImGui::GetIO().WantTextInput)
+        return;
     if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        // The removals below are individual commands, so the whole Delete is opened as one undo
+        // record; the guard closes it on every exit, including a throw from a callback.
+        const int num_selected_links = ImNodes::NumSelectedLinks();
+        const int num_selected = ImNodes::NumSelectedNodes();
+        struct EditGroupCloser {
+            const NodeGraphWidgetActions &actions;
+            bool opened;
+            ~EditGroupCloser() {
+                if (!opened || !actions.endEditGroup)
+                    return;
+                // A throw out of a destructor terminates the process, so the commit is guarded.
+                // A throw from capture() or diffSnapshots leaves the history's baseline
+                // un-advanced, so the delete's changes are absorbed into the next committed
+                // record; only a throw after the baseline advanced (in the push) loses them.
+                try {
+                    actions.endEditGroup();
+                } catch (const std::exception &error) {
+                    LOG_ERROR("Canvas delete: the edit record was not committed: %s", error.what());
+                } catch (...) {
+                    LOG_ERROR("Canvas delete: the edit record was not committed");
+                }
+            }
+        } closer{m_actions, false};
+        if (num_selected_links + num_selected > 0 && m_actions.beginEditGroup) {
+            m_actions.beginEditGroup(deletionLabel(num_selected_links, num_selected));
+            closer.opened = true;
+        }
+
         // Deleting selected links takes priority over nodes (imnodes clears the
         // other selection on click, but both may be selected programmatically).
-        int num_selected_links = ImNodes::NumSelectedLinks();
         if (num_selected_links > 0) {
             std::vector<int> selected_links(num_selected_links);
             ImNodes::GetSelectedLinks(selected_links.data());
@@ -701,7 +802,6 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::ClearLinkSelection();
         }
 
-        int num_selected = ImNodes::NumSelectedNodes();
         if (num_selected > 0) {
             std::vector<int> selected_nodes(num_selected);
             ImNodes::GetSelectedNodes(selected_nodes.data());
@@ -717,6 +817,19 @@ void NodeGraphWidget::handleNodeDeletion() {
             ImNodes::ClearNodeSelection();
         }
     }
+}
+
+std::string NodeGraphWidget::deletionLabel(int num_selected_links, int num_selected_nodes) const {
+    const int total = num_selected_links + num_selected_nodes;
+    if (total == 1 && num_selected_nodes == 1) {
+        int node_id = -1;
+        ImNodes::GetSelectedNodes(&node_id);
+        for (const GraphNode &node : m_engine.nodes()) {
+            if (node.node_id == node_id)
+                return "Remove " + node.label;
+        }
+    }
+    return "Remove " + std::to_string(total) + (total == 1 ? " item" : " items");
 }
 
 void NodeGraphWidget::handleProbeClick() {

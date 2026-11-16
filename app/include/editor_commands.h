@@ -2,10 +2,13 @@
 
 #include "circuit_runtime.h"
 #include "component_params.h"
+#include "editor_history.h"
 #include "node_layout.h"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -53,10 +56,47 @@ class EditorCommands {
     // Runs after every change to the set of live components.
     std::function<void()> onComponentsChanged;
 
-    // Editor-space node positions for moveNodes() and undoLayout(). The app wires them to the
-    // widget, which owns the imnodes positions; both must be set before a layout command runs.
+    // Editor-space node positions for moveNodes(). The app wires them to the widget, which owns
+    // the imnodes positions; both must be set before a layout command runs.
     std::function<LayoutPoint(int node_id)> readNodePosition;
     std::function<void(int node_id, LayoutPoint position)> writeNodePosition;
+
+    // Grid-space node positions for undo snapshots (pan-independent). The app wires them to the
+    // widget.
+    std::function<LayoutPoint(int node_id)> readNodeGridPosition;
+    std::function<void(int node_id, LayoutPoint grid_position)> writeNodeGridPosition;
+    // App-owned undoable values (Task 5 keys: "receiver_requirements", "rf_budget", "na_points").
+    std::function<std::map<std::string, nlohmann::json>()> captureAppState;
+    std::function<void(const std::string &key, const nlohmann::json &value)> applyAppState;
+
+    // Records the change since the last commit as one undo record. Pushes only when the snapshot
+    // differs from the baseline; inside an edit group every commit defers to the outermost group.
+    // Returns true when a record was pushed.
+    bool commitEdit(const std::string &label);
+    // Nests: commands that commit inside a group are recorded by the outermost endEditGroup().
+    void beginEditGroup(std::string label);
+    // At depth 0: commits with `label`, or the outermost group's label when it is absent. Returns
+    // true when a record was pushed.
+    bool endEditGroup(std::optional<std::string> label = std::nullopt);
+
+    std::size_t undoCount() const { return m_history.undoCount(); }
+    std::size_t redoCount() const { return m_history.redoCount(); }
+    // Records ever pushed. Never decreases, even when a push evicts the oldest record, so a
+    // caller can tell "a record was pushed" apart from "the undo count changed".
+    std::size_t pushCount() const { return m_history.pushCount(); }
+    // False when nothing is undoable, an edit group is open, or a delta step failed. A failed
+    // delta step keeps the record on the stack so a retry resumes where it stopped; the baseline
+    // is recaptured to the actual state, so the next commit records only the user's own change. A
+    // closing-sequence failure still consumes the record and returns true. Never throws.
+    bool undo();
+    bool redo();
+    bool canUndo() const;
+    bool canRedo() const;
+    // Empty when the direction is unavailable.
+    std::string undoLabel() const;
+    std::string redoLabel() const;
+    // Drops the records and group depth, and recaptures the baseline.
+    void clearHistory();
 
     IComponentEngine *createComponent(const ComponentFactory &factory);
     ComponentAddResult createComponentWithParams(const ComponentFactory &factory,
@@ -97,12 +137,6 @@ class EditorCommands {
     // accepted without advancing the revision. Refused, with nothing changed, when a listed node is
     // unknown or belongs to a collapsed subcircuit.
     std::string moveNodes(const std::vector<LayoutMove> &moves);
-    // Restores the positions the last accepted moveNodes() replaced. Available only while no other
-    // project edit has been accepted since, so it never overwrites a later edit.
-    bool undoLayout();
-    bool canUndoLayout() const;
-    // Drops the undo record. Called when the project is replaced, since node ids are reused.
-    void clearLayoutUndo() { m_layout_undo.clear(); }
 
     void markModified();
     void markClean();
@@ -111,13 +145,33 @@ class EditorCommands {
 
   private:
     void componentsChanged();
+    EditorSnapshot capture() const;
+    // Grid positions only, for the position baseline refresh below.
+    std::map<int, LayoutPoint> capturePositions() const;
+    // Copies the current grid positions into the baseline at depth 0, so a node placed outside a
+    // command is not rolled back by the next record. A no-op inside an open edit group, whose
+    // baseline must still show where the group started.
+    void refreshPositionBaseline();
+    // Applies `forward` against one capture taken at its start; every changed key applies only
+    // where the current value equals the record's before side. Returns false when a delta step
+    // throws: the record then stays on the stack (a retry resumes where it stopped), the closing
+    // sequence runs for the keys already applied, and the baseline is recaptured to the actual
+    // state. Closing-sequence failures log their step and never change the result. Never throws.
+    bool apply(const EditorDelta &forward);
+    // One step of apply(); `step` names the step in progress for the failure log.
+    void applyDeltas(const EditorDelta &forward, std::string &step);
+    bool commitNow(const std::string &label);
+    ComponentAddResult finishComponentAdd(IComponentEngine *component,
+                                          const nlohmann::ordered_json &params, std::string label);
+    std::string addedComponentLabel() const;
 
     CircuitRuntime &m_runtime;
     GraphEditorActions &m_editor_actions;
     std::uint64_t m_revision = 0;
     std::uint64_t m_clean_revision = 0;
-    // Positions the last accepted layout command replaced, and the revision it was accepted at.
-    // The record is valid only while the revision still matches.
-    std::vector<LayoutMove> m_layout_undo;
-    std::uint64_t m_layout_undo_revision = 0;
+    EditorSnapshot m_baseline;
+    EditorHistory m_history;
+    // The outermost open group's label; commits are deferred while m_group_depth is above zero.
+    std::string m_group_label;
+    int m_group_depth = 0;
 };

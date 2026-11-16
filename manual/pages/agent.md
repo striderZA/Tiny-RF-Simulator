@@ -80,6 +80,7 @@ The move does not change `revision` or create a checkpoint.
 Select **Revert to before this call** on a checkpoint to restore the project to its state before the edit.
 The dialog warns that a revert removes every change after the call. This also removes your later edits.
 Select **Revert** only if you want to discard those changes.
+A revert also clears the undo history, so Ctrl+Z cannot bring back the circuit from before it. Each other agent call that changes the circuit is one undo step, labelled `Agent: <tool>` in the **Edit** menu.
 
 ## Save and load a project
 

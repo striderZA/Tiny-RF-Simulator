@@ -8,6 +8,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -44,10 +45,11 @@ struct NodeGraphWidgetActions {
     std::function<bool(int, bool)> setGroupCollapsed;
     std::function<void(int)> selectGroup;
     // Align and distribute. moveNodes places the listed nodes and returns the refusal reason, or an
-    // empty string when accepted; undoLayout and canUndoLayout cover the last accepted layout.
+    // empty string when accepted.
     std::function<std::string(const std::vector<LayoutMove> &)> moveNodes;
-    std::function<bool()> undoLayout;
-    std::function<bool()> canUndoLayout;
+    // One undo record for a multi-item canvas delete, which is not a single command.
+    std::function<void(std::string)> beginEditGroup;
+    std::function<bool()> endEditGroup;
 };
 
 class NodeGraphWidget {
@@ -56,6 +58,12 @@ class NodeGraphWidget {
     ~NodeGraphWidget();
 
     void draw(const char *title, bool *p_open = nullptr);
+
+    // A short-lived message painted at the canvas's bottom-left corner, e.g. the notice after a
+    // removal. It lives for four seconds (ES-4) and never takes part in layout or input.
+    void showNotice(std::string text, double now);
+    // The notice text to show at `now`, or empty once the notice has expired.
+    std::string_view noticeAt(double now) const;
 
     std::function<void()> onNodeMoved;
     std::function<NodeHoverInfo(int graph_node_id)> onNodeHover;
@@ -140,6 +148,10 @@ class NodeGraphWidget {
     // initialized pool position are read directly; unregistered nodes and collapsed-group
     // members use the cached grid position (or the origin) plus the current pan.
     ImVec2 editorPositionForSave(int node_id);
+    // Pan-independent grid position, for undo records: editorPositionForSave() minus the pan.
+    ImVec2 gridPositionForSave(int node_id);
+    // Places a node at a grid position, applying the current pan so undo is pan-independent.
+    void setNodeGridPosition(int node_id, ImVec2 grid_position);
 
     // Draws the schematic glyph for `kind` (and its label, if any) centred on `center`, inside the
     // shared 48x32 design box. Public so the geometry tests can measure the drawn vertices.
@@ -168,6 +180,8 @@ class NodeGraphWidget {
     void handleLinkCreation();
     void handleLinkDeletion();
     void handleNodeDeletion();
+    // Undo label for one Delete press: the node's label, or the item count for several.
+    std::string deletionLabel(int num_selected_links, int num_selected_nodes) const;
     void handleProbeClick();
     // Link mutation and boundary refresh are delegated to the action bundle.
     void removeLink(int link_id);
@@ -226,8 +240,16 @@ class NodeGraphWidget {
     // Drag snapping to the grid, applied to ImNodes' style at the start of each draw.
     bool m_grid_snapping = false;
 
+    // The active notice (text plus the ImGui time it was shown at). Painted as draw-list text,
+    // so it is never an item.
+    std::string m_notice_text;
+    double m_notice_shown_at = 0.0;
+    void drawNotice();
+
     // Internal rendering helpers
     void rebuildSynthMaps();
+    // Forgets ImNodes pool registrations for nodes the engine no longer has.
+    void pruneMissingRegistrations();
     void drawGroupBackgrounds();
     void drawGroupCollapsedBlocks();
     void drawGroupTitleBar(const Group &g, const ImVec2 &top_left);

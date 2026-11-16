@@ -44,6 +44,9 @@ class AppAgentHost final : public IAgentHost {
         std::function<void(const ReceiverRequirementsSet &)> set_receiver_requirements;
         std::function<RfBudget()> rf_budget;
         std::function<void(const RfBudget &)> set_rf_budget;
+        // Undo grouping for one tool call: begin opens the record, end commits it under `label`.
+        std::function<void()> begin_edit_group;
+        std::function<void(const std::string &label)> end_edit_group;
     };
 
     AppAgentHost(NodeGraphWidget &graph_widget, Hooks hooks);

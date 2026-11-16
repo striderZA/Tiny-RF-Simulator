@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "rf_view_ui.h"
+#include "ui_theme.h"
 #include "utils.h"
 
 #include <algorithm>
@@ -342,7 +343,7 @@ void RfBudgetWidget::drawStatus(RfBudget &budget, const RfBudgetEvaluation &eval
         ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
         ImGui::TextWrapped("%s", budget.invalid_reason.c_str());
         ImGui::PopStyleColor();
-        if (ImGui::Button("Discard invalid budget")) {
+        if (ui::dangerButton("Discard invalid budget")) {
             budget = RfBudget{};
             m_error.clear();
             markChanged();
@@ -490,8 +491,8 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
         ImGui::TableNextColumn();
         if (ImGui::SmallButton("Rename..."))
             openRenameStage(index, budget);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Remove")) {
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerSmallButton("Remove")) {
             if (removeRfBudgetStage(budget, index)) {
                 m_error.clear();
                 markChanged();
@@ -572,8 +573,8 @@ void RfBudgetWidget::drawOutputs(RfBudget &budget) {
         ImGui::TableNextColumn();
         if (ImGui::SmallButton("Rename..."))
             openRenameOutput(index, budget);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Remove")) {
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerSmallButton("Remove")) {
             if (removeRfBudgetOutput(budget, index)) {
                 markChanged();
                 ImGui::PopID();
@@ -615,7 +616,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     if (record) {
         rf_view_ui::tag("Budgeted", rf_view_ui::passColor(), true);
         ImGui::BeginDisabled(!record->overrides.empty());
-        if (ImGui::Button("Clear budget record"))
+        if (ui::dangerButton("Clear budget record"))
             clear_record = true;
         ImGui::EndDisabled();
         if (!record->overrides.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -700,7 +701,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
                 }
 
                 ImGui::TableNextColumn();
-                if (ImGui::SmallButton("Remove"))
+                if (ui::dangerSmallButton("Remove"))
                     erase = std::make_pair(stage_name, key);
                 ImGui::PopID();
             }
@@ -1205,8 +1206,8 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                                     stage.params[field->key] = value;
                                     markChanged();
                                 }
-                                ImGui::SameLine();
-                                if (ImGui::SmallButton("Clear")) {
+                                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                                if (ui::dangerSmallButton("Clear")) {
                                     stage.params.erase(field->key);
                                     markChanged();
                                 }
@@ -1244,8 +1245,8 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                                     }
                                     ImGui::EndCombo();
                                 }
-                                ImGui::SameLine();
-                                if (ImGui::SmallButton("Clear")) {
+                                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                                if (ui::dangerSmallButton("Clear")) {
                                     stage.params.erase(field->key);
                                     markChanged();
                                 }
@@ -1266,8 +1267,8 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                                     stage.params[field->key] = value;
                                     markChanged();
                                 }
-                                ImGui::SameLine();
-                                if (ImGui::SmallButton("Clear")) {
+                                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                                if (ui::dangerSmallButton("Clear")) {
                                     stage.params.erase(field->key);
                                     markChanged();
                                 }
@@ -1283,9 +1284,9 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                     for (const std::string &key : unknown) {
                         ImGui::TextColored(rf_view_ui::failColor(), "Unknown setting '%s'",
                                            key.c_str());
-                        ImGui::SameLine();
+                        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
                         ImGui::PushID(key.c_str());
-                        if (ImGui::SmallButton("Remove")) {
+                        if (ui::dangerSmallButton("Remove")) {
                             stage.params.erase(key);
                             markChanged();
                         }

@@ -11,6 +11,7 @@
 #include "logging_widget.h"
 #include "output_snr.h"
 #include "pfb_channelizer_engine.h"
+#include "ui_theme.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -20,6 +21,7 @@
 #include <fstream>
 #include <functional>
 #include <portable-file-dialogs.h>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #ifdef _WIN32
@@ -62,6 +64,35 @@ static std::string appExeDir() {
     return parent.string();
 }
 
+namespace {
+
+// Closes an app-level edit group on every exit, including a throw: a group left open would refuse
+// undo and redo and silence every later record until the project is replaced.
+class EditGroupGuard {
+  public:
+    explicit EditGroupGuard(EditorCommands &commands) : m_commands(commands) {}
+    ~EditGroupGuard() {
+        if (m_closed)
+            return;
+        try {
+            (void)m_commands.endEditGroup();
+        } catch (...) {
+        }
+    }
+    void close(std::optional<std::string> label = std::nullopt) {
+        if (m_closed)
+            return;
+        m_closed = true;
+        (void)m_commands.endEditGroup(std::move(label));
+    }
+
+  private:
+    EditorCommands &m_commands;
+    bool m_closed = false;
+};
+
+} // namespace
+
 RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_editor_commands.onComponentsChanged = [this]() { syncComponentViews(); };
 
@@ -76,7 +107,11 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         return m_editor_commands.disconnect(link_id);
     };
     editor_actions.removeComponent = [this](int id) {
-        return m_editor_commands.removeComponent(id);
+        const std::size_t pushes = m_editor_commands.pushCount();
+        const bool removed = m_editor_commands.removeComponent(id);
+        if (removed)
+            showRemovalNotice(pushes);
+        return removed;
     };
     editor_actions.duplicateComponent = [this](int id) { return duplicateComponent(id); };
     editor_actions.addProbePin = [this](int pin_id) {
@@ -101,8 +136,15 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     editor_actions.moveNodes = [this](const std::vector<LayoutMove> &moves) {
         return m_editor_commands.moveNodes(moves);
     };
-    editor_actions.undoLayout = [this]() { return m_editor_commands.undoLayout(); };
-    editor_actions.canUndoLayout = [this]() { return m_editor_commands.canUndoLayout(); };
+    editor_actions.beginEditGroup = [this](std::string label) {
+        m_editor_commands.beginEditGroup(std::move(label));
+    };
+    editor_actions.endEditGroup = [this]() {
+        const std::size_t pushes = m_editor_commands.pushCount();
+        const bool committed = m_editor_commands.endEditGroup();
+        showRemovalNotice(pushes);
+        return committed;
+    };
     m_graph_widget =
         std::make_unique<NodeGraphWidget>(m_circuit_runtime.graph(), std::move(editor_actions));
     // Layout commands read and write node positions through the widget, which owns them.
@@ -112,6 +154,57 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     };
     m_editor_commands.writeNodePosition = [this](int node_id, LayoutPoint position) {
         m_graph_widget->setNodeEditorSpacePosition(node_id, ImVec2(position.x, position.y));
+    };
+    // Undo records grid positions, so a pan never looks like an edit.
+    m_editor_commands.readNodeGridPosition = [this](int node_id) {
+        const ImVec2 position = m_graph_widget->gridPositionForSave(node_id);
+        return LayoutPoint{position.x, position.y};
+    };
+    m_editor_commands.writeNodeGridPosition = [this](int node_id, LayoutPoint position) {
+        m_graph_widget->setNodeGridPosition(node_id, ImVec2(position.x, position.y));
+    };
+    // Undoable state the command layer cannot see. Every key is always present: a key missing on
+    // one side would make the creation of that state a one-sided record.
+    m_editor_commands.captureAppState = [this]() {
+        std::map<std::string, nlohmann::json> state;
+        nlohmann::json requirements = receiverRequirementsToJson(m_receiver_requirements);
+        // Which mode is selected is view state; an undo keeps the mode the user is looking at.
+        requirements.erase("selected_mode");
+        state["receiver_requirements"] = std::move(requirements);
+        state["rf_budget"] = rfBudgetToJson(m_rf_budget);
+        state["na_points"] =
+            nlohmann::json::array({m_na_engine.pointAPin(), m_na_engine.pointBPin()});
+        return state;
+    };
+    m_editor_commands.applyAppState = [this](const std::string &key, const nlohmann::json &value) {
+        if (key == "receiver_requirements") {
+            // Keep the selected mode across the restore while its id still exists.
+            std::uint32_t selected_id = 0;
+            if (m_receiver_requirements.selected < m_receiver_requirements.modes.size())
+                selected_id = m_receiver_requirements.modes[m_receiver_requirements.selected].id;
+            ReceiverRequirementsSet restored = receiverRequirementsFromJson(value);
+            restored.selected = 0;
+            if (selected_id != 0) {
+                for (std::size_t i = 0; i < restored.modes.size(); ++i) {
+                    if (restored.modes[i].id == selected_id) {
+                        restored.selected = i;
+                        break;
+                    }
+                }
+            }
+            m_receiver_requirements = std::move(restored);
+            m_rf_budget_evaluation_dirty = true;
+            return;
+        }
+        if (key == "rf_budget") {
+            m_rf_budget = rfBudgetFromJson(value);
+            m_rf_budget_evaluation_dirty = true;
+            return;
+        }
+        if (key == "na_points" && value.is_array() && value.size() == 2) {
+            m_na_engine.setPointA(value[0].get<int>());
+            m_na_engine.setPointB(value[1].get<int>());
+        }
     };
     m_serializer = std::make_unique<ProjectSerializer>(
         m_circuit_runtime, m_graph_editor_actions, *m_graph_widget, m_pfb_views,
@@ -125,7 +218,12 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
         m_graph_widget->registerNodeKind(desc->label_prefix, desc->kind);
     }
     m_graph_widget->setAddableComponents(std::move(addable));
-    m_graph_widget->onNodeMoved = [this]() { markDirty(); };
+    // A drag fires once on mouse release, and snapping moves nodes through the same path, so each
+    // is one record.
+    m_graph_widget->onNodeMoved = [this]() {
+        markDirty();
+        m_editor_commands.commitEdit("Move nodes");
+    };
     m_graph_widget->onNodeHover = [this](int id) {
         NodeHoverInfo info;
         info.summary = m_circuit_runtime.components().hoverSummary(id);
@@ -140,12 +238,17 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     }
     if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
         m_circuit_runtime.createComponent(descriptor->create);
+    // The seed is the starting circuit, not an edit: without this the first undo record would
+    // contain it and undo would delete the default circuit.
+    m_editor_commands.clearHistory();
 
     m_inspector_panel = std::make_unique<InspectorPanel>(
         m_circuit_runtime.graph(), m_circuit_runtime.components(), m_editor_commands);
     m_inspector_panel->registerDrawers(ComponentTypeRegistry::instance());
     m_inspector_panel->onRemoveNode = [this](int graph_node_id) {
-        (void)m_editor_commands.removeComponent(graph_node_id);
+        const std::size_t pushes = m_editor_commands.pushCount();
+        if (m_editor_commands.removeComponent(graph_node_id))
+            showRemovalNotice(pushes);
     };
     m_inspector_panel->libraryParts = [this]() { return m_library.all(); };
     m_inspector_panel->onSwapLibraryPart = [this](int graph_node_id,
@@ -156,13 +259,24 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_inspector_panel->setViewToggles({&m_show_log, &m_show_spectrum, &m_show_properties,
                                        nullptr, // iq_plot (per-PFB toggles used instead)
                                        &m_show_node_editor});
-    m_inspector_panel->onParamChange = [this]() { markDirty(); };
+    m_inspector_panel->onParamChange = [this]() {
+        markDirty();
+        // A drawer can write while nothing it can name is selected (the group was just ungrouped,
+        // or the PFB anchor moved): the record still needs a label that reads as a sentence.
+        const std::string selected = m_inspector_panel->selectionLabel();
+        noteWidgetEdit(selected.empty() ? "Edit properties" : "Edit " + selected);
+    };
 
     refreshExtensions();
 
     m_library_browser = std::make_unique<LibraryBrowserWidget>(m_library);
     m_library_browser->onInsert = [this](const ComponentDefinition &def) {
+        // One record for the insert. A library part lands at the grid origin; the record carries
+        // that position so a redo puts it back there.
+        m_editor_commands.beginEditGroup("Add " + def.part_number);
+        EditGroupGuard group(m_editor_commands);
         (void)m_editor_commands.addLibraryPart(m_library, def);
+        group.close();
     };
 
     m_library_browser->onNewComponent = [this]() { openNewComponentForm("amplifier"); };
@@ -178,11 +292,13 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     m_receiver_requirements_widget->onChange = [this]() {
         markDirty();
         m_rf_budget_evaluation_dirty = true;
+        noteWidgetEdit("Edit requirements");
     };
     m_rf_budget_widget = std::make_unique<RfBudgetWidget>();
     m_rf_budget_widget->onChange = [this]() {
         markDirty();
         m_rf_budget_evaluation_dirty = true;
+        noteWidgetEdit("Edit RF budget");
     };
     m_rf_budget_widget->onRefresh = [this]() { m_rf_budget_evaluation_dirty = true; };
     m_power_meter_widget =
@@ -190,9 +306,15 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     // Sweep-param/Point A/B edits in the Network Analyzer panel are project
     // state (persisted by ProjectSerializer) — mark the project dirty exactly
     // like InspectorPanel::onParamChange does for component params.
-    m_na_widget->onParamChange = [this]() { markDirty(); };
+    m_na_widget->onParamChange = [this]() {
+        markDirty();
+        noteWidgetEdit("Set analyzer points");
+    };
     m_calculator_widget = std::make_unique<PfbCalculatorWidget>(m_circuit_runtime.components());
-    m_calculator_widget->onParamChange = [this]() { markDirty(); };
+    m_calculator_widget->onParamChange = [this]() {
+        markDirty();
+        noteWidgetEdit("Edit filter design");
+    };
     m_test_flow_widget =
         std::make_unique<TestFlowWidget>(m_circuit_runtime.components(), m_circuit_runtime.graph());
 
@@ -233,6 +355,15 @@ RfSimulatorApp::RfSimulatorApp() : m_graph_editor_actions(m_circuit_runtime) {
     agent_hooks.set_rf_budget = [this](const RfBudget &budget) {
         m_rf_budget = budget;
         m_rf_budget_evaluation_dirty = true;
+    };
+    // One undo record per tool call. A widget edit still pending when the call begins is committed
+    // into it rather than left for the next frame.
+    agent_hooks.begin_edit_group = [this]() {
+        commitPendingWidgetEdit();
+        m_editor_commands.beginEditGroup("Agent");
+    };
+    agent_hooks.end_edit_group = [this](const std::string &label) {
+        (void)m_editor_commands.endEditGroup(label);
     };
     agent_hooks.load_project = [this](const std::string &path) {
         AgentProjectLoadResult result;
@@ -366,10 +497,19 @@ IComponentEngine *RfSimulatorApp::NaScratch::createClone(std::string_view type, 
 }
 
 void RfSimulatorApp::addComponent(const ComponentTypeDescriptor *desc, ImVec2 pos) {
+    // One record: the node, where the canvas placed it, and anything the factory configured.
+    m_editor_commands.beginEditGroup("Add component");
+    EditGroupGuard group(m_editor_commands);
     IComponentEngine *comp = m_editor_commands.createComponent(desc->create);
     if (!comp)
         return;
     m_graph_widget->setNodeEditorSpacePosition(comp->graphNodeId(), pos);
+    std::string label = "Add component";
+    for (const GraphNode &node : m_circuit_runtime.graph().nodes()) {
+        if (node.node_id == comp->graphNodeId())
+            label = "Add " + node.label;
+    }
+    group.close(label);
 }
 
 void RfSimulatorApp::syncComponentViews() {
@@ -402,11 +542,13 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     ImVec2 src_pos = ImNodes::GetNodeEditorSpacePos(graph_node_id);
     constexpr float OFFSET = 40.0f;
 
-    // Capture source part number for copying to the duplicate
+    // Capture the source label and part number for the duplicate and its undo label.
     std::string src_part_number;
+    std::string src_label = "component";
     for (const auto &gn : m_circuit_runtime.graph().nodes()) {
         if (gn.node_id == graph_node_id) {
             src_part_number = gn.part_number;
+            src_label = gn.label;
             break;
         }
     }
@@ -417,6 +559,13 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     const auto *desc = ComponentTypeRegistry::instance().find(src->type_name());
     if (!desc)
         return false;
+    // One record: the copy, its placement, and the library part number it carries.
+    m_editor_commands.beginEditGroup("Duplicate component");
+    EditGroupGuard group(m_editor_commands);
+    if (m_test_throw_on_next_duplicate) {
+        m_test_throw_on_next_duplicate = false;
+        throw std::runtime_error("test duplicate failure");
+    }
     const nlohmann::json params = src->serialize();
     IComponentEngine *copy = m_editor_commands.createComponent(
         [desc, &params](ComponentRegistry &components, NodeGraphEngine &graph, int id) {
@@ -434,6 +583,7 @@ bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
     // Copy library part number
     if (!src_part_number.empty())
         m_graph_editor_actions.setNodePartNumber(new_nid, src_part_number);
+    group.close("Duplicate " + src_label);
     return true;
 }
 
@@ -444,11 +594,20 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     // The replacement takes the predecessor's canvas spot and keeps its instrument points. The
     // Network Analyzer Point A/B and the Power Meter source are app state the command cannot see.
     const ImVec2 position = m_graph_widget->editorPositionForSave(graph_node_id);
+    // The predecessor's label is read now: the swap retires its graph node.
+    std::string old_label = "component";
+    for (const GraphNode &node : m_circuit_runtime.graph().nodes()) {
+        if (node.node_id == graph_node_id)
+            old_label = node.label;
+    }
     const std::vector<int> instrument_pins = {m_na_engine.pointAPin(), m_na_engine.pointBPin(),
                                               m_power_meter_widget->sourcePin()};
     // The successor is a new engine under a new graph node, so sync() builds its views with the
     // defaults for a new PFB. Read the IQ Plot and Grid visibility set on the predecessor first.
     const auto visibility = m_pfb_views.visibilityFor(graph_node_id);
+    // One record: the swap and the canvas spot the successor inherits.
+    m_editor_commands.beginEditGroup("Change component");
+    EditGroupGuard group(m_editor_commands);
     const ComponentSwapResult swap =
         m_editor_commands.swapLibraryPart(m_library, definition, graph_node_id, instrument_pins);
     if (!swap.component)
@@ -466,6 +625,7 @@ std::string RfSimulatorApp::swapLibraryPart(int graph_node_id,
     m_power_meter_widget->setSourcePin(moved(m_power_meter_widget->sourcePin()));
     m_graph_widget->setNodeEditorSpacePosition(swap.new_graph_node_id, position);
     m_graph_widget->selectNode(swap.new_graph_node_id);
+    group.close("Change " + old_label + " to " + definition.part_number);
     return {};
 }
 
@@ -477,7 +637,7 @@ void RfSimulatorApp::newProject() {
     m_current_project_path.clear();
     refreshExtensions();
     m_editor_commands.markClean();
-    m_editor_commands.clearLayoutUndo();
+    m_editor_commands.clearHistory();
     // The reset replaced every engine, so the panel's snapshots and result refer
     // to a circuit that no longer exists. The retained flow selection is
     // revalidated against the new circuit by the panel itself.
@@ -507,6 +667,8 @@ void RfSimulatorApp::startTutorial() {
     }
     if (const auto *descriptor = ComponentTypeRegistry::instance().find("amplifier"))
         m_circuit_runtime.createComponent(descriptor->create);
+    // The tutorial seed is the starting circuit, not an edit (see the constructor).
+    m_editor_commands.clearHistory();
     m_graph_widget->syncNodesFromEngine();
 
     // Every panel a step highlights must be on screen for the highlight to
@@ -619,6 +781,56 @@ bool RfSimulatorApp::testSetGroupCollapsed(int group_id, bool collapsed) {
 }
 
 void RfSimulatorApp::markDirty() { m_editor_commands.markModified(); }
+
+void RfSimulatorApp::noteWidgetEdit(std::string label) {
+    // The first label of a gesture names the whole gesture.
+    if (m_pending_widget_edit.empty())
+        m_pending_widget_edit = std::move(label);
+}
+
+void RfSimulatorApp::flushWidgetEdit() {
+    // A control that is still being dragged keeps writing; commit once it is released.
+    if (ImGui::IsAnyItemActive())
+        return;
+    commitPendingWidgetEdit();
+}
+
+void RfSimulatorApp::commitPendingWidgetEdit() {
+    if (m_pending_widget_edit.empty())
+        return;
+    std::string label = std::move(m_pending_widget_edit);
+    m_pending_widget_edit.clear();
+    m_editor_commands.commitEdit(label);
+}
+
+void RfSimulatorApp::undoEdit() {
+    // The label names the record being undone, so it is read while the record still exists.
+    const std::string label = m_editor_commands.undoLabel();
+    if (m_editor_commands.undo())
+        m_graph_widget->showNotice("Undo: " + label, ImGui::GetTime());
+}
+
+void RfSimulatorApp::redoEdit() {
+    const std::string label = m_editor_commands.redoLabel();
+    if (m_editor_commands.redo())
+        m_graph_widget->showNotice("Redo: " + label, ImGui::GetTime());
+}
+
+void RfSimulatorApp::showRemovalNotice(std::size_t pushes_before) {
+    // Only a record this entry point just pushed. The push counter is monotonic, so it still
+    // answers after the history reached its cap and the push evicted the oldest record. Inside
+    // an open edit group the record is pushed later, by the group's close, which shows the
+    // notice itself.
+    if (m_editor_commands.pushCount() == pushes_before)
+        return;
+    constexpr std::string_view kRemovePrefix = "Remove ";
+    const std::string label = m_editor_commands.undoLabel();
+    if (label.rfind(kRemovePrefix, 0) != 0)
+        return;
+    m_graph_widget->showNotice("Removed " + label.substr(kRemovePrefix.size()) +
+                                   " \xC2\xB7 Ctrl+Z to undo",
+                               ImGui::GetTime());
+}
 
 void RfSimulatorApp::refreshRfBudgetEvaluation() {
     if (!m_rf_budget_evaluation_dirty && m_rf_budget_library_revision == m_library_revision)
@@ -926,7 +1138,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
             // (issue #113). A failure that left state intact keeps the path.
             m_current_project_path.clear();
             m_editor_commands.markModified();
-            m_editor_commands.clearLayoutUndo();
+            m_editor_commands.clearHistory();
             // Extension discovery is rooted at the project directory, so it
             // must be re-derived once the path is gone: otherwise the
             // destroyed project's project-local tools and data packs stay
@@ -950,7 +1162,7 @@ bool RfSimulatorApp::loadProject(const std::string &path) {
     m_current_project_path = path;
     refreshExtensions();
     m_editor_commands.markClean();
-    m_editor_commands.clearLayoutUndo();
+    m_editor_commands.clearHistory();
     // A load that replaced the circuit — this successful one, or a failed one
     // that reset it (handled above) — is a circuit reload for the panel, so its
     // latch and stale result are cleared; a failed load that left the live
@@ -985,6 +1197,9 @@ void RfSimulatorApp::revertAgentCheckpoint(std::uint64_t checkpoint_id) {
     // inputs so both views show the restored state instead of the pre-revert verdicts.
     refreshExtensions();
     markDirty();
+    // The reverted state replaces the live project: the old edits can no longer be undone onto
+    // it, so the history starts over from the restored checkpoint.
+    m_editor_commands.clearHistory();
     m_agent_api->noteProjectReplaced(AgentReplacementCause::Reverted,
                                      m_agent_host->removeCheckpointsFrom(checkpoint_id));
 }
@@ -1437,6 +1652,8 @@ void RfSimulatorApp::drawComponentFormModal() {
             if (saveComponentForm()) {
                 m_show_component_form = false;
                 markDirty();
+                // The form writes a library entry, not the circuit: record it for undo too.
+                noteWidgetEdit("Edit component");
                 ImGui::CloseCurrentPopup();
             }
         }
@@ -1542,6 +1759,22 @@ void RfSimulatorApp::draw_ui() {
                 } else
                     exitApplication();
             }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Edit")) {
+            const bool can_undo = m_editor_commands.canUndo();
+            const bool can_redo = m_editor_commands.canRedo();
+            // A stable "###" id keeps each item's identity while its visible label names the
+            // record it would act on. With nothing to act on the visible text is Undo / Redo.
+            const std::string undo_label =
+                can_undo ? "Undo " + m_editor_commands.undoLabel() : std::string("Undo");
+            if (ImGui::MenuItem((undo_label + "###edit_undo").c_str(), "Ctrl+Z", false, can_undo))
+                undoEdit();
+            const std::string redo_label =
+                can_redo ? "Redo " + m_editor_commands.redoLabel() : std::string("Redo");
+            if (ImGui::MenuItem((redo_label + "###edit_redo").c_str(), "Ctrl+Shift+Z", false,
+                                can_redo))
+                redoEdit();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
@@ -1697,8 +1930,22 @@ void RfSimulatorApp::draw_ui() {
         ImGui::EndMainMenuBar();
     }
 
+    // A widget gesture that has finished (no control still active) becomes one record before any
+    // shortcut can undo it.
+    flushWidgetEdit();
+
     // Keyboard shortcuts (skip while editing text fields)
     if (!io.WantTextInput) {
+        // Undo and redo are global, but never while a control owns the keyboard: a widget that
+        // handles the key first must keep it (a text field keeps Ctrl+Z for its own text undo).
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && !io.KeyShift &&
+            ImGui::IsKeyPressed(ImGuiKey_Z))
+            undoEdit();
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && io.KeyShift &&
+            ImGui::IsKeyPressed(ImGuiKey_Z))
+            redoEdit();
+        if (!ImGui::IsAnyItemActive() && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y))
+            redoEdit();
         if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
             if (!m_current_project_path.empty())
                 saveProject(m_current_project_path);
@@ -1796,7 +2043,13 @@ void RfSimulatorApp::draw_ui() {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard", ImVec2(120, 0))) {
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_pending_action = PendingAction::None;
+            m_show_unsaved_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Discard", ImVec2(120, 0))) {
             auto action = m_pending_action;
             m_pending_action = PendingAction::None;
             m_show_unsaved_dialog = false;
@@ -1818,12 +2071,6 @@ void RfSimulatorApp::draw_ui() {
             default:
                 break;
             }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            m_pending_action = PendingAction::None;
-            m_show_unsaved_dialog = false;
-            ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
@@ -1890,8 +2137,8 @@ void RfSimulatorApp::draw_ui() {
                     m_rename_target = name;
                     std::snprintf(m_rename_buf, sizeof(m_rename_buf), "%s", name.c_str());
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Delete"))
+                ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+                if (ui::dangerButton("Delete"))
                     m_layout_manager.deleteNamedLayout(name);
             }
             ImGui::PopID();

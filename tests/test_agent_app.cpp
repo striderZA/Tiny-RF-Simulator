@@ -1271,3 +1271,172 @@ TEST_CASE_METHOD(AppFixture, "Checkpoints save collapsed-group members at grid p
     expectPos(expanded_snapshot, 0, expected0);
     expectPos(expanded_snapshot, 1, expected1);
 }
+// ======================================================================
+// Test: an agent circuit edit is one undo record
+//
+// The checkpoint group boundaries make the whole tool call (two adds and
+// a link) a single record, and undo must not advance the runtime epoch.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An agent circuit_edit is one undo record and undo keeps the epoch",
+                 "[agent_app][undo]") {
+    app.newProject();
+    REQUIRE_FALSE(app.testEditorCommands().canUndo());
+    const std::size_t seed = app.componentCount();
+    const std::size_t seed_links = app.testGraphEngine().links().size();
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(app.componentCount() == seed + 2);
+    REQUIRE(app.testEditorCommands().undoCount() == 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Agent: circuit_edit");
+
+    const AgentToolResult read_before = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(read_before.is_error);
+    const std::uint64_t epoch = read_before.structured.at("epoch").get<std::uint64_t>();
+    const std::uint64_t runtime_epoch = app.testProjectEpoch();
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == seed);
+    REQUIRE(app.testGraphEngine().links().size() == seed_links);
+    const AgentToolResult read_after = app.testAgentCall("circuit_get", ordered_json::object());
+    REQUIRE_FALSE(read_after.is_error);
+    REQUIRE(read_after.structured.at("epoch").get<std::uint64_t>() == epoch);
+    REQUIRE(app.testProjectEpoch() == runtime_epoch);
+}
+
+// ======================================================================
+// Test: an interrupted agent checkpoint leaves the edit group balanced
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An interrupted agent checkpoint leaves the edit group balanced",
+                 "[agent_app][undo]") {
+    app.newProject();
+    AgentCall first;
+    first.tool = "circuit_edit";
+    first.client = "test";
+    AgentCall second = first;
+    app.testAgentHost().beginCheckpoint(first);
+    app.testAgentHost().beginCheckpoint(second);
+    app.testAgentHost().commitCheckpoint("done");
+    // The interrupted begin committed its own checkpoint.
+    REQUIRE(app.testAgentHost().checkpoints().size() == 2);
+
+    IComponentEngine *amplifier = app.testCreateComponent("amplifier", 9401);
+    REQUIRE(amplifier != nullptr);
+    REQUIRE(app.testEditorCommands().canUndo());
+    REQUIRE(app.testEditorCommands().undoLabel().rfind("Add", 0) == 0);
+    REQUIRE(app.testEditorCommands().undoCount() == 1);
+}
+
+// ======================================================================
+// Test: an agent placement belongs to the call's undo record
+//
+// planAgentPlacement() lays the added nodes out from the existing
+// circuit's right edge: on an empty project the origin is (0,0), the
+// generator adds no predecessor (column 0, row 0) and the amplifier
+// follows it (column 1, row 0), so the expected editor positions are
+// (0,0) and (kAgentGridColumnWidth, 0) = (260,0). The fixture never
+// pans, so grid and editor space coincide.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "An agent placement is part of the call's undo record",
+                 "[agent_app][undo]") {
+    app.newProject();
+    std::vector<int> existing;
+    for (const GraphNode &node : app.testGraphEngine().nodes())
+        existing.push_back(node.node_id);
+    const std::size_t records = app.testEditorCommands().undoCount();
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+
+    // (a) The call is one record, labelled by its tool.
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+    REQUIRE(app.testEditorCommands().undoLabel() == "Agent: circuit_edit");
+
+    std::vector<int> added;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (std::find(existing.begin(), existing.end(), node.node_id) == existing.end())
+            added.push_back(node.node_id);
+    }
+    REQUIRE(added.size() == 2);
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const ImVec2 first = widget.editorPositionForSave(added[0]);
+    const ImVec2 second = widget.editorPositionForSave(added[1]);
+    REQUIRE(first.x == 0.0f);
+    REQUIRE(first.y == 0.0f);
+    REQUIRE(second.x == kAgentGridColumnWidth);
+    REQUIRE(second.y == 0.0f);
+
+    // (b) The placement is inside the record: nothing is left pending for the next flush.
+    app.testNoteWidgetEdit("Probe");
+    app.testFlushWidgetEdit();
+    REQUIRE(app.testEditorCommands().undoCount() == records + 1);
+}
+
+// ======================================================================
+// Test: redo restores the positions an agent placement recorded
+//
+// Runs on its own so the placement-in-the-record check reports its own
+// failure: planAgentPlacement() puts the generator at (0,0) and the
+// amplifier at (kAgentGridColumnWidth, 0) = (260,0) on the empty project
+// newProject() leaves. Without the placement in the record, redo would
+// recreate both nodes at the origin.
+// ======================================================================
+TEST_CASE_METHOD(AppFixture, "Redo restores the positions an agent placement recorded",
+                 "[agent_app][undo]") {
+    app.newProject();
+    std::vector<int> existing;
+    for (const GraphNode &node : app.testGraphEngine().nodes())
+        existing.push_back(node.node_id);
+
+    const AgentToolResult result = app.testAgentCall(
+        "circuit_edit",
+        ordered_json{
+            {"epoch", app.testProjectEpoch()},
+            {"ops", ordered_json::array({{{"op", "add"}, {"ref", "gen"}, {"type", "generator"}},
+                                         {{"op", "add"}, {"ref", "amp"}, {"type", "amplifier"}},
+                                         {{"op", "connect"},
+                                          {"from", {{"ref", "gen"}, {"port", 0}}},
+                                          {"to", {{"ref", "amp"}, {"port", 0}}}}})}});
+    REQUIRE_FALSE(result.is_error);
+
+    std::vector<int> added;
+    for (const GraphNode &node : app.testGraphEngine().nodes()) {
+        if (std::find(existing.begin(), existing.end(), node.node_id) == existing.end())
+            added.push_back(node.node_id);
+    }
+    REQUIRE(added.size() == 2);
+    NodeGraphWidget &widget = app.testGraphWidget();
+    const ImVec2 first = widget.editorPositionForSave(added[0]);
+    const ImVec2 second = widget.editorPositionForSave(added[1]);
+    REQUIRE(first.x == 0.0f);
+    REQUIRE(first.y == 0.0f);
+    REQUIRE(second.x == kAgentGridColumnWidth);
+    REQUIRE(second.y == 0.0f);
+
+    REQUIRE(app.testEditorCommands().undo());
+    REQUIRE(app.componentCount() == 0);
+    REQUIRE(app.testEditorCommands().redo());
+    REQUIRE(app.componentCount() == 2);
+    const ImVec2 first_after = widget.editorPositionForSave(added[0]);
+    const ImVec2 second_after = widget.editorPositionForSave(added[1]);
+    REQUIRE(first_after.x == first.x);
+    REQUIRE(first_after.y == first.y);
+    REQUIRE(second_after.x == second.x);
+    REQUIRE(second_after.y == second.y);
+}

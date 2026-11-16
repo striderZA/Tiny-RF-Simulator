@@ -147,6 +147,10 @@ class RfSimulatorApp {
     // Re-evaluates the budget only when an input changed since the last evaluation.
     void refreshRfBudgetEvaluation();
     void testMakeDirty();
+    // Drive the widget-edit coalescing directly: note keeps the first label, flush commits it
+    // without the "a widget is still active" guard the frame loop uses.
+    void testNoteWidgetEdit(std::string label) { noteWidgetEdit(std::move(label)); }
+    void testFlushWidgetEdit() { commitPendingWidgetEdit(); }
     // Test-only access to checkpoint serialization and the replacement epoch.
     ProjectSerializer &testProjectSerializer() { return *m_serializer; }
     std::uint64_t testProjectEpoch() const { return m_circuit_runtime.epoch(); }
@@ -174,6 +178,8 @@ class RfSimulatorApp {
     IComponentEngine *testAddComponentAtPosition(std::string_view type, ImVec2 position);
     // Calls the context-menu duplicate path before its first draw.
     IComponentEngine *testDuplicateComponent(int graph_node_id);
+    // Makes the next duplicate throw after its edit group opens, to exercise the guard.
+    void testThrowOnNextDuplicate() { m_test_throw_on_next_duplicate = true; }
     // Replaces a placed component through the app's swap path, which also carries the canvas
     // position, selection, and instrument points over. Returns the refusal, or "" on success.
     std::string testSwapLibraryPart(int graph_node_id, const ComponentDefinition &definition);
@@ -248,6 +254,26 @@ class RfSimulatorApp {
     void saveTestFlowDialog();
 
   private:
+    bool m_test_throw_on_next_duplicate = false;
+
+    // Widget parameter edits arrive as many small model writes while a control is dragged. The
+    // first label is kept until the edit is flushed, so one gesture is one undo record.
+    void noteWidgetEdit(std::string label);
+    // Commits a pending widget edit once no widget control is still being dragged.
+    void flushWidgetEdit();
+    // Commits a pending widget edit regardless of the active control (test seam and agent begin).
+    void commitPendingWidgetEdit();
+    std::string m_pending_widget_edit;
+
+    // Undo and redo from the Edit menu and the keyboard. Each shows the record's label as a
+    // canvas notice.
+    void undoEdit();
+    void redoEdit();
+    // Shows the removal notice when this call is the one that pushed a "Remove ..." record.
+    // A removal inside an open edit group defers its record to the group's close, so the
+    // monotonic push count says whether the record has already been pushed.
+    void showRemovalNotice(std::size_t pushes_before);
+
     void load_window_states();
     // Runs the unsaved-changes guard, then starts the tutorial (directly if the
     // project is clean, otherwise via PendingAction::Tutorial).

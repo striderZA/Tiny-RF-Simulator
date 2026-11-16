@@ -402,16 +402,27 @@ AgentToolResult executeNetworkAnalyzerSweepTool(const AgentApi &api, const Agent
                          point_a.pin != engine.pointAPin() || point_b.pin != engine.pointBPin();
     if (changed)
         context.host.beginCheckpoint(call);
-    engine.setPointA(point_a.pin);
-    engine.setPointB(point_b.pin);
-    if (start)
-        engine.setStartFrequency(*start);
-    if (stop)
-        engine.setStopFrequency(*stop);
-    if (points)
-        engine.setPoints(*points);
-    if (stimulus)
-        engine.setStimulusPower(*stimulus);
+    try {
+        engine.setPointA(point_a.pin);
+        engine.setPointB(point_b.pin);
+        if (start)
+            engine.setStartFrequency(*start);
+        if (stop)
+            engine.setStopFrequency(*stop);
+        if (points)
+            engine.setPoints(*points);
+        if (stimulus)
+            engine.setStimulusPower(*stimulus);
+    } catch (...) {
+        // A throwing setter must not leak the checkpoint's undo group, and the setters that ran
+        // before it already changed analyzer state, so the project is dirty even though the call
+        // fails. Applied-mode changes stay revertable through the committed snapshot.
+        if (changed) {
+            context.commands.markModified();
+            context.host.commitCheckpoint("interrupted: network analyzer settings");
+        }
+        throw;
+    }
     if (changed) {
         context.commands.markModified();
         context.host.commitCheckpoint("network analyzer settings");

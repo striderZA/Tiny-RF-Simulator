@@ -16,7 +16,7 @@ const std::vector<TutorialStep> steps = {
      TutorialTarget::ComponentLibrary},
     {"Connect Pins",
      "In the Node Editor, click an output pin and drag to an input pin, then release to create a "
-     "link. To remove one, select the link and press Delete.",
+     "link. To remove one, select the link and press Delete; Ctrl+Z brings it back.",
      TutorialTarget::NodeEditor},
     {"Configure Parameters",
      "Left-click a node to load it into the Properties panel, then adjust a parameter such as "
@@ -29,7 +29,7 @@ const std::vector<TutorialStep> steps = {
     {"Navigate the Graph",
      "Pan the canvas by middle-click dragging. Rubber-band select, or Ctrl+click, to pick several "
      "nodes at once — Ctrl+click on a node body also probes that node's first output. Press Delete "
-     "to remove them. That's the whole workflow — click Finish.",
+     "to remove them; Ctrl+Z brings them back. That's the whole workflow — click Finish.",
      TutorialTarget::NodeEditor},
 };
 

@@ -71,6 +71,9 @@ class InspectorPanel {
     std::function<std::string(int graph_node_id, const ComponentDefinition &definition)>
         onSwapLibraryPart;
     std::function<void()> onParamChange;
+    // The label of what the panel currently edits: the selected component (the PFB the combo
+    // edits, when one is picked), the selected group's name, or "" when nothing is selected.
+    std::string selectionLabel() const;
     void setViewToggles(const ViewToggles &t) { m_viewToggles = t; }
     bool m_param_edited = false;
 
@@ -125,8 +128,12 @@ class InspectorPanel {
     // Runs the part swap picked this frame. It runs after the drawers, because a swap deletes the
     // engine they draw.
     void applyPendingPartSwap();
+    // Runs the header's Remove after the drawers, for the same reason: the drawers still use the
+    // engine this frame.
+    void applyPendingRemove();
     const ComponentDefinition *m_pending_part = nullptr;
     int m_pending_part_node = -1;
+    int m_pending_remove_node = -1;
     // Refusal from the last swap, shown under the dropdown while its component stays selected.
     std::string m_part_swap_error;
     int m_part_swap_error_node = -1;

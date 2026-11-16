@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "rf_view_ui.h"
+#include "ui_theme.h"
 
 #include <cstdio>
 #include <limits>
@@ -437,7 +438,10 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
         ImGui::Text("Remove mode \"%s\" and its requirement limits?",
                     pending ? pending->name.c_str() : "");
-        if (ImGui::Button("Remove", ImVec2(120.0f, 0.0f))) {
+        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
+            ImGui::CloseCurrentPopup();
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Remove", ImVec2(120.0f, 0.0f))) {
             for (std::size_t index = 0; index < set.modes.size(); ++index) {
                 if (set.modes[index].id == m_remove_id &&
                     removeReceiverRequirementsMode(set, index)) {
@@ -449,9 +453,6 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
             }
             ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
-            ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
     // Both lines always occupy their space, so an appearing hint or error never
@@ -503,8 +504,8 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120.0f);
         ImGui::InputText("Min (dB)", m_oob_rows[row].min.data(), m_oob_rows[row].min.size());
-        ImGui::SameLine();
-        if (ImGui::Button("Remove point")) {
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Remove point")) {
             m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
             ImGui::PopID();
             break;

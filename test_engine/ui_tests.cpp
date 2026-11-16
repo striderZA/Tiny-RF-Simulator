@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_test_engine/imgui_te_context.h"
+#include "imgui_test_engine/imgui_te_engine.h"
 #include "mixer_engine.h"
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
@@ -16,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -103,6 +105,52 @@ struct AgentPanelUiCleanup {
 } // namespace
 
 static RfSimulatorApp *s_app = nullptr;
+
+namespace {
+
+// Shift-drags a rubber band over two ungrouped nodes, which opens the canvas-hosted
+// CreateSubcircuit modal when both fall inside the rectangle.
+void rubberBandOverNodes(ImGuiTestContext *ctx, int first, int second) {
+    NodeGraphWidget &widget = s_app->testGraphWidget();
+    ImNodes::EditorContextSet(widget.context());
+    const ImVec2 first_pos = ImNodes::GetNodeScreenSpacePos(first);
+    const ImVec2 first_size = ImNodes::GetNodeDimensions(first);
+    const ImVec2 second_pos = ImNodes::GetNodeScreenSpacePos(second);
+    const ImVec2 second_size = ImNodes::GetNodeDimensions(second);
+    const ImVec2 min(std::min(first_pos.x, second_pos.x), std::min(first_pos.y, second_pos.y));
+    const ImVec2 max(std::max(first_pos.x + first_size.x, second_pos.x + second_size.x),
+                     std::max(first_pos.y + first_size.y, second_pos.y + second_size.y));
+
+    ctx->KeyDown(ImGuiKey_LeftShift);
+    ctx->MouseMoveToPos(ImVec2(min.x - 24.0f, min.y - 24.0f));
+    ctx->Yield(1);
+    ctx->MouseDown(ImGuiMouseButton_Left);
+    ctx->Yield(1);
+    ctx->MouseMoveToPos(ImVec2(max.x + 24.0f, max.y + 24.0f));
+    ctx->Yield(1);
+    ctx->MouseUp(ImGuiMouseButton_Left);
+    ctx->Yield(1);
+    ctx->KeyUp(ImGuiKey_LeftShift);
+    ctx->Yield(2);
+}
+
+// Locates an item in the menu that is currently open by its visible label prefix. The Edit
+// menu's items carry a stable "###edit_undo" / "###edit_redo" id, and the test engine's label
+// lookup hashes a decorated path (which resets at "###"), so it cannot address those items by
+// label; gathering the open menu's items and matching their visible text does.
+ImGuiTestItemInfo findMenuItem(ImGuiTestContext *ctx, const char *visible_prefix) {
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "//$FOCUSED", 2);
+    ImGuiTestItemInfo found;
+    const std::size_t prefix_length = std::strlen(visible_prefix);
+    for (auto item : items) {
+        if (std::strncmp(item.DebugLabel, visible_prefix, prefix_length) == 0)
+            found = item;
+    }
+    return found;
+}
+
+} // namespace
 
 void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     s_app = &app;
@@ -426,7 +474,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     };
 
     // Align and undo from the node right-click menu (TRS-79): two selected nodes, right-click the
-    // lower one, Align > Top moves it onto the upper node's top edge, and Undo Layout puts it back.
+    // lower one, Align > Top moves it onto the upper node's top edge, and Ctrl+Z puts it back.
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_align_menu");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         ctx->WindowFocus("Node Editor");
@@ -461,10 +509,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
         IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 300.0f);
 
-        ctx->MouseMoveToPos(centreOf(lower));
-        ctx->MouseClick(1);
-        ctx->Yield(2);
-        ctx->MenuClick("//$FOCUSED/Undo Layout");
+        // The canvas menu no longer offers Undo Layout; the global undo takes the record back.
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
         ctx->Yield(2);
         IM_CHECK_EQ(widget.editorPositionForSave(upper).y, 300.0f);
         IM_CHECK_EQ(widget.editorPositionForSave(lower).y, 380.0f);
@@ -474,6 +522,237 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         s_app->testRemoveComponent(upper);
         s_app->testRemoveComponent(lower);
         ctx->Yield(1);
+    };
+
+    // ES-3: Ctrl+Z undoes a canvas delete, Ctrl+Shift+Z and Ctrl+Y redo it, and the delete's
+    // removal notice names what was taken away and how to take it back (ES-4).
+    t = IM_REGISTER_TEST(e, "rf_simulator", "undo_redo_shortcuts");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        IComponentEngine *generator = s_app->testCreateComponent("generator", 9901);
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9902);
+        IM_CHECK(generator != nullptr && amplifier != nullptr);
+        if (!generator || !amplifier)
+            return;
+        const int generator_node = generator->graphNodeId();
+        const int amplifier_node = amplifier->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(amplifier_node, ImVec2(300.0f, 200.0f));
+        ctx->Yield(4); // let imnodes register both nodes in the pool
+
+        const NodeGraphEngine &graph = s_app->testGraphEngine();
+        const int generator_out = graph.outputPinId(generator_node);
+        const int amplifier_in = graph.inputPinId(amplifier_node);
+        const int amplifier_out = graph.outputPinId(amplifier_node);
+        IM_CHECK(generator_out >= 0 && amplifier_in >= 0 && amplifier_out >= 0);
+        const auto link = s_app->testConnectLink(generator_out, amplifier_in);
+        IM_CHECK(link.has_value());
+        IM_CHECK(s_app->testAddProbePin(amplifier_out));
+        ctx->Yield(2);
+        const std::vector<int> probes = graph.probePins();
+        IM_CHECK(!probes.empty());
+
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(amplifier_node);
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(2);
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
+
+        // ES-4: the canvas delete says what it removed.
+        IM_CHECK_EQ(std::string(widget.noticeAt(ImGui::GetTime())),
+                    std::string("Removed Amplifier 9902 \xC2\xB7 Ctrl+Z to undo"));
+
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        const IComponentEngine *restored = s_app->testComponents().find(amplifier_node);
+        IM_CHECK(restored != nullptr);
+        if (restored)
+            IM_CHECK_EQ(restored->id(), 9902);
+        IM_CHECK(std::any_of(graph.links().begin(), graph.links().end(),
+                             [&](const GraphLink &restored_link) {
+                                 return restored_link.start_pin_id == generator_out &&
+                                        restored_link.end_pin_id == amplifier_in;
+                             }));
+        IM_CHECK(graph.probePins() == probes);
+        IM_CHECK_EQ(widget.gridPositionForSave(amplifier_node).x, 300.0f);
+        IM_CHECK_EQ(widget.gridPositionForSave(amplifier_node).y, 200.0f);
+
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
+
+        // Ctrl+Z takes the redo back, then Ctrl+Y redoes it again.
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) != nullptr);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Y);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
+
+        // Ctrl+Y with nothing left to redo changes nothing.
+        const std::size_t records = s_app->testEditorCommands().undoCount();
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Y);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(amplifier_node) == nullptr);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), records);
+
+        IM_CHECK(s_app->testRemoveComponent(generator_node));
+        ctx->Yield(2);
+    };
+
+    // ES-3: the Edit menu offers Undo and Redo, and clicking Undo takes back the last edit.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "edit_menu_undo_redo");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *component = s_app->testCreateComponent("amplifier", 9911);
+        IM_CHECK(component != nullptr);
+        if (!component)
+            return;
+        const int node = component->graphNodeId();
+        ctx->Yield(2);
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        const std::string undo_record = s_app->testEditorCommands().undoLabel();
+        IM_CHECK_EQ(undo_record, "Add Amplifier 9911");
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Edit");
+        ctx->Yield(2);
+        const ImGuiTestItemInfo undo_item = findMenuItem(ctx, "Undo Add Amplifier 9911");
+        IM_CHECK(undo_item.ID != 0);
+        IM_CHECK((undo_item.ItemFlags & ImGuiItemFlags_Disabled) == 0);
+        if (undo_item.ID != 0)
+            ctx->ItemClick(undo_item.ID);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) == nullptr);
+        IM_CHECK_EQ(std::string(widget.noticeAt(ImGui::GetTime())), "Undo: " + undo_record);
+
+        // With the edit reverted, the menu offers it back as a redo.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Edit");
+        ctx->Yield(2);
+        const ImGuiTestItemInfo redo_item = findMenuItem(ctx, "Redo Add Amplifier 9911");
+        IM_CHECK(redo_item.ID != 0);
+        IM_CHECK((redo_item.ItemFlags & ImGuiItemFlags_Disabled) == 0);
+        const std::string redo_record = s_app->testEditorCommands().redoLabel();
+        IM_CHECK_EQ(redo_record, "Add Amplifier 9911");
+        if (redo_item.ID != 0)
+            ctx->ItemClick(redo_item.ID);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+        IM_CHECK_EQ(std::string(widget.noticeAt(ImGui::GetTime())), "Redo: " + redo_record);
+
+        // An undo with nothing to undo shows no notice.
+        s_app->testEditorCommands().clearHistory();
+        widget.showNotice("", ImGui::GetTime());
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), 0);
+        IM_CHECK(widget.noticeAt(ImGui::GetTime()).empty());
+
+        // With nothing in either direction the items read bare Undo / Redo and are disabled.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Edit");
+        ctx->Yield(2);
+        const ImGuiTestItemInfo bare_undo = findMenuItem(ctx, "Undo###edit_undo");
+        const ImGuiTestItemInfo bare_redo = findMenuItem(ctx, "Redo###edit_redo");
+        IM_CHECK(bare_undo.ID != 0);
+        IM_CHECK(bare_redo.ID != 0);
+        IM_CHECK_EQ(std::string(bare_undo.DebugLabel), std::string("Undo###edit_undo"));
+        IM_CHECK_EQ(std::string(bare_redo.DebugLabel), std::string("Redo###edit_redo"));
+        IM_CHECK((bare_undo.ItemFlags & ImGuiItemFlags_Disabled) != 0);
+        IM_CHECK((bare_redo.ItemFlags & ImGuiItemFlags_Disabled) != 0);
+
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
+    // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the
+    // field, not the canvas, and the field edit becomes one undo record when it is committed.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "ctrl_z_while_editing_field_is_ignored");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9921);
+        IM_CHECK(amplifier != nullptr);
+        if (!amplifier)
+            return;
+        const int node = amplifier->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        ctx->Yield(2);
+
+        // The Add record is on the stack, so an unguarded undo would change this count.
+        const std::size_t records = s_app->testEditorCommands().undoCount();
+        IM_CHECK(records > 0);
+
+        ctx->SetRef("Properties");
+        ctx->ItemInput("Gain (dB)");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+        ctx->KeyChars("5");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), records);
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+
+        // The field consumed that Ctrl+Z for its own text undo, so type again to leave a net
+        // change for the commit below.
+        ctx->KeyChars("5");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiKey_Enter);
+        ctx->Yield(3);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoCount(), records + 1);
+        IM_CHECK_EQ(s_app->testEditorCommands().undoLabel(), "Edit Amplifier 9921");
+
+        ctx->SetRef("");
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
+    // Task 7 (ES-5): Properties owns one Remove in its header. The per-drawer Delete buttons
+    // are gone, the header Remove takes the selection away, and Ctrl+Z brings it back.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "properties_remove_in_header");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9931);
+        IM_CHECK(amplifier != nullptr);
+        if (!amplifier)
+            return;
+        const int node = amplifier->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        ctx->WindowFocus("Properties");
+        ctx->WindowResize("Properties", ImVec2(420, 560));
+        ctx->Yield(2);
+
+        ctx->SetRef("Properties");
+        IM_CHECK(!ctx->ItemExists("Delete"));
+        IM_CHECK(ctx->ItemExists("Remove"));
+        ctx->ItemClick("Remove");
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) == nullptr);
+        // The header names what it removed with the same label the undo record uses.
+        IM_CHECK_EQ(s_app->testEditorCommands().undoLabel(), "Remove Amplifier 9931");
+
+        // The header Remove records through the editor command service, so undo restores it.
+        ctx->SetRef("");
+        ctx->WindowFocus("Node Editor");
+        ctx->Yield(1);
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+
+        ctx->SetRef("");
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "node_snap_menu");
@@ -725,6 +1004,139 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         IM_CHECK_EQ(graph.links().size(), initial_links);
         IM_CHECK_EQ(ImNodes::NumSelectedLinks(), 0);
+    };
+
+    // ES-1: Delete pressed while a Properties field is being edited belongs to the
+    // field, not the canvas, even though the canvas still holds the selection.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_properties_field_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *amplifier = s_app->testCreateComponent("amplifier", 9702);
+        IM_CHECK(amplifier != nullptr);
+        const int node = amplifier->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        ctx->Yield(2);
+
+        // Activate the amplifier gain field, so the text input owns the keyboard.
+        ctx->SetRef("Properties");
+        ctx->ItemInput("Gain (dB)");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+        // The canvas still holds the selection; only the text field owns the keyboard.
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 1);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+
+        IM_CHECK(s_app->testComponents().find(node) != nullptr);
+
+        // Leave the field and drop the test component so later cases see the seeded circuit.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(1);
+        ctx->SetRef("");
+        IM_CHECK(s_app->testRemoveComponent(node));
+        ctx->Yield(2);
+    };
+
+    // ES-1: a canvas-hosted modal (CreateSubcircuit) is not the Node Editor even though the
+    // canvas owns it, so Delete pressed while the modal has focus must not reach the nodes
+    // selected behind it.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_canvas_modal_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        IComponentEngine *first = s_app->testCreateComponent("generator", 9711);
+        IComponentEngine *second = s_app->testCreateComponent("amplifier", 9712);
+        IM_CHECK(first != nullptr && second != nullptr);
+        if (!first || !second)
+            return;
+        const int member_a = first->graphNodeId();
+        const int member_b = second->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(member_a, ImVec2(260.0f, 300.0f));
+        widget.setNodeEditorSpacePosition(member_b, ImVec2(520.0f, 300.0f));
+        ctx->Yield(4);
+
+        rubberBandOverNodes(ctx, member_a, member_b);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+        // No text field is active: the modal window itself owns the keyboard.
+        IM_CHECK(!ImGui::GetIO().WantTextInput);
+
+        // Both members stay selected behind the modal.
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(member_a);
+        ImNodes::SelectNode(member_b);
+        ctx->Yield(2);
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 2);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(member_a) != nullptr);
+        IM_CHECK(s_app->testComponents().find(member_b) != nullptr);
+
+        // Close the modal and remove the fixture.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        ImNodes::ClearNodeSelection();
+        IM_CHECK(s_app->testRemoveComponent(member_a));
+        IM_CHECK(s_app->testRemoveComponent(member_b));
+        ctx->Yield(2);
+    };
+
+    // ES-1: while the canvas-hosted Name field is being edited, Delete belongs to that field
+    // and must not remove the nodes selected behind it.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "delete_in_canvas_name_field_keeps_node");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->WindowFocus("Node Editor");
+        ctx->WindowResize("Node Editor", ImVec2(900, 700));
+        ctx->Yield(2);
+
+        NodeGraphWidget &widget = s_app->testGraphWidget();
+        IComponentEngine *first = s_app->testCreateComponent("generator", 9721);
+        IComponentEngine *second = s_app->testCreateComponent("amplifier", 9722);
+        IM_CHECK(first != nullptr && second != nullptr);
+        if (!first || !second)
+            return;
+        const int member_a = first->graphNodeId();
+        const int member_b = second->graphNodeId();
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::EditorContextResetPanning(ImVec2(0.0f, 0.0f));
+        widget.setNodeEditorSpacePosition(member_a, ImVec2(260.0f, 300.0f));
+        widget.setNodeEditorSpacePosition(member_b, ImVec2(520.0f, 300.0f));
+        ctx->Yield(4);
+
+        rubberBandOverNodes(ctx, member_a, member_b);
+        IM_CHECK(ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopup));
+
+        // Both members stay selected while the canvas-hosted Name field takes the keyboard.
+        ImNodes::EditorContextSet(widget.context());
+        ImNodes::ClearNodeSelection();
+        ImNodes::SelectNode(member_a);
+        ImNodes::SelectNode(member_b);
+        ctx->Yield(2);
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemInput("Name");
+        ctx->Yield(2);
+        IM_CHECK(ImGui::GetIO().WantTextInput);
+        IM_CHECK_EQ(ImNodes::NumSelectedNodes(), 2);
+
+        ctx->KeyPress(ImGuiKey_Delete);
+        ctx->Yield(2);
+        IM_CHECK(s_app->testComponents().find(member_a) != nullptr);
+        IM_CHECK(s_app->testComponents().find(member_b) != nullptr);
+
+        // Leave the field, close the modal and remove the fixture.
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        ctx->SetRef("");
+        ImNodes::ClearNodeSelection();
+        IM_CHECK(s_app->testRemoveComponent(member_a));
+        IM_CHECK(s_app->testRemoveComponent(member_b));
+        ctx->Yield(2);
     };
 
     // Issue #67: right-clicking a link must offer a Remove entry (previously the
