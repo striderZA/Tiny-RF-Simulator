@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Added
+
+- **Undo and redo** — Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes the last editor change, up to 100 steps. The **Edit** menu names the step it will undo or redo. Undo covers component adds and removals, links, parameter edits, probes, groups, node layout, library-part swaps, receiver requirements, RF budget edits, network analyzer points, and agent tool calls (one step per call).
+- **Removal notice** — removing a component shows a notice that names it and reminds you of Ctrl+Z.
+
+### Changed
+
+- **Delete acts only while the Node Editor has focus**, and never while a text field or popup owns the keyboard.
+- **Destructive controls** use one danger style and sit last in their rows. The Properties panel has one **Remove** in its header in place of the per-drawer **Delete** buttons.
+
+### Fixed
+
+- Pressing Delete while typing in a Properties field deleted the selected node, with no way to undo it.
+
 ## [0.31.1] - 2026-11-12
 
 ### Added
