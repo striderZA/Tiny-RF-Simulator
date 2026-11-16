@@ -16,6 +16,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 > **Windows:** MSVC (cl.exe) is not supported. Use MinGW-w64 g++.
 > If switching compilers on Windows, delete `build/` first to clear cached compiler detection.
+> Configure also needs `MSYSTEM_PREFIX` set to the MinGW-w64 prefix, because the install step copies the three MinGW runtime DLLs from its `bin`. An MSYS2 MINGW64 shell sets it to `/mingw64`; a standalone toolchain sets a Windows path such as `C:/mingw64`.
 
 ### Clone & Build
 
