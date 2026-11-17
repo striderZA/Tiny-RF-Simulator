@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.31.2] - 2026-11-17
+
 ### Added
 
 - **Undo and redo** — Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes the last editor change, up to 100 steps. The **Edit** menu names the step it will undo or redo. Undo covers component adds and removals, links, parameter edits, probes, groups, node layout, library-part swaps, receiver requirements, RF budget edits, network analyzer points, and agent tool calls (one step per call).
