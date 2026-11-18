@@ -1,6 +1,6 @@
 # RF Budget
 
-The RF Budget predicts what a receiver chain will do before you wire it. Open it from **View > RF Budget**. The View item toggles the dockable panel, and its visibility persists between runs.
+The RF Budget predicts what a receiver chain will do before you wire it. Open it from **View > RF Budget**. The View item toggles the dockable panel, its visibility persists between runs, and the panel opens in the [Utility Space](utility-views.md) group beside the main window.
 
 You describe the chain as a stage table — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch rows — pick where the cascade ends, and give one or more [requirement modes](receiver-requirements.md) a budget record. The budget then predicts each mode's gain, noise figure, output power, IIP3, SNR, and out-of-band suppression at every output, with a verdict per output.
 

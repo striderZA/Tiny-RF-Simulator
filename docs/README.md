@@ -8,6 +8,7 @@ This documentation is for people who run the simulator. It covers the Windows an
 
 - [Install](install.md) — download the release archive, run the simulator, and know which files the app writes.
 - [Guided tutorial](tutorial.md) — build and probe your first signal chain, then meet the panels that check, budget, and automate a design.
+- [Utility Views](utility-views.md) — the second docking group beside the main window: which panels open there, how to move views between the groups, and how the layout persists.
 
 ## Editing the circuit
 

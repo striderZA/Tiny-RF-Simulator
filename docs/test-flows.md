@@ -1,6 +1,6 @@
 # Test Flows
 
-A test flow sweeps a live circuit through parameter values and captures measurements at every step. Open **View > Test Flow** to toggle the panel. View items toggle, and panel visibility persists between runs.
+A test flow sweeps a live circuit through parameter values and captures measurements at every step. Open **View > Test Flow** to toggle the panel. View items toggle, panel visibility persists between runs, and the panel opens in the [Utility Space](utility-views.md) group beside the main window.
 
 A flow is a small JSON file you can author in the panel, save, and reload later, or hand-edit outside the app. **Export...** writes the captured results as JSON.
 

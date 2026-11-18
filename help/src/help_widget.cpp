@@ -54,9 +54,12 @@ const HelpSection sections[] = {
          "Toggle individual probe trace visibility in the Spectrum Analyzer legend",
          "PFB Channelizer nodes produce IQ plots showing per-channel output",
          "Each widget can be resized, docked, or hidden via the View menu",
+         "Auxiliary panels (Receiver Requirements, RF Budget, Filter Calculator, Test Flow, "
+         "Agent, this help, and Extensions) open docked in the Utility Space window beside the "
+         "main window; drag any of them out or between the two windows freely",
          "Window visibility is saved and restored between sessions",
      },
-     7},
+     9},
     {"Using the Inspector Panel",
      {
          "The Inspector (Properties) panel shows details for the selected node",

@@ -1,6 +1,6 @@
 # Receiver Requirements
 
-Receiver Requirements checks the circuit against named requirement modes — each with its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level. Open it from **View > Receiver Requirements**. The View item toggles the dockable panel, and its visibility persists between runs.
+Receiver Requirements checks the circuit against named requirement modes — each with its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level. Open it from **View > Receiver Requirements**. The View item toggles the dockable panel, its visibility persists between runs, and the panel opens in the [Utility Space](utility-views.md) group beside the main window.
 
 Every verdict in this view is measured live on the [Network Analyzer](network-analyzer.md)'s points and sweep: Point A is where the measurement starts, Point B is the output, and the sweep is the frequency grid. The Network Analyzer window can stay closed; the measurement still uses its settings. Widen the analyzer's start and stop frequencies until they cover a mode's whole band, or the mode reads **Incomplete**.
 
