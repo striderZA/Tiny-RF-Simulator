@@ -23,7 +23,7 @@
   <em>Building a signal chain, probing nodes, and reading the spectrum in real time.</em>
 </p>
 
-<video src="https://github.com/user-attachments/assets/485a0066-385e-4c6b-bf4e-6d2ae6bc48cf" controls></video>
+https://github.com/user-attachments/assets/485a0066-385e-4c6b-bf4e-6d2ae6bc48cf
 
 ## ✨ Features
 
