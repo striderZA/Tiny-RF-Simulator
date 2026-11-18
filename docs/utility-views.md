@@ -1,6 +1,6 @@
 # Utility Views
 
-The auxiliary panels — [Receiver Requirements](receiver-requirements.md), the [RF Budget](rf-budget.md), the Filter Calculator, [Test Flows](test-flows.md), the [Agent](agent-mcp.md), this help window, and **Tools > Extensions** — open docked in the **Utility Space** window, a second docking group beside the main window. Under multi-viewport it is its own OS window, so the big tables stay readable without crowding the circuit.
+The auxiliary panels — [Receiver Requirements](receiver-requirements.md), the [RF Budget](rf-budget.md), the Filter Calculator, [Test Flows](test-flows.md), the [Agent](agent-mcp.md), this help window, and **Tools > Extensions** — open docked in the **Utility Space** window, a second docking group. Under multi-viewport it is its own OS window, so the big tables stay readable without crowding the circuit. On first run it opens beside the main window when the display has room for it, and clamped to the screen's right edge otherwise; drag it wherever you want it.
 
 The main window keeps the editing surfaces and instruments: the Node Editor, Properties, the Component Library, the Log, and the [Spectrum Analyzer](spectrum-analyzer.md), [Network Analyzer](network-analyzer.md), and [Power Meter](power-meter.md).
 
