@@ -672,11 +672,16 @@ void RfSimulatorApp::startTutorial() {
     m_graph_widget->syncNodesFromEngine();
 
     // Every panel a step highlights must be on screen for the highlight to
-    // resolve — the Component Library in particular is hidden by default.
+    // resolve — the Component Library, RF Budget, Receiver Requirements, Test
+    // Flow, and Agent panels are hidden by default.
     m_show_node_editor = true;
     m_show_properties = true;
     m_show_spectrum = true;
     m_show_library = true;
+    m_show_rf_budget = true;
+    m_show_receiver_requirements = true;
+    m_show_test_flow = true;
+    m_show_agent = true;
 
     m_tutorial_state.start();
     m_show_tutorial = true;

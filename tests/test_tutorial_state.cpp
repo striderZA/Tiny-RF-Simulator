@@ -43,6 +43,11 @@ TEST_CASE("TutorialState catalog is non-empty and fully addressable", "[tutorial
     REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::Properties)) == "Properties");
     REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::SpectrumAnalyzer)) ==
             "Spectrum Analyzer");
+    REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::RFBudget)) == "RF Budget");
+    REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::ReceiverRequirements)) ==
+            "Receiver Requirements");
+    REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::TestFlow)) == "Test Flow");
+    REQUIRE(std::string(tutorialTargetWindowTitle(TutorialTarget::Agent)) == "Agent");
 }
 
 TEST_CASE("TutorialState is inactive until started", "[tutorial]") {

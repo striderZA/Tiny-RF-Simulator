@@ -13,6 +13,7 @@
 #include "mixer_engine.h"
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
+#include "tutorial_steps.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -2120,6 +2121,30 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         IM_CHECK(!s_app->testTutorialState().isActive());
         IM_CHECK(std::filesystem::exists(marker));
+    };
+    // Every panel a tutorial step highlights must be on screen for the highlight
+    // to resolve, so starting the tutorial opens them all.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_opens_highlighted_panels");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->newProject();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Help/Tutorial");
+        ctx->Yield(2);
+
+        for (const TutorialStep &step : tutorialSteps()) {
+            const char *title = tutorialTargetWindowTitle(step.target);
+            if (!title)
+                continue;
+            ImGuiWindow *window = ImGui::FindWindowByName(title);
+            IM_CHECK(window != nullptr);
+            IM_CHECK(window->Active);
+        }
+
+        ctx->SetRef("Tutorial Guide");
+        ctx->ItemClick("Exit");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!s_app->testTutorialState().isActive());
     };
 
     t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_first_run_prompt_marks_completed");
