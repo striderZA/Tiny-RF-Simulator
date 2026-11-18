@@ -6,6 +6,7 @@
 #include "combiner_engine.h"
 #include "component_params.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imnodes.h"
 #include "logging_core.h"
 #include "logging_widget.h"
@@ -1720,6 +1721,62 @@ void RfSimulatorApp::update_dsp() {
                                               &m_pfb_views.gridVisibility());
 }
 
+namespace {
+// The utility family: panels that assist the design rather than edit or
+// measure the live circuit. They open docked into the utility group by
+// default and can still be docked, floated, or moved between groups freely.
+constexpr const char *kUtilityViewTitles[] = {
+    "Receiver Requirements",
+    "RF Budget",
+    "Agent",
+    "Filter Calculator",
+    "Test Flow",
+    "How to Use",
+    "Extensions",
+};
+constexpr char kUtilitySpaceTitle[] = "Utility Space";
+constexpr char kUtilityDockSpaceId[] = "UtilityDockSpace";
+constexpr ImVec2 kUtilitySpaceDefaultSize(760.0f, 800.0f);
+} // namespace
+
+void RfSimulatorApp::drawUtilitySpace() {
+    // First placement: beside the main window, clamped onto the primary
+    // monitor so the group is never fully off screen. ImGuiCond_FirstUseEver
+    // applies only while no saved window state exists, so a restored session
+    // keeps the user's position. With multi-viewport on, a position outside
+    // the main window makes the group its own OS window.
+    const ImGuiViewport *viewport = ImGui::GetMainViewport();
+    ImVec2 pos(viewport->Pos.x + viewport->Size.x + 8.0f, viewport->Pos.y + 60.0f);
+    const ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
+    if (platform_io.Monitors.Size > 0) {
+        const ImGuiPlatformMonitor &monitor = platform_io.Monitors[0];
+        const float max_x = monitor.WorkPos.x + monitor.WorkSize.x - kUtilitySpaceDefaultSize.x;
+        const float max_y = monitor.WorkPos.y + monitor.WorkSize.y - kUtilitySpaceDefaultSize.y;
+        pos.x = std::min(pos.x, max_x);
+        pos.y = std::clamp(pos.y, monitor.WorkPos.y, std::max(monitor.WorkPos.y, max_y));
+    }
+    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(kUtilitySpaceDefaultSize, ImGuiCond_FirstUseEver);
+    // No p_open: the host has no close button, so a docked view is always
+    // reachable from the View menu. NoCollapse keeps docked views from
+    // vanishing behind a collapsed title bar.
+    ImGui::Begin(kUtilitySpaceTitle, nullptr, ImGuiWindowFlags_NoCollapse);
+    const ImGuiID utility_root = ImGui::GetID(kUtilityDockSpaceId);
+    ImGui::DockSpace(utility_root);
+    // Once per process: dock every never-placed utility view into the group.
+    // DockBuilderDockWindow creates the window settings entry in the same
+    // call, so the assignment survives to later frames and sessions, and a
+    // view the user has already placed (anywhere, or floating) keeps its own
+    // settings.
+    if (!m_utility_layout_seeded) {
+        m_utility_layout_seeded = true;
+        for (const char *title : kUtilityViewTitles)
+            if (ImGui::FindWindowSettingsByID(ImHashStr(title)) == nullptr)
+                ImGui::DockBuilderDockWindow(title, utility_root);
+    }
+    ImGui::End();
+}
+
 void RfSimulatorApp::draw_ui() {
     ImGuiIO &io = ImGui::GetIO();
     (void)io;
@@ -1781,11 +1838,11 @@ void RfSimulatorApp::draw_ui() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
+            // Core editing surfaces and instruments first, then the utility
+            // family, which opens in the utility docking group.
             ImGui::MenuItem("Log", nullptr, &m_show_log);
             ImGui::MenuItem("Spectrum Analyzer", nullptr, &m_show_spectrum);
             ImGui::MenuItem("Network Analyzer", nullptr, &m_show_na);
-            ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
-            ImGui::MenuItem("RF Budget", nullptr, &m_show_rf_budget);
             ImGui::MenuItem("Power Meter", nullptr, &m_show_power_meter);
             ImGui::MenuItem("Properties", nullptr, &m_show_properties);
             ImGui::MenuItem("Node Editor", nullptr, &m_show_node_editor);
@@ -1793,6 +1850,9 @@ void RfSimulatorApp::draw_ui() {
             if (ImGui::MenuItem("Snap to Grid", nullptr, m_graph_widget->gridSnapping()))
                 m_graph_widget->setGridSnapping(!m_graph_widget->gridSnapping());
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
+            ImGui::Separator();
+            ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
+            ImGui::MenuItem("RF Budget", nullptr, &m_show_rf_budget);
             ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
             ImGui::MenuItem("Test Flow", nullptr, &m_show_test_flow);
             ImGui::MenuItem("Agent", nullptr, &m_show_agent);
@@ -1932,6 +1992,10 @@ void RfSimulatorApp::draw_ui() {
         ImGui::TextDisabled("%s", version_title.c_str());
         ImGui::EndMainMenuBar();
     }
+
+    // The utility docking group. Drawn ahead of the views so its dock node
+    // exists before they are submitted and can dock into it this frame.
+    drawUtilitySpace();
 
     // A widget gesture that has finished (no control still active) becomes one record before any
     // shortcut can undo it.

@@ -14,8 +14,6 @@
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
 #include "tutorial_steps.h"
-#include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -68,6 +66,26 @@ void settlePanelScrollToBottom(ImGuiTestContext *ctx) {
         stable_frames = std::fabs(current - previous) < 0.5f ? stable_frames + 1 : 0;
         previous = current;
     }
+}
+
+// Root dock node of the tree `window` is docked into, or nullptr while the
+// window floats.
+ImGuiDockNode *dockRootNodeFor(const ImGuiWindow *window) {
+    if (window == nullptr || window->DockNode == nullptr)
+        return nullptr;
+    return ImGui::DockNodeGetRootNode(window->DockNode);
+}
+
+// True when `window` is docked anywhere inside the "Utility Space" host
+// window's dockspace — the app's second docking group. The dockspace ID is
+// "UtilityDockSpace" scoped inside the "Utility Space" window, the same
+// stable id ImGui persists in the layout ini.
+bool dockedInUtilityGroup(const ImGuiWindow *window) {
+    const ImGuiDockNode *root = dockRootNodeFor(window);
+    if (root == nullptr)
+        return false;
+    const ImGuiID utility_root = ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
+    return root->ID == utility_root;
 }
 
 struct AgentPanelUiCleanup {
@@ -2020,6 +2038,161 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!std::filesystem::exists(path));
     };
 
+    // The utility docking group: opening an auxiliary view through its real
+    // menu path must land it in the "Utility Space" dockspace, while core
+    // instrument windows stay out of that group.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "utility_views_open_into_utility_dock_group");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // The group's host window exists even while every utility view is
+        // closed: the View menu must always have somewhere to reopen a view.
+        IM_CHECK(ImGui::FindWindowByName("Utility Space") != nullptr);
+
+        struct UtilityViewCase {
+            const char *menu_path;
+            const char *window_name;
+        };
+        const UtilityViewCase cases[] = {
+            {"View/Receiver Requirements", "Receiver Requirements"},
+            {"View/RF Budget", "RF Budget"},
+            {"View/Filter Calculator", "Filter Calculator"},
+            {"View/Test Flow", "Test Flow"},
+            {"View/Agent", "Agent"},
+            {"Help/How to Use", "How to Use"},
+            {"Tools/Extensions", "Extensions"},
+        };
+        constexpr int kCaseCount = sizeof(cases) / sizeof(cases[0]);
+
+        // IM_CHECK returns from the test on failure, so every view this test
+        // opens is closed again by a guard instead of trailing code the
+        // checks could skip.
+        struct RestoreMenuToggles {
+            ImGuiTestContext *ctx = nullptr;
+            const char *paths[kCaseCount] = {};
+            ~RestoreMenuToggles() {
+                for (const char *path : paths) {
+                    if (path == nullptr)
+                        continue;
+                    ctx->SetRef("##MainMenuBar");
+                    ctx->MenuClick(path);
+                    ctx->SetRef("");
+                    ctx->Yield(2);
+                }
+            }
+        } restore{ctx, {}};
+
+        for (int i = 0; i < kCaseCount; ++i) {
+            const char *name = cases[i].window_name;
+            ImGuiWindow *window = ImGui::FindWindowByName(name);
+            const bool was_open = window != nullptr && window->Active;
+            if (!was_open) {
+                ctx->SetRef("##MainMenuBar");
+                ctx->MenuClick(cases[i].menu_path);
+                ctx->SetRef("");
+                ctx->Yield(2);
+                restore.paths[i] = cases[i].menu_path;
+            }
+            waitForUi(ctx, [&] { return dockedInUtilityGroup(ImGui::FindWindowByName(name)); });
+            window = ImGui::FindWindowByName(name);
+            IM_CHECK(window != nullptr);
+            IM_CHECK(dockedInUtilityGroup(window));
+        }
+
+        // A core instrument view is not pulled into the utility group.
+        IM_CHECK(!dockedInUtilityGroup(ImGui::FindWindowByName("Spectrum Analyzer")));
+    };
+
+    // The group's membership must survive the app's layout save/load path,
+    // and a view the user moved to the main dockspace must stay there until
+    // a layout is loaded.
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "utility_group_layout_round_trips_through_save_and_load");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Toggle the Filter Calculator open through the View menu if it is
+        // not already on screen (a docked background tab counts as open).
+        const auto view_open = [](const char *name) {
+            ImGuiWindow *window = ImGui::FindWindowByName(name);
+            return window != nullptr && window->Active;
+        };
+        const char *calculator_menu = "View/Filter Calculator";
+        bool opened_by_test = false;
+        struct RestoreMenuToggle {
+            ImGuiTestContext *ctx;
+            const char *path;
+            bool *active;
+            ~RestoreMenuToggle() {
+                if (*active) {
+                    ctx->SetRef("##MainMenuBar");
+                    ctx->MenuClick(path);
+                    ctx->SetRef("");
+                    ctx->Yield(2);
+                }
+            }
+        } restore{ctx, calculator_menu, &opened_by_test};
+
+        if (!view_open("Filter Calculator")) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick(calculator_menu);
+            ctx->SetRef("");
+            ctx->Yield(2);
+            opened_by_test = true;
+        }
+        waitForUi(
+            ctx, [] { return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")); });
+        IM_CHECK(dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+
+        const auto layout_file =
+            std::filesystem::path(s_app->testLayoutManager().layoutsDir()) / "UtilityRoundTrip.ini";
+        // IM_CHECK returns from the test on failure, so the file is removed by
+        // a guard instead of a trailing call the checks could skip.
+        struct LayoutFileCleanup {
+            std::filesystem::path path;
+            ~LayoutFileCleanup() {
+                std::error_code ec;
+                std::filesystem::remove(path, ec);
+            }
+        } layout_cleanup{layout_file};
+        std::filesystem::remove(layout_file);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->SetRef("Save Layout As");
+        ctx->ItemInputValue("Name", "UtilityRoundTrip");
+        ctx->ItemClick("Save");
+        ctx->SetRef("");
+        ctx->Yield();
+        IM_CHECK(std::filesystem::exists(layout_file));
+
+        // Move the view into the main dockspace: the same dock request a drag
+        // between the groups submits, and the move must persist (the default
+        // assignment never re-docks a placed window mid-session).
+        ImGuiContext &g = *ImGui::GetCurrentContext();
+        const ImGuiID utility_root_id =
+            ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
+        ImGuiDockNode *main_dock_root = nullptr;
+        for (const ImGuiStoragePair &pair : g.DockContext.Nodes.Data) {
+            auto *node = static_cast<ImGuiDockNode *>(pair.val_p);
+            // The main dockspace is the dockspace root other than the
+            // utility group's.
+            if (node != nullptr && node->IsRootNode() && node->IsDockSpace() &&
+                node->ID != utility_root_id) {
+                main_dock_root = node;
+                break;
+            }
+        }
+        IM_CHECK(main_dock_root != nullptr);
+        ImGui::DockBuilderDockWindow("Filter Calculator", main_dock_root->ID);
+        ctx->Yield(2);
+        IM_CHECK(!dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+
+        // Loading the saved layout restores the utility group membership.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Load/UtilityRoundTrip");
+        ctx->SetRef("");
+        waitForUi(
+            ctx, [] { return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")); });
+        IM_CHECK(dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+    };
+
     // Tutorial tests are registered last on purpose: starting the tutorial calls
     // newProject(), which clears the components and node IDs the tests above
     // rely on.
@@ -2340,6 +2513,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(3);
         IM_CHECK(s_app->m_show_rf_budget);
+        // Float the window: this case opens Receiver Requirements alongside
+        // it, and two views docked in the same utility group would hide
+        // each other behind tabs. Floating keeps both submitted, as before
+        // the utility group existed.
+        ImGui::DockBuilderDockWindow("RF Budget", 0);
+        ctx->Yield(2);
         ImGuiWindow *window = ImGui::FindWindowByName("RF Budget");
         IM_CHECK(window != nullptr && window->Active);
 
@@ -3347,7 +3526,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(3);
         IM_CHECK(agentPanelVisible());
-        ctx->WindowFocus("Agent");
+        // Float the panel first: it opens docked in the utility group, whose
+        // docked windows have no resize border for the engine to drag.
+        ImGui::DockBuilderDockWindow("Agent", 0);
+        ctx->Yield(2);
         ctx->WindowResize("Agent", ImVec2(520, 560));
         ctx->Yield(2);
 
@@ -3398,6 +3580,10 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
         IM_CHECK(agentPanelVisible());
         ctx->WindowFocus("Agent");
+        // Float the panel first: it opens docked in the utility group, whose
+        // docked windows have no resize border for the engine to drag.
+        ImGui::DockBuilderDockWindow("Agent", 0);
+        ctx->Yield(2);
         ctx->WindowResize("Agent", ImVec2(620, 640));
         ctx->Yield(2);
         // Checkpoints render newest first, so the first matching button is the
