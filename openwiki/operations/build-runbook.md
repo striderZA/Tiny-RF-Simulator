@@ -4,34 +4,28 @@ title: Build & Operations
 description: Reliable contributor and release-operator procedures for configuring, building, testing, formatting, installing, packaging, and troubleshooting Tiny RF Simulator. Covers pinned dependency fetching, platform constraints, executable-relative runtime data, CI gates, and release publication.
 tags: [build, testing, packaging, ci, operations, release]
 sources:
-  - id: openwiki-source-6983d4a49fc6ae63a12ff946
-    resource: repo://.githooks/commit-msg
   - id: openwiki-source-bf5be0c9253ed1d07b502e10
     resource: repo://.githooks/pre-commit
   - id: openwiki-source-baf30c604828cfde90a8ab63
     resource: repo://.githooks/pre-push
+  - id: openwiki-source-17e3636a8122b268d25b0c21
+    resource: repo://.github/actions/build-and-test/action.yml
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
-  - id: openwiki-source-3fa73b0f154188231bdb99e6
-    resource: repo://agent/mcp/CMakeLists.txt
-  - id: openwiki-source-8037e2358a2c4f9b2c722a11
-    resource: repo://AGENTS.md
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-f8c30b6d300fb033e11282e7
     resource: repo://app/src/extension_manager.cpp
-  - id: openwiki-source-baedf8f3f47fa931244e3545
-    resource: repo://app/src/project_serializer.cpp
   - id: openwiki-source-d44494ef3e497fea81240ef8
     resource: repo://CMakeLists.txt
-  - id: openwiki-source-65d144a9bd5b3da69b76d204
-    resource: repo://common/AGENTS.md
   - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
     resource: repo://common/session_state.h
   - id: openwiki-source-f317ee207e1653d2033c81a4
     resource: repo://CONTRIBUTING.md
   - id: openwiki-source-6236844d67c4b6a4f4573508
     resource: repo://layout/src/layout_manager.cpp
+  - id: openwiki-source-b743af9beec87baf3f8b50b3
+    resource: repo://scripts/AGENTS.md
   - id: openwiki-source-c5119c072dddff32b56e1e2e
     resource: repo://scripts/format.sh
   - id: openwiki-source-d86f2b14681b2024bcf52a41
@@ -46,10 +40,10 @@ sources:
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Build & Operations
@@ -172,7 +166,7 @@ build/bin/tests "[sparam]"
 ctest --test-dir build -R 'test_test_flow_widget|test_issue87_flow' --output-on-failure
 ```
 
-Catch2 accepts tag and name filters on the `tests` executable. The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. MinGW-w64 can silently drop `TEST_CASE`s beyond a compiler-specific registration ceiling, and the Windows release jobs require `tests.exe --list-tests` to report at least the `MINGW_TEST_CASE_FLOOR` (currently 223). Put new coverage in a standalone target rather than assuming a silently dropped `TEST_CASE` ran.
+Catch2 accepts tag and name filters on the `tests` executable. The main `tests` executable contains the core Catch2 sources; many newer or platform-sensitive cases are standalone executables registered by `tests/CMakeLists.txt`. MinGW-w64 can silently drop `TEST_CASE`s beyond a compiler-specific registration ceiling, and the Windows release jobs require `tests.exe --list-tests` to report at least the `MINGW_TEST_CASE_FLOOR` (currently 227). Put new coverage in a standalone target rather than assuming a silently dropped `TEST_CASE` ran.
 
 The `test_ui` target needs a display. On Linux, run it under `xvfb-run --auto-servernum`; CI does not run it on Windows.
 
@@ -228,7 +222,7 @@ Pull requests run **no automated CI pipeline**. Run the local format, build, and
 
 1. `classify-release` accepts only `X.Y.Z` tags. Patch tags (`Z > 0`) run one Linux GCC 14 Debug validation leg. Minor and major tags (`Z = 0`) run four legs: Linux GCC 14 Debug, Linux GCC 14 Release, Linux Clang 18 Debug, and Windows MinGW-w64 Debug.
 2. `validate-version` requires the tag version to equal the `CMakeLists.txt` project version and runs `scripts/release-notes.sh` for the tag, failing when the matching changelog section is missing or empty.
-3. The format job runs the clang-format 18 check and the sanitizer job runs a Debug AddressSanitizer build on every release tag. The strict-build matrix runs the leg list from step 1. The strict-build and package jobs run CTest with `Benchmark` excluded; Linux runs under `xvfb-run`, and Windows also excludes `test_ui` because it needs an interactive display. Windows checks the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 223).
+3. The format job runs the clang-format 18 check and the sanitizer job runs a Debug AddressSanitizer build on every release tag. The strict-build matrix runs the leg list from step 1. The strict-build and package jobs run CTest with `Benchmark` excluded; Linux runs under `xvfb-run`, and Windows also excludes `test_ui` because it needs an interactive display. Windows checks the workflow-defined `MINGW_TEST_CASE_FLOOR` (currently 227).
 4. The package job builds the optimized Release Linux and Windows package configurations, and those are the only binaries that ship. Debug is validation-only.
 5. After all required jobs pass, the release job creates a **draft** GitHub release whose body is the matching changelog section.
 
@@ -268,6 +262,6 @@ On Windows, run the release script as `sh scripts/release.sh …` from Git for W
 | Link errors after adding files | Add the source to its module `CMakeLists.txt`, then reconfigure. |
 | Linux GLFW/Wayland configuration trouble | Reconfigure with `-DGLFW_BUILD_WAYLAND=OFF` and install the X11/OpenGL development packages. |
 | UI test hangs or fails headlessly | Use `xvfb-run` on Linux; `test_ui` does not run on Windows CI. |
-| Tests disappear on MinGW | Check `build/bin/tests.exe --list-tests`; move new cases to a standalone target if the count is below the workflow's `MINGW_TEST_CASE_FLOOR` (currently 223). |
+| Tests disappear on MinGW | Check `build/bin/tests.exe --list-tests`; move new cases to a standalone target if the count is below the workflow's `MINGW_TEST_CASE_FLOOR` (currently 227). |
 | Parallel tests fail around shared app state or extensions | On Windows, app-level tests share `app.ini`; layouts and tutorial tests share executable-relative state and extension tests mutate the source `extensions/` root. Clean leftovers, run one CTest invocation, honor `RUN_SERIAL`, and never overlap separate CTest runs on one build tree. |
 | Installed app cannot find examples or extensions | Verify the executable directory contains `component_data/` and `extensions/` (`<prefix>/bin/component_data/` and `<prefix>/bin/extensions/` for an install tree), rather than relying on the source-tree fallback. |

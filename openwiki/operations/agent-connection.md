@@ -17,6 +17,8 @@ sources:
     resource: repo://agent/mcp/src/main.cpp
   - id: openwiki-source-109ef5962c4be826d7759ce5
     resource: repo://agent/mcp/src/mcp_bridge.cpp
+  - id: openwiki-source-ea4d2883fe61311539ee1809
+    resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-5cccc848d29020d63b22e842
     resource: repo://agent/protocol/src/agent_endpoint.cpp
   - id: openwiki-source-a22e52612dd2493037e131ad
@@ -33,10 +35,10 @@ sources:
     resource: repo://common/session_state.h
   - id: openwiki-source-23775c3de52f3ab95a13cb8b
     resource: repo://README.md
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 

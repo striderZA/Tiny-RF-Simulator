@@ -16,24 +16,24 @@ sources:
     resource: repo://agent/api/src/tool_measure.cpp
   - id: openwiki-source-594ad266217b9f37cd806391
     resource: repo://agent/api/src/tool_receiver.cpp
-  - id: openwiki-source-11d3b4337d1de5e03c6cb2d1
-    resource: repo://app/include/app_agent_host.h
+  - id: openwiki-source-566e993351b4fc9de152907f
+    resource: repo://app/AGENTS.md
   - id: openwiki-source-8c3f2a1fe9422d9010bcc799
     resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-eddd217b5fc424e198cfdd6b
     resource: repo://app/include/component_registry.h
   - id: openwiki-source-a6f41f170cb54f5b8f38bf47
     resource: repo://app/include/component_type_registry.h
-  - id: openwiki-source-e81f2756b009d1486dba9b74
-    resource: repo://app/include/editor_commands.h
+  - id: openwiki-source-cb653eeead15cbc480be66fc
+    resource: repo://app/include/editor_history.h
+  - id: openwiki-source-656625537681529c035f392d
+    resource: repo://app/include/receiver_requirements.h
   - id: openwiki-source-77fe8973b7526a7bc3ecf4c4
     resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-bc033392c5f8ce0dd75226a2
     resource: repo://app/src/circuit_runtime.cpp
-  - id: openwiki-source-dd0234525c20fcc7f7d85a35
-    resource: repo://app/src/component_library.cpp
   - id: openwiki-source-7ffec1c215e8323dc7328f1d
     resource: repo://app/src/editor_commands.cpp
   - id: openwiki-source-f8c30b6d300fb033e11282e7
@@ -70,14 +70,8 @@ sources:
     resource: repo://node_graph/src/rewire.cpp
   - id: openwiki-source-d364d949938a433276255c32
     resource: repo://src/main.cpp
-  - id: openwiki-source-1f397e27ef8b0dc1f4f49d51
-    resource: repo://test_flow/include/flow_boundary.h
-  - id: openwiki-source-3d3e3b78daf6b95b69159369
-    resource: repo://test_flow/include/flow_runner.h
   - id: openwiki-source-7cf82ec60f61d2c0858950cf
     resource: repo://test_flow/src/flow_boundary.cpp
-  - id: openwiki-source-1425d7c9bb71c8e6d4145122
-    resource: repo://test_flow/src/flow_runner.cpp
   - id: openwiki-source-0f5985dbf469bdfd8b400c2d
     resource: repo://tests/test_editor_commands.cpp
   - id: openwiki-source-798feeba9e1cc5b47be50e7a
@@ -88,14 +82,12 @@ sources:
     resource: repo://tests/test_issue48_json_loader.cpp
   - id: openwiki-source-8568eb9d2755f18e4ab13407
     resource: repo://tests/test_path_containment.cpp
-  - id: openwiki-source-59642b0a96e98716b082cc11
-    resource: repo://tests/test_test_flow_widget.cpp
   - id: openwiki-source-176b6b1095bfaf01d84f5034
     resource: repo://tutorial/include/tutorial_state.h
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Architecture Overview

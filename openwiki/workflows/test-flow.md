@@ -4,14 +4,12 @@ title: Test Flow Workflow
 description: Defines the JSON Test Flow sweep contract and traces authoring, preflight, the shared RunFlowWithinBoundary seam used by the panel and the test_flow_run agent tool, once-per-run restoration, failure latching, and JSON results.
 tags: [test-flow, harness, authoring, measurements, execution, validation, restoration, agent-tool]
 sources:
-  - id: openwiki-source-d7b5e27be67d03af04c422d5
-    resource: repo://agent/api/include/agent_api.h
+  - id: openwiki-source-4dd766881eeb1848d297e025
+    resource: repo://agent/AGENTS.md
   - id: openwiki-source-09cfc1b32d53a6a762f8fcf1
     resource: repo://agent/api/src/agent_api.cpp
   - id: openwiki-source-51a2566382a8dd93c7ef78ca
     resource: repo://agent/api/src/tool_test_flow.cpp
-  - id: openwiki-source-880b52865addec60737d5a6c
-    resource: repo://agent/protocol/src/agent_errors.cpp
   - id: openwiki-source-8c3f2a1fe9422d9010bcc799
     resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-b5f6d8bb035c1246d584d593
@@ -40,14 +38,12 @@ sources:
     resource: repo://test_flow/src/flow_params.cpp
   - id: openwiki-source-1425d7c9bb71c8e6d4145122
     resource: repo://test_flow/src/flow_runner.cpp
-  - id: openwiki-source-d8865e23d4aeb9130e4e47be
-    resource: repo://tests/test_agent_api.cpp
   - id: openwiki-source-59642b0a96e98716b082cc11
     resource: repo://tests/test_test_flow_widget.cpp
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Test Flow Workflow

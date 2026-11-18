@@ -16,12 +16,12 @@ sources:
     resource: repo://agent/api/src/tool_receiver.cpp
   - id: openwiki-source-566e993351b4fc9de152907f
     resource: repo://app/AGENTS.md
-  - id: openwiki-source-8e028f5320373887a239daa1
-    resource: repo://app/include/app.h
   - id: openwiki-source-8c3f2a1fe9422d9010bcc799
     resource: repo://app/include/circuit_runtime.h
   - id: openwiki-source-e81f2756b009d1486dba9b74
     resource: repo://app/include/editor_commands.h
+  - id: openwiki-source-cb653eeead15cbc480be66fc
+    resource: repo://app/include/editor_history.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-bc033392c5f8ce0dd75226a2
@@ -82,10 +82,10 @@ sources:
     resource: repo://tests/test_node_hover_snr.cpp
   - id: openwiki-source-08f846c8582718824d718b09
     resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-10T17:27:48.662Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # DSP Pipeline & Runtime Workflows

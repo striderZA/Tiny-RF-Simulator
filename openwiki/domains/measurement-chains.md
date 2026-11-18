@@ -4,18 +4,18 @@ title: Measurement Chains
 description: How the Network Analyzer, the Receiver Requirements output-power and IIP3 measurements, and the agent network_analyzer_sweep and receiver_measure tools discover the circuit between two output ports, which topologies are accepted or refused, and how that circuit runs on isolated clones.
 tags: [network-analyzer, receiver, measurement, topology, agent, rf-simulator]
 sources:
-  - id: openwiki-source-4dd766881eeb1848d297e025
-    resource: repo://agent/AGENTS.md
   - id: openwiki-source-d37ecc0aeb17155d7b54881a
     resource: repo://agent/api/src/tool_measure.cpp
   - id: openwiki-source-594ad266217b9f37cd806391
     resource: repo://agent/api/src/tool_receiver.cpp
+  - id: openwiki-source-366e68d7a66cf48dcaeccf52
+    resource: repo://agent/api/src/tool_requirements.cpp
   - id: openwiki-source-ea4d2883fe61311539ee1809
     resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-8e028f5320373887a239daa1
     resource: repo://app/include/app.h
-  - id: openwiki-source-8f5abf4941e49fa24791bf7d
-    resource: repo://app/include/receiver_performance_measurement.h
+  - id: openwiki-source-656625537681529c035f392d
+    resource: repo://app/include/receiver_requirements.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-76cf00e5eb6f86db297b4153
@@ -32,10 +32,10 @@ sources:
     resource: repo://tests/test_network_analyzer.cpp
   - id: openwiki-source-82e3ad99f40a09c6e07d781b
     resource: repo://tests/test_receiver_performance_measurements.cpp
-generated: { by: "omp", at: "2026-10-10T19:01:57.003Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T19:01:57.003Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Measurement Chains

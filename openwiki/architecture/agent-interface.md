@@ -4,8 +4,8 @@ title: Agent Interface Architecture
 description: Layers, dependency rules, trust boundaries, and security contracts of the rfsim-agent subsystem, which lets an MCP client read and edit a running RF Simulator through rf-sim-mcp. Read this before changing agent transport, protocol, or tool boundaries.
 tags: [agent, mcp, architecture, protocol, security, rf-simulator]
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:59:41.836Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 sources:
   - id: openwiki-source-4dd766881eeb1848d297e025
     resource: repo://agent/AGENTS.md
@@ -49,11 +49,13 @@ sources:
     resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
+  - id: openwiki-source-d44494ef3e497fea81240ef8
+    resource: repo://CMakeLists.txt
   - id: openwiki-source-9cfe8ddc08d1f0119df291d5
     resource: repo://node_graph/src/node_graph_widget.cpp
   - id: openwiki-source-d364d949938a433276255c32
     resource: repo://src/main.cpp
-generated: { by: "omp", at: "2026-10-12T23:59:41.836Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 ---
 
 # Agent Interface Architecture

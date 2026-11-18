@@ -6,10 +6,10 @@ tags: [rf-components, dsp-engine, adc, pfb, signal-chain, instruments]
 sources:
   - id: openwiki-source-e0fd99a5ab1663ac9509bb7f
     resource: repo://adc/include/adc_engine.h
+  - id: openwiki-source-8037e2358a2c4f9b2c722a11
+    resource: repo://AGENTS.md
   - id: openwiki-source-3b7269741963097c808f1c17
     resource: repo://amplifier/src/amplifier_engine.cpp
-  - id: openwiki-source-a6f41f170cb54f5b8f38bf47
-    resource: repo://app/include/component_type_registry.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-bc033392c5f8ce0dd75226a2
@@ -46,6 +46,8 @@ sources:
     resource: repo://ideal_filter/include/ideal_filter_engine.h
   - id: openwiki-source-5ee0da670319981d7296cd44
     resource: repo://mixer/include/mixer_engine.h
+  - id: openwiki-source-5565fa9652878818852a9c63
+    resource: repo://mixer/src/mixer_engine.cpp
   - id: openwiki-source-318263a7857c897eac3da71e
     resource: repo://network_analyzer/include/network_analyzer_engine.h
   - id: openwiki-source-9a250414ad94d8c41379ca9b
@@ -66,8 +68,6 @@ sources:
     resource: repo://spectrum_analyzer/src/spectrum_analyzer_engine.cpp
   - id: openwiki-source-e9e03e69fc798aa353d98b03
     resource: repo://spectrum_analyzer/src/spectrum_analyzer_widget.cpp
-  - id: openwiki-source-c063649ec628c2c23017fa79
-    resource: repo://splitter/include/splitter_engine.h
   - id: openwiki-source-ff1a4cf5d084ead7139b2f59
     resource: repo://splitter/src/splitter_engine.cpp
   - id: openwiki-source-2394c03133ac41a39b442be4
@@ -98,10 +98,10 @@ sources:
     resource: repo://tests/test_rf_switch.cpp
   - id: openwiki-source-e2bb8f29e378f71c1aa407c0
     resource: repo://tests/test_spectrum_jitter.cpp
-generated: { by: "omp", at: "2026-10-10T18:57:17.727Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T18:57:17.727Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # RF Components — DSP Engines, Channelizers, and Instruments

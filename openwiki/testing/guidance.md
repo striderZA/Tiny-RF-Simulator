@@ -4,6 +4,8 @@ title: Testing Guide
 description: Explains the Catch2, standalone, UI, integration, and GUI-free Test Flow harnesses. Use it to choose focused regression coverage, isolate shared state, and validate tag-triggered releases.
 tags: [testing, catch2, ui-testing, integration-testing, regression-testing, test-flow]
 sources:
+  - id: openwiki-source-17e3636a8122b268d25b0c21
+    resource: repo://.github/actions/build-and-test/action.yml
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
   - id: openwiki-source-d7b5e27be67d03af04c422d5
@@ -12,16 +14,8 @@ sources:
     resource: repo://agent/api/src/tool_test_flow.cpp
   - id: openwiki-source-e7932f8366579c2ce8c1865d
     resource: repo://app/src/test_flow_widget.cpp
-  - id: openwiki-source-3ce882f1e6c92c2ec4ddc6c9
-    resource: repo://common/session_state.h
-  - id: openwiki-source-f317ee207e1653d2033c81a4
-    resource: repo://CONTRIBUTING.md
-  - id: openwiki-source-6236844d67c4b6a4f4573508
-    resource: repo://layout/src/layout_manager.cpp
   - id: openwiki-source-8c357fec0d6783d0809a624a
     resource: repo://test_engine/CMakeLists.txt
-  - id: openwiki-source-f23e5c266721037d2ad036be
-    resource: repo://test_flow/CMakeLists.txt
   - id: openwiki-source-1f397e27ef8b0dc1f4f49d51
     resource: repo://test_flow/include/flow_boundary.h
   - id: openwiki-source-7cf82ec60f61d2c0858950cf
@@ -42,12 +36,10 @@ sources:
     resource: repo://tests/test_temp_paths.h
   - id: openwiki-source-59642b0a96e98716b082cc11
     resource: repo://tests/test_test_flow_widget.cpp
-  - id: openwiki-source-08f846c8582718824d718b09
-    resource: repo://tutorial/src/tutorial_state.cpp
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Testing Guide

@@ -34,8 +34,6 @@ sources:
     resource: repo://agent/protocol/include/agent_errors.h
   - id: openwiki-source-ab1b628cf8814f0e781b181a
     resource: repo://agent/protocol/include/agent_wire.h
-  - id: openwiki-source-ea4d2883fe61311539ee1809
-    resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-880b52865addec60737d5a6c
     resource: repo://agent/protocol/src/agent_errors.cpp
   - id: openwiki-source-a22e52612dd2493037e131ad
@@ -46,8 +44,6 @@ sources:
     resource: repo://app/src/app_agent_host.cpp
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
-  - id: openwiki-source-9cfe8ddc08d1f0119df291d5
-    resource: repo://node_graph/src/node_graph_widget.cpp
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
   - id: openwiki-source-d8865e23d4aeb9130e4e47be
@@ -56,10 +52,10 @@ sources:
     resource: repo://tests/test_agent_app.cpp
   - id: openwiki-source-86949a298d24dfef3de6fc0c
     resource: repo://tests/test_agent_position_read.cpp
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # Agent Tool-Call Lifecycle

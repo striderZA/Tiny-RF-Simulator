@@ -3,9 +3,6 @@ type: Integration Guide
 title: S-Parameter System
 description: Traces Touchstone parsing and complex S-parameter application through the five S-parameter-capable component engines, the component-form picker, library and project data-file resolution, path containment, and the read-only data_file_read agent tool.
 tags: [s-parameter, touchstone, rf-components, persistence, path-containment, data-file-read]
-verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-10T19:32:12.266Z
 sources:
   - id: openwiki-source-5463a01543f8384d18b05f52
     resource: repo://agent/api/src/tool_data_file.cpp
@@ -13,10 +10,10 @@ sources:
     resource: repo://agent/protocol/src/agent_catalog.cpp
   - id: openwiki-source-3b7269741963097c808f1c17
     resource: repo://amplifier/src/amplifier_engine.cpp
+  - id: openwiki-source-566e993351b4fc9de152907f
+    resource: repo://app/AGENTS.md
   - id: openwiki-source-c26268b659d2e081b2bf2494
     resource: repo://app/include/component_form_model.h
-  - id: openwiki-source-78878acfa0447c3372e0ed0d
-    resource: repo://app/include/component_library.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-7521912f4cd608ba12b28d9b
@@ -37,21 +34,20 @@ sources:
     resource: repo://equalizer/src/equalizer_engine.cpp
   - id: openwiki-source-74d53cf0662e7948542d0f7d
     resource: repo://ideal_filter/src/ideal_filter_engine.cpp
-  - id: openwiki-source-3103344e965706c3b7acb9cf
-    resource: repo://tests/test_amplifier_sparam.cpp
-  - id: openwiki-source-8fbec6a99b37874b41a0f8fc
-    resource: repo://tests/test_issue117_numeric_correctness.cpp
   - id: openwiki-source-07edc275a69eebf347d2e840
     resource: repo://tests/test_issue79_component_validation.cpp
   - id: openwiki-source-8568eb9d2755f18e4ab13407
     resource: repo://tests/test_path_containment.cpp
-  - id: openwiki-source-f87d3ee6c75c1ccc4ec8d422
-    resource: repo://touchstone/include/s_parameter_data.h
+  - id: openwiki-source-ba5017ff0b95d35ec1ec3c01
+    resource: repo://tests/test_sparam_legacy_key.cpp
   - id: openwiki-source-1e03788e225c3b8fd338e958
     resource: repo://touchstone/src/s_parameter_data.cpp
   - id: openwiki-source-13f3b5d657436db7924cde15
     resource: repo://touchstone/src/touchstone_parser.cpp
-generated: { by: "omp", at: "2026-10-10T19:32:12.266Z" }
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
+verified:
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # S-Parameter System
