@@ -6,18 +6,12 @@ tags: [quickstart, entrypoint, build, testing, agent, rf-simulator]
 sources:
   - id: openwiki-source-4d1d392666be6dfdd7a91a2e
     resource: repo://.github/workflows/release.yml
-  - id: openwiki-source-4dd766881eeb1848d297e025
-    resource: repo://agent/AGENTS.md
   - id: openwiki-source-39e4bbac2a1d3ca7cc95bd2b
     resource: repo://agent/api/CMakeLists.txt
-  - id: openwiki-source-51a2566382a8dd93c7ef78ca
-    resource: repo://agent/api/src/tool_test_flow.cpp
   - id: openwiki-source-3fa73b0f154188231bdb99e6
     resource: repo://agent/mcp/CMakeLists.txt
   - id: openwiki-source-671643534997226ff2506cf3
     resource: repo://agent/protocol/CMakeLists.txt
-  - id: openwiki-source-b5f6d8bb035c1246d584d593
-    resource: repo://app/include/test_flow_widget.h
   - id: openwiki-source-5f1fbd4979e8254a53e79f25
     resource: repo://app/src/app.cpp
   - id: openwiki-source-e7932f8366579c2ce8c1865d
@@ -42,10 +36,14 @@ sources:
     resource: repo://test_flow/include/flow_runner.h
   - id: openwiki-source-fa68239bf614d837d7e5522c
     resource: repo://tests/CMakeLists.txt
-generated: { by: "omp", at: "2026-10-12T23:09:57.788Z" }
+  - id: openwiki-source-42ef0db762a7ffb82713cae7
+    resource: repo://tests/test_issue48_json_loader.cpp
+  - id: openwiki-source-8568eb9d2755f18e4ab13407
+    resource: repo://tests/test_path_containment.cpp
+generated: { by: "omp", at: "2026-11-17T19:18:07.066Z" }
 verified:
-  - by: openwiki/0.7.0
-    at: 2026-10-12T23:09:57.788Z
+  - by: openwiki/0.7.2
+    at: 2026-11-17T19:18:07.066Z
 ---
 
 # RF Simulator — Quickstart
