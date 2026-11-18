@@ -60,11 +60,11 @@ Five component types can replace their ideal model with measured complex data fr
 
 ## Parsing
 
-TouchstoneParser supports DB, MA, and RI encodings, converts supported frequency units to Hz, infers port count from .sNp filenames, reorders Touchstone column-major parameters into row-major storage, validates strictly increasing finite nonnegative frequencies, and enforces 256 MiB and 10,000,000-point limits while reading.
+TouchstoneParser supports DB, MA, and RI encodings, converts supported frequency units to Hz, infers port count from .sNp filenames, reorders Touchstone column-major parameters into row-major storage, validates strictly increasing finite nonnegative frequencies, and enforces 256 MiB and 10,000,000-point limits while reading. Two-port v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`, and files with three or more ports use row-major parameter order. Reference impedance comes from the option line `R n`, which v2.0 `[Reference]` may override across lines; a `[Reference]` with differing per-port values is refused and logged, since per-port renormalisation is not implemented. `TouchstoneParser::parse()` returns file values and the file reference unchanged, while `SParameterData::load()` renormalises a uniform reference R to 50 Ω (`Z = R(I−S)⁻¹(I+S)`, `S' = (Z−50)(Z+50)⁻¹`) and refuses a non-positive R.
 
 ## SParameterData and engine application
 
-SParameterData clears prior state before parsing, reports load failure without becoming loaded, linearly interpolates complex parameters with endpoint clamping, and applies magnitude/phase and |S|² noise scaling to spectrum data.
+SParameterData clears prior state before parsing, reports load failure without becoming loaded, linearly interpolates complex parameters with endpoint clamping, and applies magnitude/phase and |S|² noise scaling to spectrum data. `interpolate()` evaluates negative frequencies at `|f|` and returns the conjugate response, matching a real-valued network's frequency symmetry.
 
 Each S-parameter-capable engine applies its data inside its own update() by calling SParameterData::interpolate() and scaling tones and noise itself rather than through applyToSpectrum(); the amplifier, equalizer, and ideal filter apply their selected forward entry, the amplifier also keeps its noise figure and nonlinear processing, the attenuator adds a passive thermal noise term k*T*(1-|S21|^2), the combiner applies S21 to input 0 and S31 to input 1, and each engine falls back to its manual model whenever its S-parameter branch is inactive.
 
@@ -72,7 +72,7 @@ Each S-parameter-capable engine applies its data inside its own update() by call
 
 S-parameter-capable engine deserializers reload the persisted file path before enabling a requested S-parameter mode, and activation requires a successful parse plus enough ports: at least two for the amplifier, attenuator, equalizer, and ideal filter and exactly three for the combiner, so missing, malformed, or too-small data leaves the branch disabled.
 
-The amplifier, equalizer, and ideal filter persist their forward entry as sparam_fwd_idx, labelled Forward S-Parameter Index in the component type registry; loading a file through setSParamFilepath selects the S21 entry, and deserialize selects that same entry when sparam_fwd_idx is missing and a file is loaded (index 0, S11, when no file is loaded). An explicit sparam_fwd_idx is kept.
+The amplifier, equalizer, and ideal filter persist their forward entry as sparam_fwd_idx, labelled Forward S-Parameter Index in the component type registry; loading a file through setSParamFilepath selects the S21 entry, and deserialize selects that same entry when sparam_fwd_idx is missing and a file is loaded (index 0, S11, when no file is loaded). An explicit in-range sparam_fwd_idx is kept; an index outside the loaded matrix `[0, N²)` falls back to S21 with a warning, so an agent write of that index returns `ENGINE_ADJUSTED` and rolls back.
 
 All five S-parameter-capable engines (attenuator, combiner, amplifier, equalizer, and ideal filter) read the legacy sparam_path key when sparam_filepath is absent, so a contained legacy-only path loads its file, and a present sparam_filepath takes precedence.
 

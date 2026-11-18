@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:8ce866c00c334070544cc4da4cec20f7d41584edc21a5df863be31b7d7560702",
+  "pageVersion": "sha256:37378d192e068ccf58b1ee33d96544ab7c6e930d2ed79842c7efb6a78f2a5206",
   "claims": [
     {
       "id": "claim_c5104af8ab814fafa366016973af17dd",
@@ -57,7 +57,7 @@
           "version": "repo-lines-v1:sha256:b01c40f4c973ade0481e7953e8930bf6bd6b6efdbe62d13d976eb0080859f5d8:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTk4YTNhZDAxNTY0MzkzN2EyZGFlNDNlOWUwZWIwMDY3MjliZTQwNzVjYmVlNDRlYmYwNmZkMzMxNThiYTM3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQ5YzI0MWQxNzY1ZDAzNjEyYzkzYjU1NTNkMTYyM2JhOTYyMTI5NzZiNmE0OTVkOGY5ZjM4MDk1NjMyODMyYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTYzNGE3YzI1YTk3MDc0YzA4MzkwY2Y4ZjEyYWFhYzY2NDQ1MzI0NDdhYmQyMTdlNzdkNDU4YThjMGFhOTMyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWE0MjY4MjYyZDMzODY4ZWVjY2VjMjBmZWEwZjU4Zjk5ZGU3YWEyY2RiMmNlYmY2ZWIxM2NkOTAwOWNmZjg4MyJ9"
         },
         {
-          "resource": "repo://tests/test_network_analyzer.cpp#L340-L373",
+          "resource": "repo://tests/test_network_analyzer.cpp#L299-L332",
           "version": "repo-lines-v1:sha256:be3dff896c75a95b6e07ce8d1392dcb8522cb317144f9cc1ccaa45f6ff871122:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYjZkOTE2NDA4YjY0ZDMxNTE5M2IwYzI1YWEzMjhmMzMzOWM1MTM3NWM0ZTAyZjBlZDViYTExYmNhNmI4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzMjBmYzY0NGI0YTNlZDhjMDRlYmY2YzRhNDhlZmU2NjllNjQwMTRiNjA2NGRiNGVlMDYwZWUyNTgzMzViYmYifQ"
         }
       ]
@@ -103,11 +103,11 @@
       "statement": "The application supplies the scratch host through RfSimulatorApp::NaHost and NaScratch, which create clones by registry type inside a scratch graph owned by the scratch object.",
       "evidence": [
         {
-          "resource": "repo://app/include/app.h#L237-L252",
+          "resource": "repo://app/include/app.h#L308-L323",
           "version": "repo-lines-v1:sha256:b3dc96ff265ea7912faa407ba0259b633e6e298f78dc3053c1e7e22277b9091f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1ZTA4Yzg0ZWFlMjQwM2I0ODBkZjMxYzgxYTU4NzJkMjQwZjBjODNhZDcwMzE2NTI1NTM4ZmUyNGYyMTcyZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwMjE5YWM0OGMxMDE4OTBhM2JiYTE4NWRkMGQyYTliMDVlM2ZlNjE4NDM3MWVmN2RhNjdjYzcxMTY0ZjgwNGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhNWM0ZTEwZWU2OTQ0YTdiYjJiMjMzYjZkZGNlMTgwZmJjMmI1ZDBkYzYxODEzMjE1MDMzNGNiOGJkMTljNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYyYzI4ZThiMzQ5NDBkNDY4MzdjNGVjOTg5NzIwY2JkY2UwNmM1ZTRkNjI4Njk1ODUwMDZkYzdiZTJiYWQ2MWEifQ"
         },
         {
-          "resource": "repo://app/src/app.cpp#L301-L310",
+          "resource": "repo://app/src/app.cpp#L486-L495",
           "version": "repo-lines-v1:sha256:4c5789d5e1744bb8cb3d3cf2d859033810a9dce69018f9f78c2563106d48f2c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkMDEwYzYwZmI1NzMwZGFiMzkxZTBlNWJiMTNiZWQ2MmUyNTU1YWVhYjViZjRmZWYxMDA2ZGZkNDVjNjJjM2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1NGE5NzI2M2RiODBhMzJmNzgzMWZiOTA3MWM4ZTcxMzYzMGY0Y2E3ZTk2ODEwYzY2Y2IwOTczYmU0NDg1MmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1ZmI4ODJiNzVkMGIxZGQ1M2IzOWMxYzY1YzFkZjdjYWVmMGRhNWM5NjI3YzFjOWExZTllN2EwNDhhOWI1YWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5ZTY4YmNlMjhlM2ZkMjYyYTA3ODExMWU4ZDI4YWViZjBiOWRiNmE5NzFjZjYyYTgzYWNmYzc4MDI4ZTJlNzgifQ"
         }
       ]
@@ -117,52 +117,44 @@
       "statement": "The Network Analyzer clears its gain and noise-figure arrays to NaN when no chain exists, and it reuses its last result while the path signature and sweep settings are unchanged.",
       "evidence": [
         {
-          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp#L77-L92",
+          "resource": "repo://network_analyzer/src/network_analyzer_engine.cpp#L58-L73",
           "version": "repo-lines-v1:sha256:cf125c14c29d8fc76adca9e955e2675bef672e2689c3ec300b193b8bb9779b07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMjBkMDgwNDc4YmEyNDAxMGM2YzNkOGMwZWZmNTA3NTc2MTBhNWQ4YWFkZjE5OGVmZjhjNTM2NDg0M2ZiYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkMmJiYzdjNmUwYTE1ZGU0NDk2MGYzOGU4ZGY1MmVhNzI4MzZlNWIzY2YyNDFlMjNjZWEwYTcwYjRjYTc1NzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5ODE0ZTM4MzBkNmZhNTVlZTBkYWY2NzJiMmY0MWIyZWI0NmVhNmI3NWZjOWFlOGI4OWVhNGI2ZGVjNDAxYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxOGRiZWQwNjk5ZTRhNjhmMTZkY2NmMmIwYmQ4YjAwNmU5NGQ0ZjRjNjgxOGY4NDU3YWQ3NjU5NDAyY2Y2MTgifQ"
         }
       ]
     },
     {
       "id": "claim_b0e63cb25af14a4bb3bbc4fae7758e12",
-      "statement": "The receiver measurement engine re-discovers the chain on each update; it returns early with cached results for a completed request repeated unchanged, resumes an unchanged request that is still in progress, and, when the request changes, resets its output-power and IIP3 measurements to unavailable and prepares a new IsolatedChainRunner only when a chain exists and the runner can be prepared, otherwise completing that request with unavailable results. Each update is bounded to a 4 ms wall-clock budget or an optional run cap.",
+      "statement": "The receiver measurement engine re-discovers the chain on each update; it returns early with cached results for a completed request repeated unchanged, resumes an unchanged request that is still in progress, and, when the request changes, resets its output-power and IIP3 measurements to unavailable and prepares a new IsolatedChainRunner only when a chain exists and the runner can be prepared, otherwise completing that request with unavailable results. An explicit mode input level sets the stimulus level for the output-power measurement. Each update is bounded to a 4 ms wall-clock budget or an optional run cap.",
       "evidence": [
         {
-          "resource": "repo://app/include/receiver_performance_measurement.h#L42-L50",
-          "version": "repo-lines-v1:sha256:732f50f21fab1a4edf7b57d482db3edf23e670e750414472cc4529d3c3248d56:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjIzZGExZGMxODQyMWM2YWNlYWE2NzRjNjkyZWFkOTc1Mjk0ODJkODM3NTVkZWVlNWNjY2ZjNGIyZDU2MGZlMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGIyODkxMjY1MDczNDJmYjBjMGZjNzBlOTZjYmQ2ZWVhZmE5ZDQxMTk0NjE4NmQ2MTdiZDA1N2QyZDUyNmVhMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTEwMDVjZDIzM2FmMWMyOWZmYjQ4Yjg3MTUyZTlhMTJiZmI0ZmQ2NmEyMjc2ZmNhOGEzMjdlOTMxN2E3MTQzOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjdhMmU0YmM3MTEyMDg3M2IzZGYwYTYwYmQ0ZmQ5ZDI4MjQ3YTNhYjUxODVkY2UxOTk1NGM2YzY0NzA5ZWJhYiJ9"
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L206-L239",
+          "version": "repo-lines-v1:sha256:98faed6b1eb3350efe3b6197ab8a93d5cbec604fd8381051a33b4484dfc9ad46:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3MDc3MjZkODY3YzA1YmMwZDJkYzNjOTcwZmFjNWU3MDZmZTk1NzEyZmUyOGVmMGI2YzZhMjBlZjk1NGUzYjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzYTcyZWNkZWIwNTY0NTNjYjYxNGFkOWJlMzMxMDMxODM2ODU2NjM3ZjA1MzA4MTE0YWE4NWNjYWRjMmZlYjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMzNDA1MDY5ZjlkOTlhYzcyMDhlZDE2YWUzNzE2MTY5NGVkN2E0YzEyOWQ0NTUyMzZmN2MxY2YyMGQ4MTczMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2NzRhNTA1ZGE2ZjVkZWFmYzRkYWZjYzQxY2FiZDY4YWI0NzYzMjUzY2UwYmYzZTQ0YTE2ZjRiNTBiMjMwMWIifQ"
         },
         {
-          "resource": "repo://app/src/receiver_performance_measurement.cpp#L187-L199",
-          "version": "repo-lines-v1:sha256:531bc4982889203f3e4fdabe4e199f7570a287b4d1db35194eb5da58657ab765:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhZTM2ZDQ3Y2NiZmIzN2QwYzkyMTY2ODYyZTc3NTAxZTFjMWIxMDdlNDU4ZmI2MmI1Y2JlMDEwNmY3YjI3YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyYjQwNWJhMWE0ZGQyMmNiZDc3OTBjMDczNzJlNDI3YThhMzk0OTJiZmU3NDIyMGQ4MWFiYTIxOWQ3MTZmNGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyOTViMmVhZjlmZWY4Mzk0MDY2MmVjMjgyN2ViZjFjYThiNzQ2Y2NjYWJjNTBhYjgzODdhY2FhMGQwYmQwZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmZjI4MWNiODkyNWZlZWFhNzhlN2Y5MDliN2E3OWJjMTZlYWM5MzgxN2JlNmJlNWQ4NjliMGVlNGIwYzAyZGQifQ"
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L253-L259",
+          "version": "repo-lines-v1:sha256:881102a85bfcb31a53e1d2f9edf2dde4d1ac5da51f33a9326529be46396d2f01:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjY1N2NlNzEyNWRjZmE0NmFhOTAxNzU4MDI1NWY5M2Y4NzYyNzdkMWNiZmFkN2E2NTg2YzI1Y2Y4OGJjNWE2ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmMxMGQ4NzVhMjE1NTg2YjU5OGMzNTQ2NjY3NTM3NDZjZTljMzc2YzZmMWFjNjQ3NWRhNjQ3ZDYxNjA2MjlmOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTY3N2Q2MDYxOGQ0NzJhNWQ3MGNmN2M4MjJjNmUwMGI4ZDg5N2YwYWI1ZWM2OGFlNDIzYzUwZGQ3YmMwYTllYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmY5Y2U1ZDc5M2U3Y2FmOTYyMWIyZTUyMzM4ZTRjN2RhMjcwNmZkYjU2NTc3MjU2NjBhZmE5NDk4ZWMxMTJhMyJ9"
         },
         {
-          "resource": "repo://app/src/receiver_performance_measurement.cpp#L227-L251",
-          "version": "repo-lines-v1:sha256:17af43080b05eeffba67fe0f9adfd862791e0f65954358618c0b6208093ab016:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmNjExY2NkNDdiOTE4ODgxOWQwNmI0MDZmMzNiZDQ4YmEzZDlmMDQ3ZDNlZmZkNDRkMWIyMjg1Njc5M2RiNGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5YWE0MGE3MTlhZDIyMmNkOGFmZWRjMWYwM2VhMGE5YjZlZWVkZDE1ODNmZGE1YzQ3ZmViMTUxNzU0MGI2MzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmOTVkOTlkODcxMjczMTc4NDY0NzM1YjA1ZDIzYjBmNmVlYWFkMzk0NmI3MDlhNjM4YTU0ZjRjNTlkOTJkZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAzZGRmMGQwZWVkNDRkMWZkNGY2MDU4ZWMwYzBjYTA3MjljYmM5ZDU0N2JmMzhjOTFhMmYyMzdjNGMxY2YwNzcifQ"
+          "resource": "repo://app/src/receiver_performance_measurement.cpp#L305-L363",
+          "version": "repo-lines-v1:sha256:d33960687741fa0b5cef44df1b2bfd6a2435788f99ffe462bf57063bc87a0306:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5MTZhMGNkMDA4ZWVhNWZhNGIxZmM0NWE3ZDQ1ZjM1ZGU4NTFiMGU2MDk3NzhiZTc0MjQ1MzUwMGFmNTZkNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxZDI0ZTU0YjA1OWU3MmVkODE2NzM0M2IyZTkwNWE4MDU3ZGVkYTg1MGVjMGYzODE2OTAwZDQ5MjNiMjFhYWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg0NGJhMTM4OGVjNDk3M2JjMGIyNDkwZTcyYTE3NjE2ZDNmNzM2NTMyODQ0Y2Q0Y2U2OWVhMWY2MTQzM2ViOGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1OTdhNzgzMmMzMDM3ZWQ2ZmVhNDM4YmYwOTc4ODA2NTAxYjU5YjVhOTUxODRkNTU0OTE1NzUyYTAxNWM4ZTAifQ"
         },
         {
-          "resource": "repo://app/src/receiver_performance_measurement.cpp#L246-L251",
-          "version": "repo-lines-v1:sha256:dc5abf797265ab487c83eec71df2ff39aac9aba4e1daafa48ad188ab864059ea:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmRkZWU3Y2M3ZmZmODI1NWNlM2VhNmM0NWE1ZWYyMzc3OWYwZWI4OGJiYTdkMTgwM2IzYjlhMTNlMGRkNThhMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjlhYTQwYTcxOWFkMjIyY2Q4YWZlZGMxZjAzZWEwYTliNmVlZWRkMTU4M2ZkYTVjNDdmZWIxNTE3NTQwYjYzNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjcwZmIwYzYyNDRmNGQxZjg1MGUyMzE2MDA4ZmFmNWMwYjgwMjBmZWFmOGZjN2JlZGZmN2U5MjYyZmRiNTRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDNkZGYwZDBlZWQ0NGQxZmQ0ZjYwNThlYzBjMGNhMDcyOWNiYzlkNTQ3YmYzOGM5MWEyZjIzN2M0YzFjZjA3NyJ9"
-        },
-        {
-          "resource": "repo://app/src/receiver_performance_measurement.cpp#L297-L302",
-          "version": "repo-lines-v1:sha256:983d3eadf80ea0b3d5f42f643334f5ec86dd3eef9e2e1c4cfa87397011509c27:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmZmNmY3ZjMwMTI0Y2Q3NWM3NTU3ODI0ZjgxYmYxODkxMDQ5NzA5MGYwYzZmZTNhYzM4Zjc1YzlkZTBjMDU1YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQ5ZTEyNTQ2NDI1NTc2ZDNkZWFlOGM5YjlkYmYxMjhkNWQ2ZGRhZjVkN2ZlODU3OTM0OTI3ZGVmZmEzYjlkZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDg5MzA4MGZiY2IwOGRhY2E3MDZjMGViNzc3ZWNlN2U4MWFiYzRhMmNkYjMwOWFlYzA5OWNiMTg3M2FlNTdmMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWRlNTY1MGJiOWIwNWVlZWMzZWYwMTljNDEzNTc4OWJmMTlkOTQ5OGRjOTJlNmRmOTg0YmUxMjM3M2Y4YjU0OCJ9"
+          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L294-L334",
+          "version": "repo-lines-v1:sha256:5a5672305b7a4b2675b586d81def481f6a75195bb7fbb22e92b6298374c4e64e:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTE1N2ZhYzQ1YjE5ZjFjOTliY2RhZGZmMzExYzNlOGFmNGE3ODk3YThiNGY5OGNhMDdhODliMjRhMWIwNjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1OGJhZDA1MDY1YmM3ZDJjNzY3NWQ0OTQ5YzJkNWE3ODYxNTM1OTk3Y2Y3MTkyOGU3ZjY2ZjI0YjkyYjZiYzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0MDc5ZjU3NDFhZWVmZDUzOWZlMjU3MWQzMzczMDRiODIzMTU2NGMxZDI5MjUxZTZjOTc4NjUzMTI5ZDQ5NGUifQ"
         }
       ]
     },
     {
       "id": "claim_48450d33552f40f6a96b0ff060e2b200",
-      "statement": "The agent network_analyzer_sweep and receiver_measure tools return NO_MEASUREMENT with details.reason NO_PATH when no chain exists, and network_analyzer_sweep returns NO_VALID_POINTS when a chain exists but has no valid sweep points.",
+      "statement": "The agent network_analyzer_sweep and receiver_measure tools return NO_MEASUREMENT with details.reason NO_PATH when no chain exists or the chain has fewer than two components, and network_analyzer_sweep returns NO_VALID_POINTS when a chain exists but has no valid sweep points.",
       "evidence": [
         {
-          "resource": "repo://agent/api/src/tool_measure.cpp#L416-L423",
-          "version": "repo-lines-v1:sha256:2fb717c6e6f983adfb75232ed5377551d34bce06a4fdb665b7c3df1c21b442d8:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY3NmZhZTdlMjZiNzJiNWU2MDBjNTk1ODBmMDNmNmYzNTU5OTNlYzQzN2ZhZDZhMzRhNjY2MThiNGU4MzRmOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWIzZjIyZTg1OTI0ZWQ1ZTM0YmZhMGViM2MzN2Y4NWQ4ZmUwMDhkNDkwMjlmZjE0NThmOWQ0NTA4YTE0OTA2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODY2ZjkyOTZiM2VjYjMxMDRkMDNkYTQ2YWQ4M2EwNGY0MzRlMTZjN2Q1YWU3MTVkODkwYzY5YWZlZmU1NzQ4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGQ4OWEyOTRjMTc2MWNkMDFjMjM5NWFhN2YzMTk2YzdiNDk1MGM0M2M4YjZjODMyNzIzMDRjNGUyMmE3YjU4NSJ9"
+          "resource": "repo://agent/api/src/tool_measure.cpp#L440-L448",
+          "version": "repo-lines-v1:sha256:62c08079b4d94aaa1454cd8c1adb17c424dfb8736195f08420c1a056c553aa44:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY3NmZhZTdlMjZiNzJiNWU2MDBjNTk1ODBmMDNmNmYzNTU5OTNlYzQzN2ZhZDZhMzRhNjY2MThiNGU4MzRmOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODY2ZjkyOTZiM2VjYjMxMDRkMDNkYTQ2YWQ4M2EwNGY0MzRlMTZjN2Q1YWU3MTVkODkwYzY5YWZlZmU1NzQ4YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzdmZTQyODFlYjI2ZTk3NWM0MzliNDhiMzFjYWEyMDljNTRlOWI2NWJjMjUxYTAzMTM0OTE1YmFlMTVjMWVkZCJ9"
         },
         {
-          "resource": "repo://agent/api/src/tool_receiver.cpp#L141-L148",
-          "version": "repo-lines-v1:sha256:b93c920d4be7ee8420bda564e0e307ce053bbb5417eb5d75142bda664eca909a:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM3NzVjNmMwZmJiZDNhZDdmZWUxYzU1Yzk1NjM1NTM3Y2ZkMjdmZTcxMmQ1MDg3NTAyNjg0MTAwYmE4YmM0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTlhYzEwNmY4NWZkNDA5OTYxN2JkZDYzYzlhMzk1NzQwZTZlMjI3MTY4NGFhY2JjNDRiZGI1ZjU0YWJlMjBmZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzlhZTE0NWJiY2NiNzVhOWUwMmZkZTQ1MTM0ZmViZGIyYzI2MGY4MmQ4MWEwNWQyMDQ5NjkzZjYwMGQ3MzIxNCJ9"
-        },
-        {
-          "resource": "repo://agent/protocol/src/agent_catalog.cpp#L491-L492",
-          "version": "repo-lines-v1:sha256:a91089ea199f5bdfbb438287b017f3950bbe3e0d1fc71b4b803eeb8d0577b3c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDg3NjE4NTQ2YjRiODE5OGFkNjFlY2RjYjUzZDNhZDdjMTBjMWRmYTU5NGQyNDAxNDhhMTQ3M2YxNWQwNmUzYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzE3YTZiODMxMjE1NWM3ZWFjYmM3ODVkZGMxNWU5NWIzNGIxMTZlMjRkMmIxMGYxYmJkNDFjOGZiODUwM2NmZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGY0OTllMGYyZmMyYjkwNGZhYWE5MGNmNDE1ZDliYTdlYTMyNDQwZWQ1YTFjNzQyMDQ2MmUyZDQ3ZDFjMmYzZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWJkM2EzYjVjMGQ5M2JjZTJjMDZiNmVlMWE5NTUzMmNhMTE5NmUyZjZkNTM0NzhlYzUzNDI4MTkyYjQwM2Q3MCJ9"
+          "resource": "repo://agent/api/src/tool_receiver.cpp#L126-L132",
+          "version": "repo-lines-v1:sha256:3a06ec60683441bc577abe9e4bf1981e1be5844a10014faaf67d1af08cced470:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjM3NzVjNmMwZmJiZDNhZDdmZWUxYzU1Yzk1NjM1NTM3Y2ZkMjdmZTcxMmQ1MDg3NTAyNjg0MTAwYmE4YmM0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTQwNTVlNTQzYjE3YzJkYTEzZTRlYjBiODI4NWUwNjM0N2I5NzI4YWRkNWUwNDc4MjE5ZTY3ZmRlN2I0NzEwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTlhYzEwNmY4NWZkNDA5OTYxN2JkZDYzYzlhMzk1NzQwZTZlMjI3MTY4NGFhY2JjNDRiZGI1ZjU0YWJlMjBmZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjVhMDI1OGU4ODA0OTdhMGFmNTVhMWFlY2QxZDdlMjAwYTE4YTM5ZjRkOWM5MjgyNjQxMGM3ODdhNDhmMjM0ZSJ9"
         }
       ]
     },
@@ -171,7 +163,7 @@
       "statement": "The receiver_measure tool advances its sweep by at most 4 ms per call, and its catalog description tells callers to repeat the call while in_progress is true.",
       "evidence": [
         {
-          "resource": "repo://agent/protocol/src/agent_catalog.cpp#L705-L708",
+          "resource": "repo://agent/protocol/src/agent_catalog.cpp#L1067-L1070",
           "version": "repo-lines-v1:sha256:8c26c954cf11772c1954dc9d01976b4b2d67efbc39a411a1b255a3e39a0f4af6:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTg3MDZiZmQxNjE5MWFjYTQzZWYxN2RhYTdmYWI4YWNiM2M1NzIyOWNkMjZmOTlkYWI1YmE0ZjQ3OTdhZDFjZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzczN2EyOTY5MTI2NzVjN2JhMzM3YjgwNjhkNjE4ZWZhZDhlMDA3ODRiYTU3YjkxNWZkZGQ2ZmFjNGVhMzZiOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTUxYzhlMjg0ZTYxMWYyMzVhMWNmYTE1YmQ4MWQ4MGQ4ZjhiMTM2NzdmMTg1YzFjNGFjZTcyNmEyMzhjYzhmOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDlmZjg4YWQyNzQxOGQ0MzljYmU0ZTU0NzZkZmVhMmZhYjdlMjZhYWNjYzljYzNiODA1NWQwZmQ0NTdmMzg3MiJ9"
         }
       ]
@@ -181,34 +173,26 @@
       "statement": "The measure_port tool does not use measurement-chain discovery; it recomputes the live runtime and then reads the requested output port.",
       "evidence": [
         {
-          "resource": "repo://agent/AGENTS.md#L13-L13",
-          "version": "repo-lines-v1:sha256:659e1a9eb7342fd9e7497e769b252456b66f19d8cb5289ea5675e015b3d2282f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU5ZTFhOWViNzM0MmZkOWU3NDk3ZTc2OWIyNTI0NTZiNjZmMTlkOGNiNTI4OWVhNTY3NWUwMTViM2QyMjgyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU5ZTFhOWViNzM0MmZkOWU3NDk3ZTc2OWIyNTI0NTZiNjZmMTlkOGNiNTI4OWVhNTY3NWUwMTViM2QyMjgyZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDNmYWFiOWZhYzRlZWI5MzBiMWI5MmQ3YjNkMWE3N2I5ZDAyN2YyOTcyODczYjBhYzg1YWUwMjU3ODNjMzVjOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTkyMzQ0MmNlYTZhY2UzNDdiYTg0MGZmMzk3YjA5MGJhZTI3YTI1OTIwOGQ2ZWJiMTJjNjJmMGU3ZWFiYmU2OCJ9"
+          "resource": "repo://agent/api/src/tool_measure.cpp#L211-L330",
+          "version": "repo-lines-v1:sha256:9ddf4c919e1a620968b97d64d2a285d96a8f465f13dab9dedc955e96ccc2ed47:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyMTVjZGExYzZjNmE3YzY4Y2JiZTQyYTJiYWZlYjcwNGVjMjkyMzk1ZTllYzgyNGIzZThjNWI0ZTZmNzJmNTkwIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI1NTIyYzQyY2QxOWM2ZDAzZDgwOGM0NTI3MjA1NTI4MjViN2VhMWM1YjQ5MWIyMTg1MTFjYWM3NDE1Y2Y5ZDliIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2NjM1YTUzYmEzMzhjY2NhMTEzMjVmYjg1ODFkYjhkYWZmZGNlZWRkYjllMThlNDRlYmJhZmY3MjM1N2VkMDQ4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIxYzJmMTJmOTk2NTU1MDQyODA5ZDE5OWE3MWNiOWEwNjYwMWQ1YzRiZmFjMmI4MzU4ZjY2NjJjMTUwYjQ4NTA1In0"
         },
         {
-          "resource": "repo://agent/api/src/tool_measure.cpp#L211-L330",
-          "version": "repo-lines-v1:sha256:962c81e6e0b90b3ef2fe2427bf178b75082befdc2a90235f6fa3c893e81930ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzMjNhMmFlMDgzNzUyODRhMDc5MmJlODNlZWFhODFkZjZmODlkZjJjYjVhMzc3NmE3MTVkYTc2ZTVjMjUzYjczIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2MjdlNWFlYzMwNTljNDY4MDM0Mzc3NGJlZWI4MGJhMmU4NGQxNDM2M2FjZWU2NjA5NTQ4ZjdiZDhlYWE4M2YzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhMTcwZDMxODgwMzYzZGFhNjBmN2ZjYmQ4YzM4N2EwNjNkYWM4ZTZiN2NhMDlkYzY0ZDEwM2UzMWVkMjVjNDFhIn0"
+          "resource": "repo://agent/api/src/tool_measure.cpp#L240-L242",
+          "version": "repo-lines-v1:sha256:e9cb44c7609feb5ef6453230e1804e599193b9af64aa5100dd38407f3adea9d4:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGY0NTc3MmFiZjRkYTI0NjQ5MDBiMjNjNTQ5NjA5NzRiODQ4ZTM4YWQ3MTJkZjFiNTQyODQwNTI1ZTE2ZDA2YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDk3ZmNjMTFiYzM5OGQwODJlODI5ZGU1YTc1OThlOGE3YmVlM2I4MWIwZjJiNjkxNDdlMTJkZDNiOGJlMDk1ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmE0MzlmMmE5NDRmOTU2YjQ4N2Q5ZmE2OTk5N2I5MGI5ZDg0MWViM2Y2NWNkZGY4Y2NhOWM4YTJmZTJmYzQzYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzVkM2ZlNmQyNmM2ODVmNGRiNDJkNjlmZDgzZDc4ZGIzNTMyNWJmMDliOGM4NDFjYjI0MjEyMzllYjQ0OGRmYSJ9"
         }
       ]
     },
     {
       "id": "claim_558f8e5e83e6431fbe5aca7ff8f13eb4",
-      "statement": "Chain discovery and runner behavior are covered by the network analyzer runner test cases, including the rejected topologies and the switched filter bank, and receiver measurement caching and resumption are covered by the receiver measurement test cases.",
+      "statement": "Chain discovery and runner behavior are covered by the network analyzer runner test cases, including the rejected topologies and the switched filter bank, and receiver measurement caching, resumption, and input-level behavior are covered by the receiver measurement test cases.",
       "evidence": [
         {
-          "resource": "repo://tests/test_network_analyzer.cpp#L188-L338",
-          "version": "repo-lines-v1:sha256:46697c134d2cda5c650675fd83aee89a0238844fe3229589ba19929d82e79fc7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyYWY2NDE5N2JiNDMwYTRlODkxMTk4ZTE3MTZhZDBkZjNmMjQyZjhlNWZiYWIyNzE3NzAyNjA5NTE1YWMwODFmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjYTU3N2NiYzZhOGQ2NzMxNmZlZjlhMGQ3ZjU1ZDMzMTc5YjhmNjg4OWQ0MWFkZTc5OWJhYzhhYzc4NDY5ZWQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4Y2Y4ZjZlODg4Y2JmNjJkY2JiZWZhZmExNGYzODA2OWE1OTVmYTczNTQ0ZGQyNGMxODZhYTM3ZDllODU5NWFkIn0"
+          "resource": "repo://tests/test_network_analyzer.cpp#L147-L404",
+          "version": "repo-lines-v1:sha256:d17b579c69cc114434eef0d92c2f686b36c3214756548d691095f1d790a5989d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjU4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyYWY2NDE5N2JiNDMwYTRlODkxMTk4ZTE3MTZhZDBkZjNmMjQyZjhlNWZiYWIyNzE3NzAyNjA5NTE1YWMwODFmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3OGNiYmE1MzMyMDBlYWQ0YTFiNzk4MjI1NjYyOGU3YTE4ZWRhZDhlMGFlMTZkMDg2ZTg5ZDc1YjZjNDhiMDJhIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjYTU3N2NiYzZhOGQ2NzMxNmZlZjlhMGQ3ZjU1ZDMzMTc5YjhmNjg4OWQ0MWFkZTc5OWJhYzhhYzc4NDY5ZWQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwOTczN2VhNTMzMDBiYjk3MWMxYzM5MTM5NzY0NDU4MDMxMjJiNGZiODQ5YWVhYWU5NjE3OTdmZmMzZGRhMWVlIn0"
         },
         {
-          "resource": "repo://tests/test_network_analyzer.cpp#L340-L390",
-          "version": "repo-lines-v1:sha256:ac5b09ec28883ead53e39e89bc755e815ce7d8c24a89b810afea7d6924fdb2a0:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYjZkOTE2NDA4YjY0ZDMxNTE5M2IwYzI1YWEzMjhmMzMzOWM1MTM3NWM0ZTAyZjBlZDViYTExYmNhNmI4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NDk5ZmJkOWZkZmI4YmYzOWQ2ZmNkMmUwMTgxMDFmNmQ2NzQwODAwYjBlMzFhMTYxNDkyYzU2NWY0NWQ1ZDkifQ"
-        },
-        {
-          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L455-L482",
-          "version": "repo-lines-v1:sha256:1318b9a8a0a984bc482c763f826b945d022751378f9fbc95198ddb40a64c1864:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyZDIxNzQ5MTZkYTYxYzljOGYzZjFmNWNmMjIyMGRhZmM5NjczZTMyYmJkNDk4YTEwOGNkMTYxYzRlZGYzODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2NTExZTRiZGEwNTNhNjY5ZmU0Y2VkNDY0ODc1NjJjZWEwMGJhZjMyNmU3Njc5NWE4ZTExNDFjYTg2ZGFkZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1NzY3ZTRjMjk5ZjQ0MGJmYTBjZjc2N2UzOGFkOTZmODY5YzEyYWY4ZTQ3OGY3MGQ2OThlNmZmZTI4Mzc1NWUifQ"
-        },
-        {
-          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L627-L628",
-          "version": "repo-lines-v1:sha256:3c1b0ef64db93e64e51ddff59e64f109db3023507569e164500f039019698565:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDc1MzA5NzE0MjFiYjlkMzc4YTM4Y2M1M2Y3Y2ZmYWQxOGQwYjk0Zjc3YmUwODFmOTRhYTMxNzVjNGEwYWU4OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2E4ZDUwOTI0MTY4YTA3ZWRiMGVmYjQ4Yzg5YzQ1MDg3MzJmYzAwYzlhMWU5NGNhNTBmZGQzZjA2MTdiNjc2OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNlNTY0NmM1OGQwNzAzOWFlZDQzNDdmMDZkNzc3NmFmNDg5YTBmNjZiYTNiMTJkM2M4NThiOGE3MmM4MzViMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGJjN2FlZDc5OWYzMmYwNmE2Y2NlZDUyNjEyMWI0ZWYyYzdmNTZkODhkZTFhZjA0OThiM2YzZWFmN2Y3MTEzNiJ9"
+          "resource": "repo://tests/test_receiver_performance_measurements.cpp#L197-L365",
+          "version": "repo-lines-v1:sha256:33c9f7896bdab7a92db4527cc0d9e1844a7cd197945a6d845fc47af656b478ca:eyJzZWxlY3RlZExpbmVDb3VudCI6MTY5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmNWQ3YTc5MmJkZjc0YWY3NTk0MWNkYzc5YjFlNTMyODkzYWNlMjVmMmU1M2E3M2Q2ZDc2MjFjMTc0OGUzZmVmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5NWZjZjBmMDkyM2FjMTJhYmMyNTFiNzVhMDE4YTk3NTQ4NzI3M2RiY2FkZDBkZDBiOGNlYmRiODU1Zjk2YWJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjYTU3N2NiYzZhOGQ2NzMxNmZlZjlhMGQ3ZjU1ZDMzMTc5YjhmNjg4OWQ0MWFkZTc5OWJhYzhhYzc4NDY5ZWQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJmNGYwZjJmMDE3MGJiMTI4YThkZTYzNWE5ZjUyYmI2NmI4YWY5MmMyOWRkNzU1YmYwZTBhZDFmZWExNTY2YWUwIn0"
         }
       ]
     },
@@ -217,18 +201,32 @@
       "statement": "The agent API tests pin the NO_PATH reason for network_analyzer_sweep and receiver_measure when endpoints have no measurement path.",
       "evidence": [
         {
-          "resource": "repo://tests/test_agent_api.cpp#L1538-L1541",
+          "resource": "repo://tests/test_agent_api.cpp#L1424-L1427",
           "version": "repo-lines-v1:sha256:a876935c4463b0518b8c504651e1d47e1b9e85316027df74b4e1943f6cbac57e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQwNDU3OWEwZGU2M2U3YjdkOWIzMmRiNjM5ZGY1OGEwYWVlOWJhNTYwNGExNWQwOTRlMWUzMDE2YjMyNGU1YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTU2ZGM5MzY5N2ZhMDA0MDhhNThjZDEzN2MxODM4ZGJkZTNlNWY3N2ViMDExMGNjOTFjYmYzYzE2MzIwMjIzMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmQ2ZTM3OWIwZWZhMWEwYWIwOWY0YzgzMWQwNTcwYWI1ZTIyM2UxODE2NjIzYjE3YjViNDI1Y2ZmMmRjZTI2NSJ9"
         },
         {
-          "resource": "repo://tests/test_agent_api.cpp#L2341-L2344",
+          "resource": "repo://tests/test_agent_api.cpp#L2308-L2311",
           "version": "repo-lines-v1:sha256:25a0ba6faa40cc645893365dcda0121a656f6904af4cf5edbdf4023103d39a01:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjZiYmViNDZiMTc1ZWE0MjdhY2E3MDc0N2YyOTUyY2Y1OGVlNWI0OTJiYTBlNmMyYjU1OTE5NTA1NTU2MzRhNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjY4MDQ0MGYzYWUyNDIyZTQyMmViYzc4NzQ5MTc0NWI2MjA5MjEzY2VlMTNiNDRmNTVkZjdjMjY3Y2Q4MWY2NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNmZGJmMzRmMWVhMjg2OGJhZGU0MDU5M2MyNmMxN2JiNzJhNTQzY2VlMDhlMWE3YzFjZjFiMmM1NTA0NmNjYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_78aa5fc79b1b404c90f9208ff85eea1f",
+      "statement": "Receiver requirements modes carry an optional input level that sets the output-power measurement stimulus, plus gain, noise-figure, output-power, IIP3, SNR, and out-of-band suppression limits; the requirements-driven RF budget evaluates every mode and reports each reached output's verdict.",
+      "evidence": [
+        {
+          "resource": "repo://agent/api/src/tool_requirements.cpp#L1-L60",
+          "version": "repo-lines-v1:sha256:5de293541fcd8a1ffbf261ec32633a15ac7178a5ae4b5520c512907835a8a666:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM2YmFlOWFmMzNhOTRkYjM5ZmE1YWQ4NWU0MGQxMTE2ZGE2ZTdjYWNjNzU3Y2I0ZGRkYTk1NGEzOTYwY2QxYTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg2N2Q4MzFhYzhjYjljZTE1ZDg1YmJmOWM5OGU4MmFkNGJiNWU2M2VkMTFkNDRkNmRkYzkxZjMwYmRkMGNiYmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiN2FmZGI4OWE0ZjUyZTY3YmE4M2E3Y2NjYjYxMDYzNTgzYWQ0ODYzZTMwNWQxYWRiMTNkODk3ZTcxZjJkZGUifQ"
+        },
+        {
+          "resource": "repo://app/include/receiver_requirements.h#L32-L101",
+          "version": "repo-lines-v1:sha256:c161d442a4ec0b930fa23962758bcf706128ca1b71a50f3ba981bcecd31582bb:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2N2E5YzIwOWMyNjM4NTEyOTJlZWM0MzI0MTM0YmI5YTM1OWVkZTA2NjdjMDY3ZThlMTI0MGU0MjVlMzFjNTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzMGZhNzliZjk3NDc2NTA5ODAyOTkxZDQ2YzM4OGViMWYyMjU0ZjEwYWI1YjI2M2M3YjFlYWEwOWQ2YmE3NjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1ZTMwOTQxZjg4ZmJjZTA5OGEwMjA5YTRmOGU3M2ZlYTE5ZjcyNjE2MDgxMDIxYzI1OTA4YWEwNWQzZmFjODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2YmNlMzZkZmVlYWM3NzRhMzNlYjk3NjA1NTFjMjI1NTM4YmM5ZTlmMGRmMzdkZjRhOTlkZGY1MTQ3NTM2YTYifQ"
         }
       ]
     }
   ],
   "verification": {
-    "by": "openwiki/0.7.0",
-    "at": "2026-10-10T19:01:57.003Z"
+    "by": "openwiki/0.7.2",
+    "at": "2026-11-17T19:18:07.066Z"
   }
 }

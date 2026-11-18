@@ -52,7 +52,7 @@ verified:
 
 RF Simulator is a C++20 desktop RF signal-chain simulator. Build a graph of RF components, probe spectra, measure a receiver chain, or run repeatable Test Flow sweeps. The app separates DSP engines from their ImGui widgets and includes spectrum, I/Q, power-meter, Network Analyzer, and Receiver Requirements views. An opt-in agent server lets an MCP client read and edit the open circuit.
 
-**Current project version:** `0.28.2` (from `CMakeLists.txt`) · **Build:** CMake 3.20+ and Ninja · **Windows compiler:** MinGW-w64 (MSVC is unsupported) · **Tests:** Catch2 v3.4.0 plus ImGui Test Engine.
+**Current project version:** `0.31.2` (from `CMakeLists.txt`) · **Build:** CMake 3.20+ and Ninja · **Windows compiler:** MinGW-w64 (MSVC is unsupported; Windows configure requires `MSYSTEM_PREFIX` from a MINGW64 shell or a native prefix) · **Tests:** Catch2 v3.4.0 plus ImGui Test Engine.
 
 ## Build and run
 

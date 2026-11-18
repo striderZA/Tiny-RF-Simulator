@@ -115,7 +115,7 @@ sequenceDiagram
 
 ## 5. Dispatch and tool errors
 
-- `AgentApi::execute` routes by tool name through an if-chain of ten branches. An unknown name returns `InvalidArgument` with the current epoch.
+- `AgentApi::execute` routes by tool name through an if-chain covering the eighteen v1 tools. An unknown name returns `InvalidArgument` with the current epoch.
 - `AgentArgumentError` and other exceptions are caught and returned as error results. An unexpected exception becomes `INTERNAL` ("internal error in <tool>; see the RF Simulator log").
 
 ## 6. Result envelope and epochs
@@ -128,6 +128,7 @@ sequenceDiagram
 
 - `circuit_edit` requires between 1 and 64 ops and an epoch equal to the current epoch. It opens an `AppAgentHost` checkpoint before the first op.
 - The finish step discards the checkpoint when every applied entry is unchanged. Otherwise it commits the checkpoint with a summary and places any added components. An error whose `details.reason` is `RESTORE_FAILED` commits even an empty checkpoint.
+- `beginCheckpoint` opens one undo record per call and `commitCheckpoint`/`discardCheckpoint` close it under the label `Agent: <tool>`, so a reverted checkpoint and one undo step cover the same edits. `budget_edit` refuses a changing edit whose reply would not fit one protocol line before opening the checkpoint.
 - Ops name new components with call-local `ref` values. On the first failing op the call stops, returns that op's `op_index`, and reports the applied prefix in `structured.applied`; the prefix stays committed. A success returns `epoch`, `revision`, `applied`, and `refs`.
 - `AppAgentHost` keeps the newest 20 committed checkpoints. `removeCheckpointsFrom(id)` drops checkpoints at or after `id` and returns their summaries oldest-first. The API keeps those summaries from a revert (`noteProjectReplaced`) and reports them in the next stale `circuit_edit` details.
 

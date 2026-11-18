@@ -137,7 +137,9 @@ sequenceDiagram
 
 `RfSimulatorApp` is the composition root for `CircuitRuntime`, `GraphEditorActions`, `EditorCommands`, project serialization, component libraries, view widgets, instruments, and the agent stack (`AppAgentHost`, `AgentApi`, and `AgentServer`). `GraphEditorActions` adapts probe, group, and selection mutations to the graph. `NodeGraphWidget` reads a const graph and sends edit requests through its action callbacks; it does not own graph mutation policy.
 
-`EditorCommands` is the single user-level edit boundary. An accepted component, topology, or group edit performs its required app side effects, such as refreshing group boundaries and component-bound views, and then advances the project revision. A rejected edit changes neither the revision nor the project state. Dirty state is derived by comparing that revision with the last clean revision, which a successful save, load, or New records. Parameter edits, node moves, and instrument-state edits that do not pass through a command explicitly mark the project modified. Probe changes and group selection retain their non-revision semantics.
+`EditorCommands` is the single user-level edit boundary. An accepted component, topology, group, or probe edit performs its required app side effects, such as refreshing group boundaries and component-bound views, and then advances the project revision; a rejected edit changes neither the revision nor the project state. Dirty state is derived by comparing that revision with the last clean revision, which a successful save, load, or New records. Parameter edits, node moves, and instrument-state edits that do not pass through a command explicitly mark the project modified.
+
+`EditorHistory` owns undo and redo as deltas between `EditorSnapshot`s: components keyed by graph node id, links by pin pair, probe slots, groups, pan-independent grid positions, and app state (`receiver_requirements`, `rf_budget`, `na_points`). Undo and redo advance the revision (so the project is dirty) and never change the runtime epoch. Each changed key applies only where the current value still equals the side it replaces, so concurrent edits survive. History depth is 100 records; a push after an undo drops the redo stack; New, a replacing load, and a checkpoint revert clear it; and one agent tool call opens and closes a single undo record through `AppAgentHost`'s edit-group hooks.
 
 ## Engine/widget separation and signal flow
 
@@ -183,7 +185,7 @@ The Network Analyzer is a singleton floating instrument, not an `IComponentEngin
 
 The receiver output-power and IIP3 measurement uses the same discovery, and the agent `network_analyzer_sweep` and `receiver_measure` tools resolve their chains through it. The agent `measure_port` tool does not run chain discovery; it reads one live output endpoint after recomputing the runtime.
 
-The Receiver Requirements panel is an app-level measurement consumer rather than a graph component. While it is visible, `RfSimulatorApp` updates the Network Analyzer once per frame, feeds the receiver-performance engine the Point A and Point B pins and the sweep, evaluates gain, noise-figure, output-power, and IIP3 limits, and draws the result in the panel. Requirement state is saved in the project file.
+The Receiver Requirements panel is an app-level measurement consumer rather than a graph component. Requirements are named modes with an optional input level; each mode evaluates gain, noise-figure, output-power, IIP3, SNR, and out-of-band suppression limits against the receiver chain, and the mode selection plus the stored set persist in the project file. While the panel is visible, `RfSimulatorApp` updates the Network Analyzer once per frame, feeds the receiver-performance engine the Point A and Point B pins and the sweep, and draws each mode's verdict in the panel. The requirements-driven RF budget (`rf_budget_cascade`) reuses the same chain host: `budget_get` evaluates every mode and reports each reached output's requirements verdict, and the Budget views page one mode/output's per-frequency series.
 
 ## Agent interface boundary
 
@@ -230,7 +232,7 @@ flowchart TD
 
 ## Recent architectural progression
 
-The release history explains why circuit ownership and tools have separate seams. Version 0.26.0 extracted `CircuitRuntime` and `GraphEditorActions` from the application-facing workflow; version 0.27.0 extended the Receiver Requirements integration with output-power and IIP3 measurement criteria. `EditorCommands` now centralizes user-level edit side effects and revision-based dirty tracking. The agent interface sits beside these layers rather than inside them, reusing `EditorCommands` and `RunFlowWithinBoundary()` instead of duplicating their behavior.
+The release history explains why circuit ownership and tools have separate seams. Version 0.26.0 extracted `CircuitRuntime` and `GraphEditorActions` from the application-facing workflow; version 0.27.0 extended the Receiver Requirements integration with output-power and IIP3 measurement criteria. Later releases added the requirements-driven RF budget with named requirement modes (SNR and out-of-band suppression limits included), editor undo/redo (`EditorHistory`), node-graph schematic symbols with alignment, distribution, and grid snapping, and agent undo grouping so one tool call equals one undo record. `EditorCommands` still centralizes user-level edit side effects and revision-based dirty tracking. The agent interface sits beside these layers rather than inside them, reusing `EditorCommands` and `RunFlowWithinBoundary()` instead of duplicating their behavior.
 
 ## Focused change and test surfaces
 

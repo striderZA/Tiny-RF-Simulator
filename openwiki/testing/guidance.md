@@ -144,6 +144,10 @@ Each name below is an independently registered CTest target. The source is the s
 
 - `test_circuit_runtime`, `test_graph_editor_actions`, and `test_editor_commands`: UI-free circuit lifecycle and link policy, probe/group mutation, revision-based dirty semantics, rejected-command behavior, and component-view synchronization.
 - `test_receiver_requirements`, `test_receiver_performance_measurements`, and `test_receiver_requirements_project`: requirement validation/status, real-engine gain/NF/output-power/IIP3 measurement, partial/cache behavior, persistence, and New/reset behavior.
+- `test_editor_history`: editor undo/redo semantics — snapshot deltas, revision advancing without epoch change, redo-stack dropping after a new push, per-key only-if-unchanged application, and history clearing on New/replacing load/checkpoint revert.
+- `test_rf_budget`, `test_rf_budget_stage`, `test_rf_budget_cascade`, and `test_rf_budget_project`: requirements-driven RF budget evaluation, per-stage cascade series, and project persistence.
+- `test_agent_requirements`, `test_agent_budget`, `test_agent_project`, and `test_agent_library_create`: the requirements/budget/project-file/library-authoring agent tools, including checkpoint and undo-record behavior.
+- `test_sparam_legacy_key`, `test_component_params`, `test_graph_link_policy`, `test_node_graph_rewire`, `test_node_layout`, and `test_schematic_symbols`: legacy S-parameter key precedence, agent parameter write bounds, graph link policy, the shared rewire pass, node layout/alignment/snap, and schematic symbols.
 
 This inventory is intentionally derived from current CMake registration rather than a historical executable count. New targets must be registered with `add_standalone_test`; otherwise CTest will not run them.
 
@@ -178,7 +182,7 @@ Do not put ImGui/GLFW dependencies into pure engine tests. Do not duplicate harn
 
 ## CI and local verification
 
-Pull requests run no automated CI. Release-tag validation uses CMake/Ninja; Linux tests run under Xvfb excluding benchmarks, Windows tests exclude `test_ui`, and the ASan pass excludes both benchmarks and UI. The `strict-build` matrix runs one Linux GCC 14 Debug leg for patch tags and the four-leg Linux GCC Debug/Release, Clang 18, and MinGW matrix for minor/major tags. Every tag also tests the optimized Release package builds; these are the shipped configurations. The workflow checks the `MINGW_TEST_CASE_FLOOR` (currently 223) and creates a draft only after required jobs pass.
+Pull requests run no automated CI. Release-tag validation uses CMake/Ninja; Linux tests run under Xvfb excluding benchmarks, Windows tests exclude `test_ui`, and the ASan pass excludes both benchmarks and UI. The `strict-build` matrix runs one Linux GCC 14 Debug leg for patch tags and the four-leg Linux GCC Debug/Release, Clang 18, and MinGW matrix for minor/major tags. Every tag also tests the optimized Release package builds; these are the shipped configurations. The workflow checks the `MINGW_TEST_CASE_FLOOR` (currently 227) and creates a draft only after required jobs pass.
 
 Before submitting a change:
 

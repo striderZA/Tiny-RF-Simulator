@@ -129,7 +129,7 @@ Panel behavior lives in `TestFlowWidget::run()`. A Cartesian sweep above `TestFl
 3. **Shape.** `conditions` holds at most 4 entries, each with `component`, `path`, and `values`, where `values` is a non-empty array of finite numbers. `measure` holds 1 to 8 entries, each with `component`, `port`, and `metric`. Unknown fields are rejected as `INVALID_ARGUMENT`.
 4. **Duplicates.** Two conditions that sweep the same component and path, or two measurements that read the same metric on the same component and port, return `INVALID_ARGUMENT` at the later entry.
 5. **Row budget.** The row count is the saturating product of the value counts. Above 1,000 rows the call returns `INVALID_ARGUMENT` with `requested` and `limit` details, before any snapshot is taken.
-6. **Run.** The call runs through the boundary and maps the outcome:
+6. **Run.** Direct `AgentApi::execute()` uses the boundary seam in one synchronous call; `AgentServer` calls instead advance the sweep through `FlowRunSession` on the UI thread in bounded slices (at most 64 rows or `min(pump_budget, 6 ms)` per pump), restoring every engine snapshot and rewiring before each yield so the live circuit reads as the baseline between frames, and checking epoch and project revision before each slice (`STALE_EPOCH` on replacement, `BUSY` on a user edit). The call then maps the outcome:
    - `SnapshotFailed`: `INTERNAL` with "cannot snapshot the circuit"; no latch.
    - `ExecutionFailed`: `INTERNAL` with "flow execution failed"; no latch.
    - `RestoreFailed`: the message is latched, the project is marked modified, and the call returns `INTERNAL` with the latch hint. Unlike the panel, the agent path marks the project dirty.

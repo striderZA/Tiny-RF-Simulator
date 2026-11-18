@@ -149,11 +149,11 @@ The PFB channelizer is physically downstream of an RF ADC only. The runtime link
 
 ### Amplifier (`amplifier/`)
 
-`AmplifierEngine` applies `gain_dB` and `nf_dB`, optionally loads Touchstone data, and can enable the reusable nonlinear model with `oip2_dBm`, `oip3_dBm`, and `p1db_dBm`. Ideal mode uses flat gain; S-parameter mode applies complex S21 magnitude and phase to tones while carrying the noise-figure model. Nonlinear processing adds harmonic/intermodulation tones and compression. Missing or invalid RF data falls back to the ordinary parameter model.
+`AmplifierEngine` applies `gain_dB` and `nf_dB`, optionally loads Touchstone data, and can enable the reusable nonlinear model with `oip2_dBm`, `oip3_dBm`, and `p1db_dBm`. Ideal mode uses flat gain; S-parameter mode applies complex S21 magnitude and phase to tones while carrying the noise-figure model. Nonlinear processing adds harmonic/intermodulation tones and compression, with compression distortion capped at half the fundamental power so the output cannot pass through zero. Missing or invalid RF data falls back to the ordinary parameter model.
 
 ### Mixer (`mixer/`)
 
-The one-input/one-output mixer uses `lo_freq_Hz`, `conversion_gain_dB`, and `nf_dB`. Its idealized model creates lower and upper sidebands at `abs(f - LO)` and `f + LO`, propagates complex-baseband/sample-rate metadata, and adds noise according to noise figure. It does not model LO harmonics, image rejection, or intermodulation.
+The one-input/one-output mixer uses `lo_freq_Hz`, `conversion_gain_dB`, and `nf_dB`. Its idealized model emits one tone per sideband at `abs(f - LO)` and `f + LO`, propagates complex-baseband/sample-rate metadata, and follows the double-sideband (DSB) noise convention: each input bin's noise density `G·n` goes to the nearest output-grid bin at `|f − LO|` and at `f + LO`, so a flat input gives `2·G·S` where both images lie in band and `G·S` where only one does; images beyond the output grid's edges are dropped. The LO power that would set a real sideband split is not modelled. It does not model LO harmonics, image rejection, or intermodulation. Copies that differ only by rounding are grouped coherently by the analyzer and power meter.
 
 ### Ideal Filter (`ideal_filter/`)
 
@@ -206,7 +206,7 @@ IQ Plot is a display-side transform rather than a graph engine. Its pure helpers
 
 The Spectrum Analyzer consumes probed `Spectrum` objects and renders dBm traces. It separates per-bin noise power from tone impulses, applies RBW filtering to both, then VBW and trace mode. The RBW cache keys on spectrum pointer, generation, RBW, and bin width; jitter and VBW run per frame. Optional noise jitter affects only the noise floor, so deterministic tone peaks do not move between frames.
 
-The widget exposes RBW and VBW over 1 kHz–100 MHz in kHz units so the 1 kHz floor is directly typeable. This display range is a widget-level constraint; engine setters stay unclamped for tests and API callers. Trace modes are Clear/Write, Max Hold, Min Hold, and Video Average; hold/average histories are keyed by `Spectrum*` and pruned on every widget draw to the output spectra of the currently active nodes. Analyzer strongest-tone SNR uses its current RBW-filtered noise power and does not alter render caches or trace history.
+The widget exposes RBW and VBW over 1 kHz–100 MHz in kHz units so the 1 kHz floor is directly typeable. This display range is a widget-level constraint; engine setters stay unclamped for tests and API callers. The analyzer reports noise power integrated over its effective RBW; its sampled noise kernel is normalized per output bin, including sweep edges and RBWs below source-bin spacing, while the tone kernel stays peak-normalized. Trace modes are Clear/Write, Max Hold, Min Hold, and Video Average; hold/average histories are keyed by `Spectrum*` and pruned on every widget draw to the output spectra of the currently active nodes, and changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history. Analyzer strongest-tone SNR uses its current RBW-filtered noise power and does not alter render caches or trace history.
 
 ### Network Analyzer (`network_analyzer/`)
 

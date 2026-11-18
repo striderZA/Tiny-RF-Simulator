@@ -72,7 +72,7 @@ For Claude Code, run:
 claude mcp add rf-sim -- "<install dir>/rf-sim-mcp"
 ```
 
-Replace `<install dir>` with the directory containing the simulator executables. On Windows, use `rf-sim-mcp.exe` in the JSON `command` and the Claude Code command. Agents cannot open, save, or name files.
+Replace `<install dir>` with the directory containing the simulator executables. On Windows, use `rf-sim-mcp.exe` in the JSON `command` and the Claude Code command. Agents can save and load validated absolute `.rfsim` paths through `project_save` and `project_load` (no dialogs), but no tool imports or exports `.rflib` files, accepts arbitrary paths, or opens a file dialog.
 
 ## Endpoint discovery and permissions
 

@@ -146,6 +146,7 @@ Real-domain tones are stored at full engine power. The Spectrum Analyzer expands
 - `clearComponentsAndResetIds()` resets the component counter and the graph ID counters, then increments the project epoch. The project load path calls it before restoring a project.
 - The epoch is the agent's stale-call guard. `AgentApi::epoch()` reads the runtime's epoch. `circuit_edit` and `receiver_measure` reject a caller epoch that differs from it with `STALE_EPOCH`. `RfSimulatorApp` calls `AgentApi::noteProjectReplaced()` on New, Tutorial, Open, and checkpoint revert; that clears or reports the agent's checkpoints for the next stale call.
 - UI-side guards are different: destructive actions check the dirty revision, and a circuit reload clears the Test Flow panel's latch and stale result.
+- Editor undo and redo advance the project revision (the project reads as unsaved) but never change the runtime epoch; each changed snapshot key applies only where the current value still matches the recorded side, so concurrent edits survive an undo.
 
 ## ADC and PFB channelization
 

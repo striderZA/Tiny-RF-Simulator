@@ -54,7 +54,7 @@ verified:
 
 # Build & Operations
 
-The project is a C++20 CMake build. The application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.28.2`). Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
+The project is a C++20 CMake build. The application version is the `project (RfSimulator VERSION ...)` value in `CMakeLists.txt` (currently `0.31.2`). Build artifacts go to `build/bin`, libraries to `build/lib`, and FetchContent sources to `build/_deps`.
 
 ## Build lifecycle
 
@@ -77,7 +77,7 @@ This shows the local build path and the tag-triggered release path; the release 
 ## Prerequisites and platform rules
 
 - CMake 3.20 or newer, Ninja, Git, and a C++20 compiler are required. OpenGL development libraries and GLFW's platform dependencies are required on Linux/macOS.
-- Windows supports **MinGW-w64 g++**, not MSVC `cl.exe`. The CI environment is MSYS2 `MINGW64`, with Git, GCC, CMake, Ninja, pkg-config, and Python installed.
+- Windows supports **MinGW-w64 g++**, not MSVC `cl.exe`. The CI environment is MSYS2 `MINGW64`, with Git, GCC, CMake, Ninja, pkg-config, and Python installed. Windows configure requires `MSYSTEM_PREFIX` to point at the MinGW-w64 prefix (an MSYS2 MINGW64 shell sets it; a native MinGW-w64 toolchain exports a Windows path that needs no conversion), because the build resolves the MinGW runtime DLLs that the Windows release zip ships, and a missing DLL fails configure.
 - Linux release legs use GCC 14, and the minor/major matrix adds Clang 18; see [CI and release operations](#ci-and-release-operations). Linux legs configure with `-DGLFW_BUILD_WAYLAND=OFF`; use that option on Linux when X11 compatibility is needed.
 - Enable hooks once per clone if you want commit-time checks:
 
@@ -204,7 +204,7 @@ Enable the repository's local hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook checks staged C++ with clang-format 18 using the shared directory list in `scripts/format-dirs.sh`. The commit-msg hook enforces the `<type>[(scope)][!]: <summary>` subject format. The pre-push hook blocks non-fast-forward updates to existing remote refs. For an intentional one-off rewrite, use `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`; `git push --no-verify` skips all hooks. Run `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
+The pre-commit hook first checks the staged change size: above 100 changed lines it warns, and above 200 it blocks the commit. It then checks staged C++ with clang-format 18 using the shared directory list in `scripts/format-dirs.sh`. The commit-msg hook enforces the `<type>[(scope)][!]: <summary>` subject format. The pre-push hook blocks non-fast-forward updates to existing remote refs. For an intentional one-off rewrite, use `RFSIM_ALLOW_FORCE_PUSH=1 git push <same arguments>`; `git push --no-verify` skips all hooks. Run `bash scripts/test-githooks.sh` after editing anything under `.githooks/`.
 
 ## Install and package
 

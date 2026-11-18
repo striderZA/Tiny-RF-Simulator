@@ -87,7 +87,7 @@ flowchart LR
 - `simulator::agent_api` links the protocol library, UI-free editor services, the network-analyzer, spectrum-analyzer, and power-meter engines, the test-flow and Touchstone libraries, and Threads. It does not link `simulator::app` or any UI library.
 - `simulator::mcp_adapter` exposes only the protocol library and Threads publicly; logging stays private. `rf-sim-mcp` links the adapter privately and installs into `bin`.
 - `rf-sim-mcp` answers MCP discovery and `tools/list` without a reachable GUI, and accepts `--endpoint`, `--version`, and `--help`.
-- The nine-method `IAgentHost` boundary, implemented by `AppAgentHost`, provides UI-owned checkpoint, placement, and position behavior. `circuit_edit` routes component creation/removal, parameter writes, and topology edits through `EditorCommands`. Its `move` operation sets editor-space positions through `IAgentHost` and calls `EditorCommands::markModified()` only when the stored pan-independent grid position changes.
+- The `IAgentHost` boundary, implemented by `AppAgentHost`, has grown past checkpoint, placement, and position: it also routes project save/load (`projectPath`, `saveProjectFile`, `loadProjectFile`, `savedProjectDataFiles`), component-library roots (`componentLibraryRoot`, existing roots only), receiver requirements (`receiverRequirements`/`setReceiverRequirements`), and the RF budget (`rfBudget`/`setRfBudget`). `circuit_edit` routes component creation/removal, parameter writes, and topology edits through `EditorCommands`. Its `move` operation sets editor-space positions through `IAgentHost` and calls `EditorCommands::markModified()` only when the stored pan-independent grid position changes. `beginCheckpoint`/`commitCheckpoint` also open and close one undo record per tool call through the host's edit-group hooks, so a reverted checkpoint and one undo step cover the same edits.
 - `AppAgentHost` implements `IAgentHost`, and `RfSimulatorApp` owns the API, the server, and the server opt-in as members.
 
 ## Startup and threading
@@ -95,7 +95,7 @@ flowchart LR
 - `src/main.cpp` constructs `RfSimulatorApp`, calls `startAgentServerIfEnabled()`, and then runs the frame loop.
 - The server is off by default. The persisted `[Agent] ServerEnabled` key decides startup, and enabling or disabling the server writes that key.
 - Each frame, `RfSimulatorApp::update_dsp()` calls `AgentServer::pump()` before the circuit runtime updates.
-- The GUI listener thread handles framing and validated envelopes only. It shares just a mutex-protected inbox, outbox, connection status, and pump-refreshed epoch snapshot with the UI thread. `pump()` runs on the UI thread, checks modal state, and invokes the executor in FIFO order.
+- The GUI listener thread handles framing and validated envelopes only. It shares just a mutex-protected inbox, outbox, connection status, and pump-refreshed epoch snapshot with the UI thread. The inbox holds at most 64 queued calls and 8 MiB aggregate payload; network requests and `submit()` beyond either bound receive `OVERLOADED`. `pump()` runs on the UI thread, checks modal state, and invokes the executor in FIFO order; a call parked behind a modal receives `BUSY` after the 30 s park timeout.
 - The bridge reads stdin on a reader thread, runs `McpSession` on a session thread, and dispatches queued calls serially in arrival order on one caller thread.
 
 ## Trust boundary
@@ -112,10 +112,10 @@ flowchart LR
 
 ## Catalog and compatibility
 
-- `kAgentCatalogVersion` is 1. The catalog defines exactly ten v1 tools: `component_types`, `library_search`, `circuit_get`, `component_get`, `circuit_edit`, `measure_port`, `network_analyzer_sweep`, `data_file_read`, `test_flow_run`, and `receiver_measure`.
+- `kAgentCatalogVersion` is 1. The catalog defines eighteen v1 tools: `component_types`, `library_search`, `library_create`, `circuit_get`, `component_get`, `circuit_edit`, `measure_port`, `network_analyzer_sweep`, `data_file_read`, `test_flow_run`, `receiver_measure`, `project_save`, `project_load`, `requirements_get`, `requirements_edit`, `budget_get`, `budget_cascade`, and `budget_edit`.
 - Within one catalog version, changes are additive. Removing or retyping a field or tool requires a version increment.
 - The v1 `circuit_get` component schema includes `position` as an additive optional property. The GUI emits it, but older v1 producers may omit it without violating the schema.
-- No catalog tool grants extension trust, runs external tools, authors component-library entries, imports or exports `.rflib` files, or opens, saves, or names a file. `data_file_read` takes no paths and never writes, and agents may read only data files a component or library part already references.
+- No catalog tool grants extension trust, runs external tools, imports or exports `.rflib` files, or accepts arbitrary paths. `data_file_read` takes no paths and never writes, and agents may read only data files a component or library part already references. `library_create` is the sole library-authoring tool: JSON-only definitions in the existing Project (`<cwd>/rf-sim-libraries`) or Global (`~/.rf-sim/libraries`) root, rejecting file-path fields and existing entries. `project_save` writes a validated absolute `.rfsim` path and copies only external files named by component path parameters into the project's `rf_data/` directory; `project_load` opens a validated absolute `.rfsim` path; both reach the GUI only through `IAgentHost` and never open a dialog.
 - The bridge verifies the GUI token and catalog version before relaying a call. A malformed reply or JSON-RPC error drops the channel, and a later call reconnects.
 - The MCP session selects a protocol era per request: legacy initialization-era versions `2025-06-18` and `2025-11-25`, or the stateless `2026-07-28` era, which carries its own version and capability metadata.
 
