@@ -1740,6 +1740,11 @@ constexpr ImVec2 kUtilitySpaceDefaultSize(760.0f, 800.0f);
 } // namespace
 
 void RfSimulatorApp::drawUtilitySpace() {
+    // Docking is always enabled in the app (core.cpp and test_engine). Bare
+    // ImGui contexts in headless fixtures leave it off; DockSpace() no-ops
+    // there, so skip the host window and the seeding entirely.
+    if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0)
+        return;
     // First placement: beside the main window, clamped onto the primary
     // monitor so the group is never fully off screen. ImGuiCond_FirstUseEver
     // applies only while no saved window state exists, so a restored session
