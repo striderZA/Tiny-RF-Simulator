@@ -47,19 +47,19 @@ Select a library part's node, open the **Part** list under the component's name 
 
 ## Set Receiver Requirements
 
-Open **View > Receiver Requirements** to check the circuit against named requirement modes — each has its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level, and **Add mode** defines a new one. Out-of-band suppression points set how far below the in-band gain the cascade must fall outside the band, and an SNR minimum with its bandwidth judges the output signal-to-noise.
+Open **View > Receiver Requirements** if it is not already on screen — View items toggle, and panel visibility persists between runs. It checks the circuit against named requirement modes — each has its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level, and **Add mode** defines a new one. Out-of-band suppression points set how far below the in-band gain the cascade must fall outside the band, and an SNR minimum with its bandwidth judges the output signal-to-noise.
 
 ## Budget a Receiver
 
-Open **View > RF Budget** for the stage-table editor of the requirements-driven budget. **Add Stage** builds the chain — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each row takes a library part or edited settings, and **Add Output** picks where the cascade ends. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
+Open **View > RF Budget** if it is not already on screen. The stage-table editor of the requirements-driven budget appears: **Add Stage** builds the chain — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each row takes a library part or edited settings, and **Add Output** picks where the cascade ends. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
 
 ## Automate with Test Flow
 
-Open **View > Test Flow** to author and run parameter sweeps against the live circuit. **New from Circuit** scaffolds a flow you can edit — pick a component and one of its real parameter keys, seed the values from the circuit, then add conditions and measurements. **Run** applies the sweep row by row, **Export...** saves the results as JSON, and **Save Flow...** writes the flow for a later **Reload**.
+Open **View > Test Flow** if it is not already on screen. The panel authors and runs parameter sweeps against the live circuit: **New from Circuit** scaffolds a flow you can edit — pick a component and one of its real parameter keys, seed the values from the circuit, then add conditions and measurements. **Run** applies the sweep row by row, **Export...** saves the results as JSON, and **Save Flow...** writes the flow for a later **Reload**.
 
 ## Drive it from an Agent
 
-Open **View > Agent** for the MCP interface: enable **Agent Server** and point a client such as Claude Code at the `rf-sim-mcp` bridge that ships beside the simulator. An agent can read and edit the circuit, run measurements, sweeps, and test flows, and author library parts; every call leaves a checkpoint you can revert to after confirmation.
+Open **View > Agent** if it is not already on screen, then enable **Agent Server** and point a client such as Claude Code at the `rf-sim-mcp` bridge that ships beside the simulator. An agent can read and edit the circuit, run measurements, sweeps, and test flows, and author library parts. Calls that change circuit, requirements, or budget state leave a checkpoint you can revert to after confirmation; read-only calls and library creation do not.
 
 ## Wrap Up
 
