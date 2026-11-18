@@ -62,8 +62,7 @@ A change that alters no behavior or contract may leave docs unchanged, but the D
 | `.agents/skills/` and `.githooks/` | Not DOX. Skill rules: Agent Rules here. Hook rules: CONTRIBUTING.md | Humans and agents, under those rules |
 | CONTRIBUTING.md | Human conventions: setup, testing, style, git, CI, release | Humans |
 | `openwiki/` and the OPENWIKI block below | Generated, optional, non-binding evidence index | Humans, by manual OpenWiki regeneration after changing `openwiki/INSTRUCTIONS.md` |
-| `manual/` | Published user documentation (MkDocs) | Humans |
-| `docs/` | Engineering references | Humans |
+| `docs/` | User documentation (plain Markdown, GitHub-browsed) plus engineering references under `docs/resources/` | Humans, per [docs/AGENTS.md](docs/AGENTS.md) |
 | `WATCHDOG.yml` | Review-advisor config for tooling; not a DOX file | Tooling owner |
 
 Link to the owning document instead of restating its rules or commands on another surface.
@@ -135,8 +134,8 @@ Link to the owning document instead of restating its rules or commands on anothe
 - [tutorial/AGENTS.md](tutorial/AGENTS.md) — Guided first-run walkthrough with panel highlighting and exe-relative completion marker
 - [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
 - [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
-- [manual/AGENTS.md](manual/AGENTS.md) — User-facing MkDocs manual: page ownership, publish guard, docs contract
-- [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, and format scripts and the rules that bind them
+- [docs/AGENTS.md](docs/AGENTS.md) — User documentation base: plain-Markdown page contract, vanilla-syntax rule, README index, broken-link gate
+- [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, format, and docs-link scripts and the rules that bind them
 
 <!-- OPENWIKI:START -->
 

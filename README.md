@@ -48,7 +48,7 @@ https://github.com/user-attachments/assets/485a0066-385e-4c6b-bf4e-6d2ae6bc48cf
 
 ### Download
 
-Download the newest release from the [Releases page](https://github.com/striderZA/Tiny-RF-Simulator/releases). Use `rf-simulator-linux-x86_64.tar.gz` on Linux or `rf-simulator-windows-x86_64.zip` on Windows. The [user manual](https://striderza.github.io/Tiny-RF-Simulator/) covers installing, the first run, and the guided tutorial.
+Download the newest release from the [Releases page](https://github.com/striderZA/Tiny-RF-Simulator/releases). Use `rf-simulator-linux-x86_64.tar.gz` on Linux or `rf-simulator-windows-x86_64.zip` on Windows. The [user documentation](docs/README.md) covers installing, the first run, and the guided tutorial.
 
 ### Build from source (developers)
 
@@ -99,7 +99,7 @@ The local bridge protects the GUI endpoint against access from other local accou
 
 | Topic | Link |
 | :--- | :--- |
-| User manual | [Install, tutorial, and reference](https://striderza.github.io/Tiny-RF-Simulator/) |
+| User documentation | [Install, tutorial, and reference](docs/README.md) |
 | 🚀 Quickstart & Build | [Quickstart Guide](openwiki/quickstart.md) |
 | 🏛️ Architecture | [Architecture Overview](openwiki/architecture/overview.md) |
 | 📡 RF Components | [Components Reference](openwiki/domains/rf-components.md) |

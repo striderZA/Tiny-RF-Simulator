@@ -60,14 +60,14 @@ build/bin/tests.exe [bench]   # Windows
 
 ## User documentation
 
-The user manual is built with MkDocs from `manual/pages/` and published to GitHub Pages. Its contract is in [manual/AGENTS.md](manual/AGENTS.md).
+User documentation is a flat folder of plain Markdown pages under `docs/`, browsed directly on GitHub from [`docs/README.md`](docs/README.md). There is no site generator and nothing is published: no MkDocs, no GitHub Pages. Its contract is in [docs/AGENTS.md](docs/AGENTS.md).
 
-- **When to update:** any user-visible change: menus, panels, parameters, behavior, file formats, or what the release archives contain. Update the matching page in the same PR. A new published page needs a `mkdocs.yml` nav entry and a line in `manual/required-pages.txt`.
-- **Preview:** `pip install -r requirements-docs.txt`, then `NO_MKDOCS_2_WARNING=true mkdocs serve` (PowerShell: `$env:NO_MKDOCS_2_WARNING="true"; mkdocs serve`).
-- **Gate:** `NO_MKDOCS_2_WARNING=true mkdocs build --strict` must exit 0 with no WARNING or ERROR records.
-- **Publishing:** publishing a GitHub release triggers `.github/workflows/docs.yml` as a separate workflow. The release stays published if the docs run fails, and the site keeps its previous version. After you fix the problem, dispatch `docs.yml` with the fixed ref to publish again.
+- **When to update:** any user-visible change: menus, panels, parameters, behavior, file formats, or what the release archives contain. Update the matching page in the same PR. A new page needs a link from `docs/README.md`; the gate fails until it has one.
+- **Style:** strictly vanilla Markdown — no YAML frontmatter, no generator-specific syntax such as admonitions or attribute lists — so a generator can be wrapped around the folder later without touching content. Relative `.md` links only.
+- **Gate:** `python scripts/check-docs-links.py docs` must exit 0. It resolves every relative link target, checks `#anchor` fragments against GitHub heading slugs, and requires every top-level page to be linked from `docs/README.md`.
+- **CI:** pushes to `master` that change the docs run the same gate in `.github/workflows/docs.yml` as a lint. Nothing is ever published from the repo.
 - README demo videos must be GitHub `user-attachments` URLs in a raw `<video src="…" controls></video>` tag: GitHub renders no player for a repository-hosted `.mp4` (the tag is stripped from the rendered page) or for a Markdown `![](attachment-url)` reference (it renders as a broken image). Video sources such as `assets/*.mkv` stay local and are gitignored; GitHub accepts `.mp4`/`.mov`/`.webm` attachments only, capped at 10 MB for videos on a free-plan repository.
-- **Commit subjects:** `docs(manual): ...` for pages, `ci(docs): ...` for the workflow.
+- **Commit subjects:** `docs: ...` for pages, `ci(docs): ...` for the workflow.
 
 ## CI Pipeline
 
@@ -82,7 +82,7 @@ On top of that, the `strict-build` validation matrix is chosen by tag class:
 - **Patch release tags** (`vX.Y.Z` where `Z > 0`) build and test **Linux GCC 14 Debug** only (Xvfb for UI tests).
 - **Minor and major release tags** (`vX.Y.0`, including `vX.0.0`) add **Linux Clang 18 Debug** and **Windows MinGW-w64 Debug** builds to the Linux GCC 14 Debug leg. The Windows leg runs unit tests only; UI tests need a display and run on Linux.
 
-Pushes to master that change the manual or its build files also run a strict docs build in `.github/workflows/docs.yml`. That run never publishes; publishing is covered under [Release Process](#release-process).
+Pushes to master that change the docs pages or the link gate run the broken-link check in `.github/workflows/docs.yml`. That run is a lint only; nothing is published (see [User documentation](#user-documentation)).
 
 Because nothing is checked automatically before merge, run the local gates on every branch before opening a PR:
 
@@ -90,7 +90,7 @@ Because nothing is checked automatically before merge, run the local gates on ev
 bash scripts/format.sh --check   # CI-equivalent formatting (also enforced by the pre-commit hook)
 cmake --build build
 ctest --test-dir build --output-on-failure
-NO_MKDOCS_2_WARNING=true mkdocs build --strict   # user manual; needs requirements-docs.txt installed
+python scripts/check-docs-links.py docs          # user docs broken-link gate
 ```
 
 ### Release Process
@@ -127,8 +127,6 @@ sh scripts/release.sh X.Y.Z      # Windows
 7. Review and publish the generated GitHub draft after the workflow succeeds.
 
 After prepare, check that `git diff HEAD~1 --stat -- CMakeLists.txt` shows one insertion and one deletion: the replaced version line.
-
-Publishing the GitHub release also triggers [.github/workflows/docs.yml](.github/workflows/docs.yml), a separate workflow that deploys the user manual if it succeeds. The release does not depend on it; see [User documentation](#user-documentation).
 
 ### Failed release tag
 

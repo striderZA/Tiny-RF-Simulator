@@ -11,7 +11,7 @@ Each intercept can be one value for the whole component. For intercepts that cha
 
 ## Load an amp-f file
 
-An amp-f file (`.ampf`) is a text table of intercepts against frequency. A file can hold several blocks, one for each operating condition, such as a gate voltage or temperature. The format is described in the [amp-f v1 specification](https://github.com/striderZA/Tiny-RF-Simulator/blob/master/docs/resources/ampf_v1_spec.md).
+An amp-f file (`.ampf`) is a text table of intercepts against frequency. A file can hold several blocks, one for each operating condition, such as a gate voltage or temperature. The format is described in the [amp-f v1 specification](resources/ampf_v1_spec.md).
 
 The **amp-f File** section appears only while **Enable Nonlinearity** is on.
 

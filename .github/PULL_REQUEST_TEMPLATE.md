@@ -16,7 +16,7 @@
 
 ## User docs
 
-- [ ] User-visible change: the matching page under `manual/pages/` is updated in this PR (N/A otherwise).
+- [ ] User-visible change: the matching page under `docs/` is updated in this PR (N/A otherwise).
 
 ## Verification
 
