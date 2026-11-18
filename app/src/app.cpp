@@ -673,6 +673,9 @@ void RfSimulatorApp::startTutorial() {
 
     // Every panel a step highlights must be on screen for the highlight to
     // resolve — the Component Library in particular is hidden by default.
+    // The later feature steps (RF Budget, Receiver Requirements, Test Flow,
+    // Agent) name their own View menu path, so their instruction opens the
+    // panel; pre-opening it here would make that instruction toggle it closed.
     m_show_node_editor = true;
     m_show_properties = true;
     m_show_spectrum = true;

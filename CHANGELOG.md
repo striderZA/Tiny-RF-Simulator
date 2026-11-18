@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **Tutorial covers the recent features** — the guided tutorial gained steps for undo and redo, align/distribute and snap-to-grid, library part authoring with live refresh, in-place part swapping, named receiver requirement modes with out-of-band suppression and SNR limits, the RF budget stage table with **Budget this mode**, Test Flow authoring, and the MCP agent interface. Each new step says "Open View > <panel> if it is not already on screen" — View items toggle and visibility persists, so a bare "Open" instruction would close an already-open panel; the tutorial start keeps opening only the core panels. The manual's guided-tutorial page follows the new fifteen steps.
+
 ## [0.31.2] - 2026-11-17
 
 ### Added

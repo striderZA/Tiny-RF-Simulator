@@ -10,6 +10,10 @@ enum class TutorialTarget {
     NodeEditor,
     Properties,
     SpectrumAnalyzer,
+    RFBudget,
+    ReceiverRequirements,
+    TestFlow,
+    Agent,
 };
 
 struct TutorialStep {

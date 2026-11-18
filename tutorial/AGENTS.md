@@ -37,6 +37,13 @@ already been offered the tutorial.
   pin-level highlighting needs new plumbing in `node_graph/` first.
 - Keep instruction wording verified against actual app behavior, not against
   `help/`'s reference text — the two can drift.
+- `startTutorial()` (`app/`) pre-opens only the core panels (Component
+  Library, Node Editor, Properties, Spectrum Analyzer). A step targeting any
+  other panel must say "Open View > <panel> if it is not already on screen" —
+  View-menu items toggle and panel visibility persists in `app.ini`, so a
+  bare "Open View > <panel>" closes the panel for a user who already has it
+  open, and pre-opening the panel instead would make the instruction toggle
+  it closed.
 
 ## Verification
 - `ctest --test-dir build -R test_tutorial_state --output-on-failure` (pure
@@ -44,7 +51,8 @@ already been offered the tutorial.
 - `build/bin/test_ui` — `tutorial_launches_from_help_menu`,
   `tutorial_start_guards_unsaved_changes`, `tutorial_step_navigation`,
   `tutorial_completes_and_persists`,
-  `tutorial_first_run_prompt_marks_completed`
+  `tutorial_first_run_prompt_marks_completed`,
+  `tutorial_start_opens_core_panels`
 
 ## Child DOX Index
 *(none)*
