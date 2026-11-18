@@ -16,7 +16,7 @@ tar -xzf rf-simulator-linux-x86_64.tar.gz
 ./rf-simulator-linux
 ```
 
-Both executables in the archive are already marked executable. `rf-sim-mcp` is the bridge that an AI agent client starts for you. See [Connect an agent](https://github.com/striderZA/Tiny-RF-Simulator#connect-an-agent).
+Both executables in the archive are already marked executable. `rf-sim-mcp` is the bridge that an AI agent client starts for you. See [Agent (MCP)](agent-mcp.md).
 
 ## Windows
 
@@ -28,7 +28,7 @@ Keep the DLL files and `rf-sim-mcp.exe` in the same folder as `tiny-rf-simulator
 
 The app keeps these files beside the executable: the window layout (`rf_simulator_layout.ini`), named layouts (in `layouts/`), the tutorial marker (`.tutorial_completed`), and extension trust records (`extension_trust.json`).
 
-When **Agent Server** is on, the app also writes a connection file for the bridge. The file is kept in your user profile, not beside the executable. See [Connect an agent](https://github.com/striderZA/Tiny-RF-Simulator#connect-an-agent).
+When **Agent Server** is on, the app also writes a connection file for the bridge. The file is kept in your user profile, not beside the executable. See [Agent (MCP)](agent-mcp.md).
 
 ## Built-in parts
 
