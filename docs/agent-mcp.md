@@ -7,6 +7,16 @@ The bridge can read and edit the circuit, run measurements and sweeps, save or l
 
 ## Connect an agent
 
+A tool call travels from the client, through the bridge, to the open project, and back:
+
+```mermaid
+flowchart LR
+    CLI["MCP client"] -- "standard input/output" --> BR["rf-sim-mcp bridge"]
+    BR -- "reads the private<br/>connection file" --> APP["Tiny RF Simulator,<br/>Agent Server enabled"]
+    APP --> PRJ["The open project:<br/>read, edit, measure, save"]
+    PRJ -->|"result, epoch, revision"| CLI
+```
+
 Keep Tiny RF Simulator open. Select **View > Agent**, then enable **Agent Server**.
 The MCP client can connect only while **Agent Server** is on — otherwise every tool call returns `SIMULATOR_UNAVAILABLE` with a message that says so. The setting is remembered between runs. One client is admitted at a time; a second gets `BUSY`.
 

@@ -40,6 +40,20 @@ The panel previews the sweep before it runs: **Expected rows: N** counts every c
 
 **Run** applies the sweep row by row: each row sets the conditions, takes the measurements, then restores the circuit's parameters, links, and dirty flag exactly as they were before the next row. A clean run leaves the circuit untouched. On success the status reads `Flow completed: N row(s).`
 
+A run walks the sweep like this, from draft to exported JSON:
+
+```mermaid
+flowchart TD
+    DRAFT["Draft flow:<br/>conditions + measurements"] --> VAL{"Valid and within<br/>the 10 000-row limit?"}
+    VAL -- No --> DIS["Problems listed in red;<br/>Run stays disabled"]
+    VAL -- Yes --> ROW["Run applies the sweep row by row"]
+    ROW --> STEP["Set the row's conditions,<br/>take the measurements,<br/>restore the circuit"]
+    STEP --> MORE{"More rows?"}
+    MORE -- Yes --> ROW
+    MORE -- No --> RES["Results table:<br/>one row per combination"]
+    RES --> EXP["Export... writes JSON"]
+```
+
 If the circuit could not be restored, the panel latches: `Restore failed: <reason> — reload the circuit to run flows again.` Every later run is refused until the circuit is reloaded.
 
 ## Read the results

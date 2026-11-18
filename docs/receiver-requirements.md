@@ -40,6 +40,16 @@ Out-of-band points are judged by the [RF Budget](rf-budget.md) prediction, not b
 ## The measured verdict
 
 The **Measured result** table shows one row per metric: the **Limit** as configured, the in-band worst-case **Observed** range, and a **Status** pill.
+Each metric's **Status** pill follows one decision path over the analyzer's sweep of the mode's band:
+
+```mermaid
+flowchart TD
+    SW["Analyzer sweep fills the mode's band"] --> VIO{"Any in-band sample<br/>violates the limit?"}
+    VIO -- "Yes — even while coverage fills in" --> FAIL[Fail]
+    VIO -- No --> COV{"Band fully covered,<br/>at least one sample,<br/>none still measuring?"}
+    COV -- No --> INC[Incomplete]
+    COV -- Yes --> PASS[Pass]
+```
 
 - **Fail** — at least one in-band sample violates a limit. A single violating sample fails the metric even if coverage is still filling in.
 - **Incomplete** — no violation, but the analyzer sweep does not cover the whole band, or no in-band sample exists yet, or a sample is still being measured.
