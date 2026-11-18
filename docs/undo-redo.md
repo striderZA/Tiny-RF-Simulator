@@ -2,6 +2,15 @@
 
 Press **Ctrl+Z** to undo the last change and **Ctrl+Shift+Z** or **Ctrl+Y** to redo it, up to 100 steps back. The **Edit** menu names the change each will act on next, for example `Undo Move nodes`. A confirmation line at the bottom-left of the canvas repeats the label for a few seconds.
 
+The checkpoint model in one picture — every change lands in one history, and replacing the project empties it:
+
+```mermaid
+flowchart LR
+    EDIT["Your edit, or one agent tool call"] --> HIST["Undo history:<br/>one step per change,<br/>up to 100"]
+    HIST -- "Ctrl+Z / Ctrl+Y" --> WALK["Walk back and forward;<br/>the Edit menu names each next change"]
+    REP["New project, Open,<br/>or agent checkpoint revert"] -.->|clears| HIST
+```
+
 The shortcuts do not fire while a text field has the keyboard — a field keeps Ctrl+Z for its own text editing.
 
 ## What is covered

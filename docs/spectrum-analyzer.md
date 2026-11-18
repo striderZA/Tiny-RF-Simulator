@@ -2,6 +2,15 @@
 
 The Spectrum Analyzer plots the live spectrum of every probed node. Open it from **View > Spectrum Analyzer**. The panel is a dockable window; the View item toggles it, and its visibility persists between runs.
 
+The signal travels from a source through the component chain, a probe picks the point to watch, and the analyzer plots what arrives there:
+
+```mermaid
+flowchart LR
+    SRC[Source] --> CHAIN["Component chain<br/>(amplifier, filter, ...)"]
+    CHAIN --> PIN["Probed output pin<br/>(Ctrl+click, up to four)"]
+    PIN --> SA["Spectrum Analyzer<br/>one trace per probe, in its slot color"]
+```
+
 ## Probe a node
 
 - **Ctrl+click an output pin** to probe it. The analyzer plots that node's signal with a trace in the probe's color.

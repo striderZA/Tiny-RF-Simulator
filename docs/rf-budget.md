@@ -20,11 +20,32 @@ The budget needs one stage fed from the budget input, every stage reachable from
 
 **Add Output** names a stage and port where the cascade ends, `OUT1`, `OUT2`, and so on. Every reached output gets its own cascade and verdict. Up to 8 outputs fit, and each output port can feed at most one thing.
 
+A budget might be wired like this — one chain from the budget input, a splitter feeding both a stage and a second output, and a cascade at every reached output:
+
+```mermaid
+flowchart LR
+    IN[Budget input] --> S1["Stage 1: Amplifier"]
+    S1 --> S2["Stage 2: Splitter"]
+    S2 --> S3["Stage 3: Filter"]
+    S3 --> OUT1[Output OUT1]
+    S2 --> OUT2[Output OUT2]
+```
+
 **Points** (2 to 401, default 201) sets the shared frequency grid, which runs over the selected mode's band.
 
 ## Budget a mode
 
 The **Mode overrides** section lists every requirement mode, marking budgeted ones `(budgeted)`.
+
+From a mode to its predicted verdicts:
+
+```mermaid
+flowchart LR
+    MODE[Requirement mode] -- "Budget this mode" --> REC[Budget record]
+    REC --> OV["Mode overrides<br/>(optional, this mode only)"]
+    OV --> CAS["Cascade per output:<br/>gain, NF, output power, IIP3, SNR, OOB"]
+    CAS --> VERD[Verdict per output]
+```
 
 - **Budget this mode** gives the selected mode a budget record, so it is predicted even with no overrides. Without a record the mode is not predicted at all.
 - **Clear budget record** removes the record — after you remove that mode's overrides first.

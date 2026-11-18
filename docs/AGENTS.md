@@ -22,6 +22,7 @@ User-facing documentation base: a flat folder of plain-Markdown pages browsed di
 ## Work Guidance
 
 - Update the matching page in the same change as a user-visible behavior change (menus, panels, parameters, behavior, file formats, release-archive contents).
+- Illustrate a user-facing flow with a fenced `mermaid` code block where a diagram beats prose. Keep it simple and readable in GitHub's light and dark themes, and lead into it with a short sentence so the page still works where the diagram does not render.
 - Keep absorbed page voice: short imperative sentences, exact control labels in **bold**, real menu paths.
 
 ## Verification
