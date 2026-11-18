@@ -2122,10 +2122,17 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!s_app->testTutorialState().isActive());
         IM_CHECK(std::filesystem::exists(marker));
     };
-    // Every panel a tutorial step highlights must be on screen for the highlight
-    // to resolve, so starting the tutorial opens them all.
-    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_opens_highlighted_panels");
+    // Starting the tutorial opens the panels its core steps highlight. The
+    // later feature steps open theirs through the View menu as their
+    // instruction says, so those panels must NOT be pre-opened — a step that
+    // says "Open View > RF Budget" would toggle a pre-opened panel closed.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "tutorial_start_opens_core_panels");
     t->TestFunc = [](ImGuiTestContext *ctx) {
+        s_app->m_show_rf_budget = false;
+        s_app->m_show_receiver_requirements = false;
+        s_app->m_show_test_flow = false;
+        setAgentPanelVisible(ctx, false);
+
         s_app->newProject();
         ctx->SetRef("##MainMenuBar");
         ctx->MenuClick("Help/Tutorial");
@@ -2136,8 +2143,16 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             if (!title)
                 continue;
             ImGuiWindow *window = ImGui::FindWindowByName(title);
-            IM_CHECK(window != nullptr);
-            IM_CHECK(window->Active);
+            const bool view_menu_step = step.target == TutorialTarget::RFBudget ||
+                                        step.target == TutorialTarget::ReceiverRequirements ||
+                                        step.target == TutorialTarget::TestFlow ||
+                                        step.target == TutorialTarget::Agent;
+            if (view_menu_step)
+                IM_CHECK(window == nullptr || !window->Active);
+            else {
+                IM_CHECK(window != nullptr);
+                IM_CHECK(window->Active);
+            }
         }
 
         ctx->SetRef("Tutorial Guide");

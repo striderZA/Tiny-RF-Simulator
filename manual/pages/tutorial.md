@@ -2,7 +2,7 @@
 
 The tutorial walks you through the basic workflow — add a component, connect it, configure it, probe a node, navigate the graph — then the panels that check, budget, and automate a design. Start it from **Help > Tutorial**, or accept it on first launch.
 
-The tutorial has fifteen steps. Each step has **Back**, **Next**, **Skip**, and **Exit** buttons. The last step shows **Finish** in place of **Next**. Starting it opens every panel a step highlights, including the Component Library, RF Budget, Receiver Requirements, Test Flow, and Agent panels.
+The tutorial has fifteen steps. Each step has **Back**, **Next**, **Skip**, and **Exit** buttons. The last step shows **Finish** in place of **Next**. Starting it opens the panels the core steps highlight, including the Component Library; the later steps say which **View** menu item opens the panel they cover.
 
 ## Welcome
 
@@ -47,19 +47,19 @@ Select a library part's node, open the **Part** list under the component's name 
 
 ## Set Receiver Requirements
 
-**View > Receiver Requirements** checks the circuit against named requirement modes — each has its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level, and **Add mode** defines a new one. Out-of-band suppression points set how far below the in-band gain the cascade must fall outside the band, and an SNR minimum with its bandwidth judges the output signal-to-noise.
+Open **View > Receiver Requirements** to check the circuit against named requirement modes — each has its own band, gain, noise-figure, output-power, and IIP3 limits, plus its own input level, and **Add mode** defines a new one. Out-of-band suppression points set how far below the in-band gain the cascade must fall outside the band, and an SNR minimum with its bandwidth judges the output signal-to-noise.
 
 ## Budget a Receiver
 
-**View > RF Budget** opens a stage-table editor for the requirements-driven budget. **Add Stage** builds the chain — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each row takes a library part or edited settings, and **Add Output** picks where the cascade ends. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
+Open **View > RF Budget** for the stage-table editor of the requirements-driven budget. **Add Stage** builds the chain — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each row takes a library part or edited settings, and **Add Output** picks where the cascade ends. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
 
 ## Automate with Test Flow
 
-**View > Test Flow** authors and runs parameter sweeps against the live circuit. **New from Circuit** scaffolds a flow you can edit — pick a component and one of its real parameter keys, seed the values from the circuit, then add conditions and measurements. **Run** applies the sweep row by row, **Export...** saves the results as JSON, and **Save Flow...** writes the flow for a later **Reload**.
+Open **View > Test Flow** to author and run parameter sweeps against the live circuit. **New from Circuit** scaffolds a flow you can edit — pick a component and one of its real parameter keys, seed the values from the circuit, then add conditions and measurements. **Run** applies the sweep row by row, **Export...** saves the results as JSON, and **Save Flow...** writes the flow for a later **Reload**.
 
 ## Drive it from an Agent
 
-**View > Agent** exposes the MCP interface: enable **Agent Server** and point a client such as Claude Code at the `rf-sim-mcp` bridge that ships beside the simulator. An agent can read and edit the circuit, run measurements, sweeps, and test flows, and author library parts; every call leaves a checkpoint you can revert to after confirmation.
+Open **View > Agent** for the MCP interface: enable **Agent Server** and point a client such as Claude Code at the `rf-sim-mcp` bridge that ships beside the simulator. An agent can read and edit the circuit, run measurements, sweeps, and test flows, and author library parts; every call leaves a checkpoint you can revert to after confirmation.
 
 ## Wrap Up
 
