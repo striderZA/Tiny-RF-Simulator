@@ -9,7 +9,7 @@ A budget **Pass** is a prediction, not a verification: the budget evaluates the 
 ## Build the stage table
 
 - **Add Stage** appends a row, named `Stage 1`, `Stage 2`, and so on. The first stage is fed from the **Budget input** automatically.
-- Each row's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1)**.
+- Each row's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1), Digital Step Attenuator**.
 - **Source** picks **Idealized** or **Library**. An idealized stage opens its numbers in the **Params...** modal — each field starts at its default and an **Override** button sets it. A library stage instead picks a part from the [Component Library](component-library.md).
 - **Feeds...** sets what drives each input port: **Unfed**, the **Budget input**, or another stage's output. A splitter feeds all of its outputs; a switch follows its active throw.
 - **Rename...** and **Remove** act on the row. Removing a stage unfeds whatever it drove.

@@ -465,7 +465,7 @@ TEST_CASE("budget equality compares numbers by value, not by JSON type", "[rf_bu
 
 TEST_CASE("stage type table matches the engines", "[rf_budget][model]") {
     const auto &types = rfBudgetStageTypes();
-    CHECK(types.size() == 8);
+    CHECK(types.size() == 9);
     CircuitRuntime runtime;
     for (const auto &entry : types) {
         INFO(entry.type);
