@@ -8,7 +8,7 @@ Every verdict in this view is measured live on the [Network Analyzer](network-an
 
 The panel edits one mode at a time.
 
-- **Mode** picks the mode to view. The choice is saved with the project but does not itself mark the project dirty.
+- **Mode** picks the mode to view, stretching to the dock's width, with **Remove mode** at the end of its row. The choice is saved with the project but does not itself mark the project dirty.
 - Type a name in **Mode name**, then **Add mode** to create it. A new mode **copies the selected mode's limits** — a handy way to make a variant.
 - **Rename mode** renames the selected mode immediately.
 - **Remove mode** asks for confirmation, then removes the mode and its limits.
@@ -17,23 +17,24 @@ A mode name is up to 64 characters, unique, and without `#`. Up to 64 modes fit.
 
 ## Limits
 
-Each section has an enable checkbox except the band, which is always set:
+The rows reflow to the dock: a row holds as many fields as fit with their labels and wraps the rest to the next line, so a narrow dock never hides a field off the right edge. Each optional metric is one row led by its enable checkbox; the band is always set:
 
-| Section | Fields |
+| Metric row | Fields |
 | --- | --- |
 | **Band** | **Band start (Hz)**, **Band stop (Hz)** — start below stop. |
-| **Gain** | **Enable gain**, then **Gain min (dB)** and **Gain max (dB)**. |
-| **Out-of-band suppression** | Up to 16 points, below. |
-| **Noise figure** | **Enable noise figure**, then **NF max (dB)**. |
-| **Output power** | **Enable output power**, then **Output power min (dBm)** and **max (dBm)**, plus **Input level (dBm)** (−174 to +10), which stays editable while the limit is off. Output power is measured from the input level, not from a generator tone. |
-| **IIP3** | **Enable IIP3**, then **IIP3 min (dBm)** and the two-tone test: **IIP3 tone spacing (Hz)**, **input start (dBm)**, **input stop (dBm)**, **input step (dB)** — 3 to 101 sweep levels. |
-| **SNR** | **Enable SNR**, then **SNR minimum (dB)** and **SNR bandwidth (Hz)**. SNR uses the input level set under Output power. |
+| **Enable gain** | **Gain min (dB)** and **Gain max (dB)**. |
+| **Enable noise figure** | **NF max (dB)**. |
+| **Enable output power** | **Output power min (dBm)** and **max (dBm)**, plus **Input level (dBm)** (−174 to +10), which stays editable while the limit is off. Output power is measured from the input level, not from a generator tone — hover the field for the reminder. |
+| **Enable IIP3** | **IIP3 min (dBm)** and the two-tone test: **IIP3 tone spacing (Hz)**, **input start (dBm)**, **input stop (dBm)**, **input step (dB)** — 3 to 101 sweep levels. |
+| **Enable SNR** | **SNR minimum (dB)** and **SNR bandwidth (Hz)**. SNR uses the input level set beside Output power — hover the checkbox for the reminder. |
 
 Edits are a draft until you click **Apply requirements**; **Cancel** restores the applied values. A refusal appears in red under the button — for example, an output-power or SNR limit needs an input level first. While a draft is pending, the mode controls are disabled until you apply or cancel. Applying with every metric off clears the mode's configuration.
 
+In a wide dock (about 980 px of content width or more), the limits form and the measured results sit side by side, so the verdict stays in view while you edit; the results pane shows a note while a draft is pending and returns with **Apply requirements** or **Cancel**.
+
 ## Out-of-band suppression
 
-Each point says how far below the in-band **Gain min** the cascade must fall outside the band. Pick the **Anchor** (**Band start** or **Band stop**), an **Offset (Hz)**, and a **Min (dB)**. The point sits at the band edge plus the offset, outside the band, and requires gain limits to be enabled. Up to 16 points.
+Each point says how far below the in-band **Gain min** the cascade must fall outside the band. Pick the **Anchor** (**Band start** or **Band stop**), an **Offset (Hz)**, and a **Min (dB)**; the row shows the absolute frequency the point names, so a typo reads as a wrong MHz value instead of hiding in an offset. The point sits at the band edge plus the offset, outside the band, and requires gain limits to be enabled — hover **Add out-of-band point** for the rule. The counter beside it tracks the point count; up to 16 points fit.
 
 Out-of-band points are judged by the [RF Budget](rf-budget.md) prediction, not by the live measurement — the measured table here stays in-band only.
 
