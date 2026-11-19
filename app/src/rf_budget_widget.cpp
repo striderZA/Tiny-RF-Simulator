@@ -715,6 +715,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     bool clear_record = false;
     if (record) {
         rf_view_ui::tag("Budgeted", rf_view_ui::passColor(), true);
+        ImGui::SameLine();
         ImGui::BeginDisabled(!record->overrides.empty());
         if (ui::dangerButton("Clear budget record"))
             clear_record = true;
@@ -723,12 +724,13 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
             ImGui::SetTooltip("Remove the overrides first.");
     } else {
         rf_view_ui::tag("Not budgeted", rf_view_ui::warnColor(), true);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("A mode is budgeted only after it has a record.");
+        ImGui::SameLine();
         if (ImGui::Button("Budget this mode")) {
             record = &ensureRfBudgetModeRecord(budget, mode_id);
             markChanged();
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled("A mode is budgeted only after it has a record.");
     }
     if (clear_record) {
         eraseRfBudgetModeRecord(budget, mode_id);
@@ -817,7 +819,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
         return;
     }
     m_override_stage = std::min(m_override_stage, budget.stages.size() - 1);
-    ImGui::TextDisabled("One setting of one stage, for this mode only");
+    // The add row: one setting of one stage, this mode only, all on one line.
     ImGui::SetNextItemWidth(180.0f);
     if (ImGui::BeginCombo("Stage##override_stage", budget.stages[m_override_stage].name.c_str())) {
         for (std::size_t index = 0; index < budget.stages.size(); ++index) {
@@ -928,6 +930,9 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     if (mode->cascades.empty())
         return;
     m_cascade_output = std::min(m_cascade_output, mode->cascades.size() - 1);
+    // On the mode's line, or beside the last unreached-output note: one row for
+    // both cascade selectors.
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(200.0f);
     if (ImGui::BeginCombo("Output##cascade_output",
                           mode->cascades[m_cascade_output].output.c_str())) {

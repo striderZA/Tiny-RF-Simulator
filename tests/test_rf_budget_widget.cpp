@@ -16,8 +16,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
-#include <string>
 #include <functional>
+#include <string>
 
 namespace {
 
@@ -251,4 +251,32 @@ TEST_CASE_METHOD(ImGuiFixture, "RF Budget unfed input shows a warning preview",
     REQUIRE(rects.stages[1].feed_unfed[0]);
     REQUIRE(rects.stages[1].feed_unfed[1]);
     REQUIRE_FALSE(rectIsEmpty(rects.stages[1].feed_combo[1]));
+}
+
+TEST_CASE_METHOD(ImGuiFixture, "RF Budget chain holds all 32 stages in order",
+                 "[rf_budget][widget]") {
+    RfBudget budget;
+    std::string error;
+    while (budget.stages.size() < kMaxRfBudgetStages)
+        REQUIRE(addRfBudgetStage(budget, "attenuator", error));
+    RfBudgetWidget widget;
+    const ImVec2 size(1200.0f, 760.0f);
+    drawBudgetFrame(widget, budget, size);
+    drawBudgetFrame(widget, budget, size);
+
+    // Every stage gets its own block, in table order, left to right, ending at
+    // the outputs block. Blocks scrolled out of the visible strip are culled
+    // but still record their layout slot.
+    const RfBudgetWidget::ItemRects &rects = widget.lastItemRects();
+    REQUIRE(rects.stages.size() == kMaxRfBudgetStages);
+    REQUIRE(rects.input_block[0] < rects.stages[0].block[0]);
+    for (std::size_t index = 1; index < rects.stages.size(); ++index)
+        REQUIRE(rects.stages[index - 1].block[0] < rects.stages[index].block[0]);
+    REQUIRE(rects.stages.back().block[0] < rects.outputs_block[0]);
+    REQUIRE(rects.chain_scroll_max_x > 0.0f);
+
+    // The cap refuses a 33rd stage with one sentence on the error line.
+    clickRect(widget, budget, size, rects.add_stage);
+    REQUIRE(budget.stages.size() == kMaxRfBudgetStages);
+    REQUIRE_FALSE(widget.error().empty());
 }
