@@ -39,6 +39,7 @@ class ReceiverRequirementsWidget {
     // The band and every optional limit, one flowing row per metric with the
     // enable checkbox as the row leader.
     void drawLimitsForm();
+    void drawOobPoints();
     ReceiverRequirementsDraft m_baseline;
     std::array<std::array<char, 128>, 15> m_buffers{};
     std::array<char, 128> m_mode_name{};

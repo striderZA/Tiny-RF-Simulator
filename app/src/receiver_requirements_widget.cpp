@@ -5,7 +5,9 @@
 #include "ui_theme.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <string>
 
@@ -23,6 +25,8 @@ constexpr float kFieldWidth = 110.0f;
 const char *const kNoModesHint =
     "Type a name in Mode name, then choose Add mode to define the first mode.";
 
+constexpr float kAnchorComboWidth = 100.0f;
+constexpr float kMinFieldWidth = 80.0f;
 // A flowing row narrows a control to the widest that fits, down to this floor;
 // below it a dock too narrow for one field is pathological.
 constexpr float kMinFlowFrameWidth = 60.0f;
@@ -119,6 +123,31 @@ class FlowRow {
 };
 
 // The absolute frequency a draft out-of-band row names: the chosen band edge
+// plus the typed offset. "-" while the band or offset text is not a number.
+std::string oobRowFrequencyText(const std::array<char, 128> &band_start,
+                                const std::array<char, 128> &band_stop, int anchor,
+                                const std::array<char, 128> &offset) {
+    const char *edge_text = anchor == 0 ? band_start.data() : band_stop.data();
+    char *end = nullptr;
+    const double edge = std::strtod(edge_text, &end);
+    if (end == edge_text)
+        return "@ -";
+    const double offset_value = std::strtod(offset.data(), &end);
+    if (end == offset.data())
+        return "@ -";
+    const double frequency = edge + offset_value;
+    char text[40];
+    if (std::fabs(frequency) >= 1.0e9)
+        std::snprintf(text, sizeof(text), "@ %.4g GHz", frequency * 1.0e-9);
+    else if (std::fabs(frequency) >= 1.0e6)
+        std::snprintf(text, sizeof(text), "@ %.4g MHz", frequency * 1.0e-6);
+    else if (std::fabs(frequency) >= 1.0e3)
+        std::snprintf(text, sizeof(text), "@ %.4g kHz", frequency * 1.0e-3);
+    else
+        std::snprintf(text, sizeof(text), "@ %.4g Hz", frequency);
+    return text;
+}
+
 bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDraft &b) {
     if (a.oob_suppression.size() != b.oob_suppression.size())
         return false;
@@ -583,6 +612,40 @@ void ReceiverRequirementsWidget::drawLimitsForm() {
     ImGui::EndDisabled();
 }
 
+void ReceiverRequirementsWidget::drawOobPoints() {
+    rf_view_ui::sectionHeader("Out-of-band suppression");
+    ImGui::BeginDisabled(m_oob_rows.size() >= kMaxReceiverOOBSuppressionPoints);
+    if (ImGui::Button("Add out-of-band point"))
+        m_oob_rows.push_back(OobRow{});
+    ImGui::EndDisabled();
+    // The rule a point encodes; kept off the standing layout so a narrow dock
+    // does not spend a line on it.
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Each point needs gain limits: the cascade gain at the anchor plus "
+                          "the offset must fall at least its Min below the in-band Gain min.");
+    char counter[16];
+    std::snprintf(counter, sizeof(counter), "%zu/%zu", m_oob_rows.size(),
+                  kMaxReceiverOOBSuppressionPoints);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", counter);
+    for (std::size_t row = 0; row < m_oob_rows.size(); ++row) {
+        ImGui::PushID(static_cast<int>(row));
+        OobRow &oob = m_oob_rows[row];
+        FlowRow line;
+        const char *anchors[] = {"Band start", "Band stop"};
+        line.combo("Anchor", &oob.anchor, anchors, 2, kAnchorComboWidth);
+        line.field("Offset (Hz)", oob.offset, kFieldWidth);
+        line.field("Min (dB)", oob.min, kMinFieldWidth);
+        line.note(oobRowFrequencyText(m_buffers[0], m_buffers[1], oob.anchor, oob.offset).c_str());
+        if (line.dangerEnd("Remove point")) {
+            m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
+            ImGui::PopID();
+            break;
+        }
+        ImGui::PopID();
+    }
+}
+
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
                                       const ReceiverRequirementsEvaluation &result,
                                       const RfBudgetEvaluation &budget) {
@@ -659,33 +722,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
 
     drawLimitsForm();
 
-    rf_view_ui::sectionHeader("Out-of-band suppression");
-    ImGui::TextDisabled("Each point needs gain limits: the cascade gain at the point must be");
-    ImGui::TextDisabled("at least its minimum below the gain minimum.");
-    for (std::size_t row = 0; row < m_oob_rows.size(); ++row) {
-        ImGui::PushID(static_cast<int>(row));
-        const char *anchors[] = {"Band start", "Band stop"};
-        ImGui::SetNextItemWidth(130.0f);
-        ImGui::Combo("Anchor", &m_oob_rows[row].anchor, anchors, 2);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(kFieldWidth);
-        ImGui::InputText("Offset (Hz)", m_oob_rows[row].offset.data(),
-                         m_oob_rows[row].offset.size());
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0f);
-        ImGui::InputText("Min (dB)", m_oob_rows[row].min.data(), m_oob_rows[row].min.size());
-        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
-        if (ui::dangerButton("Remove point")) {
-            m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
-            ImGui::PopID();
-            break;
-        }
-        ImGui::PopID();
-    }
-    ImGui::BeginDisabled(m_oob_rows.size() >= kMaxReceiverOOBSuppressionPoints);
-    if (ImGui::Button("Add out-of-band point"))
-        m_oob_rows.push_back(OobRow{});
-    ImGui::EndDisabled();
+    drawOobPoints();
 
     // --- Actions -------------------------------------------------------------------------------
     rf_view_ui::sectionHeader("Apply");
