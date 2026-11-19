@@ -7,6 +7,7 @@
 #include "imgui_test_engine/imgui_te_exporters.h"
 #include "imgui_test_engine/imgui_te_ui.h"
 #include <GLFW/glfw3.h>
+#include <cstdlib>
 #include <imnodes.h>
 #include <implot.h>
 
@@ -61,7 +62,11 @@ int main() {
     ImGuiTestEngine_InstallDefaultCrashHandler();
 
     RegisterUiTests(engine, app);
-    ImGuiTestEngine_QueueTests(engine, ImGuiTestGroup_Tests, "all");
+    // The CTest gate runs the whole suite; a developer (or an agent mid-change)
+    // can narrow a local run with RF_SIM_UI_FILTER=<test-name substring>
+    // without touching the queue default.
+    const char *filter = std::getenv("RF_SIM_UI_FILTER");
+    ImGuiTestEngine_QueueTests(engine, ImGuiTestGroup_Tests, filter != nullptr ? filter : "all");
 
     int done_frames = 0;
     while (!glfwWindowShouldClose(window)) {
