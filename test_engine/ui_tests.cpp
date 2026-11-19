@@ -3508,6 +3508,189 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
     };
 
+    // The requirements view must use the dock it lives in: compact enough to
+    // fit a narrow dock without a horizontal scrollbar, verdict beside the
+    // form in a wide one, and on screen at the default docked size without
+    // scrolling. A panel that must be resized is floated first: docked
+    // windows have no resize border and tabs hide sibling views.
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_wraps_without_horizontal_scroll_in_a_narrow_dock");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        ImGui::DockBuilderDockWindow("Receiver Requirements", 0);
+        ctx->Yield(2);
+        ctx->WindowResize("Receiver Requirements", ImVec2(400.0f, 800.0f));
+        ctx->Yield(2);
+        struct RestoreDocked {
+            ImGuiTestContext *ctx;
+            ~RestoreDocked() {
+                const ImGuiID utility_root =
+                    ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
+                ImGui::DockBuilderDockWindow("Receiver Requirements", utility_root);
+                if (s_app->m_show_receiver_requirements) {
+                    ctx->SetRef("##MainMenuBar");
+                    ctx->MenuClick("View/Receiver Requirements");
+                    ctx->SetRef("");
+                    ctx->Yield(2);
+                }
+            }
+        } restore{ctx};
+
+        // A fully-configured mode fills every row the view can draw.
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 10.0e6;
+        config.gain = ReceiverGainLimits{0.0, 20.0};
+        config.nf_max_dB = 5.0;
+        config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
+        config.iip3_min_dBm = 10.0;
+        config.measurement_conditions.input_level_dBm = -30.0;
+        config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -60.0, -40.0, 2.0};
+        config.snr = ReceiverSNRLimit{20.0, 1.0e6};
+        // The point must sit outside the band, or Apply refuses the whole
+        // draft: BandStop + 5 MHz names 15 MHz against a 1-10 MHz band.
+        config.oob_suppression.push_back(
+            ReceiverOOBSuppressionPoint{ReceiverOOBSuppressionAnchor::BandStop, 5.0e6, 30.0});
+        s_app->testSetSingleModeRequirements(config);
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+
+        ctx->SetRef("Receiver Requirements");
+        // A narrow dock wraps rows; nothing may clip off the right edge (the
+        // window shows no horizontal scrollbar by design, so an overflowing
+        // row would be silently unreachable).
+        IM_CHECK(panel->ContentSize.x <= panel->InnerRect.GetWidth() + 2.0f);
+        // Every pinned window-scoped control is still submitted and finds its
+        // input. The per-point controls of an out-of-band row carry their row
+        // index in their id, so they are covered by the content bound above.
+        const char *controls[] = {"Mode",
+                                  "Mode name",
+                                  "Add mode",
+                                  "Rename mode",
+                                  "Remove mode",
+                                  "Band start (Hz)",
+                                  "Band stop (Hz)",
+                                  "Enable gain",
+                                  "Gain min (dB)",
+                                  "Gain max (dB)",
+                                  "Enable noise figure",
+                                  "NF max (dB)",
+                                  "Enable output power",
+                                  "Output power min (dBm)",
+                                  "Output power max (dBm)",
+                                  "Input level (dBm)",
+                                  "Enable IIP3",
+                                  "IIP3 min (dBm)",
+                                  "IIP3 tone spacing (Hz)",
+                                  "IIP3 input start (dBm)",
+                                  "IIP3 input stop (dBm)",
+                                  "IIP3 input step (dB)",
+                                  "Enable SNR",
+                                  "SNR minimum (dB)",
+                                  "SNR bandwidth (Hz)",
+                                  "Add out-of-band point",
+                                  "Apply requirements",
+                                  "Cancel"};
+        for (const char *label : controls)
+            IM_CHECK(ctx->ItemExists(label));
+        ctx->ItemInputValue("Gain max (dB)", "25");
+        settlePanelScrollToBottom(ctx);
+        ctx->ItemClick("Apply requirements");
+        waitForUi(ctx, [&]() {
+            const auto state = s_app->testReceiverRequirementsState();
+            return state.config.has_value() && state.config->gain.has_value() &&
+                   state.config->gain->maximum_dB == 25.0;
+        });
+        const auto state = s_app->testReceiverRequirementsState();
+        IM_CHECK(state.config.has_value() && state.config->gain.has_value());
+        if (state.config && state.config->gain)
+            IM_CHECK_EQ(state.config->gain->maximum_dB, 25.0);
+    };
+
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_shows_verdict_beside_the_form_in_a_wide_dock");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        ImGui::DockBuilderDockWindow("Receiver Requirements", 0);
+        ctx->Yield(2);
+        ctx->WindowResize("Receiver Requirements", ImVec2(1040.0f, 620.0f));
+        ctx->Yield(2);
+        struct RestoreDocked {
+            ImGuiTestContext *ctx;
+            ~RestoreDocked() {
+                const ImGuiID utility_root =
+                    ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
+                ImGui::DockBuilderDockWindow("Receiver Requirements", utility_root);
+                if (s_app->m_show_receiver_requirements) {
+                    ctx->SetRef("##MainMenuBar");
+                    ctx->MenuClick("View/Receiver Requirements");
+                    ctx->SetRef("");
+                    ctx->Yield(2);
+                }
+            }
+        } restore{ctx};
+
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 10.0e6;
+        config.gain = ReceiverGainLimits{0.0, 20.0};
+        s_app->testSetSingleModeRequirements(config);
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+        const ImRect panel_rect = panel->Rect();
+
+        ctx->SetRef("Receiver Requirements");
+        // The measured verdict sits beside the form, above the fold: the
+        // table header cell and a form control share the same rows of the
+        // window, and the apply bar is on screen without scrolling.
+        ImGuiTestItemInfo metric = ctx->ItemInfo("**/Metric");
+        ImGuiTestItemInfo enable_gain = ctx->ItemInfo("**/Enable gain");
+        ImGuiTestItemInfo apply = ctx->ItemInfo("Apply requirements");
+        IM_CHECK(metric.ID != 0);
+        IM_CHECK(enable_gain.ID != 0);
+        IM_CHECK(apply.ID != 0);
+        IM_CHECK(metric.RectFull.Min.y < enable_gain.RectFull.Max.y + 40.0f);
+        IM_CHECK(metric.RectFull.Min.y < panel_rect.Max.y);
+        IM_CHECK(apply.RectFull.Max.y < panel_rect.Max.y);
+
+        // The applied result is hidden while a draft is pending (table
+        // items are scoped by the layout table, hence the deep search).
+        ctx->ItemInputValue("**/Band stop (Hz)", "9000000");
+        ctx->Yield(2);
+        IM_CHECK(!ctx->ItemExists("**/Metric"));
+        ctx->ItemClick("Cancel");
+        ctx->Yield(3);
+        IM_CHECK(ctx->ItemInfo("**/Metric").ID != 0);
+    };
+
     // Agent panel control callbacks are replaced here, so the tests exercise
     // the UI without enabling the production listener or persisting a setting.
     t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_server_toggle_callback");
