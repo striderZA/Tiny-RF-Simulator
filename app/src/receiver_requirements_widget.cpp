@@ -19,7 +19,6 @@ constexpr const char *kLabels[] = {
 
 constexpr const char *kRemoveModeTitle = "Remove mode?";
 constexpr float kFieldWidth = 110.0f;
-constexpr float kNameWidth = 260.0f;
 
 const char *const kNoModesHint =
     "Type a name in Mode name, then choose Add mode to define the first mode.";
@@ -427,6 +426,107 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     m_mode_error.clear();
     m_notice.clear();
 }
+void ReceiverRequirementsWidget::drawModeBar(ReceiverRequirementsSet &set, bool has_modes,
+                                             std::size_t selected_index, bool unapplied) {
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const auto button_width = [](const char *label) {
+        return ImGui::CalcTextSize(label).x + 2.0f * ImGui::GetStyle().FramePadding.x;
+    };
+    // A combo or text field draws its label after the frame, so a row must
+    // reserve the label too, not just the frame width.
+    const auto trailing_label = [](const char *label) {
+        return ImGui::CalcTextSize(label).x + ImGui::GetStyle().ItemInnerSpacing.x;
+    };
+
+    rf_view_ui::sectionHeader("Mode");
+    ImGui::BeginDisabled(unapplied);
+    // Row 1: the selector, then the destructive Remove at the end of the row
+    // behind the wider gap every destructive control keeps.
+    const float remove_width = button_width("Remove mode");
+    const float selector_label = trailing_label("Mode");
+    const float selector_row_width = ImGui::GetContentRegionAvail().x;
+    // A first frame of a small window can report less width than the 150 px
+    // floor, so compose the bound instead of std::clamp (which asserts when
+    // the upper bound falls below the lower one).
+    const float selector_width = std::min(
+        selector_row_width, std::max(150.0f, selector_row_width - selector_label - remove_width -
+                                                 3.0f * style.ItemSpacing.x));
+    const ImVec2 selector_pos = ImGui::GetCursorScreenPos();
+    const float content_right = selector_pos.x + selector_row_width;
+    const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
+    ImGui::SetNextItemWidth(selector_width);
+    if (ImGui::BeginCombo("Mode", preview)) {
+        for (std::size_t index = 0; index < set.modes.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
+            const bool selected = index == selected_index;
+            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
+            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
+                selectReceiverRequirementsMode(set, index))
+                resetDraft(set);
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    // The Remove button joins only while the space it needs remains beside the
+    // selector and its trailing label (the cursor has already moved below).
+    if (content_right - selector_pos.x - selector_width - selector_label >=
+        remove_width + 3.0f * style.ItemSpacing.x)
+        ImGui::SameLine(0.0f, 3.0f * style.ItemSpacing.x);
+    if (ui::dangerButton("Remove mode")) {
+        if (has_modes) {
+            m_remove_id = set.modes[selected_index].id;
+            ImGui::OpenPopup(kRemoveModeTitle);
+        } else {
+            m_mode_error = "Add a mode before removing.";
+        }
+    }
+    // Row 2: the name field carries the Add/Rename pair.
+    const float add_width = button_width("Add mode");
+    const float rename_width = button_width("Rename mode");
+    const float name_label = trailing_label("Mode name");
+    const ImVec2 name_pos = ImGui::GetCursorScreenPos();
+    const float name_row_width = ImGui::GetContentRegionAvail().x;
+    const float name_row_right = name_pos.x + name_row_width;
+    const float name_width =
+        std::min(name_row_width, std::max(150.0f, name_row_width - name_label - add_width -
+                                                      rename_width - 2.0f * style.ItemSpacing.x));
+    ImGui::SetNextItemWidth(name_width);
+    if (ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size()))
+        m_mode_error.clear();
+    // The Add button joins only beside the name field and its trailing label.
+    if (name_row_right - name_pos.x - name_width - name_label >= add_width + style.ItemSpacing.x)
+        ImGui::SameLine();
+    if (ImGui::Button("Add mode")) {
+        std::string error;
+        if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
+            resetDraft(set);
+            if (onChange)
+                onChange();
+        } else {
+            m_mode_error = std::move(error);
+        }
+    }
+    if (name_row_right - ImGui::GetItemRectMax().x >= rename_width + style.ItemSpacing.x)
+        ImGui::SameLine();
+    if (ImGui::Button("Rename mode")) {
+        if (!has_modes) {
+            m_mode_error = "Add a mode before renaming.";
+        } else {
+            std::string error;
+            if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
+                resetDraft(set);
+                if (onChange)
+                    onChange();
+            } else {
+                m_mode_error = std::move(error);
+            }
+        }
+    }
+    ImGui::EndDisabled();
+}
+
 void ReceiverRequirementsWidget::drawLimitsForm() {
     // The band leads: every other limit, and each out-of-band point, is
     // measured against it.
@@ -515,64 +615,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         fillModeName(set);
     const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
-    // --- Mode selection and naming -------------------------------------------------------------
-    rf_view_ui::sectionHeader("Mode");
-    ImGui::BeginDisabled(unapplied);
-    const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
-    ImGui::SetNextItemWidth(kNameWidth);
-    if (ImGui::BeginCombo("Mode", preview)) {
-        for (std::size_t index = 0; index < set.modes.size(); ++index) {
-            ImGui::PushID(static_cast<int>(index));
-            const bool selected = index == selected_index;
-            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
-            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
-                selectReceiverRequirementsMode(set, index))
-                resetDraft(set);
-            if (selected)
-                ImGui::SetItemDefaultFocus();
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::SetNextItemWidth(kNameWidth);
-    if (ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size()))
-        m_mode_error.clear();
-    ImGui::SameLine();
-    if (ImGui::Button("Add mode")) {
-        std::string error;
-        if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
-            resetDraft(set);
-            if (onChange)
-                onChange();
-        } else {
-            m_mode_error = std::move(error);
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Rename mode")) {
-        if (!has_modes) {
-            m_mode_error = "Add a mode before renaming.";
-        } else {
-            std::string error;
-            if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
-                resetDraft(set);
-                if (onChange)
-                    onChange();
-            } else {
-                m_mode_error = std::move(error);
-            }
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Remove mode")) {
-        if (has_modes) {
-            m_remove_id = set.modes[selected_index].id;
-            ImGui::OpenPopup(kRemoveModeTitle);
-        } else {
-            m_mode_error = "Add a mode before removing.";
-        }
-    }
-    ImGui::EndDisabled();
+    drawModeBar(set, has_modes, selected_index, unapplied);
     // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
     // id when confirmed, so a set changed meanwhile never removes a different mode.
     if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
