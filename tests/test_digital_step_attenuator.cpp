@@ -46,6 +46,11 @@ TEST_CASE("Digital step attenuator: defaults match the ZX76-31R5A-PN+",
     CHECK(att.numInputPins() == 1);
     REQUIRE(att.node().outputs.size() == 1);
     CHECK(att.inputPinId() != -1);
+
+    // The graph label must start with the registry label_prefix so the canvas
+    // resolves NodeKind::DigitalStepAttenuator, not the Attenuator glyph.
+    const GraphNode &node = graph.nodes()[0];
+    CHECK(node.label.rfind("Digital Step Attenuator", 0) == 0);
 }
 
 TEST_CASE("Digital step attenuator: attenuation is ref loss plus code times step",

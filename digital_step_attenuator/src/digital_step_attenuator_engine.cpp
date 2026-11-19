@@ -3,7 +3,7 @@
 #include <cmath>
 
 DigitalStepAttenuatorEngine::DigitalStepAttenuatorEngine(int id, NodeGraphEngine &graph)
-    : AttenuatorEngine(id, graph) {
+    : AttenuatorEngine(id, graph, "Digital Step Attenuator") {
     // The default state (ZX76-31R5A-PN+: 1.4 dB at code 0) is already a
     // non-zero attenuation, so seed the base engine instead of leaving 0 dB
     // until the first setter call.
