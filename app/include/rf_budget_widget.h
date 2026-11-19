@@ -29,13 +29,43 @@ class RfBudgetWidget {
     // The last refusal shown under the toolbar; empty when there is none.
     const std::string &error() const { return m_error; }
 
+    // {x0, y0, x1, y1} of the last draw()'s interactive items. A headless frame has no
+    // label-based item lookup without the ImGui Test Engine, so the widget tests press at
+    // these rects to drive a real click (the TestFlowWidget::lastButtonRects() pattern).
+    // A rect the last draw did not produce stays all-zero; `feed_unfed` is true when that
+    // port's feed combo was drawn with an unfed warning preview.
+    struct StageRects {
+        float block[4] = {};
+        float type_combo[4] = {};
+        float source_combo[4] = {};
+        float part_combo[4] = {};    // library source only
+        float params_button[4] = {}; // idealized source only
+        float feed_combo[2][4] = {};
+        bool feed_unfed[2] = {};
+        float rename_button[4] = {};
+        float remove_button[4] = {};
+    };
+    struct ItemRects {
+        float add_stage[4] = {};
+        float add_output[4] = {};
+        float input_block[4] = {};
+        float outputs_block[4] = {};
+        float chain_scroll_max_x = 0.0f;
+        std::vector<StageRects> stages;
+    };
+    const ItemRects &lastItemRects() const { return m_item_rects; }
+
   private:
-    enum class Modal { None, RenameStage, StageFeeds, StageParams, RenameOutput };
+    enum class Modal { None, RenameStage, StageParams, RenameOutput };
 
     void drawToolbar(RfBudget &budget);
     void drawStatus(RfBudget &budget, const RfBudgetEvaluation &evaluation);
-    void drawStages(RfBudget &budget, const ComponentLibrary &library);
-    void drawOutputs(RfBudget &budget);
+    // The horizontal signal-chain strip: budget input block, one block per stage,
+    // outputs block. Stages read left to right in table order; the strip scrolls
+    // horizontally when the dock is narrower than the chain.
+    void drawSignalChain(RfBudget &budget, const ComponentLibrary &library);
+    bool drawStageBlock(RfBudget &budget, const ComponentLibrary &library, std::size_t index);
+    void drawOutputsBlock(RfBudget &budget);
     void drawOverrides(RfBudget &budget, const ReceiverRequirementsSet &requirements);
     void drawCascade(const RfBudget &budget, const ReceiverRequirementsSet &requirements,
                      const RfBudgetEvaluation &evaluation);
@@ -57,6 +87,7 @@ class RfBudgetWidget {
     std::size_t m_modal_output = 0;
     std::array<char, 96> m_name_buffer{};
     std::string m_error;
+    ItemRects m_item_rects;
 
     bool m_initialized = false;
     std::size_t m_last_requirements_selected = 0;
