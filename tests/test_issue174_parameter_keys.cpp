@@ -50,6 +50,9 @@ const std::vector<FieldSerializationCase> &fieldSerializationCases() {
         {"adc", "nsd_dBm_per_Hz", "nsd_dBm_per_Hz", -132.5, -132.5},
         {"adc", "decimation", "decimation", 4, 4},
         {"adc", "nco_fs_fraction", "nco_fs_fraction", 0.125, 0.125},
+        {"digital_step_attenuator", "bit_depth", "bit_depth", 4, 4},
+        {"digital_step_attenuator", "step_dB", "step_dB", 1.25, 1.25},
+        {"digital_step_attenuator", "ref_loss_dB", "ref_loss_dB", 0.8, 0.8},
     };
     return cases;
 }
@@ -78,6 +81,8 @@ Json validLibraryParameters(const std::string &type) {
                 {"nsd_dBm_per_Hz", -150.0},
                 {"decimation", 2},
                 {"nco_fs_fraction", 0.25}};
+    if (type == "digital_step_attenuator")
+        return {{"bit_depth", 6}, {"step_dB", 0.5}, {"ref_loss_dB", 1.4}};
     return Json::object();
 }
 } // namespace
