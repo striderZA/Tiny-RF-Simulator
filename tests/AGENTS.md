@@ -35,7 +35,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 ## Work Guidance
 
 - Follow [CONTRIBUTING.md — Testing](../CONTRIBUTING.md#testing) for test commands and general coverage guidance.
-- `test_ui` shares `<exe_dir>/layouts/UITestLayout.ini`; `test_engine/CMakeLists.txt` registers `add_test(NAME test_ui COMMAND test_ui)` and sets `RUN_SERIAL TRUE`. `test_ui` is not defined in `tests/CMakeLists.txt`; run the whole `test_ui` target, not individual UI cases.
+- `test_ui` shares `<exe_dir>/layouts/UITestLayout.ini`; `test_engine/CMakeLists.txt` registers `add_test(NAME test_ui COMMAND test_ui)` and sets `RUN_SERIAL TRUE`. `test_ui` is not defined in `tests/CMakeLists.txt`; run the whole `test_ui` target, not individual UI cases. Setting `RF_SIM_UI_FILTER=<substring>` before launching the executable narrows one local run to matching test names, and a filter that matches no tests fails the run (exit 2) instead of reporting an empty pass; the CTest gate and any verification claim still run the whole target.
 - `perf_app` (`test_engine/perf_main.cpp`) is opt-in: `cmake --build build --target perf_app`. It is declared `EXCLUDE_FROM_ALL` and is not a CTest target.
 - Matched perf runs: `cmake --build build --target perf_app`, then `build/bin/perf_app <scenario>` from the repo root on each tag. Delete `build/bin/app.ini` first so both trees start from defaults, and interleave tags.
 - Every DSP engine must have at least a basic correctness test and a dirty/clean benchmark. Benchmarks too slow for CTest are `EXCLUDE_FROM_ALL` executables run on request, e.g. `cmake --build build --target bench_pfb_large` then `build/bin/bench_pfb_large --benchmark-samples 10` (PFB M=2048 recompute, issue #130).

@@ -120,7 +120,15 @@ int main() {
     ImGuiTestEngine_GetResult(engine, count_tested, count_success);
     ImGuiTestEngine_PrintResultSummary(engine);
 
-    int exit_code = (count_tested > 0 && count_tested == count_success) ? 0 : 1;
+    // A filter that matched nothing must not read as a green run: the queue
+    // would report 0/0 passed and the typo would go unnoticed.
+    int exit_code;
+    if (filter != nullptr && count_tested == 0) {
+        std::fprintf(stderr, "RF_SIM_UI_FILTER \"%s\" matched no tests.\n", filter);
+        exit_code = 2;
+    } else {
+        exit_code = (count_tested > 0 && count_tested == count_success) ? 0 : 1;
+    }
 
     ImGui_ImplOpenGL2_Shutdown();
     ImGui_ImplGlfw_Shutdown();
