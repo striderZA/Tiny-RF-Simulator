@@ -3691,6 +3691,66 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(ctx->ItemInfo("**/Metric").ID != 0);
     };
 
+    t = IM_REGISTER_TEST(e, "rf_simulator",
+                         "receiver_requirements_default_dock_shows_verdict_without_scrolling");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->Yield(2);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Receiver Requirements");
+        if (panel && panel->Active) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick("View/Receiver Requirements");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        panel = ImGui::FindWindowByName("Receiver Requirements");
+        IM_CHECK(panel != nullptr && panel->Active);
+        if (!panel || !panel->Active)
+            return;
+        IM_CHECK(dockedInUtilityGroup(panel));
+
+        // A fully populated mode fills every section; the compact layout must
+        // still keep the verdict on screen in the default dock.
+        ReceiverRequirementsConfig config;
+        config.band_start_Hz = 1.0e6;
+        config.band_stop_Hz = 10.0e6;
+        config.gain = ReceiverGainLimits{0.0, 20.0};
+        config.nf_max_dB = 5.0;
+        config.output_power = ReceiverOutputPowerLimits{-40.0, 0.0};
+        config.iip3_min_dBm = 10.0;
+        config.measurement_conditions.input_level_dBm = -30.0;
+        config.measurement_conditions.iip3 = ReceiverIIP3TestSettings{1.0e6, -60.0, -40.0, 2.0};
+        config.snr = ReceiverSNRLimit{20.0, 1.0e6};
+        // Outside the band (BandStop + 5 MHz names 15 MHz against 1-10 MHz).
+        config.oob_suppression.push_back(
+            ReceiverOOBSuppressionPoint{ReceiverOOBSuppressionAnchor::BandStop, 5.0e6, 30.0});
+        s_app->testSetSingleModeRequirements(config);
+        ctx->Yield(3);
+        // Start from the top so the check below measures the content, not the
+        // scroll state an earlier case left behind.
+        ctx->ScrollToTop("//Receiver Requirements");
+        ctx->Yield(2);
+        ctx->SetRef("Receiver Requirements");
+        // The default utility dock (~744 px usable) holds the whole view —
+        // form, verdict, and budget hint — on one screen, with nothing
+        // overflowing sideways either.
+        IM_CHECK_EQ(panel->Scroll.y, 0.0f);
+        IM_CHECK(panel->ContentSize.x <= panel->InnerRect.GetWidth() + 2.0f);
+        IM_CHECK(panel->ContentSize.y <= panel->InnerRect.GetHeight() + 2.0f);
+        ImGuiTestItemInfo metric = ctx->ItemInfo("**/Metric");
+        IM_CHECK(metric.ID != 0);
+        IM_CHECK(metric.RectFull.Min.y < panel->Rect().Max.y);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Receiver Requirements");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        s_app->testSetSingleModeRequirements(ReceiverRequirementsConfig{});
+    };
+
     // Agent panel control callbacks are replaced here, so the tests exercise
     // the UI without enabling the production listener or persisting a setting.
     t = IM_REGISTER_TEST(e, "rf_simulator", "agent_panel_server_toggle_callback");
