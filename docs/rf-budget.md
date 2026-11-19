@@ -2,23 +2,25 @@
 
 The RF Budget predicts what a receiver chain will do before you wire it. Open it from **View > RF Budget**. The View item toggles the dockable panel, its visibility persists between runs, and the panel opens in the [Utility Space](utility-views.md) group beside the main window.
 
-You describe the chain as a stage table — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch rows — pick where the cascade ends, and give one or more [requirement modes](receiver-requirements.md) a budget record. The budget then predicts each mode's gain, noise figure, output power, IIP3, SNR, and out-of-band suppression at every output, with a verdict per output.
+You describe the chain as a horizontal signal flow — the budget input on the left, one compact block per stage (amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch), the outputs on the right — give one or more [requirement modes](receiver-requirements.md) a budget record, and the budget predicts each mode's gain, noise figure, output power, IIP3, SNR, and out-of-band suppression at every output, with a verdict per output.
 
 A budget **Pass** is a prediction, not a verification: the budget evaluates the component models without touching the live circuit. Confirm on the real circuit with the [Network Analyzer](network-analyzer.md) or a [power](power-meter.md) reading.
 
-## Build the stage table
+## Build the signal chain
 
-- **Add Stage** appends a row, named `Stage 1`, `Stage 2`, and so on. The first stage is fed from the **Budget input** automatically.
-- Each row's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1)**.
-- **Source** picks **Idealized** or **Library**. An idealized stage opens its numbers in the **Params...** modal — each field starts at its default and an **Override** button sets it. A library stage instead picks a part from the [Component Library](component-library.md).
-- **Feeds...** sets what drives each input port: **Unfed**, the **Budget input**, or another stage's output. A splitter feeds all of its outputs; a switch follows its active throw.
-- **Rename...** and **Remove** act on the row. Removing a stage unfeds whatever it drove.
+The **Signal chain** strip reads like the wiring it describes: a **Budget input** block on the left, one block per stage flowing left to right in chain order, and an **Outputs** block closing the strip on the right. When the dock is narrower than the chain, the strip scrolls horizontally instead of reflowing, so the left-to-right reading survives any dock width.
+
+- **Add Stage** appends a block, named `Stage 1`, `Stage 2`, and so on. The first stage is fed from the **Budget input** automatically.
+- Each block's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1)**.
+- **Source** picks **Idealized** or **Library**. An idealized stage edits its numbers through the **Params...** editor — each field starts at its default and an **Override** button sets it. A library stage instead picks a part from the [Component Library](component-library.md).
+- Each input port has its own feed combo right in the block: **Unfed** (drawn as a warning, since an unfed stage never reaches the cascade), the **Budget input**, or another stage's output. A splitter feeds all of its outputs; a switch follows its active throw.
+- **Rename...** and **Remove** act on the block. Removing a stage unfeds whatever it drove.
 
 The budget needs one stage fed from the budget input, every stage reachable from it, and no loops. Mixer stages are not supported. Up to 32 stages fit.
 
 ## Add outputs
 
-**Add Output** names a stage and port where the cascade ends, `OUT1`, `OUT2`, and so on. Every reached output gets its own cascade and verdict. Up to 8 outputs fit, and each output port can feed at most one thing.
+The **Outputs** block on the right names where the cascade ends: **Add Output** appends `OUT1`, `OUT2`, and so on, each picking a stage and one of its ports. Every reached output gets its own cascade and verdict. Up to 8 outputs fit, and each output port can feed at most one thing.
 
 A budget might be wired like this — one chain from the budget input, a splitter feeding both a stage and a second output, and a cascade at every reached output:
 

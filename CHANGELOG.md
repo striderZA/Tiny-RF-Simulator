@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- **RF budget reads as a horizontal signal chain** — the **View > RF Budget** stage table becomes a left-to-right strip: the budget input on the left, one compact block per stage (type, source with the part picker or idealized **Params...** editor, one inline feed combo per input port, rename/remove), the outputs on the right, joined by flow arrows. The strip scrolls horizontally when the dock is narrower than the chain, so the signal-flow reading survives any dock width. The **Feeds...** modal is gone — the per-port feed combos sit inside each block, with an unfed port drawn as a warning — and the mode-override and cascade selector rows are compacted to one line each.
+
 ## [0.31.3] - 2026-11-19
 
 ### Added

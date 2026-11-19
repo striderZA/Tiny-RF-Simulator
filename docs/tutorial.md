@@ -51,7 +51,7 @@ Open **View > Receiver Requirements** if it is not already on screen — View it
 
 ## Budget a Receiver
 
-Open **View > RF Budget** if it is not already on screen. The stage-table editor of the requirements-driven budget appears: **Add Stage** builds the chain — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each row takes a library part or edited settings, and **Add Output** picks where the cascade ends. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
+Open **View > RF Budget** if it is not already on screen. The budget appears as a signal chain reading left to right: the budget input on the left, one compact block per stage — amplifier, attenuator, filter, coax, equalizer, splitter, or RF switch — each block taking a library part or edited settings and naming what feeds its input ports, and the outputs on the right, with **Add Stage** and **Add Output** building the chain. **Budget this mode** gives the selected mode a budget record so it is predicted even with no overrides; the table shows each stage's gain, noise figure, and cumulative Friis and IIP3 with a verdict per output.
 
 ## Automate with Test Flow
 

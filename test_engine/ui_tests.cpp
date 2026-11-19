@@ -2496,10 +2496,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ImGuiWindow *panel = ImGui::FindWindowByName("Test Flow");
         IM_CHECK(panel == nullptr || !panel->Active);
     };
-    // RF Budget view: View > RF Budget opens the table, and its Add Stage /
-    // Add Output actions edit the project budget through the same helpers the
-    // standalone test_rf_budget target covers. The window is closed and the
-    // model cleared so later cases start from the default empty budget.
+    // RF Budget view: View > RF Budget opens the signal-chain editor, and its
+    // Add Stage / Add Output actions edit the project budget through the same
+    // helpers the standalone test_rf_budget and test_rf_budget_widget targets
+    // cover. The window is closed and the model cleared so later cases start
+    // from the default empty budget.
     t = IM_REGISTER_TEST(e, "rf_simulator", "rf_budget_view_menu_and_table_edit");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         s_app->m_show_rf_budget = false;
