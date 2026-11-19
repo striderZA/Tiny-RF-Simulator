@@ -1,6 +1,7 @@
 #include "digital_step_attenuator_engine.h"
 #include "node_graph_engine.h"
 #include "spectrum.h"
+#include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -219,4 +220,30 @@ TEST_CASE("Digital step attenuator: hover summary names the code and attenuation
     const std::string summary(att.hoverSummary());
     CHECK(summary.find("11.9") != std::string::npos); // 1.4 + 21*0.5
     CHECK(summary.find("21") != std::string::npos);
+}
+
+// Per tests/AGENTS.md Work Guidance: a dirty/clean benchmark, kept in this
+// engine's standalone target (the main tests target is at the MinGW
+// registration ceiling) and skipped by the plain ctest run behind
+// --skip-benchmarks; run with: build/bin/test_digital_step_attenuator [bench]
+TEST_CASE("Benchmark: DigitalStepAttenuatorEngine update", "[bench][digital_step_attenuator]") {
+    SECTION("code change (dirty)") {
+        NodeGraphEngine graph;
+        DigitalStepAttenuatorEngine att(1, graph);
+        Spectrum in = buildTestSpectrum(1e9, -10.0);
+        att.node().inputs[0] = &in;
+        BENCHMARK("Step attenuator update dirty") {
+            att.setCode((att.code() + 1) % (att.maxCode() + 1));
+            att.update(0.0);
+        };
+    }
+
+    SECTION("same input and code (dirty skip)") {
+        NodeGraphEngine graph;
+        DigitalStepAttenuatorEngine att(1, graph);
+        Spectrum in = buildTestSpectrum(1e9, -10.0);
+        att.node().inputs[0] = &in;
+        att.update(0.0); // prime
+        BENCHMARK("Step attenuator update clean (dirty skip)") { att.update(0.0); };
+    }
 }

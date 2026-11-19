@@ -90,6 +90,7 @@ add_standalone_test(test_attenuator
 add_standalone_test(test_digital_step_attenuator
     SOURCES test_digital_step_attenuator.cpp
     LIBS simulator::digital_step_attenuator_engine simulator::node_graph_engine
+    ARGS --skip-benchmarks
 )
 
 add_standalone_test(test_combiner
