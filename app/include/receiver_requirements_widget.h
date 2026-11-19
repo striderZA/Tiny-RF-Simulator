@@ -32,6 +32,15 @@ class ReceiverRequirementsWidget {
     void resetDraft(const ReceiverRequirementsSet &set);
     void fillModeName(const ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft makeDraft() const;
+    // The Mode combo and the Add/Rename/Remove buttons stay in one BeginDisabled
+    // scope while a draft is pending; the helpers keep that grouping in one place.
+    void drawModeBar(ReceiverRequirementsSet &set, bool has_modes, std::size_t selected_index,
+                     bool unapplied);
+    // The band and every optional limit, one flowing row per metric with the
+    // enable checkbox as the row leader.
+    void drawLimitsForm();
+    void drawOobPoints();
+    void drawApplyBar(ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft m_baseline;
     std::array<std::array<char, 128>, 15> m_buffers{};
     std::array<char, 128> m_mode_name{};

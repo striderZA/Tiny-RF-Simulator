@@ -4,7 +4,10 @@
 #include "rf_view_ui.h"
 #include "ui_theme.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <string>
 
@@ -17,8 +20,19 @@ constexpr const char *kLabels[] = {
     "Input level (dBm)",      "SNR minimum (dB)",      "SNR bandwidth (Hz)"};
 
 constexpr const char *kRemoveModeTitle = "Remove mode?";
-constexpr float kFieldWidth = 200.0f;
-constexpr float kNameWidth = 260.0f;
+constexpr float kFieldWidth = 110.0f;
+constexpr float kAnchorComboWidth = 100.0f;
+constexpr float kMinFieldWidth = 80.0f;
+// A flowing row narrows a control to the widest that fits, down to this floor;
+// below it a dock too narrow for one field is pathological.
+constexpr float kMinFlowFrameWidth = 60.0f;
+// Above this content width the view splits into a form pane and a results pane,
+// the same side-by-side-over-a-threshold arrangement the RF Budget view uses for
+// its sweep plots. The results pane keeps this much width so the measured and
+// budget tables never clip.
+constexpr float kSideBySideWidth = 980.0f;
+constexpr float kResultsPaneWidth = 500.0f;
+constexpr float kLeftPaneMinWidth = 460.0f;
 
 const char *const kNoModesHint =
     "Type a name in Mode name, then choose Add mode to define the first mode.";
@@ -26,6 +40,118 @@ const char *const kNoModesHint =
 void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
                   value);
+}
+
+// One responsive row of controls: each control joins the current line while it
+// fits with its label, otherwise the row wraps to the next line. The window
+// shows no horizontal scrollbar, so a row wider than the dock would clip
+// silently; flowing keeps every control reachable at any dock width.
+class FlowRow {
+  public:
+    // A label+frame control (text input, combo); returns the control's state.
+    bool field(const char *label, std::array<char, 128> &buffer, float frame_width) {
+        const float use = place(frame_width, label);
+        ImGui::SetNextItemWidth(use);
+        const bool edited = ImGui::InputText(label, buffer.data(), buffer.size());
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return edited;
+    }
+
+    bool combo(const char *label, int *item, const char *const items[], int count,
+               float frame_width) {
+        const float use = place(frame_width, label);
+        ImGui::SetNextItemWidth(use);
+        const bool opened = ImGui::Combo(label, item, items, count);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return opened;
+    }
+
+    // A checkbox that leads its row and names its metric.
+    bool checkbox(const char *label, bool *value) {
+        place(ImGui::GetFrameHeight(), label);
+        const bool toggled = ImGui::Checkbox(label, value);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return toggled;
+    }
+
+    // A disabled note that takes part in the flow, such as the two-tone test
+    // leader or a row's computed frequency.
+    void note(const char *text) {
+        place(ImGui::CalcTextSize(text).x, "");
+        ImGui::TextDisabled("%s", text);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+    }
+
+    // A destructive small button at the row's end, behind the wider gap every
+    // destructive control keeps; wraps to a fresh line only when it cannot fit.
+    bool dangerEnd(const char *label) {
+        const ImGuiStyle &style = ImGui::GetStyle();
+        const float width = ImGui::CalcTextSize(label).x + 4.0f;
+        if (m_first)
+            beginLine();
+        else if (m_content_max_x - m_line_used_x >= 3.0f * style.ItemSpacing.x + width)
+            ImGui::SameLine(0.0f, 3.0f * style.ItemSpacing.x);
+        const bool pressed = ui::dangerSmallButton(label);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return pressed;
+    }
+
+  private:
+    // The cursor sits below the previous item once it is drawn, so the space
+    // left on its line is tracked explicitly: the line's right limit from the
+    // fresh-line cursor, and the last item's right edge after each draw.
+    void beginLine() {
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        m_content_max_x = pos.x + ImGui::GetContentRegionAvail().x;
+        m_line_used_x = pos.x;
+        m_first = false;
+    }
+
+    // Positions the next control: joins the current line while the control and
+    // its label fit, otherwise lets it wrap to the next line. Returns the frame
+    // width to draw with, narrowed to the widest that fits the line.
+    float place(float frame_width, const char *label) {
+        const ImGuiStyle &style = ImGui::GetStyle();
+        const float label_width = ImGui::CalcTextSize(label).x + style.ItemInnerSpacing.x;
+        if (m_first)
+            beginLine();
+        else if (m_content_max_x - m_line_used_x - style.ItemSpacing.x >= frame_width + label_width)
+            ImGui::SameLine();
+        const float avail = ImGui::GetContentRegionAvail().x;
+        // std::clamp would assert when frame_width < the floor (a short
+        // note), so compose the same bound with min/max.
+        return std::min(frame_width, std::max(kMinFlowFrameWidth, avail - label_width));
+    }
+
+    bool m_first = true;
+    float m_content_max_x = 0.0f; // screen x of the line's right limit
+    float m_line_used_x = 0.0f;   // screen x of the last drawn item's right edge
+};
+
+// The absolute frequency a draft out-of-band row names: the chosen band edge
+// plus the typed offset. "-" while the band or offset text is not a number.
+std::string oobRowFrequencyText(const std::array<char, 128> &band_start,
+                                const std::array<char, 128> &band_stop, int anchor,
+                                const std::array<char, 128> &offset) {
+    const char *edge_text = anchor == 0 ? band_start.data() : band_stop.data();
+    char *end = nullptr;
+    const double edge = std::strtod(edge_text, &end);
+    if (end == edge_text)
+        return "@ -";
+    const double offset_value = std::strtod(offset.data(), &end);
+    if (end == offset.data())
+        return "@ -";
+    const double frequency = edge + offset_value;
+    char text[40];
+    if (std::fabs(frequency) >= 1.0e9)
+        std::snprintf(text, sizeof(text), "@ %.4g GHz", frequency * 1.0e-9);
+    else if (std::fabs(frequency) >= 1.0e6)
+        std::snprintf(text, sizeof(text), "@ %.4g MHz", frequency * 1.0e-6);
+    else if (std::fabs(frequency) >= 1.0e3)
+        std::snprintf(text, sizeof(text), "@ %.4g kHz", frequency * 1.0e-3);
+    else
+        std::snprintf(text, sizeof(text), "@ %.4g Hz", frequency);
+    return text;
 }
 
 bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDraft &b) {
@@ -105,7 +231,7 @@ void drawEvaluation(const ReceiverRequirementsState &state,
         return;
     }
     if (!state.config) {
-        rf_view_ui::hint("Not configured. Fill the limits above and choose Apply requirements.");
+        rf_view_ui::hint("Not configured. Fill the limits and choose Apply requirements.");
         return;
     }
     const ReceiverRequirementsConfig &config = *state.config;
@@ -115,10 +241,10 @@ void drawEvaluation(const ReceiverRequirementsState &state,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_NoSavedSettings)) {
-        ImGui::TableSetupColumn("Metric", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Metric", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupColumn("Limit", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Observed", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 140.0f);
         ImGui::TableHeadersRow();
         drawMetricRow(
             "Gain",
@@ -153,7 +279,7 @@ void drawEvaluation(const ReceiverRequirementsState &state,
         ImGui::EndTable();
     }
     if (config.output_power && !config.measurement_conditions.input_level_dBm)
-        rf_view_ui::hint("Output power is measured only with an input level set above.");
+        rf_view_ui::hint("Output power is measured only with an input level set in the form.");
     if (config.snr)
         rf_view_ui::hint("SNR is judged by the budget prediction; the measured view does not "
                          "measure it.");
@@ -222,12 +348,6 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
     for (const RfBudgetUnreachedOutput &unreached : budget->unreached)
         ImGui::TextColored(rf_view_ui::warnColor(), "%s: %s", unreached.output.c_str(),
                            unreached.reason.c_str());
-}
-
-// One numeric limit field, indented under its section heading.
-void drawNumberField(const char *label, std::array<char, 128> &buffer, float width) {
-    ImGui::SetNextItemWidth(width);
-    ImGui::InputText(label, buffer.data(), buffer.size());
 }
 } // namespace
 
@@ -342,6 +462,280 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     m_notice.clear();
 }
 
+void ReceiverRequirementsWidget::drawModeBar(ReceiverRequirementsSet &set, bool has_modes,
+                                             std::size_t selected_index, bool unapplied) {
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const auto button_width = [](const char *label) {
+        return ImGui::CalcTextSize(label).x + 2.0f * ImGui::GetStyle().FramePadding.x;
+    };
+    // A combo or text field draws its label after the frame, so a row must
+    // reserve the label too, not just the frame width.
+    const auto trailing_label = [](const char *label) {
+        return ImGui::CalcTextSize(label).x + ImGui::GetStyle().ItemInnerSpacing.x;
+    };
+
+    rf_view_ui::sectionHeader("Mode");
+    ImGui::BeginDisabled(unapplied);
+    // Row 1: the selector, then the destructive Remove at the end of the row
+    // behind the wider gap every destructive control keeps.
+    const float remove_width = button_width("Remove mode");
+    const float selector_label = trailing_label("Mode");
+    const float selector_row_width = ImGui::GetContentRegionAvail().x;
+    // A first frame of a small window can report less width than the 150 px
+    // floor, so compose the bound instead of std::clamp (which asserts when
+    // the upper bound falls below the lower one).
+    const float selector_width = std::min(
+        selector_row_width, std::max(150.0f, selector_row_width - selector_label - remove_width -
+                                                 3.0f * style.ItemSpacing.x));
+    const ImVec2 selector_pos = ImGui::GetCursorScreenPos();
+    const float content_right = selector_pos.x + selector_row_width;
+    const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
+    ImGui::SetNextItemWidth(selector_width);
+    if (ImGui::BeginCombo("Mode", preview)) {
+        for (std::size_t index = 0; index < set.modes.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
+            const bool selected = index == selected_index;
+            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
+            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
+                selectReceiverRequirementsMode(set, index))
+                resetDraft(set);
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    // The Remove button joins only while the space it needs remains beside the
+    // selector and its trailing label (the cursor has already moved below).
+    if (content_right - selector_pos.x - selector_width - selector_label >=
+        remove_width + 3.0f * style.ItemSpacing.x)
+        ImGui::SameLine(0.0f, 3.0f * style.ItemSpacing.x);
+    if (ui::dangerButton("Remove mode")) {
+        if (has_modes) {
+            m_remove_id = set.modes[selected_index].id;
+            ImGui::OpenPopup(kRemoveModeTitle);
+        } else {
+            m_mode_error = "Add a mode before removing.";
+        }
+    }
+    // Row 2: the name field carries the Add/Rename pair.
+    const float add_width = button_width("Add mode");
+    const float rename_width = button_width("Rename mode");
+    const float name_label = trailing_label("Mode name");
+    const ImVec2 name_pos = ImGui::GetCursorScreenPos();
+    const float name_row_width = ImGui::GetContentRegionAvail().x;
+    const float name_row_right = name_pos.x + name_row_width;
+    const float name_width =
+        std::min(name_row_width, std::max(150.0f, name_row_width - name_label - add_width -
+                                                      rename_width - 2.0f * style.ItemSpacing.x));
+    ImGui::SetNextItemWidth(name_width);
+    if (ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size()))
+        m_mode_error.clear();
+    // The Add button joins only beside the name field and its trailing label.
+    if (name_row_right - name_pos.x - name_width - name_label >= add_width + style.ItemSpacing.x)
+        ImGui::SameLine();
+    if (ImGui::Button("Add mode")) {
+        std::string error;
+        if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
+            resetDraft(set);
+            if (onChange)
+                onChange();
+        } else {
+            m_mode_error = std::move(error);
+        }
+    }
+    if (name_row_right - ImGui::GetItemRectMax().x >= rename_width + style.ItemSpacing.x)
+        ImGui::SameLine();
+    if (ImGui::Button("Rename mode")) {
+        if (!has_modes) {
+            m_mode_error = "Add a mode before renaming.";
+        } else {
+            std::string error;
+            if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
+                resetDraft(set);
+                if (onChange)
+                    onChange();
+            } else {
+                m_mode_error = std::move(error);
+            }
+        }
+    }
+    ImGui::EndDisabled();
+    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
+    // id when confirmed, so a set changed meanwhile never removes a different mode.
+    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
+        ImGui::Text("Remove mode \"%s\" and its requirement limits?",
+                    pending ? pending->name.c_str() : "");
+        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
+            ImGui::CloseCurrentPopup();
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Remove", ImVec2(120.0f, 0.0f))) {
+            for (std::size_t index = 0; index < set.modes.size(); ++index) {
+                if (set.modes[index].id == m_remove_id &&
+                    removeReceiverRequirementsMode(set, index)) {
+                    resetDraft(set);
+                    if (onChange)
+                        onChange();
+                    break;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    // The status line always occupies exactly one wrapped line, so an appearing
+    // hint or error never shifts the limit fields under the mouse or a scripted
+    // click beyond the one line it may already wrap to.
+    if (!m_mode_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_mode_error.c_str());
+        ImGui::PopStyleColor();
+    } else if (!m_notice.empty()) {
+        ImGui::TextDisabled("%s", m_notice.c_str());
+    } else if (unapplied) {
+        ImGui::TextDisabled("Apply or cancel edits to change modes");
+    } else if (has_modes) {
+        ImGui::TextDisabled("Add mode uses the name in Mode name.");
+    } else {
+        rf_view_ui::hint(kNoModesHint);
+    }
+}
+
+void ReceiverRequirementsWidget::drawLimitsForm() {
+    // The band leads: every other limit, and each out-of-band point, is
+    // measured against it.
+    FlowRow band;
+    band.field(kLabels[0], m_buffers[0], kFieldWidth);
+    band.field(kLabels[1], m_buffers[1], kFieldWidth);
+
+    // Each optional metric is one row: the enable checkbox leads and names it,
+    // its fields follow in the same flow.
+    FlowRow gain;
+    gain.checkbox("Enable gain", &m_gain_enabled);
+    ImGui::BeginDisabled(!m_gain_enabled);
+    gain.field(kLabels[2], m_buffers[2], kFieldWidth);
+    gain.field(kLabels[3], m_buffers[3], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow noise_figure;
+    noise_figure.checkbox("Enable noise figure", &m_nf_enabled);
+    ImGui::BeginDisabled(!m_nf_enabled);
+    noise_figure.field(kLabels[4], m_buffers[4], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow output_power;
+    output_power.checkbox("Enable output power", &m_output_power_enabled);
+    ImGui::BeginDisabled(!m_output_power_enabled);
+    output_power.field(kLabels[5], m_buffers[5], kFieldWidth);
+    output_power.field(kLabels[6], m_buffers[6], kFieldWidth);
+    ImGui::EndDisabled();
+    // The input level is a measurement condition, but it only gates output
+    // power, so it joins the limit it feeds and remains editable when the
+    // limit is off.
+    output_power.field(kLabels[12], m_buffers[12], kFieldWidth);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Output power is measured at this input level.");
+
+    FlowRow iip3;
+    iip3.checkbox("Enable IIP3", &m_iip3_enabled);
+    ImGui::BeginDisabled(!m_iip3_enabled);
+    iip3.field(kLabels[7], m_buffers[7], kFieldWidth);
+    iip3.note("Two-tone test");
+    iip3.field(kLabels[8], m_buffers[8], kFieldWidth);
+    iip3.field(kLabels[9], m_buffers[9], kFieldWidth);
+    iip3.field(kLabels[10], m_buffers[10], kFieldWidth);
+    iip3.field(kLabels[11], m_buffers[11], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow snr;
+    snr.checkbox("Enable SNR", &m_snr_enabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("SNR uses the input level set beside Output power.");
+    ImGui::BeginDisabled(!m_snr_enabled);
+    snr.field(kLabels[13], m_buffers[13], kFieldWidth);
+    snr.field(kLabels[14], m_buffers[14], kFieldWidth);
+    ImGui::EndDisabled();
+}
+
+void ReceiverRequirementsWidget::drawOobPoints() {
+    rf_view_ui::sectionHeader("Out-of-band suppression");
+    ImGui::BeginDisabled(m_oob_rows.size() >= kMaxReceiverOOBSuppressionPoints);
+    if (ImGui::Button("Add out-of-band point"))
+        m_oob_rows.push_back(OobRow{});
+    ImGui::EndDisabled();
+    // The rule a point encodes; kept off the standing layout so a narrow dock
+    // does not spend a line on it.
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Each point needs gain limits: the cascade gain at the anchor plus "
+                          "the offset must fall at least its Min below the in-band Gain min.");
+    char counter[16];
+    std::snprintf(counter, sizeof(counter), "%zu/%zu", m_oob_rows.size(),
+                  kMaxReceiverOOBSuppressionPoints);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", counter);
+    for (std::size_t row = 0; row < m_oob_rows.size(); ++row) {
+        ImGui::PushID(static_cast<int>(row));
+        OobRow &oob = m_oob_rows[row];
+        FlowRow line;
+        const char *anchors[] = {"Band start", "Band stop"};
+        line.combo("Anchor", &oob.anchor, anchors, 2, kAnchorComboWidth);
+        line.field("Offset (Hz)", oob.offset, kFieldWidth);
+        line.field("Min (dB)", oob.min, kMinFieldWidth);
+        line.note(oobRowFrequencyText(m_buffers[0], m_buffers[1], oob.anchor, oob.offset).c_str());
+        if (line.dangerEnd("Remove point")) {
+            m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
+            ImGui::PopID();
+            break;
+        }
+        ImGui::PopID();
+    }
+}
+
+void ReceiverRequirementsWidget::drawApplyBar(ReceiverRequirementsSet &set) {
+    const auto draft = makeDraft();
+    const bool pending_edits = !sameDraft(draft, m_baseline);
+    if (pending_edits) {
+        // The theme's hover/active shades make the primary action stand out while an edit is
+        // pending, without introducing a colour outside the design system.
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
+    }
+    if (ImGui::Button("Apply requirements")) {
+        std::string error;
+        if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
+            const bool changed = !(set == m_snapshot);
+            resetDraft(set);
+            if (changed && onChange)
+                onChange();
+        } else {
+            m_error = std::move(error);
+        }
+    }
+    if (pending_edits)
+        ImGui::PopStyleColor(3);
+    // Applying resets the draft, so the pending state is re-read: the stacked
+    // result table appears in the same frame the edit was accepted instead of
+    // one frame later.
+    const bool still_pending = !sameDraft(makeDraft(), m_baseline);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!still_pending && m_error.empty());
+    if (ImGui::Button("Cancel"))
+        resetDraft(set);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    rf_view_ui::reservedLine(still_pending ? "Unapplied edits" : "");
+    // The refusal sits under the row that produced it and wraps, so it never clips and never
+    // moves a control that is under the pointer.
+    if (!m_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_error.c_str());
+        ImGui::PopStyleColor();
+    }
+}
+
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
                                       const ReceiverRequirementsEvaluation &result,
                                       const RfBudgetEvaluation &budget) {
@@ -372,248 +766,56 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         has_modes && set.selected < set.modes.size() ? set.selected : 0;
     if (has_modes && set.selected != m_name_selected)
         fillModeName(set);
-    const bool unapplied = !sameDraft(makeDraft(), m_baseline);
+    bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
-    // --- Mode selection and naming -------------------------------------------------------------
-    rf_view_ui::sectionHeader("Mode");
-    ImGui::BeginDisabled(unapplied);
-    const char *preview = has_modes ? set.modes[selected_index].name.c_str() : "No modes";
-    ImGui::SetNextItemWidth(kNameWidth);
-    if (ImGui::BeginCombo("Mode", preview)) {
-        for (std::size_t index = 0; index < set.modes.size(); ++index) {
-            ImGui::PushID(static_cast<int>(index));
-            const bool selected = index == selected_index;
-            // Choosing a mode changes the view, not the project, so nothing is marked dirty.
-            if (ImGui::Selectable(set.modes[index].name.c_str(), selected) && !selected &&
-                selectReceiverRequirementsMode(set, index))
-                resetDraft(set);
-            if (selected)
-                ImGui::SetItemDefaultFocus();
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::SetNextItemWidth(kNameWidth);
-    if (ImGui::InputText("Mode name", m_mode_name.data(), m_mode_name.size()))
-        m_mode_error.clear();
-    ImGui::SameLine();
-    if (ImGui::Button("Add mode")) {
-        std::string error;
-        if (addReceiverRequirementsMode(set, m_mode_name.data(), error)) {
-            resetDraft(set);
-            if (onChange)
-                onChange();
-        } else {
-            m_mode_error = std::move(error);
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Rename mode")) {
-        if (!has_modes) {
-            m_mode_error = "Add a mode before renaming.";
-        } else {
-            std::string error;
-            if (renameReceiverRequirementsMode(set, set.selected, m_mode_name.data(), error)) {
-                resetDraft(set);
-                if (onChange)
-                    onChange();
-            } else {
-                m_mode_error = std::move(error);
-            }
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Remove mode")) {
-        if (has_modes) {
-            m_remove_id = set.modes[selected_index].id;
-            ImGui::OpenPopup(kRemoveModeTitle);
-        } else {
-            m_mode_error = "Add a mode before removing.";
-        }
-    }
-    ImGui::EndDisabled();
-    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
-    // id when confirmed, so a set changed meanwhile never removes a different mode.
-    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
-        ImGui::Text("Remove mode \"%s\" and its requirement limits?",
-                    pending ? pending->name.c_str() : "");
-        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
-            ImGui::CloseCurrentPopup();
-        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
-        if (ui::dangerButton("Remove", ImVec2(120.0f, 0.0f))) {
-            for (std::size_t index = 0; index < set.modes.size(); ++index) {
-                if (set.modes[index].id == m_remove_id &&
-                    removeReceiverRequirementsMode(set, index)) {
-                    resetDraft(set);
-                    if (onChange)
-                        onChange();
-                    break;
-                }
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-    // Both lines always occupy their space, so an appearing hint or error never
-    // shifts the limit fields under the mouse or a scripted click.
-    if (!m_mode_error.empty())
-        ImGui::TextColored(rf_view_ui::failColor(), "%s", m_mode_error.c_str());
-    else if (unapplied)
-        ImGui::TextDisabled("Apply or cancel edits to change modes");
-    else
-        ImGui::TextDisabled(has_modes ? "Add mode uses the name in Mode name." : kNoModesHint);
-    if (!m_notice.empty())
-        ImGui::TextDisabled("%s", m_notice.c_str());
-    else
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+    drawModeBar(set, has_modes, selected_index, unapplied);
 
     if (!has_modes) {
         ImGui::End();
         return;
     }
+    // Mode operations above may have reloaded the draft.
+    unapplied = !sameDraft(makeDraft(), m_baseline);
 
-    // --- Limits ---------------------------------------------------------------------------------
-    rf_view_ui::sectionHeader("Band");
-    ImGui::PushItemWidth(kFieldWidth);
-    ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
-    ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
-    ImGui::PopItemWidth();
-
-    rf_view_ui::sectionHeader("Gain");
-    ImGui::Checkbox("Enable gain", &m_gain_enabled);
-    ImGui::BeginDisabled(!m_gain_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[2], m_buffers[2], kFieldWidth);
-    drawNumberField(kLabels[3], m_buffers[3], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("Out-of-band suppression");
-    ImGui::TextDisabled("Each point needs gain limits: the cascade gain at the point must be");
-    ImGui::TextDisabled("at least its minimum below the gain minimum.");
-    for (std::size_t row = 0; row < m_oob_rows.size(); ++row) {
-        ImGui::PushID(static_cast<int>(row));
-        const char *anchors[] = {"Band start", "Band stop"};
-        ImGui::SetNextItemWidth(130.0f);
-        ImGui::Combo("Anchor", &m_oob_rows[row].anchor, anchors, 2);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(kFieldWidth);
-        ImGui::InputText("Offset (Hz)", m_oob_rows[row].offset.data(),
-                         m_oob_rows[row].offset.size());
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0f);
-        ImGui::InputText("Min (dB)", m_oob_rows[row].min.data(), m_oob_rows[row].min.size());
-        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
-        if (ui::dangerButton("Remove point")) {
-            m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));
-            ImGui::PopID();
-            break;
+    const ReceiverRequirementsState state = selectedReceiverRequirementsState(set);
+    const RfBudgetModeResult *budget_mode =
+        findRfBudgetModeResult(budget, set.modes[selected_index].id);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail >= kSideBySideWidth) {
+        // Wide docks: the form and the results share the row, so the verdict
+        // stays visible while the limits are being edited.
+        if (ImGui::BeginTable("requirements_panes", 2,
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
+            const float left =
+                std::min(avail * 0.6f, std::max(kLeftPaneMinWidth, avail - kResultsPaneWidth));
+            ImGui::TableSetupColumn("limits", ImGuiTableColumnFlags_WidthFixed, left);
+            ImGui::TableSetupColumn("results", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            drawLimitsForm();
+            ImGui::TableNextColumn();
+            if (unapplied)
+                rf_view_ui::hint("The measured result returns after Apply or Cancel.");
+            else {
+                drawEvaluation(state, result);
+                drawBudgetPrediction(budget, budget_mode);
+            }
+            ImGui::EndTable();
         }
-        ImGui::PopID();
-    }
-    ImGui::BeginDisabled(m_oob_rows.size() >= kMaxReceiverOOBSuppressionPoints);
-    if (ImGui::Button("Add out-of-band point"))
-        m_oob_rows.push_back(OobRow{});
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("Noise figure");
-    ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
-    ImGui::BeginDisabled(!m_nf_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[4], m_buffers[4], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("Output power");
-    ImGui::Checkbox("Enable output power", &m_output_power_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::BeginDisabled(!m_output_power_enabled);
-    drawNumberField(kLabels[5], m_buffers[5], kFieldWidth);
-    drawNumberField(kLabels[6], m_buffers[6], kFieldWidth);
-    ImGui::EndDisabled();
-    // The input level is a measurement condition, but it only gates output power, so it stays
-    // next to the limit it feeds and remains editable when the limit is off.
-    drawNumberField(kLabels[12], m_buffers[12], kFieldWidth);
-    if (m_output_power_enabled)
-        ImGui::TextDisabled("Output power is measured at this input level.");
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-
-    rf_view_ui::sectionHeader("IIP3");
-    ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
-    ImGui::BeginDisabled(!m_iip3_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[7], m_buffers[7], kFieldWidth);
-    ImGui::Spacing();
-    ImGui::TextDisabled("Two-tone test");
-    drawNumberField(kLabels[8], m_buffers[8], kFieldWidth);
-    drawNumberField(kLabels[9], m_buffers[9], kFieldWidth);
-    drawNumberField(kLabels[10], m_buffers[10], kFieldWidth);
-    drawNumberField(kLabels[11], m_buffers[11], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("SNR");
-    ImGui::Checkbox("Enable SNR", &m_snr_enabled);
-    ImGui::BeginDisabled(!m_snr_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[13], m_buffers[13], kFieldWidth);
-    drawNumberField(kLabels[14], m_buffers[14], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-    if (m_snr_enabled)
-        ImGui::TextDisabled("SNR uses the input level set under Output power.");
-
-    // --- Actions -------------------------------------------------------------------------------
-    rf_view_ui::sectionHeader("Apply");
-    const auto draft = makeDraft();
-    const bool pending_edits = !sameDraft(draft, m_baseline);
-    if (pending_edits) {
-        // The theme's hover/active shades make the primary action stand out while an edit is
-        // pending, without introducing a colour outside the design system.
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
-    }
-    if (ImGui::Button("Apply requirements")) {
-        std::string error;
-        if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
-            const bool changed = !(set == m_snapshot);
-            resetDraft(set);
-            if (changed && onChange)
-                onChange();
-        } else {
-            m_error = std::move(error);
+        // The out-of-band rows and the actions they feed span the full width.
+        drawOobPoints();
+        drawApplyBar(set);
+    } else {
+        drawLimitsForm();
+        drawOobPoints();
+        drawApplyBar(set);
+        // Applying resets the draft and commits the new config, so re-read
+        // both: the stacked result table appears with the just-applied limits
+        // in the same frame the edit was accepted instead of one frame later.
+        if (sameDraft(makeDraft(), m_baseline)) {
+            drawEvaluation(selectedReceiverRequirementsState(set), result);
+            drawBudgetPrediction(budget, budget_mode);
         }
     }
-    if (pending_edits)
-        ImGui::PopStyleColor(3);
-    // Applying resets the draft, so the pending state is re-read: the result table appears in the
-    // same frame the edit was accepted instead of one frame later.
-    const bool still_pending = !sameDraft(makeDraft(), m_baseline);
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!still_pending && m_error.empty());
-    if (ImGui::Button("Cancel"))
-        resetDraft(set);
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    rf_view_ui::reservedLine(still_pending ? "Unapplied edits" : "");
-    // The refusal sits under the row that produced it and wraps, so it never clips and never
-    // moves a control that is under the pointer.
-    if (!m_error.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
-        ImGui::TextWrapped("%s", m_error.c_str());
-        ImGui::PopStyleColor();
-    }
-
-    if (!still_pending)
-        drawEvaluation(selectedReceiverRequirementsState(set), result);
-
-    const RfBudgetModeResult *budget_mode = nullptr;
-    if (!still_pending && has_modes)
-        budget_mode = findRfBudgetModeResult(budget, set.modes[selected_index].id);
-    if (!still_pending)
-        drawBudgetPrediction(budget, budget_mode);
     ImGui::End();
 }

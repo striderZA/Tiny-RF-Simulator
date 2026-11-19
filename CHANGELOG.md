@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- **Compact Receiver Requirements view** — the panel's one-field-per-row stack becomes responsive flowing rows: each metric is one row led by its enable checkbox, fields join the line only while they fit (trailing labels included) and wrap otherwise, so nothing clips off the right edge of a narrow dock, and the mode selector and name field stretch to the dock instead of fixed widths. Out-of-band rows gain an n/16 counter, a computed absolute-frequency note per point, a small Remove point button, and the rule as a tooltip instead of two standing hint lines. Above 980 px of content width the limits form and the measured/budget results sit side by side (mirroring the RF Budget view's over-a-threshold arrangement), so the verdict stays visible while limits are edited; below that the view stacks and keeps the same-frame result after Apply. Control labels, the mode-control disabled scope, and all project-file and agent behavior are unchanged.
+
 ## [0.31.3] - 2026-11-19
 
 ### Added
