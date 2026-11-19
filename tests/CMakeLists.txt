@@ -87,6 +87,11 @@ add_standalone_test(test_attenuator
     LIBS simulator::attenuator_engine simulator::node_graph_engine
 )
 
+add_standalone_test(test_digital_step_attenuator
+    SOURCES test_digital_step_attenuator.cpp
+    LIBS simulator::digital_step_attenuator_engine simulator::node_graph_engine
+)
+
 add_standalone_test(test_combiner
     SOURCES test_combiner.cpp
     LIBS simulator::combiner_engine simulator::node_graph_engine
