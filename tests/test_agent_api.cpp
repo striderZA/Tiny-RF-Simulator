@@ -370,11 +370,20 @@ TEST_CASE("component_types lists every registered type with its ports", "[agent_
     REQUIRE_FALSE(result.is_error);
     CHECK(result.structured.at("epoch") == fixture.api.epoch());
     const auto &types = result.structured.at("types");
-    REQUIRE(types.size() == 13);
-    const std::vector<std::string> expected{"amplifier", "attenuator",     "splitter",
-                                            "filter",    "mixer",          "equalizer",
-                                            "combiner",  "rf_switch_spdt", "rf_switch_spdt_2to1",
-                                            "adc",       "generator",      "coax",
+    REQUIRE(types.size() == 14);
+    const std::vector<std::string> expected{"amplifier",
+                                            "attenuator",
+                                            "digital_step_attenuator",
+                                            "splitter",
+                                            "filter",
+                                            "mixer",
+                                            "equalizer",
+                                            "combiner",
+                                            "rf_switch_spdt",
+                                            "rf_switch_spdt_2to1",
+                                            "adc",
+                                            "generator",
+                                            "coax",
                                             "pfb"};
     for (std::size_t i = 0; i < expected.size(); ++i)
         CHECK(types[i].at("type") == expected[i]);

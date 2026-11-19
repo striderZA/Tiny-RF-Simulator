@@ -7,6 +7,7 @@
 #include "coax_cable_engine.h"
 #include "combiner_engine.h"
 #include "component_registry.h"
+#include "digital_step_attenuator_engine.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "mixer_engine.h"
@@ -183,6 +184,53 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
         return static_cast<IComponentEngine *>(&registry.add<AttenuatorEngine>(id, graph));
     };
     m_descriptors.push_back(att);
+
+    ComponentTypeDescriptor dsa;
+    dsa.type = "digital_step_attenuator";
+    dsa.project_type = "DigitalStepAttenuator";
+    dsa.display_name = "Digital Step Attenuator";
+    dsa.menu_label = "Add Digital Step Attenuator";
+    dsa.label_prefix = "Digital Step Attenuator";
+    dsa.kind = NodeKind::DigitalStepAttenuator;
+    dsa.authorable = true;
+    dsa.supports_sparam_file = false;
+    // Authoring fields mirror the Mini-Circuits ZX76-31R5A-PN+ datasheet
+    // defaults: 6 bits, 0.5 dB step, 1.4 dB typ insertion loss at zero code.
+    dsa.fields = {
+        {"bit_depth", "Bit Depth", "", FieldKind::Number, true, 1.0, 16.0, {}, 6, ""},
+        {"step_dB", "Step Size", "dB", FieldKind::Number, true, 0.0, 20.0, {}, 0.5, ""},
+        {"ref_loss_dB",
+         "Ref Insertion Loss",
+         "dB",
+         FieldKind::Number,
+         true,
+         0.0,
+         30.0,
+         {},
+         1.4,
+         ""},
+    };
+    dsa.state_fields = {
+        bounded(stateField("bit_depth", "Bit Depth", "", FieldKind::Number,
+                           "Sets the number of control bits; the code range is 0 to "
+                           "2^bit_depth - 1."),
+                1.0, 16.0),
+        bounded(stateField("step_dB", "Step Size", "dB", FieldKind::Number,
+                           "Sets the attenuation added per code step."),
+                0.0, 20.0),
+        bounded(stateField("ref_loss_dB", "Ref Insertion Loss", "dB", FieldKind::Number,
+                           "Sets the zero-code baseline insertion loss."),
+                0.0, 30.0),
+        bounded(stateField("code", "Digital Code", "", FieldKind::Number,
+                           "Selects the applied code; the valid range is 0 to 2^bit_depth - "
+                           "1."),
+                0.0, 65535.0),
+    };
+    dsa.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
+        return static_cast<IComponentEngine *>(
+            &registry.add<DigitalStepAttenuatorEngine>(id, graph));
+    };
+    m_descriptors.push_back(dsa);
 
     ComponentTypeDescriptor spl;
     spl.type = "splitter";

@@ -12,7 +12,7 @@ Click a part to insert it into the circuit at the canvas origin. The new node ta
 
 ## Built-in parts
 
-The repository ships 18 built-in definitions under `component_data/library` — amplifiers, attenuators, filters, splitters, mixers, equalizers, combiners, and ADCs, including one amplifier (`AM1143`) with a Touchstone file. The release archives do not include them: a fresh download lists only the parts you create and parts from extensions. To use the built-in parts, copy the `component_data` folder from a source checkout into the folder beside the executable, so `component_data/library` sits there, and click **Refresh**.
+The repository ships 19 built-in definitions under `component_data/library` — amplifiers, attenuators (including the 6-bit digital step attenuator `ZX76-31R5A-PN+`), filters, splitters, mixers, equalizers, combiners, and ADCs, including one amplifier (`AM1143`) with a Touchstone file. The release archives do not include them: a fresh download lists only the parts you create and parts from extensions. To use the built-in parts, copy the `component_data` folder from a source checkout into the folder beside the executable, so `component_data/library` sits there, and click **Refresh**.
 
 Built-in definitions have no **Edit** button; they cannot be changed in place.
 

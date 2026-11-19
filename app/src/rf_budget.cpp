@@ -130,7 +130,7 @@ const std::vector<RfBudgetStageType> &rfBudgetStageTypes() {
     static const std::vector<RfBudgetStageType> types = {
         {"amplifier", 1, 1},      {"attenuator", 1, 1},          {"filter", 1, 1},
         {"coax", 1, 1},           {"equalizer", 1, 1},           {"splitter", 1, 2},
-        {"rf_switch_spdt", 1, 2}, {"rf_switch_spdt_2to1", 2, 1},
+        {"rf_switch_spdt", 1, 2}, {"rf_switch_spdt_2to1", 2, 1}, {"digital_step_attenuator", 1, 1},
     };
     return types;
 }
