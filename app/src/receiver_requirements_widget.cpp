@@ -21,15 +21,21 @@ constexpr const char *kLabels[] = {
 
 constexpr const char *kRemoveModeTitle = "Remove mode?";
 constexpr float kFieldWidth = 110.0f;
-
-const char *const kNoModesHint =
-    "Type a name in Mode name, then choose Add mode to define the first mode.";
-
 constexpr float kAnchorComboWidth = 100.0f;
 constexpr float kMinFieldWidth = 80.0f;
 // A flowing row narrows a control to the widest that fits, down to this floor;
 // below it a dock too narrow for one field is pathological.
 constexpr float kMinFlowFrameWidth = 60.0f;
+// Above this content width the view splits into a form pane and a results pane,
+// the same side-by-side-over-a-threshold arrangement the RF Budget view uses for
+// its sweep plots. The results pane keeps this much width so the measured and
+// budget tables never clip.
+constexpr float kSideBySideWidth = 980.0f;
+constexpr float kResultsPaneWidth = 500.0f;
+constexpr float kLeftPaneMinWidth = 460.0f;
+
+const char *const kNoModesHint =
+    "Type a name in Mode name, then choose Add mode to define the first mode.";
 
 void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
@@ -225,7 +231,7 @@ void drawEvaluation(const ReceiverRequirementsState &state,
         return;
     }
     if (!state.config) {
-        rf_view_ui::hint("Not configured. Fill the limits above and choose Apply requirements.");
+        rf_view_ui::hint("Not configured. Fill the limits and choose Apply requirements.");
         return;
     }
     const ReceiverRequirementsConfig &config = *state.config;
@@ -235,10 +241,10 @@ void drawEvaluation(const ReceiverRequirementsState &state,
                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_NoSavedSettings)) {
-        ImGui::TableSetupColumn("Metric", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Metric", ImGuiTableColumnFlags_WidthFixed, 100.0f);
         ImGui::TableSetupColumn("Limit", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Observed", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 140.0f);
         ImGui::TableHeadersRow();
         drawMetricRow(
             "Gain",
@@ -273,7 +279,7 @@ void drawEvaluation(const ReceiverRequirementsState &state,
         ImGui::EndTable();
     }
     if (config.output_power && !config.measurement_conditions.input_level_dBm)
-        rf_view_ui::hint("Output power is measured only with an input level set above.");
+        rf_view_ui::hint("Output power is measured only with an input level set in the form.");
     if (config.snr)
         rf_view_ui::hint("SNR is judged by the budget prediction; the measured view does not "
                          "measure it.");
@@ -455,6 +461,7 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     m_mode_error.clear();
     m_notice.clear();
 }
+
 void ReceiverRequirementsWidget::drawModeBar(ReceiverRequirementsSet &set, bool has_modes,
                                              std::size_t selected_index, bool unapplied) {
     const ImGuiStyle &style = ImGui::GetStyle();
@@ -759,7 +766,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         has_modes && set.selected < set.modes.size() ? set.selected : 0;
     if (has_modes && set.selected != m_name_selected)
         fillModeName(set);
-    const bool unapplied = !sameDraft(makeDraft(), m_baseline);
+    bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
     drawModeBar(set, has_modes, selected_index, unapplied);
 
@@ -767,28 +774,48 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         ImGui::End();
         return;
     }
+    // Mode operations above may have reloaded the draft.
+    unapplied = !sameDraft(makeDraft(), m_baseline);
 
-    if (!has_modes) {
-        ImGui::End();
-        return;
+    const ReceiverRequirementsState state = selectedReceiverRequirementsState(set);
+    const RfBudgetModeResult *budget_mode =
+        findRfBudgetModeResult(budget, set.modes[selected_index].id);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail >= kSideBySideWidth) {
+        // Wide docks: the form and the results share the row, so the verdict
+        // stays visible while the limits are being edited.
+        if (ImGui::BeginTable("requirements_panes", 2,
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
+            const float left =
+                std::min(avail * 0.6f, std::max(kLeftPaneMinWidth, avail - kResultsPaneWidth));
+            ImGui::TableSetupColumn("limits", ImGuiTableColumnFlags_WidthFixed, left);
+            ImGui::TableSetupColumn("results", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            drawLimitsForm();
+            ImGui::TableNextColumn();
+            if (unapplied)
+                rf_view_ui::hint("The measured result returns after Apply or Cancel.");
+            else {
+                drawEvaluation(state, result);
+                drawBudgetPrediction(budget, budget_mode);
+            }
+            ImGui::EndTable();
+        }
+        // The out-of-band rows and the actions they feed span the full width.
+        drawOobPoints();
+        drawApplyBar(set);
+    } else {
+        drawLimitsForm();
+        drawOobPoints();
+        drawApplyBar(set);
+        // Applying resets the draft and commits the new config, so re-read
+        // both: the stacked result table appears with the just-applied limits
+        // in the same frame the edit was accepted instead of one frame later.
+        if (sameDraft(makeDraft(), m_baseline)) {
+            drawEvaluation(selectedReceiverRequirementsState(set), result);
+            drawBudgetPrediction(budget, budget_mode);
+        }
     }
-
-    drawLimitsForm();
-
-    drawOobPoints();
-
-    drawApplyBar(set);
-    // Applying resets the draft, so the pending state is re-read: the
-    // result table appears in the same frame the edit was accepted.
-    const bool still_pending = !sameDraft(makeDraft(), m_baseline);
-
-    if (!still_pending)
-        drawEvaluation(selectedReceiverRequirementsState(set), result);
-
-    const RfBudgetModeResult *budget_mode = nullptr;
-    if (!still_pending && has_modes)
-        budget_mode = findRfBudgetModeResult(budget, set.modes[selected_index].id);
-    if (!still_pending)
-        drawBudgetPrediction(budget, budget_mode);
     ImGui::End();
 }
