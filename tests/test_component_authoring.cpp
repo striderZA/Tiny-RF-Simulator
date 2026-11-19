@@ -34,16 +34,26 @@
 
 // --- Task 1: ComponentTypeRegistry ---
 
-TEST_CASE("ComponentTypeRegistry covers all 13 existing types", "[type_registry]") {
+TEST_CASE("ComponentTypeRegistry covers all 14 existing types", "[type_registry]") {
     auto all = ComponentTypeRegistry::instance().all();
     std::vector<std::string> types;
     for (auto *d : all)
         types.push_back(d->type);
     std::sort(types.begin(), types.end());
-    std::vector<std::string> expected = {
-        "adc",     "amplifier", "attenuator", "coax", "combiner",       "equalizer",
-        "filter",  "generator", "mixer",      "pfb",  "rf_switch_spdt", "rf_switch_spdt_2to1",
-        "splitter"};
+    std::vector<std::string> expected = {"adc",
+                                         "amplifier",
+                                         "attenuator",
+                                         "coax",
+                                         "combiner",
+                                         "digital_step_attenuator",
+                                         "equalizer",
+                                         "filter",
+                                         "generator",
+                                         "mixer",
+                                         "pfb",
+                                         "rf_switch_spdt",
+                                         "rf_switch_spdt_2to1",
+                                         "splitter"};
     REQUIRE(types == expected);
 }
 

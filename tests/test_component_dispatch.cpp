@@ -57,7 +57,7 @@ TEST_CASE_METHOD(ImGuiFixture, "Every registry label_prefix maps to its kind", "
     REQUIRE(app.testGraphWidget().kindForLabel("UnknownThing 1") == NodeKind::Unknown);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "All 13 registry types round-trip through project save/load",
+TEST_CASE_METHOD(ImGuiFixture, "All 14 registry types round-trip through project save/load",
                  "[dispatch]") {
     const auto path = (std::filesystem::temp_directory_path() /
                        ("test_dispatch_all_types_" + test_temp_paths::processTag() + ".rfsim"))
@@ -68,13 +68,13 @@ TEST_CASE_METHOD(ImGuiFixture, "All 13 registry types round-trip through project
         app.newProject();
         for (const auto &addable : app.testGraphWidget().addableComponents())
             addable.on_add(ImVec2(0, 0));
-        REQUIRE(app.componentCount() == 13);
+        REQUIRE(app.componentCount() == 14);
         app.saveProject(path);
     }
     {
         RfSimulatorApp app;
         app.loadProject(path);
-        REQUIRE(app.componentCount() == 13);
+        REQUIRE(app.componentCount() == 14);
     }
     std::filesystem::remove(path);
 }
@@ -148,6 +148,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         {"combiner", NodeKind::Combiner},
         {"rf_switch_spdt", NodeKind::RFSwitchSPDT},
         {"rf_switch_spdt_2to1", NodeKind::RFSwitchSPDT2to1},
+        {"digital_step_attenuator", NodeKind::DigitalStepAttenuator},
     };
     // supports_sparam_file must be true exactly for the engines that
     // implement the Touchstone S-param API (verified against
@@ -167,6 +168,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         {"splitter", false},
         {"rf_switch_spdt", false},
         {"rf_switch_spdt_2to1", false},
+        {"digital_step_attenuator", false},
     };
 
     for (const auto *d : ComponentTypeRegistry::instance().all()) {
@@ -225,4 +227,9 @@ TEST_CASE_METHOD(ImGuiFixture, "kindForLabel separates the 1:2 and 2:1 SPDT pref
 
 TEST_CASE("SPDT 2:1 switch has its own theme colour", "[dispatch]") {
     REQUIRE(themeColor(NodeKind::RFSwitchSPDT2to1) != themeColor(NodeKind::Unknown));
+}
+
+TEST_CASE("Digital step attenuator has its own theme colour", "[dispatch]") {
+    REQUIRE(themeColor(NodeKind::DigitalStepAttenuator) != themeColor(NodeKind::Unknown));
+    REQUIRE(themeColor(NodeKind::DigitalStepAttenuator) != themeColor(NodeKind::Attenuator));
 }

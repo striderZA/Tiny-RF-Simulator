@@ -19,6 +19,7 @@ class SignalGeneratorEngine;
 class SplitterEngine;
 class IdealFilterEngine;
 class AttenuatorEngine;
+class DigitalStepAttenuatorEngine;
 class CombinerEngine;
 class PFBChannelizerEngine;
 class RFSwitch2to1Engine;
@@ -98,6 +99,7 @@ class InspectorPanel {
     void drawPFBProperties(PFBChannelizerEngine &engine);
     void drawIdealFilterProperties(IdealFilterEngine &engine, int index);
     void drawAttenuatorProperties(AttenuatorEngine &engine, int index);
+    void drawDigitalStepAttenuatorProperties(DigitalStepAttenuatorEngine &engine, int index);
     void drawCombinerProperties(CombinerEngine &engine, int index);
     void drawRFSwitchProperties(RFSwitchEngine &engine, int index);
     void drawRFSwitch2to1Properties(RFSwitch2to1Engine &engine, int index);
