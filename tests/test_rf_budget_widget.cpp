@@ -15,9 +15,9 @@
 #include "rf_budget_widget.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstddef>
 #include <functional>
-#include <string>
 
 namespace {
 
@@ -73,6 +73,19 @@ void drawBudgetFrame(RfBudgetWidget &widget, RfBudget &budget, ImVec2 size,
     ImGui::Render();
 }
 
+// One headless frame with a caller-built requirements set and evaluation, for
+// the cascade section's selector layout.
+void drawBudgetFrame(RfBudgetWidget &widget, RfBudget &budget,
+                     const ReceiverRequirementsSet &requirements,
+                     const RfBudgetEvaluation &evaluation, ImVec2 size) {
+    ComponentLibrary library;
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    widget.draw("RF Budget", nullptr, budget, requirements, library, evaluation);
+    ImGui::Render();
+}
+
 ImVec2 rectCenter(const float rect[4]) {
     return ImVec2((rect[0] + rect[2]) * 0.5f, (rect[1] + rect[3]) * 0.5f);
 }
@@ -93,6 +106,54 @@ void clickRect(RfBudgetWidget &widget, RfBudget &budget, ImVec2 size, const floa
 }
 
 } // namespace
+
+TEST_CASE_METHOD(ImGuiFixture, "RF Budget cascade selectors share a line only when they fit",
+                 "[rf_budget][widget]") {
+    RfBudget budget = wiredBudget();
+
+    ReceiverRequirementsSet requirements;
+    ReceiverRequirementsConfig config;
+    config.band_start_Hz = 30.0e6;
+    config.band_stop_Hz = 70.0e6;
+    requirements.modes.push_back({"HF receive", config, 1});
+    requirements.next_mode_id = 2;
+
+    RfBudgetStageResult stage;
+    stage.stage = "Preamp";
+    RfBudgetCascade cascade;
+    cascade.output = "OUT1";
+    cascade.frequencies_Hz = {30.0e6, 50.0e6, 70.0e6};
+    cascade.stages.push_back(stage);
+    RfBudgetModeResult mode;
+    mode.mode_id = 1;
+    mode.mode_name = "HF receive";
+    mode.status = RfBudgetModeStatus::Budgeted;
+    mode.cascades.push_back(cascade);
+    RfBudgetEvaluation evaluation;
+    evaluation.modes.push_back(mode);
+
+    RfBudgetWidget widget;
+    // A wide dock: the output selector rides the mode selector's line.
+    const ImVec2 wide(900.0f, 760.0f);
+    drawBudgetFrame(widget, budget, requirements, evaluation, wide);
+    drawBudgetFrame(widget, budget, requirements, evaluation, wide);
+    const RfBudgetWidget::ItemRects &wide_rects = widget.lastItemRects();
+    REQUIRE_FALSE(rectIsEmpty(wide_rects.cascade_mode_combo));
+    REQUIRE_FALSE(rectIsEmpty(wide_rects.cascade_output_combo));
+    REQUIRE(wide_rects.cascade_output_combo[0] > wide_rects.cascade_mode_combo[0]);
+    REQUIRE(std::abs(wide_rects.cascade_output_combo[1] - wide_rects.cascade_mode_combo[1]) < 0.5f);
+
+    // A narrow dock (a 420 px window at x = 20): the output selector wraps to
+    // its own row and stays inside the window instead of overflowing the line
+    // and growing a window scrollbar.
+    const ImVec2 narrow(420.0f, 760.0f);
+    drawBudgetFrame(widget, budget, requirements, evaluation, narrow);
+    drawBudgetFrame(widget, budget, requirements, evaluation, narrow);
+    const RfBudgetWidget::ItemRects &narrow_rects = widget.lastItemRects();
+    REQUIRE_FALSE(rectIsEmpty(narrow_rects.cascade_output_combo));
+    REQUIRE(narrow_rects.cascade_output_combo[1] > narrow_rects.cascade_mode_combo[1]);
+    REQUIRE(narrow_rects.cascade_output_combo[2] < 20.0f + narrow.x);
+}
 
 TEST_CASE_METHOD(ImGuiFixture, "RF Budget stages read left to right as a signal chain",
                  "[rf_budget][widget]") {

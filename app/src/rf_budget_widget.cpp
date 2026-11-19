@@ -30,6 +30,10 @@ constexpr float kInputBlockWidth = 120.0f;
 constexpr float kStageBlockWidth = 240.0f;
 constexpr float kOutputBlockWidth = 240.0f;
 constexpr float kSourceComboWidth = 74.0f;
+// The cascade section's two selector combos; they share a line only when both
+// fit beside each other in the dock.
+constexpr float kCascadeModeComboWidth = 240.0f;
+constexpr float kCascadeOutputComboWidth = 200.0f;
 
 const RfBudgetStageType *stageTypeInfo(std::string_view type) {
     for (const auto &entry : rfBudgetStageTypes()) {
@@ -191,6 +195,10 @@ std::string elidedText(const std::string &text, float max_width) {
         return text;
     std::string out = text;
     while (!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+        out.pop_back();
+    // Back up past UTF-8 continuation bytes, so the elided name never ends
+    // inside a multi-byte sequence.
+    while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
         out.pop_back();
     return out.empty() ? "..." : out + "...";
 }
@@ -887,8 +895,13 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         rf_view_ui::hint("No requirement modes.");
         return;
     }
-    m_cascade_mode = std::min(m_cascade_mode, requirements.modes.size() - 1);
-    ImGui::SetNextItemWidth(240.0f);
+    // Both cascade selectors share one line only when they fit: a narrower
+    // dock wraps the output selector onto its own row instead of overflowing
+    // the line and growing a window scrollbar over the chain's strip.
+    const bool selectors_one_line =
+        ImGui::GetContentRegionAvail().x >=
+        kCascadeModeComboWidth + kCascadeOutputComboWidth + ImGui::GetStyle().ItemSpacing.x;
+    ImGui::SetNextItemWidth(kCascadeModeComboWidth);
     const std::string cascade_preview = modeLabel(requirements, budget, m_cascade_mode);
     if (ImGui::BeginCombo("Mode##cascade_mode", cascade_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
@@ -904,6 +917,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         }
         ImGui::EndCombo();
     }
+    recordRect(m_item_rects.cascade_mode_combo);
 
     const RfBudgetModeResult *mode =
         findRfBudgetModeResult(evaluation, requirements.modes[m_cascade_mode].id);
@@ -930,10 +944,10 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     if (mode->cascades.empty())
         return;
     m_cascade_output = std::min(m_cascade_output, mode->cascades.size() - 1);
-    // On the mode's line, or beside the last unreached-output note: one row for
-    // both cascade selectors.
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(200.0f);
+    // One row for both cascade selectors when they fit; its own row otherwise.
+    if (selectors_one_line)
+        ImGui::SameLine();
+    ImGui::SetNextItemWidth(kCascadeOutputComboWidth);
     if (ImGui::BeginCombo("Output##cascade_output",
                           mode->cascades[m_cascade_output].output.c_str())) {
         for (std::size_t index = 0; index < mode->cascades.size(); ++index) {
@@ -945,6 +959,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         }
         ImGui::EndCombo();
     }
+    recordRect(m_item_rects.cascade_output_combo);
 
     const RfBudgetCascade &cascade = mode->cascades[m_cascade_output];
     const std::size_t count = cascade.frequencies_Hz.size();

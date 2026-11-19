@@ -51,6 +51,8 @@ class RfBudgetWidget {
         float input_block[4] = {};
         float outputs_block[4] = {};
         float chain_scroll_max_x = 0.0f;
+        float cascade_mode_combo[4] = {};
+        float cascade_output_combo[4] = {};
         std::vector<StageRects> stages;
     };
     const ItemRects &lastItemRects() const { return m_item_rects; }
