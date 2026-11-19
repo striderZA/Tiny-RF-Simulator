@@ -554,6 +554,45 @@ void ReceiverRequirementsWidget::drawModeBar(ReceiverRequirementsSet &set, bool 
         }
     }
     ImGui::EndDisabled();
+    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
+    // id when confirmed, so a set changed meanwhile never removes a different mode.
+    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
+        ImGui::Text("Remove mode \"%s\" and its requirement limits?",
+                    pending ? pending->name.c_str() : "");
+        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
+            ImGui::CloseCurrentPopup();
+        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+        if (ui::dangerButton("Remove", ImVec2(120.0f, 0.0f))) {
+            for (std::size_t index = 0; index < set.modes.size(); ++index) {
+                if (set.modes[index].id == m_remove_id &&
+                    removeReceiverRequirementsMode(set, index)) {
+                    resetDraft(set);
+                    if (onChange)
+                        onChange();
+                    break;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+    // The status line always occupies exactly one wrapped line, so an appearing
+    // hint or error never shifts the limit fields under the mouse or a scripted
+    // click beyond the one line it may already wrap to.
+    if (!m_mode_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_mode_error.c_str());
+        ImGui::PopStyleColor();
+    } else if (!m_notice.empty()) {
+        ImGui::TextDisabled("%s", m_notice.c_str());
+    } else if (unapplied) {
+        ImGui::TextDisabled("Apply or cancel edits to change modes");
+    } else if (has_modes) {
+        ImGui::TextDisabled("Add mode uses the name in Mode name.");
+    } else {
+        rf_view_ui::hint(kNoModesHint);
+    }
 }
 
 void ReceiverRequirementsWidget::drawLimitsForm() {
@@ -723,41 +762,11 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     const bool unapplied = !sameDraft(makeDraft(), m_baseline);
 
     drawModeBar(set, has_modes, selected_index, unapplied);
-    // Removing a mode deletes its limits, so it waits for confirmation. The mode is matched by its
-    // id when confirmed, so a set changed meanwhile never removes a different mode.
-    if (ImGui::BeginPopupModal(kRemoveModeTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        const ReceiverRequirementsMode *pending = findReceiverRequirementsMode(set, m_remove_id);
-        ImGui::Text("Remove mode \"%s\" and its requirement limits?",
-                    pending ? pending->name.c_str() : "");
-        if (ImGui::Button("Keep mode", ImVec2(120.0f, 0.0f)))
-            ImGui::CloseCurrentPopup();
-        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
-        if (ui::dangerButton("Remove", ImVec2(120.0f, 0.0f))) {
-            for (std::size_t index = 0; index < set.modes.size(); ++index) {
-                if (set.modes[index].id == m_remove_id &&
-                    removeReceiverRequirementsMode(set, index)) {
-                    resetDraft(set);
-                    if (onChange)
-                        onChange();
-                    break;
-                }
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
+
+    if (!has_modes) {
+        ImGui::End();
+        return;
     }
-    // Both lines always occupy their space, so an appearing hint or error never
-    // shifts the limit fields under the mouse or a scripted click.
-    if (!m_mode_error.empty())
-        ImGui::TextColored(rf_view_ui::failColor(), "%s", m_mode_error.c_str());
-    else if (unapplied)
-        ImGui::TextDisabled("Apply or cancel edits to change modes");
-    else
-        ImGui::TextDisabled(has_modes ? "Add mode uses the name in Mode name." : kNoModesHint);
-    if (!m_notice.empty())
-        ImGui::TextDisabled("%s", m_notice.c_str());
-    else
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
 
     if (!has_modes) {
         ImGui::End();
