@@ -290,6 +290,12 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     void drawExtensionTrustPrompt();
+    // The utility docking group's host window ("Utility Space") with its own
+    // dockspace. Views in the utility family open docked there by default.
+    void drawUtilitySpace();
+    // Set once the never-placed utility views have been docked into the
+    // group; a view the user has already placed keeps its own settings.
+    bool m_utility_layout_seeded = false;
     // Trust state, identity details, and the Trust/Revoke control for a
     // project-local external tool record in the Extensions panel.
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
