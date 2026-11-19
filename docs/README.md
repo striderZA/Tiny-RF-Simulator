@@ -24,7 +24,7 @@ This documentation is for people who run the simulator. It covers the Windows an
 ## Receiver design
 
 - [Receiver Requirements](receiver-requirements.md) — define band, gain, noise-figure, output-power, and IIP3 limits per mode, and see pass, fail, or incomplete verdicts.
-- [RF Budget](rf-budget.md) — build a stage table and predict each mode's cascade before it is wired.
+- [RF Budget](rf-budget.md) — wire a horizontal signal chain and predict each mode's cascade before it is built.
 
 ## Parts and automation
 

@@ -22,8 +22,18 @@ namespace {
 
 constexpr const char *kRenameStageTitle = "Rename stage";
 constexpr const char *kRenameOutputTitle = "Rename output";
-constexpr const char *kFeedsTitle = "Stage feeds";
 constexpr const char *kParamsTitle = "Stage parameters";
+
+// Fixed signal-chain block widths. Fixed widths keep the left-to-right reading
+// stable at any dock width; the strip scrolls horizontally when they do not fit.
+constexpr float kInputBlockWidth = 120.0f;
+constexpr float kStageBlockWidth = 240.0f;
+constexpr float kOutputBlockWidth = 240.0f;
+constexpr float kSourceComboWidth = 74.0f;
+// The cascade section's two selector combos; they share a line only when both
+// fit beside each other in the dock.
+constexpr float kCascadeModeComboWidth = 240.0f;
+constexpr float kCascadeOutputComboWidth = 200.0f;
 
 const RfBudgetStageType *stageTypeInfo(std::string_view type) {
     for (const auto &entry : rfBudgetStageTypes()) {
@@ -155,6 +165,44 @@ int feedOptionIndex(const RfBudget &budget, std::size_t self_index,
     return 0;
 }
 
+// {x0, y0, x1, y1} of the last submitted item, for the recorded test rects.
+void recordRect(float out[4]) {
+    out[0] = ImGui::GetItemRectMin().x;
+    out[1] = ImGui::GetItemRectMin().y;
+    out[2] = ImGui::GetItemRectMax().x;
+    out[3] = ImGui::GetItemRectMax().y;
+}
+
+float rectMidY(const float rect[4]) { return (rect[1] + rect[3]) * 0.5f; }
+
+// The flow arrow between two blocks, drawn at the height of the block the
+// signal comes from. Non-interactive: it consumes one dummy item only.
+void drawFlowArrow(float y) {
+    const float x0 = ImGui::GetCursorScreenPos().x;
+    const float x1 = x0 + 14.0f;
+    ImDrawList *draw = ImGui::GetWindowDrawList();
+    const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text, 0.7f);
+    draw->AddLine(ImVec2(x0, y), ImVec2(x1 - 4.0f, y), color, 1.5f);
+    draw->AddTriangleFilled(ImVec2(x1 - 5.0f, y - 3.5f), ImVec2(x1 - 5.0f, y + 3.5f), ImVec2(x1, y),
+                            color);
+    ImGui::Dummy(ImVec2(14.0f, 1.0f));
+}
+
+// `text` clipped to `max_width` with a trailing "..."; the tooltip keeps the
+// full name readable.
+std::string elidedText(const std::string &text, float max_width) {
+    if (ImGui::CalcTextSize(text.c_str()).x <= max_width)
+        return text;
+    std::string out = text;
+    while (!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+        out.pop_back();
+    // Back up past UTF-8 continuation bytes, so the elided name never ends
+    // inside a multi-byte sequence.
+    while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80)
+        out.pop_back();
+    return out.empty() ? "..." : out + "...";
+}
+
 // One cascade cell. A NaN point is blank and carries a reason; an infinity is a real value
 // (no transmission, linear OIP3, infinite headroom) and carries its reason too.
 void drawSeriesCell(const RfBudgetSeries &series, std::size_t point,
@@ -279,10 +327,10 @@ void RfBudgetWidget::draw(const char *title, bool *p_open, RfBudget &budget,
     }
     m_last_requirements_selected = requirements.selected;
 
+    m_item_rects = ItemRects{}; // the last draw's rects only, for the headless tests
     drawToolbar(budget);
     drawStatus(budget, evaluation);
-    drawStages(budget, library);
-    drawOutputs(budget);
+    drawSignalChain(budget, library);
     drawOverrides(budget, requirements);
     drawCascade(budget, requirements, evaluation);
     drawModals(budget);
@@ -299,6 +347,7 @@ void RfBudgetWidget::drawToolbar(RfBudget &budget) {
             m_error = std::move(error);
         }
     }
+    recordRect(m_item_rects.add_stage);
     ImGui::SameLine();
     ImGui::BeginDisabled(budget.stages.empty());
     if (ImGui::Button("Add Output")) {
@@ -310,6 +359,7 @@ void RfBudgetWidget::drawToolbar(RfBudget &budget) {
             m_error = std::move(error);
         }
     }
+    recordRect(m_item_rects.add_output);
     ImGui::EndDisabled();
     ImGui::SameLine();
     if (ImGui::Button("Refresh")) {
@@ -374,38 +424,76 @@ void RfBudgetWidget::drawStatus(RfBudget &budget, const RfBudgetEvaluation &eval
                            evaluation.orphaned_mode_ids.size());
 }
 
-void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &library) {
-    rf_view_ui::sectionHeader("Stages");
+void RfBudgetWidget::drawSignalChain(RfBudget &budget, const ComponentLibrary &library) {
+    rf_view_ui::sectionHeader("Signal chain");
     if (budget.stages.empty()) {
-        rf_view_ui::hint("Add Stage appends an amplifier. Choose its type, source, and feeds "
-                         "here, and give it a name you recognize.");
+        rf_view_ui::hint("Add Stage appends an amplifier block. Give it a name you recognize, "
+                         "choose its type and source, and feed it from the budget input or "
+                         "another stage.");
         return;
     }
-    if (!ImGui::BeginTable("budget_stages", 6,
-                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
-                               ImGuiTableFlags_NoSavedSettings)) {
-        return;
-    }
-    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-    ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-    ImGui::TableSetupColumn("Part / Params", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Feeds", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-    ImGui::TableHeadersRow();
+    m_item_rects.stages.assign(budget.stages.size(), StageRects{});
 
+    // The chain reads left to right: input, stages in table order, outputs. The blocks keep
+    // fixed widths, so a dock narrower than the chain scrolls the strip horizontally instead
+    // of reflowing it; the signal-flow reading survives any dock width.
+    if (!ImGui::BeginChild("budget_chain", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f),
+                           ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::EndChild();
+        return;
+    }
+
+    // Budget input block: the comb source every feed can select.
+    float arrow_y = 0.0f;
+    if (ImGui::BeginChild("budget_chain_input", ImVec2(kInputBlockWidth, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
+        ImGui::TextUnformatted("Budget input");
+        ImGui::TextDisabled("comb at -30 dBm over the band");
+    }
+    ImGui::EndChild();
+    recordRect(m_item_rects.input_block);
+    arrow_y = rectMidY(m_item_rects.input_block);
+
+    bool removed = false;
     for (std::size_t index = 0; index < budget.stages.size(); ++index) {
-        RfBudgetStage &stage = budget.stages[index];
-        ImGui::PushID(static_cast<int>(index));
-        ImGui::TableNextRow();
+        ImGui::SameLine();
+        drawFlowArrow(arrow_y);
+        ImGui::SameLine();
+        if (drawStageBlock(budget, library, index)) {
+            removed = true;
+            break;
+        }
+        arrow_y = rectMidY(m_item_rects.stages[index].block);
+    }
 
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted(stage.name.c_str());
+    if (!removed) {
+        ImGui::SameLine();
+        drawFlowArrow(arrow_y);
+        ImGui::SameLine();
+    }
+    drawOutputsBlock(budget);
+
+    m_item_rects.chain_scroll_max_x = ImGui::GetScrollMaxX();
+    ImGui::EndChild();
+}
+
+bool RfBudgetWidget::drawStageBlock(RfBudget &budget, const ComponentLibrary &library,
+                                    std::size_t index) {
+    RfBudgetStage &stage = budget.stages[index];
+    StageRects &rects = m_item_rects.stages[index];
+    ImGui::PushID(static_cast<int>(index));
+
+    const std::string child_name = "budget_stage_" + std::to_string(index);
+    bool removed = false;
+    if (ImGui::BeginChild(child_name.c_str(), ImVec2(kStageBlockWidth, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
+        // Name, elided to the block; the tooltip carries the full name.
+        const std::string shown = elidedText(stage.name, ImGui::GetContentRegionAvail().x);
+        ImGui::TextUnformatted(shown.c_str());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", stage.name.c_str());
 
-        ImGui::TableNextColumn();
+        // Type.
         ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##type", stageTypeLabel(stage.type).c_str())) {
             for (const RfBudgetStageType &type : rfBudgetStageTypes()) {
@@ -417,11 +505,12 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
             }
             ImGui::EndCombo();
         }
+        recordRect(rects.type_combo);
 
-        ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(-FLT_MIN);
+        // Source, then the part picker (library) or the idealized params editor.
         const char *source_preview =
             stage.source == RfBudgetStageSource::Library ? "Library" : "Idealized";
+        ImGui::SetNextItemWidth(kSourceComboWidth);
         if (ImGui::BeginCombo("##source", source_preview)) {
             if (ImGui::Selectable("Idealized", stage.source == RfBudgetStageSource::Idealized)) {
                 if (stage.source != RfBudgetStageSource::Idealized) {
@@ -439,10 +528,10 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
             }
             ImGui::EndCombo();
         }
-
-        ImGui::TableNextColumn();
+        recordRect(rects.source_combo);
         if (stage.source == RfBudgetStageSource::Library) {
             const auto parts = library.byType(stage.type);
+            ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
             const char *part_preview =
                 stage.part_number.empty() ? "(choose part)" : stage.part_number.c_str();
@@ -458,132 +547,151 @@ void RfBudgetWidget::drawStages(RfBudget &budget, const ComponentLibrary &librar
                 }
                 ImGui::EndCombo();
             }
+            recordRect(rects.part_combo);
             if (parts.empty())
                 ImGui::TextDisabled("No %s parts in the library.",
                                     stageTypeLabel(stage.type).c_str());
-        } else if (ImGui::Button("Params...")) {
-            m_modal = Modal::StageParams;
-            m_modal_stage = index;
-            m_error.clear();
+        } else {
+            ImGui::SameLine();
+            if (ImGui::Button("Params...", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+                m_modal = Modal::StageParams;
+                m_modal_stage = index;
+                m_error.clear();
+            }
+            recordRect(rects.params_button);
         }
 
-        ImGui::TableNextColumn();
-        if (stage.inputs.empty()) {
-            ImGui::TextDisabled("no inputs");
-        }
+        // One feed combo per input port: unfed, the budget input, or another
+        // stage's output. The unfed preview is a warning, since an unfed stage
+        // never reaches the cascade.
         for (std::size_t port = 0; port < stage.inputs.size(); ++port) {
-            const std::optional<RfBudgetFeed> &feed = stage.inputs[port];
+            ImGui::PushID(static_cast<int>(port));
             ImGui::TextDisabled("in %zu", port);
             ImGui::SameLine();
+            const std::optional<RfBudgetFeed> &feed = stage.inputs[port];
+            std::string preview = "Unfed";
+            if (feed && !feed->stage)
+                preview = "Budget input";
+            else if (feed)
+                preview = *feed->stage + " out " + std::to_string(feed->port);
+            // The unfed preview is drawn as a warning; the color is popped right after the
+            // preview is drawn, so the popup's items keep the normal color and the style
+            // stack stays balanced whichever way the combo call went (the same
+            // push-around-BeginCombo pattern the imgui demo uses).
+            ImGui::PushStyleColor(ImGuiCol_Text, feed ? ImGui::GetStyleColorVec4(ImGuiCol_Text)
+                                                      : rf_view_ui::warnColor());
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            const bool feed_open = ImGui::BeginCombo("##feed", preview.c_str());
+            ImGui::PopStyleColor();
+            if (feed_open) {
+                const auto options = feedOptions(budget, index);
+                const int current = feedOptionIndex(budget, index, feed);
+                for (std::size_t option = 0; option < options.size(); ++option) {
+                    const bool selected = static_cast<int>(option) == current;
+                    if (ImGui::Selectable(options[option].c_str(), selected) && !selected) {
+                        stage.inputs[port] =
+                            feedFromOption(static_cast<int>(option), budget, index);
+                        markChanged();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            recordRect(rects.feed_combo[port < 2 ? port : 1]);
             if (!feed)
-                ImGui::TextColored(rf_view_ui::warnColor(), "unfed");
-            else if (!feed->stage)
-                ImGui::TextUnformatted("budget input");
-            else
-                ImGui::Text("%s out %d", feed->stage->c_str(), feed->port);
-        }
-        if (ImGui::SmallButton("Feeds...")) {
-            m_modal = Modal::StageFeeds;
-            m_modal_stage = index;
-            m_error.clear();
+                rects.feed_unfed[port < 2 ? port : 1] = true;
+            ImGui::PopID();
         }
 
-        ImGui::TableNextColumn();
         if (ImGui::SmallButton("Rename..."))
             openRenameStage(index, budget);
+        recordRect(rects.rename_button);
         ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
         if (ui::dangerSmallButton("Remove")) {
             if (removeRfBudgetStage(budget, index)) {
                 m_error.clear();
                 markChanged();
-                ImGui::PopID();
-                break;
+                removed = true;
             }
         }
-        ImGui::PopID();
+        recordRect(rects.remove_button);
     }
-    ImGui::EndTable();
+    ImGui::EndChild();
+    recordRect(rects.block);
+    ImGui::PopID();
+    return removed;
 }
 
-void RfBudgetWidget::drawOutputs(RfBudget &budget) {
-    rf_view_ui::sectionHeader("Outputs");
-    if (budget.outputs.empty()) {
-        rf_view_ui::hint("No outputs. An output names a stage port, and each reached output gets "
-                         "its own cascade and verdict.");
-        return;
-    }
-    if (!ImGui::BeginTable("budget_outputs", 4,
-                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                               ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
-                               ImGuiTableFlags_NoSavedSettings)) {
-        return;
-    }
-    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-    ImGui::TableSetupColumn("Stage", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Port", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-    ImGui::TableHeadersRow();
+void RfBudgetWidget::drawOutputsBlock(RfBudget &budget) {
+    // A block scrolled out of the visible strip is culled (BeginChild returns
+    // false); its rect is still recorded, so the chain layout stays readable
+    // from the recorded rects at any dock width.
+    if (ImGui::BeginChild("budget_chain_outputs", ImVec2(kOutputBlockWidth, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
+        ImGui::TextUnformatted("Outputs");
+        if (budget.outputs.empty()) {
+            rf_view_ui::hint("Add Output names a stage port the cascade ends at.");
+        }
+        for (std::size_t index = 0; index < budget.outputs.size(); ++index) {
+            RfBudgetOutput &output = budget.outputs[index];
+            ImGui::PushID(static_cast<int>(index));
+            if (index > 0)
+                ImGui::Spacing();
 
-    for (std::size_t index = 0; index < budget.outputs.size(); ++index) {
-        RfBudgetOutput &output = budget.outputs[index];
-        ImGui::PushID(static_cast<int>(index));
-        ImGui::TableNextRow();
+            const std::string shown = elidedText(output.name, ImGui::GetContentRegionAvail().x);
+            ImGui::TextUnformatted(shown.c_str());
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", output.name.c_str());
 
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted(output.name.c_str());
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s", output.name.c_str());
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            const char *stage_preview =
+                output.stage.empty() ? "(choose stage)" : output.stage.c_str();
+            if (ImGui::BeginCombo("##stage", stage_preview)) {
+                for (const RfBudgetStage &stage : budget.stages) {
+                    const bool selected = stage.name == output.stage;
+                    if (ImGui::Selectable(stage.name.c_str(), selected) && !selected) {
+                        output.stage = stage.name;
+                        markChanged();
+                    }
+                }
+                ImGui::EndCombo();
+            }
 
-        ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        const char *stage_preview = output.stage.empty() ? "(choose stage)" : output.stage.c_str();
-        if (ImGui::BeginCombo("##stage", stage_preview)) {
-            for (const RfBudgetStage &stage : budget.stages) {
-                const bool selected = stage.name == output.stage;
-                if (ImGui::Selectable(stage.name.c_str(), selected) && !selected) {
-                    output.stage = stage.name;
-                    markChanged();
+            const RfBudgetStage *stage = nullptr;
+            for (const RfBudgetStage &candidate : budget.stages) {
+                if (candidate.name == output.stage) {
+                    stage = &candidate;
+                    break;
                 }
             }
-            ImGui::EndCombo();
-        }
-
-        ImGui::TableNextColumn();
-        const RfBudgetStage *stage = nullptr;
-        for (const RfBudgetStage &candidate : budget.stages) {
-            if (candidate.name == output.stage) {
-                stage = &candidate;
-                break;
+            const RfBudgetStageType *info = stage ? stageTypeInfo(stage->type) : nullptr;
+            const int ports = info ? info->outputs : 0;
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::BeginCombo("##port", std::to_string(output.port).c_str())) {
+                for (int port = 0; port < ports; ++port) {
+                    const bool selected = port == output.port;
+                    if (ImGui::Selectable(std::to_string(port).c_str(), selected) && !selected) {
+                        output.port = port;
+                        markChanged();
+                    }
+                }
+                ImGui::EndCombo();
             }
-        }
-        const RfBudgetStageType *info = stage ? stageTypeInfo(stage->type) : nullptr;
-        const int ports = info ? info->outputs : 0;
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::BeginCombo("##port", std::to_string(output.port).c_str())) {
-            for (int port = 0; port < ports; ++port) {
-                const bool selected = port == output.port;
-                if (ImGui::Selectable(std::to_string(port).c_str(), selected) && !selected) {
-                    output.port = port;
+
+            if (ImGui::SmallButton("Rename..."))
+                openRenameOutput(index, budget);
+            ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
+            if (ui::dangerSmallButton("Remove")) {
+                if (removeRfBudgetOutput(budget, index)) {
                     markChanged();
+                    ImGui::PopID();
+                    break;
                 }
             }
-            ImGui::EndCombo();
+            ImGui::PopID();
         }
-
-        ImGui::TableNextColumn();
-        if (ImGui::SmallButton("Rename..."))
-            openRenameOutput(index, budget);
-        ImGui::SameLine(0.0f, 3.0f * ImGui::GetStyle().ItemSpacing.x);
-        if (ui::dangerSmallButton("Remove")) {
-            if (removeRfBudgetOutput(budget, index)) {
-                markChanged();
-                ImGui::PopID();
-                break;
-            }
-        }
-        ImGui::PopID();
     }
-    ImGui::EndTable();
+    ImGui::EndChild();
+    recordRect(m_item_rects.outputs_block);
 }
 
 void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsSet &requirements) {
@@ -615,6 +723,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
     bool clear_record = false;
     if (record) {
         rf_view_ui::tag("Budgeted", rf_view_ui::passColor(), true);
+        ImGui::SameLine();
         ImGui::BeginDisabled(!record->overrides.empty());
         if (ui::dangerButton("Clear budget record"))
             clear_record = true;
@@ -623,12 +732,13 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
             ImGui::SetTooltip("Remove the overrides first.");
     } else {
         rf_view_ui::tag("Not budgeted", rf_view_ui::warnColor(), true);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("A mode is budgeted only after it has a record.");
+        ImGui::SameLine();
         if (ImGui::Button("Budget this mode")) {
             record = &ensureRfBudgetModeRecord(budget, mode_id);
             markChanged();
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled("A mode is budgeted only after it has a record.");
     }
     if (clear_record) {
         eraseRfBudgetModeRecord(budget, mode_id);
@@ -717,7 +827,7 @@ void RfBudgetWidget::drawOverrides(RfBudget &budget, const ReceiverRequirementsS
         return;
     }
     m_override_stage = std::min(m_override_stage, budget.stages.size() - 1);
-    ImGui::TextDisabled("One setting of one stage, for this mode only");
+    // The add row: one setting of one stage, this mode only, all on one line.
     ImGui::SetNextItemWidth(180.0f);
     if (ImGui::BeginCombo("Stage##override_stage", budget.stages[m_override_stage].name.c_str())) {
         for (std::size_t index = 0; index < budget.stages.size(); ++index) {
@@ -785,8 +895,13 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         rf_view_ui::hint("No requirement modes.");
         return;
     }
-    m_cascade_mode = std::min(m_cascade_mode, requirements.modes.size() - 1);
-    ImGui::SetNextItemWidth(240.0f);
+    // Both cascade selectors share one line only when they fit: a narrower
+    // dock wraps the output selector onto its own row instead of overflowing
+    // the line and growing a window scrollbar over the chain's strip.
+    const bool selectors_one_line =
+        ImGui::GetContentRegionAvail().x >=
+        kCascadeModeComboWidth + kCascadeOutputComboWidth + ImGui::GetStyle().ItemSpacing.x;
+    ImGui::SetNextItemWidth(kCascadeModeComboWidth);
     const std::string cascade_preview = modeLabel(requirements, budget, m_cascade_mode);
     if (ImGui::BeginCombo("Mode##cascade_mode", cascade_preview.c_str())) {
         for (std::size_t index = 0; index < requirements.modes.size(); ++index) {
@@ -802,6 +917,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         }
         ImGui::EndCombo();
     }
+    recordRect(m_item_rects.cascade_mode_combo);
 
     const RfBudgetModeResult *mode =
         findRfBudgetModeResult(evaluation, requirements.modes[m_cascade_mode].id);
@@ -828,7 +944,10 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
     if (mode->cascades.empty())
         return;
     m_cascade_output = std::min(m_cascade_output, mode->cascades.size() - 1);
-    ImGui::SetNextItemWidth(200.0f);
+    // One row for both cascade selectors when they fit; its own row otherwise.
+    if (selectors_one_line)
+        ImGui::SameLine();
+    ImGui::SetNextItemWidth(kCascadeOutputComboWidth);
     if (ImGui::BeginCombo("Output##cascade_output",
                           mode->cascades[m_cascade_output].output.c_str())) {
         for (std::size_t index = 0; index < mode->cascades.size(); ++index) {
@@ -840,6 +959,7 @@ void RfBudgetWidget::drawCascade(const RfBudget &budget,
         }
         ImGui::EndCombo();
     }
+    recordRect(m_item_rects.cascade_output_combo);
 
     const RfBudgetCascade &cascade = mode->cascades[m_cascade_output];
     const std::size_t count = cascade.frequencies_Hz.size();
@@ -1125,46 +1245,6 @@ void RfBudgetWidget::drawModals(RfBudget &budget) {
                 m_modal = Modal::None;
                 m_error.clear();
                 ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
-        }
-    } else if (m_modal == Modal::StageFeeds) {
-        if (!ImGui::IsPopupOpen(kFeedsTitle))
-            ImGui::OpenPopup(kFeedsTitle);
-        if (ImGui::BeginPopupModal(kFeedsTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            if (m_modal_stage >= budget.stages.size()) {
-                m_modal = Modal::None;
-                ImGui::CloseCurrentPopup();
-            } else {
-                ImGui::TextUnformatted(budget.stages[m_modal_stage].name.c_str());
-                ImGui::TextDisabled("What drives each input port");
-                const auto options = feedOptions(budget, m_modal_stage);
-                for (std::size_t port = 0; port < budget.stages[m_modal_stage].inputs.size();
-                     ++port) {
-                    const int current = feedOptionIndex(budget, m_modal_stage,
-                                                        budget.stages[m_modal_stage].inputs[port]);
-                    ImGui::PushID(static_cast<int>(port));
-                    ImGui::TextDisabled("in %zu", port);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(260.0f);
-                    if (ImGui::BeginCombo("##feed",
-                                          options[static_cast<std::size_t>(current)].c_str())) {
-                        for (std::size_t option = 0; option < options.size(); ++option) {
-                            const bool selected = static_cast<int>(option) == current;
-                            if (ImGui::Selectable(options[option].c_str(), selected) && !selected) {
-                                budget.stages[m_modal_stage].inputs[port] =
-                                    feedFromOption(static_cast<int>(option), budget, m_modal_stage);
-                                markChanged();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                    ImGui::PopID();
-                }
-                if (ImGui::Button("Close", ImVec2(100.0f, 0.0f))) {
-                    m_modal = Modal::None;
-                    ImGui::CloseCurrentPopup();
-                }
             }
             ImGui::EndPopup();
         }

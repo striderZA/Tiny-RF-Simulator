@@ -647,6 +647,14 @@ add_standalone_test(test_rf_budget_cascade
     SOURCES test_rf_budget_cascade.cpp
     LIBS simulator::editor_services
 )
+# Standalone headless-frame coverage for the RF Budget view's signal-chain layout:
+# left-to-right stage blocks, the narrow-dock horizontal scroll fallback, and the
+# toolbar/stage interactions pressed at the widget's recorded item rects.
+# Kept outside tests.exe for the MinGW-w64 registration ceiling.
+add_standalone_test(test_rf_budget_widget
+    SOURCES test_rf_budget_widget.cpp
+    LIBS simulator::app
+)
 # Standalone real-engine coverage for the UI-free receiver measurement engine.
 add_standalone_test(test_receiver_performance_measurements
     SOURCES test_receiver_performance_measurements.cpp
