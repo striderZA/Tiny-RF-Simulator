@@ -14,8 +14,9 @@
 // click combo options: driving a popup's option rows headlessly means
 // computing ImGui-internal popup geometry, which is deliberately out of
 // scope here. Combo wiring is covered where it already lives: the model
-// helpers (feed/type/override mutations) in tests/test_rf_budget.cpp, and
-// real label-driven clicks (Add Stage, Add Output, Budget this mode,
+// helpers (feed/type/override mutations) in tests/test_rf_budget.cpp, the
+// agent-facing budget contract in tests/test_agent_budget.cpp, and real
+// label-driven clicks (Add Stage, Add Output, Budget this mode,
 // Add override) in test_engine/ui_tests.cpp, which runs as the test_ui
 // CTest target.
 #include "component_library.h"
