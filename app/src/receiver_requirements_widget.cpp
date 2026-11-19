@@ -646,6 +646,50 @@ void ReceiverRequirementsWidget::drawOobPoints() {
     }
 }
 
+void ReceiverRequirementsWidget::drawApplyBar(ReceiverRequirementsSet &set) {
+    const auto draft = makeDraft();
+    const bool pending_edits = !sameDraft(draft, m_baseline);
+    if (pending_edits) {
+        // The theme's hover/active shades make the primary action stand out while an edit is
+        // pending, without introducing a colour outside the design system.
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
+    }
+    if (ImGui::Button("Apply requirements")) {
+        std::string error;
+        if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
+            const bool changed = !(set == m_snapshot);
+            resetDraft(set);
+            if (changed && onChange)
+                onChange();
+        } else {
+            m_error = std::move(error);
+        }
+    }
+    if (pending_edits)
+        ImGui::PopStyleColor(3);
+    // Applying resets the draft, so the pending state is re-read: the stacked
+    // result table appears in the same frame the edit was accepted instead of
+    // one frame later.
+    const bool still_pending = !sameDraft(makeDraft(), m_baseline);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!still_pending && m_error.empty());
+    if (ImGui::Button("Cancel"))
+        resetDraft(set);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    rf_view_ui::reservedLine(still_pending ? "Unapplied edits" : "");
+    // The refusal sits under the row that produced it and wraps, so it never clips and never
+    // moves a control that is under the pointer.
+    if (!m_error.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
+        ImGui::TextWrapped("%s", m_error.c_str());
+        ImGui::PopStyleColor();
+    }
+}
+
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
                                       const ReceiverRequirementsEvaluation &result,
                                       const RfBudgetEvaluation &budget) {
@@ -724,48 +768,10 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
 
     drawOobPoints();
 
-    // --- Actions -------------------------------------------------------------------------------
-    rf_view_ui::sectionHeader("Apply");
-    const auto draft = makeDraft();
-    const bool pending_edits = !sameDraft(draft, m_baseline);
-    if (pending_edits) {
-        // The theme's hover/active shades make the primary action stand out while an edit is
-        // pending, without introducing a colour outside the design system.
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
-    }
-    if (ImGui::Button("Apply requirements")) {
-        std::string error;
-        if (applyReceiverRequirementsDraftToSelectedMode(set, draft, error)) {
-            const bool changed = !(set == m_snapshot);
-            resetDraft(set);
-            if (changed && onChange)
-                onChange();
-        } else {
-            m_error = std::move(error);
-        }
-    }
-    if (pending_edits)
-        ImGui::PopStyleColor(3);
-    // Applying resets the draft, so the pending state is re-read: the result table appears in the
-    // same frame the edit was accepted instead of one frame later.
+    drawApplyBar(set);
+    // Applying resets the draft, so the pending state is re-read: the
+    // result table appears in the same frame the edit was accepted.
     const bool still_pending = !sameDraft(makeDraft(), m_baseline);
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!still_pending && m_error.empty());
-    if (ImGui::Button("Cancel"))
-        resetDraft(set);
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    rf_view_ui::reservedLine(still_pending ? "Unapplied edits" : "");
-    // The refusal sits under the row that produced it and wraps, so it never clips and never
-    // moves a control that is under the pointer.
-    if (!m_error.empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, rf_view_ui::failColor());
-        ImGui::TextWrapped("%s", m_error.c_str());
-        ImGui::PopStyleColor();
-    }
 
     if (!still_pending)
         drawEvaluation(selectedReceiverRequirementsState(set), result);

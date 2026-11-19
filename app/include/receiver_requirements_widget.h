@@ -40,6 +40,7 @@ class ReceiverRequirementsWidget {
     // enable checkbox as the row leader.
     void drawLimitsForm();
     void drawOobPoints();
+    void drawApplyBar(ReceiverRequirementsSet &set);
     ReceiverRequirementsDraft m_baseline;
     std::array<std::array<char, 128>, 15> m_buffers{};
     std::array<char, 128> m_mode_name{};
