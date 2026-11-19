@@ -5,8 +5,10 @@
 #include <nlohmann/json.hpp>
 #include <numbers>
 
-AttenuatorEngine::AttenuatorEngine(int id, NodeGraphEngine &graph)
-    : ComponentEngineBase(id, graph, "Attenuator", 1, 1) {}
+// The label is the graph node title; derived classes pass their own so the
+// canvas resolves their NodeKind from the ComponentTypeRegistry prefix.
+AttenuatorEngine::AttenuatorEngine(int id, NodeGraphEngine &graph, std::string_view label)
+    : ComponentEngineBase(id, graph, label, 1, 1) {}
 
 int AttenuatorEngine::outputPinId(int index) const {
     if (!m_graph || m_graph_node_id < 0 || index != 0)

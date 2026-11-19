@@ -180,6 +180,30 @@ static void drawAttenuatorSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     drawLabel(dl, c, "ATT", color);
 }
 
+static void drawDigitalStepAttenuatorSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
+    // Attenuator zigzag with the diagonal "variable/adjustable" arrow of the
+    // schematic convention for a selectable (coded) attenuator, with "DSA" in
+    // the label slot.
+    const float x0 = c.x - 20.0f;
+    const float x1 = c.x + 20.0f;
+    const float amp = 5.0f;
+    dl->AddLine(ImVec2(c.x - kEdgeX, c.y), ImVec2(x0, c.y), color, kStroke);
+    dl->AddLine(ImVec2(x1, c.y), ImVec2(c.x + kEdgeX, c.y), color, kStroke);
+    dl->PathClear();
+    dl->PathLineTo(ImVec2(x0, c.y));
+    for (int i = 0; i < 4; ++i) {
+        float x = x0 + (x1 - x0) * (i + 0.5f) / 4.0f;
+        float yo = (i % 2 == 0) ? -amp : amp;
+        dl->PathLineTo(ImVec2(x, c.y + yo));
+    }
+    dl->PathLineTo(ImVec2(x1, c.y));
+    dl->PathStroke(color, 0, kStroke);
+    // Diagonal arrow, tip at upper right.
+    dl->AddLine(ImVec2(c.x - 13.0f, c.y + 9.0f), ImVec2(c.x + 13.0f, c.y - 9.0f), color, kStroke);
+    dl->AddLine(ImVec2(c.x + 13.0f, c.y - 9.0f), ImVec2(c.x + 6.0f, c.y - 9.0f), color, kStroke);
+    dl->AddLine(ImVec2(c.x + 13.0f, c.y - 9.0f), ImVec2(c.x + 13.0f, c.y - 2.5f), color, kStroke);
+    drawLabel(dl, c, "DSA", color);
+}
 static void drawPfbSymbol(ImDrawList *dl, ImVec2 c, ImU32 color) {
     // Three stacked channel filters, 40x24 px, with the input and output leads at the centre row.
     for (int i = 0; i < 3; ++i) {
@@ -264,6 +288,9 @@ void NodeGraphWidget::drawSchematicSymbol(ImDrawList *dl, ImVec2 center, NodeKin
         break;
     case NodeKind::Attenuator:
         drawAttenuatorSymbol(dl, center, color);
+        break;
+    case NodeKind::DigitalStepAttenuator:
+        drawDigitalStepAttenuatorSymbol(dl, center, color);
         break;
     case NodeKind::Combiner:
         drawCombinerSymbol(dl, center, color);

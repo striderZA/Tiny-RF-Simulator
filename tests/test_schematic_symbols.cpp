@@ -62,6 +62,7 @@ const std::vector<SymbolCase> &allSymbols() {
         {NodeKind::Combiner, false},
         {NodeKind::RFSwitchSPDT, false},
         {NodeKind::RFSwitchSPDT2to1, false},
+        {NodeKind::DigitalStepAttenuator, true},
         {NodeKind::GroupCollapsed, false},
         {NodeKind::Unknown, false},
     };

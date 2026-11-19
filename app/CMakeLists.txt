@@ -55,6 +55,7 @@ target_link_libraries(editor_services
         simulator::equalizer_engine
         simulator::ideal_filter_engine
         simulator::attenuator_engine
+        simulator::digital_step_attenuator_engine
         simulator::combiner_engine
         simulator::rf_switch_engine
         simulator::rf_switch_2to1_engine

@@ -49,6 +49,7 @@ Define binding rules for the Catch2 unit tests and ImGui Test Engine UI tests. T
 Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 
 - `ctest --test-dir build -R '^test_flow_boundary$' --output-on-failure`
+- `ctest --test-dir build -R '^test_digital_step_attenuator$' --output-on-failure` — step attenuator engine math (ref loss + code × step), kT(1−G) noise, bit-depth/code clamps, round-trip, and dirty-flag skip; the suite's dirty/clean `BENCHMARK` cases run only via `build/bin/test_digital_step_attenuator [bench]` (the ctest registration passes `--skip-benchmarks`).
 - `ctest --test-dir build -R '^test_issue174_parameter_keys$' --output-on-failure`
 - `ctest --test-dir build -R '^test_path_containment$' --output-on-failure` — project path containment and component-library asset checks.
 - `ctest --test-dir build -R '^test_external_project_data$' --output-on-failure` — external RF data save/reload, atomic failure, and MCP result.

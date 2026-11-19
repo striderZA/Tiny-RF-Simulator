@@ -5,6 +5,7 @@
 #include "app.h"
 #include "attenuator_engine.h"
 #include "coax_cable_engine.h"
+#include "digital_step_attenuator_engine.h"
 #include "ideal_filter_engine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -1640,6 +1641,40 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         auto *amp = dynamic_cast<AmplifierEngine *>(s_app->testComponents().find(node));
         IM_CHECK(amp != nullptr);
         IM_CHECK_EQ(amp->nf_dB(), 3.5);
+    };
+
+    // Digital step attenuator: place a fresh one, drive the code and bit-depth
+    // steppers through the Properties panel, and verify the engine state.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "inspector_digital_step_attenuator");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *placed =
+            s_app->testAddComponentAtPosition("digital_step_attenuator", ImVec2(420, 260));
+        IM_CHECK(placed != nullptr);
+        const int node = placed->graphNodeId();
+        NodeHelper::selectNode(ctx, *s_app, node);
+        InspectorHelper::waitForPopulated(ctx, node);
+
+        auto *dsa = dynamic_cast<DigitalStepAttenuatorEngine *>(s_app->testComponents().find(node));
+        IM_CHECK(dsa != nullptr);
+
+        // Code 21 at the 6-bit ZX76 default: 1.4 + 21 * 0.5 = 11.9 dB.
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Digital Code", "21");
+        ctx->Yield(2);
+        IM_CHECK_EQ(dsa->code(), 21);
+        IM_CHECK(std::fabs(dsa->totalAttenuation_dB() - 11.9) < 1e-9);
+
+        // Shrinking the bit depth re-clamps the stored code (21 -> 7).
+        ctx->SetRef("Properties");
+        ctx->ItemInputValue("Bit Depth", "3");
+        ctx->Yield(2);
+        IM_CHECK_EQ(dsa->bitDepth(), 3);
+        IM_CHECK_EQ(dsa->code(), 7);
+        // The Bit Depth input left the Properties ref set; re-root so the
+        // Node Editor resolves for the Delete key.
+        ctx->SetRef("");
+        ctx->WindowFocus("Node Editor");
+        NodeHelper::deleteSelectedNode(ctx);
     };
 
     // Issue #200: a library part gets a Part dropdown that swaps it in place. The seeded amplifier

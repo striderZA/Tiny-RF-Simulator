@@ -19,6 +19,7 @@
 #include "component_form_model.h"
 #include "component_library.h"
 #include "component_type_registry.h"
+#include "digital_step_attenuator_engine.h"
 #include "equalizer_engine.h"
 #include "graph_editor_actions.h"
 #include "ideal_filter_engine.h"
@@ -34,16 +35,26 @@
 
 // --- Task 1: ComponentTypeRegistry ---
 
-TEST_CASE("ComponentTypeRegistry covers all 13 existing types", "[type_registry]") {
+TEST_CASE("ComponentTypeRegistry covers all 14 existing types", "[type_registry]") {
     auto all = ComponentTypeRegistry::instance().all();
     std::vector<std::string> types;
     for (auto *d : all)
         types.push_back(d->type);
     std::sort(types.begin(), types.end());
-    std::vector<std::string> expected = {
-        "adc",     "amplifier", "attenuator", "coax", "combiner",       "equalizer",
-        "filter",  "generator", "mixer",      "pfb",  "rf_switch_spdt", "rf_switch_spdt_2to1",
-        "splitter"};
+    std::vector<std::string> expected = {"adc",
+                                         "amplifier",
+                                         "attenuator",
+                                         "coax",
+                                         "combiner",
+                                         "digital_step_attenuator",
+                                         "equalizer",
+                                         "filter",
+                                         "generator",
+                                         "mixer",
+                                         "pfb",
+                                         "rf_switch_spdt",
+                                         "rf_switch_spdt_2to1",
+                                         "splitter"};
     REQUIRE(types == expected);
 }
 
@@ -690,4 +701,54 @@ TEST_CASE("A cutoff the filter type hides is still saved and validated", "[form_
     model.setParameter("filter_type", "LPF");
     REQUIRE_FALSE(model.fieldLabel(*high).has_value());
     CHECK(flaggedFields(model.validate(lib)) == std::set<std::string>{"fc_high_Hz"});
+}
+
+// --- Digital step attenuator library part (Mini-Circuits ZX76-31R5A-PN+) ---
+
+TEST_CASE("Digital step attenuator definitions validate against the authoring fields",
+          "[library][digital_step_attenuator]") {
+    ComponentLibrary lib;
+
+    // The ZX76-31R5A-PN+ datasheet definition shape.
+    nlohmann::json zx76 = {{"bit_depth", 6}, {"step_dB", 0.5}, {"ref_loss_dB", 1.4}};
+    REQUIRE(lib.validate("digital_step_attenuator", zx76).empty());
+
+    // Missing bit depth is refused (the part's defining spec).
+    nlohmann::json missing_bits = {{"step_dB", 0.5}, {"ref_loss_dB", 1.4}};
+    auto issues = lib.validate("digital_step_attenuator", missing_bits);
+    REQUIRE_FALSE(issues.empty());
+    CHECK(issues.front().field == "bit_depth");
+
+    // Out-of-range step is refused.
+    nlohmann::json bad_step = {{"bit_depth", 6}, {"step_dB", 21.0}, {"ref_loss_dB", 1.4}};
+    issues = lib.validate("digital_step_attenuator", bad_step);
+    REQUIRE_FALSE(issues.empty());
+    CHECK(issues.front().field == "step_dB");
+}
+
+TEST_CASE("The built-in ZX76-31R5A-PN+ part loads and instantiates with datasheet values",
+          "[library][digital_step_attenuator]") {
+    const std::string path = std::string(PROJECT_SOURCE_DIR) +
+                             "/component_data/library/attenuators/mini-circuits/"
+                             "zx76-31r5a-pn.json";
+    ComponentLibrary lib;
+    lib.loadFile(path);
+    auto defs = lib.all();
+    REQUIRE(defs.size() == 1);
+    REQUIRE(defs[0]->part_number == "ZX76-31R5A-PN+");
+    REQUIRE(defs[0]->issues.empty());
+
+    CircuitRuntime runtime;
+    GraphEditorActions actions(runtime);
+    auto *engine = lib.instantiate(*defs[0], runtime, actions);
+    REQUIRE(engine != nullptr);
+    auto *dsa = dynamic_cast<DigitalStepAttenuatorEngine *>(engine);
+    REQUIRE(dsa != nullptr);
+    // Datasheet: 6-bit parallel control, 0.5 dB steps over 0-31.5 dB, 1.4 dB
+    // typ insertion loss at zero code (DC-1 GHz, 2.0 dB max).
+    CHECK(dsa->bitDepth() == 6);
+    CHECK(dsa->stepSize_dB() == Catch::Approx(0.5));
+    CHECK(dsa->refInsertionLoss_dB() == Catch::Approx(1.4));
+    CHECK(dsa->code() == 0);
+    CHECK(dsa->maxCode() == 63);
 }

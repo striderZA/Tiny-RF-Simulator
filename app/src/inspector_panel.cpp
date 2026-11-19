@@ -6,6 +6,7 @@
 #include "combiner_engine.h"
 #include "common.h"
 #include "component_library.h"
+#include "digital_step_attenuator_engine.h"
 #include "equalizer_engine.h"
 #include "ideal_filter_engine.h"
 #include "imgui.h"
@@ -79,6 +80,11 @@ const std::map<std::string_view, DrawerFn> &drawerMap() {
         {"attenuator",
          [](InspectorPanel &p, IComponentEngine &e) {
              p.drawAttenuatorProperties(static_cast<AttenuatorEngine &>(e), e.id());
+         }},
+        {"digital_step_attenuator",
+         [](InspectorPanel &p, IComponentEngine &e) {
+             p.drawDigitalStepAttenuatorProperties(static_cast<DigitalStepAttenuatorEngine &>(e),
+                                                   e.id());
          }},
         {"combiner",
          [](InspectorPanel &p, IComponentEngine &e) {
@@ -879,6 +885,43 @@ void InspectorPanel::drawAttenuatorProperties(AttenuatorEngine &engine, int inde
     }
 
     ImGui::Text("NF = %.2f dB", engine.attenuation());
+}
+
+void InspectorPanel::drawDigitalStepAttenuatorProperties(DigitalStepAttenuatorEngine &engine,
+                                                         int index) {
+    (void)index;
+
+    // Bit depth, step size, reference insertion loss, and the digital code
+    // are the four configurable values. Integer steppers suit the code: the
+    // bit depth is configurable, so per-bit toggles would be ZX76-specific.
+    int bits = engine.bitDepth();
+    if (ImGui::InputInt("Bit Depth", &bits, 1, 1)) {
+        engine.setBitDepth(bits);
+        m_param_edited = true;
+    }
+
+    double step = engine.stepSize_dB();
+    if (utils::inputDouble("Step Size (dB)", step, 0.1, 0.25, "%.2f", 0.0,
+                           DigitalStepAttenuatorEngine::MAX_STEP_DB)) {
+        engine.setStepSize(step);
+        m_param_edited = true;
+    }
+
+    double ref_loss = engine.refInsertionLoss_dB();
+    if (utils::inputDouble("Ref Insertion Loss (dB)", ref_loss, 0.1, 0.5, "%.2f", 0.0,
+                           DigitalStepAttenuatorEngine::MAX_REF_LOSS_DB)) {
+        engine.setRefInsertionLoss(ref_loss);
+        m_param_edited = true;
+    }
+
+    int code = engine.code();
+    if (ImGui::InputInt("Digital Code", &code, 1, 8)) {
+        engine.setCode(code);
+        m_param_edited = true;
+    }
+
+    ImGui::Text("Atten: %.2f dB (code %d/%d)", engine.totalAttenuation_dB(), engine.code(),
+                engine.maxCode());
 }
 
 void InspectorPanel::drawCombinerProperties(CombinerEngine &engine, int index) {

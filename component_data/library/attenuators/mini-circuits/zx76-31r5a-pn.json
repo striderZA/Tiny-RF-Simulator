@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "digital_step_attenuator",
+  "part_number": "ZX76-31R5A-PN+",
+  "manufacturer": "Mini-Circuits",
+  "description": "50-ohm 6-bit digital step attenuator, 0 to 31.5 dB in 0.5 dB steps, DC to 4.0 GHz, parallel control interface",
+  "parameters": {
+    "bit_depth": 6,
+    "step_dB": 0.5,
+    "ref_loss_dB": 1.4
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 4e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Mini-Circuits ZX76-31R5A-PN+ datasheet (DC-4000 MHz, TAMB=25C, VDD=+3V, VSS=-3.3V): insertion loss at all bits set to 0 dB is 1.4 dB typ / 2.0 dB max DC-1 GHz, 1.9 dB typ / 2.7 dB max 1-2.4 GHz, and 2.5 dB typ / 3.3 dB max 2.4-4 GHz; the 1.4 dB typical DC-1 GHz value is the modeled zero-code reference loss. Attenuation is selectable 0 to 31.5 dB in 0.5 dB steps through the 6-bit parallel control interface; input IP3 is +52 dBm typ."
+}
