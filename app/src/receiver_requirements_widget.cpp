@@ -4,6 +4,7 @@
 #include "rf_view_ui.h"
 #include "ui_theme.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <limits>
 #include <string>
@@ -23,11 +24,102 @@ constexpr float kNameWidth = 260.0f;
 const char *const kNoModesHint =
     "Type a name in Mode name, then choose Add mode to define the first mode.";
 
+// A flowing row narrows a control to the widest that fits, down to this floor;
+// below it a dock too narrow for one field is pathological.
+constexpr float kMinFlowFrameWidth = 60.0f;
+
 void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
                   value);
 }
 
+// One responsive row of controls: each control joins the current line while it
+// fits with its label, otherwise the row wraps to the next line. The window
+// shows no horizontal scrollbar, so a row wider than the dock would clip
+// silently; flowing keeps every control reachable at any dock width.
+class FlowRow {
+  public:
+    // A label+frame control (text input, combo); returns the control's state.
+    bool field(const char *label, std::array<char, 128> &buffer, float frame_width) {
+        const float use = place(frame_width, label);
+        ImGui::SetNextItemWidth(use);
+        const bool edited = ImGui::InputText(label, buffer.data(), buffer.size());
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return edited;
+    }
+
+    bool combo(const char *label, int *item, const char *const items[], int count,
+               float frame_width) {
+        const float use = place(frame_width, label);
+        ImGui::SetNextItemWidth(use);
+        const bool opened = ImGui::Combo(label, item, items, count);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return opened;
+    }
+
+    // A checkbox that leads its row and names its metric.
+    bool checkbox(const char *label, bool *value) {
+        place(ImGui::GetFrameHeight(), label);
+        const bool toggled = ImGui::Checkbox(label, value);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return toggled;
+    }
+
+    // A disabled note that takes part in the flow, such as the two-tone test
+    // leader or a row's computed frequency.
+    void note(const char *text) {
+        place(ImGui::CalcTextSize(text).x, "");
+        ImGui::TextDisabled("%s", text);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+    }
+
+    // A destructive small button at the row's end, behind the wider gap every
+    // destructive control keeps; wraps to a fresh line only when it cannot fit.
+    bool dangerEnd(const char *label) {
+        const ImGuiStyle &style = ImGui::GetStyle();
+        const float width = ImGui::CalcTextSize(label).x + 4.0f;
+        if (m_first)
+            beginLine();
+        else if (m_content_max_x - m_line_used_x >= 3.0f * style.ItemSpacing.x + width)
+            ImGui::SameLine(0.0f, 3.0f * style.ItemSpacing.x);
+        const bool pressed = ui::dangerSmallButton(label);
+        m_line_used_x = ImGui::GetItemRectMax().x;
+        return pressed;
+    }
+
+  private:
+    // The cursor sits below the previous item once it is drawn, so the space
+    // left on its line is tracked explicitly: the line's right limit from the
+    // fresh-line cursor, and the last item's right edge after each draw.
+    void beginLine() {
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        m_content_max_x = pos.x + ImGui::GetContentRegionAvail().x;
+        m_line_used_x = pos.x;
+        m_first = false;
+    }
+
+    // Positions the next control: joins the current line while the control and
+    // its label fit, otherwise lets it wrap to the next line. Returns the frame
+    // width to draw with, narrowed to the widest that fits the line.
+    float place(float frame_width, const char *label) {
+        const ImGuiStyle &style = ImGui::GetStyle();
+        const float label_width = ImGui::CalcTextSize(label).x + style.ItemInnerSpacing.x;
+        if (m_first)
+            beginLine();
+        else if (m_content_max_x - m_line_used_x - style.ItemSpacing.x >= frame_width + label_width)
+            ImGui::SameLine();
+        const float avail = ImGui::GetContentRegionAvail().x;
+        // std::clamp would assert when frame_width < the floor (a short
+        // note), so compose the same bound with min/max.
+        return std::min(frame_width, std::max(kMinFlowFrameWidth, avail - label_width));
+    }
+
+    bool m_first = true;
+    float m_content_max_x = 0.0f; // screen x of the line's right limit
+    float m_line_used_x = 0.0f;   // screen x of the last drawn item's right edge
+};
+
+// The absolute frequency a draft out-of-band row names: the chosen band edge
 bool sameDraft(const ReceiverRequirementsDraft &a, const ReceiverRequirementsDraft &b) {
     if (a.oob_suppression.size() != b.oob_suppression.size())
         return false;
