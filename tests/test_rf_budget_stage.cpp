@@ -213,6 +213,28 @@ TEST_CASE("attenuator NF equals its loss", "[rf_budget][stage]") {
     }
 }
 
+TEST_CASE("digital step attenuator stage applies ref loss plus code times step",
+          "[rf_budget][stage]") {
+    ComponentLibrary library;
+    RfBudgetReasonTable reasons;
+    RfBudgetStageEvaluator evaluator(library, reasons);
+
+    // ZX76-31R5A-PN+ defaults: code 21 selects 1.4 + 21 * 0.5 = 11.9 dB,
+    // so gain is -11.9 dB and the passive NF equals the loss.
+    const RfBudgetStage dsa = idealStage("DSA", "digital_step_attenuator", {{"code", 21}});
+    const auto frequencies = grid(1.0e9, 2.0e9, 5);
+    const RfBudgetStageResponse response = evaluator.evaluate(dsa, nullptr, frequencies, 0);
+
+    CHECK(response.stage == "DSA");
+    CHECK(response.stage_reason == 0);
+    REQUIRE(response.gain_dB.size() == 1);
+    REQUIRE(response.nf_dB.size() == 1);
+    for (std::size_t i = 0; i < frequencies.size(); ++i) {
+        CHECK(response.gain_dB[0].values[i] == Approx(-11.9).margin(kMargin));
+        CHECK(response.nf_dB[0].values[i] == Approx(11.9).margin(kMargin));
+    }
+}
+
 TEST_CASE("splitter outputs read -3.0103 dB and NF 3.0103 dB on both ports", "[rf_budget][stage]") {
     ComponentLibrary library;
     RfBudgetReasonTable reasons;

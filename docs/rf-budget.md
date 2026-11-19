@@ -11,7 +11,7 @@ A budget **Pass** is a prediction, not a verification: the budget evaluates the 
 The **Signal chain** strip reads like the wiring it describes: a **Budget input** block on the left, one block per stage flowing left to right in chain order, and an **Outputs** block closing the strip on the right. When the dock is narrower than the chain, the strip scrolls horizontally instead of reflowing, so the left-to-right reading survives any dock width.
 
 - **Add Stage** appends a block, named `Stage 1`, `Stage 2`, and so on. The first stage is fed from the **Budget input** automatically.
-- Each block's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1)**.
+- Each block's **Type** list offers **Amplifier, Attenuator, IdealFilter, Coax Cable, Equalizer, Splitter, SPDT Switch, SPDT Switch (2:1), Digital Step Attenuator**.
 - **Source** picks **Idealized** or **Library**. An idealized stage edits its numbers through the **Params...** editor — each field starts at its default and an **Override** button sets it. A library stage instead picks a part from the [Component Library](component-library.md).
 - Each input port has its own feed combo right in the block: **Unfed** (drawn as a warning, since an unfed stage never reaches the cascade), the **Budget input**, or another stage's output. A splitter feeds all of its outputs; a switch follows its active throw.
 - **Rename...** and **Remove** act on the block. Removing a stage unfeds whatever it drove.

@@ -46,6 +46,11 @@ const std::map<std::string, ExpectedTypeFields> &expectedStateFields() {
          {{"atten_dB", {FieldKind::Number, "dB"}},
           {"sparam_mode", {FieldKind::Bool, ""}},
           {"sparam_filepath", {FieldKind::FilePath, ""}}}},
+        {"digital_step_attenuator",
+         {{"bit_depth", {FieldKind::Number, ""}},
+          {"step_dB", {FieldKind::Number, "dB"}},
+          {"ref_loss_dB", {FieldKind::Number, "dB"}},
+          {"code", {FieldKind::Number, ""}}}},
         {"splitter", {}},
         {"filter",
          {{"filter_type", {FieldKind::Enum, ""}},
@@ -253,6 +258,19 @@ TEST_CASE("State metadata describes every scalar engine serialization leaf", "[c
             } else if (descriptor->type == "equalizer" && field.key == "slope_dB_per_decade") {
                 CHECK(field.min == -100.0);
                 CHECK(field.max == 100.0);
+            } else if (descriptor->type == "digital_step_attenuator" && field.key == "bit_depth") {
+                CHECK(field.min == 1.0);
+                CHECK(field.max == 16.0);
+            } else if (descriptor->type == "digital_step_attenuator" && field.key == "step_dB") {
+                CHECK(field.min == 0.0);
+                CHECK(field.max == 20.0);
+            } else if (descriptor->type == "digital_step_attenuator" &&
+                       field.key == "ref_loss_dB") {
+                CHECK(field.min == 0.0);
+                CHECK(field.max == 30.0);
+            } else if (descriptor->type == "digital_step_attenuator" && field.key == "code") {
+                CHECK(field.min == 0.0);
+                CHECK(field.max == 65535.0);
             } else {
                 CHECK((std::isinf(field.min) && field.min < 0.0));
                 CHECK((std::isinf(field.max) && field.max > 0.0));
@@ -761,4 +779,50 @@ TEST_CASE("Out-of-range sparam_fwd_idx is refused as an engine adjustment", "[co
         CHECK(in_range.status == ParamWriteStatus::Applied);
         CHECK(engine->serialize()["sparam_fwd_idx"] == 0);
     }
+}
+
+TEST_CASE("Agent digital step attenuator writes respect the valid ranges", "[component_params]") {
+    ParamsEngineFixture fixture;
+    auto *engine = fixture.create("digital_step_attenuator");
+    REQUIRE(engine != nullptr);
+    const auto &fields = paramsDescriptor("digital_step_attenuator").state_fields;
+
+    // In-range write applies: code 21 at the 6-bit default.
+    const auto applied = applyComponentParams(*engine, fields, {{"code", 21}});
+    REQUIRE(applied.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("code") == 21);
+
+    // Static bounds reject before mutation, engine state untouched.
+    const auto bits_low = applyComponentParams(*engine, fields, {{"bit_depth", 0}});
+    CHECK(bits_low.status == ParamWriteStatus::TypeMismatch);
+    CHECK(bits_low.path == "bit_depth");
+    CHECK(bits_low.expected == "number from 1 to 16");
+    const auto bits_high = applyComponentParams(*engine, fields, {{"bit_depth", 17}});
+    CHECK(bits_high.status == ParamWriteStatus::TypeMismatch);
+    const auto step_bad = applyComponentParams(*engine, fields, {{"step_dB", -1.0}});
+    CHECK(step_bad.status == ParamWriteStatus::TypeMismatch);
+    CHECK(step_bad.expected == "number from 0 to 20");
+    const auto ref_bad = applyComponentParams(*engine, fields, {{"ref_loss_dB", 45.0}});
+    CHECK(ref_bad.status == ParamWriteStatus::TypeMismatch);
+    CHECK(ref_bad.expected == "number from 0 to 30");
+    CHECK(engine->serialize().at("code") == 21);
+
+    // A code above the live 2^bit_depth - 1 is an engine adjustment: the
+    // engine clamps it, the write rolls back (sparam_fwd_idx precedent).
+    const auto over = applyComponentParams(*engine, fields, {{"code", 64}});
+    CHECK(over.status == ParamWriteStatus::EngineAdjusted);
+    CHECK(over.path == "code");
+    CHECK(over.requested == 64);
+    CHECK(over.stored == 63);
+    CHECK(engine->serialize().at("code") == 21);
+
+    // Shrinking the bit depth re-clamps the stored code: the requested
+    // bit_depth applies and the clamped code is reported as an engine-side
+    // change.
+    const auto shrunk = applyComponentParams(*engine, fields, {{"bit_depth", 3}});
+    REQUIRE(shrunk.status == ParamWriteStatus::Applied);
+    CHECK(engine->serialize().at("bit_depth") == 3);
+    CHECK(engine->serialize().at("code") == 7);
+    REQUIRE(shrunk.also_changed.size() == 1);
+    CHECK(shrunk.also_changed[0].path == "code");
 }

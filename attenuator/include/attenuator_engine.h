@@ -10,7 +10,9 @@
 
 class AttenuatorEngine : public ComponentEngineBase {
   public:
-    AttenuatorEngine(int id, NodeGraphEngine &graph);
+    // label defaults to "Attenuator"; a derived class passes its own
+    // registry label_prefix so the canvas resolves the right NodeKind.
+    AttenuatorEngine(int id, NodeGraphEngine &graph, std::string_view label = "Attenuator");
 
     std::string_view type_name() const override { return "attenuator"; }
     std::string hoverSummary() const override;
