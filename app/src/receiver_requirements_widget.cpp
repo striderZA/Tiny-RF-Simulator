@@ -18,7 +18,7 @@ constexpr const char *kLabels[] = {
     "Input level (dBm)",      "SNR minimum (dB)",      "SNR bandwidth (Hz)"};
 
 constexpr const char *kRemoveModeTitle = "Remove mode?";
-constexpr float kFieldWidth = 200.0f;
+constexpr float kFieldWidth = 110.0f;
 constexpr float kNameWidth = 260.0f;
 
 const char *const kNoModesHint =
@@ -315,12 +315,6 @@ void drawBudgetPrediction(const RfBudgetEvaluation &evaluation, const RfBudgetMo
         ImGui::TextColored(rf_view_ui::warnColor(), "%s: %s", unreached.output.c_str(),
                            unreached.reason.c_str());
 }
-
-// One numeric limit field, indented under its section heading.
-void drawNumberField(const char *label, std::array<char, 128> &buffer, float width) {
-    ImGui::SetNextItemWidth(width);
-    ImGui::InputText(label, buffer.data(), buffer.size());
-}
 } // namespace
 
 ReceiverRequirementStatusTone receiverRequirementStatusTone(ReceiverRequirementStatus status) {
@@ -432,6 +426,61 @@ void ReceiverRequirementsWidget::resetDraft(const ReceiverRequirementsSet &set) 
     m_error.clear();
     m_mode_error.clear();
     m_notice.clear();
+}
+void ReceiverRequirementsWidget::drawLimitsForm() {
+    // The band leads: every other limit, and each out-of-band point, is
+    // measured against it.
+    FlowRow band;
+    band.field(kLabels[0], m_buffers[0], kFieldWidth);
+    band.field(kLabels[1], m_buffers[1], kFieldWidth);
+
+    // Each optional metric is one row: the enable checkbox leads and names it,
+    // its fields follow in the same flow.
+    FlowRow gain;
+    gain.checkbox("Enable gain", &m_gain_enabled);
+    ImGui::BeginDisabled(!m_gain_enabled);
+    gain.field(kLabels[2], m_buffers[2], kFieldWidth);
+    gain.field(kLabels[3], m_buffers[3], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow noise_figure;
+    noise_figure.checkbox("Enable noise figure", &m_nf_enabled);
+    ImGui::BeginDisabled(!m_nf_enabled);
+    noise_figure.field(kLabels[4], m_buffers[4], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow output_power;
+    output_power.checkbox("Enable output power", &m_output_power_enabled);
+    ImGui::BeginDisabled(!m_output_power_enabled);
+    output_power.field(kLabels[5], m_buffers[5], kFieldWidth);
+    output_power.field(kLabels[6], m_buffers[6], kFieldWidth);
+    ImGui::EndDisabled();
+    // The input level is a measurement condition, but it only gates output
+    // power, so it joins the limit it feeds and remains editable when the
+    // limit is off.
+    output_power.field(kLabels[12], m_buffers[12], kFieldWidth);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Output power is measured at this input level.");
+
+    FlowRow iip3;
+    iip3.checkbox("Enable IIP3", &m_iip3_enabled);
+    ImGui::BeginDisabled(!m_iip3_enabled);
+    iip3.field(kLabels[7], m_buffers[7], kFieldWidth);
+    iip3.note("Two-tone test");
+    iip3.field(kLabels[8], m_buffers[8], kFieldWidth);
+    iip3.field(kLabels[9], m_buffers[9], kFieldWidth);
+    iip3.field(kLabels[10], m_buffers[10], kFieldWidth);
+    iip3.field(kLabels[11], m_buffers[11], kFieldWidth);
+    ImGui::EndDisabled();
+
+    FlowRow snr;
+    snr.checkbox("Enable SNR", &m_snr_enabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("SNR uses the input level set beside Output power.");
+    ImGui::BeginDisabled(!m_snr_enabled);
+    snr.field(kLabels[13], m_buffers[13], kFieldWidth);
+    snr.field(kLabels[14], m_buffers[14], kFieldWidth);
+    ImGui::EndDisabled();
 }
 
 void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverRequirementsSet &set,
@@ -565,21 +614,7 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
         return;
     }
 
-    // --- Limits ---------------------------------------------------------------------------------
-    rf_view_ui::sectionHeader("Band");
-    ImGui::PushItemWidth(kFieldWidth);
-    ImGui::InputText(kLabels[0], m_buffers[0].data(), m_buffers[0].size());
-    ImGui::InputText(kLabels[1], m_buffers[1].data(), m_buffers[1].size());
-    ImGui::PopItemWidth();
-
-    rf_view_ui::sectionHeader("Gain");
-    ImGui::Checkbox("Enable gain", &m_gain_enabled);
-    ImGui::BeginDisabled(!m_gain_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[2], m_buffers[2], kFieldWidth);
-    drawNumberField(kLabels[3], m_buffers[3], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
+    drawLimitsForm();
 
     rf_view_ui::sectionHeader("Out-of-band suppression");
     ImGui::TextDisabled("Each point needs gain limits: the cascade gain at the point must be");
@@ -608,53 +643,6 @@ void ReceiverRequirementsWidget::draw(const char *title, bool *p_open, ReceiverR
     if (ImGui::Button("Add out-of-band point"))
         m_oob_rows.push_back(OobRow{});
     ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("Noise figure");
-    ImGui::Checkbox("Enable noise figure", &m_nf_enabled);
-    ImGui::BeginDisabled(!m_nf_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[4], m_buffers[4], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("Output power");
-    ImGui::Checkbox("Enable output power", &m_output_power_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::BeginDisabled(!m_output_power_enabled);
-    drawNumberField(kLabels[5], m_buffers[5], kFieldWidth);
-    drawNumberField(kLabels[6], m_buffers[6], kFieldWidth);
-    ImGui::EndDisabled();
-    // The input level is a measurement condition, but it only gates output power, so it stays
-    // next to the limit it feeds and remains editable when the limit is off.
-    drawNumberField(kLabels[12], m_buffers[12], kFieldWidth);
-    if (m_output_power_enabled)
-        ImGui::TextDisabled("Output power is measured at this input level.");
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-
-    rf_view_ui::sectionHeader("IIP3");
-    ImGui::Checkbox("Enable IIP3", &m_iip3_enabled);
-    ImGui::BeginDisabled(!m_iip3_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[7], m_buffers[7], kFieldWidth);
-    ImGui::Spacing();
-    ImGui::TextDisabled("Two-tone test");
-    drawNumberField(kLabels[8], m_buffers[8], kFieldWidth);
-    drawNumberField(kLabels[9], m_buffers[9], kFieldWidth);
-    drawNumberField(kLabels[10], m_buffers[10], kFieldWidth);
-    drawNumberField(kLabels[11], m_buffers[11], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-
-    rf_view_ui::sectionHeader("SNR");
-    ImGui::Checkbox("Enable SNR", &m_snr_enabled);
-    ImGui::BeginDisabled(!m_snr_enabled);
-    ImGui::Indent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    drawNumberField(kLabels[13], m_buffers[13], kFieldWidth);
-    drawNumberField(kLabels[14], m_buffers[14], kFieldWidth);
-    ImGui::Unindent(ImGui::GetStyle().IndentSpacing * 0.5f);
-    ImGui::EndDisabled();
-    if (m_snr_enabled)
-        ImGui::TextDisabled("SNR uses the input level set under Output power.");
 
     // --- Actions -------------------------------------------------------------------------------
     rf_view_ui::sectionHeader("Apply");
