@@ -219,6 +219,37 @@ TEST_CASE_METHOD(ImGuiFixture, "RF Budget chain scrolls horizontally when the do
     REQUIRE(rects.stages[2].block[0] < rects.outputs_block[0]);
 }
 
+TEST_CASE_METHOD(ImGuiFixture, "RF Budget blocks are compact: narrow, name and type on one row",
+                 "[rf_budget][widget]") {
+    RfBudget budget = wiredBudget();
+    RfBudgetWidget widget;
+    const ImVec2 size(1200.0f, 760.0f);
+    drawBudgetFrame(widget, budget, size);
+    drawBudgetFrame(widget, budget, size);
+
+    const RfBudgetWidget::ItemRects &rects = widget.lastItemRects();
+    REQUIRE(rects.stages.size() == 3);
+
+    // Narrow blocks: the whole three-stage chain fits a 1200 px dock without scrolling.
+    REQUIRE(rects.input_block[2] - rects.input_block[0] <= 100.0f);
+    REQUIRE(rects.stages[0].block[2] - rects.stages[0].block[0] <= 208.0f);
+    REQUIRE(rects.outputs_block[2] - rects.outputs_block[0] <= 208.0f);
+    REQUIRE(rects.chain_scroll_max_x == 0.0f);
+
+    // Stage 0 has one input port. Its name and type share the top row, so the
+    // block is shorter than the stacked layout's 115 px.
+    const RfBudgetWidget::StageRects &first = rects.stages[0];
+    REQUIRE(first.block[3] - first.block[1] < 115.0f);
+
+    // The type combo sits in the top row, above the source row, at a fixed width.
+    for (std::size_t index = 0; index < rects.stages.size(); ++index) {
+        const RfBudgetWidget::StageRects &stage = rects.stages[index];
+        REQUIRE_FALSE(rectIsEmpty(stage.type_combo));
+        REQUIRE(stage.type_combo[3] <= stage.source_combo[1]);
+        REQUIRE(stage.type_combo[2] - stage.type_combo[0] <= 100.0f);
+    }
+}
+
 TEST_CASE_METHOD(ImGuiFixture, "RF Budget empty view shows the hint, not blocks",
                  "[rf_budget][widget]") {
     RfBudget budget;

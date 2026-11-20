@@ -26,9 +26,10 @@ constexpr const char *kParamsTitle = "Stage parameters";
 
 // Fixed signal-chain block widths. Fixed widths keep the left-to-right reading
 // stable at any dock width; the strip scrolls horizontally when they do not fit.
-constexpr float kInputBlockWidth = 120.0f;
-constexpr float kStageBlockWidth = 240.0f;
-constexpr float kOutputBlockWidth = 240.0f;
+constexpr float kInputBlockWidth = 96.0f;
+constexpr float kStageBlockWidth = 200.0f;
+constexpr float kOutputBlockWidth = 200.0f;
+constexpr float kStageTypeComboWidth = 96.0f;
 constexpr float kSourceComboWidth = 74.0f;
 // The cascade section's two selector combos; they share a line only when both
 // fit beside each other in the dock.
@@ -448,7 +449,9 @@ void RfBudgetWidget::drawSignalChain(RfBudget &budget, const ComponentLibrary &l
     if (ImGui::BeginChild("budget_chain_input", ImVec2(kInputBlockWidth, 0.0f),
                           ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
         ImGui::TextUnformatted("Budget input");
+        ImGui::PushTextWrapPos(0.0f);
         ImGui::TextDisabled("comb at -30 dBm over the band");
+        ImGui::PopTextWrapPos();
     }
     ImGui::EndChild();
     recordRect(m_item_rects.input_block);
@@ -487,14 +490,18 @@ bool RfBudgetWidget::drawStageBlock(RfBudget &budget, const ComponentLibrary &li
     bool removed = false;
     if (ImGui::BeginChild(child_name.c_str(), ImVec2(kStageBlockWidth, 0.0f),
                           ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
-        // Name, elided to the block; the tooltip carries the full name.
-        const std::string shown = elidedText(stage.name, ImGui::GetContentRegionAvail().x);
+        // Name, elided to the room left beside the type combo; the tooltip carries the
+        // full name. The type combo sits on the same row, at the block's right edge.
+        const float name_room = ImGui::GetContentRegionAvail().x - kStageTypeComboWidth -
+                                ImGui::GetStyle().ItemSpacing.x;
+        const std::string shown = elidedText(stage.name, name_room);
         ImGui::TextUnformatted(shown.c_str());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", stage.name.c_str());
 
-        // Type.
-        ImGui::SetNextItemWidth(-FLT_MIN);
+        // Type, on the name's row.
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - kStageTypeComboWidth);
+        ImGui::SetNextItemWidth(kStageTypeComboWidth);
         if (ImGui::BeginCombo("##type", stageTypeLabel(stage.type).c_str())) {
             for (const RfBudgetStageType &type : rfBudgetStageTypes()) {
                 const bool selected = type.type == stage.type;
