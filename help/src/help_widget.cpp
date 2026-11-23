@@ -56,7 +56,8 @@ const HelpSection sections[] = {
          "Each widget can be resized, docked, or hidden via the View menu",
          "Auxiliary panels (Receiver Requirements, RF Budget, Filter Calculator, Test Flow, "
          "Agent, this help, and Extensions) open docked in the Utility Space window beside the "
-         "main window; drag any of them out or between the two windows freely",
+         "main window; drag any of them out or between the two windows freely, and toggle the "
+         "second window itself from View > Utility Space",
          "Window visibility is saved and restored between sessions",
      },
      9},
