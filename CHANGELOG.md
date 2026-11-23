@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **Utility Space moves to its own window on demand** — **Window > Utility Space to its own window** undocks the group from whatever layout it was saved in (docked into the main window or floating inside it) and places it beside the main window, clamped onto the screen when the display is too narrow. The promoted group keeps its own OS window under multi-viewport, stays dockable, and its new position persists in the layout ini and named layouts.
+
 ### Changed
 
 - **RF budget reads as a horizontal signal chain** — the **View > RF Budget** stage table becomes a left-to-right strip: the budget input on the left, one compact block per stage (type, source with the part picker or idealized **Params...** editor, one inline feed combo per input port, rename/remove), the outputs on the right, joined by flow arrows. The strip scrolls horizontally when the dock is narrower than the chain, so the signal-flow reading survives any dock width. The **Feeds...** modal is gone — the per-port feed combos sit inside each block, with an unfed port drawn as a warning — and the mode-override and cascade selector rows are compacted to one line each.

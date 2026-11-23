@@ -2,7 +2,7 @@
 
 The tutorial walks you through the basic workflow — add a component, connect it, configure it, probe a node, navigate the graph — then the panels that check, budget, and automate a design. Start it from **Help > Tutorial**, or accept it on first launch.
 
-The tutorial has fifteen steps. Each step has **Back**, **Next**, **Skip**, and **Exit** buttons. The last step shows **Finish** in place of **Next**. Starting it opens the panels the core steps highlight, including the Component Library; the later steps say which **View** menu item opens the panel they cover.
+The tutorial has sixteen steps. Each step has **Back**, **Next**, **Skip**, and **Exit** buttons. The last step shows **Finish** in place of **Next**. Starting it opens the panels the core steps highlight, including the Component Library; the later steps say which **View** menu item opens the panel they cover.
 
 ## Welcome
 
@@ -60,6 +60,10 @@ Open **View > Test Flow** if it is not already on screen. The panel authors and 
 ## Drive it from an Agent
 
 Open **View > Agent** if it is not already on screen, then enable **Agent Server** and point a client such as Claude Code at the `rf-sim-mcp` bridge that ships beside the simulator. An agent can read and edit the circuit, run measurements, sweeps, and test flows, and author library parts. Calls that change circuit, requirements, or budget state leave a checkpoint you can revert to after confirmation; read-only calls and library creation do not.
+
+## Move the Utility Space
+
+The auxiliary panels open together in the Utility Space beside the main window. If the group is docked into the main window, choose **Window > Utility Space to its own window** to move it back out without dragging — the command also works while the group floats inside the main window. The new position is saved with the layout, and the group stays dockable.
 
 ## Wrap Up
 

@@ -85,6 +85,12 @@ const std::vector<TutorialStep> steps = {
      "library parts. Calls that change circuit, requirements, or budget state leave a checkpoint "
      "you can revert to after confirmation; read-only calls and library creation do not.",
      TutorialTarget::Agent},
+    {"Move the Utility Space",
+     "The auxiliary panels open together in the Utility Space beside the main window. If the "
+     "group is docked into the main window, choose Window > Utility Space to its own window to "
+     "move it back out without dragging — the command also works while the group floats inside "
+     "the main window. The new position is saved with the layout, and the group stays dockable.",
+     TutorialTarget::None},
     {"Wrap Up",
      "That's the tour. The panels stay under the View menu, Help > How to Use keeps the full "
      "reference, and Help > Tutorial restarts this walkthrough any time. Click Finish to mark it "
