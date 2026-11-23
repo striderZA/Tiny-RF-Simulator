@@ -27,9 +27,8 @@ constexpr const char *kParamsTitle = "Stage parameters";
 // Fixed signal-chain block widths. Fixed widths keep the left-to-right reading
 // stable at any dock width; the strip scrolls horizontally when they do not fit.
 constexpr float kInputBlockWidth = 96.0f;
-constexpr float kStageBlockWidth = 200.0f;
+constexpr float kStageBlockWidth = 208.0f;
 constexpr float kOutputBlockWidth = 200.0f;
-constexpr float kStageTypeComboWidth = 96.0f;
 constexpr float kSourceComboWidth = 74.0f;
 // The cascade section's two selector combos; they share a line only when both
 // fit beside each other in the dock.
@@ -490,18 +489,15 @@ bool RfBudgetWidget::drawStageBlock(RfBudget &budget, const ComponentLibrary &li
     bool removed = false;
     if (ImGui::BeginChild(child_name.c_str(), ImVec2(kStageBlockWidth, 0.0f),
                           ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
-        // Name, elided to the room left beside the type combo; the tooltip carries the
-        // full name. The type combo sits on the same row, at the block's right edge.
-        const float name_room = ImGui::GetContentRegionAvail().x - kStageTypeComboWidth -
-                                ImGui::GetStyle().ItemSpacing.x;
-        const std::string shown = elidedText(stage.name, name_room);
+        // Name, elided to the block; the tooltip carries the full name.
+        const std::string shown = elidedText(stage.name, ImGui::GetContentRegionAvail().x);
         ImGui::TextUnformatted(shown.c_str());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", stage.name.c_str());
 
-        // Type, on the name's row.
-        ImGui::SameLine(ImGui::GetContentRegionMax().x - kStageTypeComboWidth);
-        ImGui::SetNextItemWidth(kStageTypeComboWidth);
+        // Type, on its own full-width row: a narrow combo clipped the longest labels in
+        // its collapsed preview, so the block's width is the combo's width.
+        ImGui::SetNextItemWidth(-FLT_MIN);
         if (ImGui::BeginCombo("##type", stageTypeLabel(stage.type).c_str())) {
             for (const RfBudgetStageType &type : rfBudgetStageTypes()) {
                 const bool selected = type.type == stage.type;

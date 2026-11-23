@@ -20,6 +20,7 @@
 // Add override) in test_engine/ui_tests.cpp, which runs as the test_ui
 // CTest target.
 #include "component_library.h"
+#include "component_type_registry.h"
 #include "imgui.h"
 #include "implot.h"
 #include "receiver_requirements.h"
@@ -27,6 +28,7 @@
 #include "rf_budget_cascade.h"
 #include "rf_budget_widget.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -219,7 +221,7 @@ TEST_CASE_METHOD(ImGuiFixture, "RF Budget chain scrolls horizontally when the do
     REQUIRE(rects.stages[2].block[0] < rects.outputs_block[0]);
 }
 
-TEST_CASE_METHOD(ImGuiFixture, "RF Budget blocks are compact: narrow, name and type on one row",
+TEST_CASE_METHOD(ImGuiFixture, "RF Budget blocks are compact and the type combo fits its label",
                  "[rf_budget][widget]") {
     RfBudget budget = wiredBudget();
     RfBudgetWidget widget;
@@ -236,17 +238,24 @@ TEST_CASE_METHOD(ImGuiFixture, "RF Budget blocks are compact: narrow, name and t
     REQUIRE(rects.outputs_block[2] - rects.outputs_block[0] <= 208.0f);
     REQUIRE(rects.chain_scroll_max_x == 0.0f);
 
-    // Stage 0 has one input port. Its name and type share the top row, so the
-    // block is shorter than the stacked layout's 115 px.
-    const RfBudgetWidget::StageRects &first = rects.stages[0];
-    REQUIRE(first.block[3] - first.block[1] < 115.0f);
+    // The type combo spans its block and sits above the source row. Its collapsed preview
+    // must hold the longest registry label plus the arrow, or the label is clipped (the
+    // narrow 96 px combo hid "(2:1)" and cut "Digital Step Attenuator").
+    float longest = 0.0f;
+    for (const RfBudgetStageType &entry : rfBudgetStageTypes()) {
+        const ComponentTypeDescriptor *descriptor =
+            ComponentTypeRegistry::instance().find(entry.type);
+        REQUIRE(descriptor != nullptr);
+        longest = std::max(longest, ImGui::CalcTextSize(descriptor->display_name.c_str()).x);
+    }
+    const ImGuiStyle &style = ImGui::GetStyle();
+    const float needed = longest + ImGui::GetFrameHeight() + 2.0f * style.FramePadding.x;
 
-    // The type combo sits in the top row, above the source row, at a fixed width.
     for (std::size_t index = 0; index < rects.stages.size(); ++index) {
         const RfBudgetWidget::StageRects &stage = rects.stages[index];
         REQUIRE_FALSE(rectIsEmpty(stage.type_combo));
+        REQUIRE(stage.type_combo[2] - stage.type_combo[0] >= needed);
         REQUIRE(stage.type_combo[3] <= stage.source_combo[1]);
-        REQUIRE(stage.type_combo[2] - stage.type_combo[0] <= 100.0f);
     }
 }
 
