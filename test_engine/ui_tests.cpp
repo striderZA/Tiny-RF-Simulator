@@ -2235,6 +2235,19 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     // viewport (and so a separate OS window) without any drag.
     t = IM_REGISTER_TEST(e, "rf_simulator", "utility_space_promotes_to_its_own_os_window");
     t->TestFunc = [](ImGuiTestContext *ctx) {
+        // Later cases expect the utility views in the main viewport. Clear the
+        // promotion state and dock the host back even when an assertion
+        // returns early.
+        struct PromotionCleanup {
+            ~PromotionCleanup() {
+                s_app->testResetUtilitySpacePromotion();
+                ImGui::DockBuilderDockWindow("Utility Space", 0);
+                ImGui::SetWindowSize("Utility Space", ImVec2(760.0f, 800.0f));
+                ImGui::SetWindowPos("Utility Space",
+                                    ImGui::GetMainViewport()->Pos + ImVec2(20.0f, 20.0f));
+            }
+        } cleanup;
+
         ImGuiWindow *host = ImGui::FindWindowByName("Utility Space");
         IM_CHECK(host != nullptr);
 
@@ -2270,6 +2283,25 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         waitForUi(ctx, in_own_viewport);
         IM_CHECK(in_own_viewport());
 
+        // The separation and position are what the layout file records: no
+        // dock id, the host's own viewport, and that viewport's position.
+        ImGui::SaveIniSettingsToMemory();
+        const ImGuiWindowSettings *settings =
+            ImGui::FindWindowSettingsByID(ImHashStr("Utility Space"));
+        IM_CHECK(settings != nullptr);
+        if (settings != nullptr) {
+            host = ImGui::FindWindowByName("Utility Space");
+            IM_CHECK_EQ(settings->DockId, 0u);
+            IM_CHECK(settings->ViewportId != 0u);
+            IM_CHECK(settings->Size.x > 0 && settings->Size.y > 0);
+            const int dx =
+                static_cast<int>(settings->ViewportPos.x) - static_cast<int>(host->Viewport->Pos.x);
+            const int dy =
+                static_cast<int>(settings->ViewportPos.y) - static_cast<int>(host->Viewport->Pos.y);
+            IM_CHECK(dx >= -1 && dx <= 1);
+            IM_CHECK(dy >= -1 && dy <= 1);
+        }
+
         // Case 2: docked into the main dockspace, as a saved layout can
         // restore it.
         ImGuiDockNode *main_dock_root = mainDockRootNode();
@@ -2292,19 +2324,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         host = ImGui::FindWindowByName("Utility Space");
         IM_CHECK(host->Pos.x > main_viewport->Pos.x);
         IM_CHECK(host->Pos.y >= main_viewport->Pos.y);
-
-        // Clear the promotion state and merge the host back into the main
-        // platform window, so later cases find docked utility views where
-        // they expect them. Undocking clamped the size to the monitor, so
-        // shrink it to fit inside the main viewport before merging.
-        s_app->testResetUtilitySpacePromotion();
-        ImGui::SetWindowSize("Utility Space", ImVec2(760.0f, 800.0f));
-        ImGui::SetWindowPos("Utility Space", main_viewport->Pos + ImVec2(20.0f, 20.0f));
-        waitForUi(ctx, [] {
-            const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
-            return window != nullptr && window->Viewport == ImGui::GetMainViewport();
-        });
-        IM_CHECK(ImGui::FindWindowByName("Utility Space")->Viewport == main_viewport);
     };
 
     // Tutorial tests are registered last on purpose: starting the tutorial calls
