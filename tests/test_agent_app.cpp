@@ -201,6 +201,59 @@ TEST_CASE("AppAgentHost exposes only the existing component-library roots", "[ag
     CHECK_FALSE(fixture.host.componentLibraryRoot("external").has_value());
 }
 
+TEST_CASE_METHOD(AppFixture, "Utility Space host is skipped when docking is disabled",
+                 "[agent_app][utility_space]") {
+    ImGuiIO &io = ImGui::GetIO();
+    app.m_show_tutorial_first_run_prompt = false;
+    app.m_show_utility_space = true;
+    REQUIRE((io.ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0);
+
+    runFrame([&] { app.draw_ui(); });
+    CHECK(ImGui::FindWindowByName("Utility Space") == nullptr);
+}
+
+TEST_CASE_METHOD(AppFixture, "Utility Space falls back to an in-window dock host without viewports",
+                 "[agent_app][utility_space]") {
+    ImGuiIO &io = ImGui::GetIO();
+    // Enable docking before the first NewFrame; enabling it later trips
+    // ImGui's "set it before the first frame" sanity check.
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    app.m_show_tutorial_first_run_prompt = false;
+    app.m_show_utility_space = true;
+    app.m_show_help = true;
+    REQUIRE((io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) == 0);
+
+    const auto draw_frame = [&] {
+        ImGui::DockSpaceOverViewport(ImGui::GetID("MainDockSpace"), nullptr,
+                                     ImGuiDockNodeFlags_PassthruCentralNode);
+        app.draw_ui();
+    };
+
+    // Viewports disabled, docking enabled: the host is a normal window in the
+    // main viewport, but still owns its utility dockspace.
+    runFrame(draw_frame);
+    runFrame(draw_frame);
+    ImGuiWindow *space = ImGui::FindWindowByName("Utility Space");
+    REQUIRE(space != nullptr);
+    CHECK(space->Active);
+    CHECK(space->Viewport == ImGui::GetMainViewport());
+    CHECK(space->DockNode == nullptr);
+    CHECK((space->Flags & ImGuiWindowFlags_NoDocking) != 0);
+    ImGuiWindow *help = ImGui::FindWindowByName("How to Use");
+    REQUIRE(help != nullptr);
+    CHECK(help->Active);
+
+    // Closing the group hides the host and its docked views; their open state
+    // stays in the visibility flags for the group to show again.
+    app.m_show_utility_space = false;
+    runFrame(draw_frame);
+    runFrame(draw_frame);
+    space = ImGui::FindWindowByName("Utility Space");
+    CHECK_FALSE((space != nullptr && space->Active));
+    help = ImGui::FindWindowByName("How to Use");
+    CHECK_FALSE((help != nullptr && help->Active));
+}
+
 // ======================================================================
 // Test: Checkpoint lifetime and removal
 // ======================================================================
