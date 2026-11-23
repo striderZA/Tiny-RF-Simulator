@@ -58,7 +58,7 @@ const HelpSection sections[] = {
          "Agent, this help, and Extensions) open docked in the Utility Space window beside the "
          "main window; drag any of them out or between the two windows freely, and toggle the "
          "second window itself from View > Utility Space",
-         "Window visibility is saved and restored between sessions",
+         "Window visibility is saved and restored between sessions on Windows",
      },
      9},
     {"Using the Inspector Panel",

@@ -525,6 +525,7 @@ void RfSimulatorApp::load_window_states() {
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
+    // SessionState persists only on Windows; elsewhere the toggle resets to on.
     m_show_utility_space = m_state.loadBool("WindowState", "UtilitySpace", true);
     m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
     m_show_rf_budget = m_state.loadBool("WindowState", "RfBudget", false);
