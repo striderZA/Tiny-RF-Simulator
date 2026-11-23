@@ -90,6 +90,8 @@ class RfSimulatorApp {
     bool m_show_properties = true;
     bool m_show_node_editor = true;
     bool m_show_help = false;
+    // The Utility Space host window is its own OS window; View > Utility Space toggles it.
+    bool m_show_utility_space = true;
     HelpWidget m_help_widget;
     bool m_show_tutorial = false;
     // Set on construction when no completion marker exists. Public so the UI
@@ -290,8 +292,9 @@ class RfSimulatorApp {
     void openEditComponentForm(const ComponentDefinition &def);
     void drawComponentFormModal();
     void drawExtensionTrustPrompt();
-    // The utility docking group's host window ("Utility Space") with its own
-    // dockspace. Views in the utility family open docked there by default.
+    // The utility docking group's own top-level window ("Utility Space") with
+    // its own dockspace. Views in the utility family open docked there by
+    // default; View > Utility Space toggles the host.
     void drawUtilitySpace();
     // Set once the never-placed utility views have been docked into the
     // group; a view the user has already placed keeps its own settings.
