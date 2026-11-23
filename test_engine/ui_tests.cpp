@@ -89,6 +89,24 @@ bool dockedInUtilityGroup(const ImGuiWindow *window) {
     return root->ID == utility_root;
 }
 
+bool utilitySpaceVisible() {
+    ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+    return window != nullptr && window->Active;
+}
+
+// A persisted layout may have closed the group. Open it through its real menu
+// path so every utility-space test starts from the same state.
+void ensureUtilitySpaceVisible(ImGuiTestContext *ctx) {
+    ctx->SetRef("");
+    ctx->Yield(2);
+    if (utilitySpaceVisible())
+        return;
+    ctx->SetRef("##MainMenuBar");
+    ctx->MenuClick("View/Utility Space");
+    ctx->SetRef("");
+    ctx->Yield(3);
+}
+
 struct AgentPanelUiCleanup {
     RfSimulatorApp &app;
     ImGuiTestContext *ctx;
@@ -2078,6 +2096,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     // instrument windows stay out of that group.
     t = IM_REGISTER_TEST(e, "rf_simulator", "utility_views_open_into_utility_dock_group");
     t->TestFunc = [](ImGuiTestContext *ctx) {
+        ensureUtilitySpaceVisible(ctx);
         // The group's host window exists even while every utility view is
         // closed: the View menu must always have somewhere to reopen a view.
         IM_CHECK(ImGui::FindWindowByName("Utility Space") != nullptr);
@@ -2142,6 +2161,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
     t = IM_REGISTER_TEST(e, "rf_simulator",
                          "utility_group_layout_round_trips_through_save_and_load");
     t->TestFunc = [](ImGuiTestContext *ctx) {
+        ensureUtilitySpaceVisible(ctx);
         // Toggle the Filter Calculator open through the View menu if it is
         // not already on screen (a docked background tab counts as open).
         const auto view_open = [](const char *name) {
@@ -2226,6 +2246,178 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         waitForUi(
             ctx, [] { return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")); });
         IM_CHECK(dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+    };
+
+    // The Utility Space is its own OS window even while it overlaps the main
+    // viewport, and it is never a pane in the main dockspace.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "utility_space_is_its_own_os_window");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ensureUtilitySpaceVisible(ctx);
+        ctx->Yield(2);
+        ImGuiWindow *space = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(space != nullptr);
+        IM_CHECK(space->Active);
+        IM_CHECK((space->WindowClass.ViewportFlagsOverrideSet & ImGuiViewportFlags_NoAutoMerge) !=
+                 0);
+        IM_CHECK(space->DockNode == nullptr);
+        IM_CHECK(space->DockIsActive == false);
+        IM_CHECK((space->Flags & ImGuiWindowFlags_NoDocking) != 0);
+        // A backend without multi-viewport support (for example Wayland)
+        // makes ImGui clear ViewportsEnable; the host then stays a normal
+        // floating window instead of failing.
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            IM_CHECK(space->Viewport != ImGui::GetMainViewport());
+            IM_CHECK(space->ViewportOwned);
+        } else {
+            IM_CHECK(space->Viewport == ImGui::GetMainViewport());
+        }
+    };
+
+    // Closing the group hides the docked utility views without closing them;
+    // reopening the group brings them back with their layout.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "utility_space_closes_and_reopens_with_its_views");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ensureUtilitySpaceVisible(ctx);
+        const char *calculator_menu = "View/Filter Calculator";
+        ImGuiWindow *calculator = ImGui::FindWindowByName("Filter Calculator");
+        const bool was_open = calculator != nullptr && calculator->Active;
+        bool opened_by_test = false;
+        struct RestoreCalculator {
+            ImGuiTestContext *ctx;
+            const char *path;
+            bool *active;
+            ~RestoreCalculator() {
+                if (*active) {
+                    ensureUtilitySpaceVisible(ctx);
+                    ctx->SetRef("##MainMenuBar");
+                    ctx->MenuClick(path);
+                    ctx->SetRef("");
+                    ctx->Yield(2);
+                }
+            }
+        } restore{ctx, calculator_menu, &opened_by_test};
+
+        if (!was_open) {
+            ctx->SetRef("##MainMenuBar");
+            ctx->MenuClick(calculator_menu);
+            ctx->SetRef("");
+            ctx->Yield(2);
+            opened_by_test = true;
+            waitForUi(ctx, [] {
+                return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator"));
+            });
+            IM_CHECK(dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+        }
+        IM_CHECK(utilitySpaceVisible());
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Utility Space");
+        ctx->SetRef("");
+        waitForUi(ctx, [] { return !utilitySpaceVisible(); });
+        IM_CHECK(!utilitySpaceVisible());
+        calculator = ImGui::FindWindowByName("Filter Calculator");
+        IM_CHECK(calculator == nullptr || !calculator->Active);
+
+        // Asking for a view while the group is hidden opens the group and
+        // keeps the already-open view visible instead of toggling it off.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick(calculator_menu);
+        ctx->SetRef("");
+        waitForUi(ctx, [] { return utilitySpaceVisible(); });
+        IM_CHECK(utilitySpaceVisible());
+        waitForUi(ctx, [] {
+            ImGuiWindow *window = ImGui::FindWindowByName("Filter Calculator");
+            return window != nullptr && window->Active && dockedInUtilityGroup(window);
+        });
+        calculator = ImGui::FindWindowByName("Filter Calculator");
+        IM_CHECK(calculator != nullptr);
+        IM_CHECK(calculator->Active);
+        IM_CHECK(dockedInUtilityGroup(calculator));
+
+        // The group's own View item closes and reopens it.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Utility Space");
+        ctx->SetRef("");
+        waitForUi(ctx, [] { return !utilitySpaceVisible(); });
+        IM_CHECK(!utilitySpaceVisible());
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Utility Space");
+        ctx->SetRef("");
+        waitForUi(ctx, [] { return utilitySpaceVisible(); });
+        IM_CHECK(utilitySpaceVisible());
+    };
+
+    // The second window's own position and size are part of the saved layout.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "utility_space_position_and_size_round_trip");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ensureUtilitySpaceVisible(ctx);
+        ImGuiWindow *initial_space = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(initial_space != nullptr);
+        if (!initial_space)
+            return;
+        // This test resizes the group; put the geometry back for the later
+        // receiver-requirements dock-width cases.
+        struct RestoreGeometry {
+            ImVec2 pos;
+            ImVec2 size;
+            ~RestoreGeometry() {
+                ImGui::SetWindowPos("Utility Space", pos);
+                ImGui::SetWindowSize("Utility Space", size);
+            }
+        } restore_geometry{initial_space->Pos, initial_space->Size};
+        const auto layout_file = std::filesystem::path(s_app->testLayoutManager().layoutsDir()) /
+                                 "UtilitySpacePosSize.ini";
+        struct LayoutFileCleanup {
+            std::filesystem::path path;
+            ~LayoutFileCleanup() {
+                std::error_code ec;
+                std::filesystem::remove(path, ec);
+            }
+        } cleanup{layout_file};
+        std::filesystem::remove(layout_file);
+
+        ImGui::SetWindowPos("Utility Space", ImVec2(100.0f, 120.0f));
+        ImGui::SetWindowSize("Utility Space", ImVec2(600.0f, 500.0f));
+        ctx->Yield(3);
+        ImGuiWindow *space = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(space != nullptr);
+        const ImVec2 saved_pos = space->Pos;
+        const ImVec2 saved_size = space->Size;
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Save As...");
+        ctx->SetRef("Save Layout As");
+        ctx->ItemInputValue("Name", "UtilitySpacePosSize");
+        ctx->ItemClick("Save");
+        ctx->SetRef("");
+        ctx->Yield();
+        IM_CHECK(std::filesystem::exists(layout_file));
+
+        ImGui::SetWindowPos("Utility Space", ImVec2(200.0f, 220.0f));
+        ImGui::SetWindowSize("Utility Space", ImVec2(640.0f, 520.0f));
+        ctx->Yield(3);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View/Layouts/Load/UtilitySpacePosSize");
+        ctx->SetRef("");
+        waitForUi(ctx, [&] {
+            ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+            return window != nullptr && std::fabs(window->Pos.x - saved_pos.x) <= 1.0f &&
+                   std::fabs(window->Pos.y - saved_pos.y) <= 1.0f &&
+                   std::fabs(window->Size.x - saved_size.x) <= 1.0f &&
+                   std::fabs(window->Size.y - saved_size.y) <= 1.0f;
+        });
+        space = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(space != nullptr);
+        IM_CHECK(std::fabs(space->Pos.x - saved_pos.x) <= 1.0f);
+        IM_CHECK(std::fabs(space->Pos.y - saved_pos.y) <= 1.0f);
+        IM_CHECK(std::fabs(space->Size.x - saved_size.x) <= 1.0f);
+        IM_CHECK(std::fabs(space->Size.y - saved_size.y) <= 1.0f);
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            IM_CHECK(space->Viewport != nullptr);
+            IM_CHECK(std::fabs(space->Viewport->Pos.x - saved_pos.x) <= 1.0f);
+            IM_CHECK(std::fabs(space->Viewport->Pos.y - saved_pos.y) <= 1.0f);
+        }
     };
 
     // Tutorial tests are registered last on purpose: starting the tutorial calls
