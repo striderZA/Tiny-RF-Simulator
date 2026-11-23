@@ -1737,19 +1737,11 @@ constexpr const char *kUtilityViewTitles[] = {
 constexpr char kUtilitySpaceTitle[] = "Utility Space";
 constexpr char kUtilityDockSpaceId[] = "UtilityDockSpace";
 constexpr ImVec2 kUtilitySpaceDefaultSize(760.0f, 800.0f);
-} // namespace
 
-void RfSimulatorApp::drawUtilitySpace() {
-    // Docking is always enabled in the app (core.cpp and test_engine). Bare
-    // ImGui contexts in headless fixtures leave it off; DockSpace() no-ops
-    // there, so skip the host window and the seeding entirely.
-    if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0)
-        return;
-    // First placement: beside the main window, clamped onto the primary
-    // monitor so the group is never fully off screen. ImGuiCond_FirstUseEver
-    // applies only while no saved window state exists, so a restored session
-    // keeps the user's position. With multi-viewport on, a position outside
-    // the main window makes the group its own OS window.
+// Beside the main window, clamped onto the primary monitor so the group is
+// never fully off screen. Used for first placement and for the explicit
+// "Utility Space to its own window" promotion.
+ImVec2 utilitySpaceDefaultPos() {
     const ImGuiViewport *viewport = ImGui::GetMainViewport();
     ImVec2 pos(viewport->Pos.x + viewport->Size.x + 8.0f, viewport->Pos.y + 60.0f);
     const ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
@@ -1760,7 +1752,41 @@ void RfSimulatorApp::drawUtilitySpace() {
         pos.x = std::min(pos.x, max_x);
         pos.y = std::clamp(pos.y, monitor.WorkPos.y, std::max(monitor.WorkPos.y, max_y));
     }
-    ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+    return pos;
+}
+} // namespace
+
+void RfSimulatorApp::drawUtilitySpace() {
+    // Docking is always enabled in the app (core.cpp and test_engine). Bare
+    // ImGui contexts in headless fixtures leave it off; DockSpace() no-ops
+    // there, so skip the host window and the seeding entirely.
+    if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0)
+        return;
+    // Window > Utility Space to its own window promotes the host past whatever
+    // the saved layout says. NoAutoMerge keeps the promoted window in its own
+    // platform viewport even when the clamped position overlaps the main
+    // window on a small display. The class leaves docking alone, so the host
+    // still docks and floats by ImGui's normal rules. The clear branch lets a
+    // test (or a future toggle) restore normal merging.
+    ImGuiWindowClass utility_class;
+    if (m_utility_space_own_viewport)
+        utility_class.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+    else
+        utility_class.ViewportFlagsOverrideClear = ImGuiViewportFlags_NoAutoMerge;
+    ImGui::SetNextWindowClass(&utility_class);
+    if (m_promote_utility_space) {
+        m_promote_utility_space = false;
+        // SetNextWindowPos() undocks a docked window (PosUndock) and moves a
+        // floating one. Always covers the host docked into either dockspace
+        // and the host floating wholly inside the main window.
+        ImGui::SetNextWindowPos(utilitySpaceDefaultPos(), ImGuiCond_Always);
+    } else {
+        // ImGuiCond_FirstUseEver applies only while no saved window state
+        // exists, so a restored session keeps the user's position. With
+        // multi-viewport on, a position outside the main window makes the
+        // group its own OS window.
+        ImGui::SetNextWindowPos(utilitySpaceDefaultPos(), ImGuiCond_FirstUseEver);
+    }
     ImGui::SetNextWindowSize(kUtilitySpaceDefaultSize, ImGuiCond_FirstUseEver);
     // No p_open: the host has no close button, so a docked view is always
     // reachable from the View menu. NoCollapse keeps docked views from
@@ -1878,6 +1904,13 @@ void RfSimulatorApp::draw_ui() {
                 if (ImGui::MenuItem("Manage..."))
                     m_show_manage_layouts_dialog = true;
                 ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Window")) {
+            if (ImGui::MenuItem("Utility Space to its own window")) {
+                m_promote_utility_space = true;
+                m_utility_space_own_viewport = true;
             }
             ImGui::EndMenu();
         }

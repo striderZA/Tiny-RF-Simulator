@@ -89,6 +89,20 @@ bool dockedInUtilityGroup(const ImGuiWindow *window) {
     return root->ID == utility_root;
 }
 
+// The main dockspace's root node: the dock-space root other than the utility
+// group's.
+ImGuiDockNode *mainDockRootNode() {
+    ImGuiContext &g = *ImGui::GetCurrentContext();
+    const ImGuiID utility_root_id = ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
+    for (const ImGuiStoragePair &pair : g.DockContext.Nodes.Data) {
+        auto *node = static_cast<ImGuiDockNode *>(pair.val_p);
+        if (node != nullptr && node->IsRootNode() && node->IsDockSpace() &&
+            node->ID != utility_root_id)
+            return node;
+    }
+    return nullptr;
+}
+
 struct AgentPanelUiCleanup {
     RfSimulatorApp &app;
     ImGuiTestContext *ctx;
@@ -2200,20 +2214,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // Move the view into the main dockspace: the same dock request a drag
         // between the groups submits, and the move must persist (the default
         // assignment never re-docks a placed window mid-session).
-        ImGuiContext &g = *ImGui::GetCurrentContext();
-        const ImGuiID utility_root_id =
-            ImHashStr("UtilityDockSpace", 0, ImHashStr("Utility Space"));
-        ImGuiDockNode *main_dock_root = nullptr;
-        for (const ImGuiStoragePair &pair : g.DockContext.Nodes.Data) {
-            auto *node = static_cast<ImGuiDockNode *>(pair.val_p);
-            // The main dockspace is the dockspace root other than the
-            // utility group's.
-            if (node != nullptr && node->IsRootNode() && node->IsDockSpace() &&
-                node->ID != utility_root_id) {
-                main_dock_root = node;
-                break;
-            }
-        }
+        ImGuiDockNode *main_dock_root = mainDockRootNode();
         IM_CHECK(main_dock_root != nullptr);
         ImGui::DockBuilderDockWindow("Filter Calculator", main_dock_root->ID);
         ctx->Yield(2);
@@ -2226,6 +2227,84 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         waitForUi(
             ctx, [] { return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")); });
         IM_CHECK(dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")));
+    };
+
+    // Window > Utility Space to its own window separates the host on demand:
+    // it must work from a host floating inside the main window's bounds and
+    // from a host docked into the main dockspace, leaving a separate ImGui
+    // viewport (and so a separate OS window) without any drag.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "utility_space_promotes_to_its_own_os_window");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ImGuiWindow *host = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(host != nullptr);
+
+        const auto in_own_viewport = [] {
+            const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+            return window != nullptr && window->DockNode == nullptr &&
+                   window->Viewport != ImGui::GetMainViewport() &&
+                   window->Viewport->PlatformWindowCreated;
+        };
+
+        // Case 1: floating wholly inside the main window, so multi-viewport
+        // merges it into the main platform window before the command.
+        if (host->DockNode != nullptr) {
+            ImGui::DockBuilderDockWindow("Utility Space", 0);
+            waitForUi(ctx, [] {
+                const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+                return window != nullptr && window->DockNode == nullptr;
+            });
+        }
+        const ImGuiViewport *main_viewport = ImGui::GetMainViewport();
+        ImGui::SetWindowPos("Utility Space", main_viewport->Pos + ImVec2(120.0f, 120.0f));
+        waitForUi(ctx, [] {
+            const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+            return window != nullptr && window->Viewport == ImGui::GetMainViewport();
+        });
+        host = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(host->DockNode == nullptr);
+        IM_CHECK(host->Viewport == main_viewport);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Window/Utility Space to its own window");
+        ctx->SetRef("");
+        waitForUi(ctx, in_own_viewport);
+        IM_CHECK(in_own_viewport());
+
+        // Case 2: docked into the main dockspace, as a saved layout can
+        // restore it.
+        ImGuiDockNode *main_dock_root = mainDockRootNode();
+        IM_CHECK(main_dock_root != nullptr);
+        ImGui::DockBuilderDockWindow("Utility Space", main_dock_root->ID);
+        waitForUi(ctx, [] {
+            const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+            return window != nullptr && window->DockNode != nullptr;
+        });
+        IM_CHECK(ImGui::FindWindowByName("Utility Space")->DockNode != nullptr);
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Window/Utility Space to its own window");
+        ctx->SetRef("");
+        waitForUi(ctx, in_own_viewport);
+        IM_CHECK(in_own_viewport());
+
+        // The placement is the beside-the-main-window first-use position, so
+        // the promoted window does not land on top of the circuit.
+        host = ImGui::FindWindowByName("Utility Space");
+        IM_CHECK(host->Pos.x > main_viewport->Pos.x);
+        IM_CHECK(host->Pos.y >= main_viewport->Pos.y);
+
+        // Clear the promotion state and merge the host back into the main
+        // platform window, so later cases find docked utility views where
+        // they expect them. Undocking clamped the size to the monitor, so
+        // shrink it to fit inside the main viewport before merging.
+        s_app->testResetUtilitySpacePromotion();
+        ImGui::SetWindowSize("Utility Space", ImVec2(760.0f, 800.0f));
+        ImGui::SetWindowPos("Utility Space", main_viewport->Pos + ImVec2(20.0f, 20.0f));
+        waitForUi(ctx, [] {
+            const ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");
+            return window != nullptr && window->Viewport == ImGui::GetMainViewport();
+        });
+        IM_CHECK(ImGui::FindWindowByName("Utility Space")->Viewport == main_viewport);
     };
 
     // Tutorial tests are registered last on purpose: starting the tutorial calls

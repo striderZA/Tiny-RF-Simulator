@@ -204,6 +204,12 @@ class RfSimulatorApp {
     NodeGraphWidget &testGraphWidget() { return *m_graph_widget; }
     PowerMeterWidget &testPowerMeterWidget() { return *m_power_meter_widget; }
     LayoutManager &testLayoutManager() { return m_layout_manager; }
+    // Clears the Window > Utility Space to its own window promotion state so
+    // a UI case can restore normal multi-viewport merging for later cases.
+    void testResetUtilitySpacePromotion() {
+        m_promote_utility_space = false;
+        m_utility_space_own_viewport = false;
+    }
     TutorialState &testTutorialState() { return m_tutorial_state; }
     ReceiverRequirementsSet &testReceiverRequirements() { return m_receiver_requirements; }
     RfBudget &testRfBudget() { return m_rf_budget; }
@@ -296,6 +302,13 @@ class RfSimulatorApp {
     // Set once the never-placed utility views have been docked into the
     // group; a view the user has already placed keeps its own settings.
     bool m_utility_layout_seeded = false;
+    // Set by Window > Utility Space to its own window; drawUtilitySpace()
+    // consumes it and undocks and repositions the host on the next frame.
+    bool m_promote_utility_space = false;
+    // After a promotion the host must not auto-merge back into the main
+    // platform window when the clamped position overlaps it (small displays).
+    // Docking is unaffected, so the host stays dockable by ImGui's rules.
+    bool m_utility_space_own_viewport = false;
     // Trust state, identity details, and the Trust/Revoke control for a
     // project-local external tool record in the Extensions panel.
     void drawExternalToolTrustControls(const ExtensionManifest &manifest, bool needs_trust);
