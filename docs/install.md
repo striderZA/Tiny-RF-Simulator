@@ -4,8 +4,8 @@ Tiny RF Simulator ships as release archives on the [GitHub Releases page](https:
 
 | System | Archive | Contents |
 | --- | --- | --- |
-| Linux (x86_64) | `rf-simulator-linux-x86_64.tar.gz` | Two executables at the top level: `rf-simulator-linux` and the agent bridge `rf-sim-mcp` |
-| Windows (x86_64) | `rf-simulator-windows-x86_64.zip` | A folder, `rf-simulator-windows`, with `tiny-rf-simulator.exe`, the agent bridge `rf-sim-mcp.exe`, and three runtime DLLs |
+| Linux (x86_64) | `rf-simulator-linux-x86_64.tar.gz` | Two executables and `component_data/` at the top level: `rf-simulator-linux`, the agent bridge `rf-sim-mcp`, and the built-in component library |
+| Windows (x86_64) | `rf-simulator-windows-x86_64.zip` | A folder, `rf-simulator-windows`, with `tiny-rf-simulator.exe`, the agent bridge `rf-sim-mcp.exe`, three runtime DLLs, and `component_data/` |
 
 ## Linux
 
@@ -32,7 +32,7 @@ When **Agent Server** is on, the app also writes a connection file for the bridg
 
 ## Built-in parts
 
-The release archives do not include the built-in component library. A new download starts with an empty **Component Library**, which lists only the parts you create and parts from extensions. To use the built-in parts, copy the `component_data` folder from a source checkout into the folder beside the executable. The result must be `component_data/library` beside the executable.
+The release archives include the built-in component library at `component_data/library` beside the executable (Linux) or inside the `rf-simulator-windows` folder (Windows). A fresh download lists the shipped parts in the **Component Library** after **Refresh**. In a source checkout, start the simulator from the repository root so it finds the same `component_data/library` folder.
 
 ## First run
 
