@@ -1,7 +1,7 @@
 # Scripts
 
 ## Purpose
-- Own release, changelog, format, and docs-link scripts and their operational contracts.
+- Own release packaging, changelog, format, docs-link, and release-archive verification scripts and their operational contracts.
 
 ## Ownership
 - `scripts/release.sh`
