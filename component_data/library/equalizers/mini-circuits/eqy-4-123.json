@@ -5,9 +5,9 @@
   "manufacturer": "Mini-Circuits",
   "description": "Fixed-slope equalizer, 4 dB, DC-12 GHz",
   "parameters": {
-    "ref_gain_dB": 0.0,
+    "ref_gain_dB": -4.0,
     "ref_freq_Hz": 1e9,
-    "slope_dB_per_decade": 3.7
+    "slope_dB_per_decade": 3.0
   },
   "test_conditions": {
     "frequency_range_Hz": [0, 12e9],
