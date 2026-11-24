@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "type": "attenuator",
+  "part_number": "RCAT-30+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Fixed SMT attenuator, 30 dB, DC-20 GHz, 1.3 W",
+  "parameters": {
+    "attenuation_dB": 30.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 20e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "power_W": 1.3
+  },
+  "notes": "Precision fixed attenuator, DC to 20 GHz, 1.3 W power handling."
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "digital_step_attenuator",
+  "part_number": "DAT-31R5A-PP+",
+  "manufacturer": "Mini-Circuits",
+  "description": "6-bit digital step attenuator, 0-31.5 dB in 0.5 dB steps, DC-4 GHz",
+  "parameters": {
+    "bit_depth": 6,
+    "step_dB": 0.5,
+    "ref_loss_dB": 1.3
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 4e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "vdd_V": 3.0
+  },
+  "notes": "Mini-Circuits DAT-31R5A-PP+ datasheet (DC-4000 MHz, VDD=+3 V): 6-bit parallel control, 0.5 dB steps, 1.3 dB typical insertion loss at zero code DC-1 GHz, input IP3 +52 dBm typical."
+}
