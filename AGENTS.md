@@ -135,7 +135,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - [test_flow/AGENTS.md](test_flow/AGENTS.md) — GUI-free test-flow (ATP) harness: flow-file schema, parameter sweeps, metric capture, JSON result export
 - [agent/AGENTS.md](agent/AGENTS.md) — Agent protocol framing, shared errors, and agent-domain boundaries
 - [docs/AGENTS.md](docs/AGENTS.md) — User documentation base: plain-Markdown page contract, vanilla-syntax rule, README index, broken-link gate
-- [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, format, and docs-link scripts and the rules that bind them
+- [scripts/AGENTS.md](scripts/AGENTS.md) — Release, changelog, format, docs-link, and release-archive verification scripts and the rules that bind them
 
 <!-- OPENWIKI:START -->
 

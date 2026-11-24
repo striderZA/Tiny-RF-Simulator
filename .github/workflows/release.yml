@@ -234,6 +234,7 @@ jobs:
             build/bin/tiny-rf-simulator${{ runner.os == 'Windows' && '.exe' || '' }}
             build/bin/rf-sim-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
             mingw-dlls/
+            component_data/
 
       # CPack runs on the Release tree the job just built and tested, so the
       # CPACK_* and install() settings in CMakeLists.txt are exercised on every
@@ -256,7 +257,8 @@ jobs:
           # Each archive has one top-level directory; the patterns match below it.
           for required in \
             'bin/tiny-rf-simulator(\.exe)?$' \
-            'bin/component_data/' \
+            'bin/component_data/library/.+\.json$' \
+            'bin/component_data/library/amplifiers/mercury-systems/AM1143\.s2p$' \
             'bin/extensions/' \
             'share/doc/rf-simulator/README\.md$'; do
             if ! grep -Eq "^[^/]+/${required}" <<< "$listing"; then
@@ -305,10 +307,14 @@ jobs:
 
       - name: Package Linux binaries
         run: |
-          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux
-          cp artifacts/build-linux/build/bin/rf-sim-mcp rf-sim-mcp
-          chmod +x rf-simulator-linux rf-sim-mcp
-          tar czf rf-simulator-linux-x86_64.tar.gz rf-simulator-linux rf-sim-mcp component_data
+          set -euo pipefail
+          mkdir -p rf-simulator-linux
+          cp artifacts/build-linux/build/bin/tiny-rf-simulator rf-simulator-linux/rf-simulator-linux
+          cp artifacts/build-linux/build/bin/rf-sim-mcp rf-simulator-linux/rf-sim-mcp
+          cp -R artifacts/build-linux/component_data rf-simulator-linux/component_data
+          chmod +x rf-simulator-linux/rf-simulator-linux rf-simulator-linux/rf-sim-mcp
+          tar -czf rf-simulator-linux-x86_64.tar.gz -C rf-simulator-linux \
+            rf-simulator-linux rf-sim-mcp component_data
           tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-simulator-linux'
           tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-sim-mcp'
           tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'component_data/library/filters/mini-circuits/slp-50.json'
@@ -319,9 +325,20 @@ jobs:
           cp artifacts/build-windows/build/bin/tiny-rf-simulator.exe rf-simulator-windows/
           cp artifacts/build-windows/build/bin/rf-sim-mcp.exe rf-simulator-windows/
           cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/
-          cp -R component_data rf-simulator-windows/
+          cp -R artifacts/build-windows/component_data rf-simulator-windows/component_data
           zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
           unzip -l rf-simulator-windows-x86_64.zip | grep -F 'rf-simulator-windows/component_data/library/filters/mini-circuits/slp-50.json'
+
+      - name: Verify release archives
+        run: |
+          set -euo pipefail
+          bash scripts/test-verify-release-archive.sh
+          python3 scripts/verify-release-archive.py \
+            rf-simulator-linux-x86_64.tar.gz \
+            --library-root component_data/library --min-parts 62
+          python3 scripts/verify-release-archive.py \
+            rf-simulator-windows-x86_64.zip \
+            --library-root rf-simulator-windows/component_data/library --min-parts 62
 
       - name: Create Release (draft)
         # workflow_dispatch validates and packages the same artifacts but never publishes.

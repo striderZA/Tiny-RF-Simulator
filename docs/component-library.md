@@ -12,7 +12,7 @@ Click a part to insert it into the circuit at the canvas origin. The new node ta
 
 ## Built-in parts
 
-The repository ships 62 built-in definitions under `component_data/library`: 18 filters, 11 amplifiers, 6 fixed attenuators, 2 digital step attenuators, 5 splitters, 4 combiners, 6 mixers, 4 equalizers, and 6 ADCs. The release archives include this folder beside the executable (Linux) or inside the `rf-simulator-windows` folder (Windows), so a fresh download lists the parts after **Refresh**. In a source checkout, start the simulator from the repository root, or copy `component_data` beside the executable. `AM1143` is the only built-in part with a Touchstone file; it inserts in S-parameter mode, and its bundled file is a synthetic placeholder. Every other built-in part inserts on its ideal model.
+The download ships 62 built-in definitions under `component_data/library` beside the executable (`rf-simulator-windows/component_data/library` in the Windows zip): 18 filters, 11 amplifiers, 6 fixed attenuators, 2 digital step attenuators, 5 splitters, 4 combiners, 6 mixers, 4 equalizers, and 6 ADCs. A fresh download lists them in the browser; no source checkout is needed. `AM1143` is the only built-in part with a Touchstone file; it inserts in S-parameter mode, and its bundled file is a synthetic placeholder. Every other built-in part inserts on its ideal model.
 
 | Type | Part | Manufacturer | Description |
 |---|---|---|---|
@@ -97,7 +97,7 @@ A part's **Edit** button (user-defined parts only) reopens the same form pre-fil
 
 ## Refresh
 
-Click **Refresh** to rescan every library root — global, project, built-in, and extension data packs. Use it after editing or deleting definition files outside the app, or after copying `component_data` beside the executable. Refresh never touches placed components or the project's dirty state.
+Click **Refresh** to rescan every library root — global, project, built-in, and extension data packs. Use it after editing or deleting definition files outside the app, or after adding an extension data pack. Refresh never touches placed components or the project's dirty state.
 
 ## Swap a placed part
 
