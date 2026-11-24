@@ -11,6 +11,8 @@
 - `scripts/clang-format-resolve.sh`
 - `scripts/test-format-version.sh`
 - `scripts/check-docs-links.py`
+- `scripts/verify-release-archive.py`
+- `scripts/test-verify-release-archive.sh`
 
 ## Local Contracts
 - `scripts/clang-format-resolve.sh` is the single clang-format discovery and version check, sourced by `scripts/format.sh` and `.githooks/pre-commit`. It accepts only major >= 18 (`CLANG_FORMAT_MIN_MAJOR`), prefers the lowest accepted installed major, and falls back to the pinned `scripts/install-clang-format.sh` 18.1.8 copy only when no PATH binary qualifies.
@@ -22,12 +24,13 @@
 - `release.yml`'s `validate-version` job requires the tag version to match `CMakeLists.txt` and a matching usable changelog section.
 - `scripts/release.sh` replaces only the version token on the `project (RfSimulator VERSION …)` line of `CMakeLists.txt` and keeps its line ending. It fails unless exactly one line changed and the CR count is unchanged. After prepare, `git diff HEAD~1 --stat -- CMakeLists.txt` shows one insertion and one deletion; anything else means stop and fix the edit before pushing.
 - `CHANGELOG.md` is the source of truth for release descriptions.
-- The Linux tarball `rf-simulator-linux-x86_64.tar.gz` has exactly two root-level regular-file members: `rf-simulator-linux` (copied from `tiny-rf-simulator`) and `rf-sim-mcp`. Do not place them inside an `rf-simulator-linux/` directory.
+- The Linux tarball `rf-simulator-linux-x86_64.tar.gz` has exactly two root-level regular-file members, `rf-simulator-linux` (copied from `tiny-rf-simulator`) and `rf-sim-mcp`, plus the root-level `component_data/` directory. Do not place the executables inside an `rf-simulator-linux/` directory. The Windows zip keeps everything, including `component_data/`, inside `rf-simulator-windows/` beside `tiny-rf-simulator.exe`.
 - On Windows, run scripts with Git for Windows `sh`; WSL's `bash` on `PATH` cannot run them. Use `bash` on Linux and macOS.
 - A failed tag is retagged as described in `CONTRIBUTING.md` ("Failed release tag"); a published release's tag is never moved.
 - `release.yml` declares top-level `permissions: contents: read`; only the `release` job has `contents: write`.
 - `strict-build` and `package` both run `.github/actions/build-and-test`, which holds each configuration's toolchain install, configure, build, test, and the Windows MinGW TEST_CASE floor check. `MINGW_TEST_CASE_FLOOR` is set in `release.yml`.
-- The `package` job also runs `cpack -C Release` on its build tree and uploads the archive as the `cpack-linux` / `cpack-windows` artifact. CPack output is CI-only: the release assets are still built by hand in the release job, and the job checks that the archive holds `bin/tiny-rf-simulator`, `bin/component_data/`, `bin/extensions/` and `share/doc/rf-simulator/README.md`.
+- The `package` job also runs `cpack -C Release` on its build tree and uploads the archive as the `cpack-linux` / `cpack-windows` artifact. CPack output is CI-only: the release assets are still built by hand in the release job, and the job checks that the archive holds `bin/tiny-rf-simulator`, `bin/component_data/library` (definitions and the `AM1143` S-parameter file), `bin/extensions/` and `share/doc/rf-simulator/README.md`.
+- The hand-built release archives are checked after packaging by `scripts/verify-release-archive.py`, which opens the finished archive (never the source tree), requires `component_data/library` with at least 19 definitions, parses every definition, and resolves each declared data file inside the archive. `scripts/test-verify-release-archive.sh` covers the verifier itself; the release job runs both before publishing.
 - CPack output is not a replacement for the release assets yet. Known gap: the CPack paths differ from the hand-built assets (`bin/` prefix, `rf-simulator-<ver>-<System>-<arch>/` root). GLFW development files are excluded because the root `CMakeLists.txt` sets `GLFW_INSTALL OFF`.
 - The Windows CPack ZIP carries the MinGW runtime DLLs from the root `CMakeLists.txt` `install(FILES …)` block. The DLL names there must equal the `Collect MinGW runtime DLLs` loop in `release.yml` (the source of truth, same three as `mingw-dlls/`); change both together, and compare the Windows package job's copy step and the CPack archive when either changes.
 - The verify step strips CR from `cmake -E tar tf` output (Windows text mode) before matching; keep that `tr -d '\r'` when editing the check.
@@ -43,7 +46,7 @@
 - The Windows package job fails when `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, or `libwinpthread-1.dll` is missing from `/mingw64/bin`.
 - `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `python scripts/check-docs-links.py docs` for pushes to `master` touching the docs pages or the gate script. It is a lint only; nothing is published.
-- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`. Docs link gate: `python scripts/check-docs-links.py docs`.
+- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`. Docs link gate: `python scripts/check-docs-links.py docs`. Archive verifier: `bash scripts/test-verify-release-archive.sh`.
 
 ## Child DOX Index
 - None.
