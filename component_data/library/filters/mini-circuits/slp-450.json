@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "SLP-450+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Low-pass filter, DC-400 MHz",
+  "parameters": {
+    "filter_type": "LPF",
+    "fc_low_Hz": 440e6,
+    "fc_high_Hz": 440e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 2e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal LPF at the 440 MHz 3 dB cutoff. Datasheet passband DC-400 MHz, 20 dB stopband 580-750 MHz, 0.5 W max."
+}
