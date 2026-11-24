@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "MPD-0226CH",
+  "manufacturer": "Marki Microwave",
+  "description": "2-way MMIC power divider/combiner, 2-26.5 GHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [2e9, 26.5e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "splitter_power_W": 20
+  },
+  "notes": "Ideal 2-way splitter (3.01 dB per output). Marki MPD-0226CH GaAs MMIC Wilkinson divider: 1 dB typical excess loss, 20 dB typical isolation, 20 W as a divider and 2 W as a combiner."
+}

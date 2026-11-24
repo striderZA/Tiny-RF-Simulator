@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "M1-0218",
+  "manufacturer": "Marki Microwave",
+  "description": "Double-balanced mixer, 2-18 GHz, IF DC-2 GHz",
+  "parameters": {
+    "lo_freq_Hz": 10e9,
+    "conversion_gain_dB": -7.0,
+    "nf_dB": 7.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [2e9, 18e9],
+    "temperature_C": 25,
+    "lo_power_dBm": 10
+  },
+  "notes": "Marki M1-0218 double-balanced mixer. Datasheet conversion loss 7.0 dB typical, LO-RF isolation 35 dB typical, LO/RF 2-18 GHz, IF DC-2 GHz."
+}

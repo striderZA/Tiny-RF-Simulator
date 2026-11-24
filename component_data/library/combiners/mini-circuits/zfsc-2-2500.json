@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "combiner",
+  "part_number": "ZFSC-2-2500-S+",
+  "manufacturer": "Mini-Circuits",
+  "description": "2-way power combiner/splitter, 10-2500 MHz",
+  "parameters": {
+    "manual_mode": true
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 2.5e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way combiner (3.01 dB per input). Mini-Circuits ZFSC-2-2500-S+ coaxial power splitter/combiner, 10-2500 MHz."
+}
