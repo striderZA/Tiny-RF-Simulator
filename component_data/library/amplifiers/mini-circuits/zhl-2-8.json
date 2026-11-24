@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "ZHL-2-8+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Medium-power driver amplifier, 10-1000 MHz",
+  "parameters": {
+    "gain_dB": 34.0,
+    "nf_dB": 7.0,
+    "oip3_dBm": 42.0,
+    "p1db_dBm": 29.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 1e9],
+    "temperature_C": 25,
+    "vdd_V": 24.0,
+    "supply_current_mA": 700
+  },
+  "notes": "Typical at 24 V: gain 34 dB, NF 7 dB, OIP3 +42 dBm, P1dB +29 dBm, P3dB +30 dBm. Requires an external heat sink."
+}

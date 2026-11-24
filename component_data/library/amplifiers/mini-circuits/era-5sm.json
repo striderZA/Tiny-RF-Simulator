@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "ERA-5SM+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Wideband MMIC gain block, DC-4 GHz",
+  "parameters": {
+    "gain_dB": 19.5,
+    "nf_dB": 3.5,
+    "oip3_dBm": 33.0,
+    "p1db_dBm": 18.4
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 4.9,
+    "idd_mA": 65
+  },
+  "notes": "Typical at 1 GHz, 65 mA: gain 19.5 dB, NF 3.5 dB, OIP3 +33 dBm, P1dB +18.4 dBm."
+}

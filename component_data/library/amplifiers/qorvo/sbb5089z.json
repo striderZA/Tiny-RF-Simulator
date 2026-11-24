@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "SBB5089Z",
+  "manufacturer": "Qorvo",
+  "description": "Cascadable InGaP HBT gain block, 50 MHz-6 GHz",
+  "parameters": {
+    "gain_dB": 20.5,
+    "nf_dB": 3.9,
+    "oip3_dBm": 38.5,
+    "p1db_dBm": 20.5
+  },
+  "test_conditions": {
+    "frequency_Hz": 850e6,
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "idd_mA": 75
+  },
+  "notes": "Typical at 850 MHz, VDD=+5 V, 75 mA: gain 20.5 dB, NF 3.9 dB, OIP3 +38.5 dBm, P1dB +20.5 dBm. Gain is 19.0 dB typical at 1.95 GHz."
+}

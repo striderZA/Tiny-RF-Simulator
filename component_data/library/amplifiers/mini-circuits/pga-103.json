@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "PGA-103+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Ultra-low-noise, high-linearity gain block, 0.05-4 GHz",
+  "parameters": {
+    "gain_dB": 16.2,
+    "nf_dB": 0.6,
+    "oip3_dBm": 41.9,
+    "p1db_dBm": 22.5
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "idd_mA": 97
+  },
+  "notes": "Typical at 1 GHz, VDD=+5 V: gain 16.2 dB, NF 0.6 dB, OIP3 +41.9 dBm, P1dB +22.5 dBm. Gain falls to 11 dB at 2 GHz."
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "GALI-39+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Wideband MMIC gain block, DC-7 GHz",
+  "parameters": {
+    "gain_dB": 21.1,
+    "nf_dB": 2.4,
+    "oip3_dBm": 22.9,
+    "p1db_dBm": 10.5
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 3.5,
+    "idd_mA": 35
+  },
+  "notes": "Typical at 1 GHz, 35 mA: gain 21.1 dB, NF 2.4 dB, OIP3 +22.9 dBm, P1dB +10.5 dBm."
+}
