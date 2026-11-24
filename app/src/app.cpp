@@ -525,6 +525,8 @@ void RfSimulatorApp::load_window_states() {
     m_show_properties = m_state.loadBool("WindowState", "Properties", true);
     m_show_node_editor = m_state.loadBool("WindowState", "NodeEditor", true);
     m_show_help = m_state.loadBool("WindowState", "Help", false);
+    // SessionState persists only on Windows; elsewhere the toggle resets to on.
+    m_show_utility_space = m_state.loadBool("WindowState", "UtilitySpace", true);
     m_show_receiver_requirements = m_state.loadBool("WindowState", "ReceiverRequirements", false);
     m_show_rf_budget = m_state.loadBool("WindowState", "RfBudget", false);
     m_show_calculator = m_state.loadBool("WindowState", "FilterCalculator", false);
@@ -1745,11 +1747,12 @@ void RfSimulatorApp::drawUtilitySpace() {
     // there, so skip the host window and the seeding entirely.
     if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0)
         return;
+    if (!m_show_utility_space)
+        return;
     // First placement: beside the main window, clamped onto the primary
-    // monitor so the group is never fully off screen. ImGuiCond_FirstUseEver
+    // monitor so the window is never fully off screen. ImGuiCond_FirstUseEver
     // applies only while no saved window state exists, so a restored session
-    // keeps the user's position. With multi-viewport on, a position outside
-    // the main window makes the group its own OS window.
+    // keeps the user's position and size.
     const ImGuiViewport *viewport = ImGui::GetMainViewport();
     ImVec2 pos(viewport->Pos.x + viewport->Size.x + 8.0f, viewport->Pos.y + 60.0f);
     const ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
@@ -1760,24 +1763,32 @@ void RfSimulatorApp::drawUtilitySpace() {
         pos.x = std::min(pos.x, max_x);
         pos.y = std::clamp(pos.y, monitor.WorkPos.y, std::max(monitor.WorkPos.y, max_y));
     }
+    // NoAutoMerge keeps the host in its own platform viewport even when it
+    // overlaps the main viewport. NoDocking keeps it out of the main
+    // dockspace, so it is always a separate OS window rather than a pane.
+    ImGuiWindowClass window_class;
+    window_class.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+    window_class.ParentViewportId = 0; // top-level: do not parent it to the main window
+    ImGui::SetNextWindowClass(&window_class);
     ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(kUtilitySpaceDefaultSize, ImGuiCond_FirstUseEver);
-    // No p_open: the host has no close button, so a docked view is always
-    // reachable from the View menu. NoCollapse keeps docked views from
-    // vanishing behind a collapsed title bar.
-    ImGui::Begin(kUtilitySpaceTitle, nullptr, ImGuiWindowFlags_NoCollapse);
-    const ImGuiID utility_root = ImGui::GetID(kUtilityDockSpaceId);
-    ImGui::DockSpace(utility_root);
-    // Once per process: dock every never-placed utility view into the group.
-    // DockBuilderDockWindow creates the window settings entry in the same
-    // call, so the assignment survives to later frames and sessions, and a
-    // view the user has already placed (anywhere, or floating) keeps its own
-    // settings.
-    if (!m_utility_layout_seeded) {
-        m_utility_layout_seeded = true;
-        for (const char *title : kUtilityViewTitles)
-            if (ImGui::FindWindowSettingsByID(ImHashStr(title)) == nullptr)
-                ImGui::DockBuilderDockWindow(title, utility_root);
+    // The close button is mirrored by View > Utility Space. NoCollapse keeps
+    // docked views from vanishing behind a collapsed title bar.
+    if (ImGui::Begin(kUtilitySpaceTitle, &m_show_utility_space,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking)) {
+        const ImGuiID utility_root = ImGui::GetID(kUtilityDockSpaceId);
+        ImGui::DockSpace(utility_root);
+        // Once per process: dock every never-placed utility view into the
+        // group. DockBuilderDockWindow creates the window settings entry in
+        // the same call, so the assignment survives to later frames and
+        // sessions, and a view the user has already placed (anywhere, or
+        // floating) keeps its own settings.
+        if (!m_utility_layout_seeded) {
+            m_utility_layout_seeded = true;
+            for (const char *title : kUtilityViewTitles)
+                if (ImGui::FindWindowSettingsByID(ImHashStr(title)) == nullptr)
+                    ImGui::DockBuilderDockWindow(title, utility_root);
+        }
     }
     ImGui::End();
 }
@@ -1856,11 +1867,23 @@ void RfSimulatorApp::draw_ui() {
                 m_graph_widget->setGridSnapping(!m_graph_widget->gridSnapping());
             ImGui::MenuItem("Component Library", nullptr, &m_show_library);
             ImGui::Separator();
-            ImGui::MenuItem("Receiver Requirements", nullptr, &m_show_receiver_requirements);
-            ImGui::MenuItem("RF Budget", nullptr, &m_show_rf_budget);
-            ImGui::MenuItem("Filter Calculator", nullptr, &m_show_calculator);
-            ImGui::MenuItem("Test Flow", nullptr, &m_show_test_flow);
-            ImGui::MenuItem("Agent", nullptr, &m_show_agent);
+            ImGui::MenuItem("Utility Space", nullptr, &m_show_utility_space);
+            ImGui::Separator();
+            // A utility view requested while the group is closed opens the
+            // group instead of toggling the hidden view off.
+            const auto utility_view_item = [this](const char *label, bool &visible) {
+                if (!ImGui::MenuItem(label, nullptr, &visible))
+                    return;
+                if (!m_show_utility_space) {
+                    m_show_utility_space = true;
+                    visible = true;
+                }
+            };
+            utility_view_item("Receiver Requirements", m_show_receiver_requirements);
+            utility_view_item("RF Budget", m_show_rf_budget);
+            utility_view_item("Filter Calculator", m_show_calculator);
+            utility_view_item("Test Flow", m_show_test_flow);
+            utility_view_item("Agent", m_show_agent);
             ImGui::Separator();
             if (ImGui::BeginMenu("Layouts")) {
                 if (ImGui::MenuItem("Save As...")) {
@@ -1882,7 +1905,12 @@ void RfSimulatorApp::draw_ui() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Tools")) {
-            ImGui::MenuItem("Extensions", nullptr, &m_show_extensions);
+            if (ImGui::MenuItem("Extensions", nullptr, &m_show_extensions)) {
+                if (!m_show_utility_space) {
+                    m_show_utility_space = true;
+                    m_show_extensions = true;
+                }
+            }
             ImGui::Separator();
             for (const auto *tool : toolsMenuEntries()) {
                 const auto actions = externalToolActions(*tool);
@@ -1904,8 +1932,14 @@ void RfSimulatorApp::draw_ui() {
         }
 
         if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("How to Use", "F1"))
-                m_show_help = !m_show_help;
+            if (ImGui::MenuItem("How to Use", "F1")) {
+                if (!m_show_utility_space) {
+                    m_show_utility_space = true;
+                    m_show_help = true;
+                } else {
+                    m_show_help = !m_show_help;
+                }
+            }
             if (ImGui::MenuItem("Tutorial"))
                 requestTutorial();
             ImGui::EndMenu();
@@ -1921,8 +1955,10 @@ void RfSimulatorApp::draw_ui() {
                                                              : "Agent: " + status.client_name;
             }
         }
-        if (!agent_indicator.empty() && ImGui::MenuItem(agent_indicator.c_str()))
+        if (!agent_indicator.empty() && ImGui::MenuItem(agent_indicator.c_str())) {
             m_show_agent = true;
+            m_show_utility_space = true;
+        }
         // Track the repository containing the active circuit, or the launch
         // directory while the project is untitled.
         std::filesystem::path git_working_directory;
@@ -2040,8 +2076,11 @@ void RfSimulatorApp::draw_ui() {
             } else
                 newProject();
         }
-        if (ImGui::IsKeyPressed(ImGuiKey_F1))
+        if (ImGui::IsKeyPressed(ImGuiKey_F1)) {
             m_show_help = !m_show_help;
+            if (m_show_help)
+                m_show_utility_space = true;
+        }
     }
 
     // First-run tutorial offer. Must stay ahead of the Unsaved Changes block so
@@ -2232,17 +2271,27 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_spectrum)
         m_spectrum_widget->draw("Spectrum Analyzer", &m_show_spectrum);
 
-    if (m_show_na || m_show_receiver_requirements)
+    // The utility family lives in the second window. When that window is
+    // closed its views are hidden too; their open flags stay for the group to
+    // restore. Bare headless fixtures without docking keep drawing the views
+    // as ordinary floating windows.
+    const bool utility_views_visible =
+        m_show_utility_space || (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) == 0;
+    const bool receiver_requirements_visible =
+        utility_views_visible && m_show_receiver_requirements;
+    const bool rf_budget_visible = utility_views_visible && m_show_rf_budget;
+
+    if (m_show_na || receiver_requirements_visible)
         m_na_engine.update();
     if (m_show_na)
         m_na_widget->draw("Network Analyzer", &m_show_na);
-    if (m_show_receiver_requirements || m_show_rf_budget)
+    if (receiver_requirements_visible || rf_budget_visible)
         refreshRfBudgetEvaluation();
-    if (m_show_rf_budget) {
+    if (rf_budget_visible) {
         m_rf_budget_widget->draw("RF Budget", &m_show_rf_budget, m_rf_budget,
                                  m_receiver_requirements, m_library, m_rf_budget_evaluation);
     }
-    if (m_show_receiver_requirements) {
+    if (receiver_requirements_visible) {
         const auto measurement_state = selectedReceiverRequirementsState(m_receiver_requirements);
         ReceiverRequirementsConfig measurement_config;
         if (measurement_state.config && measurement_state.invalid_reason.empty())
@@ -2276,16 +2325,16 @@ void RfSimulatorApp::draw_ui() {
     if (m_show_library && m_library_browser) {
         m_library_browser->draw("Component Library", &m_show_library);
     }
-    if (m_show_calculator && m_calculator_widget) {
+    if (utility_views_visible && m_show_calculator && m_calculator_widget) {
         m_calculator_widget->draw("Filter Calculator", &m_show_calculator);
     }
-    if (m_show_test_flow) {
+    if (utility_views_visible && m_show_test_flow) {
         m_test_flow_widget->draw(
             "Test Flow", &m_show_test_flow, [this]() { openTestFlowDialog(); },
             [this]() { exportTestFlowDialog(); }, [this]() { saveTestFlowDialog(); });
     }
 
-    if (m_show_agent) {
+    if (utility_views_visible && m_show_agent) {
         AgentPanelView view;
         view.server_on = m_agent_server_enabled;
         view.status = m_agent_server ? m_agent_server->status() : AgentServerStatus{};
@@ -2304,12 +2353,13 @@ void RfSimulatorApp::draw_ui() {
         view.checkpoints = &m_agent_host->checkpoints();
         m_agent_panel_widget.draw("Agent", &m_show_agent, view);
     }
-    drawExtensionsPanel();
+    if (utility_views_visible)
+        drawExtensionsPanel();
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);
 
-    if (m_show_help)
+    if (utility_views_visible && m_show_help)
         m_help_widget.draw("How to Use", &m_show_help);
 
     if (m_show_tutorial) {
@@ -2337,6 +2387,7 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_pfb_views.saveVisibility(m_circuit_runtime.components(), m_state);
     m_state.saveBool("WindowState", "NodeEditor", m_show_node_editor);
     m_state.saveBool("WindowState", "Help", m_show_help);
+    m_state.saveBool("WindowState", "UtilitySpace", m_show_utility_space);
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
     m_state.saveBool("WindowState", "TestFlow", m_show_test_flow);
     m_state.saveBool("WindowState", "Agent", m_show_agent);
