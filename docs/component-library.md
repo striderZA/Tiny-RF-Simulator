@@ -12,7 +12,7 @@ Click a part to insert it into the circuit at the canvas origin. The new node ta
 
 ## Built-in parts
 
-The repository ships 19 built-in definitions under `component_data/library` — amplifiers, attenuators (including the 6-bit digital step attenuator `ZX76-31R5A-PN+`), filters, splitters, mixers, equalizers, combiners, and ADCs, including one amplifier (`AM1143`) with a Touchstone file. The release archives do not include them: a fresh download lists only the parts you create and parts from extensions. To use the built-in parts, copy the `component_data` folder from a source checkout into the folder beside the executable, so `component_data/library` sits there, and click **Refresh**.
+The download ships 19 built-in definitions under `component_data/library` beside the executable (`rf-simulator-windows/component_data/library` in the Windows zip) — amplifiers, attenuators (including the 6-bit digital step attenuator `ZX76-31R5A-PN+`), filters, splitters, mixers, equalizers, combiners, and ADCs, including one amplifier (`AM1143`) with a Touchstone file. A fresh download lists them in the browser; no source checkout is needed.
 
 Built-in definitions have no **Edit** button; they cannot be changed in place.
 
@@ -32,7 +32,7 @@ A part's **Edit** button (user-defined parts only) reopens the same form pre-fil
 
 ## Refresh
 
-Click **Refresh** to rescan every library root — global, project, built-in, and extension data packs. Use it after editing or deleting definition files outside the app, or after copying `component_data` beside the executable. Refresh never touches placed components or the project's dirty state.
+Click **Refresh** to rescan every library root — global, project, built-in, and extension data packs. Use it after editing or deleting definition files outside the app, or after adding an extension data pack. Refresh never touches placed components or the project's dirty state.
 
 ## Swap a placed part
 

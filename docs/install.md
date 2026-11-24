@@ -4,8 +4,8 @@ Tiny RF Simulator ships as release archives on the [GitHub Releases page](https:
 
 | System | Archive | Contents |
 | --- | --- | --- |
-| Linux (x86_64) | `rf-simulator-linux-x86_64.tar.gz` | Two executables at the top level: `rf-simulator-linux` and the agent bridge `rf-sim-mcp` |
-| Windows (x86_64) | `rf-simulator-windows-x86_64.zip` | A folder, `rf-simulator-windows`, with `tiny-rf-simulator.exe`, the agent bridge `rf-sim-mcp.exe`, and three runtime DLLs |
+| Linux (x86_64) | `rf-simulator-linux-x86_64.tar.gz` | Two executables at the top level, `rf-simulator-linux` and the agent bridge `rf-sim-mcp`, plus the `component_data/` folder with the built-in component library |
+| Windows (x86_64) | `rf-simulator-windows-x86_64.zip` | A folder, `rf-simulator-windows`, with `tiny-rf-simulator.exe`, the agent bridge `rf-sim-mcp.exe`, three runtime DLLs, and the `component_data/` folder with the built-in component library |
 
 ## Linux
 
@@ -22,7 +22,7 @@ Both executables in the archive are already marked executable. `rf-sim-mcp` is t
 
 Extract `rf-simulator-windows-x86_64.zip`, open the `rf-simulator-windows` folder, and run `tiny-rf-simulator.exe`.
 
-Keep the DLL files and `rf-sim-mcp.exe` in the same folder as `tiny-rf-simulator.exe`. They are part of the archive. The Agent panel looks for the bridge in that folder.
+Keep the DLL files, `rf-sim-mcp.exe`, and the `component_data` folder in the same folder as `tiny-rf-simulator.exe`. They are part of the archive. The Agent panel looks for the bridge in that folder, and the built-in parts are read from `component_data/library` there.
 
 ## Files the app writes
 
@@ -32,7 +32,7 @@ When **Agent Server** is on, the app also writes a connection file for the bridg
 
 ## Built-in parts
 
-The release archives do not include the built-in component library. A new download starts with an empty **Component Library**, which lists only the parts you create and parts from extensions. To use the built-in parts, copy the `component_data` folder from a source checkout into the folder beside the executable. The result must be `component_data/library` beside the executable.
+The release archives include the built-in component library beside the executable, so a fresh download lists the 19 built-in parts in **View > Component Library**. The definitions and their S-parameter files live in `component_data/library` (`rf-simulator-windows/component_data/library` in the Windows zip); keep that folder beside the executable.
 
 ## First run
 

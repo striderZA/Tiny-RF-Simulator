@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **The built-in component library ships with the release downloads** — the Linux tarball and the Windows zip now carry `component_data/library` beside the executable (inside `rf-simulator-windows/` on Windows), so a fresh download lists the 19 built-in parts without copying anything from a source checkout. The release workflow fails when a packaged archive is missing the library, malformed definitions, or a declared S-parameter file.
+
 ### Changed
 
 - **Utility Space is always its own window** — the second docking group is now a separate top-level window beside the main one even when the display is too narrow for it to fit, instead of becoming a pane of the main window. **View > Utility Space** opens and closes it, its docked panels hide and return with it, individual panels still float and move between the windows, and its position and size persist in the layout ini and named layouts.
