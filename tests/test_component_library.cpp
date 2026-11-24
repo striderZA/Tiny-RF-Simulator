@@ -518,8 +518,8 @@ TEST_CASE("Built-in component library catalogue is complete and loadable", "[lib
     CHECK(library.byType("attenuator").size() == 6);
     CHECK(library.byType("digital_step_attenuator").size() == 2);
     CHECK(library.byType("splitter").size() == 5);
-    CHECK(library.byType("combiner").size() == 5);
-    CHECK(library.byType("mixer").size() == 5);
+    CHECK(library.byType("combiner").size() == 4);
+    CHECK(library.byType("mixer").size() == 6);
     CHECK(library.byType("equalizer").size() == 4);
     CHECK(library.byType("adc").size() == 6);
 }

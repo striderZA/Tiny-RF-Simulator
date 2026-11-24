@@ -134,7 +134,7 @@ TEST_CASE("library part swap keeps the component id, its links, and neighbour re
 TEST_CASE("library part swap refuses a connected port the new part lacks, changing nothing",
           "[component_swap][issue200]") {
     SwapFixture f;
-    const SplitterCircuit circuit = buildSplitterCircuit(f, "M1-0002");
+    const SplitterCircuit circuit = buildSplitterCircuit(f, "PD-0R510");
     const ComponentDefinition *zx60 = findPart(f.library, "ZX60-33LN+");
     REQUIRE(zx60 != nullptr);
 
@@ -160,7 +160,7 @@ TEST_CASE("library part swap refuses a connected port the new part lacks, changi
 TEST_CASE("library part swap to a variant with the same ports keeps every link",
           "[component_swap][issue200]") {
     SwapFixture f;
-    const SplitterCircuit circuit = buildSplitterCircuit(f, "M1-0002");
+    const SplitterCircuit circuit = buildSplitterCircuit(f, "PD-0R510");
     const ComponentDefinition *mpd = findPart(f.library, "MPD-0226CH");
     REQUIRE(mpd != nullptr);
 
@@ -219,7 +219,7 @@ TEST_CASE("library part swap refuses a probe or instrument on a port the new par
     // Only the first output is linked, so the second output is refused on a probe or an instrument
     // alone rather than on its connection.
     IComponentEngine *generator = f.add("generator");
-    IComponentEngine *splitter = f.addPart("M1-0002");
+    IComponentEngine *splitter = f.addPart("PD-0R510");
     REQUIRE(generator != nullptr);
     REQUIRE(splitter != nullptr);
     REQUIRE(f.commands.connect(generator->outputPinId(), splitter->inputPinId()).has_value());
@@ -253,7 +253,7 @@ TEST_CASE("library part swap refuses a probe or instrument on a port the new par
 TEST_CASE("library part swap moves an instrument selection onto the matching port",
           "[component_swap][issue200]") {
     SwapFixture f;
-    const SplitterCircuit circuit = buildSplitterCircuit(f, "M1-0002");
+    const SplitterCircuit circuit = buildSplitterCircuit(f, "PD-0R510");
     const ComponentDefinition *mpd = findPart(f.library, "MPD-0226CH");
     REQUIRE(mpd != nullptr);
     const int old_node = circuit.splitter->graphNodeId();

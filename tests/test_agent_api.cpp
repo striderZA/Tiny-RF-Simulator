@@ -1564,7 +1564,7 @@ std::string admS2pPath() {
 
 std::string am1143S2pPath() {
     return std::string(PROJECT_SOURCE_DIR) +
-           "/component_data/library/amplifiers/anatech/AM1143.s2p";
+           "/component_data/library/amplifiers/mercury-systems/AM1143.s2p";
 }
 
 } // namespace
