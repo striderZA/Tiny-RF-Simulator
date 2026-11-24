@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Added
+
+- **Built-in component library expanded to 62 parts** — the starter catalogue under `component_data/library` now covers common RF chains end to end: 18 filters (low-pass, high-pass, band-pass, and band-stop from 37 MHz to 3.3 GHz), 11 amplifiers (LNAs, gain blocks, and driver amplifiers), six fixed attenuators, two digital step attenuators, five 2-way splitters, five 2-way combiners, five mixers, four equalizers, and six ADCs. Every definition loads with no validation issues and inserts with its datasheet-typical parameters; `AM1143` remains the only part with a Touchstone file, so every other part starts on its ideal model. The Component Library page lists the shipped parts.
+
+### Fixed
+
+- **`MEQ0-20ASM` lists its actual manufacturer and response** — the passive equalizer is a Marki Microwave part, not Mini-Circuits, and its ideal model now follows the datasheet's 0.6 dB at 10 GHz / 1.3 dB at 20 GHz insertion-loss trend instead of an unrelated -20 dB/decade slope.
+
 ### Changed
 
 - **Utility Space is always its own window** — the second docking group is now a separate top-level window beside the main one even when the display is too narrow for it to fit, instead of becoming a pane of the main window. **View > Utility Space** opens and closes it, its docked panels hide and return with it, individual panels still float and move between the windows, and its position and size persist in the layout ini and named layouts.
