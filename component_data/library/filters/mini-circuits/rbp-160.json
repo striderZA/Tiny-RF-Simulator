@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "RBP-160+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Band-pass filter, 120-210 MHz",
+  "parameters": {
+    "filter_type": "BPF",
+    "fc_low_Hz": 120e6,
+    "fc_high_Hz": 210e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 2e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "rf_power_W": 0.5
+  },
+  "notes": "Datasheet: 120-210 MHz passband, 1.24 dB typical insertion loss at 165 MHz, 20 dB stopbands at 85 MHz and 280 MHz, 35 dB rejection 70 MHz and 340-2000 MHz."
+}
