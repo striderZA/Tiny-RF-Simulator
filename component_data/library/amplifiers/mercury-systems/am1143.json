@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "type": "amplifier",
+  "part_number": "AM1143",
+  "manufacturer": "Mercury Systems",
+  "description": "20 MHz-6 GHz driver MMIC amplifier",
+  "parameters": {
+    "gain_dB": 20.0,
+    "nf_dB": 2.0,
+    "oip2_dBm": 50.0,
+    "oip3_dBm": 40.0,
+    "p1db_dBm": 27.0
+  },
+  "data_files": [
+    {"type": "s_parameters", "path": "AM1143.s2p"}
+  ],
+  "test_conditions": {
+    "frequency_range_Hz": [20e6, 6e9],
+    "temperature_C": 25,
+    "vdd_V": 8.0,
+    "idd_mA": 200
+  },
+  "notes": "Mercury Systems datasheet typical at VDD=+8 V and 200 mA: 20 dB gain, 2.0 dB noise figure, +40 dBm OIP3, +50 dBm OIP2, +27 dBm P1dB. The bundled AM1143.s2p is a synthetic placeholder for demonstration, not measured data."
+}
