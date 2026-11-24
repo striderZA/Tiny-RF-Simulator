@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "adc",
+  "part_number": "AD9680",
+  "manufacturer": "Analog Devices",
+  "description": "14-bit, 1.25 GSPS dual RF sampling ADC",
+  "parameters": {
+    "fs_Hz": 1.25e9,
+    "nsd_dBm_per_Hz": -154.0,
+    "decimation": 2,
+    "nco_fs_fraction": 0.25
+  },
+  "test_conditions": {
+    "temperature_C": 25,
+    "vdd_V": 2.5,
+    "resolution_bits": 14
+  },
+  "notes": "Typical noise spectral density at 1.25 GSPS with a 14-bit converter and JESD204B output."
+}

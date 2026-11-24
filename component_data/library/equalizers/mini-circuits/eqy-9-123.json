@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "equalizer",
+  "part_number": "EQY-9-123+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Fixed-slope equalizer, 9 dB, DC-12 GHz",
+  "parameters": {
+    "ref_gain_dB": 0.0,
+    "ref_freq_Hz": 1e9,
+    "slope_dB_per_decade": 8.3
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 12e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal positive-slope model of a 9 dB equalization across DC-12 GHz (about 8.3 dB/decade from 1 to 12 GHz)."
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "adc",
+  "part_number": "ADS54J60",
+  "manufacturer": "Texas Instruments",
+  "description": "16-bit, 1 GSPS dual RF sampling ADC",
+  "parameters": {
+    "fs_Hz": 1.0e9,
+    "nsd_dBm_per_Hz": -157.0,
+    "decimation": 2,
+    "nco_fs_fraction": 0.25
+  },
+  "test_conditions": {
+    "temperature_C": 25,
+    "vdd_V": 1.9,
+    "resolution_bits": 16
+  },
+  "notes": "Typical SNR 70 dBFS at 1 GSPS with a 16-bit converter and JESD204B output."
+}
