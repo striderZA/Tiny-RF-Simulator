@@ -2,6 +2,7 @@
 #include "spectrum.h"
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_markers.h"
+#include "spectrum_analyzer_measurement.h"
 #include "view_manager.h"
 #include <string>
 #include <unordered_map>
@@ -35,6 +36,13 @@ class SpectrumAnalyzerWidget {
     // The combined axis readoutTrace() is sampled on (the Peak/marker axis).
     const std::vector<double> &readoutAxis() const { return m_readout_axis; }
 
+    // Measurement source state: all visible traces, or one probe's trace. View state, not
+    // project data; the resolution reports a hidden/removed fallback for the readout.
+    const MeasurementSelection &measurementSelection() const { return m_measurement; }
+    const MeasurementSelection::Resolution &measurementResolution() const {
+        return m_measurement_resolution;
+    }
+
     // Marker view state: four markers, M1 is the reference. Not project data.
     const MarkerModel &markers() const { return m_markers; }
     std::string markerSessionState() const { return m_markers.serialize(); }
@@ -54,6 +62,7 @@ class SpectrumAnalyzerWidget {
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
     std::vector<std::string> m_probe_labels;
+    std::vector<std::pair<SignalNode *, int>> m_probe_targets;  // probe-pin order
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
     MarkerModel m_markers;
     DragZoomState m_zoom;
@@ -65,7 +74,16 @@ class SpectrumAnalyzerWidget {
     std::vector<double> m_readout_axis; // combined axis of the last draw()
     PlotArea m_last_plot_area;
 
+    MeasurementSelection m_measurement;
+    MeasurementSelection::Resolution m_measurement_resolution;
+    std::string m_measure_label; // label of the chosen probe, kept for the removed fallback
+    bool m_measure_source_known = false;
+    bool m_last_measure_all_visible = true;
+    MeasurementProbeId m_last_measure_probe;
+
     const Spectrum &outputSpectrumFor(SignalNode *node) const;
+    std::vector<MeasurementProbeId> measurementProbeIds() const;
+    const Spectrum *spectrumForProbeSlot(size_t slot) const;
 
     // Vertical space the marker controls, readout strip, and optional table need.
     float markerAreaReserve() const;

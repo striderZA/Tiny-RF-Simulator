@@ -57,6 +57,9 @@ class MarkerModel {
     // neither a cache nor a supplied list nothing moves. Returns true only when it moved.
     bool nextPeak(int index, const std::vector<Peak> &peaks = {});
     const std::vector<Peak> &peaks(int index) const;
+    // Drops every marker's cached peak list, so Next Peak adopts peaks from the current
+    // readout source after the measured trace changes. Positions and delta flags stay.
+    void clearPeakCaches();
 
     // Session token: monotonic view state for SessionState persistence. Peaks are transient
     // and are not part of it. restore() rejects a malformed token without changing anything.

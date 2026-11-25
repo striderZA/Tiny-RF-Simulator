@@ -467,6 +467,14 @@ add_standalone_test(test_spectrum_analyzer_marker_session
     LIBS simulator::spectrum_analyzer_markers
 )
 
+# Measurement-source rules: probe selection identity across reordering, and the
+# hidden/removed fallback back to the all-visible readout. UI-free; the widget
+# presentation is covered by test_ui.
+add_standalone_test(test_spectrum_analyzer_measurement
+    SOURCES test_spectrum_analyzer_measurement.cpp
+    LIBS simulator::spectrum_analyzer_measurement
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.

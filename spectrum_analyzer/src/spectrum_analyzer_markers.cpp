@@ -145,6 +145,11 @@ const std::vector<Peak> &MarkerModel::peaks(int index) const {
     return validIndex(index) ? m_markers[static_cast<size_t>(index)].peaks : kEmpty;
 }
 
+void MarkerModel::clearPeakCaches() {
+    for (Marker &marker : m_markers)
+        marker.peaks.clear();
+}
+
 std::string MarkerModel::serialize() const {
     char buffer[512];
     std::snprintf(

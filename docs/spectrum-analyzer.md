@@ -58,14 +58,23 @@ The **Trace Mode** list picks how each trace is drawn:
 
 Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average history. In Max Hold or Min Hold, a **Reset Hold** button clears it directly. Changing the frequency span does not clear history.
 
+## Measure on a probe
+
+The **Measure on** list picks which trace the measurement readouts follow:
+
+- **All visible** (the default) keeps the historic combined readout: every visible trace, sampled onto one shared axis.
+- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, and **Next Peak** to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
+
+The chosen probe stays selected if its trace is hidden or its probe is removed. While that happens the panel reads `Measure on: All visible traces (probe [n] … hidden)` or `… (probe … removed)` and measures the visible traces, so it never silently measures a different trace. Showing the probe again, or probing it again, resumes measuring it; choosing **All visible** clears the stored selection. The selection is view state: it is not saved with the project and does not mark it dirty.
+
 ## Readouts
 
-- **Peak** shows the strongest bin of the combined visible traces, with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
-- **Average noise level** is the mean per-bin noise across the visible traces with tones excluded.
+- **Peak** shows the strongest bin of the measurement source selected by **Measure on** (all visible traces, or one probe's trace), with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
+- **Average noise level** is the mean per-bin noise across the measurement source with tones excluded.
 
 Peak, marker, and average-noise readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
 
-Each probe is plotted on its own frequency grid. The readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin.
+Each probe is plotted on its own frequency grid. With **Measure on: All visible**, the readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin. With one probe selected, the readouts use that probe's trace on its own grid.
 
 The PFB Channelizer's per-channel output draws in light sky blue regardless of slot, and its full-band trace carries an **Active Ch** segment over the active channel.
 
@@ -76,12 +85,12 @@ The analyzer has four markers, **M1** to **M4**, each in its own color on the tr
 - **Drag** a marker's vertical line (or its dot) left or right to move it along the trace. The readout follows live, and the marker settles on the nearest displayed bin when you release it.
 - **Ctrl+click** the plot to place the selected marker at that frequency.
 - **Marker** picks which marker the peak buttons act on. Clicking a marker line, its dot, or its line in the readout strip also selects it.
-- **Snap to Peak** moves the selected marker to the strongest of up to eight local maxima. **Next Peak** cycles that marker through the same list.
+- **Snap to Peak** moves the selected marker to the strongest of up to eight local maxima. **Next Peak** cycles that marker through the same list. Changing the **Measure on** source clears every marker's cached peak list, so Next Peak starts from the newly selected trace.
 - **Delta (vs M1)** switches the selected marker to a relative readout: frequency offset and dB offset from M1. M1 is the reference marker and always reads absolute; while M1 is off, a delta marker shows that the reference is unavailable.
 - The compact readout strip under the plot shows every enabled marker's frequency and amplitude, or its delta values. Clicking a strip line selects that marker.
 - **Marker Table** shows or hides a table of every enabled marker with absolute frequency and amplitude and the delta columns.
 
-Markers read the same jitter-free combined visible-trace values as **Peak**: they follow trace visibility, Max Hold and Min Hold values, and Video Avg, and a marker at a given frequency names the same bin the Peak readout uses.
+Markers read the same jitter-free values as **Peak** on the current **Measure on** source: they follow its trace visibility and its Max Hold and Min Hold values, and a marker at a given frequency names the same bin the Peak readout uses. As for Peak, Clear/Write and Video Avg read the current frame.
 
 ## Nothing probed
 

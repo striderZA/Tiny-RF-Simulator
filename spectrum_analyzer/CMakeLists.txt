@@ -37,6 +37,18 @@ target_link_libraries(spectrum_analyzer_markers
 
 add_library(simulator::spectrum_analyzer_markers ALIAS spectrum_analyzer_markers)
 
+# ---- Measurement source selection (UI-free) ----
+add_library(spectrum_analyzer_measurement
+    STATIC
+        src/spectrum_analyzer_measurement.cpp
+)
+
+target_include_directories(spectrum_analyzer_measurement
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+add_library(simulator::spectrum_analyzer_measurement ALIAS spectrum_analyzer_measurement)
+
 # ---- UI Widget ----
 add_library(spectrum_analyzer_widget 
     STATIC
@@ -50,6 +62,7 @@ target_include_directories(spectrum_analyzer_widget
 target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
         simulator::spectrum_analyzer_markers
+        simulator::spectrum_analyzer_measurement
         simulator::spectrum_analyzer_engine 
         simulator::core 
         simulator::pfb_channelizer_engine
