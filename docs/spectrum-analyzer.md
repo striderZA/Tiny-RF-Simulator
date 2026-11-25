@@ -58,6 +58,15 @@ The **Trace Mode** list picks how each trace is drawn:
 
 Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average history. In Max Hold or Min Hold, a **Reset Hold** button clears it directly. Changing the frequency span does not clear history.
 
+## Measure on a probe
+
+The **Measure on** list picks which trace the measurement readouts follow:
+
+- **All visible** (the default) keeps the historic combined readout: every visible trace, sampled onto one shared axis.
+- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, and **Next Peak** to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
+
+The chosen probe stays selected if its trace is hidden or its probe is removed. While that happens the panel reads `Measure on: All visible traces (probe [n] … hidden)` or `… (probe … removed)` and measures the visible traces, so it never silently measures a different trace. Showing the probe again, or probing it again, resumes measuring it; choosing **All visible** clears the stored selection. The selection is view state: it is not saved with the project and does not mark it dirty.
+
 ## Readouts
 
 - **Peak** shows the strongest bin of the combined visible traces, with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
@@ -65,7 +74,7 @@ Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average hist
 
 Peak, marker, and average-noise readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
 
-Each probe is plotted on its own frequency grid. The readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin.
+Each probe is plotted on its own frequency grid. With **Measure on: All visible**, the readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin. With one probe selected, the readouts use that probe's trace on its own grid.
 
 The PFB Channelizer's per-channel output draws in light sky blue regardless of slot, and its full-band trace carries an **Active Ch** segment over the active channel.
 

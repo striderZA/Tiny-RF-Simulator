@@ -77,6 +77,13 @@ Link to the owning document instead of restating its rules or commands on anothe
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
 
+## Spectrum Analyzer Measurement Contract
+
+- **Measure on** is view state, not project data: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo.
+- `MeasurementSelection` (`spectrum_analyzer/include/spectrum_analyzer_measurement.h`, UI-free) owns the chosen probe identity `(node pointer, output index)` and resolves it against the current probe list and trace visibility. Identity survives reordering, so adding or removing another probe does not retarget the selection.
+- `All visible` (no selection) keeps the combined readout. A chosen probe scopes Peak, average noise, markers, Snap to Peak, and Next Peak to that probe's own trace on its own grid. Held values still advance for every probe.
+- A chosen probe that is hidden or removed resolves to the all-visible readout with `Fallback::Hidden` or `Fallback::Removed`, and the panel readout names the reason. Showing or re-probing the trace resumes the selection.
+
 ## Spectrum Analyzer Marker Contract
 
 - Markers are view state, never project data: they do not enter `ProjectSerializer`, do not mark the project dirty, and are not undo records.
