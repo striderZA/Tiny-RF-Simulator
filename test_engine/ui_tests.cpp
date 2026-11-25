@@ -936,11 +936,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(short_size.y >= SpectrumAnalyzerWidget::kMinPlotHeight);
         IM_CHECK(tall_size.x > 600.0f); // fills the window width
 
-        // Enabling the marker adds control rows below the plot; the plot must
-        // give up exactly that room and stay usable.
+        // Enabling a marker adds the selected-marker rows and the readout strip
+        // below the plot; the plot must give up exactly that room and stay usable.
         ctx->SetRef("Spectrum Analyzer");
-        IM_CHECK(ctx->ItemExists("Enable Marker"));
-        ctx->ItemClick("Enable Marker");
+        IM_CHECK(ctx->ItemExists("M1"));
+        ctx->ItemCheck("M1");
         ctx->SetRef("");
         ctx->Yield(2);
         const float marker_h = plot_size().y;
@@ -948,7 +948,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(marker_h >= SpectrumAnalyzerWidget::kMinPlotHeight);
         ctx->SetRef("Spectrum Analyzer");
         IM_CHECK(ctx->ItemExists("Snap to Peak"));
-        ctx->ItemClick("Enable Marker"); // restore the disabled layout
+        IM_CHECK(ctx->ItemExists("Marker Table"));
+        ctx->ItemUncheck("M1"); // restore the disabled layout
         ctx->SetRef("");
         ctx->Yield(2);
 
