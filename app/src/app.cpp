@@ -542,6 +542,10 @@ void RfSimulatorApp::load_window_states() {
     if (m_spectrum_widget)
         m_spectrum_widget->setPeakTableVisible(
             m_state.loadBool("SpectrumAnalyzer", "PeakTable", false));
+    // The harmonic measurement follows the same rule: its visibility is view state.
+    if (m_spectrum_widget)
+        m_spectrum_widget->setHarmonicsVisible(
+            m_state.loadBool("SpectrumAnalyzer", "Harmonics", false));
 }
 
 bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -2404,6 +2408,7 @@ RfSimulatorApp::~RfSimulatorApp() {
         m_state.save("SpectrumAnalyzer", "Markers",
                      m_spectrum_widget->markerSessionState().c_str());
         m_state.saveBool("SpectrumAnalyzer", "PeakTable", m_spectrum_widget->peakTable().visible());
+        m_state.saveBool("SpectrumAnalyzer", "Harmonics", m_spectrum_widget->harmonics().visible());
     }
 }
 

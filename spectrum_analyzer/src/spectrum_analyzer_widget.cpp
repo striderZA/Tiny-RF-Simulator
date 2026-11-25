@@ -94,6 +94,11 @@ float SpectrumAnalyzerWidget::markerAreaReserve() const {
         const int rows = std::max(1, m_peaks.count());
         reserve += ImGui::GetFrameHeightWithSpacing() * static_cast<float>(rows + 2) + 8.0f;
     }
+    if (m_harmonics.visible()) {
+        // The use-marker row, the fundamental line, and the header plus two harmonic rows.
+        reserve += ImGui::GetFrameHeightWithSpacing() * 4.0f +
+                   ImGui::GetTextLineHeightWithSpacing() + 8.0f;
+    }
     if (!m_markers.anyEnabled())
         return reserve;
 
@@ -188,6 +193,10 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
     bool peaks_visible = m_peaks.visible();
     if (ImGui::Checkbox("Peak Table", &peaks_visible))
         m_peaks.setVisible(peaks_visible);
+    ImGui::SameLine();
+    bool harmonics_visible = m_harmonics.visible();
+    if (ImGui::Checkbox("Harmonics", &harmonics_visible))
+        m_harmonics.setVisible(harmonics_visible);
 
     if (!m_markers.anyEnabled())
         return;
@@ -375,6 +384,103 @@ void SpectrumAnalyzerWidget::drawPeakTable() {
         ImGui::Text("%+.3f", row.delta_frequency_Hz / 1e6);
         ImGui::TableSetColumnIndex(4);
         ImGui::Text("%+.2f", row.delta_amplitude_dB);
+    }
+    ImGui::EndTable();
+}
+
+void SpectrumAnalyzerWidget::drawHarmonicTable() {
+    if (!m_harmonics.visible())
+        return;
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Harmonic measurement");
+
+    // The marker source follows the selected marker, like Snap to Peak and Next Peak. A
+    // marker that is off has no meaningful frequency, so the box is disabled and the
+    // measurement falls back to the strongest tone (the line below says which).
+    const bool marker_on = m_markers.enabled(m_markers.selected());
+    bool use_marker = m_harmonics.useMarker();
+    if (!marker_on)
+        ImGui::BeginDisabled();
+    if (ImGui::Checkbox("Use marker as fundamental", &use_marker))
+        m_harmonics.setUseMarker(use_marker);
+    if (!marker_on) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && ImGui::BeginTooltip()) {
+            ImGui::TextUnformatted("Enable a marker to use its frequency as the fundamental.");
+            ImGui::EndTooltip();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%s)", kMarkerNames[m_markers.selected()]);
+
+    const HarmonicModel::Result &result = m_harmonics.result();
+    if (result.fundamental_status == HarmonicModel::Status::NoFundamental) {
+        if (m_harmonics.useMarker() && marker_on) {
+            ImGui::TextUnformatted(
+                "No clear fundamental: the marker is at 0 Hz. Place it on a tone.");
+        } else {
+            ImGui::TextUnformatted(
+                "No clear fundamental: no tone stands clear of the noise floor.");
+        }
+        return;
+    }
+    if (result.fundamental_status == HarmonicModel::Status::FundamentalOutOfSpan) {
+        ImGui::TextUnformatted("No clear fundamental: the marker is outside the current span.");
+        return;
+    }
+
+    ImGui::Text("Fundamental: %.3f MHz  %.2f dBm  (%s)", result.fundamental_Hz / 1e6,
+                result.fundamental_dBm,
+                (m_harmonics.useMarker() && marker_on) ? "marker" : "strongest tone");
+
+    const ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter;
+    if (!ImGui::BeginTable("Harmonic Table", 4, flags))
+        return;
+    // Short unit headers keep the four columns inside a 400 px dock.
+    ImGui::TableSetupColumn("Harmonic");
+    ImGui::TableSetupColumn("MHz");
+    ImGui::TableSetupColumn("dBm");
+    ImGui::TableSetupColumn("dBc");
+    ImGui::TableHeadersRow();
+
+    for (const HarmonicModel::Entry &entry : result.harmonics) {
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        if (entry.order == 2)
+            ImGui::TextUnformatted("2nd");
+        else
+            ImGui::TextUnformatted("3rd");
+
+        ImGui::TableSetColumnIndex(1);
+        switch (entry.status) {
+        case HarmonicModel::Status::Measured:
+            ImGui::Text("%.3f", entry.frequency_Hz / 1e6);
+            break;
+        case HarmonicModel::Status::OutOfSpan:
+            ImGui::TextUnformatted("outside span");
+            break;
+        case HarmonicModel::Status::Unresolved:
+            ImGui::TextUnformatted("RBW too wide");
+            break;
+        default:
+            ImGui::TextUnformatted("not found");
+            break;
+        }
+
+        ImGui::TableSetColumnIndex(2);
+        if (entry.status == HarmonicModel::Status::Measured)
+            ImGui::Text("%.2f", entry.amplitude_dBm);
+        else
+            ImGui::TextUnformatted("-");
+
+        ImGui::TableSetColumnIndex(3);
+        if (entry.status == HarmonicModel::Status::Measured)
+            ImGui::Text("%+.2f", entry.relative_dBc);
+        else
+            ImGui::TextUnformatted("-");
     }
     ImGui::EndTable();
 }
@@ -675,6 +781,13 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     // The peak table is the strongest part of the same readout trace, so it follows the
     // measurement source, trace visibility, and the hold/average mode exactly as Peak does.
     m_peaks.setPeaks(m_engine.findPeaks(m_readout_dBm, *freq_axis, PeakTableModel::kMaxPeaks));
+    // The harmonic measurement reads the same trace as Peak and the markers; when the user
+    // asked for it, the selected marker's frequency is taken as the fundamental.
+    std::optional<double> harmonic_fundamental;
+    if (m_harmonics.useMarker() && m_markers.enabled(m_markers.selected()))
+        harmonic_fundamental = m_markers.frequency(m_markers.selected());
+    m_harmonics.measure(*freq_axis, m_readout_dBm, m_engine.startFrequency(),
+                        m_engine.stopFrequency(), m_engine.rbw(), harmonic_fundamental);
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
         // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
@@ -869,6 +982,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     drawMarkerControls(*freq_axis, readout_dBm);
     drawMarkerTable(*freq_axis, readout_dBm);
     drawPeakTable();
+    drawHarmonicTable();
 
     ImGui::End();
 }
