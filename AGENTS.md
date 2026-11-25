@@ -94,6 +94,13 @@ Link to the owning document instead of restating its rules or commands on anothe
 - A manual move (drag or Ctrl+click placement) clears that marker's cached peak list; re-placing the current value keeps it, so the widget's per-frame drag-line update does not invalidate Next Peak.
 - `RfSimulatorApp` persists the marker session token under `[SpectrumAnalyzer] Markers` through `SessionState` (Windows only), like window visibility.
 
+## Spectrum Analyzer Peak Table Contract
+
+- `PeakTableModel` (`spectrum_analyzer/include/spectrum_analyzer_peak_table.h`, UI-free) owns the show/hide flag, the up-to-five rows, and the selected row. Rows come from `findPeaks()` on the same jitter-free readout trace as Peak and the markers, so they follow **Measure on**, trace visibility, and Max Hold, Min Hold, and Video Avg.
+- Rows are sorted by descending amplitude. Row 1 is the strongest peak and anchors every delta column at zero; the other rows read their frequency and dB offsets from it.
+- Selecting a row, or stepping with `PeakTableModel::step()`, moves the selected marker onto that peak and enables the marker first. Selection clamps to a shrinking search and wraps when stepping.
+- The table is view state: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo. `RfSimulatorApp` persists its visibility under `[SpectrumAnalyzer] PeakTable` through `SessionState` (Windows only).
+
 ## Touchstone Parsing Contract
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
