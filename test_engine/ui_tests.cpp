@@ -1205,6 +1205,71 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Measurement source selector: readouts and peak searches can follow one probe's
+    // trace instead of every visible trace, and losing that probe falls back clearly.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_measure_on_probe");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        const int amp_out = graph.outputPinId(2);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(amp_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        IM_CHECK(s_app->testAddProbePin(amp_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(3);
+
+        const auto &widget = s_app->testSpectrumWidget();
+        IM_CHECK(widget.measurementSelection().allVisible());
+        IM_CHECK(widget.measurementResolution().allVisible());
+        IM_CHECK_EQ(widget.measurementResolution().fallback, MeasurementSelection::Fallback::None);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Measure on"));
+        // The combo lists All visible first, then the probes in order; clicking every item
+        // leaves the last one (the second probe, Amplifier 0 OUT) selected.
+        ctx->ComboClickAll("Measure on");
+        ctx->SetRef("");
+        ctx->Yield(3);
+
+        // The selection names the amplifier probe, and the readouts use its own trace.
+        const auto probed = graph.probedSignalNodes();
+        IM_CHECK_EQ(probed.size(), static_cast<size_t>(2));
+        IM_CHECK(!widget.measurementSelection().allVisible());
+        IM_CHECK(widget.measurementSelection().probe().has_value());
+        if (probed.size() == 2 && widget.measurementSelection().probe().has_value()) {
+            IM_CHECK(widget.measurementSelection().probe()->node == probed[1].node);
+            IM_CHECK_EQ(widget.measurementSelection().probe()->output_index,
+                        probed[1].output_index);
+            const auto &amp_spec = probed[1].node->outputs[probed[1].output_index];
+            IM_CHECK_EQ(widget.measurementResolution().probe_index, 1);
+            IM_CHECK_EQ(widget.readoutAxis().size(), amp_spec.frequencies.size());
+            IM_CHECK(!widget.readoutTrace().empty());
+            IM_CHECK(widget.readoutTrace().size() == widget.readoutAxis().size());
+        }
+
+        // Removing the chosen probe is a clear fallback to all visible traces, not a
+        // silent switch to another probe.
+        IM_CHECK(s_app->testRemoveProbePin(amp_out));
+        ctx->Yield(3);
+        IM_CHECK(widget.measurementResolution().allVisible());
+        IM_CHECK_EQ(widget.measurementResolution().fallback,
+                    MeasurementSelection::Fallback::Removed);
+        IM_CHECK(!widget.readoutAxis().empty());
+
+        // Selecting "All visible" returns the historic combined readout.
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ComboClick("Measure on/All visible");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(widget.measurementSelection().allVisible());
+        IM_CHECK_EQ(widget.measurementResolution().fallback, MeasurementSelection::Fallback::None);
+
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // =========================================================================
 
     // Issue #67: selecting a link and pressing Delete must remove it (previously
