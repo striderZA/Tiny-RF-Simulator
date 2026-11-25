@@ -132,3 +132,112 @@ TEST_CASE("a noise-only trace has no clear fundamental") {
     for (const auto &entry : result.harmonics)
         REQUIRE(entry.status == HarmonicModel::Status::NoFundamental);
 }
+
+TEST_CASE("a marker frequency becomes the fundamental when supplied") {
+    const auto axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+    addTone(trace, axis, 11.0 * kMHz, -30.0);
+
+    HarmonicModel model;
+
+    // Auto detection picks the stronger tone.
+    model.measure(axis, trace, 0.0, 60.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_Hz == Catch::Approx(10.0 * kMHz));
+
+    // The user-placed marker is taken as the fundamental, level and all.
+    model.measure(axis, trace, 0.0, 60.0 * kMHz, 1.0 * kMHz, 11.0 * kMHz);
+    const auto &result = model.result();
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::Measured);
+    REQUIRE(result.fundamental_Hz == Catch::Approx(11.0 * kMHz));
+    REQUIRE(result.fundamental_dBm == Catch::Approx(-30.0));
+    REQUIRE(result.harmonics[0].expected_Hz == Catch::Approx(22.0 * kMHz));
+    REQUIRE(result.harmonics[0].status == HarmonicModel::Status::NotFound);
+}
+
+TEST_CASE("a fundamental marker outside the span is reported as such") {
+    const auto axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+
+    HarmonicModel model;
+    model.measure(axis, trace, 5.0 * kMHz, 15.0 * kMHz, 1.0 * kMHz, 100.0 * kMHz);
+    const auto &result = model.result();
+
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::FundamentalOutOfSpan);
+    for (const auto &entry : result.harmonics) {
+        REQUIRE(entry.status == HarmonicModel::Status::NoFundamental);
+        REQUIRE(entry.relative_dBc == Catch::Approx(0.0));
+    }
+}
+
+TEST_CASE("an RBW too wide to separate harmonic orders is reported unresolved") {
+    const auto axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+    addTone(trace, axis, 20.0 * kMHz, -40.0);
+    addTone(trace, axis, 30.0 * kMHz, -50.0);
+
+    HarmonicModel model;
+    // A 20 MHz RBW is wider than the 10 MHz fundamental spacing.
+    model.measure(axis, trace, 0.0, 60.0 * kMHz, 20.0 * kMHz);
+    const auto &result = model.result();
+
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::Measured);
+    for (const auto &entry : result.harmonics)
+        REQUIRE(entry.status == HarmonicModel::Status::Unresolved);
+}
+
+TEST_CASE("the fundamental is the strongest positive-frequency tone") {
+    // A real-domain trace mirrors its tones at +-f; the negative image must not win a tie.
+    const auto axis = uniformAxis(-30.0 * kMHz, 30.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, -10.0 * kMHz, -10.0);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+
+    HarmonicModel model;
+    model.measure(axis, trace, -30.0 * kMHz, 30.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_status == HarmonicModel::Status::Measured);
+    REQUIRE(model.result().fundamental_Hz == Catch::Approx(10.0 * kMHz));
+}
+
+TEST_CASE("a zero-frequency marker is not a usable fundamental") {
+    const auto axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+
+    HarmonicModel model;
+    model.measure(axis, trace, 0.0, 60.0 * kMHz, 1.0 * kMHz, 0.0);
+    const auto &result = model.result();
+
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::NoFundamental);
+    for (const auto &entry : result.harmonics)
+        REQUIRE(entry.status == HarmonicModel::Status::NoFundamental);
+}
+
+TEST_CASE("a harmonic peak inside the search window sets the reported frequency") {
+    const auto axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, 10.0 * kMHz, -10.0);
+    addTone(trace, axis, 21.0 * kMHz, -40.0); // just inside the 20 MHz +- 1 MHz window
+
+    HarmonicModel model;
+    model.measure(axis, trace, 0.0, 60.0 * kMHz, 1.0 * kMHz);
+    const auto &second = model.result().harmonics[0];
+
+    REQUIRE(second.status == HarmonicModel::Status::Measured);
+    REQUIRE(second.expected_Hz == Catch::Approx(20.0 * kMHz));
+    REQUIRE(second.frequency_Hz == Catch::Approx(21.0 * kMHz));
+    REQUIRE(second.relative_dBc == Catch::Approx(-30.0));
+}
+
+TEST_CASE("mismatched or empty trace input measures nothing") {
+    const auto axis = uniformAxis(0.0, 10.0 * kMHz, 1.0 * kMHz);
+
+    HarmonicModel model;
+    model.measure(axis, std::vector<double>(axis.size() - 1, -120.0), 0.0, 10.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_status == HarmonicModel::Status::NoFundamental);
+
+    model.measure({}, {}, 0.0, 10.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_status == HarmonicModel::Status::NoFundamental);
+}
