@@ -7,15 +7,25 @@
 #include "utils.h"
 #include "view_manager.h"
 #include <algorithm>
+#include <cstdio>
 #include <limits>
 
 namespace {
-// Vertical space (px) the readout rows below the plot need: the average-noise
-// and trace/peak text lines plus the Reset Zoom button. The marker block adds
-// more only while it is enabled. Reserving it lets the plot grow into whatever
+// Vertical space (px) the rows below the plot need: the average-noise text,
+// the trace/peak text, Reset Zoom, and the always-visible marker row (M1..M4
+// and the Marker Table toggle). Reserving it lets the plot grow into whatever
 // is left instead of sitting at ImPlot's fixed 300 px default (issue #88).
-constexpr float kPlotBottomReserve = 88.0f;
-constexpr float kMarkerControlsReserve = 44.0f;
+constexpr float kPlotBottomReserve = 112.0f;
+
+// Marker colors stay distinct from the four probe trace colors (teal, orange,
+// purple, blue) so a marker is never mistaken for a trace.
+const ImVec4 kMarkerColors[MarkerModel::kMaxMarkers] = {
+    ImVec4(1.00f, 0.85f, 0.20f, 1.0f), // M1 yellow (reference)
+    ImVec4(0.95f, 0.35f, 0.85f, 1.0f), // M2 magenta
+    ImVec4(0.30f, 0.85f, 1.00f, 1.0f), // M3 cyan
+    ImVec4(1.00f, 0.35f, 0.35f, 1.0f), // M4 red
+};
+const char *const kMarkerNames[MarkerModel::kMaxMarkers] = {"M1", "M2", "M3", "M4"};
 } // namespace
 
 SpectrumAnalyzerWidget::SpectrumAnalyzerWidget(SpectrumAnalyzerEngine &engine,
@@ -48,100 +58,231 @@ const Spectrum &SpectrumAnalyzerWidget::outputSpectrumFor(SignalNode *node) cons
     return node->outputs.empty() ? kEmpty : node->outputs[0];
 }
 
-int SpectrumAnalyzerWidget::resolveMarkerIdx(const std::vector<double> &freq_axis,
-                                             const std::vector<double> &data) const {
-    if (!m_marker.enabled || data.empty() || freq_axis.empty()) {
-        return -1;
+float SpectrumAnalyzerWidget::markerAreaReserve() const {
+    float reserve = 0.0f;
+    if (m_markers.tableVisible()) {
+        // A table row is taller than a text line (cell padding plus the row
+        // background), so reserve header and rows at frame height.
+        const int rows = std::max(1, m_markers.enabledCount());
+        reserve += ImGui::GetFrameHeightWithSpacing() * static_cast<float>(rows + 1) + 8.0f;
     }
+    if (!m_markers.anyEnabled())
+        return reserve;
 
-    // Try to find nearest cached peak to target_freq_Hz
-    if (!m_marker.peaks.empty()) {
-        int best_idx = -1;
-        double best_dist = std::numeric_limits<double>::max();
-        for (const auto &pk : m_marker.peaks) {
-            double dist = std::abs(pk.freq_Hz - m_marker.target_freq_Hz);
-            if (dist < best_dist) {
-                best_dist = dist;
-                best_idx = pk.index;
-            }
-        }
-        if (best_idx >= 0 && best_idx < static_cast<int>(data.size())) {
-            return best_idx;
-        }
-    }
-
-    // Fallback: nearest bin to target_freq_Hz
-    int best_idx = 0;
-    double best_dist = std::numeric_limits<double>::max();
-    for (size_t i = 0; i < freq_axis.size(); ++i) {
-        double dist = std::abs(freq_axis[i] - m_marker.target_freq_Hz);
-        if (dist < best_dist) {
-            best_dist = dist;
-            best_idx = static_cast<int>(i);
-        }
-    }
-    return best_idx;
+    // Selected-marker combo/delta row and the peak-search button row.
+    reserve += 2.0f * ImGui::GetFrameHeightWithSpacing();
+    // One compact readout line per enabled marker.
+    reserve += ImGui::GetTextLineHeightWithSpacing() * static_cast<float>(m_markers.enabledCount());
+    return reserve;
 }
 
-void SpectrumAnalyzerWidget::drawMarkerOnPlot(double freq_Hz, double power_dBm) {
-    ImPlotSpec marker_spec;
-    marker_spec.Marker = ImPlotMarker_Down;
-    marker_spec.MarkerSize = 8.0f;
-    marker_spec.MarkerFillColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-    marker_spec.LineWeight = 1.0f;
-    marker_spec.MarkerLineColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-    ImPlot::PlotScatter("Marker", &freq_Hz, &power_dBm, 1, marker_spec);
+bool SpectrumAnalyzerWidget::drawMarkersOnPlot(const std::vector<double> &freq_axis,
+                                               const std::vector<double> &display_dBm) {
+    bool marker_tool_active = false;
+    for (int i = 0; i < MarkerModel::kMaxMarkers; ++i) {
+        if (!m_markers.enabled(i))
+            continue;
+
+        // Instrument-style vertical line: grabbing it anywhere moves the marker
+        // along the frequency axis, not just grabbing the point symbol.
+        double x = m_markers.frequency(i);
+        bool clicked = false;
+        bool hovered = false;
+        bool held = false;
+        ImPlot::DragLineX(i + 1, &x, kMarkerColors[i], i == m_markers.selected() ? 2.0f : 1.0f,
+                          ImPlotDragToolFlags_NoFit, &clicked, &hovered, &held);
+        if (clicked || held)
+            m_markers.select(i);
+        if (held)
+            m_drag_marker = i;
+        marker_tool_active = marker_tool_active || hovered || held;
+        m_markers.place(i, x);
+
+        const MarkerModel::Readout reading = m_markers.readout(i, freq_axis, display_dBm);
+        if (!reading.valid)
+            continue;
+
+        char point_id[24];
+        char name[8];
+        std::snprintf(point_id, sizeof point_id, "##markerpoint%d", i + 1);
+        std::snprintf(name, sizeof name, "M%d", i + 1);
+
+        ImPlotSpec point_spec;
+        point_spec.Marker = ImPlotMarker_Circle;
+        point_spec.MarkerSize = 6.0f;
+        point_spec.MarkerFillColor = kMarkerColors[i];
+        point_spec.MarkerLineColor = kMarkerColors[i];
+        point_spec.LineWeight = 1.0f;
+        point_spec.Flags = ImPlotItemFlags_NoLegend | ImPlotItemFlags_NoFit;
+        ImPlot::PlotScatter(point_id, &reading.frequency_Hz, &reading.amplitude_dBm, 1, point_spec);
+
+        ImPlotSpec text_spec;
+        text_spec.Flags = ImPlotItemFlags_NoLegend | ImPlotItemFlags_NoFit;
+        ImPlot::PushStyleColor(ImPlotCol_InlayText, kMarkerColors[i]);
+        ImPlot::PlotText(name, reading.frequency_Hz, reading.amplitude_dBm, ImVec2(5.0f, -18.0f),
+                         text_spec);
+        ImPlot::PopStyleColor();
+    }
+
+    // A released drag settles on the nearest displayed bin, so the readout and
+    // the line always name the same trace sample.
+    if (m_drag_marker >= 0 && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        const int idx = m_markers.resolveIndex(m_drag_marker, freq_axis, display_dBm);
+        if (idx >= 0)
+            m_markers.place(m_drag_marker, freq_axis[static_cast<size_t>(idx)]);
+        m_drag_marker = -1;
+    }
+    return marker_tool_active;
 }
 
 void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_axis,
                                                 const std::vector<double> &display_dBm) {
-    if (ImGui::Checkbox("Enable Marker", &m_marker.enabled)) {
-        if (m_marker.enabled && !freq_axis.empty()) {
-            m_marker.target_freq_Hz = freq_axis[freq_axis.size() / 2];
-            m_marker.peaks.clear();
+    for (int i = 0; i < MarkerModel::kMaxMarkers; ++i) {
+        bool on = m_markers.enabled(i);
+        ImGui::PushStyleColor(ImGuiCol_Text, kMarkerColors[i]);
+        if (ImGui::Checkbox(kMarkerNames[i], &on)) {
+            m_markers.setEnabled(i, on);
+            m_markers.select(i);
+            if (on) {
+                m_markers.place(i, freq_axis.empty() ? 0.0 : freq_axis[freq_axis.size() / 2]);
+            }
+        }
+        ImGui::PopStyleColor();
+        if (i + 1 < MarkerModel::kMaxMarkers)
+            ImGui::SameLine();
+    }
+    ImGui::SameLine();
+    bool table_visible = m_markers.tableVisible();
+    if (ImGui::Checkbox("Marker Table", &table_visible))
+        m_markers.setTableVisible(table_visible);
+
+    if (!m_markers.anyEnabled())
+        return;
+
+    int selected = m_markers.selected();
+    ImGui::SetNextItemWidth(70.0f);
+    if (ImGui::Combo("Marker", &selected, kMarkerNames, MarkerModel::kMaxMarkers))
+        m_markers.select(selected);
+
+    ImGui::SameLine();
+    const bool is_reference = m_markers.selected() == MarkerModel::kReferenceIndex;
+    bool delta = m_markers.delta(m_markers.selected());
+    if (is_reference)
+        ImGui::BeginDisabled();
+    if (ImGui::Checkbox("Delta (vs M1)", &delta))
+        m_markers.setDelta(m_markers.selected(), delta);
+    if (is_reference) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && ImGui::BeginTooltip()) {
+            ImGui::TextUnformatted("M1 is the reference marker; it always reads absolute.");
+            ImGui::EndTooltip();
         }
     }
 
-    if (!m_marker.enabled) {
+    if (ImGui::Button("Snap to Peak"))
+        m_markers.snapToPeak(m_markers.selected(), m_engine.findPeaks(display_dBm, freq_axis, 8));
+    ImGui::SameLine();
+    if (ImGui::Button("Next Peak")) {
+        std::vector<Peak> peaks;
+        if (m_markers.peaks(m_markers.selected()).empty())
+            peaks = m_engine.findPeaks(display_dBm, freq_axis, 8);
+        m_markers.nextPeak(m_markers.selected(), peaks);
+    }
+
+    // Compact readout strip: one line per enabled marker, in the marker color.
+    for (int i = 0; i < MarkerModel::kMaxMarkers; ++i) {
+        if (!m_markers.enabled(i))
+            continue;
+        const MarkerModel::Readout reading = m_markers.readout(i, freq_axis, display_dBm);
+        char line[160];
+        if (!reading.valid) {
+            std::snprintf(line, sizeof line, "M%d  --", i + 1);
+        } else if (reading.delta) {
+            if (reading.reference_valid) {
+                std::snprintf(line, sizeof line, "M%d delta  %+.3f MHz  %+.2f dB", i + 1,
+                              reading.delta_frequency_Hz / 1e6, reading.delta_amplitude_dB);
+            } else {
+                std::snprintf(line, sizeof line, "M%d delta  (enable M1 reference)", i + 1);
+            }
+        } else {
+            std::snprintf(line, sizeof line, "M%d  %.3f MHz  %.2f dBm", i + 1,
+                          reading.frequency_Hz / 1e6, reading.amplitude_dBm);
+        }
+
+        char id[24];
+        std::snprintf(id, sizeof id, "###marker%d", i + 1);
+        const std::string label = std::string(line) + id;
+        ImGui::PushStyleColor(ImGuiCol_Text, kMarkerColors[i]);
+        if (ImGui::Selectable(label.c_str(), i == m_markers.selected(), ImGuiSelectableFlags_None,
+                              ImVec2(0.0f, 0.0f))) {
+            m_markers.select(i);
+        }
+        ImGui::PopStyleColor();
+    }
+}
+
+void SpectrumAnalyzerWidget::drawMarkerTable(const std::vector<double> &freq_axis,
+                                             const std::vector<double> &display_dBm) {
+    if (!m_markers.tableVisible())
+        return;
+    if (!m_markers.anyEnabled()) {
+        ImGui::TextUnformatted("Marker table: no markers enabled.");
         return;
     }
 
-    if (ImGui::Button("Snap to Peak")) {
-        m_marker.peaks = m_engine.findPeaks(display_dBm, freq_axis, 8);
-        if (!m_marker.peaks.empty()) {
-            m_marker.target_freq_Hz = m_marker.peaks[0].freq_Hz;
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Next Peak")) {
-        if (!m_marker.peaks.empty()) {
-            // Find the currently tracked peak (nearest to target_freq_Hz)
-            int current_rank = 0;
-            double best_dist = std::numeric_limits<double>::max();
-            for (size_t i = 0; i < m_marker.peaks.size(); ++i) {
-                double dist = std::abs(m_marker.peaks[i].freq_Hz - m_marker.target_freq_Hz);
-                if (dist < best_dist) {
-                    best_dist = dist;
-                    current_rank = static_cast<int>(i);
-                }
-            }
-            int next_rank = (current_rank + 1) % static_cast<int>(m_marker.peaks.size());
-            m_marker.target_freq_Hz = m_marker.peaks[next_rank].freq_Hz;
-        }
-    }
+    const ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter;
+    if (!ImGui::BeginTable("Marker Table", 5, flags))
+        return;
+    // Short unit headers keep the five columns inside a 400 px dock.
+    ImGui::TableSetupColumn("Marker");
+    ImGui::TableSetupColumn("MHz");
+    ImGui::TableSetupColumn("dBm");
+    ImGui::TableSetupColumn("df MHz");
+    ImGui::TableSetupColumn("dAmp dB");
+    ImGui::TableHeadersRow();
 
-    int idx = resolveMarkerIdx(freq_axis, display_dBm);
-    double marker_freq = 0.0;
-    double marker_power = -174.0;
-    if (idx >= 0 && idx < static_cast<int>(display_dBm.size())) {
-        marker_freq = freq_axis[static_cast<size_t>(idx)];
-        marker_power = display_dBm[static_cast<size_t>(idx)];
+    for (int i = 0; i < MarkerModel::kMaxMarkers; ++i) {
+        if (!m_markers.enabled(i))
+            continue;
+        const MarkerModel::Readout reading = m_markers.readout(i, freq_axis, display_dBm);
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        char selectable[24];
+        std::snprintf(selectable, sizeof selectable, "M%d###markertable%d", i + 1, i + 1);
+        ImGui::PushStyleColor(ImGuiCol_Text, kMarkerColors[i]);
+        if (ImGui::Selectable(selectable, i == m_markers.selected()))
+            m_markers.select(i);
+        ImGui::PopStyleColor();
+
+        ImGui::TableSetColumnIndex(1);
+        if (reading.valid)
+            ImGui::Text("%.3f", reading.frequency_Hz / 1e6);
+        else
+            ImGui::TextUnformatted("-");
+        ImGui::TableSetColumnIndex(2);
+        if (reading.valid)
+            ImGui::Text("%.2f", reading.amplitude_dBm);
+        else
+            ImGui::TextUnformatted("-");
+        ImGui::TableSetColumnIndex(3);
+        if (reading.delta && reading.reference_valid)
+            ImGui::Text("%+.3f", reading.delta_frequency_Hz / 1e6);
+        else
+            ImGui::TextUnformatted("-");
+        ImGui::TableSetColumnIndex(4);
+        if (reading.delta && reading.reference_valid)
+            ImGui::Text("%+.2f", reading.delta_amplitude_dB);
+        else
+            ImGui::TextUnformatted("-");
     }
-    ImGui::Text("Marker: %.2f MHz, %.2f dBm", marker_freq / 1e6, marker_power);
+    ImGui::EndTable();
 }
 
 void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     m_readout_dBm.clear();
+    m_last_plot_area = {};
     // First-use size gives the plot a useful working area; the minimum stops at
     // the width the labelled inputs need and a modest height so a docked panel
     // never forces its dock node to grow and squeeze neighbouring panels
@@ -301,6 +442,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     // Combined trace and its marker/peak axis share the common readout axis.
     const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
+    m_readout_axis = combined_axis;
     freq_axis = &combined_axis;
     // Marker and peak readouts use the jitter-free trace on the same axis (issue #292). Every
     // active spectrum is passed so hidden traces keep their held value (issue #291).
@@ -332,12 +474,15 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     // Let the plot absorb the remaining window height (ImPlot's own default is
     // a fixed 300 px), reserving room for the readout rows drawn below it and
     // never dropping under the usable floor (issue #88).
-    const float bottom_reserve =
-        kPlotBottomReserve + (m_marker.enabled ? kMarkerControlsReserve : 0.0f);
+    const float bottom_reserve = kPlotBottomReserve + markerAreaReserve();
     const float plot_height =
         std::max(kMinPlotHeight, ImGui::GetContentRegionAvail().y - bottom_reserve);
 
     if (ImPlot::BeginPlot("Spectrum", ImVec2(-1.0f, plot_height))) {
+        const ImVec2 plot_pos = ImPlot::GetPlotPos();
+        const ImVec2 plot_size = ImPlot::GetPlotSize();
+        m_last_plot_area = {plot_pos.x, plot_pos.y, plot_size.x, plot_size.y};
+
         for (size_t i = 0; i < active_nodes.size(); ++i) {
             auto *node = active_nodes[i];
             if (!node)
@@ -395,9 +540,22 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             }
         }
 
-        // Drag-to-zoom
-        if (ImPlot::IsPlotHovered()) {
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        // Markers overlay the traces; a grabbed marker line must not also
+        // start the drag-to-zoom band.
+        const bool marker_tool_active = drawMarkersOnPlot(*freq_axis, readout_dBm);
+
+        // Drag-to-zoom, and Ctrl+click to place the selected marker.
+        if (ImPlot::IsPlotHovered() && !marker_tool_active) {
+            const bool ctrl = ImGui::GetIO().KeyCtrl;
+            if (ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                ImPlotPoint p = ImPlot::GetPlotMousePos();
+                const double placed =
+                    std::clamp(p.x, m_engine.startFrequency(), m_engine.stopFrequency());
+                const int marker = m_markers.selected();
+                if (!m_markers.enabled(marker))
+                    m_markers.setEnabled(marker, true);
+                m_markers.place(marker, placed);
+            } else if (!ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 ImPlotPoint p = ImPlot::GetPlotMousePos();
                 m_zoom.active = true;
                 m_zoom.start_freq_Hz = p.x;
@@ -420,16 +578,6 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                 ImPlotPoint p2 = ImPlot::PlotToPixels(x2, y2);
                 ImPlot::GetPlotDrawList()->AddRectFilled(ImVec2(p1.x, p1.y), ImVec2(p2.x, p2.y),
                                                          IM_COL32(100, 150, 255, 40));
-            }
-        }
-
-        // Marker display (no drag)
-        if (m_marker.enabled && !readout_dBm.empty()) {
-            int idx = resolveMarkerIdx(*freq_axis, readout_dBm);
-            if (idx >= 0 && idx < static_cast<int>(readout_dBm.size())) {
-                double mf = (*freq_axis)[static_cast<size_t>(idx)];
-                double mp = readout_dBm[static_cast<size_t>(idx)];
-                drawMarkerOnPlot(mf, mp);
             }
         }
 
@@ -488,6 +636,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
 
     drawMarkerControls(*freq_axis, readout_dBm);
+    drawMarkerTable(*freq_axis, readout_dBm);
 
     ImGui::End();
 }

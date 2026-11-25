@@ -1,6 +1,7 @@
 #pragma once
 #include "spectrum.h"
 #include "spectrum_analyzer_engine.h"
+#include "spectrum_analyzer_markers.h"
 #include "view_manager.h"
 #include <string>
 #include <unordered_map>
@@ -8,13 +9,6 @@
 #include <vector>
 
 class PFBChannelizerEngine;
-
-struct MarkerState {
-    bool enabled = false;
-    double target_freq_Hz = 0.0;
-    bool is_dragging = false;
-    std::vector<Peak> peaks;
-};
 
 struct DragZoomState {
     bool active = false;
@@ -36,26 +30,49 @@ class SpectrumAnalyzerWidget {
     static constexpr float kMinPlotHeight = 180.0f;
 
     // The jitter-free combined trace the last draw() used for the Peak text, snap-to-peak
-    // and marker (issue #292). Empty when the last draw() had no visible trace.
+    // and markers (issue #292). Empty when the last draw() had no visible trace.
     const std::vector<double> &readoutTrace() const { return m_readout_dBm; }
+    // The combined axis readoutTrace() is sampled on (the Peak/marker axis).
+    const std::vector<double> &readoutAxis() const { return m_readout_axis; }
+
+    // Marker view state: four markers, M1 is the reference. Not project data.
+    const MarkerModel &markers() const { return m_markers; }
+    std::string markerSessionState() const { return m_markers.serialize(); }
+    bool setMarkerSessionState(const std::string &token) { return m_markers.restore(token); }
+
+    // The pixel rect of the plot's data area in the last draw(); test seam for
+    // frequency-to-pixel mapping in the headless UI test.
+    struct PlotArea {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+    PlotArea lastPlotArea() const { return m_last_plot_area; }
 
   private:
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
     std::vector<std::string> m_probe_labels;
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
-    MarkerState m_marker;
+    MarkerModel m_markers;
     DragZoomState m_zoom;
+    int m_drag_marker = -1;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
     std::unordered_map<SignalNode *, PFBChannelizerEngine *> m_pfb_map;
-    std::vector<bool> m_trace_visible; // Track visibility for each probe trace
-    std::vector<double> m_readout_dBm; // readout trace of the last draw() (issue #292)
+    std::vector<bool> m_trace_visible;  // Track visibility for each probe trace
+    std::vector<double> m_readout_dBm;  // readout trace of the last draw() (issue #292)
+    std::vector<double> m_readout_axis; // combined axis of the last draw()
+    PlotArea m_last_plot_area;
 
     const Spectrum &outputSpectrumFor(SignalNode *node) const;
 
-    int resolveMarkerIdx(const std::vector<double> &freq_axis,
-                         const std::vector<double> &data) const;
-    void drawMarkerOnPlot(double freq_Hz, double power_dBm);
+    // Vertical space the marker controls, readout strip, and optional table need.
+    float markerAreaReserve() const;
+    bool drawMarkersOnPlot(const std::vector<double> &freq_axis,
+                           const std::vector<double> &display_dBm);
     void drawMarkerControls(const std::vector<double> &freq_axis,
                             const std::vector<double> &display_dBm);
+    void drawMarkerTable(const std::vector<double> &freq_axis,
+                         const std::vector<double> &display_dBm);
 };

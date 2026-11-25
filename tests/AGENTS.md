@@ -64,6 +64,7 @@ Focused CTest targets confirmed in `tests/CMakeLists.txt`:
 - `ctest --test-dir build -R '^test_external_tool_launch$' --output-on-failure` (non-Windows only)
 - `ctest --test-dir build -R '^test_agent_packaged_acceptance$' --output-on-failure`
 - `ctest --test-dir build -R '^test_ui$' --output-on-failure` (run the whole target)
+- `ctest --test-dir build -R '^test_spectrum_analyzer_marker' --output-on-failure` — the two UI-free marker targets: readouts (nearest-bin resolution, delta arithmetic and unavailable reference, per-marker peak search, cache invalidation on manual move) and the session token (round-trip and malformed refusal).
 - `ctest --test-dir build -R '^test_node_graph_rewire$' --output-on-failure` covers shared rewire characterization and scaling; its standalone target follows the MinGW registration convention in Local Contracts.
 - `test_editor_services_boundary` is a standalone CTest that verifies the public `simulator::editor_services` target exposes no ImGui, ImNodes, ImPlot, or GLFW include paths and supports a real editor command edit
 - `ctest --test-dir build -R '^test_editor_history$' --output-on-failure` — snapshot diff and reversal, the 100-record cap with redo clearing, and `restoreComponent`/`restoreGroup`/`setProbePins` under original ids (`tests/test_editor_history.cpp`, a standalone target).
