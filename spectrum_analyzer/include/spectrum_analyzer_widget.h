@@ -77,6 +77,9 @@ class SpectrumAnalyzerWidget {
     MeasurementSelection m_measurement;
     MeasurementSelection::Resolution m_measurement_resolution;
     std::string m_measure_label; // label of the chosen probe, kept for the removed fallback
+    bool m_measure_source_known = false;
+    bool m_last_measure_all_visible = true;
+    MeasurementProbeId m_last_measure_probe;
 
     const Spectrum &outputSpectrumFor(SignalNode *node) const;
     std::vector<MeasurementProbeId> measurementProbeIds() const;

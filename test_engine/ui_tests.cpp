@@ -1230,11 +1230,24 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         ctx->SetRef("Spectrum Analyzer");
         IM_CHECK(ctx->ItemExists("Measure on"));
+        // Cache a peak list on the all-visible source; changing sources must drop it so
+        // Next Peak adopts the selected trace's peaks.
+        if (!widget.markers().enabled(0)) {
+            ctx->ItemCheck("M1");
+            ctx->Yield(2);
+        }
+        IM_CHECK(ctx->ItemExists("Snap to Peak"));
+        ctx->ItemClick("Snap to Peak");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!widget.markers().peaks(0).empty());
         // The combo lists All visible first, then the probes in probe-pin order; clicking
         // every item leaves the last one (the second probe, the generator) selected.
+        ctx->SetRef("Spectrum Analyzer");
         ctx->ComboClickAll("Measure on");
         ctx->SetRef("");
         ctx->Yield(3);
+        IM_CHECK(widget.markers().peaks(0).empty());
 
         // The selection names the generator probe, and the readouts use its own trace.
         const auto probed = graph.probedSignalNodes();
@@ -1269,7 +1282,85 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(widget.measurementSelection().allVisible());
         IM_CHECK_EQ(widget.measurementResolution().fallback, MeasurementSelection::Fallback::None);
 
+        ctx->SetRef("Spectrum Analyzer");
+        if (widget.markers().enabled(0)) {
+            ctx->ItemUncheck("M1");
+            ctx->Yield(2);
+        }
+        ctx->SetRef("");
         IM_CHECK(s_app->testRemoveProbePin(amp_out));
+        ctx->Yield(2);
+    };
+
+    // A node probed at two outputs: selecting the earlier output must measure that output's
+    // spectrum, not the node's last-probed output and not an empty readout.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_measure_multi_output_probe");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        IComponentEngine *splitter = s_app->testCreateComponent("splitter", 9851);
+        IM_CHECK(splitter != nullptr);
+        if (!splitter)
+            return;
+        const int splitter_node = splitter->graphNodeId();
+        const auto &graph = s_app->testGraphEngine();
+        std::vector<int> out_pins;
+        std::vector<int> in_pins;
+        std::string label;
+        for (const auto &node : graph.nodes()) {
+            if (node.node_id == splitter_node) {
+                out_pins = node.output_pin_ids;
+                in_pins = node.input_pin_ids;
+                label = node.label;
+            }
+        }
+        IM_CHECK_EQ(out_pins.size(), static_cast<size_t>(2));
+        IM_CHECK(!in_pins.empty());
+        if (out_pins.size() < 2 || in_pins.empty()) {
+            IM_CHECK(s_app->testRemoveComponent(splitter_node));
+            return;
+        }
+        // Feed the splitter so its outputs carry a frequency grid.
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        const auto link = s_app->testConnectLink(gen_out, in_pins[0]);
+        IM_CHECK(link.has_value());
+        // Probe OUT first and OUT2 second: the node's last-probed output is then OUT2, so
+        // selecting the earlier output exercises the output that active nodes drop.
+        IM_CHECK(s_app->testAddProbePin(out_pins[0]));
+        IM_CHECK(s_app->testAddProbePin(out_pins[1]));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(3);
+
+        const auto &widget = s_app->testSpectrumWidget();
+        const auto probed = graph.probedSignalNodes();
+        IM_CHECK_EQ(probed.size(), static_cast<size_t>(2));
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Measure on"));
+        const std::string item = "Measure on/[0] " + label + " OUT";
+        ctx->ComboClick(item.c_str());
+        ctx->SetRef("");
+        ctx->Yield(3);
+
+        if (probed.size() == 2) {
+            IM_CHECK(widget.measurementSelection().probe().has_value());
+            IM_CHECK_EQ(widget.measurementResolution().probe_index, 0);
+            IM_CHECK(widget.measurementResolution().fallback ==
+                     MeasurementSelection::Fallback::None);
+            IM_CHECK_EQ(widget.measurementSelection().probe()->node, probed[0].node);
+            IM_CHECK_EQ(widget.measurementSelection().probe()->output_index,
+                        probed[0].output_index);
+            const auto &first_spec =
+                probed[0].node->outputs[static_cast<size_t>(probed[0].output_index)];
+            IM_CHECK(!first_spec.frequencies.empty());
+            IM_CHECK(!widget.readoutTrace().empty());
+            IM_CHECK_EQ(widget.readoutAxis().size(), first_spec.frequencies.size());
+            IM_CHECK(widget.readoutTrace().size() == widget.readoutAxis().size());
+        }
+
+        IM_CHECK(s_app->testRemoveProbePin(out_pins[1]));
+        IM_CHECK(s_app->testRemoveProbePin(out_pins[0]));
+        ctx->Yield(2);
+        IM_CHECK(s_app->testRemoveComponent(splitter_node));
         ctx->Yield(2);
     };
 

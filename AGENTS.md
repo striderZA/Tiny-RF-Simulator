@@ -83,6 +83,8 @@ Link to the owning document instead of restating its rules or commands on anothe
 - `MeasurementSelection` (`spectrum_analyzer/include/spectrum_analyzer_measurement.h`, UI-free) owns the chosen probe identity `(node pointer, output index)` and resolves it against the current probe list and trace visibility. Identity survives reordering, so adding or removing another probe does not retarget the selection.
 - `All visible` (no selection) keeps the combined readout. A chosen probe scopes Peak, average noise, markers, Snap to Peak, and Next Peak to that probe's own trace on its own grid. Held values still advance for every probe.
 - A chosen probe that is hidden or removed resolves to the all-visible readout with `Fallback::Hidden` or `Fallback::Removed`, and the panel readout names the reason. Showing or re-probing the trace resumes the selection.
+- Changing the measurement source clears every marker's cached peak list (`MarkerModel::clearPeakCaches()`), so Next Peak adopts the selected trace's peaks rather than cycling the previous source's.
+- A node probed at two outputs keeps one probe slot per output; the selected output's spectrum is added to the readout set even though the active-node list holds only the node's last-probed output.
 
 ## Spectrum Analyzer Marker Contract
 

@@ -493,6 +493,28 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
     ImGui::Separator();
 
+    // A new measurement source invalidates cached peak lists: Next Peak must cycle the
+    // selected trace's peaks, not the previous source's.
+    const bool all_visible_source = m_measurement_resolution.allVisible();
+    MeasurementProbeId probe_source{};
+    bool have_probe_source = false;
+    if (!all_visible_source) {
+        const size_t slot = static_cast<size_t>(m_measurement_resolution.probe_index);
+        if (slot < probe_ids.size()) {
+            probe_source = probe_ids[slot];
+            have_probe_source = true;
+        }
+    }
+    const bool source_changed =
+        !m_measure_source_known || all_visible_source != m_last_measure_all_visible ||
+        (!all_visible_source && have_probe_source && probe_source != m_last_measure_probe);
+    if (source_changed) {
+        m_markers.clearPeakCaches();
+        m_measure_source_known = true;
+        m_last_measure_all_visible = all_visible_source;
+        m_last_measure_probe = probe_source;
+    }
+
     if (active_nodes.empty()) {
         ImGui::Text("No signal node selected for display!");
         ImGui::End();
@@ -534,6 +556,18 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             continue;
         all_active.push_back(&outputSpectrumFor(node));
         all_active_visible.push_back(m_trace_visible[i]);
+    }
+    // A node probed at two outputs contributes only its last probed output above, and
+    // active_nodes holds one entry per node. Add the selected output's spectrum so the
+    // readout path and its hold history use the trace the selector names.
+    if (!m_measurement_resolution.allVisible()) {
+        const size_t slot = static_cast<size_t>(m_measurement_resolution.probe_index);
+        if (const Spectrum *measured = spectrumForProbeSlot(slot);
+            measured &&
+            std::find(all_active.begin(), all_active.end(), measured) == all_active.end()) {
+            all_active.push_back(measured);
+            all_active_visible.push_back(true);
+        }
     }
     m_engine.pruneHistory(all_active);
 

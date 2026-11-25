@@ -69,8 +69,8 @@ The chosen probe stays selected if its trace is hidden or its probe is removed. 
 
 ## Readouts
 
-- **Peak** shows the strongest bin of the combined visible traces, with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
-- **Average noise level** is the mean per-bin noise across the visible traces with tones excluded.
+- **Peak** shows the strongest bin of the measurement source selected by **Measure on** (all visible traces, or one probe's trace), with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
+- **Average noise level** is the mean per-bin noise across the measurement source with tones excluded.
 
 Peak, marker, and average-noise readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
 
@@ -85,12 +85,12 @@ The analyzer has four markers, **M1** to **M4**, each in its own color on the tr
 - **Drag** a marker's vertical line (or its dot) left or right to move it along the trace. The readout follows live, and the marker settles on the nearest displayed bin when you release it.
 - **Ctrl+click** the plot to place the selected marker at that frequency.
 - **Marker** picks which marker the peak buttons act on. Clicking a marker line, its dot, or its line in the readout strip also selects it.
-- **Snap to Peak** moves the selected marker to the strongest of up to eight local maxima. **Next Peak** cycles that marker through the same list.
+- **Snap to Peak** moves the selected marker to the strongest of up to eight local maxima. **Next Peak** cycles that marker through the same list. Changing the **Measure on** source clears every marker's cached peak list, so Next Peak starts from the newly selected trace.
 - **Delta (vs M1)** switches the selected marker to a relative readout: frequency offset and dB offset from M1. M1 is the reference marker and always reads absolute; while M1 is off, a delta marker shows that the reference is unavailable.
 - The compact readout strip under the plot shows every enabled marker's frequency and amplitude, or its delta values. Clicking a strip line selects that marker.
 - **Marker Table** shows or hides a table of every enabled marker with absolute frequency and amplitude and the delta columns.
 
-Markers read the same jitter-free combined visible-trace values as **Peak**: they follow trace visibility, Max Hold and Min Hold values, and Video Avg, and a marker at a given frequency names the same bin the Peak readout uses.
+Markers read the same jitter-free values as **Peak** on the current **Measure on** source: they follow its trace visibility and its Max Hold and Min Hold values, and a marker at a given frequency names the same bin the Peak readout uses. As for Peak, Clear/Write and Video Avg read the current frame.
 
 ## Nothing probed
 

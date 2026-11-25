@@ -151,6 +151,22 @@ TEST_CASE("next peak adopts a fresh peak list when the cache is empty") {
     REQUIRE_FALSE(empty.nextPeak(0, {}));
 }
 
+TEST_CASE("clearing peak caches makes Next Peak adopt the current source") {
+    MarkerModel model = enabledModel();
+    model.snapToPeak(0, {{2, 1.02e9, -20.0}, {1, 1.01e9, -30.0}});
+    REQUIRE(model.nextPeak(0));
+    REQUIRE(model.frequency(0) == 1.01e9);
+
+    // A readout-source change drops the cached list but keeps the marker position.
+    model.clearPeakCaches();
+    REQUIRE(model.peaks(0).empty());
+    REQUIRE(model.frequency(0) == 1.01e9);
+
+    // Next Peak now adopts the new source's list instead of cycling the old one.
+    REQUIRE(model.nextPeak(0, {{0, 1.05e9, -5.0}}));
+    REQUIRE(model.frequency(0) == 1.05e9);
+}
+
 TEST_CASE("peak search caches are per marker") {
     MarkerModel model;
     model.setEnabled(0, true);
