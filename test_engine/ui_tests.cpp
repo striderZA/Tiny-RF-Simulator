@@ -1214,8 +1214,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         const int amp_out = graph.outputPinId(2);
         IM_CHECK(gen_out >= 0);
         IM_CHECK(amp_out >= 0);
-        IM_CHECK(s_app->testAddProbePin(gen_out));
+        // Probe the amplifier before the generator: probe-pin order then differs from the
+        // node registration order, so a selector that maps combo slots through active nodes
+        // instead of the probe list would pick the wrong trace.
         IM_CHECK(s_app->testAddProbePin(amp_out));
+        IM_CHECK(s_app->testAddProbePin(gen_out));
         s_app->m_show_spectrum = true;
         ctx->WindowFocus("Spectrum Analyzer");
         ctx->Yield(3);
@@ -1227,13 +1230,13 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         ctx->SetRef("Spectrum Analyzer");
         IM_CHECK(ctx->ItemExists("Measure on"));
-        // The combo lists All visible first, then the probes in order; clicking every item
-        // leaves the last one (the second probe, Amplifier 0 OUT) selected.
+        // The combo lists All visible first, then the probes in probe-pin order; clicking
+        // every item leaves the last one (the second probe, the generator) selected.
         ctx->ComboClickAll("Measure on");
         ctx->SetRef("");
         ctx->Yield(3);
 
-        // The selection names the amplifier probe, and the readouts use its own trace.
+        // The selection names the generator probe, and the readouts use its own trace.
         const auto probed = graph.probedSignalNodes();
         IM_CHECK_EQ(probed.size(), static_cast<size_t>(2));
         IM_CHECK(!widget.measurementSelection().allVisible());
@@ -1242,16 +1245,16 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK(widget.measurementSelection().probe()->node == probed[1].node);
             IM_CHECK_EQ(widget.measurementSelection().probe()->output_index,
                         probed[1].output_index);
-            const auto &amp_spec = probed[1].node->outputs[probed[1].output_index];
+            const auto &selected_spec = probed[1].node->outputs[probed[1].output_index];
             IM_CHECK_EQ(widget.measurementResolution().probe_index, 1);
-            IM_CHECK_EQ(widget.readoutAxis().size(), amp_spec.frequencies.size());
+            IM_CHECK_EQ(widget.readoutAxis().size(), selected_spec.frequencies.size());
             IM_CHECK(!widget.readoutTrace().empty());
             IM_CHECK(widget.readoutTrace().size() == widget.readoutAxis().size());
         }
 
         // Removing the chosen probe is a clear fallback to all visible traces, not a
         // silent switch to another probe.
-        IM_CHECK(s_app->testRemoveProbePin(amp_out));
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
         ctx->Yield(3);
         IM_CHECK(widget.measurementResolution().allVisible());
         IM_CHECK_EQ(widget.measurementResolution().fallback,
@@ -1266,7 +1269,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(widget.measurementSelection().allVisible());
         IM_CHECK_EQ(widget.measurementResolution().fallback, MeasurementSelection::Fallback::None);
 
-        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        IM_CHECK(s_app->testRemoveProbePin(amp_out));
         ctx->Yield(2);
     };
 

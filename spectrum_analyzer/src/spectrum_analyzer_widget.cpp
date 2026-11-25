@@ -42,6 +42,7 @@ void SpectrumAnalyzerWidget::setPFBs(const std::vector<PFBChannelizerEngine *> &
 
 void SpectrumAnalyzerWidget::setProbeTargets(
     const std::vector<std::pair<SignalNode *, int>> &targets) {
+    m_probe_targets = targets;
     m_probe_output_index.clear();
     for (const auto &[node, output_index] : targets)
         if (node)
@@ -58,18 +59,25 @@ const Spectrum &SpectrumAnalyzerWidget::outputSpectrumFor(SignalNode *node) cons
     return node->outputs.empty() ? kEmpty : node->outputs[0];
 }
 
-std::vector<MeasurementProbeId>
-SpectrumAnalyzerWidget::measurementProbeIds(const std::vector<SignalNode *> &nodes) const {
+std::vector<MeasurementProbeId> SpectrumAnalyzerWidget::measurementProbeIds() const {
     std::vector<MeasurementProbeId> ids;
-    ids.reserve(nodes.size());
-    for (auto *node : nodes) {
-        MeasurementProbeId id;
-        id.node = node;
-        auto it = m_probe_output_index.find(node);
-        id.output_index = (it != m_probe_output_index.end()) ? it->second : 0;
-        ids.push_back(id);
+    ids.reserve(m_probe_targets.size());
+    for (const auto &[node, output_index] : m_probe_targets) {
+        ids.push_back(MeasurementProbeId{node, output_index});
     }
     return ids;
+}
+
+const Spectrum *SpectrumAnalyzerWidget::spectrumForProbeSlot(size_t slot) const {
+    if (slot >= m_probe_targets.size())
+        return nullptr;
+    SignalNode *node = m_probe_targets[slot].first;
+    if (!node || node->outputs.empty())
+        return nullptr;
+    const int output_index = m_probe_targets[slot].second;
+    if (output_index >= 0 && static_cast<size_t>(output_index) < node->outputs.size())
+        return &node->outputs[static_cast<size_t>(output_index)];
+    return &node->outputs[0];
 }
 
 float SpectrumAnalyzerWidget::markerAreaReserve() const {
@@ -400,8 +408,16 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         m_trace_visible.assign(active_nodes.size(), true);
     }
 
-    const std::vector<MeasurementProbeId> probe_ids = measurementProbeIds(active_nodes);
-    m_measurement_resolution = m_measurement.resolve(probe_ids, m_trace_visible);
+    const std::vector<MeasurementProbeId> probe_ids = measurementProbeIds();
+    // Visibility is tracked per active node, while probes are listed in probe-pin order.
+    // Map each probe identity to its active node's visibility so the two orders may differ.
+    std::vector<bool> probe_visible(probe_ids.size(), false);
+    for (size_t i = 0; i < probe_ids.size(); ++i) {
+        const auto it = std::find(active_nodes.begin(), active_nodes.end(), probe_ids[i].node);
+        probe_visible[i] = it != active_nodes.end() &&
+                           m_trace_visible[static_cast<size_t>(it - active_nodes.begin())];
+    }
+    m_measurement_resolution = m_measurement.resolve(probe_ids, probe_visible);
 
     if (m_probe_labels.empty()) {
         ImGui::Text("No node probed");
@@ -427,8 +443,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             measure_items.push_back("[" + std::to_string(i) + "] " + m_probe_labels[i]);
 
         int measure_index = 0;
-        if (!m_measurement.allVisible() && m_measurement_resolution.requested_index >= 0)
-            measure_index = m_measurement_resolution.requested_index + 1;
+        if (!m_measurement.allVisible() && m_measurement_resolution.requested_index >= 0) {
+            measure_index = std::min(m_measurement_resolution.requested_index + 1,
+                                     static_cast<int>(measure_items.size()) - 1);
+        }
         ImGui::SetNextItemWidth(240.0f);
         // BeginCombo rather than Combo: a removed or hidden probe can leave the preview
         // already showing "All visible", and the user must still be able to apply that
@@ -448,7 +466,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
                             m_measure_label = probe_label(static_cast<int>(slot));
                         }
                     }
-                    m_measurement_resolution = m_measurement.resolve(probe_ids, m_trace_visible);
+                    m_measurement_resolution = m_measurement.resolve(probe_ids, probe_visible);
                 }
                 if (selected)
                     ImGui::SetItemDefaultFocus();
@@ -528,10 +546,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         measure_specs = visible_specs;
     } else {
         const size_t slot = static_cast<size_t>(m_measurement_resolution.probe_index);
-        if (slot < active_nodes.size() && active_nodes[slot]) {
-            const Spectrum *measured = &outputSpectrumFor(active_nodes[slot]);
+        readout_visible.assign(all_active.size(), false);
+        if (const Spectrum *measured = spectrumForProbeSlot(slot)) {
             measure_specs.push_back(measured);
-            readout_visible.assign(all_active.size(), false);
             const auto match = std::find(all_active.begin(), all_active.end(), measured);
             if (match != all_active.end())
                 readout_visible[static_cast<size_t>(match - all_active.begin())] = true;

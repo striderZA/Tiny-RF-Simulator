@@ -62,6 +62,7 @@ class SpectrumAnalyzerWidget {
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
     std::vector<std::string> m_probe_labels;
+    std::vector<std::pair<SignalNode *, int>> m_probe_targets;  // probe-pin order
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
     MarkerModel m_markers;
     DragZoomState m_zoom;
@@ -78,8 +79,8 @@ class SpectrumAnalyzerWidget {
     std::string m_measure_label; // label of the chosen probe, kept for the removed fallback
 
     const Spectrum &outputSpectrumFor(SignalNode *node) const;
-    std::vector<MeasurementProbeId>
-    measurementProbeIds(const std::vector<SignalNode *> &nodes) const;
+    std::vector<MeasurementProbeId> measurementProbeIds() const;
+    const Spectrum *spectrumForProbeSlot(size_t slot) const;
 
     // Vertical space the marker controls, readout strip, and optional table need.
     float markerAreaReserve() const;
