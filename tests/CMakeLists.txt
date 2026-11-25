@@ -482,6 +482,14 @@ add_standalone_test(test_spectrum_analyzer_peak_table
     LIBS simulator::spectrum_analyzer_peak_table
 )
 
+# Harmonic-measurement rules: the clear fundamental, a missing 2nd/3rd, an out-of-span and
+# an RBW-unresolved harmonic, a noise-only trace, and the marker fundamental. UI-free;
+# test_ui drives the panel.
+add_standalone_test(test_spectrum_analyzer_harmonics
+    SOURCES test_spectrum_analyzer_harmonics.cpp
+    LIBS simulator::spectrum_analyzer_harmonics
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.
