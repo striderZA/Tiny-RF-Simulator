@@ -77,6 +77,14 @@ Link to the owning document instead of restating its rules or commands on anothe
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
 
+## Spectrum Analyzer Marker Contract
+
+- Markers are view state, never project data: they do not enter `ProjectSerializer`, do not mark the project dirty, and are not undo records.
+- `MarkerModel` (`spectrum_analyzer/include/spectrum_analyzer_markers.h`, UI-free) owns positions, selection, delta flags, per-marker peak caches, and the session token. M1 (index 0) is the reference and always reads absolute; delta markers read frequency and dB offsets from it, and report an unavailable reference while M1 is off.
+- Marker readouts resolve to the nearest bin of the same jitter-free combined visible-trace axis as the Peak readout, so they follow trace visibility, Max Hold/Min Hold, and Video Avg.
+- A manual move (drag or Ctrl+click placement) clears that marker's cached peak list; re-placing the current value keeps it, so the widget's per-frame drag-line update does not invalidate Next Peak.
+- `RfSimulatorApp` persists the marker session token under `[SpectrumAnalyzer] Markers` through `SessionState` (Windows only), like window visibility.
+
 ## Touchstone Parsing Contract
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
