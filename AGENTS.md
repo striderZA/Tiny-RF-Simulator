@@ -91,7 +91,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Markers are view state, never project data: they do not enter `ProjectSerializer`, do not mark the project dirty, and are not undo records.
 - `MarkerModel` (`spectrum_analyzer/include/spectrum_analyzer_markers.h`, UI-free) owns positions, selection, delta flags, per-marker peak caches, and the session token. M1 (index 0) is the reference and always reads absolute; delta markers read frequency and dB offsets from it, and report an unavailable reference while M1 is off.
 - Marker readouts resolve to the nearest bin of the same jitter-free combined visible-trace axis as the Peak readout, so they follow trace visibility, Max Hold/Min Hold, and Video Avg.
-- A manual move (drag or Ctrl+click placement) clears that marker's cached peak list; re-placing the current value keeps it, so the widget's per-frame drag-line update does not invalidate Next Peak.
+- A manual move (drag, Ctrl+click placement, or a peak-table row selection) clears that marker's cached peak list; re-placing the current value keeps it, so the widget's per-frame drag-line update does not invalidate Next Peak.
 - `RfSimulatorApp` persists the marker session token under `[SpectrumAnalyzer] Markers` through `SessionState` (Windows only), like window visibility.
 
 ## Spectrum Analyzer Peak Table Contract
