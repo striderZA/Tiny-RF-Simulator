@@ -63,7 +63,7 @@ Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average hist
 The **Measure on** list picks which trace the measurement readouts follow:
 
 - **All visible** (the default) keeps the historic combined readout: every visible trace, sampled onto one shared axis.
-- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, and **Next Peak** to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
+- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, **Next Peak**, and the harmonic measurement to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
 
 The chosen probe stays selected if its trace is hidden or its probe is removed. While that happens the panel reads `Measure on: All visible traces (probe [n] … hidden)` or `… (probe … removed)` and measures the visible traces, so it never silently measures a different trace. Showing the probe again, or probing it again, resumes measuring it; choosing **All visible** clears the stored selection. The selection is view state: it is not saved with the project and does not mark it dirty.
 
@@ -72,7 +72,7 @@ The chosen probe stays selected if its trace is hidden or its probe is removed. 
 - **Peak** shows the strongest bin of the measurement source selected by **Measure on** (all visible traces, or one probe's trace), with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
 - **Average noise level** is the mean per-bin noise across the measurement source with tones excluded.
 
-Peak, marker, and average-noise readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
+Peak, marker, average-noise, and harmonic readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
 
 Each probe is plotted on its own frequency grid. With **Measure on: All visible**, the readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin. With one probe selected, the readouts use that probe's trace on its own grid.
 
@@ -108,6 +108,24 @@ Tick **Peak Table** beside the marker controls to show or hide a table of the up
 - **Prev Row** and **Next Row** step the selection, wrapping at either end, and move the marker the same way.
 - The table reads the same jitter-free trace as **Peak** and the markers, so it follows the **Measure on** source, trace visibility, and Max Hold, Min Hold, and Video Avg. Clear/Write and Video Avg read the current frame.
 - The table is view state: it does not enter the project, does not count as an unsaved change, and is not undone. Its show/hide state persists between runs on Windows, like the markers.
+
+## Harmonics
+
+Tick **Harmonics** beside **Peak Table** to measure the fundamental and its 2nd and 3rd harmonics on the **Measure on** source.
+
+- The fundamental is the strongest positive-frequency bin that stands at least 6 dB clear of the trace's median level (its noise floor). A trace with no such tone reads `No clear fundamental` instead of naming one.
+- Tick **Use marker as fundamental** to take the selected marker's frequency as the fundamental instead of the strongest tone. The box is disabled while the selected marker is off, and the fundamental line says whether it came from the marker or the strongest tone. A marker outside the current span reads `No clear fundamental: the marker is outside the current span`, and one at 0 Hz reads that it has to be placed on a tone.
+- Each harmonic is searched within one resolution bandwidth (RBW) of twice and three times the fundamental, on the same jitter-free trace as **Peak** and the markers, so it follows **Measure on**, trace visibility, and the Max Hold, Min Hold, and Video Avg modes.
+- A harmonic outside the swept span reads `outside span`; an RBW as wide as the fundamental frequency, which blurs adjacent harmonic orders together, reads `RBW too wide`; a harmonic with no peak clear of the noise floor reads `not found`. None of these are guessed.
+
+| Column | Meaning |
+| --- | --- |
+| Harmonic | 2nd or 3rd |
+| MHz | Measured harmonic frequency |
+| dBm | Harmonic level on the readout trace |
+| dBc | Harmonic level minus the fundamental level |
+
+The fundamental line names the fundamental's frequency and level. Levels are the displayed trace values, the same as **Peak** and the markers. The block is view state: it does not enter the project, does not count as an unsaved change, and is not undone, and its show/hide state persists between runs on Windows.
 
 ## Nothing probed
 

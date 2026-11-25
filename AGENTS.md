@@ -101,6 +101,14 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Selecting a row, or stepping with `PeakTableModel::step()`, moves the selected marker onto that peak and enables the marker first. Selection clamps to a shrinking search and wraps when stepping.
 - The table is view state: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo. `RfSimulatorApp` persists its visibility under `[SpectrumAnalyzer] PeakTable` through `SessionState` (Windows only).
 
+## Spectrum Analyzer Harmonic Measurement Contract
+
+- `HarmonicModel` (`spectrum_analyzer/include/spectrum_analyzer_harmonics.h`, UI-free) owns the show/hide flag, the `useMarker()` switch, the search rules, and the last result; the widget supplies the selected marker's frequency.
+- The measurement reads the same jitter-free readout trace/axis as Peak and the markers, so it follows **Measure on**, trace visibility, and Max Hold, Min Hold, and Video Avg.
+- The fundamental is the strongest positive-frequency bin at least `kPeakClearance_dB` (6 dB) above the trace median, or the supplied marker frequency taken as given. On a real-domain trace the positive image names the tone, matching the marker readout. A 0 Hz fundamental (a marker left at the axis midpoint, or a dc tone) has no harmonic sequence and reads `NoFundamental`.
+- Harmonics are searched within `max(rbw/2, bin width)` of `n*f0`. The displayed-span check runs first (`OutOfSpan`), then the RBW resolution rule (`half_window >= |f0|/2` is `Unresolved`), then the peak must clear the same noise-floor threshold (`NotFound`). A fundamental with no clear tone is `NoFundamental`; a supplied marker outside the span is `FundamentalOutOfSpan`. The statuses are reported, never guessed.
+- The block is view state: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo. `RfSimulatorApp` persists its visibility under `[SpectrumAnalyzer] Harmonics` through `SessionState` (Windows only); the marker-fundamental switch is session-only.
+
 ## Touchstone Parsing Contract
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.
