@@ -92,6 +92,23 @@ The analyzer has four markers, **M1** to **M4**, each in its own color on the tr
 
 Markers read the same jitter-free values as **Peak** on the current **Measure on** source: they follow its trace visibility and its Max Hold and Min Hold values, and a marker at a given frequency names the same bin the Peak readout uses. As for Peak, Clear/Write and Video Avg read the current frame.
 
+## Peak table
+
+Tick **Peak Table** beside the marker controls to show or hide a table of the up to five strongest local maxima of the **Measure on** source. Rows are sorted by descending amplitude: row 1 is the strongest peak and anchors the delta columns, so it reads `+0.000 MHz` and `+0.00 dB`.
+
+| Column | Meaning |
+| --- | --- |
+| # | Rank, strongest first |
+| MHz | Peak frequency |
+| dBm | Peak amplitude |
+| df MHz | Frequency offset from the strongest peak |
+| dAmp dB | Amplitude offset from the strongest peak |
+
+- Click a row to select it (highlighted) and move the selected marker (**Marker**, M1 to M4) onto that peak. The marker is switched on if it was off.
+- **Prev Row** and **Next Row** step the selection, wrapping at either end, and move the marker the same way.
+- The table reads the same jitter-free trace as **Peak** and the markers, so it follows the **Measure on** source, trace visibility, and Max Hold, Min Hold, and Video Avg. Clear/Write and Video Avg read the current frame.
+- The table is view state: it does not enter the project, does not count as an unsaved change, and is not undone. Its show/hide state persists between runs on Windows, like the markers.
+
 ## Nothing probed
 
 With no probes the panel reads `No node probed`. With probes but no signal it names the problem, for example `Unable to display spectrum (no frequency grid).`

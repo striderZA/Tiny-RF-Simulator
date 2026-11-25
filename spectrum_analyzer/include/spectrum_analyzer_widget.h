@@ -3,6 +3,7 @@
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_markers.h"
 #include "spectrum_analyzer_measurement.h"
+#include "spectrum_analyzer_peak_table.h"
 #include "view_manager.h"
 #include <string>
 #include <unordered_map>
@@ -48,6 +49,11 @@ class SpectrumAnalyzerWidget {
     std::string markerSessionState() const { return m_markers.serialize(); }
     bool setMarkerSessionState(const std::string &token) { return m_markers.restore(token); }
 
+    // Peak table view state: up to five strongest peaks of the measurement source.
+    // Not project data; its visibility persists with the panel like the marker table.
+    const PeakTableModel &peakTable() const { return m_peaks; }
+    void setPeakTableVisible(bool visible) { m_peaks.setVisible(visible); }
+
     // The pixel rect of the plot's data area in the last draw(); test seam for
     // frequency-to-pixel mapping in the headless UI test.
     struct PlotArea {
@@ -65,6 +71,7 @@ class SpectrumAnalyzerWidget {
     std::vector<std::pair<SignalNode *, int>> m_probe_targets;  // probe-pin order
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
     MarkerModel m_markers;
+    PeakTableModel m_peaks;
     DragZoomState m_zoom;
     int m_drag_marker = -1;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
@@ -93,4 +100,7 @@ class SpectrumAnalyzerWidget {
                             const std::vector<double> &display_dBm);
     void drawMarkerTable(const std::vector<double> &freq_axis,
                          const std::vector<double> &display_dBm);
+    void drawPeakTable();
+    // Moves the selected marker onto the selected table row, enabling it first if needed.
+    void applySelectedPeak();
 };
