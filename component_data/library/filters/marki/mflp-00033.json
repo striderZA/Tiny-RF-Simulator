@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "MFLP-00033CSP1",
+  "manufacturer": "Marki Microwave",
+  "description": "Passive GaAs MMIC 19 GHz low-pass filter",
+  "parameters": {
+    "filter_type": "LPF",
+    "fc_low_Hz": 18.98e9,
+    "fc_high_Hz": 18.98e9
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 25e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Datasheet: 1 dB passband DC-17.22 GHz, 3 dB cutoff 18.98 GHz, 30 dB rejection from 20.91 GHz, 26 dB passband return loss."
+}

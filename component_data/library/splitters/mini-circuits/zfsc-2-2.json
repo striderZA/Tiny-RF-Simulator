@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "ZFSC-2-2-S+",
+  "manufacturer": "Mini-Circuits",
+  "description": "2-way power splitter/combiner, 10-1000 MHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 1e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way splitter (3.01 dB per output). Datasheet total loss 3.15 dB typical at 10 MHz, isolation 26 dB typical, 1 W as a splitter."
+}

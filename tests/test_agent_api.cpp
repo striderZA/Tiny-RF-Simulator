@@ -469,8 +469,17 @@ TEST_CASE("library_search matches case-insensitively and limits results", "[agen
     const auto part_number = fixture.call("library_search", {{"query", "zx60"}});
     REQUIRE_FALSE(part_number.is_error);
     CHECK(part_number.structured.at("epoch") == fixture.api.epoch());
-    REQUIRE(part_number.structured.at("parts").size() == 1);
-    CHECK(part_number.structured.at("parts")[0].at("part_number") == "ZX60-33LN+");
+    // The catalogue has two ZX60 parts, so the case-insensitive query must find both.
+    REQUIRE(part_number.structured.at("parts").size() >= 2);
+    bool found_zx60_33 = false;
+    bool found_zx60_83 = false;
+    for (const auto &part : part_number.structured.at("parts")) {
+        const auto part_name = part.at("part_number").get<std::string>();
+        found_zx60_33 = found_zx60_33 || part_name == "ZX60-33LN+";
+        found_zx60_83 = found_zx60_83 || part_name == "ZX60-83LN+";
+    }
+    CHECK(found_zx60_33);
+    CHECK(found_zx60_83);
 
     const auto manufacturer = fixture.call("library_search", {{"query", "mini-circuits"}});
     REQUIRE_FALSE(manufacturer.is_error);
@@ -497,10 +506,13 @@ TEST_CASE("library_search matches case-insensitively and limits results", "[agen
         fixture.call("library_search", {{"query", "mini-circuits"}, {"type", "amplifier"}});
     REQUIRE_FALSE(amplifier_filter.is_error);
     CHECK(amplifier_filter.structured.at("epoch") == fixture.api.epoch());
-    REQUIRE(amplifier_filter.structured.at("parts").size() == 1);
-    CHECK(amplifier_filter.structured.at("parts")[0].at("part_number") == "ZX60-33LN+");
-    for (const auto &part : amplifier_filter.structured.at("parts"))
+    REQUIRE(amplifier_filter.structured.at("parts").size() >= 2);
+    bool filtered_zx60_33 = false;
+    for (const auto &part : amplifier_filter.structured.at("parts")) {
         CHECK(part.at("type") == "amplifier");
+        filtered_zx60_33 = filtered_zx60_33 || part.at("part_number") == "ZX60-33LN+";
+    }
+    CHECK(filtered_zx60_33);
 
     const auto ordered = fixture.call("library_search", {{"query", "mini-circuits"}});
     CHECK(ordered.structured.at("epoch") == fixture.api.epoch());
@@ -1552,7 +1564,7 @@ std::string admS2pPath() {
 
 std::string am1143S2pPath() {
     return std::string(PROJECT_SOURCE_DIR) +
-           "/component_data/library/amplifiers/anatech/AM1143.s2p";
+           "/component_data/library/amplifiers/mercury-systems/AM1143.s2p";
 }
 
 } // namespace

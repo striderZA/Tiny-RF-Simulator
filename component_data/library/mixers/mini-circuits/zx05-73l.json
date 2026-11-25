@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "ZX05-73L+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Frequency mixer, 2400-7000 MHz, +4 dBm LO",
+  "parameters": {
+    "lo_freq_Hz": 4e9,
+    "conversion_gain_dB": -6.2,
+    "nf_dB": 6.2
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [2.4e9, 7e9],
+    "temperature_C": 25,
+    "lo_power_dBm": 4
+  },
+  "notes": "Level 4 wideband mixer. Datasheet conversion loss 6.2 dB typical, LO-RF isolation 30 dB typical, IF response DC-3000 MHz."
+}

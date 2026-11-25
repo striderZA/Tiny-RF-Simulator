@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "BSF-C160+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Band-stop filter, 150.3-169.7 MHz",
+  "parameters": {
+    "filter_type": "BSF",
+    "fc_low_Hz": 150.3e6,
+    "fc_high_Hz": 169.7e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 1e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal band-stop response over the 150.3-169.7 MHz stopband. Datasheet rejection 48 dB typical."
+}

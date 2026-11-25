@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "PD-0R510",
+  "manufacturer": "Marki Microwave",
+  "description": "2-way Wilkinson power divider/combiner, 0.5-10 GHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [0.5e9, 10e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal 2-way splitter (3.01 dB per output). Marki PD-0R510 Wilkinson divider: 0.9 dB excess insertion loss, 22 dB isolation, 0.1 dB amplitude balance."
+}

@@ -2,7 +2,12 @@
 
 ### Added
 
-- **The built-in component library ships with the release downloads** — the Linux tarball and the Windows zip now carry `component_data/library` beside the executable (inside `rf-simulator-windows/` on Windows), so a fresh download lists the 19 built-in parts without copying anything from a source checkout. The release workflow fails when a packaged archive is missing the library, malformed definitions, or a declared S-parameter file.
+- **Built-in component library expanded to 62 parts** — the starter catalogue under `component_data/library` now covers common RF chains end to end: 18 filters (low-pass, high-pass, band-pass, and band-stop from 37 MHz to 19 GHz), 11 amplifiers (LNAs, gain blocks, and driver amplifiers), six fixed attenuators, two digital step attenuators, five 2-way splitters, four 2-way combiners, six mixers, four equalizers, and six ADCs. Every definition loads with no validation issues and inserts with its datasheet-typical parameters; `AM1143` remains the only part with a Touchstone file, which is a synthetic placeholder, so every other part starts on its ideal model. The Component Library page lists the shipped parts.
+- **The built-in component library ships with the release downloads** — the Linux tarball and the Windows zip now carry `component_data/library` beside the executable (inside `rf-simulator-windows/` on Windows), so a fresh download lists the 62 built-in parts without copying anything from a source checkout. The release workflow fails when a packaged archive is missing the library, malformed definitions, or a declared S-parameter file.
+
+### Fixed
+
+- **Existing catalogue entries now match their datasheets** — `MFLP-00033CSP1` is a Marki Microwave 19 GHz low-pass filter, `AM1143` is a Mercury Systems 20 MHz-6 GHz driver, `ATN01-0040PSM` is a Marki 1 dB DC-40 GHz MMIC attenuator, `MPD-0226CH` is a Marki 2-26.5 GHz divider/combiner, `M1-0218` is a Marki 2-18 GHz mixer rather than a combiner, `MEQ0-20ASM` is a Marki 0-20 GHz negative-slope equalizer, and `ZAD-1-1+` covers 0.1-500 MHz. The undocumented `M1-0002`, `BFC-160+`, `RC-10-10+`, `ZFSC-2-1G-S+`, and `EQ-12` entries are replaced by the real `PD-0R510`, `RBP-160+`, `RCAT-10+`, `ZFSC-2-2500-S+`, and `EQY-15-24+` parts.
 
 ### Changed
 

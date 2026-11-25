@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "MAR-6SM+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Low-current MMIC gain block, DC-2 GHz",
+  "parameters": {
+    "gain_dB": 20.2,
+    "nf_dB": 2.3,
+    "oip3_dBm": 18.1,
+    "p1db_dBm": 3.7
+  },
+  "test_conditions": {
+    "frequency_Hz": 1e9,
+    "temperature_C": 25,
+    "vdd_V": 3.5,
+    "idd_mA": 16
+  },
+  "notes": "Typical at 1 GHz, 16 mA: gain 20.2 dB, NF 2.3 dB, OIP3 +18.1 dBm, P1dB +3.7 dBm."
+}

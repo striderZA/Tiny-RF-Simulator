@@ -12,7 +12,72 @@ Click a part to insert it into the circuit at the canvas origin. The new node ta
 
 ## Built-in parts
 
-The download ships 19 built-in definitions under `component_data/library` beside the executable (`rf-simulator-windows/component_data/library` in the Windows zip) — amplifiers, attenuators (including the 6-bit digital step attenuator `ZX76-31R5A-PN+`), filters, splitters, mixers, equalizers, combiners, and ADCs, including one amplifier (`AM1143`) with a Touchstone file. A fresh download lists them in the browser; no source checkout is needed.
+The download ships 62 built-in definitions under `component_data/library` beside the executable (`rf-simulator-windows/component_data/library` in the Windows zip): 18 filters, 11 amplifiers, 6 fixed attenuators, 2 digital step attenuators, 5 splitters, 4 combiners, 6 mixers, 4 equalizers, and 6 ADCs. A fresh download lists them in the browser; no source checkout is needed. `AM1143` is the only built-in part with a Touchstone file; it inserts in S-parameter mode, and its bundled file is a synthetic placeholder. Every other built-in part inserts on its ideal model.
+
+| Type | Part | Manufacturer | Description |
+|---|---|---|---|
+| Filter | `MFLP-00033CSP1` | Marki Microwave | Low-pass, 19 GHz cutoff |
+| Filter | `SLP-50+` | Mini-Circuits | Low-pass, DC-48 MHz |
+| Filter | `SLP-100+` | Mini-Circuits | Low-pass, DC-98 MHz |
+| Filter | `SLP-450+` | Mini-Circuits | Low-pass, DC-400 MHz |
+| Filter | `SLP-1000+` | Mini-Circuits | Low-pass, DC-900 MHz |
+| Filter | `SLP-2400+` | Mini-Circuits | Low-pass, DC-2200 MHz |
+| Filter | `BHP-500+` | Mini-Circuits | High-pass, 500-3200 MHz passband |
+| Filter | `SHP-50+` | Mini-Circuits | High-pass, 41-800 MHz passband |
+| Filter | `SHP-100+` | Mini-Circuits | High-pass, 90-2000 MHz passband |
+| Filter | `SHP-250+` | Mini-Circuits | High-pass, 225-3000 MHz passband |
+| Filter | `SHP-1000+` | Mini-Circuits | High-pass, 1000-3000 MHz passband |
+| Filter | `RBP-160+` | Mini-Circuits | Band-pass, 120-210 MHz |
+| Filter | `SBP-70+` | Mini-Circuits | Band-pass, 63-77 MHz |
+| Filter | `VBFZ-925-S+` | Mini-Circuits | Band-pass, 800-1050 MHz |
+| Filter | `VBFZ-2000+` | Mini-Circuits | Band-pass, 1730-2270 MHz |
+| Filter | `BSF-C75+` | Mini-Circuits | Band-stop, 65-85 MHz |
+| Filter | `BSF-C100+` | Mini-Circuits | Band-stop, 90.365-109.635 MHz |
+| Filter | `BSF-C160+` | Mini-Circuits | Band-stop, 150.3-169.7 MHz |
+| Amplifier | `AM1143` | Mercury Systems | 20 MHz-6 GHz driver, synthetic Touchstone placeholder |
+| Amplifier | `MGA-62563` | Broadcom | Low-noise LNA, 900 MHz |
+| Amplifier | `ZX60-33LN+` | Mini-Circuits | Low-noise gain block, 1 GHz |
+| Amplifier | `PGA-103+` | Mini-Circuits | Ultra-low-noise gain block, 0.05-4 GHz |
+| Amplifier | `ZX60-83LN+` | Mini-Circuits | Wideband LNA, 0.5-8 GHz |
+| Amplifier | `GALI-39+` | Mini-Circuits | MMIC gain block, DC-7 GHz |
+| Amplifier | `ERA-5SM+` | Mini-Circuits | MMIC gain block, DC-4 GHz |
+| Amplifier | `MAR-6SM+` | Mini-Circuits | Low-current MMIC gain block, DC-2 GHz |
+| Amplifier | `SBB5089Z` | Qorvo | InGaP HBT gain block, 50 MHz-6 GHz |
+| Amplifier | `ZHL-2-8+` | Mini-Circuits | Driver amplifier, 10-1000 MHz |
+| Amplifier | `ZHL-42W+` | Mini-Circuits | Driver amplifier, 10-4200 MHz |
+| Attenuator | `ATN01-0040PSM` | Marki Microwave | Fixed MMIC, 1 dB, DC-40 GHz |
+| Attenuator | `RCAT-10+` | Mini-Circuits | Fixed SMT, 10 dB, DC-20 GHz |
+| Attenuator | `RCAT-03+` | Mini-Circuits | Fixed SMT, 3 dB, DC-20 GHz |
+| Attenuator | `RCAT-06+` | Mini-Circuits | Fixed SMT, 6 dB, DC-20 GHz |
+| Attenuator | `RCAT-20+` | Mini-Circuits | Fixed SMT, 20 dB, DC-20 GHz |
+| Attenuator | `RCAT-30+` | Mini-Circuits | Fixed SMT, 30 dB, DC-20 GHz |
+| Digital step attenuator | `ZX76-31R5A-PN+` | Mini-Circuits | 6-bit, 0.5 dB steps, DC-4 GHz |
+| Digital step attenuator | `DAT-31R5A-PP+` | Mini-Circuits | 6-bit, 0.5 dB steps, DC-4 GHz |
+| Splitter | `PD-0R510` | Marki Microwave | 2-way, 0.5-10 GHz |
+| Splitter | `MPD-0226CH` | Marki Microwave | 2-way MMIC, 2-26.5 GHz |
+| Splitter | `ZFSC-2-2-S+` | Mini-Circuits | 2-way, 10-1000 MHz |
+| Splitter | `ZFSC-2-4-S+` | Mini-Circuits | 2-way, 0.2-1000 MHz |
+| Splitter | `ZN2PD2-63-S+` | Mini-Circuits | 2-way, 350-6000 MHz, 25 W |
+| Combiner | `PD-0218` | Marki Microwave | 2-way Wilkinson, 2-18 GHz |
+| Combiner | `ZFSC-2-2500-S+` | Mini-Circuits | 2-way, 10-2500 MHz |
+| Combiner | `ZFSC-2-2-S+` | Mini-Circuits | 2-way, 10-1000 MHz |
+| Combiner | `ZN2PD2-63-S+` | Mini-Circuits | 2-way, 350-6000 MHz |
+| Mixer | `ADL5387` | Analog Devices | I/Q demodulator, 400-2700 MHz |
+| Mixer | `ZAD-1-1+` | Mini-Circuits | Double-balanced, 0.1-500 MHz |
+| Mixer | `M1-0218` | Marki Microwave | Double-balanced, 2-18 GHz |
+| Mixer | `ZEM-4300+` | Mini-Circuits | Double-balanced, 300-4300 MHz |
+| Mixer | `ZX05-73L+` | Mini-Circuits | Wideband, 2400-7000 MHz |
+| Mixer | `ADL5801` | Analog Devices | Active, 100-6000 MHz |
+| Equalizer | `EQY-15-24+` | Mini-Circuits | 15.7 dB fixed slope, 6-20 GHz |
+| Equalizer | `MEQ0-20ASM` | Marki Microwave | 0-20 GHz, negative slope |
+| Equalizer | `EQY-4-123+` | Mini-Circuits | 4 dB fixed slope, DC-12 GHz |
+| Equalizer | `EQY-9-123+` | Mini-Circuits | 9 dB fixed slope, DC-12 GHz |
+| ADC | `AD9226` | Analog Devices | 12-bit, 65 MSPS |
+| ADC | `ADC12D1600` | Texas Instruments | 12-bit, 3.2 GSPS |
+| ADC | `AD9680` | Analog Devices | 14-bit, 1.25 GSPS dual |
+| ADC | `AD9208` | Analog Devices | 14-bit, 3 GSPS dual |
+| ADC | `LTC2208` | Analog Devices | 16-bit, 130 MSPS |
+| ADC | `ADS54J60` | Texas Instruments | 16-bit, 1 GSPS dual |
 
 Built-in definitions have no **Edit** button; they cannot be changed in place.
 

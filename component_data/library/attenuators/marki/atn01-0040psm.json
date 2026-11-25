@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "type": "attenuator",
+  "part_number": "ATN01-0040PSM",
+  "manufacturer": "Marki Microwave",
+  "description": "1 dB DC-40 GHz MMIC attenuator",
+  "parameters": {
+    "attenuation_dB": 1.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 40e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Marki Microwave 1 dB surface-mount GaAs MMIC attenuator, DC-40 GHz, 27 dB typical return loss, 0.3 dB attenuation flatness."
+}

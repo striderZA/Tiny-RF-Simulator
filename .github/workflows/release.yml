@@ -258,7 +258,7 @@ jobs:
           for required in \
             'bin/tiny-rf-simulator(\.exe)?$' \
             'bin/component_data/library/.+\.json$' \
-            'bin/component_data/library/amplifiers/anatech/AM1143\.s2p$' \
+            'bin/component_data/library/amplifiers/mercury-systems/AM1143\.s2p$' \
             'bin/extensions/' \
             'share/doc/rf-simulator/README\.md$'; do
             if ! grep -Eq "^[^/]+/${required}" <<< "$listing"; then
@@ -317,6 +317,7 @@ jobs:
             rf-simulator-linux rf-sim-mcp component_data
           tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-simulator-linux'
           tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'rf-sim-mcp'
+          tar -tzf rf-simulator-linux-x86_64.tar.gz | grep -Fx 'component_data/library/filters/mini-circuits/slp-50.json'
 
       - name: Package Windows binaries + DLLs
         run: |
@@ -326,6 +327,7 @@ jobs:
           cp artifacts/build-windows/mingw-dlls/*.dll rf-simulator-windows/
           cp -R artifacts/build-windows/component_data rf-simulator-windows/component_data
           zip -r rf-simulator-windows-x86_64.zip rf-simulator-windows/
+          unzip -l rf-simulator-windows-x86_64.zip | grep -F 'rf-simulator-windows/component_data/library/filters/mini-circuits/slp-50.json'
 
       - name: Verify release archives
         run: |
@@ -333,10 +335,10 @@ jobs:
           bash scripts/test-verify-release-archive.sh
           python3 scripts/verify-release-archive.py \
             rf-simulator-linux-x86_64.tar.gz \
-            --library-root component_data/library --min-parts 19
+            --library-root component_data/library --min-parts 62
           python3 scripts/verify-release-archive.py \
             rf-simulator-windows-x86_64.zip \
-            --library-root rf-simulator-windows/component_data/library --min-parts 19
+            --library-root rf-simulator-windows/component_data/library --min-parts 62
 
       - name: Create Release (draft)
         # workflow_dispatch validates and packages the same artifacts but never publishes.

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "ZHL-42W+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Medium-power driver amplifier, 10-4200 MHz",
+  "parameters": {
+    "gain_dB": 34.0,
+    "nf_dB": 6.0,
+    "oip3_dBm": 38.0,
+    "p1db_dBm": 30.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [10e6, 4.2e9],
+    "temperature_C": 25,
+    "vdd_V": 15.0,
+    "supply_current_mA": 1000
+  },
+  "notes": "Typical at 15 V: gain 34 dB, NF 6 dB, OIP3 +38 dBm, P1dB +30 dBm. Requires an external heat sink."
+}

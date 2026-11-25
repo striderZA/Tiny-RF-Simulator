@@ -15,6 +15,9 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <set>
+#include <string>
+#include <utility>
 
 using Catch::Approx;
 
@@ -461,4 +464,62 @@ TEST_CASE("ComponentLibrary falls back when S-param file missing", "[library]") 
     REQUIRE(amp->nf_dB() == Approx(1.0));
 
     std::filesystem::remove_all(tmpdir);
+}
+
+TEST_CASE("Built-in component library catalogue is complete and loadable", "[library][catalogue]") {
+    ComponentLibrary library;
+    library.scan(std::string(PROJECT_SOURCE_DIR) + "/component_data/library");
+    const auto definitions = library.all();
+
+    // The shipped starter catalogue: filters, amplifiers, attenuators,
+    // splitters, combiners, mixers, equalizers, and ADCs.
+    REQUIRE(definitions.size() == 62);
+
+    std::set<std::pair<std::string, std::string>> parts;
+    std::set<std::string> filter_shapes;
+    int sparam_parts = 0;
+    for (const ComponentDefinition *definition : definitions) {
+        REQUIRE(definition != nullptr);
+        INFO(definition->type << " " << definition->part_number);
+        CHECK(definition->issues.empty());
+        CHECK(parts.insert({definition->type, definition->part_number}).second);
+        CHECK_FALSE(definition->manufacturer.empty());
+        CHECK_FALSE(definition->description.empty());
+        if (definition->type == "filter")
+            filter_shapes.insert(definition->parameters.value("filter_type", ""));
+
+        bool declares_sparam = false;
+        for (const auto &data_file : definition->data_files) {
+            if (data_file.type != "s_parameters")
+                continue;
+            declares_sparam = true;
+            const auto path = componentDataFilePath(*definition, "s_parameters");
+            REQUIRE(path.has_value());
+            CHECK(std::filesystem::exists(*path));
+        }
+
+        CircuitRuntime runtime;
+        GraphEditorActions actions(runtime);
+        IComponentEngine *engine = library.instantiate(*definition, runtime, actions);
+        REQUIRE(engine != nullptr);
+        const nlohmann::json state = engine->serialize();
+        if (declares_sparam) {
+            ++sparam_parts;
+            CHECK(state.value("sparam_mode", false));
+        } else if (state.contains("sparam_mode")) {
+            CHECK_FALSE(state.value("sparam_mode", true));
+        }
+    }
+
+    CHECK(sparam_parts == 1); // Only AM1143 ships a redistributable Touchstone file.
+    CHECK(filter_shapes == std::set<std::string>{"LPF", "HPF", "BPF", "BSF"});
+    CHECK(library.byType("filter").size() == 18);
+    CHECK(library.byType("amplifier").size() == 11);
+    CHECK(library.byType("attenuator").size() == 6);
+    CHECK(library.byType("digital_step_attenuator").size() == 2);
+    CHECK(library.byType("splitter").size() == 5);
+    CHECK(library.byType("combiner").size() == 4);
+    CHECK(library.byType("mixer").size() == 6);
+    CHECK(library.byType("equalizer").size() == 4);
+    CHECK(library.byType("adc").size() == 6);
 }

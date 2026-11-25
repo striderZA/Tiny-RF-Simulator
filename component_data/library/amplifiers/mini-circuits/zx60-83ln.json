@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "type": "amplifier",
+  "part_number": "ZX60-83LN+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Wideband low-noise amplifier, 0.5-8 GHz",
+  "parameters": {
+    "gain_dB": 21.3,
+    "nf_dB": 1.4,
+    "oip3_dBm": 30.0,
+    "p1db_dBm": 19.1
+  },
+  "test_conditions": {
+    "frequency_Hz": 2e9,
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "idd_mA": 60
+  },
+  "notes": "Typical at 2 GHz, VDD=+5 V: gain 21.3 dB, NF 1.4 dB, OIP3 +30 dBm, P1dB +19.1 dBm."
+}

@@ -32,7 +32,7 @@ When **Agent Server** is on, the app also writes a connection file for the bridg
 
 ## Built-in parts
 
-The release archives include the built-in component library beside the executable, so a fresh download lists the 19 built-in parts in **View > Component Library**. The definitions and their S-parameter files live in `component_data/library` (`rf-simulator-windows/component_data/library` in the Windows zip); keep that folder beside the executable.
+The release archives include the built-in component library beside the executable, so a fresh download lists the 62 built-in parts in **View > Component Library**. The definitions and their S-parameter files live in `component_data/library` (`rf-simulator-windows/component_data/library` in the Windows zip); keep that folder beside the executable.
 
 ## First run
 

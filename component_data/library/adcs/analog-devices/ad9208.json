@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "adc",
+  "part_number": "AD9208",
+  "manufacturer": "Analog Devices",
+  "description": "14-bit, 3 GSPS dual RF sampling ADC",
+  "parameters": {
+    "fs_Hz": 3.0e9,
+    "nsd_dBm_per_Hz": -156.0,
+    "decimation": 2,
+    "nco_fs_fraction": 0.25
+  },
+  "test_conditions": {
+    "temperature_C": 25,
+    "vdd_V": 2.5,
+    "resolution_bits": 14
+  },
+  "notes": "Typical noise spectral density at 3 GSPS with a 14-bit converter and JESD204B output."
+}

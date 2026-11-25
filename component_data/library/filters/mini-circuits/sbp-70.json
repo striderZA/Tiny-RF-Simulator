@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "SBP-70+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Band-pass filter, 63-77 MHz",
+  "parameters": {
+    "filter_type": "BPF",
+    "fc_low_Hz": 63e6,
+    "fc_high_Hz": 77e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 1e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal BPF over the 63-77 MHz passband. Datasheet insertion loss 1.5 dB max, 20 dB stopbands at 51 MHz and 94 MHz, 0.5 W max."
+}

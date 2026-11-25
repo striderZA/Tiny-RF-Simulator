@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "filter",
+  "part_number": "VBFZ-2000+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Band-pass filter, 1730-2270 MHz, 7 W",
+  "parameters": {
+    "filter_type": "BPF",
+    "fc_low_Hz": 1730e6,
+    "fc_high_Hz": 2270e6
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 16e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "rf_power_W": 7
+  },
+  "notes": "Ideal BPF over the 1730-2270 MHz passband. Datasheet LTCC band-pass filter with 1.37 dB typical insertion loss at 2 GHz and 30 dB rejection to 16 GHz."
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "ZEM-4300+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Frequency mixer, 300-4300 MHz, +7 dBm LO",
+  "parameters": {
+    "lo_freq_Hz": 1e9,
+    "conversion_gain_dB": -6.65,
+    "nf_dB": 6.65
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [300e6, 4.3e9],
+    "temperature_C": 25,
+    "lo_power_dBm": 7
+  },
+  "notes": "Level 7 double-balanced mixer. Datasheet conversion loss 6.65 dB typical, LO-RF isolation 40 dB typical, IF response DC-1000 MHz."
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "type": "equalizer",
+  "part_number": "EQY-4-123+",
+  "manufacturer": "Mini-Circuits",
+  "description": "Fixed-slope equalizer, 4 dB, DC-12 GHz",
+  "parameters": {
+    "ref_gain_dB": -4.0,
+    "ref_freq_Hz": 1e9,
+    "slope_dB_per_decade": 3.0
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [0, 12e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50
+  },
+  "notes": "Ideal positive-slope model of a 4 dB equalization across DC-12 GHz (about 3.7 dB/decade from 1 to 12 GHz)."
+}

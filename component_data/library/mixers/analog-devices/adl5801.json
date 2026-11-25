@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": "mixer",
+  "part_number": "ADL5801",
+  "manufacturer": "Analog Devices",
+  "description": "Active double-balanced mixer, 100-6000 MHz",
+  "parameters": {
+    "lo_freq_Hz": 2e9,
+    "conversion_gain_dB": 1.5,
+    "nf_dB": 9.75
+  },
+  "test_conditions": {
+    "frequency_range_Hz": [100e6, 6e9],
+    "temperature_C": 25,
+    "vdd_V": 5.0,
+    "lo_power_dBm": 0
+  },
+  "notes": "Active mixer with integrated LO buffer. Datasheet conversion gain 1.5 dB typical and SSB noise figure 9.75 dB typical at 2 GHz."
+}

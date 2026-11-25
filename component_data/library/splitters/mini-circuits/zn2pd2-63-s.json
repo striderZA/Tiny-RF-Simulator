@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "type": "splitter",
+  "part_number": "ZN2PD2-63-S+",
+  "manufacturer": "Mini-Circuits",
+  "description": "2-way high-power power splitter/combiner, 350-6000 MHz",
+  "parameters": {},
+  "test_conditions": {
+    "frequency_range_Hz": [350e6, 6e9],
+    "temperature_C": 25,
+    "impedance_ohm": 50,
+    "splitter_power_W": 25
+  },
+  "notes": "Ideal 2-way splitter (3.01 dB per output). Datasheet handles 25 W as a splitter to 3.6 GHz, 15 W to 6 GHz, and 1 W as a combiner; insertion loss 0.9 dB typical."
+}
