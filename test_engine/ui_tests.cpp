@@ -1205,6 +1205,155 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Peak table: the up to five strongest peaks, strongest first, with deltas from the
+    // strongest. Clicking a row or stepping with the row buttons moves the selected marker.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_peak_table_moves_marker");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 760));
+        ctx->Yield(3);
+
+        const auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const auto &widget = s_app->testSpectrumWidget();
+        const auto &markers = widget.markers();
+        const auto &table = widget.peakTable();
+        IM_CHECK(!widget.readoutTrace().empty());
+
+        auto enable_marker = [&](const char *name, bool on) {
+            ctx->SetRef("Spectrum Analyzer");
+            IM_CHECK(ctx->ItemExists(name));
+            const int index = name[1] - '1';
+            if (markers.enabled(index) != on) {
+                if (on)
+                    ctx->ItemCheck(name);
+                else
+                    ctx->ItemUncheck(name);
+            }
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+        // Marker and table visibility persist between runs; start from none, then make M1
+        // the selected marker so the table's row click has a known target.
+        enable_marker("M1", false);
+        enable_marker("M2", false);
+        enable_marker("M3", false);
+        enable_marker("M4", false);
+        enable_marker("M1", true);
+        IM_CHECK_EQ(markers.selected(), 0);
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Peak Table"));
+        if (table.visible())
+            ctx->ItemUncheck("Peak Table");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!table.visible());
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("Peak Table");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(table.visible());
+
+        // Rows are the strongest local maxima of the same readout trace Peak uses, in
+        // descending amplitude order, capped at five.
+        const std::vector<Peak> searched =
+            sa.findPeaks(widget.readoutTrace(), widget.readoutAxis(), PeakTableModel::kMaxPeaks);
+        IM_CHECK(!searched.empty());
+        IM_CHECK_EQ(table.count(), static_cast<int>(searched.size()));
+        IM_CHECK(table.count() <= PeakTableModel::kMaxPeaks);
+        for (int i = 0; i < table.count(); ++i) {
+            const auto &row = table.rows()[static_cast<size_t>(i)];
+            IM_CHECK(std::abs(row.frequency_Hz - searched[static_cast<size_t>(i)].freq_Hz) < 1.0);
+            IM_CHECK(std::abs(row.amplitude_dBm - searched[static_cast<size_t>(i)].power_dBm) <
+                     1e-9);
+            if (i > 0)
+                IM_CHECK(row.amplitude_dBm <=
+                         table.rows()[static_cast<size_t>(i - 1)].amplitude_dBm);
+            const auto &strongest = table.rows()[0];
+            IM_CHECK(std::abs(row.delta_frequency_Hz -
+                              (row.frequency_Hz - strongest.frequency_Hz)) < 1e-6);
+            IM_CHECK(std::abs(row.delta_amplitude_dB -
+                              (row.amplitude_dBm - strongest.amplitude_dBm)) < 1e-9);
+        }
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("**/peaktablerow1"));
+        if (table.count() > 1)
+            IM_CHECK(ctx->ItemExists("**/peaktablerow2"));
+
+        // Clicking a row enables the selected marker and lands it on that peak.
+        int clicked = 0;
+        if (table.count() > 1) {
+            clicked = 1;
+            ctx->ItemClick("**/peaktablerow2");
+        } else {
+            ctx->ItemClick("**/peaktablerow1");
+        }
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK_EQ(table.selected(), clicked);
+        IM_CHECK(markers.enabled(markers.selected()));
+        const auto &clicked_row = table.rows()[static_cast<size_t>(clicked)];
+        IM_CHECK(std::abs(markers.frequency(markers.selected()) - clicked_row.frequency_Hz) < 1.0);
+
+        // Next Row steps the selection and moves the marker with it; Prev Row wraps back.
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("**/peaknext"));
+        ctx->ItemClick("**/peaknext");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        const int stepped = (clicked + 1) % table.count();
+        IM_CHECK_EQ(table.selected(), stepped);
+        IM_CHECK(std::abs(markers.frequency(markers.selected()) -
+                          table.rows()[static_cast<size_t>(stepped)].frequency_Hz) < 1.0);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("**/peakprev"));
+        ctx->ItemClick("**/peakprev");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK_EQ(table.selected(), clicked);
+
+        // A narrow dock keeps the table and its controls inside the panel.
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(400.0f, 700.0f));
+        ctx->Yield(3);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Spectrum Analyzer");
+        IM_CHECK(panel != nullptr);
+        if (panel) {
+            ctx->SetRef("Spectrum Analyzer");
+            const char *narrow_items[] = {"Peak Table", "**/peakprev", "**/peaknext",
+                                          "**/peaktablerow1"};
+            for (const char *item : narrow_items) {
+                const auto info = ctx->ItemInfo(item, ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                IM_CHECK(info.RectFull.Min.x >= panel->InnerRect.Min.x - 1.0f);
+                IM_CHECK(info.RectFull.Max.x <= panel->InnerRect.Max.x + 1.0f);
+            }
+            ctx->SetRef("");
+        }
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720.0f, 760.0f));
+        ctx->Yield(2);
+
+        // Leave the shared app with the table hidden and no markers on.
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemUncheck("Peak Table");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!table.visible());
+        enable_marker("M1", false);
+        enable_marker("M2", false);
+        enable_marker("M3", false);
+        enable_marker("M4", false);
+        IM_CHECK_EQ(markers.enabledCount(), 0);
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // Measurement source selector: readouts and peak searches can follow one probe's
     // trace instead of every visible trace, and losing that probe falls back clearly.
     t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_measure_on_probe");

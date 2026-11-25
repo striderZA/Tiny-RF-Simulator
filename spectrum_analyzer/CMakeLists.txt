@@ -49,6 +49,22 @@ target_include_directories(spectrum_analyzer_measurement
 
 add_library(simulator::spectrum_analyzer_measurement ALIAS spectrum_analyzer_measurement)
 
+# ---- Peak table view state (UI-free) ----
+add_library(spectrum_analyzer_peak_table
+    STATIC
+        src/spectrum_analyzer_peak_table.cpp
+)
+
+target_include_directories(spectrum_analyzer_peak_table
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(spectrum_analyzer_peak_table
+    PUBLIC common
+)
+
+add_library(simulator::spectrum_analyzer_peak_table ALIAS spectrum_analyzer_peak_table)
+
 # ---- UI Widget ----
 add_library(spectrum_analyzer_widget 
     STATIC
@@ -63,6 +79,7 @@ target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
         simulator::spectrum_analyzer_markers
         simulator::spectrum_analyzer_measurement
+        simulator::spectrum_analyzer_peak_table
         simulator::spectrum_analyzer_engine 
         simulator::core 
         simulator::pfb_channelizer_engine

@@ -81,12 +81,18 @@ const Spectrum *SpectrumAnalyzerWidget::spectrumForProbeSlot(size_t slot) const 
 }
 
 float SpectrumAnalyzerWidget::markerAreaReserve() const {
-    float reserve = 0.0f;
+    // The Peak Table toggle always has its own row under the marker row.
+    float reserve = ImGui::GetFrameHeightWithSpacing();
     if (m_markers.tableVisible()) {
         // A table row is taller than a text line (cell padding plus the row
         // background), so reserve header and rows at frame height.
         const int rows = std::max(1, m_markers.enabledCount());
         reserve += ImGui::GetFrameHeightWithSpacing() * static_cast<float>(rows + 1) + 8.0f;
+    }
+    if (m_peaks.visible()) {
+        // Header row, the step buttons, and one row per peak (the search may find none).
+        const int rows = std::max(1, m_peaks.count());
+        reserve += ImGui::GetFrameHeightWithSpacing() * static_cast<float>(rows + 2) + 8.0f;
     }
     if (!m_markers.anyEnabled())
         return reserve;
@@ -177,6 +183,11 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
     bool table_visible = m_markers.tableVisible();
     if (ImGui::Checkbox("Marker Table", &table_visible))
         m_markers.setTableVisible(table_visible);
+
+    // On its own row: a narrow dock cannot fit a fifth control beside the marker row.
+    bool peaks_visible = m_peaks.visible();
+    if (ImGui::Checkbox("Peak Table", &peaks_visible))
+        m_peaks.setVisible(peaks_visible);
 
     if (!m_markers.anyEnabled())
         return;
@@ -298,6 +309,72 @@ void SpectrumAnalyzerWidget::drawMarkerTable(const std::vector<double> &freq_axi
             ImGui::Text("%+.2f", reading.delta_amplitude_dB);
         else
             ImGui::TextUnformatted("-");
+    }
+    ImGui::EndTable();
+}
+
+void SpectrumAnalyzerWidget::applySelectedPeak() {
+    const int row = m_peaks.selected();
+    if (row < 0 || row >= m_peaks.count())
+        return;
+    const int marker = m_markers.selected();
+    m_markers.setEnabled(marker, true);
+    m_markers.place(marker, m_peaks.rows()[static_cast<size_t>(row)].frequency_Hz);
+}
+
+void SpectrumAnalyzerWidget::drawPeakTable() {
+    if (!m_peaks.visible())
+        return;
+
+    ImGui::Separator();
+    ImGui::Text("Peak table (strongest first, marker %s)", kMarkerNames[m_markers.selected()]);
+    if (ImGui::Button("Prev Row###peakprev")) {
+        m_peaks.step(-1);
+        applySelectedPeak();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Next Row###peaknext")) {
+        m_peaks.step(1);
+        applySelectedPeak();
+    }
+
+    if (m_peaks.count() == 0) {
+        ImGui::TextUnformatted("Peak table: no peaks found.");
+        return;
+    }
+
+    const ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter;
+    if (!ImGui::BeginTable("Peak Table", 5, flags))
+        return;
+    ImGui::TableSetupColumn("#");
+    ImGui::TableSetupColumn("MHz");
+    ImGui::TableSetupColumn("dBm");
+    ImGui::TableSetupColumn("df MHz");
+    ImGui::TableSetupColumn("dAmp dB");
+    ImGui::TableHeadersRow();
+
+    for (int i = 0; i < m_peaks.count(); ++i) {
+        const PeakTableModel::Row &row = m_peaks.rows()[static_cast<size_t>(i)];
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        char selectable[32];
+        std::snprintf(selectable, sizeof selectable, "#%d###peaktablerow%d", i + 1, i + 1);
+        if (ImGui::Selectable(selectable, i == m_peaks.selected(),
+                              ImGuiSelectableFlags_SpanAllColumns)) {
+            m_peaks.select(i);
+            applySelectedPeak();
+        }
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%.3f", row.frequency_Hz / 1e6);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("%.2f", row.amplitude_dBm);
+        ImGui::TableSetColumnIndex(3);
+        ImGui::Text("%+.3f", row.delta_frequency_Hz / 1e6);
+        ImGui::TableSetColumnIndex(4);
+        ImGui::Text("%+.2f", row.delta_amplitude_dB);
     }
     ImGui::EndTable();
 }
@@ -595,6 +672,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     // Marker and peak readouts use the jitter-free trace on the same axis (issue #292). Every
     // active spectrum is passed so hidden traces keep their held value (issue #291).
     m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(all_active, readout_visible);
+    // The peak table is the strongest part of the same readout trace, so it follows the
+    // measurement source, trace visibility, and the hold/average mode exactly as Peak does.
+    m_peaks.setPeaks(m_engine.findPeaks(m_readout_dBm, *freq_axis, PeakTableModel::kMaxPeaks));
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
         // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
@@ -788,6 +868,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
     drawMarkerControls(*freq_axis, readout_dBm);
     drawMarkerTable(*freq_axis, readout_dBm);
+    drawPeakTable();
 
     ImGui::End();
 }

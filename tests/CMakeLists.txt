@@ -475,6 +475,13 @@ add_standalone_test(test_spectrum_analyzer_measurement
     LIBS simulator::spectrum_analyzer_measurement
 )
 
+# Peak-table rules: strongest-first ordering, the five-row cap, deltas against the
+# strongest peak, and selection stepping. UI-free; test_ui drives the table.
+add_standalone_test(test_spectrum_analyzer_peak_table
+    SOURCES test_spectrum_analyzer_peak_table.cpp
+    LIBS simulator::spectrum_analyzer_peak_table
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.

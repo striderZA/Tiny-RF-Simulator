@@ -538,6 +538,10 @@ void RfSimulatorApp::load_window_states() {
     const std::string marker_state = m_state.load("SpectrumAnalyzer", "Markers", "");
     if (!marker_state.empty() && m_spectrum_widget)
         m_spectrum_widget->setMarkerSessionState(marker_state);
+    // The peak table is view state too; only its visibility needs to survive a run.
+    if (m_spectrum_widget)
+        m_spectrum_widget->setPeakTableVisible(
+            m_state.loadBool("SpectrumAnalyzer", "PeakTable", false));
 }
 
 bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -2396,9 +2400,11 @@ RfSimulatorApp::~RfSimulatorApp() {
     m_state.saveBool("WindowState", "FilterCalculator", m_show_calculator);
     m_state.saveBool("WindowState", "TestFlow", m_show_test_flow);
     m_state.saveBool("WindowState", "Agent", m_show_agent);
-    if (m_spectrum_widget)
+    if (m_spectrum_widget) {
         m_state.save("SpectrumAnalyzer", "Markers",
                      m_spectrum_widget->markerSessionState().c_str());
+        m_state.saveBool("SpectrumAnalyzer", "PeakTable", m_spectrum_widget->peakTable().visible());
+    }
 }
 
 [[noreturn]] void RfSimulatorApp::exitApplication() {
