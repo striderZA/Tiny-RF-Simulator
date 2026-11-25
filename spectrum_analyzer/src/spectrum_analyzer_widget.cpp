@@ -58,6 +58,20 @@ const Spectrum &SpectrumAnalyzerWidget::outputSpectrumFor(SignalNode *node) cons
     return node->outputs.empty() ? kEmpty : node->outputs[0];
 }
 
+std::vector<MeasurementProbeId>
+SpectrumAnalyzerWidget::measurementProbeIds(const std::vector<SignalNode *> &nodes) const {
+    std::vector<MeasurementProbeId> ids;
+    ids.reserve(nodes.size());
+    for (auto *node : nodes) {
+        MeasurementProbeId id;
+        id.node = node;
+        auto it = m_probe_output_index.find(node);
+        id.output_index = (it != m_probe_output_index.end()) ? it->second : 0;
+        ids.push_back(id);
+    }
+    return ids;
+}
+
 float SpectrumAnalyzerWidget::markerAreaReserve() const {
     float reserve = 0.0f;
     if (m_markers.tableVisible()) {
@@ -379,6 +393,16 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
     }
 
+    auto active_nodes = m_view_manager.getActiveNodes();
+
+    // Sync visibility tracking vector with current probe count
+    if (m_trace_visible.size() != active_nodes.size()) {
+        m_trace_visible.assign(active_nodes.size(), true);
+    }
+
+    const std::vector<MeasurementProbeId> probe_ids = measurementProbeIds(active_nodes);
+    m_measurement_resolution = m_measurement.resolve(probe_ids, m_trace_visible);
+
     if (m_probe_labels.empty()) {
         ImGui::Text("No node probed");
     } else {
@@ -386,15 +410,70 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         for (size_t i = 0; i < m_probe_labels.size(); ++i)
             probes += "  [" + std::to_string(i) + "] " + m_probe_labels[i];
         ImGui::TextUnformatted(probes.c_str());
+
+        // Measurement source: every visible trace (the historic combined readout) or one
+        // probe's own trace. The chosen probe stays selected while hidden/absent so the
+        // fallback below can explain why the readout is back on the visible traces.
+        auto probe_label = [&](int index) -> std::string {
+            if (index >= 0 && static_cast<size_t>(index) < m_probe_labels.size())
+                return m_probe_labels[static_cast<size_t>(index)];
+            return "probe";
+        };
+
+        std::vector<std::string> measure_items;
+        measure_items.reserve(m_probe_labels.size() + 1);
+        measure_items.emplace_back("All visible");
+        for (size_t i = 0; i < m_probe_labels.size(); ++i)
+            measure_items.push_back("[" + std::to_string(i) + "] " + m_probe_labels[i]);
+
+        int measure_index = 0;
+        if (!m_measurement.allVisible() && m_measurement_resolution.requested_index >= 0)
+            measure_index = m_measurement_resolution.requested_index + 1;
+        ImGui::SetNextItemWidth(240.0f);
+        // BeginCombo rather than Combo: a removed or hidden probe can leave the preview
+        // already showing "All visible", and the user must still be able to apply that
+        // choice to clear the stored selection.
+        if (ImGui::BeginCombo("Measure on", measure_items[measure_index].c_str())) {
+            for (int i = 0; i < static_cast<int>(measure_items.size()); ++i) {
+                const bool selected = i == measure_index;
+                if (ImGui::Selectable(measure_items[i].c_str(), selected)) {
+                    measure_index = i;
+                    if (i <= 0) {
+                        m_measurement.selectAllVisible();
+                        m_measure_label.clear();
+                    } else {
+                        const size_t slot = static_cast<size_t>(i - 1);
+                        if (slot < probe_ids.size()) {
+                            m_measurement.selectProbe(probe_ids[slot]);
+                            m_measure_label = probe_label(static_cast<int>(slot));
+                        }
+                    }
+                    m_measurement_resolution = m_measurement.resolve(probe_ids, m_trace_visible);
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        std::string source = "Measure on: ";
+        if (m_measurement_resolution.allVisible())
+            source += "All visible traces";
+        else
+            source += "[" + std::to_string(m_measurement_resolution.probe_index) + "] " +
+                      probe_label(m_measurement_resolution.probe_index);
+        if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Hidden) {
+            source += " (probe [" + std::to_string(m_measurement_resolution.requested_index) +
+                      "] " + probe_label(m_measurement_resolution.requested_index) + " hidden)";
+        } else if (m_measurement_resolution.fallback == MeasurementSelection::Fallback::Removed) {
+            source += " (" +
+                      (m_measure_label.empty() ? std::string("selected probe")
+                                               : "probe " + m_measure_label) +
+                      " removed)";
+        }
+        ImGui::TextUnformatted(source.c_str());
     }
     ImGui::Separator();
-
-    auto active_nodes = m_view_manager.getActiveNodes();
-
-    // Sync visibility tracking vector with current probe count
-    if (m_trace_visible.size() != active_nodes.size()) {
-        m_trace_visible.assign(active_nodes.size(), true);
-    }
 
     if (active_nodes.empty()) {
         ImGui::Text("No signal node selected for display!");
@@ -440,13 +519,31 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
     m_engine.pruneHistory(all_active);
 
+    // Readouts and peak searches follow the selected measurement source: all visible traces
+    // (the historic combined readout) or one probe's own trace. Held values still advance for
+    // every probe, so hiding or unselecting a trace does not reset its Max/Min Hold state.
+    std::vector<const Spectrum *> measure_specs;
+    std::vector<bool> readout_visible = all_active_visible;
+    if (m_measurement_resolution.allVisible()) {
+        measure_specs = visible_specs;
+    } else {
+        const size_t slot = static_cast<size_t>(m_measurement_resolution.probe_index);
+        if (slot < active_nodes.size() && active_nodes[slot]) {
+            const Spectrum *measured = &outputSpectrumFor(active_nodes[slot]);
+            measure_specs.push_back(measured);
+            readout_visible.assign(all_active.size(), false);
+            const auto match = std::find(all_active.begin(), all_active.end(), measured);
+            if (match != all_active.end())
+                readout_visible[static_cast<size_t>(match - all_active.begin())] = true;
+        }
+    }
+
     // Combined trace and its marker/peak axis share the common readout axis.
-    const std::vector<double> combined_axis = m_engine.combinedReadoutAxis(visible_specs);
-    m_readout_axis = combined_axis;
-    freq_axis = &combined_axis;
+    m_readout_axis = m_engine.combinedReadoutAxis(measure_specs);
+    freq_axis = &m_readout_axis;
     // Marker and peak readouts use the jitter-free trace on the same axis (issue #292). Every
     // active spectrum is passed so hidden traces keep their held value (issue #291).
-    m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(all_active, all_active_visible);
+    m_readout_dBm = m_engine.renderCombinedReadoutSpectrum(all_active, readout_visible);
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
         // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
@@ -454,7 +551,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             if (node)
                 m_engine.renderSpectrum(outputSpectrumFor(node));
         }
-        ImGui::Text("No visible traces. Enable at least one trace in the legend.");
+        if (m_measurement_resolution.allVisible())
+            ImGui::Text("No visible traces. Enable at least one trace in the legend.");
+        else
+            ImGui::Text("The measured probe has no frequency grid.");
         ImGui::End();
         return;
     }
@@ -597,7 +697,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         }
     }
 
-    double avg_noise = m_engine.computeAverageNoiseLevel(visible_specs);
+    double avg_noise = m_engine.computeAverageNoiseLevel(measure_specs);
     ImGui::Text("Average noise level: %.2f dBm", avg_noise);
 
     // Trace mode + peak readout
