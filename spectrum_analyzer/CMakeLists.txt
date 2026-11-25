@@ -20,6 +20,23 @@ target_link_libraries(spectrum_analyzer_engine
 
 add_library(simulator::spectrum_analyzer_engine ALIAS spectrum_analyzer_engine)
 
+
+# ---- Marker view model (UI-free) ----
+add_library(spectrum_analyzer_markers
+    STATIC
+        src/spectrum_analyzer_markers.cpp
+)
+
+target_include_directories(spectrum_analyzer_markers
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(spectrum_analyzer_markers
+    PUBLIC common
+)
+
+add_library(simulator::spectrum_analyzer_markers ALIAS spectrum_analyzer_markers)
+
 # ---- UI Widget ----
 add_library(spectrum_analyzer_widget 
     STATIC
@@ -32,6 +49,7 @@ target_include_directories(spectrum_analyzer_widget
 
 target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
+        simulator::spectrum_analyzer_markers
         simulator::spectrum_analyzer_engine 
         simulator::core 
         simulator::pfb_channelizer_engine
