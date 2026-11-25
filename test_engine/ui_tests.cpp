@@ -1354,6 +1354,168 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Harmonic measurement: the fundamental and its 2nd/3rd on the selected measurement
+    // source, with the marker frequency usable as the fundamental. The generator output
+    // holds one tone, so neither harmonic exists.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_harmonic_measurement");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 760));
+        ctx->Yield(3);
+
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const auto &widget = s_app->testSpectrumWidget();
+        const auto &markers = widget.markers();
+        const auto &harmonics = widget.harmonics();
+        IM_CHECK(!widget.readoutTrace().empty());
+        IM_CHECK(!widget.readoutAxis().empty());
+
+        auto enable_marker = [&](const char *name, bool on) {
+            ctx->SetRef("Spectrum Analyzer");
+            IM_CHECK(ctx->ItemExists(name));
+            const int index = name[1] - '1';
+            if (markers.enabled(index) != on) {
+                if (on)
+                    ctx->ItemCheck(name);
+                else
+                    ctx->ItemUncheck(name);
+            }
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+
+        // Harmonic visibility and markers persist between runs; start from a clean panel.
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Harmonics"));
+        if (harmonics.visible())
+            ctx->ItemUncheck("Harmonics");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!harmonics.visible());
+        for (const char *name : {"M1", "M2", "M3", "M4"})
+            enable_marker(name, false);
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("Harmonics");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(harmonics.visible());
+
+        // A known span keeps the click geometry deterministic across the shared app state,
+        // and puts both expected harmonics inside it (see the marker target below).
+        const double original_start_Hz = sa.startFrequency();
+        const double original_stop_Hz = sa.stopFrequency();
+        sa.setStartFrequency(50.0e6);
+        sa.setStopFrequency(400.0e6);
+        ctx->Yield(3);
+
+        // The strongest positive readout bin is the fundamental; no harmonic is present.
+        const auto &axis = widget.readoutAxis();
+        const auto &trace = widget.readoutTrace();
+        size_t strongest = 0;
+        bool found = false;
+        for (size_t i = 0; i < axis.size() && i < trace.size(); ++i) {
+            if (axis[i] < 0.0)
+                continue;
+            if (!found || trace[i] > trace[strongest]) {
+                strongest = i;
+                found = true;
+            }
+        }
+        IM_CHECK(found);
+        const auto &result = harmonics.result();
+        IM_CHECK(result.fundamental_status == HarmonicModel::Status::Measured);
+        IM_CHECK(std::abs(result.fundamental_Hz - axis[strongest]) < 1.0);
+        IM_CHECK(std::abs(result.fundamental_dBm - trace[strongest]) < 1e-9);
+        IM_CHECK(result.harmonics[0].status == HarmonicModel::Status::NotFound);
+        IM_CHECK(result.harmonics[1].status == HarmonicModel::Status::NotFound);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Use marker as fundamental"));
+        ctx->SetRef("");
+
+        // A marker frequency replaces auto-detection. Place M1 three bins above the tone with
+        // Ctrl+click; select M1 explicitly, because an earlier case can leave another marker
+        // selected.
+        enable_marker("M1", true);
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("marker1"));
+        ctx->ItemClick("marker1");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK_EQ(markers.selected(), 0);
+        const double start_Hz = sa.startFrequency();
+        const double stop_Hz = sa.stopFrequency();
+        const double span_Hz = stop_Hz - start_Hz;
+        const auto plot = widget.lastPlotArea();
+        const double bin_Hz = axis.size() > 1 ? axis[1] - axis[0] : 10.0e6;
+        // Off the strongest bin and off M1's mid-span start position, so the Ctrl+click
+        // cannot grab the marker's own drag line instead of placing it.
+        const double marker_target = axis[strongest] + 3.0 * bin_Hz;
+        IM_CHECK(marker_target > start_Hz && marker_target < stop_Hz);
+        const float x =
+            plot.x + static_cast<float>((marker_target - start_Hz) / span_Hz) * plot.width;
+        const float y = plot.y + plot.height * 0.5f;
+        ctx->SetRef("");
+        ctx->KeyDown(ImGuiKey_LeftCtrl);
+        ctx->MouseMoveToPos(ImVec2(x, y));
+        ctx->Yield(1);
+        ctx->MouseClick(ImGuiMouseButton_Left);
+        ctx->KeyUp(ImGuiKey_LeftCtrl);
+        ctx->Yield(3);
+        IM_CHECK(std::abs(markers.frequency(0) - marker_target) < 0.5 * bin_Hz);
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("Use marker as fundamental");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(harmonics.useMarker());
+        const auto &marker_result = harmonics.result();
+        IM_CHECK(marker_result.fundamental_status == HarmonicModel::Status::Measured);
+        IM_CHECK(std::abs(marker_result.fundamental_Hz - markers.frequency(0)) < 1.0);
+        IM_CHECK(std::abs(marker_result.harmonics[0].expected_Hz - 2.0 * markers.frequency(0)) <
+                 1.0);
+        IM_CHECK(std::abs(marker_result.harmonics[1].expected_Hz - 3.0 * markers.frequency(0)) <
+                 1.0);
+
+        // A narrow dock keeps the toggle and the harmonic controls inside the panel.
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(400.0f, 700.0f));
+        ctx->Yield(3);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Spectrum Analyzer");
+        IM_CHECK(panel != nullptr);
+        if (panel) {
+            ctx->SetRef("Spectrum Analyzer");
+            const char *narrow_items[] = {"Harmonics", "Use marker as fundamental"};
+            for (const char *item : narrow_items) {
+                const auto info = ctx->ItemInfo(item, ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                IM_CHECK(info.RectFull.Min.x >= panel->InnerRect.Min.x - 1.0f);
+                IM_CHECK(info.RectFull.Max.x <= panel->InnerRect.Max.x + 1.0f);
+            }
+            ctx->SetRef("");
+        }
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720.0f, 760.0f));
+        ctx->Yield(2);
+
+        // Leave the shared app with the harmonics hidden, no markers on, and the span it had.
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemUncheck("Harmonics");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!harmonics.visible());
+        enable_marker("M1", false);
+        IM_CHECK_EQ(markers.enabledCount(), 0);
+        sa.setStartFrequency(original_start_Hz);
+        sa.setStopFrequency(original_stop_Hz);
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // Measurement source selector: readouts and peak searches can follow one probe's
     // trace instead of every visible trace, and losing that probe falls back clearly.
     t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_measure_on_probe");
