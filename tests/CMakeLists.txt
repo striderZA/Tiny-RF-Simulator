@@ -454,6 +454,19 @@ add_standalone_test(test_spectrum_combined_grid
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Marker view-state coverage: nearest-bin readouts, delta arithmetic, per-marker
+# peak search, and the session token. The model is UI-free; widget presentation
+# is covered by test_ui. Standalone for the MinGW-w64 registration ceiling.
+add_standalone_test(test_spectrum_analyzer_markers
+    SOURCES test_spectrum_analyzer_markers.cpp
+    LIBS simulator::spectrum_analyzer_markers
+)
+
+add_standalone_test(test_spectrum_analyzer_marker_session
+    SOURCES test_spectrum_analyzer_marker_session.cpp
+    LIBS simulator::spectrum_analyzer_markers
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.
