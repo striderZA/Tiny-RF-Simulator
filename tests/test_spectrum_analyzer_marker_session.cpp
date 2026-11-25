@@ -33,7 +33,9 @@ TEST_CASE("marker session token round-trips the view state") {
 }
 
 TEST_CASE("malformed marker session tokens are refused without changing state") {
-    MarkerModel model = enabledModel();
+    MarkerModel model;
+    model.setEnabled(0, true);
+    model.place(0, 1.02e9);
     model.select(1);
     const std::string before = model.serialize();
 
