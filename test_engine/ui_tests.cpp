@@ -1005,6 +1005,205 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Markers are instrument cursors: M1..M4, a draggable line, Ctrl+click
+    // placement, per-marker peak search, delta readouts against M1, and a table.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_markers_drag_place_delta_and_table");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 760));
+        ctx->Yield(3);
+
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const double start_Hz = sa.startFrequency();
+        const double stop_Hz = sa.stopFrequency();
+        const double span_Hz = stop_Hz - start_Hz;
+        const auto &widget = s_app->testSpectrumWidget();
+        const auto &markers = widget.markers();
+        IM_CHECK(!widget.readoutAxis().empty());
+        IM_CHECK(!widget.readoutTrace().empty());
+
+        auto area = [&]() { return widget.lastPlotArea(); };
+        auto x_for = [&](double freq_Hz) {
+            const auto plot = area();
+            return plot.x + static_cast<float>((freq_Hz - start_Hz) / span_Hz) * plot.width;
+        };
+        auto click_marker = [&](int one_based) {
+            ctx->SetRef("Spectrum Analyzer");
+            const std::string id = "marker" + std::to_string(one_based);
+            IM_CHECK(ctx->ItemExists(id.c_str()));
+            ctx->ItemClick(id.c_str());
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+        auto enable_marker = [&](const char *name, bool on) {
+            ctx->SetRef("Spectrum Analyzer");
+            IM_CHECK(ctx->ItemExists(name));
+            const int index = name[1] - '1';
+            if (markers.enabled(index) != on) {
+                if (on)
+                    ctx->ItemCheck(name);
+                else
+                    ctx->ItemUncheck(name);
+            }
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+
+        // Marker view state persists between runs (like panel visibility), so a
+        // previous run's app.ini can arrive with markers on. Start from none.
+        for (int i = 0; i < MarkerModel::kMaxMarkers; ++i) {
+            const char *names[] = {"M1", "M2", "M3", "M4"};
+            enable_marker(names[i], false);
+        }
+        if (markers.tableVisible()) {
+            ctx->SetRef("Spectrum Analyzer");
+            ctx->ItemUncheck("Marker Table");
+            ctx->SetRef("");
+            ctx->Yield(2);
+        }
+
+        enable_marker("M2", true);
+        enable_marker("M4", true);
+        IM_CHECK(markers.enabled(1));
+        IM_CHECK(markers.enabled(3));
+        IM_CHECK_EQ(markers.selected(), 3);
+        IM_CHECK_EQ(markers.enabledCount(), 2);
+
+        // Per-marker Snap to Peak: M2 lands on the strongest combined-trace peak.
+        click_marker(2);
+        IM_CHECK_EQ(markers.selected(), 1);
+        const std::vector<Peak> peaks =
+            sa.findPeaks(widget.readoutTrace(), widget.readoutAxis(), 8);
+        IM_CHECK(!peaks.empty());
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemClick("Snap to Peak");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(markers.frequency(1) == peaks.front().freq_Hz);
+        IM_CHECK(markers.frequency(3) != peaks.front().freq_Hz); // other marker untouched
+
+        // Drag the M2 line to the right; the readout follows live.
+        const double before_drag = markers.frequency(1);
+        const float drag_x = x_for(before_drag);
+        const float drag_y = area().y + area().height * 0.5f;
+        ctx->SetRef("");
+        ctx->MouseMoveToPos(ImVec2(drag_x, drag_y));
+        ctx->Yield(2);
+        ctx->MouseDown(ImGuiMouseButton_Left);
+        ctx->Yield(2);
+        ctx->MouseMoveToPos(ImVec2(drag_x + 60.0f, drag_y));
+        ctx->Yield(3);
+        ctx->MouseUp(ImGuiMouseButton_Left);
+        ctx->Yield(3);
+        const double after_drag = markers.frequency(1);
+        const double drag_target =
+            start_Hz + static_cast<double>(drag_x + 60.0f - area().x) / area().width * span_Hz;
+        IM_CHECK(after_drag > before_drag);
+        IM_CHECK(std::abs(after_drag - drag_target) < 0.02 * span_Hz);
+
+        // Ctrl+click places the selected marker; the drag-zoom band must not open.
+        click_marker(4);
+        const float place_x = area().x + area().width * 0.30f;
+        const float place_y = area().y + area().height * 0.40f;
+        const double place_target = start_Hz + 0.30 * span_Hz;
+        ctx->KeyDown(ImGuiKey_LeftCtrl);
+        ctx->MouseMoveToPos(ImVec2(place_x, place_y));
+        ctx->Yield(1);
+        ctx->MouseClick(ImGuiMouseButton_Left);
+        ctx->KeyUp(ImGuiKey_LeftCtrl);
+        ctx->Yield(3);
+        IM_CHECK(std::abs(markers.frequency(3) - place_target) < 0.02 * span_Hz);
+        // A zoom band would have changed the span; Ctrl+click leaves it alone.
+        IM_CHECK_EQ(sa.startFrequency(), start_Hz);
+        IM_CHECK_EQ(sa.stopFrequency(), stop_Hz);
+
+        // M1 is the reference: place it, then M2 reads delta against it.
+        enable_marker("M1", true);
+        click_marker(1);
+        const float ref_x = area().x + area().width * 0.70f;
+        ctx->KeyDown(ImGuiKey_LeftCtrl);
+        ctx->MouseMoveToPos(ImVec2(ref_x, place_y));
+        ctx->Yield(1);
+        ctx->MouseClick(ImGuiMouseButton_Left);
+        ctx->KeyUp(ImGuiKey_LeftCtrl);
+        ctx->Yield(3);
+        IM_CHECK(std::abs(markers.frequency(0) - (start_Hz + 0.70 * span_Hz)) < 0.02 * span_Hz);
+
+        click_marker(2);
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Delta (vs M1)"));
+        ctx->ItemCheck("Delta (vs M1)");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(markers.delta(1));
+        const MarkerModel::Readout delta =
+            markers.readout(1, widget.readoutAxis(), widget.readoutTrace());
+        const MarkerModel::Readout reference =
+            markers.readout(0, widget.readoutAxis(), widget.readoutTrace());
+        IM_CHECK(delta.valid);
+        IM_CHECK(delta.delta);
+        IM_CHECK(delta.reference_valid);
+        IM_CHECK(std::abs(delta.delta_frequency_Hz -
+                          (delta.frequency_Hz - reference.frequency_Hz)) < 1.0);
+        IM_CHECK(std::abs(delta.delta_amplitude_dB -
+                          (delta.amplitude_dBm - reference.amplitude_dBm)) < 1e-9);
+
+        // The marker table lists each enabled marker, including the delta columns.
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Marker Table"));
+        ctx->ItemCheck("Marker Table");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(markers.tableVisible());
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("**/markertable2"));
+        IM_CHECK(ctx->ItemExists("**/markertable1"));
+        ctx->SetRef("");
+        // A narrow dock keeps the strip and table inside the window: the panel
+        // shows no horizontal scrollbar, so overflow would be unreachable.
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(400.0f, 700.0f));
+        ctx->Yield(3);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Spectrum Analyzer");
+        IM_CHECK(panel != nullptr);
+        if (panel) {
+            // Every marker control, strip line, and table row stays inside the
+            // window at the narrow width (the panel shows no horizontal
+            // scrollbar, so an overflowing item would be unreachable).
+            ctx->SetRef("Spectrum Analyzer");
+            const char *narrow_items[] = {"Marker Table", "marker1",         "marker2",
+                                          "marker4",      "Delta (vs M1)",   "Snap to Peak",
+                                          "Next Peak",    "**/markertable1", "**/markertable2"};
+            for (const char *item : narrow_items) {
+                const auto info = ctx->ItemInfo(item, ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                IM_CHECK(info.RectFull.Min.x >= panel->InnerRect.Min.x - 1.0f);
+                IM_CHECK(info.RectFull.Max.x <= panel->InnerRect.Max.x + 1.0f);
+            }
+            ctx->SetRef("");
+        }
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720.0f, 760.0f));
+        ctx->Yield(2);
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemUncheck("Marker Table"); // hide again
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!markers.tableVisible());
+
+        // Leave the shared app with no marker rows for later cases.
+        enable_marker("M1", false);
+        enable_marker("M2", false);
+        enable_marker("M4", false);
+        IM_CHECK_EQ(markers.enabledCount(), 0);
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // =========================================================================
 
     // Issue #67: selecting a link and pressing Delete must remove it (previously
