@@ -463,7 +463,7 @@ void SpectrumAnalyzerWidget::drawHarmonicTable() {
             ImGui::TextUnformatted("outside span");
             break;
         case HarmonicModel::Status::Unresolved:
-            ImGui::TextUnformatted("RBW too wide");
+            ImGui::TextUnformatted(entry.rbw_limited ? "RBW too wide" : "grid too coarse");
             break;
         default:
             ImGui::TextUnformatted("not found");

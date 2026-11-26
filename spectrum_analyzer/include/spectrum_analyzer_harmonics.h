@@ -8,11 +8,13 @@
 // presentation. The measurement reads the same jitter-free readout trace as Peak and the
 // markers, so it follows the measurement source, trace visibility, and the hold modes.
 //
-// The fundamental is the strongest positive-frequency bin of the trace that stands clear of
-// the trace's noise floor, or the frequency of the marker the user placed on it. The 2nd and
-// 3rd harmonics are searched within one resolution bandwidth of 2*f0 and 3*f0. A harmonic
-// outside the swept span is reported as out of span rather than extrapolated, and one that
-// the RBW cannot separate from its neighbour is reported unresolved.
+// The fundamental is the strongest tone-like peak of the trace that stands clear of its noise
+// floor, or the frequency of the marker the user placed on it. The search is sign-agnostic,
+// so a one-sided complex-baseband trace measures a negative-frequency tone; on a mirrored
+// real-domain trace an exact +-f tie prefers the positive image. The 2nd and 3rd harmonics are
+// searched within one resolution bandwidth of 2*f0 and 3*f0. A harmonic outside the swept span
+// is reported as out of span rather than extrapolated, and one that the RBW or the bin spacing
+// cannot separate from its neighbour is reported unresolved.
 class HarmonicModel {
   public:
     static constexpr int kMaxOrder = 3; // reports the 2nd and 3rd
@@ -22,10 +24,10 @@ class HarmonicModel {
 
     enum class Status {
         Measured,             // a peak was found and measured
-        NoFundamental,        // the trace has no clear fundamental
+        NoFundamental,        // the trace has no clear tone-like peak
         FundamentalOutOfSpan, // the supplied marker frequency is outside the swept span
         OutOfSpan,            // the harmonic frequency is outside the swept span
-        Unresolved,           // the RBW is too wide to separate adjacent harmonic orders
+        Unresolved,           // the RBW or bin spacing is too wide to separate adjacent orders
         NotFound,             // inside the span, but no peak stands clear of the noise floor
     };
 
@@ -36,6 +38,8 @@ class HarmonicModel {
         double frequency_Hz = 0.0; // measured peak, or expected when not measured
         double amplitude_dBm = 0.0;
         double relative_dBc = 0.0; // harmonic level minus the fundamental level
+        // Unresolved only: true when the RBW is the limit, false when the bin spacing is.
+        bool rbw_limited = false;
     };
 
     struct Result {

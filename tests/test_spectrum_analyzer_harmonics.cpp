@@ -241,3 +241,85 @@ TEST_CASE("mismatched or empty trace input measures nothing") {
     model.measure({}, {}, 0.0, 10.0 * kMHz, 1.0 * kMHz);
     REQUIRE(model.result().fundamental_status == HarmonicModel::Status::NoFundamental);
 }
+
+TEST_CASE("a negative-frequency tone on a one-sided trace is a fundamental") {
+    // Complex-baseband ADC/PFB traces are one-sided: a clear tone can sit at a negative
+    // frequency with no positive image. The auto search must measure it, as the marker and
+    // Peak readouts do.
+    const auto axis = uniformAxis(-250.0 * kMHz, 250.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, -100.0 * kMHz, -10.0);
+    addTone(trace, axis, -200.0 * kMHz, -40.0);
+
+    HarmonicModel model;
+    model.measure(axis, trace, -250.0 * kMHz, 250.0 * kMHz, 1.0 * kMHz);
+    const auto &result = model.result();
+
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::Measured);
+    REQUIRE(result.fundamental_Hz == Catch::Approx(-100.0 * kMHz));
+    REQUIRE(result.fundamental_dBm == Catch::Approx(-10.0));
+    REQUIRE(result.harmonics[0].status == HarmonicModel::Status::Measured);
+    REQUIRE(result.harmonics[0].frequency_Hz == Catch::Approx(-200.0 * kMHz));
+    REQUIRE(result.harmonics[0].relative_dBc == Catch::Approx(-30.0));
+}
+
+TEST_CASE("a negative tone is measured when the span hides its positive image") {
+    const auto axis = uniformAxis(-300.0 * kMHz, -100.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    addTone(trace, axis, -200.0 * kMHz, -10.0);
+
+    HarmonicModel model;
+    model.measure(axis, trace, -300.0 * kMHz, -100.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_status == HarmonicModel::Status::Measured);
+    REQUIRE(model.result().fundamental_Hz == Catch::Approx(-200.0 * kMHz));
+}
+
+TEST_CASE("a raised noise band is not a clear fundamental") {
+    const auto axis = uniformAxis(0.0, 300.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    // A 100-200 MHz noise pedestal 40 dB above the floor, with a shallow ripple.
+    for (size_t i = 0; i < axis.size(); ++i) {
+        if (axis[i] >= 100.0 * kMHz && axis[i] <= 200.0 * kMHz)
+            trace[i] = -80.0 + 0.2 * static_cast<double>(static_cast<int>(i % 3) - 1);
+    }
+
+    HarmonicModel model;
+    model.measure(axis, trace, 0.0, 300.0 * kMHz, 1.0 * kMHz);
+    const auto &result = model.result();
+
+    REQUIRE(result.fundamental_status == HarmonicModel::Status::NoFundamental);
+    for (const auto &entry : result.harmonics)
+        REQUIRE(entry.status == HarmonicModel::Status::NoFundamental);
+}
+
+TEST_CASE("a flat raised noise band is not a clear fundamental") {
+    const auto axis = uniformAxis(0.0, 300.0 * kMHz, 1.0 * kMHz);
+    auto trace = floorTrace(axis);
+    for (size_t i = 0; i < axis.size(); ++i) {
+        if (axis[i] >= 100.0 * kMHz && axis[i] <= 200.0 * kMHz)
+            trace[i] = -80.0;
+    }
+
+    HarmonicModel model;
+    model.measure(axis, trace, 0.0, 300.0 * kMHz, 1.0 * kMHz);
+    REQUIRE(model.result().fundamental_status == HarmonicModel::Status::NoFundamental);
+}
+
+TEST_CASE("an unresolved harmonic records whether the RBW or the grid is too coarse") {
+    const auto coarse_axis = uniformAxis(0.0, 60.0 * kMHz, 10.0 * kMHz);
+    auto coarse_trace = floorTrace(coarse_axis);
+    addTone(coarse_trace, coarse_axis, 10.0 * kMHz, -10.0);
+
+    HarmonicModel model;
+    // A narrow RBW cannot help a 10 MHz bin spacing against a 10 MHz fundamental.
+    model.measure(coarse_axis, coarse_trace, 0.0, 60.0 * kMHz, 1.0e3);
+    REQUIRE(model.result().harmonics[0].status == HarmonicModel::Status::Unresolved);
+    REQUIRE_FALSE(model.result().harmonics[0].rbw_limited);
+
+    const auto fine_axis = uniformAxis(0.0, 60.0 * kMHz, 1.0 * kMHz);
+    auto fine_trace = floorTrace(fine_axis);
+    addTone(fine_trace, fine_axis, 10.0 * kMHz, -10.0);
+    model.measure(fine_axis, fine_trace, 0.0, 60.0 * kMHz, 20.0 * kMHz);
+    REQUIRE(model.result().harmonics[0].status == HarmonicModel::Status::Unresolved);
+    REQUIRE(model.result().harmonics[0].rbw_limited);
+}
