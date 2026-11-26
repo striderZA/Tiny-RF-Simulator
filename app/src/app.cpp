@@ -546,6 +546,9 @@ void RfSimulatorApp::load_window_states() {
     if (m_spectrum_widget)
         m_spectrum_widget->setHarmonicsVisible(
             m_state.loadBool("SpectrumAnalyzer", "Harmonics", false));
+    // The IM3 measurement is view state on the same terms.
+    if (m_spectrum_widget)
+        m_spectrum_widget->setIm3Visible(m_state.loadBool("SpectrumAnalyzer", "Im3", false));
 }
 
 bool RfSimulatorApp::duplicateComponent(int graph_node_id) {
@@ -2409,6 +2412,7 @@ RfSimulatorApp::~RfSimulatorApp() {
                      m_spectrum_widget->markerSessionState().c_str());
         m_state.saveBool("SpectrumAnalyzer", "PeakTable", m_spectrum_widget->peakTable().visible());
         m_state.saveBool("SpectrumAnalyzer", "Harmonics", m_spectrum_widget->harmonics().visible());
+        m_state.saveBool("SpectrumAnalyzer", "Im3", m_spectrum_widget->im3().visible());
     }
 }
 

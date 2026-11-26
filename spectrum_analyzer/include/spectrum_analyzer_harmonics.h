@@ -1,4 +1,5 @@
 #pragma once
+#include "spectrum_analyzer_trace.h"
 #include <array>
 #include <optional>
 #include <vector>
@@ -20,7 +21,7 @@ class HarmonicModel {
     static constexpr int kMaxOrder = 3; // reports the 2nd and 3rd
     // A bin must rise this far above the trace's median level to count as a tone. The
     // trace is jitter-free, so this only rejects the noise floor and its rounding ripple.
-    static constexpr double kPeakClearance_dB = 6.0;
+    static constexpr double kPeakClearance_dB = spectrum_trace::kPeakClearance_dB;
 
     enum class Status {
         Measured,             // a peak was found and measured

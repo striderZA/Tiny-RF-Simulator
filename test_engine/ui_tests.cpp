@@ -1516,6 +1516,155 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // IM3 measurement: the two strongest tones and their third-order products on the
+    // selected measurement source, with M1/M2 usable as the tone pair. The generator output
+    // holds one tone, so auto-detection reports that two tones are needed.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_im3_measurement");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720, 760));
+        ctx->Yield(3);
+
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const auto &widget = s_app->testSpectrumWidget();
+        const auto &markers = widget.markers();
+        const auto &im3 = widget.im3();
+        IM_CHECK(!widget.readoutTrace().empty());
+        IM_CHECK(!widget.readoutAxis().empty());
+
+        auto enable_marker = [&](const char *name, bool on) {
+            ctx->SetRef("Spectrum Analyzer");
+            IM_CHECK(ctx->ItemExists(name));
+            const int index = name[1] - '1';
+            if (markers.enabled(index) != on) {
+                if (on)
+                    ctx->ItemCheck(name);
+                else
+                    ctx->ItemUncheck(name);
+            }
+            ctx->SetRef("");
+            ctx->Yield(2);
+        };
+
+        // IM3 visibility and markers persist between runs; start from a clean panel.
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("IM3"));
+        if (im3.visible())
+            ctx->ItemUncheck("IM3");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!im3.visible());
+        for (const char *name : {"M1", "M2", "M3", "M4"})
+            enable_marker(name, false);
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("IM3");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(im3.visible());
+
+        const double original_start_Hz = sa.startFrequency();
+        const double original_stop_Hz = sa.stopFrequency();
+        sa.setStartFrequency(50.0e6);
+        sa.setStopFrequency(400.0e6);
+        ctx->Yield(3);
+
+        // The generator trace holds one tone: no two clear tones exist.
+        IM_CHECK(im3.result().tone_status == Im3Model::Status::NeedTwoTones);
+
+        ctx->SetRef("Spectrum Analyzer");
+        IM_CHECK(ctx->ItemExists("Use M1 and M2 as tones"));
+        ctx->SetRef("");
+
+        // Place M1 and M2 on two distinct frequencies with Ctrl+click.
+        auto place_marker = [&](const char *item, double target_Hz) {
+            ctx->SetRef("Spectrum Analyzer");
+            IM_CHECK(ctx->ItemExists(item));
+            ctx->ItemClick(item);
+            ctx->SetRef("");
+            ctx->Yield(2);
+            const double start_Hz = sa.startFrequency();
+            const double stop_Hz = sa.stopFrequency();
+            const double span_Hz = stop_Hz - start_Hz;
+            const auto plot = widget.lastPlotArea();
+            const float x =
+                plot.x + static_cast<float>((target_Hz - start_Hz) / span_Hz) * plot.width;
+            const float y = plot.y + plot.height * 0.5f;
+            ctx->KeyDown(ImGuiKey_LeftCtrl);
+            ctx->MouseMoveToPos(ImVec2(x, y));
+            ctx->Yield(1);
+            ctx->MouseClick(ImGuiMouseButton_Left);
+            ctx->KeyUp(ImGuiKey_LeftCtrl);
+            ctx->Yield(3);
+        };
+
+        const auto &axis = widget.readoutAxis();
+        const double bin_Hz = axis.size() > 1 ? axis[1] - axis[0] : 10.0e6;
+        const double span_start_Hz = sa.startFrequency();
+        const double span_stop_Hz = sa.stopFrequency();
+        const double target1 = span_start_Hz + 0.25 * (span_stop_Hz - span_start_Hz);
+        const double target2 = span_start_Hz + 0.65 * (span_stop_Hz - span_start_Hz);
+        IM_CHECK(target2 > target1);
+        enable_marker("M1", true);
+        place_marker("marker1", target1);
+        IM_CHECK(std::abs(markers.frequency(0) - target1) < 0.5 * bin_Hz);
+        enable_marker("M2", true);
+        place_marker("marker2", target2);
+        IM_CHECK(std::abs(markers.frequency(1) - target2) < 0.5 * bin_Hz);
+
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("Use M1 and M2 as tones");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(im3.useMarkers());
+        const auto &marker_result = im3.result();
+        IM_CHECK(marker_result.tone_status == Im3Model::Status::Measured);
+        IM_CHECK(std::abs(marker_result.tones[0].frequency_Hz - markers.frequency(0)) < 1.0);
+        IM_CHECK(std::abs(marker_result.tones[1].frequency_Hz - markers.frequency(1)) < 1.0);
+        IM_CHECK(std::abs(marker_result.products[0].expected_Hz -
+                          (2.0 * markers.frequency(0) - markers.frequency(1))) < 1.0);
+        IM_CHECK(std::abs(marker_result.products[1].expected_Hz -
+                          (2.0 * markers.frequency(1) - markers.frequency(0))) < 1.0);
+
+        // A narrow dock keeps the toggle and the marker-source row inside the panel.
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(400.0f, 700.0f));
+        ctx->Yield(3);
+        ImGuiWindow *panel = ImGui::FindWindowByName("Spectrum Analyzer");
+        IM_CHECK(panel != nullptr);
+        if (panel) {
+            ctx->SetRef("Spectrum Analyzer");
+            const char *narrow_items[] = {"IM3", "Use M1 and M2 as tones"};
+            for (const char *item : narrow_items) {
+                const auto info = ctx->ItemInfo(item, ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                IM_CHECK(info.RectFull.Min.x >= panel->InnerRect.Min.x - 1.0f);
+                IM_CHECK(info.RectFull.Max.x <= panel->InnerRect.Max.x + 1.0f);
+            }
+            ctx->SetRef("");
+        }
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720.0f, 760.0f));
+        ctx->Yield(2);
+
+        // Leave the shared app with IM3 hidden, no markers on, and the span it had.
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemUncheck("IM3");
+        ctx->SetRef("");
+        ctx->Yield(2);
+        IM_CHECK(!im3.visible());
+        enable_marker("M1", false);
+        enable_marker("M2", false);
+        IM_CHECK_EQ(markers.enabledCount(), 0);
+        sa.setStartFrequency(original_start_Hz);
+        sa.setStopFrequency(original_stop_Hz);
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // Measurement source selector: readouts and peak searches can follow one probe's
     // trace instead of every visible trace, and losing that probe falls back clearly.
     t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_measure_on_probe");
