@@ -1,6 +1,7 @@
 #pragma once
 #include "spectrum.h"
 #include "spectrum_analyzer_engine.h"
+#include "spectrum_analyzer_harmonics.h"
 #include "spectrum_analyzer_markers.h"
 #include "spectrum_analyzer_measurement.h"
 #include "spectrum_analyzer_peak_table.h"
@@ -54,6 +55,11 @@ class SpectrumAnalyzerWidget {
     const PeakTableModel &peakTable() const { return m_peaks; }
     void setPeakTableVisible(bool visible) { m_peaks.setVisible(visible); }
 
+    // Harmonic measurement view state: the fundamental and its 2nd/3rd harmonics on the
+    // measurement source. Not project data; its visibility persists like the peak table.
+    const HarmonicModel &harmonics() const { return m_harmonics; }
+    void setHarmonicsVisible(bool visible) { m_harmonics.setVisible(visible); }
+
     // The pixel rect of the plot's data area in the last draw(); test seam for
     // frequency-to-pixel mapping in the headless UI test.
     struct PlotArea {
@@ -72,6 +78,7 @@ class SpectrumAnalyzerWidget {
     std::unordered_map<SignalNode *, int> m_probe_output_index; // node -> probed output port
     MarkerModel m_markers;
     PeakTableModel m_peaks;
+    HarmonicModel m_harmonics;
     DragZoomState m_zoom;
     int m_drag_marker = -1;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
@@ -101,6 +108,7 @@ class SpectrumAnalyzerWidget {
     void drawMarkerTable(const std::vector<double> &freq_axis,
                          const std::vector<double> &display_dBm);
     void drawPeakTable();
+    void drawHarmonicTable();
     // Moves the selected marker onto the selected table row, enabling it first if needed.
     void applySelectedPeak();
 };

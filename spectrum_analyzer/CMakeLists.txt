@@ -65,6 +65,18 @@ target_link_libraries(spectrum_analyzer_peak_table
 
 add_library(simulator::spectrum_analyzer_peak_table ALIAS spectrum_analyzer_peak_table)
 
+# ---- Harmonic measurement view state (UI-free) ----
+add_library(spectrum_analyzer_harmonics
+    STATIC
+        src/spectrum_analyzer_harmonics.cpp
+)
+
+target_include_directories(spectrum_analyzer_harmonics
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+add_library(simulator::spectrum_analyzer_harmonics ALIAS spectrum_analyzer_harmonics)
+
 # ---- UI Widget ----
 add_library(spectrum_analyzer_widget 
     STATIC
@@ -77,6 +89,7 @@ target_include_directories(spectrum_analyzer_widget
 
 target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
+        simulator::spectrum_analyzer_harmonics
         simulator::spectrum_analyzer_markers
         simulator::spectrum_analyzer_measurement
         simulator::spectrum_analyzer_peak_table
