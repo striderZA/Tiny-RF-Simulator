@@ -109,6 +109,16 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Harmonics are searched within `max(rbw/2, bin width)` of `n*f0`. The displayed-span check runs first (`OutOfSpan`), then the resolution rule (`half_window >= |f0|/2` is `Unresolved`, and `Entry::rbw_limited` says whether the RBW or the bin spacing is the limit), then the peak must clear the same noise-floor threshold (`NotFound`). A fundamental with no clear tone is `NoFundamental`; a supplied marker outside the span is `FundamentalOutOfSpan`. The statuses are reported, never guessed.
 - The block is view state: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo. `RfSimulatorApp` persists its visibility under `[SpectrumAnalyzer] Harmonics` through `SessionState` (Windows only); the marker-fundamental switch is session-only.
 
+## Spectrum Analyzer IM3 Measurement Contract
+
+- `Im3Model` (`spectrum_analyzer/include/spectrum_analyzer_im3.h`, UI-free) owns the show/hide flag, the `useMarkers()` switch, the tone and product search rules, and the last result; the widget supplies the two marker frequencies and owns presentation.
+- The measurement reads the same jitter-free readout trace/axis as Peak and the markers, so it follows **Measure on**, trace visibility, and Max Hold, Min Hold, and Video Avg.
+- Auto-detection takes the two strongest tone-like peaks under the harmonic rule (a local maximum 6 dB clear of the trace median with a 6 dB dip on both sides within one RBW). A negative peak that mirrors a near-equal positive peak is the same tone's real-domain image and is not a second tone; a one-sided complex-baseband trace keeps its negative tones. The pair is ordered by frequency (f1 lower); equal levels resolve lower frequency first. Fewer than two peaks is `NeedTwoTones`.
+- Supplied M1/M2 frequencies are taken as given and ordered by frequency. Either outside the span is `TonesOutOfSpan`; equal frequencies, or 0 Hz, are `NeedTwoTones`.
+- Products `2*f1-f2` (nearest f1) and `2*f2-f1` (nearest f2) are checked in order: outside span, unresolved (`half_window >= spacing/2`, with `rbw_limited` naming the RBW or the bin spacing), then a peak search within `max(rbw/2, bin)`; no peak above the threshold is `NotFound`. `relative_dBc` is relative to the nearest fundamental.
+- TOI is a spectrum-derived output-intercept estimate `(P1 + P2 - dBc)/2`, averaged over the measured products, valid when at least one product is measured. It is not the Receiver Requirements IIP3 test.
+- The block is view state: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo. `RfSimulatorApp` persists its visibility under `[SpectrumAnalyzer] Im3` through `SessionState` (Windows only); the marker-tone switch is session-only.
+
 ## Touchstone Parsing Contract
 
 - Two-port Touchstone v2.0 files require `[Two-Port Data Order]`; the parser honors `12_21` and `21_12`. Files with three or more ports use row-major parameter order.

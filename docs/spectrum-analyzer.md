@@ -63,7 +63,7 @@ Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average hist
 The **Measure on** list picks which trace the measurement readouts follow:
 
 - **All visible** (the default) keeps the historic combined readout: every visible trace, sampled onto one shared axis.
-- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, **Next Peak**, and the harmonic measurement to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
+- **`[n] <label>`** scopes **Peak**, **Average noise level**, the markers, **Snap to Peak**, **Next Peak**, the harmonic measurement, and the IM3 measurement to that one probe's own trace and frequency grid. The plot still draws every probe; only the measurements change.
 
 The chosen probe stays selected if its trace is hidden or its probe is removed. While that happens the panel reads `Measure on: All visible traces (probe [n] … hidden)` or `… (probe … removed)` and measures the visible traces, so it never silently measures a different trace. Showing the probe again, or probing it again, resumes measuring it; choosing **All visible** clears the stored selection. The selection is view state: it is not saved with the project and does not mark it dirty.
 
@@ -72,7 +72,7 @@ The chosen probe stays selected if its trace is hidden or its probe is removed. 
 - **Peak** shows the strongest bin of the measurement source selected by **Measure on** (all visible traces, or one probe's trace), with its frequency and power. In Max Hold or Min Hold it reads the held value on the same sum as the plot; in Clear/Write and Video Avg it reads the current frame.
 - **Average noise level** is the mean per-bin noise across the measurement source with tones excluded.
 
-Peak, marker, average-noise, and harmonic readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
+Peak, marker, average-noise, harmonic, and IM3 readouts are jitter-free; only the drawn noise floor carries a small cosmetic jitter.
 
 Each probe is plotted on its own frequency grid. With **Measure on: All visible**, the readouts combine the visible traces on a shared axis spanning all of them at their coarsest bin spacing, so traces from different grids are never summed bin by bin. With one probe selected, the readouts use that probe's trace on its own grid.
 
@@ -127,6 +127,27 @@ Tick **Harmonics** beside **Peak Table** to measure the fundamental and its 2nd 
 | dBc | Harmonic level minus the fundamental level |
 
 The fundamental line names the fundamental's frequency and level. Levels are the displayed trace values, the same as **Peak** and the markers. The block is view state: it does not enter the project, does not count as an unsaved change, and is not undone, and its show/hide state persists between runs on Windows.
+
+## IM3
+
+Tick **IM3** beside **Harmonics** to measure the third-order intermodulation products of the two fundamental tones on the **Measure on** source.
+
+- The two fundamentals are the strongest two tone-like peaks: local maxima at least 6 dB clear of the trace's median level (its noise floor) that also dip by that much on both sides within one RBW (at least one bin). Fewer than two such peaks reads `Need two tones` instead of naming one.
+- On a real-domain trace every tone is mirrored at `+-f`; the positive image names the tone, so the pair is two tones, not a tone and its own mirror. On a one-sided complex-baseband trace (an ADC or PFB output) both tones may be at negative frequencies and are measured at their own frequencies.
+- The pair is ordered by frequency: f1 is the lower tone and f2 the higher. Two equally strong tones therefore resolve deterministically, lower frequency first.
+- Tick **Use M1 and M2 as tones** to take the frequencies of **M1** and **M2** as the fundamentals instead of the auto-detected pair. The box is disabled unless both markers are on. A marker outside the current span reads `a marker is outside the current span`; a pair at the same frequency, or at 0 Hz, reads `Need two tones`. The two markers are ordered by frequency too, so it does not matter which one sits on the lower tone.
+- The products are at `2*f1-f2` (low side, nearest f1) and `2*f2-f1` (high side, nearest f2), each searched within one resolution bandwidth (RBW) of its expected frequency on the same jitter-free trace as **Peak** and the markers. They therefore follow **Measure on**, trace visibility, and the Max Hold, Min Hold, and Video Avg modes.
+- Each product reports its frequency, level, and dBc relative to the fundamental it is nearest. **TOI (est.)** is a spectrum-derived output-intercept estimate, `(P1 + P2 - dBc) / 2` averaged over the measured products. It is an estimate from the displayed levels, not a substitute for the Receiver Requirements IIP3 test.
+- A product outside the swept span reads `outside span`; one the RBW or the bin spacing cannot separate from its fundamental reads `RBW too wide` (the RBW) or `grid too coarse` (the spacing); one with no peak clear of the noise floor reads `not found`. None of these are guessed.
+
+| Column | Meaning |
+| --- | --- |
+| Product | `2f1-f2` or `2f2-f1` |
+| MHz | Measured product frequency |
+| dBm | Product level on the readout trace |
+| dBc | Product level minus its nearest fundamental's level |
+
+The tone line names both fundamentals' frequencies and levels, or says why two tones are missing. The block is view state: it does not enter the project, does not count as an unsaved change, and is not undone, and its show/hide state persists between runs on Windows.
 
 ## Nothing probed
 
