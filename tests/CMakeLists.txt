@@ -490,6 +490,15 @@ add_standalone_test(test_spectrum_analyzer_harmonics
     LIBS simulator::spectrum_analyzer_harmonics
 )
 
+# IM3-measurement rules: two auto-detected tones and their products in dBc, the TOI
+# estimate, fewer than two tones, equal tones, out-of-span and noise-hidden products, the
+# RBW and grid unresolved cases, the marker pair, the real-domain mirror image, and
+# negative-frequency tones. UI-free; test_ui drives the panel.
+add_standalone_test(test_spectrum_analyzer_im3
+    SOURCES test_spectrum_analyzer_im3.cpp
+    LIBS simulator::spectrum_analyzer_im3
+)
+
 # Regression coverage for issue #113 (failed-load save-target leak, malformed
 # window_state/graph_state guards, atomic save). Kept outside tests.exe for the
 # MinGW-w64 registration-ceiling reason above.
