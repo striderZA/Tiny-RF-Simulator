@@ -77,6 +77,18 @@ target_include_directories(spectrum_analyzer_harmonics
 
 add_library(simulator::spectrum_analyzer_harmonics ALIAS spectrum_analyzer_harmonics)
 
+# ---- IM3 measurement view state (UI-free) ----
+add_library(spectrum_analyzer_im3
+    STATIC
+        src/spectrum_analyzer_im3.cpp
+)
+
+target_include_directories(spectrum_analyzer_im3
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+)
+
+add_library(simulator::spectrum_analyzer_im3 ALIAS spectrum_analyzer_im3)
+
 # ---- UI Widget ----
 add_library(spectrum_analyzer_widget 
     STATIC
@@ -90,6 +102,7 @@ target_include_directories(spectrum_analyzer_widget
 target_link_libraries(spectrum_analyzer_widget
     PUBLIC 
         simulator::spectrum_analyzer_harmonics
+        simulator::spectrum_analyzer_im3
         simulator::spectrum_analyzer_markers
         simulator::spectrum_analyzer_measurement
         simulator::spectrum_analyzer_peak_table
