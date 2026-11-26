@@ -99,6 +99,11 @@ float SpectrumAnalyzerWidget::markerAreaReserve() const {
         reserve += ImGui::GetFrameHeightWithSpacing() * 4.0f +
                    ImGui::GetTextLineHeightWithSpacing() + 8.0f;
     }
+    if (m_im3.visible()) {
+        // The use-markers row, two tone/TOI lines, and the header plus two product rows.
+        reserve += ImGui::GetFrameHeightWithSpacing() * 4.0f +
+                   ImGui::GetTextLineHeightWithSpacing() * 2.0f + 8.0f;
+    }
     if (!m_markers.anyEnabled())
         return reserve;
 
@@ -197,6 +202,10 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
     bool harmonics_visible = m_harmonics.visible();
     if (ImGui::Checkbox("Harmonics", &harmonics_visible))
         m_harmonics.setVisible(harmonics_visible);
+    ImGui::SameLine();
+    bool im3_visible = m_im3.visible();
+    if (ImGui::Checkbox("IM3", &im3_visible))
+        m_im3.setVisible(im3_visible);
 
     if (!m_markers.anyEnabled())
         return;
@@ -479,6 +488,109 @@ void SpectrumAnalyzerWidget::drawHarmonicTable() {
         ImGui::TableSetColumnIndex(3);
         if (entry.status == HarmonicModel::Status::Measured)
             ImGui::Text("%+.2f", entry.relative_dBc);
+        else
+            ImGui::TextUnformatted("-");
+    }
+    ImGui::EndTable();
+}
+
+void SpectrumAnalyzerWidget::drawIm3Table() {
+    if (!m_im3.visible())
+        return;
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("IM3 measurement");
+
+    // M1 and M2 are the two fundamentals when the marker source is on, so both must exist.
+    const bool markers_on = m_markers.enabled(0) && m_markers.enabled(1);
+    bool use_markers = m_im3.useMarkers();
+    if (!markers_on)
+        ImGui::BeginDisabled();
+    if (ImGui::Checkbox("Use M1 and M2 as tones", &use_markers))
+        m_im3.setUseMarkers(use_markers);
+    if (!markers_on) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) && ImGui::BeginTooltip()) {
+            ImGui::TextUnformatted("Enable M1 and M2 to use their frequencies as the tones.");
+            ImGui::EndTooltip();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(M1, M2)");
+
+    const Im3Model::Result &result = m_im3.result();
+    if (result.tone_status == Im3Model::Status::NeedTwoTones) {
+        if (m_im3.useMarkers() && !markers_on) {
+            ImGui::TextUnformatted("Need two tones: enable M1 and M2.");
+        } else if (m_im3.useMarkers()) {
+            ImGui::TextUnformatted("Need two tones: place M1 and M2 on distinct tones.");
+        } else {
+            ImGui::TextUnformatted("Need two tones: no two tones stand clear of the noise floor.");
+        }
+        return;
+    }
+    if (result.tone_status == Im3Model::Status::TonesOutOfSpan) {
+        ImGui::TextUnformatted("Need two tones: a marker is outside the current span.");
+        return;
+    }
+
+    ImGui::Text("Tones: %.3f / %.3f MHz  %.2f / %.2f dBm", result.tones[0].frequency_Hz / 1e6,
+                result.tones[1].frequency_Hz / 1e6, result.tones[0].amplitude_dBm,
+                result.tones[1].amplitude_dBm);
+    if (result.toi_valid) {
+        ImGui::Text("TOI (est.): %.1f dBm", result.toi_dBm);
+    } else {
+        ImGui::TextDisabled("TOI (est.): --");
+    }
+    if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
+        ImGui::TextUnformatted(
+            "Spectrum-derived output intercept estimate from the tone and IM3 levels.");
+        ImGui::TextUnformatted("Not a substitute for the Receiver Requirements IIP3 test.");
+        ImGui::EndTooltip();
+    }
+
+    const ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg |
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter;
+    if (!ImGui::BeginTable("IM3 Table", 4, flags))
+        return;
+    // Short unit headers keep the four columns inside a 400 px dock.
+    ImGui::TableSetupColumn("Product");
+    ImGui::TableSetupColumn("MHz");
+    ImGui::TableSetupColumn("dBm");
+    ImGui::TableSetupColumn("dBc");
+    ImGui::TableHeadersRow();
+
+    for (const Im3Model::Product &product : result.products) {
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(product.high_side ? "2f2-f1" : "2f1-f2");
+
+        ImGui::TableSetColumnIndex(1);
+        switch (product.status) {
+        case Im3Model::Status::Measured:
+            ImGui::Text("%.3f", product.frequency_Hz / 1e6);
+            break;
+        case Im3Model::Status::OutOfSpan:
+            ImGui::TextUnformatted("outside span");
+            break;
+        case Im3Model::Status::Unresolved:
+            ImGui::TextUnformatted(product.rbw_limited ? "RBW too wide" : "grid too coarse");
+            break;
+        default:
+            ImGui::TextUnformatted("not found");
+            break;
+        }
+
+        ImGui::TableSetColumnIndex(2);
+        if (product.status == Im3Model::Status::Measured)
+            ImGui::Text("%.2f", product.amplitude_dBm);
+        else
+            ImGui::TextUnformatted("-");
+
+        ImGui::TableSetColumnIndex(3);
+        if (product.status == Im3Model::Status::Measured)
+            ImGui::Text("%+.2f", product.relative_dBc);
         else
             ImGui::TextUnformatted("-");
     }
@@ -788,6 +900,22 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         harmonic_fundamental = m_markers.frequency(m_markers.selected());
     m_harmonics.measure(*freq_axis, m_readout_dBm, m_engine.startFrequency(),
                         m_engine.stopFrequency(), m_engine.rbw(), harmonic_fundamental);
+    // The IM3 measurement reads the same trace; with the marker source on, M1 and M2 are
+    // the two fundamental tones. Both must be enabled for a pair to exist; when one is off
+    // the switch stays on and the measurement reports that two tones are needed instead of
+    // silently falling back to auto-detection.
+    std::optional<std::pair<double, double>> im3_tones;
+    if (m_im3.useMarkers()) {
+        if (m_markers.enabled(0) && m_markers.enabled(1))
+            im3_tones = std::pair<double, double>{m_markers.frequency(0), m_markers.frequency(1)};
+        else
+            // An equal, in-span pair: the model reports NeedTwoTones.
+            im3_tones = std::pair<double, double>{
+                0.5 * (m_engine.startFrequency() + m_engine.stopFrequency()),
+                0.5 * (m_engine.startFrequency() + m_engine.stopFrequency())};
+    }
+    m_im3.measure(*freq_axis, m_readout_dBm, m_engine.startFrequency(), m_engine.stopFrequency(),
+                  m_engine.rbw(), im3_tones);
     const std::vector<double> &readout_dBm = m_readout_dBm;
     if (readout_dBm.empty()) {
         // The plot loop below is skipped here; advance each plotted hold so it matches the readout.
@@ -983,6 +1111,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     drawMarkerTable(*freq_axis, readout_dBm);
     drawPeakTable();
     drawHarmonicTable();
+    drawIm3Table();
 
     ImGui::End();
 }

@@ -2,6 +2,7 @@
 #include "spectrum.h"
 #include "spectrum_analyzer_engine.h"
 #include "spectrum_analyzer_harmonics.h"
+#include "spectrum_analyzer_im3.h"
 #include "spectrum_analyzer_markers.h"
 #include "spectrum_analyzer_measurement.h"
 #include "spectrum_analyzer_peak_table.h"
@@ -60,6 +61,12 @@ class SpectrumAnalyzerWidget {
     const HarmonicModel &harmonics() const { return m_harmonics; }
     void setHarmonicsVisible(bool visible) { m_harmonics.setVisible(visible); }
 
+    // IM3 measurement view state: two fundamental tones and their 2*f1-f2 / 2*f2-f1
+    // products on the measurement source. Not project data; its visibility persists like
+    // the harmonic block.
+    const Im3Model &im3() const { return m_im3; }
+    void setIm3Visible(bool visible) { m_im3.setVisible(visible); }
+
     // The pixel rect of the plot's data area in the last draw(); test seam for
     // frequency-to-pixel mapping in the headless UI test.
     struct PlotArea {
@@ -79,6 +86,7 @@ class SpectrumAnalyzerWidget {
     MarkerModel m_markers;
     PeakTableModel m_peaks;
     HarmonicModel m_harmonics;
+    Im3Model m_im3;
     DragZoomState m_zoom;
     int m_drag_marker = -1;
     std::vector<PFBChannelizerEngine *> m_pfb_ptrs;
@@ -109,6 +117,7 @@ class SpectrumAnalyzerWidget {
                          const std::vector<double> &display_dBm);
     void drawPeakTable();
     void drawHarmonicTable();
+    void drawIm3Table();
     // Moves the selected marker onto the selected table row, enabling it first if needed.
     void applySelectedPeak();
 };
