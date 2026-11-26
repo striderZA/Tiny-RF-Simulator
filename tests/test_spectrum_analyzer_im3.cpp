@@ -301,9 +301,9 @@ TEST_CASE("a real-domain trace does not pair a tone with its own mirror image") 
         addTone(trace, axis, f * kMHz, -10.0);
         addTone(trace, axis, -f * kMHz, -10.0);
     }
-    addTone(trace, axis, 5.0 * kMHz, -60.0);   // 2*10 - 15
-    addTone(trace, axis, 20.0 * kMHz, -60.0);  // 2*15 - 10
-    addTone(trace, axis, -5.0 * kMHz, -60.0);  // mirrored products
+    addTone(trace, axis, 5.0 * kMHz, -60.0);  // 2*10 - 15
+    addTone(trace, axis, 20.0 * kMHz, -60.0); // 2*15 - 10
+    addTone(trace, axis, -5.0 * kMHz, -60.0); // mirrored products
     addTone(trace, axis, -20.0 * kMHz, -60.0);
 
     Im3Model model;
