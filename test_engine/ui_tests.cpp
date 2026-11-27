@@ -1176,11 +1176,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
-    // The top configuration block lays out in one column in a narrow dock and in two balanced
-    // columns once the dock fits them. Both show the same fields in the same order. The
-    // two-column block is at most 65% of the stacked height (about a third shorter: nine
-    // controls take five rows, and the Probes and source lines stay), the plot takes the freed
-    // room, and no field clips, overlaps its neighbour, or moves when its value changes width.
+    // The top configuration block lays out in one column in a narrow dock and in two columns once
+    // the dock fits them, with the same fields in the same order. The two-column block measures
+    // 154 px against 246 px stacked (63%), and the test bounds it at 65%. It cannot reach half:
+    // nine controls need five rows in two columns, and the Probes and source text lines stay full
+    // width, so the floor is about 63%. The plot takes the freed height, and no field clips,
+    // overlaps its neighbour, or moves when its value changes width.
     t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_config_two_columns");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         const auto &graph = s_app->testGraphEngine();
@@ -1201,15 +1202,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         // The configuration fields by visible label, in the order the panel draws them. The
         // two-column layout takes the first four on the left and the rest on the right.
-        const char *const kFields[] = {"Start Frequency (MHz)",
-                                       "Stop Frequency (MHz)",
-                                       "VBW (kHz)",
-                                       "RBW (kHz)",
-                                       "Trace Mode",
-                                       "Avg Count",
-                                       "Ref (dBm)",
-                                       "Min level (dBm)",
-                                       "Measure on"};
+        const char *const kFields[] = {"Start (MHz)", "Stop (MHz)",      "VBW (kHz)",
+                                       "RBW (kHz)",   "Trace Mode",      "Avg Count",
+                                       "Ref (dBm)",   "Min level (dBm)", "Measure on"};
         constexpr int kFieldCount = 9;
         constexpr int kLeftCount = 4;
 
@@ -1217,6 +1212,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             bool two_columns = false;
             float height = 0.0f;
             float plot_height = 0.0f;
+            float avail = 0.0f;
             ImRect rects[kFieldCount];
         };
         auto measure = [&](float width, Block &out) {
@@ -1227,6 +1223,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             // The layout splits exactly at the threshold the widget measured at this font.
             IM_CHECK(cfg.two_column_min_width > 0.0f);
             IM_CHECK_EQ(cfg.two_columns, cfg.avail_width >= cfg.two_column_min_width);
+            b.avail = cfg.avail_width;
             ctx->LogInfo("config layout at %.0f px: two_columns=%d avail=%.1f min=%.1f height=%.1f",
                          width, cfg.two_columns ? 1 : 0, cfg.avail_width, cfg.two_column_min_width,
                          cfg.height);
@@ -1288,6 +1285,17 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
                      ImGui::CalcTextSize("Spectrum").x <=
                  panel->InnerRect.Max.x + 1.0f);
 
+        // The two-column floor is the sum of each column's own widest label and the narrowest
+        // field (see twoColumnMinWidth()). A panel below it stays one column; one above it has
+        // two, and every field is still inside the panel.
+        Block below_floor;
+        measure(420.0f, below_floor);
+        IM_CHECK(!below_floor.two_columns);
+        Block above_floor;
+        measure(440.0f, above_floor);
+        IM_CHECK(above_floor.two_columns);
+        check_inside(above_floor);
+        IM_CHECK(above_floor.rects[kLeftCount].Min.x > above_floor.rects[0].Min.x);
         // Mid dock: two columns. The left column holds the span and bandwidth fields and the
         // right column the trace and level fields, each top-to-bottom in the same order.
         Block mid;
@@ -1318,11 +1326,12 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         Block wide;
         measure(900.0f, wide);
         IM_CHECK(wide.two_columns);
-        // Both columns carry the same field width: Start and Ref against the Trace Mode combo.
-        IM_CHECK(std::abs(field_width(wide, 0) - field_width(wide, 4)) < 1.0f);
-        IM_CHECK(std::abs(field_width(wide, 6) - field_width(wide, 4)) < 1.0f);
-        IM_CHECK(std::abs(field_width(wide, 5) - field_width(wide, 4)) < 1.0f);
-        IM_CHECK(std::abs(field_width(wide, 8) - field_width(wide, 4)) < 1.0f);
+        // Wide dock: two equal columns. The right column starts one column width and one gap after
+        // the left one; each field keeps its column's label width, so the fields differ by label.
+        const float gap = 2.0f * ImGui::GetStyle().ItemSpacing.x;
+        const float half = (wide.avail - gap) * 0.5f;
+        IM_CHECK(std::abs((wide.rects[kLeftCount].Min.x - wide.rects[0].Min.x) - (half + gap)) <
+                 1.0f);
         IM_CHECK(wide.height <= 0.65f * narrow.height);
         check_inside(wide);
 
@@ -1372,7 +1381,6 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(s_app->testRemoveProbePin(gen_out));
         ctx->Yield(2);
     };
-
     // Issue #292: Peak, snap-to-peak and marker read the widget's jitter-free readout
     // trace. It must hold the same values on every frame, while the jittered plot
     // trace changes. A widget that reads the jittered trace again fails here.

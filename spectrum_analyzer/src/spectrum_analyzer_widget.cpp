@@ -8,6 +8,7 @@
 #include "view_manager.h"
 #include <algorithm>
 #include <cstdio>
+#include <initializer_list>
 #include <limits>
 
 namespace {
@@ -27,44 +28,60 @@ const ImVec4 kMarkerColors[MarkerModel::kMaxMarkers] = {
 };
 const char *const kMarkerNames[MarkerModel::kMaxMarkers] = {"M1", "M2", "M3", "M4"};
 
-// Configuration-row widths, measured at the current font: the widest label every field draws,
-// and the narrowest numeric field (seven characters plus its two step buttons).
-struct ConfigFieldMetrics {
-    float label = 0.0f;
-    float field = 0.0f;
-};
-ConfigFieldMetrics configFieldMetrics() {
-    static const char *const kLabels[] = {"Start Frequency (MHz)",
-                                          "Stop Frequency (MHz)",
-                                          "VBW (kHz)",
-                                          "RBW (kHz)",
-                                          "Trace Mode",
-                                          "Avg Count",
-                                          "Ref (dBm)",
-                                          "Min level (dBm)",
-                                          "Measure on"};
-    ConfigFieldMetrics m;
-    for (const char *label : kLabels)
-        m.label = std::max(m.label, ImGui::CalcTextSize(label).x);
+// Configuration-row widths, measured at the current font. Each column needs its own widest label
+// (the left column holds "Start (MHz)", the right "Min level (dBm)"), then the gap after the label,
+// then the narrowest numeric field: seven characters plus its two step buttons.
+float widestLabel(std::initializer_list<const char *> labels) {
+    float width = 0.0f;
+    for (const char *label : labels)
+        width = std::max(width, ImGui::CalcTextSize(label).x);
+    return width;
+}
+float leftColumnLabelWidth() {
+    return widestLabel({"Start (MHz)", "Stop (MHz)", "VBW (kHz)", "RBW (kHz)"});
+}
+float rightColumnLabelWidth() {
+    return widestLabel({"Trace Mode", "Avg Count", "Ref (dBm)", "Min level (dBm)", "Measure on"});
+}
+// The one-column stack sizes every field to the widest label, so the fields line up.
+float stackedLabelWidth() { return std::max(leftColumnLabelWidth(), rightColumnLabelWidth()); }
+float configFieldWidth() {
     const ImGuiStyle &style = ImGui::GetStyle();
-    m.field = ImGui::CalcTextSize("-100000").x +
-              2.0f * (ImGui::GetFrameHeight() + style.ItemInnerSpacing.x) +
-              2.0f * style.FramePadding.x;
-    return m;
+    return ImGui::CalcTextSize("-100000").x +
+           2.0f * (ImGui::GetFrameHeight() + style.ItemInnerSpacing.x) +
+           2.0f * style.FramePadding.x;
 }
 // Gap between the two columns, two item spacings (px).
 float configColumnGap() { return 2.0f * ImGui::GetStyle().ItemSpacing.x; }
-// Two columns each need a label, the gap after it, and the narrowest field, plus the gap between
-// them. The dock's content width must reach this (px, at the current font) to use two columns.
+// A column is wide enough when it holds its widest label, the gap after it, and the narrowest
+// field.
+float columnMinWidth(float label_width) {
+    return label_width + ImGui::GetStyle().ItemInnerSpacing.x + configFieldWidth();
+}
+// The dock's content width must reach this (px, at the current font) to use two columns.
 float twoColumnMinWidth() {
-    const ConfigFieldMetrics m = configFieldMetrics();
-    return 2.0f * (m.label + ImGui::GetStyle().ItemInnerSpacing.x + m.field) + configColumnGap();
+    return columnMinWidth(leftColumnLabelWidth()) + columnMinWidth(rightColumnLabelWidth()) +
+           configColumnGap();
+}
+struct ConfigColumns {
+    float left = 0.0f;
+    float right = 0.0f;
+};
+// Splits the content width into two columns. Equal halves when both columns fit in them; otherwise
+// the left column takes just what its label and field need, and the right column takes the rest.
+ConfigColumns splitConfigColumns(float avail) {
+    const float half = (avail - configColumnGap()) * 0.5f;
+    const float need =
+        std::max(columnMinWidth(leftColumnLabelWidth()), columnMinWidth(rightColumnLabelWidth()));
+    ConfigColumns cols;
+    cols.left = half >= need ? half : columnMinWidth(leftColumnLabelWidth());
+    cols.right = avail - configColumnGap() - cols.left;
+    return cols;
 }
 // Sizes the next field to fill its column less the label after it, so the label stays in the
 // column and never reaches the other one.
-void pushConfigFieldWidth(float column_width) {
-    ImGui::PushItemWidth(column_width - configFieldMetrics().label -
-                         ImGui::GetStyle().ItemInnerSpacing.x);
+void pushConfigFieldWidth(float column_width, float label_width) {
+    ImGui::PushItemWidth(column_width - label_width - ImGui::GetStyle().ItemInnerSpacing.x);
 }
 } // namespace
 
@@ -653,12 +670,12 @@ void SpectrumAnalyzerWidget::drawFrequencyFields() {
     double vbw = m_engine.vbw();
     double rbw = m_engine.rbw();
 
-    if (utils::inputFrequency("Start Frequency (MHz)", s, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Start (MHz)", s, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStartFrequency(s);
         LOG_INFO("Update start frequency: %.0f MHz", m_engine.startFrequency() / 1e6);
     }
 
-    if (utils::inputFrequency("Stop Frequency (MHz)", e, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
+    if (utils::inputFrequency("Stop (MHz)", e, 1.0, 100.0, "%.0f", MIN_FREQ, MAX_FREQ)) {
         m_engine.setStopFrequency(e);
         LOG_INFO("Update stop frequency: %.0f MHz", m_engine.stopFrequency() / 1e6);
     }
@@ -857,15 +874,16 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         // Left: the span and bandwidth fields. Right: trace, levels, and the measurement source.
         // Groups and a SameLine offset place the columns; an ImGui table would push its ID onto
         // the window's ID stack and hide these fields from label lookups.
-        const float column_width = (block_avail - configColumnGap()) * 0.5f;
+        const ConfigColumns cols = splitConfigColumns(block_avail);
         ImGui::BeginGroup();
-        pushConfigFieldWidth(column_width);
+        pushConfigFieldWidth(cols.left, leftColumnLabelWidth());
         drawFrequencyFields();
         ImGui::PopItemWidth();
         ImGui::EndGroup();
-        ImGui::SameLine(column_width + configColumnGap());
+        // SameLine's offset counts from the window origin, so start from the content origin.
+        ImGui::SameLine(ImGui::GetCursorStartPos().x + cols.left + configColumnGap());
         ImGui::BeginGroup();
-        pushConfigFieldWidth(column_width);
+        pushConfigFieldWidth(cols.right, rightColumnLabelWidth());
         drawTraceFields();
         drawLevelFields();
         if (has_probes)
@@ -873,8 +891,8 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         ImGui::PopItemWidth();
         ImGui::EndGroup();
     } else {
-        // One column: each field fills the dock less its label, the same as a column's.
-        pushConfigFieldWidth(block_avail);
+        // One column: each field fills the dock less the widest label, so the fields line up.
+        pushConfigFieldWidth(block_avail, stackedLabelWidth());
         drawFrequencyFields();
         drawTraceFields();
         drawLevelFields();
