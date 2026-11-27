@@ -1946,6 +1946,10 @@ void RfSimulatorApp::draw_ui() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Settings")) {
+            ImGui::MenuItem("UI Font...", nullptr, &m_show_settings);
+            ImGui::EndMenu();
+        }
 
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("How to Use", "F1")) {
@@ -2371,6 +2375,9 @@ void RfSimulatorApp::draw_ui() {
     }
     if (utility_views_visible)
         drawExtensionsPanel();
+
+    if (m_show_settings)
+        m_settings_panel.draw(&m_show_settings, m_ui_font);
 
     if (m_show_log)
         m_log_widget.draw("Log", &m_show_log);

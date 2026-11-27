@@ -44,6 +44,7 @@
 #include "rf_budget_cascade.h"
 #include "rf_budget_widget.h"
 #include "session_state.h"
+#include "settings_panel_widget.h"
 #include "signal_generator_engine.h"
 #include "signal_generator_widget.h"
 #include "spectrum_analyzer_engine.h"
@@ -52,6 +53,7 @@
 #include "test_flow_widget.h"
 #include "tutorial_state.h"
 #include "tutorial_widget.h"
+#include "ui_font_controller.h"
 #include "view_manager.h"
 
 #include "agent_host.h"
@@ -128,7 +130,16 @@ class RfSimulatorApp {
     void denyPendingExtensionTrust();
 
     SessionState m_state;
+    // The UI font choice. It reads the saved font in its constructor and installs it from
+    // applyPendingUiFont(), which the frame loop calls between frames.
+    UiFontController m_ui_font{m_state};
     TutorialState m_tutorial_state;
+    // Settings > UI Font... toggles the font picker window.
+    bool m_show_settings = false;
+    SettingsPanelWidget m_settings_panel;
+    // Installs a queued UI font choice. Call between frames, before ImGui::NewFrame. Returns true
+    // when the UI font changed.
+    bool applyPendingUiFont() { return m_ui_font.applyPending(); }
     ~RfSimulatorApp();
 
     // Project save/load
