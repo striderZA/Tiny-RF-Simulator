@@ -20,10 +20,10 @@ The choice is saved with the simulator's settings, in `app.ini` beside the execu
 - **A saved font is installed but cannot be read.** The simulator uses the built-in font and shows a note. The saved name is kept, as above.
 - **A font you pick cannot be read.** The font in use stays as it was, and the note says so. Nothing is saved.
 
-On Linux the list comes from fontconfig. The choice is not saved between runs on Linux yet, so the simulator starts with **Default (built-in)** there.
+The Linux font list is not built or tested yet. Until it is, Linux shows **Default (built-in)** only, and the choice is not saved between runs on Linux.
 
 ## Limits
 
 - Font collections (`.ttc` files) are not listed. A family that is only available as a collection does not appear in the list.
 - The font size stays the same as the built-in font's. The picker changes the typeface only.
-- Numeric fields and readout strips widen to fit a wider font instead of clipping its digits. A font much wider than the built-in one can still make a dock narrow, so widen the window if a row runs off the edge.
+- Numeric fields and readout strips are sized from the measured text of the current font. They have not been checked in a wide font, so a much wider font may still need a wider window.
