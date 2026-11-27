@@ -38,6 +38,12 @@ void UiFontController::select(const std::string &family) {
 }
 
 bool UiFontController::applyPending() {
+    // The style carries no font size until the first frame's NewFrame derives it from the default
+    // font. Installing before that would add the picked font at size 0, and ImGui would then fall
+    // back to its own 20 px default instead of the built-in font's size. Keep the request queued
+    // for one frame.
+    if (ImGui::GetStyle().FontSizeBase <= 0.0f)
+        return false;
     if (!m_has_request)
         return false;
     m_has_request = false;
@@ -97,6 +103,13 @@ UiFontController::InstallResult UiFontController::installFamily(const std::strin
     if (!family.empty() && !ui_font::readSystemFontFile(family, bytes))
         return InstallResult::Unchanged;
 
+    // Never add a font at size 0: ImGui would leave it with no legacy size and then fall back to
+    // its own 20 px default. applyPending() waits for the first frame, which sets this from the
+    // built-in font.
+    const float size_px = ImGui::GetStyle().FontSizeBase;
+    if (size_px <= 0.0f)
+        return InstallResult::Unchanged;
+
     ImGuiIO &io = ImGui::GetIO();
     // Between frames only (see the class comment). ClearFonts() frees the previous font's input
     // and its atlas glyphs; the backend releases the old texture after its last use.
@@ -113,13 +126,14 @@ UiFontController::InstallResult UiFontController::installFamily(const std::strin
     // (docs/FONTS.md), and ClearFonts() on the next pick would have freed it too early.
     void *data = ImGui::MemAlloc(bytes.size());
     std::memcpy(data, bytes.data(), bytes.size());
-    // The size is the style's base size, the same value the built-in font uses, so any future
-    // scaling of FontSizeBase or the font scale applies to this font too.
+    // The size is the style's base size, which the first frame set from the built-in font, so a
+    // picked family keeps the built-in size and any future scaling of FontSizeBase or the font
+    // scale applies to it too.
     ImFontConfig config; // FontDataOwnedByAtlas stays true
     // The debug name lets a test confirm which family the UI is drawn with.
     std::snprintf(config.Name, sizeof(config.Name), "%s", family.c_str());
-    ImFont *font = io.Fonts->AddFontFromMemoryTTF(data, static_cast<int>(bytes.size()),
-                                                  ImGui::GetStyle().FontSizeBase, &config);
+    ImFont *font =
+        io.Fonts->AddFontFromMemoryTTF(data, static_cast<int>(bytes.size()), size_px, &config);
     if (font == nullptr) {
         io.FontDefault = io.Fonts->AddFontDefault();
         m_applied.clear();

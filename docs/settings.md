@@ -20,7 +20,7 @@ The choice is saved with the simulator's settings, in `app.ini` beside the execu
 - **A saved font is installed but cannot be read.** The simulator uses the built-in font and shows a note. The saved name is kept, as above.
 - **A font you pick cannot be read.** The font in use stays as it was, and the note says so. Nothing is saved.
 
-The Linux font list is not built or tested yet. Until it is, Linux shows **Default (built-in)** only, and the choice is not saved between runs on Linux.
+On Linux the list is built through fontconfig. That path has not been run here, so treat the list as unverified there, and the choice is not saved between runs on Linux (the setting is stored in `app.ini` on Windows only).
 
 ## Limits
 
