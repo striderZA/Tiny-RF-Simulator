@@ -467,6 +467,13 @@ add_standalone_test(test_spectrum_single_sided
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Single-sided view behaviour: complex-baseband traces stay unchanged, the readout and plot agree
+# on the folded spectrum, and the hold modes follow the mode in use.
+add_standalone_test(test_spectrum_single_sided_views
+    SOURCES test_spectrum_single_sided_views.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Marker view-state coverage: nearest-bin readouts, delta arithmetic, per-marker
 # peak search, and the session token. The model is UI-free; widget presentation
 # is covered by test_ui. Standalone for the MinGW-w64 registration ceiling.
