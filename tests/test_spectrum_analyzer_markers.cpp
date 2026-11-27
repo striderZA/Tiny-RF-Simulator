@@ -201,3 +201,41 @@ TEST_CASE("a manual move invalidates the cached peak list") {
     model.place(0, 1.04e9);
     REQUIRE_FALSE(model.nextPeak(0, {}));
 }
+
+TEST_CASE("folding moves a negative marker to its image, drops its peak list, and reads on-axis") {
+    MarkerModel model;
+    model.setEnabled(0, true);
+    model.snapToPeak(0, {{0, -100e6, -6.01}});
+    REQUIRE(model.frequency(0) == -100e6);
+    REQUIRE_FALSE(model.peaks(0).empty());
+
+    // Single-sided axis: 0 Hz upward only, with the folded tone at +100 MHz.
+    const std::vector<double> folded_axis = {0.0, 100e6, 200e6};
+    const std::vector<double> folded_dBm = {-90.0, -3.0, -90.0};
+
+    model.foldNegativeFrequencies();
+    REQUIRE(model.frequency(0) == 100e6);
+    REQUIRE(model.peaks(0).empty());
+
+    const MarkerModel::Readout r = model.readout(0, folded_axis, folded_dBm);
+    REQUIRE(r.valid);
+    REQUIRE(r.frequency_Hz == 100e6);
+    REQUIRE(r.amplitude_dBm == Catch::Approx(-3.0));
+}
+
+TEST_CASE("folding leaves positive and zero markers alone and is idempotent") {
+    MarkerModel model;
+    model.setEnabled(0, true);
+    model.setEnabled(1, true);
+    model.place(0, 0.0);
+    model.place(1, 50e6);
+
+    model.foldNegativeFrequencies();
+    REQUIRE(model.frequency(0) == 0.0);
+    REQUIRE(model.frequency(1) == 50e6);
+
+    model.place(2, -80e6);
+    model.foldNegativeFrequencies();
+    model.foldNegativeFrequencies();
+    REQUIRE(model.frequency(2) == 80e6);
+}

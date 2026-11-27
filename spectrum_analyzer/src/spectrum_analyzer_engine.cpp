@@ -29,6 +29,16 @@ bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
     return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
 }
 
+// Whether any spectrum in the list is complex-baseband (an ADC or PFB output, with no negative
+// image to fold onto).
+bool anyComplexBaseband(const std::vector<const Spectrum *> &specs) {
+    for (const Spectrum *s : specs) {
+        if (s && s->is_complex_baseband)
+            return true;
+    }
+    return false;
+}
+
 // Bin-cell lower-edge slack, in bins. Float error in (f - front)/bw can leave a tone on the
 // lower cell edge a few ulp below it; this covers that without moving real tones.
 constexpr double kCellEdgeTolerance = 1e-9;
@@ -76,6 +86,39 @@ void accumulateOntoGrid(const std::vector<double> &src_freqs,
     }
 }
 
+// Per-bin noise power (W) of a spectrum on its own grid: density (W/Hz) times the bin width.
+std::vector<double> noiseBinsW(const Spectrum &spec, double bin_width) {
+    const size_t n = spec.frequencies.size();
+    std::vector<double> noise_W(n, 0.0);
+    if (spec.noise_total_W.size() == n) {
+        for (size_t i = 0; i < n; ++i) {
+            noise_W[i] = spec.noise_total_W[i] * bin_width;
+        }
+    } else if (!spec.noise_total_W.empty()) {
+        for (size_t i = 0; i < n && i < spec.noise_total_W.size(); ++i) {
+            noise_W[i] = spec.noise_total_W[i] * bin_width;
+        }
+    }
+    return noise_W;
+}
+
+// Adds each tone's coherent power (W) to the bin of `grid` that holds it. Copies at one frequency
+// add as phasors (coherentToneWatts). A tone on the lower bin edge belongs to the bin above.
+void binToneWatts(const std::vector<double> &grid, double bin_width,
+                  const std::vector<Spectrum::Tone> &tones, std::vector<double> &tone_W) {
+    if (grid.empty()) {
+        return;
+    }
+    for (const auto &[freq_Hz, watts] : coherentToneWatts(tones)) {
+        const double cell = (freq_Hz - grid.front()) / bin_width + 0.5;
+        int bin_idx = static_cast<int>(std::floor(cell));
+        if (bin_idx == -1 && cell > -kCellEdgeTolerance)
+            bin_idx = 0;
+        if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < grid.size())
+            tone_W[static_cast<size_t>(bin_idx)] += watts;
+    }
+}
+
 } // namespace
 
 std::vector<double>
@@ -91,7 +134,11 @@ SpectrumAnalyzerEngine::combinedReadoutAxis(const std::vector<const Spectrum *> 
         if (!s || s->frequencies.empty()) {
             continue;
         }
-        const std::vector<double> &f = s->frequencies;
+        // A folded trace has only its non-negative bins, so its axis starts at 0 Hz.
+        const std::vector<double> f = this->displayFrequencies(*s);
+        if (f.empty()) {
+            continue;
+        }
         start = found ? std::min(start, f.front()) : f.front();
         stop = found ? std::max(stop, f.back()) : f.back();
         found = true;
@@ -119,8 +166,6 @@ SpectrumAnalyzerEngine::combinedReadoutAxis(const std::vector<const Spectrum *> 
 void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                                                 std::vector<double> &tone_W) const {
     size_t n = spec.frequencies.size();
-    noise_W.assign(n, 0.0);
-    tone_W.assign(n, 0.0);
 
     double bin_width = 1.0;
     if (spec.frequencies.size() >= 2) {
@@ -128,15 +173,8 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
     }
 
     // Convert noise density (W/Hz) to per-bin power (W)
-    if (spec.noise_total_W.size() == n) {
-        for (size_t i = 0; i < n; ++i) {
-            noise_W[i] = spec.noise_total_W[i] * bin_width;
-        }
-    } else if (!spec.noise_total_W.empty()) {
-        for (size_t i = 0; i < n && i < spec.noise_total_W.size(); ++i) {
-            noise_W[i] = spec.noise_total_W[i] * bin_width;
-        }
-    }
+    noise_W = noiseBinsW(spec, bin_width);
+    tone_W.assign(n, 0.0);
 
     // Tones are discrete impulses. Real-domain spectra (pre-ADC) get expanded into their
     // +-fc conjugate-symmetric half-power pair per Euler's formula before binning; post-ADC
@@ -150,18 +188,76 @@ void SpectrumAnalyzerEngine::binPowerComponents(const Spectrum &spec, std::vecto
     if (n < 2) {
         return;
     }
-    for (const auto &[freq_Hz, watts] : coherentToneWatts(*display_tones)) {
-        // A bin covers [label - bw/2, label + bw/2). A tone exactly on the lower edge gives
-        // a cell value of 0 in exact arithmetic, but rounding can leave it a hair below 0;
-        // that tone still belongs to the bin above, not the bin below the grid.
-        const double cell = (freq_Hz - spec.frequencies.front()) / bin_width + 0.5;
-        int bin_idx = static_cast<int>(std::floor(cell));
-        if (bin_idx == -1 && cell > -kCellEdgeTolerance)
-            bin_idx = 0;
-        if (bin_idx >= 0 && static_cast<size_t>(bin_idx) < n) {
-            tone_W[bin_idx] += watts;
+    binToneWatts(spec.frequencies, bin_width, *display_tones, tone_W);
+}
+
+std::vector<double> SpectrumAnalyzerEngine::displayFrequencies(const Spectrum &spec) const {
+    if (!foldsSpectrum(spec)) {
+        return spec.frequencies;
+    }
+    // Folded: the non-negative suffix of the (ascending) grid. 0 Hz itself is kept, so a DC bin
+    // is not doubled.
+    const auto first = std::lower_bound(spec.frequencies.begin(), spec.frequencies.end(), 0.0);
+    return std::vector<double>(first, spec.frequencies.end());
+}
+
+double
+SpectrumAnalyzerEngine::plotStartFrequency(const std::vector<const Spectrum *> &specs) const {
+    if (m_sides != SpectrumSides::SingleSided || anyComplexBaseband(specs)) {
+        return m_start_freq;
+    }
+    // The folded half starts at 0 Hz. Only use it while it lies below the stop: a span that ends
+    // at or below 0 Hz keeps its own start, so the axis is never inverted (min above max).
+    const double folded_start = std::max(m_start_freq, 0.0);
+    return folded_start < m_stop_freq ? folded_start : m_start_freq;
+}
+
+bool SpectrumAnalyzerEngine::singleSidedSpanHidesFold(
+    const std::vector<const Spectrum *> &specs) const {
+    return m_sides == SpectrumSides::SingleSided && m_stop_freq <= 0.0 &&
+           !anyComplexBaseband(specs);
+}
+
+SpectrumAnalyzerEngine::SpectrumComponents
+SpectrumAnalyzerEngine::spectrumComponents(const Spectrum &spec) const {
+    SpectrumComponents out;
+    if (!foldsSpectrum(spec)) {
+        out.freqs = spec.frequencies;
+        this->binPowerComponents(spec, out.noise_W, out.tone_W);
+        return out;
+    }
+
+    // Noise: each non-negative bin adds the noise of its mirror bin at -f. The two bins carry
+    // independent noise, so their powers add: +3 dB on a flat real floor. 0 Hz has no mirror
+    // distinct from itself and is not doubled.
+    const std::vector<double> &src = spec.frequencies;
+    const double src_bin_width = gridBinWidth(src);
+    const std::vector<double> src_noise_W = noiseBinsW(spec, src_bin_width);
+    out.freqs = this->displayFrequencies(spec);
+    const size_t first = src.size() - out.freqs.size();
+    out.noise_W.assign(out.freqs.size(), 0.0);
+    for (size_t j = 0; j < out.freqs.size(); ++j) {
+        double noise = src_noise_W[first + j];
+        const double f = out.freqs[j];
+        if (f > 0.0 && withinGrid(src, src_bin_width, -f)) {
+            noise += src_noise_W[nearestGridIndex(src, -f)];
+        }
+        out.noise_W[j] = noise;
+    }
+
+    // Tones: a real tone at -f is the cosine at +f with its phase negated, so fold each to +|f|
+    // at full power. The mirror of a tone is the same tone, never a second one. Tones that land on
+    // one |f| add as phasors (coherentToneWatts), so in-phase copies add and opposite ones cancel.
+    std::vector<Spectrum::Tone> folded = spec.tones;
+    for (Spectrum::Tone &t : folded) {
+        if (t.freq_Hz < 0.0) {
+            t.freq_Hz = -t.freq_Hz;
+            t.phase_deg = -t.phase_deg;
         }
     }
+    out.tone_W.assign(out.freqs.size(), 0.0);
+    binToneWatts(out.freqs, src_bin_width, folded, out.tone_W);
+    return out;
 }
 
 std::vector<double> SpectrumAnalyzerEngine::toJitteredNoise_dBm(const std::vector<double> &noise_W,
@@ -213,23 +309,25 @@ std::vector<double> SpectrumAnalyzerEngine::renderSpectrum(const Spectrum &spec)
     }
 
     // Cache the expensive split + RBW step. Jitter + VBW still run every frame
-    // so the display keeps its instrument-like live feel.
+    // so the display keeps its instrument-like live feel. The key includes the sides mode, so a
+    // folded trace never reuses the double-sided cache.
+    const bool single_sided = foldsSpectrum(spec);
     std::vector<double> rbw_noise_W, rbw_tone_W;
     if (&spec == m_cache_spectrum && spec.identity.value == m_cache_identity &&
         spec.generation == m_cache_spec_gen && m_rbw == m_cache_rbw &&
-        bin_width == m_cache_bin_width) {
+        bin_width == m_cache_bin_width && single_sided == m_cache_single_sided) {
         rbw_noise_W = m_cache_rbw_noise_W;
         rbw_tone_W = m_cache_rbw_tone_W;
     } else {
-        std::vector<double> noise_W, tone_W;
-        this->binPowerComponents(spec, noise_W, tone_W);
-        rbw_noise_W = this->applyRBWForNoise(noise_W, bin_width);
-        rbw_tone_W = this->applyRBW(tone_W, bin_width);
+        const SpectrumComponents comps = this->spectrumComponents(spec);
+        rbw_noise_W = this->applyRBWForNoise(comps.noise_W, bin_width);
+        rbw_tone_W = this->applyRBW(comps.tone_W, bin_width);
         m_cache_spectrum = &spec;
         m_cache_identity = spec.identity.value;
         m_cache_spec_gen = spec.generation;
         m_cache_rbw = m_rbw;
         m_cache_bin_width = bin_width;
+        m_cache_single_sided = single_sided;
         m_cache_rbw_noise_W = rbw_noise_W;
         m_cache_rbw_tone_W = rbw_tone_W;
     }
@@ -272,23 +370,22 @@ void SpectrumAnalyzerEngine::advanceComponentHolds(const std::vector<const Spect
         if (!s || s->frequencies.empty()) {
             continue;
         }
-        std::vector<double> noise_W, tone_W;
-        this->binPowerComponents(*s, noise_W, tone_W);
+        SpectrumComponents comps = this->spectrumComponents(*s);
         ComponentHold &entry = holds[s];
-        if (entry.identity != s->identity.value || entry.noise_W.size() != noise_W.size() ||
-            entry.tone_W.size() != tone_W.size()) {
+        if (entry.identity != s->identity.value || entry.noise_W.size() != comps.noise_W.size() ||
+            entry.tone_W.size() != comps.tone_W.size()) {
             entry.identity = s->identity.value;
-            entry.noise_W = std::move(noise_W);
-            entry.tone_W = std::move(tone_W);
+            entry.noise_W = std::move(comps.noise_W);
+            entry.tone_W = std::move(comps.tone_W);
             continue;
         }
-        for (size_t i = 0; i < noise_W.size(); ++i) {
-            entry.noise_W[i] = is_max ? std::max(entry.noise_W[i], noise_W[i])
-                                      : std::min(entry.noise_W[i], noise_W[i]);
+        for (size_t i = 0; i < comps.noise_W.size(); ++i) {
+            entry.noise_W[i] = is_max ? std::max(entry.noise_W[i], comps.noise_W[i])
+                                      : std::min(entry.noise_W[i], comps.noise_W[i]);
         }
-        for (size_t i = 0; i < tone_W.size(); ++i) {
-            entry.tone_W[i] = is_max ? std::max(entry.tone_W[i], tone_W[i])
-                                     : std::min(entry.tone_W[i], tone_W[i]);
+        for (size_t i = 0; i < comps.tone_W.size(); ++i) {
+            entry.tone_W[i] = is_max ? std::max(entry.tone_W[i], comps.tone_W[i])
+                                     : std::min(entry.tone_W[i], comps.tone_W[i]);
         }
     }
 }
@@ -313,19 +410,21 @@ SpectrumAnalyzerEngine::renderCombinedTrace(const std::vector<const Spectrum *> 
         if (!s || s->frequencies.empty()) {
             continue;
         }
-        std::vector<double> noise_W, tone_W;
-        this->binPowerComponents(*s, noise_W, tone_W);
+        SpectrumComponents comps = this->spectrumComponents(*s);
+        if (comps.freqs.empty()) {
+            continue;
+        }
         if (holds) {
             // Held components stand in for the current frame; each spectrum is advanced first.
             auto it = holds->find(s);
             if (it != holds->end() && it->second.identity == s->identity.value &&
-                it->second.noise_W.size() == noise_W.size() &&
-                it->second.tone_W.size() == tone_W.size()) {
-                noise_W = it->second.noise_W;
-                tone_W = it->second.tone_W;
+                it->second.noise_W.size() == comps.noise_W.size() &&
+                it->second.tone_W.size() == comps.tone_W.size()) {
+                comps.noise_W = it->second.noise_W;
+                comps.tone_W = it->second.tone_W;
             }
         }
-        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W,
+        accumulateOntoGrid(comps.freqs, comps.noise_W, comps.tone_W, grid, bin_width, sum_noise_W,
                            &sum_tone_W);
     }
 
@@ -344,15 +443,19 @@ SpectrumAnalyzerEngine::computeAverageNoiseLevel(const std::vector<const Spectru
     }
     const double bin_width = gridBinWidth(grid);
 
-    // Sum noise power per bin (W) on the readout grid across all spectra, excluding tones
+    // Sum noise power per bin (W) on the readout grid across all spectra, excluding tones. A
+    // folded spectrum contributes its folded noise, so the average reads the spectrum on screen.
     std::vector<double> sum_noise_W(grid.size(), 0.0);
     for (const Spectrum *s : specs) {
         if (!s || s->frequencies.empty()) {
             continue;
         }
-        std::vector<double> noise_W, tone_W;
-        this->binPowerComponents(*s, noise_W, tone_W);
-        accumulateOntoGrid(s->frequencies, noise_W, tone_W, grid, bin_width, sum_noise_W, nullptr);
+        const SpectrumComponents comps = this->spectrumComponents(*s);
+        if (comps.freqs.empty()) {
+            continue;
+        }
+        accumulateOntoGrid(comps.freqs, comps.noise_W, comps.tone_W, grid, bin_width, sum_noise_W,
+                           nullptr);
     }
 
     std::vector<double> rbw_noise_W = this->applyRBWForNoise(sum_noise_W, bin_width);
