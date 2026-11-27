@@ -90,3 +90,43 @@ TEST_CASE(
         CHECK(spsValueNear(restarted.axis, restarted.dBm, 100e6) < -170.0);
     }
 }
+
+TEST_CASE(
+    "SpectrumAnalyzer single-sided: a span that ends below 0 Hz keeps its order and is flagged",
+    "[spectrum][single_sided][span]") {
+    const Spectrum real = makeSpsRealToneScene({{100e6, -3.0, 0.0}});
+    const Spectrum complex = makeSpsSpectrum(0.0, true);
+    SpectrumAnalyzerEngine sa;
+    configureSpsDeterministic(sa, SpectrumSides::SingleSided);
+
+    SECTION("a span wholly below 0 Hz keeps its own start, which stays below its stop") {
+        sa.setStartFrequency(-500e6);
+        sa.setStopFrequency(-100e6);
+        const std::vector<const Spectrum *> specs = {&real};
+        const double start = sa.plotStartFrequency(specs);
+        CHECK(start == Approx(-500e6));
+        CHECK(start < sa.stopFrequency());
+        CHECK(sa.singleSidedSpanHidesFold(specs));
+    }
+    SECTION("a span ending exactly at 0 Hz is also flagged, and the axis is not inverted") {
+        sa.setStartFrequency(-500e6);
+        sa.setStopFrequency(0.0);
+        const std::vector<const Spectrum *> specs = {&real};
+        CHECK(sa.plotStartFrequency(specs) < sa.stopFrequency());
+        CHECK(sa.singleSidedSpanHidesFold(specs));
+    }
+    SECTION("a span crossing 0 Hz starts at 0 Hz and hides nothing") {
+        sa.setStartFrequency(-500e6);
+        sa.setStopFrequency(500e6);
+        const std::vector<const Spectrum *> specs = {&real};
+        CHECK(sa.plotStartFrequency(specs) == Approx(0.0));
+        CHECK_FALSE(sa.singleSidedSpanHidesFold(specs));
+    }
+    SECTION("a complex-baseband trace keeps its negative span and is never flagged") {
+        sa.setStartFrequency(-500e6);
+        sa.setStopFrequency(-100e6);
+        const std::vector<const Spectrum *> specs = {&complex};
+        CHECK(sa.plotStartFrequency(specs) == Approx(-500e6));
+        CHECK_FALSE(sa.singleSidedSpanHidesFold(specs));
+    }
+}

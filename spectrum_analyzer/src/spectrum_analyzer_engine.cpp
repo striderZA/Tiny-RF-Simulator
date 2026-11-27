@@ -29,6 +29,16 @@ bool withinGrid(const std::vector<double> &freqs, double bin_width, double x) {
     return x >= freqs.front() - bin_width / 2.0 && x <= freqs.back() + bin_width / 2.0;
 }
 
+// Whether any spectrum in the list is complex-baseband (an ADC or PFB output, with no negative
+// image to fold onto).
+bool anyComplexBaseband(const std::vector<const Spectrum *> &specs) {
+    for (const Spectrum *s : specs) {
+        if (s && s->is_complex_baseband)
+            return true;
+    }
+    return false;
+}
+
 // Bin-cell lower-edge slack, in bins. Float error in (f - front)/bw can leave a tone on the
 // lower cell edge a few ulp below it; this covers that without moving real tones.
 constexpr double kCellEdgeTolerance = 1e-9;
@@ -193,15 +203,19 @@ std::vector<double> SpectrumAnalyzerEngine::displayFrequencies(const Spectrum &s
 
 double
 SpectrumAnalyzerEngine::plotStartFrequency(const std::vector<const Spectrum *> &specs) const {
-    if (m_sides != SpectrumSides::SingleSided) {
+    if (m_sides != SpectrumSides::SingleSided || anyComplexBaseband(specs)) {
         return m_start_freq;
     }
-    for (const Spectrum *s : specs) {
-        if (s && s->is_complex_baseband) {
-            return m_start_freq;
-        }
-    }
-    return std::max(m_start_freq, 0.0);
+    // The folded half starts at 0 Hz. Only use it while it lies below the stop: a span that ends
+    // at or below 0 Hz keeps its own start, so the axis is never inverted (min above max).
+    const double folded_start = std::max(m_start_freq, 0.0);
+    return folded_start < m_stop_freq ? folded_start : m_start_freq;
+}
+
+bool SpectrumAnalyzerEngine::singleSidedSpanHidesFold(
+    const std::vector<const Spectrum *> &specs) const {
+    return m_sides == SpectrumSides::SingleSided && m_stop_freq <= 0.0 &&
+           !anyComplexBaseband(specs);
 }
 
 SpectrumAnalyzerEngine::SpectrumComponents

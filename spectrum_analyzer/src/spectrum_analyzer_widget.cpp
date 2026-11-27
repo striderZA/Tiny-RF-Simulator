@@ -1024,7 +1024,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         // Drag-to-zoom, and Ctrl+click to place the selected marker.
         if (ImPlot::IsPlotHovered() && !marker_tool_active) {
             const bool ctrl = ImGui::GetIO().KeyCtrl;
-            if (ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            // A span whose start is not below its stop has no frequency to place on.
+            if (ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+                plot_start_Hz < m_engine.stopFrequency()) {
                 ImPlotPoint p = ImPlot::GetPlotMousePos();
                 const double placed = std::clamp(p.x, plot_start_Hz, m_engine.stopFrequency());
                 const int marker = m_markers.selected();
@@ -1129,16 +1131,27 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     }
     if (m_engine.spectrumSides() == SpectrumSides::SingleSided) {
         bool any_complex = false;
+        std::vector<const Spectrum *> active_specs;
         for (auto *node : m_view_manager.getActiveNodes()) {
-            if (node && outputSpectrumFor(node).is_complex_baseband)
+            if (!node)
+                continue;
+            const Spectrum &spec = outputSpectrumFor(node);
+            active_specs.push_back(&spec);
+            if (spec.is_complex_baseband)
                 any_complex = true;
         }
-        if (any_complex)
+        if (m_engine.singleSidedSpanHidesFold(active_specs)) {
+            // Amber, like the other flagged fields: the folded trace is outside the span.
+            ImGui::TextColored(ImVec4(1.00f, 0.65f, 0.20f, 1.0f),
+                               "Single-sided: the span ends at or below 0 Hz, so the folded trace "
+                               "(0 Hz upward) is outside it. Raise Stop above 0 Hz.");
+        } else if (any_complex) {
             ImGui::TextDisabled(
                 "Single-sided: real traces fold onto +f. Complex-baseband (ADC/PFB) "
                 "traces are shown unchanged.");
-        else
+        } else {
             ImGui::TextDisabled("Single-sided: real traces fold onto +f.");
+        }
     }
 
     drawMarkerControls(*freq_axis, readout_dBm);

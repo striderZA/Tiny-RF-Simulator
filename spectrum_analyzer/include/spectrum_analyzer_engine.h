@@ -70,8 +70,13 @@ class SpectrumAnalyzerEngine {
     std::vector<double> displayFrequencies(const Spectrum &spec) const;
     // Left edge of the plot: 0 Hz in single-sided mode when no spectrum is complex-baseband (the
     // folded half starts there), otherwise startFrequency(), so complex traces keep their
-    // negatives.
+    // negatives. The edge stays below stopFrequency(): when the span ends at or below 0 Hz the
+    // folded half lies outside it, so the span's own start is returned instead (see below).
     double plotStartFrequency(const std::vector<const Spectrum *> &specs) const;
+    // True when single-sided mode would draw nothing: the span ends at or below 0 Hz and no
+    // spectrum is complex-baseband. The widget reports it rather than drawing an empty plot
+    // silently.
+    bool singleSidedSpanHidesFold(const std::vector<const Spectrum *> &specs) const;
 
     void resetTraceHistory() const;
     void pruneHistory(const std::vector<const Spectrum *> &active_keys) const;
