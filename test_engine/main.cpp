@@ -74,6 +74,8 @@ int main() {
 
         if (test_io.IsRequestingMaxAppSpeed)
             glfwSwapInterval(0);
+        // Between frames, as in the application loop: a queued UI font is installed here.
+        app.applyPendingUiFont();
 
         ImGui_ImplOpenGL2_NewFrame();
         ImGui_ImplGlfw_NewFrame();

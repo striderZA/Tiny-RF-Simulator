@@ -22,12 +22,13 @@ RfSimulatorCore::RfSimulatorCore() : p_impl(new Impl()) {}
 
 RfSimulatorCore::~RfSimulatorCore() {}
 
-void RfSimulatorCore::Run(const std::function<void()> &onGui) {
+void RfSimulatorCore::Run(const std::function<void()> &onGui,
+                          const std::function<void()> &beforeFrame) {
     if (!Initialize()) {
         Shutdown();
         return;
     }
-    MainLoop(onGui);
+    MainLoop(onGui, beforeFrame);
     Shutdown();
 }
 
@@ -82,9 +83,13 @@ void RfSimulatorCore::Shutdown() {
     glfwTerminate();
 }
 
-void RfSimulatorCore::MainLoop(const std::function<void()> &onGui) {
+void RfSimulatorCore::MainLoop(const std::function<void()> &onGui,
+                               const std::function<void()> &beforeFrame) {
     while (!glfwWindowShouldClose(p_impl->window)) {
         glfwPollEvents();
+        // Between frames: the UI font atlas is rebuilt here, before any font is in use this frame.
+        if (beforeFrame)
+            beforeFrame();
         ImGui_ImplOpenGL2_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();

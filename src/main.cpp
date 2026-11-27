@@ -7,10 +7,12 @@ int main() {
     ImNodes::CreateContext();
     RfSimulatorApp app;
     app.startAgentServerIfEnabled();
-    core.Run([&app]() {
-        app.update_dsp();
-        app.draw_ui();
-    });
+    core.Run(
+        [&app]() {
+            app.update_dsp();
+            app.draw_ui();
+        },
+        [&app]() { app.applyPendingUiFont(); });
     ImNodes::DestroyContext();
     return 0;
 }
