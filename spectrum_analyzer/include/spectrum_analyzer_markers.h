@@ -60,6 +60,10 @@ class MarkerModel {
     // Drops every marker's cached peak list, so Next Peak adopts peaks from the current
     // readout source after the measured trace changes. Positions and delta flags stay.
     void clearPeakCaches();
+    // Moves every marker parked on a negative frequency to its folded image +|f|, the same tone
+    // on the single-sided axis. A marker that moves drops its cached peak list (place() does).
+    // Called when the Spectrum view changes to single-sided, so no marker reads off-axis.
+    void foldNegativeFrequencies();
 
     // Session token: monotonic view state for SessionState persistence. Peaks are transient
     // and are not part of it. restore() rejects a malformed token without changing anything.

@@ -1121,6 +1121,12 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Combo("Spectrum##sides", &sides_idx, sides_labels, 2)) {
         m_engine.setSpectrumSides(sides_idx == 1 ? SpectrumSides::SingleSided
                                                  : SpectrumSides::DoubleSided);
+        // The readout trace changed with the view. A marker parked on a negative frequency moves
+        // to its folded image, and every cached peak list is dropped so Next Peak adopts the new
+        // trace's peaks rather than cycling the old one.
+        if (m_engine.spectrumSides() == SpectrumSides::SingleSided)
+            m_markers.foldNegativeFrequencies();
+        m_markers.clearPeakCaches();
     }
     if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
         ImGui::TextUnformatted(
