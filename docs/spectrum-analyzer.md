@@ -39,6 +39,33 @@ Four fields frame the plot:
 
 **Drag** with the left mouse across the plot to select a frequency band; on release the span fields snap to it. **Reset Zoom** restores the full default span, −20 to +20 GHz.
 
+## Single-sided spectrum
+
+The **Spectrum** list, beside **Reset Zoom** below the plot, picks how a real-domain trace is drawn:
+
+- **Double-sided** (the default) shows a real signal's conjugate-symmetric image: a real tone appears at both `+f` and `-f`, each at half its power.
+- **Single-sided** folds the negative-frequency half onto the positive half and starts the axis at 0 Hz. A real tone reads its full level at `+f`.
+
+Worked example: a real tone of −3 dBm at 100 MHz.
+
+| View | Reading at +100 MHz | Reading at −100 MHz |
+| --- | --- | --- |
+| Double-sided | −6.01 dBm | −6.01 dBm |
+| Single-sided | −3.00 dBm | not shown (the axis starts at 0 Hz) |
+
+Folding follows the physics of a real signal:
+
+- Two real tones at the same frequency add as phasors. Two equal tones in phase read +6 dB over one tone (+3.02 dBm for two −3 dBm tones, against 0.01 dBm on each side when double-sided). Two equal tones in opposite phase cancel.
+- Independent noise adds as power, so a flat real noise floor reads about +3 dB per bin.
+- A tone within one bin of 0 Hz folds into the 0 Hz bin at its full level. Its mirror is the same tone, so it is not counted twice.
+- A real trace on a grid with no bin at or above 0 Hz plots nothing.
+- A span that ends at or below 0 Hz has no folded half inside it. The panel warns in amber, and the plot keeps the span you set rather than drawing an inverted axis. Raise **Stop** above 0 Hz to see the folded trace.
+- A marker parked on a negative frequency moves to its folded image when **Single-sided** is selected: a marker at −100 MHz moves to +100 MHz, the same tone. Switching back to Double-sided does not move it. Every change of the **Spectrum** mode also clears the markers' cached peak lists, so **Next Peak** starts from the new trace.
+
+Complex-baseband traces (ADC and PFB outputs) have no negative-frequency image, so they are drawn unchanged. The panel says so when a probed trace is complex-baseband, and the axis keeps its negative half.
+
+Peak, the markers, the peak table, the harmonic and IM3 measurements, and the average noise level read the folded trace. Changing the **Spectrum** mode clears the hold and average history, like the RBW and VBW settings. The mode is view state: it is not saved with the project and starts as Double-sided each run. The agent API's `measure_port` tool reports stored tone power and noise, not this view, so its output is the same in both modes; its "3.01 dB above the displayed peak" note refers to the double-sided display.
+
 ## Resolution and video bandwidth
 
 | Control | Range | Default | Effect |
@@ -56,7 +83,7 @@ The **Trace Mode** list picks how each trace is drawn:
 - **Min Hold** — each trace keeps the per-bin minimum.
 - **Video Avg** — an exponential average of the displayed trace over the last **Avg Count** frames.
 
-Changing the trace mode, RBW, VBW, or Avg Count clears all hold and average history. In Max Hold or Min Hold, a **Reset Hold** button clears it directly. Changing the frequency span does not clear history.
+Changing the trace mode, RBW, VBW, Avg Count, or **Spectrum** mode clears all hold and average history. In Max Hold or Min Hold, a **Reset Hold** button clears it directly. Changing the frequency span does not clear history.
 
 ## Measure on a probe
 

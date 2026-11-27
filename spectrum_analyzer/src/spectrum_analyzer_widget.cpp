@@ -944,8 +944,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     static const ImVec4 pfb_full_color(0.60f, 0.80f, 0.95f, 1.0f);      // Light sky blue
     static const ImVec4 pfb_highlight_color(1.00f, 0.50f, 0.00f, 1.0f); // Bright orange
 
-    ImPlot::SetNextAxesLimits(m_engine.startFrequency(), m_engine.stopFrequency(),
-                              m_engine.minPower(), m_engine.maxPower(), ImPlotCond_Always);
+    // Single-sided starts the plot at 0 Hz unless a complex-baseband trace keeps its negative half.
+    const double plot_start_Hz = m_engine.plotStartFrequency(all_active);
+    ImPlot::SetNextAxesLimits(plot_start_Hz, m_engine.stopFrequency(), m_engine.minPower(),
+                              m_engine.maxPower(), ImPlotCond_Always);
 
     // Let the plot absorb the remaining window height (ImPlot's own default is
     // a fixed 300 px), reserving room for the readout rows drawn below it and
@@ -972,7 +974,10 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
             bool is_pfb_full = is_pfb && &spec == &node->outputs[1];
 
             std::vector<double> trace = m_engine.renderSpectrum(spec);
-            if (trace.size() != spec.frequencies.size())
+            // Single-sided draws a folded trace on its non-negative bins; the grid follows the
+            // mode.
+            const std::vector<double> display_freqs = m_engine.displayFrequencies(spec);
+            if (trace.size() != display_freqs.size())
                 continue;
 
             std::string label =
@@ -980,7 +985,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
             // Sync ImPlot visibility with our tracking
             ImPlot::HideNextItem(!m_trace_visible[i], ImPlotCond_Always);
-            ImPlot::PlotLine(label.c_str(), spec.frequencies.data(), trace.data(),
+            ImPlot::PlotLine(label.c_str(), display_freqs.data(), trace.data(),
                              static_cast<int>(trace.size()),
                              {ImPlotProp_LineColor, is_pfb ? pfb_full_color : trace_colors[i % 4],
                               ImPlotProp_LineWeight, is_pfb ? 1.0f : 1.5f});
@@ -1001,9 +1006,9 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
 
                 std::vector<double> highlight_freqs;
                 std::vector<double> highlight_data;
-                for (size_t j = 0; j < trace.size() && j < spec.frequencies.size(); ++j) {
-                    if (spec.frequencies[j] >= ch_lo && spec.frequencies[j] <= ch_hi) {
-                        highlight_freqs.push_back(spec.frequencies[j]);
+                for (size_t j = 0; j < trace.size() && j < display_freqs.size(); ++j) {
+                    if (display_freqs[j] >= ch_lo && display_freqs[j] <= ch_hi) {
+                        highlight_freqs.push_back(display_freqs[j]);
                         highlight_data.push_back(trace[j]);
                     }
                 }
@@ -1023,10 +1028,11 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
         // Drag-to-zoom, and Ctrl+click to place the selected marker.
         if (ImPlot::IsPlotHovered() && !marker_tool_active) {
             const bool ctrl = ImGui::GetIO().KeyCtrl;
-            if (ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            // A span whose start is not below its stop has no frequency to place on.
+            if (ctrl && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+                plot_start_Hz < m_engine.stopFrequency()) {
                 ImPlotPoint p = ImPlot::GetPlotMousePos();
-                const double placed =
-                    std::clamp(p.x, m_engine.startFrequency(), m_engine.stopFrequency());
+                const double placed = std::clamp(p.x, plot_start_Hz, m_engine.stopFrequency());
                 const int marker = m_markers.selected();
                 if (!m_markers.enabled(marker))
                     m_markers.setEnabled(marker, true);
@@ -1109,6 +1115,53 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     if (ImGui::Button("Reset Zoom")) {
         m_engine.setStartFrequency(MIN_FREQ);
         m_engine.setStopFrequency(MAX_FREQ);
+    }
+    // Spectrum view: the combo shares the Reset Zoom row, so the panel keeps its height. Single-
+    // sided folds the negative-frequency half of real-domain traces onto +f. View state: not
+    // project data, and a change clears the hold history.
+    ImGui::SameLine();
+    static const char *sides_labels[] = {"Double-sided", "Single-sided"};
+    int sides_idx = m_engine.spectrumSides() == SpectrumSides::SingleSided ? 1 : 0;
+    if (ImGui::Combo("Spectrum##sides", &sides_idx, sides_labels, 2)) {
+        m_engine.setSpectrumSides(sides_idx == 1 ? SpectrumSides::SingleSided
+                                                 : SpectrumSides::DoubleSided);
+        // The readout trace changed with the view. A marker parked on a negative frequency moves
+        // to its folded image, and every cached peak list is dropped so Next Peak adopts the new
+        // trace's peaks rather than cycling the old one.
+        if (m_engine.spectrumSides() == SpectrumSides::SingleSided)
+            m_markers.foldNegativeFrequencies();
+        m_markers.clearPeakCaches();
+    }
+    if (ImGui::IsItemHovered() && ImGui::BeginTooltip()) {
+        ImGui::TextUnformatted(
+            "Double-sided: a real tone shows at +f and -f, each at half power.\n"
+            "Single-sided: negative frequencies fold onto +f, so a real tone\n"
+            "reads its full level at +f. Complex-baseband traces are not folded.");
+        ImGui::EndTooltip();
+    }
+    if (m_engine.spectrumSides() == SpectrumSides::SingleSided) {
+        bool any_complex = false;
+        std::vector<const Spectrum *> active_specs;
+        for (auto *node : m_view_manager.getActiveNodes()) {
+            if (!node)
+                continue;
+            const Spectrum &spec = outputSpectrumFor(node);
+            active_specs.push_back(&spec);
+            if (spec.is_complex_baseband)
+                any_complex = true;
+        }
+        if (m_engine.singleSidedSpanHidesFold(active_specs)) {
+            // Amber, like the other flagged fields: the folded trace is outside the span.
+            ImGui::TextColored(ImVec4(1.00f, 0.65f, 0.20f, 1.0f),
+                               "Single-sided: the span ends at or below 0 Hz, so the folded trace "
+                               "(0 Hz upward) is outside it. Raise Stop above 0 Hz.");
+        } else if (any_complex) {
+            ImGui::TextDisabled(
+                "Single-sided: real traces fold onto +f. Complex-baseband (ADC/PFB) "
+                "traces are shown unchanged.");
+        } else {
+            ImGui::TextDisabled("Single-sided: real traces fold onto +f.");
+        }
     }
 
     drawMarkerControls(*freq_axis, readout_dBm);

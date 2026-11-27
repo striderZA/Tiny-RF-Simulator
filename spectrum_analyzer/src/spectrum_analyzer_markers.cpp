@@ -150,6 +150,14 @@ void MarkerModel::clearPeakCaches() {
         marker.peaks.clear();
 }
 
+void MarkerModel::foldNegativeFrequencies() {
+    for (int index = 0; index < kMaxMarkers; ++index) {
+        const double frequency_Hz = frequency(index);
+        if (frequency_Hz < 0.0)
+            place(index, -frequency_Hz);
+    }
+}
+
 std::string MarkerModel::serialize() const {
     char buffer[512];
     std::snprintf(
