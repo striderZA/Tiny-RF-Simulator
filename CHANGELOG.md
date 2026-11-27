@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- **Splitter S-parameter mode** — a splitter can load a 3-port Touchstone file (`.s3p`) and drive both outputs from the measured response instead of the ideal −3.01 dB split. Tick **S-parameter mode** in the splitter's Inspector and browse to the file: port 1 is the input, ports 2 and 3 are the outputs, each output's tones are scaled and phase-shifted by its S-parameter (`S2,1` and `S3,1`), and each output follows the passive noise rule `|S|²·noise_in + kT(1−|S|²)` per bin, so a flat −3 dB file reproduces the ideal split exactly. A file that fails to load or is not 3-port keeps the splitter on its ideal model, and the inspector reports the failure. The mode and file persist with the project, out-of-band tones and bins are marked in S-parameter mode, and the Component Library can author splitter parts with an S-parameter file.
+
 ## [0.32.0] - 2026-11-26
 
 ### Added

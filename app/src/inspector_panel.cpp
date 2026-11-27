@@ -535,6 +535,34 @@ void InspectorPanel::drawMixerProperties(MixerEngine &engine, int index) {
 void InspectorPanel::drawSplitterProperties(SplitterEngine &engine, int index) {
     (void)index;
     ImGui::TextDisabled("Splitter: 1 input, 2 outputs, -3 dB split loss");
+
+    bool sparam_mode = engine.sparamMode();
+    if (ImGui::Checkbox("S-parameter mode", &sparam_mode)) {
+        engine.setSParamMode(sparam_mode);
+        m_param_edited = true;
+    }
+
+    if (sparam_mode) {
+        ImGui::TextWrapped("File: %s", engine.sparamFilepath().c_str());
+        if (ImGui::Button("Browse##split_sparam")) {
+            auto result = pfd::open_file("Select S-parameter file", "",
+                                         {"S-parameter Files",
+                                          "*.s2p *.s3p *.s4p *.s5p *.s6p *.s7p *.s8p *.s9p"})
+                              .result();
+            if (!result.empty()) {
+                engine.setSParamFilepath(result[0]);
+                LOG_INFO("Splitter S-param file: %s", result[0].c_str());
+                m_param_edited = true;
+            }
+        }
+        if (engine.sparamLoaded() && engine.sparamData().numPorts() == 3) {
+            ImGui::TextDisabled("Points: %zu | Ports: %d", engine.sparamData().freqs().size(),
+                                engine.sparamData().numPorts());
+        } else if (!engine.sparamFilepath().empty()) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                               "Failed to load file (a 3-port .s3p is required)");
+        }
+    }
 }
 
 void InspectorPanel::drawAdcProperties(AdcEngine &engine, int index) {

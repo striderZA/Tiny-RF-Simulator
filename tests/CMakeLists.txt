@@ -98,6 +98,11 @@ add_standalone_test(test_combiner
     LIBS simulator::combiner_engine simulator::node_graph_engine
 )
 
+add_standalone_test(test_splitter
+    SOURCES test_splitter.cpp
+    LIBS simulator::splitter_engine simulator::node_graph_engine
+)
+
 # Issue #238: pins the per-process temp root that tests/test_temp_paths.h installs.
 add_standalone_test(test_issue238_temp_isolation
     SOURCES test_issue238_temp_isolation.cpp

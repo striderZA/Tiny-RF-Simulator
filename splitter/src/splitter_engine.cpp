@@ -1,5 +1,8 @@
 #include "splitter_engine.h"
+#include "common.h"
+#include <cmath>
 #include <nlohmann/json.hpp>
+#include <numbers>
 
 SplitterEngine::SplitterEngine(int id, NodeGraphEngine &graph)
     : ComponentEngineBase(id, graph, "Splitter", 1, 2) {}
@@ -76,9 +79,3 @@ void SplitterEngine::update(double dt) {
     for (auto &out : m_node.outputs)
         out.bumpGeneration();
 }
-
-nlohmann::json SplitterEngine::serialize() const { return nlohmann::json::object(); }
-
-void SplitterEngine::deserialize(const nlohmann::json &) { m_dirty = true; }
-
-std::string SplitterEngine::hoverSummary() const { return "Split: -3 dB | 1 in, 2 out"; }

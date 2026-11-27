@@ -136,7 +136,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 ## Passive Splitter and Combiner Noise
 
-- Splitter outputs pass `gain·noise_in` and add `kT(1−gain)` per bin, the attenuator model at the split gain (0.5, −3.01 dB). A kT input reads NF 3.01 dB.
+- Splitter outputs pass `gain·noise_in` and add `kT(1−gain)` per bin, the attenuator model at the split gain (0.5, −3.01 dB). A kT input reads NF 3.01 dB. S-parameter mode uses per-output `|S2,1|²` / `|S3,1|²` as the gain (row-major 3-port, output row, input column 0); only a loaded 3-port file enables the mode, any other file or a failed load falls back to manual mode. A flat −3 dB 3-port file reproduces manual mode exactly.
 - Combiner noise per bin is `Σ gain_i·noise_i` over connected inputs, plus `kT·max(0, 1 − Σ gain_i)`, plus `gain_i·kT` for each absent input (a 290 K termination). Manual mode uses gain 0.5 per input; S-parameter mode uses `|S21|²` and `|S31|²`. Both modes share this rule in `combinerBinNoise()`; one connected input reduces to the attenuator.
 
 ## Mixer Noise Contract
