@@ -8,7 +8,7 @@
 
 ### Changed
 
-- **Numeric fields and the PFB calculator's readout widen with the font** — the receiver requirement fields and the Spectrum Analyzer **Marker** selector size from the measured text of a sample value, and the Filter Calculator's two-column readout places its second column past the measured first label, so a wider font no longer clips digits or overlaps the columns.
+- **Text-sized widths in the receiver requirement fields, PFB calculator readout, and Spectrum Analyzer marker selector** — the receiver requirement numeric fields, the Filter Calculator's second readout column, and the Spectrum Analyzer **Marker** selector size from the measured text of a sample value instead of fixed pixel offsets.
 
 ## [0.32.0] - 2026-11-26
 
