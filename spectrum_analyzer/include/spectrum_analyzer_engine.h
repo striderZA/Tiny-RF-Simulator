@@ -7,6 +7,7 @@
 #include <vector>
 
 enum class TraceMode { ClearWrite, MaxHold, MinHold, VideoAverage };
+enum class SpectrumSides { DoubleSided, SingleSided };
 
 class SpectrumAnalyzerEngine {
   public:
@@ -52,6 +53,26 @@ class SpectrumAnalyzerEngine {
 
     TraceMode traceMode() const { return m_trace_mode; }
     int videoAvgCount() const { return m_video_avg_count; }
+
+    // Single-sided view (view state). Real-domain traces fold their negative-frequency half onto
+    // the positive half; complex-baseband traces are unchanged. Changing the mode clears the trace
+    // history, as RBW and VBW do, so no hold carries a value from the other mode.
+    void setSpectrumSides(SpectrumSides s) {
+        if (m_sides != s) {
+            m_sides = s;
+            resetTraceHistory();
+        }
+    }
+    SpectrumSides spectrumSides() const { return m_sides; }
+    // Grid a spectrum is drawn and read on: its own grid, or in single-sided mode for a real-domain
+    // spectrum the bins at or above 0 Hz. A real-domain grid with no bin at or above 0 Hz gives an
+    // empty grid and nothing to draw.
+    std::vector<double> displayFrequencies(const Spectrum &spec) const;
+    // Left edge of the plot: 0 Hz in single-sided mode when no spectrum is complex-baseband (the
+    // folded half starts there), otherwise startFrequency(), so complex traces keep their
+    // negatives.
+    double plotStartFrequency(const std::vector<const Spectrum *> &specs) const;
+
     void resetTraceHistory() const;
     void pruneHistory(const std::vector<const Spectrum *> &active_keys) const;
 
@@ -108,12 +129,30 @@ class SpectrumAnalyzerEngine {
     double m_max_power = MAX_POWER;
     double m_vbw = DEFAULT_VBW;
     double m_rbw = DEFAULT_RBW;
+    SpectrumSides m_sides = SpectrumSides::DoubleSided;
 
     // Splits a spectrum into per-bin noise power (W) and per-bin tone impulse
     // power (W) on its own frequency grid. Both are linear in power, so callers
     // may filter or jitter them independently before recombining.
     void binPowerComponents(const Spectrum &spec, std::vector<double> &noise_W,
                             std::vector<double> &tone_W) const;
+    // Per-bin components of one spectrum on the grid it is drawn and read on (displayFrequencies).
+    // Double-sided and complex-baseband spectra use their own grid and binPowerComponents(). In
+    // single-sided mode a real-domain spectrum folds: each tone moves to +|f| with its phase
+    // conjugated for f < 0, at full power, and tones at one |f| add as phasors; each non-negative
+    // bin adds its mirror bin's noise (independent noise, so +3 dB where a mirror exists).
+    struct SpectrumComponents {
+        std::vector<double> freqs;
+        std::vector<double> noise_W;
+        std::vector<double> tone_W;
+    };
+    SpectrumComponents spectrumComponents(const Spectrum &spec) const;
+    // True when this spectrum is folded in the current mode: single-sided, real-domain, and at
+    // least two bins (a single-bin grid has no bin width to fold on).
+    bool foldsSpectrum(const Spectrum &spec) const {
+        return m_sides == SpectrumSides::SingleSided && !spec.is_complex_baseband &&
+               spec.frequencies.size() >= 2;
+    }
     // Jittered noise floor (dBm per bin) from RBW-filtered noise power (W). When apply_jitter
     // is set, the cosmetic jitter scales only this component; a non-positive sigma or a
     // disabled jitter setting leaves it unjittered.
@@ -153,6 +192,7 @@ class SpectrumAnalyzerEngine {
     mutable uint64_t m_cache_spec_gen = 0;
     mutable double m_cache_rbw = 0;
     mutable double m_cache_bin_width = 0;
+    mutable bool m_cache_single_sided = false;
     mutable std::vector<double> m_cache_rbw_noise_W;
     mutable std::vector<double> m_cache_rbw_tone_W;
 
