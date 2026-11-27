@@ -43,7 +43,7 @@ Only the six intercept columns above affect the signal. Gain, NF, S-parameter, a
 
 ## Touchstone S-parameter band
 
-A Touchstone file (`.s2p`) covers a frequency band. Inside the band, S-parameters are interpolated between its points. Outside the band they hold the value of the nearest edge point, which is not a measurement. The inspector shows the file's band. The Amplifier, Attenuator, Equalizer, and Ideal Filter mark each out-of-band tone and sweep bin, and keep those marks through their S-parameter and manual modes. The Splitter's S-parameter mode marks its outputs the same way, but a splitter back in manual mode drops the marks. Other blocks do not copy the marks, so a mark is lost after them. The held value still sets the gain in the signal path, and the Network Analyzer shows such points as NaN.
+A Touchstone file (`.s2p`) covers a frequency band. Inside the band, S-parameters are interpolated between its points. Outside the band they hold the value of the nearest edge point, which is not a measurement. The inspector shows the file's band. The Amplifier, Attenuator, Equalizer, and Ideal Filter mark each out-of-band tone and sweep bin, and keep those marks through their S-parameter and manual modes. The Splitter's S-parameter mode marks its outputs the same way, and back in manual mode its outputs carry the input's marks through instead. Other blocks do not copy the marks, so a mark is lost after them. The held value still sets the gain in the signal path, and the Network Analyzer shows such points as NaN.
 
 ## Errors
 
