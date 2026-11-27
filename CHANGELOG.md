@@ -12,6 +12,8 @@
 
 - **Text-sized widths in the receiver requirement fields, PFB calculator readout, and Spectrum Analyzer marker selector** — the receiver requirement numeric fields, the Filter Calculator's second readout column, and the Spectrum Analyzer **Marker** selector size from the measured text of a sample value instead of fixed pixel offsets.
 
+- **Two-column Spectrum Analyzer configuration** — the fields above the plot (Start and Stop Frequency, VBW, RBW, Trace Mode, Avg Count, Ref, Min level, and the **Measure on** list) sit in two columns once the panel is about 525 px wide at the default font, so the block is about a third shorter and the plot takes the room back. A narrower panel, such as one docked in the utility group, keeps the single column with the same fields in the same order. No control, range, or behaviour changed.
+
 ## [0.32.0] - 2026-11-26
 
 ### Added
