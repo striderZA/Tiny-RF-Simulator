@@ -59,6 +59,8 @@ Folding follows the physics of a real signal:
 - Independent noise adds as power, so a flat real noise floor reads about +3 dB per bin.
 - A tone within one bin of 0 Hz folds into the 0 Hz bin at its full level. Its mirror is the same tone, so it is not counted twice.
 - A real trace on a grid with no bin at or above 0 Hz plots nothing.
+- A span that ends at or below 0 Hz has no folded half inside it. The panel warns in amber, and the plot keeps the span you set rather than drawing an inverted axis. Raise **Stop** above 0 Hz to see the folded trace.
+- A marker parked on a negative frequency moves to its folded image when **Single-sided** is selected: a marker at −100 MHz moves to +100 MHz, the same tone. Switching back to Double-sided does not move it. Every change of the **Spectrum** mode also clears the markers' cached peak lists, so **Next Peak** starts from the new trace.
 
 Complex-baseband traces (ADC and PFB outputs) have no negative-frequency image, so they are drawn unchanged. The panel says so when a probed trace is complex-baseband, and the axis keeps its negative half.
 

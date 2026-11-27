@@ -84,6 +84,8 @@ Link to the owning document instead of restating its rules or commands on anothe
 - Complex-baseband (ADC/PFB) traces are never folded. The axis keeps their negative half, and the plot starts at 0 Hz only when no probed trace is complex-baseband.
 - `SpectrumAnalyzerEngine::spectrumComponents()` is the single per-spectrum path for the display, readout, average noise, and holds. The SNR probe (`computeStrongestToneSNRdB`) stays on stored double-sided data.
 - The view does not change agent `measure_port` output, which reports stored tone power and noise. Its "3.01 dB above the displayed peak" note describes the double-sided display.
+- The plot start stays below the stop. `plotStartFrequency()` returns 0 Hz only while it lies below the stop; a span ending at or below 0 Hz keeps its own start, and `singleSidedSpanHidesFold()` makes the panel warn in amber. Ctrl+click placement is skipped when the span has no placeable range.
+- Switching to Single-sided calls `MarkerModel::foldNegativeFrequencies()`, which moves a marker on a negative frequency to `+|f|`. Every change of the Spectrum view calls `clearPeakCaches()`, so Next Peak adopts the new readout trace.
 
 ## Spectrum Analyzer Measurement Contract
 
