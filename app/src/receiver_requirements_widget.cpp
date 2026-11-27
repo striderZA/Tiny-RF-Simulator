@@ -26,6 +26,10 @@ constexpr float kMinFieldWidth = 80.0f;
 // A flowing row narrows a control to the widest that fits, down to this floor;
 // below it a dock too narrow for one field is pathological.
 constexpr float kMinFlowFrameWidth = 60.0f;
+// Samples a numeric field must fit at its floor width. A wider font widens the field past its floor
+// instead of clipping the value; the default font keeps the floors.
+constexpr const char *kNumericSample = "-00000000.000";
+constexpr const char *kShortNumericSample = "-000.00";
 // Above this content width the view splits into a form pane and a results pane,
 // the same side-by-side-over-a-threshold arrangement the RF Budget view uses for
 // its sweep plots. The results pane keeps this much width so the measured and
@@ -36,6 +40,12 @@ constexpr float kLeftPaneMinWidth = 460.0f;
 
 const char *const kNoModesHint =
     "Type a name in Mode name, then choose Add mode to define the first mode.";
+
+// The frame width of a numeric field: its floor, or the sample's measured width plus the frame
+// padding in the current font, whichever is wider.
+float numericFieldWidth(float floor, const char *sample) {
+    return std::max(floor, ImGui::CalcTextSize(sample).x + 2.0f * ImGui::GetStyle().FramePadding.x);
+}
 
 void setNumber(std::array<char, 128> &buffer, double value) {
     std::snprintf(buffer.data(), buffer.size(), "%.*g", std::numeric_limits<double>::max_digits10,
@@ -606,46 +616,46 @@ void ReceiverRequirementsWidget::drawLimitsForm() {
     // The band leads: every other limit, and each out-of-band point, is
     // measured against it.
     FlowRow band;
-    band.field(kLabels[0], m_buffers[0], kFieldWidth);
-    band.field(kLabels[1], m_buffers[1], kFieldWidth);
+    band.field(kLabels[0], m_buffers[0], numericFieldWidth(kFieldWidth, kNumericSample));
+    band.field(kLabels[1], m_buffers[1], numericFieldWidth(kFieldWidth, kNumericSample));
 
     // Each optional metric is one row: the enable checkbox leads and names it,
     // its fields follow in the same flow.
     FlowRow gain;
     gain.checkbox("Enable gain", &m_gain_enabled);
     ImGui::BeginDisabled(!m_gain_enabled);
-    gain.field(kLabels[2], m_buffers[2], kFieldWidth);
-    gain.field(kLabels[3], m_buffers[3], kFieldWidth);
+    gain.field(kLabels[2], m_buffers[2], numericFieldWidth(kFieldWidth, kNumericSample));
+    gain.field(kLabels[3], m_buffers[3], numericFieldWidth(kFieldWidth, kNumericSample));
     ImGui::EndDisabled();
 
     FlowRow noise_figure;
     noise_figure.checkbox("Enable noise figure", &m_nf_enabled);
     ImGui::BeginDisabled(!m_nf_enabled);
-    noise_figure.field(kLabels[4], m_buffers[4], kFieldWidth);
+    noise_figure.field(kLabels[4], m_buffers[4], numericFieldWidth(kFieldWidth, kNumericSample));
     ImGui::EndDisabled();
 
     FlowRow output_power;
     output_power.checkbox("Enable output power", &m_output_power_enabled);
     ImGui::BeginDisabled(!m_output_power_enabled);
-    output_power.field(kLabels[5], m_buffers[5], kFieldWidth);
-    output_power.field(kLabels[6], m_buffers[6], kFieldWidth);
+    output_power.field(kLabels[5], m_buffers[5], numericFieldWidth(kFieldWidth, kNumericSample));
+    output_power.field(kLabels[6], m_buffers[6], numericFieldWidth(kFieldWidth, kNumericSample));
     ImGui::EndDisabled();
     // The input level is a measurement condition, but it only gates output
     // power, so it joins the limit it feeds and remains editable when the
     // limit is off.
-    output_power.field(kLabels[12], m_buffers[12], kFieldWidth);
+    output_power.field(kLabels[12], m_buffers[12], numericFieldWidth(kFieldWidth, kNumericSample));
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Output power is measured at this input level.");
 
     FlowRow iip3;
     iip3.checkbox("Enable IIP3", &m_iip3_enabled);
     ImGui::BeginDisabled(!m_iip3_enabled);
-    iip3.field(kLabels[7], m_buffers[7], kFieldWidth);
+    iip3.field(kLabels[7], m_buffers[7], numericFieldWidth(kFieldWidth, kNumericSample));
     iip3.note("Two-tone test");
-    iip3.field(kLabels[8], m_buffers[8], kFieldWidth);
-    iip3.field(kLabels[9], m_buffers[9], kFieldWidth);
-    iip3.field(kLabels[10], m_buffers[10], kFieldWidth);
-    iip3.field(kLabels[11], m_buffers[11], kFieldWidth);
+    iip3.field(kLabels[8], m_buffers[8], numericFieldWidth(kFieldWidth, kNumericSample));
+    iip3.field(kLabels[9], m_buffers[9], numericFieldWidth(kFieldWidth, kNumericSample));
+    iip3.field(kLabels[10], m_buffers[10], numericFieldWidth(kFieldWidth, kNumericSample));
+    iip3.field(kLabels[11], m_buffers[11], numericFieldWidth(kFieldWidth, kNumericSample));
     ImGui::EndDisabled();
 
     FlowRow snr;
@@ -653,8 +663,8 @@ void ReceiverRequirementsWidget::drawLimitsForm() {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("SNR uses the input level set beside Output power.");
     ImGui::BeginDisabled(!m_snr_enabled);
-    snr.field(kLabels[13], m_buffers[13], kFieldWidth);
-    snr.field(kLabels[14], m_buffers[14], kFieldWidth);
+    snr.field(kLabels[13], m_buffers[13], numericFieldWidth(kFieldWidth, kNumericSample));
+    snr.field(kLabels[14], m_buffers[14], numericFieldWidth(kFieldWidth, kNumericSample));
     ImGui::EndDisabled();
 }
 
@@ -680,8 +690,8 @@ void ReceiverRequirementsWidget::drawOobPoints() {
         FlowRow line;
         const char *anchors[] = {"Band start", "Band stop"};
         line.combo("Anchor", &oob.anchor, anchors, 2, kAnchorComboWidth);
-        line.field("Offset (Hz)", oob.offset, kFieldWidth);
-        line.field("Min (dB)", oob.min, kMinFieldWidth);
+        line.field("Offset (Hz)", oob.offset, numericFieldWidth(kFieldWidth, kNumericSample));
+        line.field("Min (dB)", oob.min, numericFieldWidth(kMinFieldWidth, kShortNumericSample));
         line.note(oobRowFrequencyText(m_buffers[0], m_buffers[1], oob.anchor, oob.offset).c_str());
         if (line.dangerEnd("Remove point")) {
             m_oob_rows.erase(m_oob_rows.begin() + static_cast<std::ptrdiff_t>(row));

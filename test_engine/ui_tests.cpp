@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX // windows.h must not shadow std::min/std::max, used throughout this file
+#endif
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "agent_endpoint.h"
 #include "agent_panel_widget.h"
@@ -15,8 +19,10 @@
 #include "signal_generator_engine.h"
 #include "test_helpers.h"
 #include "tutorial_steps.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -24,7 +30,12 @@
 #include <imnodes.h>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
+#ifdef _WIN32
+#include <psapi.h>
+#include <windows.h>
+#endif
 #undef Yield
 namespace {
 bool agentPanelVisible() {
@@ -141,6 +152,28 @@ struct AgentPanelUiCleanup {
     }
 };
 } // namespace
+
+// Process private bytes, resolved at run time so the test needs no psapi link dependency.
+static size_t processPrivateKB() {
+#ifdef _WIN32
+    using GetProcessMemoryInfoFn = BOOL(WINAPI *)(HANDLE, PROCESS_MEMORY_COUNTERS_EX *, DWORD);
+    static GetProcessMemoryInfoFn get_info = [] {
+        HMODULE kernel = GetModuleHandleW(L"kernel32.dll");
+        return kernel ? reinterpret_cast<GetProcessMemoryInfoFn>(reinterpret_cast<void *>(
+                            GetProcAddress(kernel, "K32GetProcessMemoryInfo")))
+                      : nullptr;
+    }();
+    if (!get_info)
+        return 0;
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = sizeof(counters);
+    if (!get_info(GetCurrentProcess(), &counters, sizeof(counters)))
+        return 0;
+    return static_cast<size_t>(counters.PrivateUsage / 1024);
+#else
+    return 0;
+#endif
+}
 
 static RfSimulatorApp *s_app = nullptr;
 
@@ -713,6 +746,177 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         IM_CHECK(s_app->testRemoveComponent(node));
         ctx->Yield(2);
+    };
+
+    // Settings > UI Font... opens the monospaced font picker. A family applies to the whole UI at
+    // once and is saved (Windows app.ini); Default restores the built-in font. The case starts from
+    // Default and writes the app.ini UiFont value it found back at the end.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_font_picker");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const std::string saved_before = s_app->m_state.load("Settings", "UiFont", "");
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/UI Font...");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_settings);
+
+        ctx->SetRef("Settings");
+        ctx->Yield(2);
+        IM_CHECK(ctx->ItemExists("**/Default (built-in)"));
+        ctx->ItemClick("**/Default (built-in)");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.savedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.note().empty());
+
+        const std::vector<std::string> &installed = s_app->m_ui_font.installed();
+        if (!installed.empty()) {
+            // The first listed family is a monospaced face the system can load.
+            const std::string family = installed.front();
+            IM_CHECK(ctx->ItemExists(("**/" + family).c_str()));
+            ctx->ItemClick(("**/" + family).c_str());
+            ctx->Yield(3);
+            IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
+            IM_CHECK_EQ(s_app->m_ui_font.savedFamily(), family);
+            IM_CHECK(s_app->m_ui_font.note().empty());
+            IM_CHECK_EQ(std::string(ImGui::GetIO().FontDefault->GetDebugName()),
+                        family.substr(0, 39));
+#ifdef _WIN32
+            IM_CHECK_EQ(s_app->m_state.load("Settings", "UiFont", ""), family);
+#endif
+
+            ctx->ItemClick("**/Default (built-in)");
+            ctx->Yield(3);
+            IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+            IM_CHECK(s_app->m_ui_font.savedFamily().empty());
+            IM_CHECK(std::string(ImGui::GetIO().FontDefault->GetDebugName()) !=
+                     family.substr(0, 39));
+        }
+
+        // Put back the app.ini value the case found, so a developer's saved font survives a run.
+        s_app->m_state.save("Settings", "UiFont", saved_before.c_str());
+        s_app->m_show_settings = false;
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
+
+    // A UI font change releases the previous font and its atlas texture: every pick leaves the
+    // atlas holding one font and one input source, the previous font is gone from the atlas, and
+    // the live texture bytes stay bounded across repeated picks. Logs the measured numbers.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_font_atlas_reuse");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const std::vector<std::string> &installed = s_app->m_ui_font.installed();
+        if (installed.size() < 2) {
+            std::printf("[font-atlas] fewer than two monospaced families installed; skipped\n");
+            return;
+        }
+        struct AtlasSample {
+            int fonts = 0;
+            int sources = 0;
+            int textures = 0;
+            int live_textures = 0;
+            long long live_bytes = 0;
+        };
+        const auto sample = []() {
+            ImFontAtlas *atlas = ImGui::GetIO().Fonts;
+            AtlasSample s;
+            s.fonts = atlas->Fonts.Size;
+            s.sources = atlas->Sources.Size;
+            s.textures = atlas->TexList.Size;
+            for (ImTextureData *tex : atlas->TexList) {
+                if (tex->Status == ImTextureStatus_Destroyed)
+                    continue;
+                ++s.live_textures;
+                s.live_bytes += tex->GetSizeInBytes();
+            }
+            return s;
+        };
+        const auto inAtlas = [](const ImFont *font) {
+            for (ImFont *candidate : ImGui::GetIO().Fonts->Fonts)
+                if (candidate == font)
+                    return true;
+            return false;
+        };
+        const auto textureListed = [](const ImTextureData *tex) {
+            for (ImTextureData *candidate : ImGui::GetIO().Fonts->TexList)
+                if (candidate == tex)
+                    return true;
+            return false;
+        };
+        // The backend destroys the previous texture once it is unused; wait for that, bounded.
+        const auto waitTextureReleased = [&ctx, &textureListed](const ImTextureData *tex) {
+            for (int frame = 0; frame < 40 && textureListed(tex); ++frame)
+                ctx->Yield(1);
+            return !textureListed(tex);
+        };
+
+        struct PickResult {
+            AtlasSample state;
+            bool previous_font_gone = false;
+            bool texture_released = false;
+            bool texture_reused = false; // the atlas rebuilt in place: nothing to release
+        };
+        int pick_index = 0;
+        // No IM_CHECK in here: the macro returns from the enclosing function, and this lambda
+        // returns a value. The test body checks each result.
+        const auto pick = [&](const std::string &family, const char *label) {
+            ImFont *previous_font = ImGui::GetIO().FontDefault;
+            ImTextureData *previous_texture = ImGui::GetIO().Fonts->TexData;
+            s_app->m_ui_font.select(family);
+            ctx->Yield(4);
+            PickResult result;
+            result.state = sample();
+            result.previous_font_gone =
+                !inAtlas(previous_font) || previous_font == ImGui::GetIO().FontDefault;
+            result.texture_reused = previous_texture == ImGui::GetIO().Fonts->TexData;
+            result.texture_released =
+                result.texture_reused || waitTextureReleased(previous_texture);
+            std::printf("[font-atlas] pick %2d %-20s fonts=%d sources=%d textures=%d live=%d "
+                        "live_bytes=%lld reused=%d private_kb=%zu\n",
+                        ++pick_index, label, result.state.fonts, result.state.sources,
+                        result.state.textures, result.state.live_textures, result.state.live_bytes,
+                        result.texture_reused ? 1 : 0, processPrivateKB());
+            return result;
+        };
+
+        // The first pick is the TTF baseline; eleven more alternate families and Default.
+        std::vector<std::pair<std::string, std::string>> picks;
+        picks.emplace_back(installed.front(), installed.front());
+        for (int i = 1; i <= 11; ++i) {
+            const bool use_default = (i % 3 == 0);
+            if (use_default)
+                picks.emplace_back(std::string(), "Default");
+            else
+                picks.emplace_back(installed[static_cast<std::size_t>(i) % installed.size()],
+                                   std::string());
+        }
+
+        long long baseline_bytes = 0;
+        long long max_live_bytes = 0;
+        for (std::size_t index = 0; index < picks.size(); ++index) {
+            const std::string &family = picks[index].first;
+            const std::string &label = picks[index].second.empty() ? family : picks[index].second;
+            const PickResult result = pick(family, label.c_str());
+            IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
+            IM_CHECK_EQ(result.state.fonts, 1);
+            IM_CHECK_EQ(result.state.sources, 1);
+            IM_CHECK(result.state.live_textures <= 3);
+            IM_CHECK(result.previous_font_gone);
+            IM_CHECK(result.texture_released);
+            // The atlas reuses one texture object and grows nothing across picks; when it does
+            // rebuild a new one, the previous entry must have left the list (checked above).
+            IM_CHECK_EQ(result.state.textures, 1);
+            if (index == 0)
+                baseline_bytes = result.state.live_bytes;
+            max_live_bytes = std::max(max_live_bytes, result.state.live_bytes);
+        }
+        // One font of this size: the live bytes stay near the first pick's and never grow per pick.
+        const long long cap = 2 * baseline_bytes + 64 * 1024;
+        std::printf("[font-atlas] baseline=%lld max=%lld cap=%lld\n", baseline_bytes,
+                    max_live_bytes, cap);
+        IM_CHECK(max_live_bytes <= cap);
+
+        s_app->m_ui_font.select("");
+        ctx->Yield(4);
     };
 
     // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the

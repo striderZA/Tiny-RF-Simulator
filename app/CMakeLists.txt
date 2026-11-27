@@ -66,6 +66,39 @@ target_link_libraries(editor_services
 set_target_properties(editor_services PROPERTIES FOLDER "Library")
 
 # --------------------------------------------------
+# UI-free font picker rules and platform font enumeration (no ImGui)
+# --------------------------------------------------
+if(WIN32)
+    set(RFSIM_UI_FONT_SYSTEM_SOURCE src/ui_font_system_windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    find_path(RFSIM_FONTCONFIG_INCLUDE_DIR fontconfig/fontconfig.h)
+    find_library(RFSIM_FONTCONFIG_LIBRARY fontconfig)
+    if(RFSIM_FONTCONFIG_INCLUDE_DIR AND RFSIM_FONTCONFIG_LIBRARY)
+        set(RFSIM_UI_FONT_SYSTEM_SOURCE src/ui_font_system_fontconfig.cpp)
+    else()
+        message(WARNING "fontconfig headers or library not found: the Settings font list will offer only Default")
+        set(RFSIM_UI_FONT_SYSTEM_SOURCE src/ui_font_system_none.cpp)
+    endif()
+else()
+    set(RFSIM_UI_FONT_SYSTEM_SOURCE src/ui_font_system_none.cpp)
+endif()
+add_library(ui_font_model STATIC
+    src/ui_font_model.cpp
+    ${RFSIM_UI_FONT_SYSTEM_SOURCE}
+)
+add_library(simulator::ui_font_model ALIAS ui_font_model)
+target_include_directories(ui_font_model PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+if(WIN32)
+    target_link_libraries(ui_font_model PUBLIC gdi32)
+elseif(RFSIM_UI_FONT_SYSTEM_SOURCE STREQUAL "src/ui_font_system_fontconfig.cpp")
+    target_include_directories(ui_font_model PRIVATE ${RFSIM_FONTCONFIG_INCLUDE_DIR})
+    target_link_libraries(ui_font_model PRIVATE ${RFSIM_FONTCONFIG_LIBRARY})
+endif()
+set_target_properties(ui_font_model PROPERTIES FOLDER "Library")
+
+# --------------------------------------------------
 # App library
 # --------------------------------------------------
 add_library(app STATIC
@@ -87,6 +120,8 @@ add_library(app STATIC
     src/test_flow_widget.cpp
     src/receiver_requirements_widget.cpp
     src/rf_budget_widget.cpp
+    src/ui_font_controller.cpp
+    src/settings_panel_widget.cpp
 )
 add_library(simulator::app ALIAS app)
 
@@ -120,6 +155,7 @@ target_link_libraries(app
         simulator::node_graph_widget
         simulator::help_widget
         simulator::layout
+        simulator::ui_font_model
         simulator::tutorial
         simulator::test_flow
         common

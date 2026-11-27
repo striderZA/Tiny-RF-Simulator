@@ -33,6 +33,10 @@ This documentation is for people who run the simulator. It covers the Windows an
 - [Test Flows](test-flows.md) — author parameter sweeps, capture measurements, and export results as JSON.
 - [Agent (MCP)](agent-mcp.md) — connect an MCP client and let it read, edit, measure, and automate the open project.
 
+## Settings
+
+- [Settings](settings.md) — pick the interface font from the monospaced fonts installed on your system. The choice applies at once and is saved.
+
 ## Project status
 
 With a saved project open, the menu bar shows its filename and the project's current Git commit and working-tree counts. Hover over the Git summary to see the branch and full counts for staged, unstaged, untracked, and conflicted paths. For an untitled project, status is read from the simulator's current working directory. If Git or a repository is unavailable, the header shows `Git unavailable`.

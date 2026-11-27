@@ -856,3 +856,19 @@ add_dependencies(test_git_status test_git_status_hanging_git)
 target_compile_definitions(test_git_status PRIVATE
     GIT_STATUS_HANG_HELPER="$<TARGET_FILE:test_git_status_hanging_git>"
 )
+
+# The Settings font picker's UI-free rules: monospaced-only, one entry per family, sorted, the
+# saved choice falling back to Default when it is not installed, and the platform enumeration.
+add_standalone_test(test_ui_font_model
+    SOURCES test_ui_font_model.cpp
+    LIBS simulator::ui_font_model
+)
+
+# The startup restore of a saved UI font: its own ImGui context, no backend, so the first-frame
+# size path is covered (the UI test harness starts on Default).
+if(WIN32)
+    add_standalone_test(test_ui_font_startup
+        SOURCES test_ui_font_startup.cpp
+        LIBS simulator::app simulator::ui_font_model
+    )
+endif()
