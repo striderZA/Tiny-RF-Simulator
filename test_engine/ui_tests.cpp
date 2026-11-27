@@ -154,7 +154,7 @@ struct AgentPanelUiCleanup {
 } // namespace
 
 // Process private bytes, resolved at run time so the test needs no psapi link dependency.
-size_t processPrivateKB() {
+static size_t processPrivateKB() {
 #ifdef _WIN32
     using GetProcessMemoryInfoFn = BOOL(WINAPI *)(HANDLE, PROCESS_MEMORY_COUNTERS_EX *, DWORD);
     static GetProcessMemoryInfoFn get_info = [] {
@@ -853,6 +853,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             AtlasSample state;
             bool previous_font_gone = false;
             bool texture_released = false;
+            bool texture_reused = false; // the atlas rebuilt in place: nothing to release
         };
         int pick_index = 0;
         // No IM_CHECK in here: the macro returns from the enclosing function, and this lambda
@@ -866,13 +867,14 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             result.state = sample();
             result.previous_font_gone =
                 !inAtlas(previous_font) || previous_font == ImGui::GetIO().FontDefault;
-            result.texture_released = previous_texture == ImGui::GetIO().Fonts->TexData ||
-                                      waitTextureReleased(previous_texture);
+            result.texture_reused = previous_texture == ImGui::GetIO().Fonts->TexData;
+            result.texture_released =
+                result.texture_reused || waitTextureReleased(previous_texture);
             std::printf("[font-atlas] pick %2d %-20s fonts=%d sources=%d textures=%d live=%d "
-                        "live_bytes=%lld private_kb=%zu\n",
+                        "live_bytes=%lld reused=%d private_kb=%zu\n",
                         ++pick_index, label, result.state.fonts, result.state.sources,
                         result.state.textures, result.state.live_textures, result.state.live_bytes,
-                        processPrivateKB());
+                        result.texture_reused ? 1 : 0, processPrivateKB());
             return result;
         };
 
@@ -900,6 +902,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK(result.state.live_textures <= 3);
             IM_CHECK(result.previous_font_gone);
             IM_CHECK(result.texture_released);
+            // The atlas reuses one texture object and grows nothing across picks; when it does
+            // rebuild a new one, the previous entry must have left the list (checked above).
+            IM_CHECK_EQ(result.state.textures, 1);
             if (index == 0)
                 baseline_bytes = result.state.live_bytes;
             max_live_bytes = std::max(max_live_bytes, result.state.live_bytes);
