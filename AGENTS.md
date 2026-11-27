@@ -77,6 +77,14 @@ Link to the owning document instead of restating its rules or commands on anothe
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.
 
+## Spectrum Analyzer Single-Sided Contract
+
+- **Spectrum** (Double-sided | Single-sided) is view state: not project data, not dirty, not undo. Changing it clears Max Hold, Min Hold, and Video Average history, as RBW and VBW do.
+- Single-sided folds a real-domain trace. Each tone moves to `+|f|` at full power, its phase negated for `f < 0`, and tones on one `|f|` add as phasors (`coherentToneWatts`). Each non-negative bin adds its mirror bin's noise, so a flat real floor reads +3.01 dB. 0 Hz is not doubled.
+- Complex-baseband (ADC/PFB) traces are never folded. The axis keeps their negative half, and the plot starts at 0 Hz only when no probed trace is complex-baseband.
+- `SpectrumAnalyzerEngine::spectrumComponents()` is the single per-spectrum path for the display, readout, average noise, and holds. The SNR probe (`computeStrongestToneSNRdB`) stays on stored double-sided data.
+- The view does not change agent `measure_port` output, which reports stored tone power and noise. Its "3.01 dB above the displayed peak" note describes the double-sided display.
+
 ## Spectrum Analyzer Measurement Contract
 
 - **Measure on** is view state, not project data: it does not enter `ProjectSerializer`, does not mark the project dirty, and is not undo.
