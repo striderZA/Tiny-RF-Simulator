@@ -715,6 +715,54 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // Settings > UI Font... opens the monospaced font picker. A family applies to the whole UI at
+    // once and is saved (Windows app.ini); Default restores the built-in font. The case starts and
+    // ends on Default, so the saved choice is left as it was found.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_font_picker");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/UI Font...");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_settings);
+
+        ctx->SetRef("Settings");
+        ctx->Yield(2);
+        IM_CHECK(ctx->ItemExists("**/Default (built-in)"));
+        ctx->ItemClick("**/Default (built-in)");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.savedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.note().empty());
+
+        const std::vector<std::string> &installed = s_app->m_ui_font.installed();
+        if (!installed.empty()) {
+            // The first listed family is a monospaced face the system can load.
+            const std::string family = installed.front();
+            IM_CHECK(ctx->ItemExists(("**/" + family).c_str()));
+            ctx->ItemClick(("**/" + family).c_str());
+            ctx->Yield(3);
+            IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
+            IM_CHECK_EQ(s_app->m_ui_font.savedFamily(), family);
+            IM_CHECK(s_app->m_ui_font.note().empty());
+            IM_CHECK_EQ(std::string(ImGui::GetIO().FontDefault->GetDebugName()),
+                        family.substr(0, 39));
+#ifdef _WIN32
+            IM_CHECK_EQ(s_app->m_state.load("Settings", "UiFont", ""), family);
+#endif
+
+            ctx->ItemClick("**/Default (built-in)");
+            ctx->Yield(3);
+            IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+            IM_CHECK(s_app->m_ui_font.savedFamily().empty());
+            IM_CHECK(std::string(ImGui::GetIO().FontDefault->GetDebugName()) !=
+                     family.substr(0, 39));
+        }
+
+        s_app->m_show_settings = false;
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
+
     // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the
     // field, not the canvas, and the field edit becomes one undo record when it is committed.
     t = IM_REGISTER_TEST(e, "rf_simulator", "ctrl_z_while_editing_field_is_ignored");
