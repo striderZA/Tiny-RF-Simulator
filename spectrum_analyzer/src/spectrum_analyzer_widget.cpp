@@ -211,7 +211,11 @@ void SpectrumAnalyzerWidget::drawMarkerControls(const std::vector<double> &freq_
         return;
 
     int selected = m_markers.selected();
-    ImGui::SetNextItemWidth(70.0f);
+    // The marker names are two glyphs; the field is their measured width plus the arrow, with 70 px
+    // as the floor the default font was laid out with.
+    const float marker_text = ImGui::CalcTextSize("M4").x;
+    ImGui::SetNextItemWidth(std::max(70.0f, marker_text + ImGui::GetFrameHeight() +
+                                                2.0f * ImGui::GetStyle().FramePadding.x));
     if (ImGui::Combo("Marker", &selected, kMarkerNames, MarkerModel::kMaxMarkers))
         m_markers.select(selected);
 

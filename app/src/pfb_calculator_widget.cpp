@@ -6,6 +6,7 @@
 #include "pfb_filter_design.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -209,8 +210,14 @@ void PfbCalculatorWidget::draw(const char *title, bool *p_open) {
                        "Far-band rejection (x in 1.0..1.5): %.1f dB (target %.0f dB)",
                        -m_cached_metrics.far_floor_db, m_target_db);
 
-    ImGui::Text("-3 dB half-width:  %.3f channel", m_cached_metrics.passband_halfwidth_ch);
-    ImGui::SameLine(250.0f);
+    char half_width[96];
+    std::snprintf(half_width, sizeof(half_width), "-3 dB half-width:  %.3f channel",
+                  m_cached_metrics.passband_halfwidth_ch);
+    ImGui::TextUnformatted(half_width);
+    // The second column starts past the measured label, never at a fixed offset that a wider
+    // font would overlap. 250 px is the floor the default font was laid out with.
+    ImGui::SameLine(
+        std::max(250.0f, ImGui::CalcTextSize(half_width).x + ImGui::GetStyle().ItemSpacing.x));
     ImGui::Text("Band-edge loss: %.1f dB", m_cached_metrics.edge_loss_db);
 
     ImGui::Text("Taps N = M*K: %d", m_cached_metrics.total_taps);
