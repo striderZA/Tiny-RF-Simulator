@@ -153,7 +153,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
     // supports_sparam_file must be true exactly for the engines that
     // implement the Touchstone S-param API (verified against
     // AmplifierEngine, IdealFilterEngine, EqualizerEngine, AttenuatorEngine,
-    // CombinerEngine).
+    // CombinerEngine, SplitterEngine).
     const std::map<std::string_view, bool> expected_sparam = {
         {"amplifier", true},
         {"attenuator", true},
@@ -165,7 +165,7 @@ TEST_CASE("Registry rows, inspector drawers, and NodeKinds stay consistent", "[d
         {"generator", false},
         {"mixer", false},
         {"pfb", false},
-        {"splitter", false},
+        {"splitter", true},
         {"rf_switch_spdt", false},
         {"rf_switch_spdt_2to1", false},
         {"digital_step_attenuator", false},

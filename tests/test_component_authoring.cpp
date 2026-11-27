@@ -24,6 +24,7 @@
 #include "graph_editor_actions.h"
 #include "ideal_filter_engine.h"
 #include "node_graph_engine.h"
+#include "splitter_engine.h"
 #include "test_temp_paths.h"
 #include <algorithm>
 #include <filesystem>
@@ -378,6 +379,7 @@ TEST_CASE("ComponentLibrary applies S-param data files to every supported engine
         {"amplifier", {{"gain_dB", 20.0}}, "test.s2p"},
         {"attenuator", {{"attenuation_dB", 6.0}}, "test.s2p"},
         {"combiner", {{"manual_mode", false}}, "test.s3p"},
+        {"splitter", nlohmann::json::object(), "test.s3p"},
         {"equalizer", nlohmann::json::object(), "test.s2p"},
         {"filter", {{"filter_type", "LPF"}, {"fc_low_Hz", 1.0e9}}, "test.s2p"},
     };
@@ -447,6 +449,7 @@ TEST_CASE("ComponentLibrary rejects Touchstone files incompatible with transfer 
         {"equalizer", nlohmann::json::object(), "one_port.s1p"},
         {"filter", {{"filter_type", "LPF"}, {"fc_low_Hz", 1.0e9}}, "one_port.s1p"},
         {"combiner", {{"manual_mode", false}}, "two_port.s2p"},
+        {"splitter", nlohmann::json::object(), "two_port.s2p"},
         {"amplifier", {{"gain_dB", 20.0}}, "y_parameters.s2p"},
     };
 
@@ -486,6 +489,10 @@ TEST_CASE("ComponentLibrary rejects Touchstone files incompatible with transfer 
                 typed_engine->setSParamMode(true);
             } else if (std::string(test_case.type) == "combiner") {
                 auto *typed_engine = dynamic_cast<CombinerEngine *>(engine);
+                REQUIRE(typed_engine != nullptr);
+                typed_engine->setSParamMode(true);
+            } else if (std::string(test_case.type) == "splitter") {
+                auto *typed_engine = dynamic_cast<SplitterEngine *>(engine);
                 REQUIRE(typed_engine != nullptr);
                 typed_engine->setSParamMode(true);
             }
