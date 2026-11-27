@@ -6,6 +6,7 @@
 #include "ui_font_model.h"
 
 #include <cstdio>
+#include <cstring>
 #include <utility>
 
 namespace {
@@ -100,7 +101,6 @@ UiFontController::InstallResult UiFontController::installFamily(const std::strin
     // Between frames only (see the class comment). ClearFonts() frees the previous font's input
     // and its atlas glyphs; the backend releases the old texture after its last use.
     io.Fonts->ClearFonts();
-    m_font_bytes = std::move(bytes);
 
     if (family.empty()) {
         io.FontDefault = io.Fonts->AddFontDefault();
@@ -108,18 +108,19 @@ UiFontController::InstallResult UiFontController::installFamily(const std::strin
         return InstallResult::Installed;
     }
 
+    // The atlas owns a copy, allocated with ImGui's allocator, so ClearFonts() frees it with the
+    // font. A non-owned buffer must outlive the font until RemoveFont() or shutdown
+    // (docs/FONTS.md), and ClearFonts() on the next pick would have freed it too early.
+    void *data = ImGui::MemAlloc(bytes.size());
+    std::memcpy(data, bytes.data(), bytes.size());
     // The size is the style's base size, the same value the built-in font uses, so any future
     // scaling of FontSizeBase or the font scale applies to this font too.
-    ImFontConfig config;
-    config.FontDataOwnedByAtlas = false; // m_font_bytes outlives the atlas font
+    ImFontConfig config; // FontDataOwnedByAtlas stays true
     // The debug name lets a test confirm which family the UI is drawn with.
     std::snprintf(config.Name, sizeof(config.Name), "%s", family.c_str());
-    ImFont *font =
-        io.Fonts->AddFontFromMemoryTTF(m_font_bytes.data(), static_cast<int>(m_font_bytes.size()),
-                                       ImGui::GetStyle().FontSizeBase, &config);
+    ImFont *font = io.Fonts->AddFontFromMemoryTTF(data, static_cast<int>(bytes.size()),
+                                                  ImGui::GetStyle().FontSizeBase, &config);
     if (font == nullptr) {
-        m_font_bytes.clear();
-        m_font_bytes.shrink_to_fit();
         io.FontDefault = io.Fonts->AddFontDefault();
         m_applied.clear();
         return InstallResult::FellBackToDefault;

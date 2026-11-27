@@ -54,8 +54,5 @@ class UiFontController {
     bool m_user_request = false;
     bool m_enumerated = false;
     std::vector<std::string> m_installed;
-    // The bytes the atlas reads from. They outlive the atlas font: replaced only after
-    // ClearFonts().
-    std::vector<unsigned char> m_font_bytes;
     std::string m_note;
 };
