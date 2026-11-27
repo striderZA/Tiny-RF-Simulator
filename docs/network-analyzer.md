@@ -37,7 +37,7 @@ Points with no data are absent from the traces and skipped by the averages. The 
 - there is no forward path from A to B, or the topology is unsupported — for example a combiner inside the measured chain, a cycle, or a second live source feeding the chain;
 - an input pin carries two links;
 - no tone arrives at B at that frequency, or it is more than 100 dB below the stimulus;
-- the point is outside a Touchstone file's frequency band. The Amplifier, Attenuator, Equalizer, and Ideal Filter hold the edge value outside the band — that held value still sets the live signal — but the analyzer reads such points as no data. The inspector shows each file's band.
+- the point is outside a Touchstone file's frequency band. The Amplifier, Attenuator, Equalizer, and Ideal Filter hold the edge value outside the band — that held value still sets the live signal — and the Splitter's S-parameter mode marks its outputs the same way — but the analyzer reads such points as no data. The inspector shows each file's band.
 
 The panel has no markers, hold, or single-shot controls; it recomputes live while it is visible.
 

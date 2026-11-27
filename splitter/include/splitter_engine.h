@@ -1,5 +1,6 @@
 #pragma once
 
+#include "s_parameter_data.h"
 #include <string>
 
 #include "component_engine_base.h"
@@ -18,6 +19,17 @@ class SplitterEngine : public ComponentEngineBase {
     nlohmann::json serialize() const override;
     void deserialize(const nlohmann::json &) override;
 
+    void setSParamMode(bool enabled);
+    bool sparamMode() const { return m_sparam_mode; }
+    void setSParamFilepath(const std::string &path);
+    bool sparamLoaded() const { return m_sparam_data.loaded(); }
+    const std::string &sparamFilepath() const { return m_sparam_filepath; }
+    const SParameterData &sparamData() const { return m_sparam_data; }
+
   private:
+    bool m_sparam_mode = false;
+    std::string m_sparam_filepath;
+    SParameterData m_sparam_data;
+
     static constexpr double SPLIT_LOSS_DB = 3.010299956639812;
 };

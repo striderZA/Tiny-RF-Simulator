@@ -11,5 +11,7 @@ target_include_directories(splitter_engine
     PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(splitter_engine PUBLIC common simulator::node_graph_engine)
+target_link_libraries(splitter_engine
+    PUBLIC common simulator::node_graph_engine simulator::touchstone_parser
+           simulator::logging_core)
 add_library(simulator::splitter_engine ALIAS splitter_engine)

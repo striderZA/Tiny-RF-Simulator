@@ -240,7 +240,14 @@ ComponentTypeRegistry::ComponentTypeRegistry() {
     spl.label_prefix = "Splitter";
     spl.kind = NodeKind::Splitter;
     spl.authorable = true;
-    spl.state_fields = {};
+    spl.supports_sparam_file = true;
+    spl.load_sparam_file = &loadSparamFile<SplitterEngine>;
+    spl.state_fields = {
+        stateField("sparam_mode", "S-Parameter Mode", "", FieldKind::Bool,
+                   "Uses the loaded S-parameter model instead of the ideal split."),
+        stateField("sparam_filepath", "S-Parameter File", "", FieldKind::FilePath,
+                   "Identifies the Touchstone file loaded by the component.", {}, true),
+    };
     spl.create = [](ComponentRegistry &registry, NodeGraphEngine &graph, int id) {
         return static_cast<IComponentEngine *>(&registry.add<SplitterEngine>(id, graph));
     };

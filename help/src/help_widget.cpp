@@ -65,7 +65,7 @@ const HelpSection sections[] = {
      {
          "The Inspector (Properties) panel shows details for the selected node",
          "Parameters include gain, frequency, attenuation, filter type, etc.",
-         "Some components support Touchstone (.s2p/.s4p) data file loading",
+         "Some components support Touchstone (.s2p to .s9p) data file loading",
          "The panel updates in real time as you change values",
      },
      4},
