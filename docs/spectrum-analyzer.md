@@ -33,13 +33,13 @@ Four fields frame the plot:
 
 | Control | Meaning |
 | --- | --- |
-| **Start Frequency (MHz)** / **Stop Frequency (MHz)** | X-axis span, within −20 GHz to +20 GHz |
+| **Start (MHz)** / **Stop (MHz)** | X-axis span, within −20 GHz to +20 GHz |
 | **Ref (dBm)** | Top of the Y axis |
 | **Min level (dBm)** | Bottom of the Y axis, within −174 to +10 dBm |
 
 **Drag** with the left mouse across the plot to select a frequency band; on release the span fields snap to it. **Reset Zoom** restores the full default span, −20 to +20 GHz.
 
-The configuration fields above the plot sit in two columns when the panel is at least about 525 px wide at the default font. The left column holds the span and bandwidth fields and the right column the trace and level fields, and the **Measure on** list ends the right column. A narrower panel, such as one docked in the utility group, stacks the same fields in one column in the same order. The two-column layout is about a third shorter than the stacked one, and the plot takes the room. The width threshold is measured from the font, so a larger UI font raises it.
+The configuration fields above the plot sit in two columns when the panel is at least about 428 px wide at the default font (the threshold is 412 px of content width inside the panel's 16 px of window padding). The left column holds the span and bandwidth fields and the right column the trace and level fields, and the **Measure on** list ends the right column. A narrower panel stacks the same fields in one column in the same order. This covers the usual 440–500 px utility-group width. A panel narrower than about 428 px keeps one column. Two columns make the block about a third shorter (nine controls take five rows, and the Probes and source lines stay full width). The threshold is measured from the font, so a larger UI font raises it.
 
 ## Single-sided spectrum
 

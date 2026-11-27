@@ -79,8 +79,8 @@ Link to the owning document instead of restating its rules or commands on anothe
 
 ## Spectrum Analyzer Configuration Layout Contract
 
-- The configuration fields above the plot (Start and Stop Frequency, VBW, RBW, Trace Mode, Avg Count, Reset Hold, Ref, Min level, and Measure on) lay out in two equal columns when the content width reaches `twoColumnMinWidth()`, and in one column otherwise. The threshold is measured from the widest label and the narrowest numeric field at the current font, so a larger UI font raises it; it is never a fixed pixel count.
-- Both layouts draw the same fields in the same order: the left column first, then the right. The **Measure on** source line spans the full width below them.
+- The configuration fields above the plot (Start and Stop, VBW, RBW, Trace Mode, Avg Count, Reset Hold, Ref, Min level, and Measure on) lay out in two columns when the content width reaches `twoColumnMinWidth()`, and in one column otherwise. The threshold is the sum of each column's own widest label, the gap after it, and the narrowest numeric field, plus the gap between columns. It is measured at the current font, so a larger UI font raises it; it is never a fixed pixel count.
+- Two equal columns when both fit in half the width; otherwise the left column takes just what it needs and the right column takes the rest. Both layouts draw the same fields in the same order: the left column first, then the right. The **Measure on** source line spans the full width below them.
 - Field widths come from the column, never from the value shown, so a value that changes width moves no field.
 - The layout is view state: it does not enter `ProjectSerializer` and is not undo. `SpectrumAnalyzerWidget::lastConfigLayout()` is the test seam.
 
