@@ -1176,6 +1176,203 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(2);
     };
 
+    // The top configuration block lays out in one column in a narrow dock and in two balanced
+    // columns once the dock fits them. Both show the same fields in the same order. The
+    // two-column block is at most 65% of the stacked height (about a third shorter: nine
+    // controls take five rows, and the Probes and source lines stay), the plot takes the freed
+    // room, and no field clips, overlaps its neighbour, or moves when its value changes width.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "spectrum_analyzer_config_two_columns");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto &graph = s_app->testGraphEngine();
+        const int gen_out = graph.outputPinId(1);
+        IM_CHECK(gen_out >= 0);
+        IM_CHECK(s_app->testAddProbePin(gen_out));
+        s_app->m_show_spectrum = true;
+        ctx->WindowFocus("Spectrum Analyzer");
+        ctx->Yield(3);
+
+        auto &sa = s_app->testSpectrumAnalyzerEngine();
+        const double original_start_Hz = sa.startFrequency();
+        const double original_stop_Hz = sa.stopFrequency();
+        const TraceMode original_mode = sa.traceMode();
+        // Reset Hold adds a row to the trace column, so the heights compare in Clear/Write.
+        sa.setTraceMode(TraceMode::ClearWrite);
+        const auto &widget = s_app->testSpectrumWidget();
+
+        // The configuration fields by visible label, in the order the panel draws them. The
+        // two-column layout takes the first four on the left and the rest on the right.
+        const char *const kFields[] = {"Start Frequency (MHz)",
+                                       "Stop Frequency (MHz)",
+                                       "VBW (kHz)",
+                                       "RBW (kHz)",
+                                       "Trace Mode",
+                                       "Avg Count",
+                                       "Ref (dBm)",
+                                       "Min level (dBm)",
+                                       "Measure on"};
+        constexpr int kFieldCount = 9;
+        constexpr int kLeftCount = 4;
+
+        struct Block {
+            bool two_columns = false;
+            float height = 0.0f;
+            float plot_height = 0.0f;
+            ImRect rects[kFieldCount];
+        };
+        auto measure = [&](float width, Block &out) {
+            ctx->WindowResize("Spectrum Analyzer", ImVec2(width, 760.0f));
+            ctx->Yield(6);
+            Block b;
+            const auto cfg = widget.lastConfigLayout();
+            // The layout splits exactly at the threshold the widget measured at this font.
+            IM_CHECK(cfg.two_column_min_width > 0.0f);
+            IM_CHECK_EQ(cfg.two_columns, cfg.avail_width >= cfg.two_column_min_width);
+            ctx->LogInfo("config layout at %.0f px: two_columns=%d avail=%.1f min=%.1f height=%.1f",
+                         width, cfg.two_columns ? 1 : 0, cfg.avail_width, cfg.two_column_min_width,
+                         cfg.height);
+            b.two_columns = cfg.two_columns;
+            b.height = cfg.height;
+            b.plot_height = widget.lastPlotArea().height;
+            ctx->SetRef("Spectrum Analyzer");
+            for (int i = 0; i < kFieldCount; ++i) {
+                const auto info = ctx->ItemInfo(kFields[i], ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                b.rects[i] = info.RectFull;
+            }
+            ctx->SetRef("");
+            out = b;
+        };
+
+        // Every field and its label lie inside the panel, and no label reaches the next column.
+        ImGuiWindow *panel = nullptr;
+        // An input draws its step buttons after the text box, outside RectFull, so its field
+        // width adds them back. Combos and the slider have no step buttons.
+        auto field_width = [&](const Block &b, int i) {
+            const bool stepped = i != 4 && i != 5 && i != 8;
+            return b.rects[i].GetWidth() + (stepped ? 2.0f * (ImGui::GetFrameHeight() +
+                                                              ImGui::GetStyle().ItemInnerSpacing.x)
+                                                    : 0.0f);
+        };
+        auto label_end = [&](const Block &b, int i) {
+            return b.rects[i].Min.x + field_width(b, i) + ImGui::GetStyle().ItemInnerSpacing.x +
+                   ImGui::CalcTextSize(kFields[i]).x;
+        };
+        auto check_inside = [&](const Block &b) {
+            panel = ImGui::FindWindowByName("Spectrum Analyzer");
+            IM_CHECK(panel != nullptr);
+            if (!panel)
+                return;
+            for (int i = 0; i < kFieldCount; ++i) {
+                IM_CHECK(b.rects[i].Min.x >= panel->InnerRect.Min.x - 1.0f);
+                IM_CHECK(label_end(b, i) <= panel->InnerRect.Max.x + 1.0f);
+            }
+        };
+
+        // Narrow dock: one column, in the existing order, every field at the same x.
+        Block narrow;
+        measure(400.0f, narrow);
+        IM_CHECK(!narrow.two_columns);
+        for (int i = 0; i < kFieldCount; ++i) {
+            IM_CHECK(std::abs(narrow.rects[i].Min.x - narrow.rects[0].Min.x) < 1.0f);
+            if (i + 1 < kFieldCount)
+                IM_CHECK(narrow.rects[i].Min.y < narrow.rects[i + 1].Min.y);
+        }
+        check_inside(narrow);
+        // The Spectrum list shares the Reset Zoom row, below the plot: its label stays inside the
+        // narrow panel too.
+        ctx->SetRef("Spectrum Analyzer");
+        const auto sides = ctx->ItemInfo("Spectrum##sides", ImGuiTestOpFlags_NoError);
+        ctx->SetRef("");
+        IM_CHECK(sides.ID != 0);
+        IM_CHECK(sides.RectFull.Max.x + ImGui::GetStyle().ItemInnerSpacing.x +
+                     ImGui::CalcTextSize("Spectrum").x <=
+                 panel->InnerRect.Max.x + 1.0f);
+
+        // Mid dock: two columns. The left column holds the span and bandwidth fields and the
+        // right column the trace and level fields, each top-to-bottom in the same order.
+        Block mid;
+        measure(600.0f, mid);
+        IM_CHECK(mid.two_columns);
+        for (int i = 0; i < kLeftCount; ++i) {
+            IM_CHECK(std::abs(mid.rects[i].Min.x - mid.rects[0].Min.x) < 1.0f);
+            IM_CHECK(label_end(mid, i) <= mid.rects[kLeftCount].Min.x);
+            if (i + 1 < kLeftCount)
+                IM_CHECK(mid.rects[i].Min.y < mid.rects[i + 1].Min.y);
+        }
+        for (int i = kLeftCount; i < kFieldCount; ++i) {
+            IM_CHECK(std::abs(mid.rects[i].Min.x - mid.rects[kLeftCount].Min.x) < 1.0f);
+            if (i + 1 < kFieldCount)
+                IM_CHECK(mid.rects[i].Min.y < mid.rects[i + 1].Min.y);
+        }
+        IM_CHECK(std::abs(mid.rects[0].Min.y - mid.rects[kLeftCount].Min.y) < 1.0f);
+        check_inside(mid);
+
+        // The two-column block is at most 65% of the stacked height, and the plot takes the room
+        // the block gave back, so the bottom rows are where they were.
+        IM_CHECK(mid.height <= 0.65f * narrow.height);
+        IM_CHECK(mid.plot_height > narrow.plot_height);
+        IM_CHECK(std::abs((mid.plot_height - narrow.plot_height) - (narrow.height - mid.height)) <
+                 2.0f);
+
+        // Wide dock: the same two columns, balanced to the same field width.
+        Block wide;
+        measure(900.0f, wide);
+        IM_CHECK(wide.two_columns);
+        // Both columns carry the same field width: Start and Ref against the Trace Mode combo.
+        IM_CHECK(std::abs(field_width(wide, 0) - field_width(wide, 4)) < 1.0f);
+        IM_CHECK(std::abs(field_width(wide, 6) - field_width(wide, 4)) < 1.0f);
+        IM_CHECK(std::abs(field_width(wide, 5) - field_width(wide, 4)) < 1.0f);
+        IM_CHECK(std::abs(field_width(wide, 8) - field_width(wide, 4)) < 1.0f);
+        IM_CHECK(wide.height <= 0.65f * narrow.height);
+        check_inside(wide);
+
+        // A value that changes width moves no field: widths come from the labels and the
+        // narrowest field, never from the value shown.
+        sa.setStartFrequency(-19999.0e6);
+        sa.setStopFrequency(19999.0e6);
+        Block wide_values;
+        measure(900.0f, wide_values);
+        for (int i = 0; i < kFieldCount; ++i) {
+            IM_CHECK(std::abs(wide_values.rects[i].Min.x - wide.rects[i].Min.x) < 0.5f);
+            IM_CHECK(std::abs(wide_values.rects[i].Min.y - wide.rects[i].Min.y) < 0.5f);
+            IM_CHECK(std::abs(wide_values.rects[i].Max.x - wide.rects[i].Max.x) < 0.5f);
+        }
+
+        // The Peak Table rows sit below the plot and inside the panel at the wide width.
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemCheck("Peak Table");
+        ctx->SetRef("");
+        ctx->Yield(3);
+        IM_CHECK(widget.peakTable().visible());
+        IM_CHECK(widget.peakTable().count() > 0);
+        if (panel) {
+            const float plot_bottom = widget.lastPlotArea().y + widget.lastPlotArea().height;
+            ctx->SetRef("Spectrum Analyzer");
+            for (int row = 1; row <= widget.peakTable().count(); ++row) {
+                char id[32];
+                std::snprintf(id, sizeof id, "**/peaktablerow%d", row);
+                const auto info = ctx->ItemInfo(id, ImGuiTestOpFlags_NoError);
+                IM_CHECK(info.ID != 0);
+                IM_CHECK(info.RectFull.Min.y >= plot_bottom - 1.0f);
+                IM_CHECK(info.RectFull.Max.y <= panel->InnerRect.Max.y + 1.0f);
+            }
+            ctx->SetRef("");
+        }
+        ctx->SetRef("Spectrum Analyzer");
+        ctx->ItemUncheck("Peak Table");
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        // Leave the shared app as it was.
+        sa.setStartFrequency(original_start_Hz);
+        sa.setStopFrequency(original_stop_Hz);
+        sa.setTraceMode(original_mode);
+        ctx->WindowResize("Spectrum Analyzer", ImVec2(720.0f, 760.0f));
+        ctx->Yield(2);
+        IM_CHECK(s_app->testRemoveProbePin(gen_out));
+        ctx->Yield(2);
+    };
+
     // Issue #292: Peak, snap-to-peak and marker read the widget's jitter-free readout
     // trace. It must hold the same values on every frame, while the jittered plot
     // trace changes. A widget that reads the jittered trace again fails here.
