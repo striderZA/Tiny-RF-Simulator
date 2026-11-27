@@ -863,3 +863,12 @@ add_standalone_test(test_ui_font_model
     SOURCES test_ui_font_model.cpp
     LIBS simulator::ui_font_model
 )
+
+# The startup restore of a saved UI font: its own ImGui context, no backend, so the first-frame
+# size path is covered (the UI test harness starts on Default).
+if(WIN32)
+    add_standalone_test(test_ui_font_startup
+        SOURCES test_ui_font_startup.cpp
+        LIBS simulator::app simulator::ui_font_model
+    )
+endif()
