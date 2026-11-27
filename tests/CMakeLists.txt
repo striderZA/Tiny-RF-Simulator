@@ -459,6 +459,14 @@ add_standalone_test(test_spectrum_combined_grid
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Single-sided spectrum view: the negative-frequency half of a real-domain trace folds onto
+# the positive half (coherent tones, +3 dB merged noise), complex-baseband traces are unchanged,
+# and the readouts and hold modes follow the folded spectrum.
+add_standalone_test(test_spectrum_single_sided
+    SOURCES test_spectrum_single_sided.cpp
+    LIBS simulator::spectrum_analyzer_engine
+)
+
 # Marker view-state coverage: nearest-bin readouts, delta arithmetic, per-marker
 # peak search, and the session token. The model is UI-free; widget presentation
 # is covered by test_ui. Standalone for the MinGW-w64 registration ceiling.
