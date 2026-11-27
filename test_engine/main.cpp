@@ -44,6 +44,14 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL2_Init();
 
+    // The picker case changes the UI font, and the test engine restores ImGuiIO after every case,
+    // FontDefault included. A run that starts on a saved non-default font would then restore a
+    // pointer that the case had already freed. Start on Default, and put the developer's saved
+    // choice back before exit.
+    SessionState ui_font_state;
+    const std::string saved_ui_font = ui_font_state.load("Settings", "UiFont", "");
+    ui_font_state.save("Settings", "UiFont", "");
+
     RfSimulatorApp app;
 
     ImGuiTestEngine *engine = ImGuiTestEngine_CreateContext();
@@ -143,5 +151,6 @@ int main() {
     glfwDestroyWindow(window);
     glfwTerminate();
 
+    ui_font_state.save("Settings", "UiFont", saved_ui_font.c_str());
     return exit_code;
 }
