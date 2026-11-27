@@ -1,7 +1,7 @@
 #include "node_graph_engine.h"
 #include "s_parameter_data.h"
-#include "splitter_engine.h"
 #include "spectrum.h"
+#include "splitter_engine.h"
 #include "test_temp_paths.h"
 
 #include <catch2/catch_approx.hpp>
@@ -33,12 +33,10 @@ Spectrum buildTestSpectrum(double freq_Hz, double power_dBm, double phase_deg) {
 
 // Row-major 3-port file. Pair index = row * 3 + col, (row, col) = (output, input).
 // Row 1 = output 0, row 2 = output 1, column 0 = the input.
-std::filesystem::path writeSplitterS3p(const std::string &tag, double s21_mag,
-                                       double s21_phase_deg, double s31_mag,
-                                       double s31_phase_deg) {
-    const auto path =
-        std::filesystem::temp_directory_path() / ("split_s3p_" + tag + "_" +
-                                                  test_temp_paths::processTag() + ".s3p");
+std::filesystem::path writeSplitterS3p(const std::string &tag, double s21_mag, double s21_phase_deg,
+                                       double s31_mag, double s31_phase_deg) {
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("split_s3p_" + tag + "_" + test_temp_paths::processTag() + ".s3p");
     std::ofstream file(path);
     file << "# Hz S MA R 50\n";
     for (const char *freq : {"5e8", "5e9"}) {
@@ -132,8 +130,7 @@ TEST_CASE("Splitter: S-param phase carries into per-bin phase", "[splitter][spar
     REQUIRE_THAT(out1.phase_deg[0], WithinAbs(55.0, 1e-6));
 }
 
-TEST_CASE("Splitter: flat -3 dB 3-port file matches manual mode exactly",
-          "[splitter][sparam]") {
+TEST_CASE("Splitter: flat -3 dB 3-port file matches manual mode exactly", "[splitter][sparam]") {
     const auto path = writeSplitterS3p("flat", 0.7071067811865476, 0.0, 0.7071067811865476, 0.0);
 
     NodeGraphEngine graph;
@@ -183,8 +180,7 @@ TEST_CASE("Splitter: a 2-port file falls back to manual mode", "[splitter][spara
     REQUIRE_THAT(out0.tones[0].power_dBm, WithinAbs(-13.0102999566398, 1e-6));
 }
 
-TEST_CASE("Splitter: non-3-port serialization falls back to manual mode",
-          "[splitter][sparam]") {
+TEST_CASE("Splitter: non-3-port serialization falls back to manual mode", "[splitter][sparam]") {
     NodeGraphEngine graph;
     SplitterEngine splitter(1, graph);
     nlohmann::json j = {{"sparam_mode", true},
@@ -200,6 +196,36 @@ TEST_CASE("Splitter: non-3-port serialization falls back to manual mode",
     nlohmann::json round = nlohmann::json::parse(loaded.serialize().dump());
     REQUIRE(round.value("sparam_mode", false));
     REQUIRE(round.value("sparam_filepath", std::string()) == path.string());
+}
+
+TEST_CASE("Splitter: unticking S-parameter mode drops its out-of-band marks",
+          "[splitter][sparam][oob]") {
+    // Bins at 6 GHz lie outside the file's 0.5-5 GHz band.
+    const auto path = writeSplitterS3p("oob", 0.7071067811865476, 0.0, 0.7071067811865476, 0.0);
+
+    NodeGraphEngine graph;
+    SplitterEngine splitter(1, graph);
+    splitter.setSParamFilepath(path.string());
+    Spectrum in = buildTestSpectrum(1e9, -10.0, 0.0);
+    in.frequencies = {5e9, 6e9};
+    in.tones = {{6e9, -10.0, 0.0}};
+    splitter.node().inputs[0] = &in;
+    splitter.update(0.016);
+    REQUIRE(splitter.node().outputs[0].out_of_band == std::vector<bool>{false, true});
+
+    splitter.setSParamMode(false);
+    splitter.update(0.016);
+    // Back in manual mode the output drops the S-parameter marks and carries the
+    // input's own (none here) through, per the attenuator precedent.
+    REQUIRE(splitter.node().outputs[0].out_of_band.empty());
+    REQUIRE_FALSE(splitter.node().outputs[0].tones[0].out_of_band);
+
+    // Ticking before a file is chosen sticks (the picker reveal path). A failed
+    // load leaves no data, so a re-tick also sticks — the combiner's contract;
+    // the instantiate-time rejection is pinned in test_component_authoring.
+    SplitterEngine bare(1, graph);
+    bare.setSParamMode(true);
+    REQUIRE(bare.sparamMode());
 }
 
 TEST_CASE("Splitter: hover summary", "[splitter]") {

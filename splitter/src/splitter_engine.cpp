@@ -144,6 +144,10 @@ void SplitterEngine::update(double dt) {
         out.tones = in_ptr ? in_ptr->tones : std::vector<Spectrum::Tone>{};
         out.is_complex_baseband = in_ptr ? in_ptr->is_complex_baseband : false;
         out.fs_Hz = in_ptr ? in_ptr->fs_Hz : 0.0;
+        // The attenuator precedent: a stage in its ideal/manual mode carries its input's
+        // marks through (they are upstream facts), so this output drops any marks a
+        // previous S-parameter frame set here.
+        out.out_of_band = in_ptr ? in_ptr->out_of_band : std::vector<bool>{};
         for (auto &t : out.tones) {
             t.power_dBm -= SPLIT_LOSS_DB;
         }
