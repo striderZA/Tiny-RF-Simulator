@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -133,6 +134,30 @@ std::string faceFile(IDWriteFont *font) {
     return toUtf8(path);
 }
 
+// Opens a font file for ranged reads. The handle stays open until the last reader is dropped.
+FileSource openFontFile(const std::string &path) {
+    FileSource source;
+    std::shared_ptr<FILE> file(_wfopen(toWide(path).c_str(), L"rb"), [](FILE *handle) {
+        if (handle != nullptr)
+            std::fclose(handle);
+    });
+    if (!file || _fseeki64(file.get(), 0, SEEK_END) != 0)
+        return source;
+    const long long size = _ftelli64(file.get());
+    if (size <= 0)
+        return source;
+    source.open = true;
+    source.size = static_cast<std::size_t>(size);
+    source.read = [file](std::size_t offset, std::size_t length) {
+        std::vector<unsigned char> bytes(length);
+        if (_fseeki64(file.get(), static_cast<long long>(offset), SEEK_SET) != 0)
+            return std::vector<unsigned char>();
+        bytes.resize(std::fread(bytes.data(), 1, length, file.get()));
+        return bytes;
+    };
+    return source;
+}
+
 // Collects the monospaced family names. EnumFontFamiliesEx with an empty face name reports one
 // face per family, so the names are gathered once and each is then read through DirectWrite.
 int CALLBACK collectFamily(const LOGFONTW *logfont, const TEXTMETRICW *metrics, DWORD,
@@ -143,17 +168,6 @@ int CALLBACK collectFamily(const LOGFONTW *logfont, const TEXTMETRICW *metrics, 
     if ((metrics->tmPitchAndFamily & TMPF_FIXED_PITCH) == 0 && logfont->lfFaceName[0] != L'@')
         names->insert(logfont->lfFaceName);
     return 1;
-}
-
-// Whether the first bytes of `path` begin a single-face font (checked without reading the file).
-bool isSingleFaceFile(const std::string &path) {
-    FILE *file = _wfopen(toWide(path).c_str(), L"rb");
-    if (file == nullptr)
-        return false;
-    unsigned char head[4] = {};
-    const bool ok = std::fread(head, 1, sizeof(head), file) == sizeof(head);
-    std::fclose(file);
-    return ok && isSingleFaceFontFile(std::vector<unsigned char>(head, head + sizeof(head)));
 }
 
 } // namespace
@@ -199,10 +213,10 @@ std::vector<FontCandidate> enumerateSystemFonts() {
             candidate.italic = font->GetStyle() == DWRITE_FONT_STYLE_ITALIC;
             candidate.fixed_pitch = true;
             candidate.file = faceFile(font.get());
-            candidate.loadable = !candidate.file.empty() && isSingleFaceFile(candidate.file);
             found.push_back(std::move(candidate));
         }
     }
+    identifyFiles(found, openFontFile);
     return found;
 }
 
