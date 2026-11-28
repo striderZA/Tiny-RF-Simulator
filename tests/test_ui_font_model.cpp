@@ -516,12 +516,13 @@ TEST_CASE("A variable file is one row, drawn at its default weight, not its ligh
 
 TEST_CASE("Identical bytes at two paths, with an oblique copy, are one upright row",
           "[ui_font][style]") {
-    // Fira Code installed twice (user and system folders) and listed as Oblique: the oblique entry
-    // reads the same upright bytes, so it is the same face and is not a second row.
+    // Fira Code installed twice (user and system folders) and listed as Oblique. Windows reports an
+    // oblique as upright, so the Oblique candidate is upright 400 too. It is listed first, so only
+    // the Regular label preference (not input order) can pick Regular as the row.
     const std::vector<FontCandidate> candidates = {
+        drawn("Fira", "Oblique", 400, false, "system/Fira-Oblique.ttf", "fira", 400),
         drawn("Fira", "Regular", 400, false, "user/Fira-Regular.ttf", "fira", 400),
         drawn("Fira", "Regular", 400, false, "system/Fira-Regular.ttf", "fira", 400),
-        drawn("Fira", "Oblique", 400, true, "system/Fira-Oblique.ttf", "fira", 400),
     };
     const auto faces = ui_font::familyFaces(candidates, "Fira");
     REQUIRE(faces.size() == 1);

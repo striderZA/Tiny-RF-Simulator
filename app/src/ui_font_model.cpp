@@ -130,7 +130,8 @@ FontFace drawnFace(const std::vector<const FontCandidate *> &members) {
     const FontCandidate *best = members.front();
     const auto rank = [target](const FontCandidate *c) {
         return std::make_tuple(c->weight != target, c->italic, std::abs(c->weight - target),
-                               c->weight, styleNameOf(*c) != "Regular", styleNameOf(*c));
+                               c->weight, styleNameOf(*c) != styleNameFor(target, c->italic),
+                               styleNameOf(*c));
     };
     for (const FontCandidate *member : members)
         if (rank(member) < rank(best))
