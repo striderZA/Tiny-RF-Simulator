@@ -8,6 +8,7 @@
 #include <iterator>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -25,26 +26,71 @@ bool sameFamily(const std::string &a, const std::string &b) {
     return true;
 }
 
-bool readFile(const std::string &path, std::vector<unsigned char> &bytes) {
+// The first `limit` bytes of a file, or the whole file when `limit` is 0.
+bool readFile(const std::string &path, std::vector<unsigned char> &bytes, std::size_t limit) {
     std::ifstream in(path, std::ios::binary);
     if (!in)
         return false;
-    std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)),
-                                    std::istreambuf_iterator<char>());
-    if (!in.good() && !in.eof())
-        return false;
+    std::vector<unsigned char> data;
+    if (limit > 0) {
+        data.resize(limit);
+        in.read(reinterpret_cast<char *>(data.data()), static_cast<std::streamsize>(limit));
+        data.resize(static_cast<std::size_t>(in.gcount()));
+    } else {
+        data.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        if (!in.good() && !in.eof())
+            return false;
+    }
     bytes = std::move(data);
     return true;
 }
 
-// The file fontconfig selects for `family` among monospaced faces. The match must keep the
-// requested family and monospaced spacing, so fontconfig's substitution is never loaded.
-bool matchMonospacedFile(const std::string &family, std::string &path) {
+// Reads the face a fontconfig pattern describes: family, style, OpenType weight, slant, and the
+// monospaced spacing the picker requires. Returns false for a pattern that lacks any of them.
+bool faceOf(FcPattern *font, FontCandidate &candidate) {
+    FcChar8 *family = nullptr;
+    if (FcPatternGetString(font, FC_FAMILY, 0, &family) != FcResultMatch)
+        return false;
+    int spacing = -1;
+    if (FcPatternGetInteger(font, FC_SPACING, 0, &spacing) != FcResultMatch || spacing != FC_MONO)
+        return false;
+    candidate.family = reinterpret_cast<const char *>(family);
+
+    FcChar8 *style = nullptr;
+    candidate.style = FcPatternGetString(font, FC_STYLE, 0, &style) == FcResultMatch
+                          ? reinterpret_cast<const char *>(style)
+                          : std::string();
+
+    int fc_weight = FC_WEIGHT_REGULAR;
+    FcPatternGetInteger(font, FC_WEIGHT, 0, &fc_weight);
+    candidate.weight = FcWeightToOpenType(fc_weight);
+
+    int slant = FC_SLANT_ROMAN;
+    FcPatternGetInteger(font, FC_SLANT, 0, &slant);
+    candidate.italic = slant != FC_SLANT_ROMAN;
+    candidate.fixed_pitch = true;
+    return !candidate.family.empty();
+}
+
+bool fileOf(FcPattern *font, std::string &path) {
+    FcChar8 *file = nullptr;
+    if (FcPatternGetString(font, FC_FILE, 0, &file) != FcResultMatch)
+        return false;
+    path = reinterpret_cast<const char *>(file);
+    return true;
+}
+
+// The face fontconfig selects for `family` at `face`'s weight and slant among monospaced faces.
+// The match must keep the requested family, spacing, weight, and slant, so fontconfig's
+// substitution is never loaded.
+bool matchMonospacedFace(const std::string &family, const FontFace &face, std::string &path) {
     FcPattern *pattern = FcPatternCreate();
     if (pattern == nullptr)
         return false;
     FcPatternAddString(pattern, FC_FAMILY, reinterpret_cast<const FcChar8 *>(family.c_str()));
     FcPatternAddInteger(pattern, FC_SPACING, FC_MONO);
+    FcPatternAddInteger(pattern, FC_WEIGHT, FcWeightFromOpenType(face.weight));
+    FcPatternAddInteger(pattern, FC_SLANT, face.italic ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
     FcConfigSubstitute(nullptr, pattern, FcMatchPattern);
     FcDefaultSubstitute(pattern);
 
@@ -52,16 +98,9 @@ bool matchMonospacedFile(const std::string &family, std::string &path) {
     FcPattern *match = FcFontMatch(nullptr, pattern, &result);
     bool ok = false;
     if (match != nullptr && result == FcResultMatch) {
-        FcChar8 *matched_family = nullptr;
-        FcChar8 *file = nullptr;
-        int spacing = -1;
-        if (FcPatternGetString(match, FC_FAMILY, 0, &matched_family) == FcResultMatch &&
-            sameFamily(reinterpret_cast<const char *>(matched_family), family) &&
-            FcPatternGetInteger(match, FC_SPACING, 0, &spacing) == FcResultMatch &&
-            spacing == FC_MONO && FcPatternGetString(match, FC_FILE, 0, &file) == FcResultMatch) {
-            path = reinterpret_cast<const char *>(file);
-            ok = true;
-        }
+        FontCandidate matched;
+        ok = faceOf(match, matched) && sameFamily(matched.family, family) &&
+             matched.weight == face.weight && matched.italic == face.italic && fileOf(match, path);
     }
     if (match != nullptr)
         FcPatternDestroy(match);
@@ -77,28 +116,24 @@ std::vector<FontCandidate> enumerateSystemFonts() {
     if (pattern == nullptr)
         return found;
     FcPatternAddInteger(pattern, FC_SPACING, FC_MONO);
-    FcObjectSet *objects = FcObjectSetBuild(FC_FAMILY, FC_FILE, FC_SPACING, nullptr);
+    FcObjectSet *objects =
+        FcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_WEIGHT, FC_SLANT, FC_FILE, FC_SPACING, nullptr);
     FcFontSet *fonts = objects != nullptr ? FcFontList(nullptr, pattern, objects) : nullptr;
 
-    std::set<std::string> seen;
+    std::set<std::tuple<std::string, std::string, int, bool>> seen;
     if (fonts != nullptr) {
         for (int i = 0; i < fonts->nfont; ++i) {
-            FcPattern *font = fonts->fonts[i];
-            int spacing = -1;
-            FcChar8 *family = nullptr;
-            if (FcPatternGetInteger(font, FC_SPACING, 0, &spacing) != FcResultMatch ||
-                spacing != FC_MONO ||
-                FcPatternGetString(font, FC_FAMILY, 0, &family) != FcResultMatch)
-                continue;
             FontCandidate candidate;
-            candidate.family = reinterpret_cast<const char *>(family);
-            if (!seen.insert(candidate.family).second)
+            if (!faceOf(fonts->fonts[i], candidate))
                 continue;
-            candidate.fixed_pitch = true;
+            if (!seen.insert(
+                         {candidate.family, candidate.style, candidate.weight, candidate.italic})
+                     .second)
+                continue;
             std::string path;
-            std::vector<unsigned char> bytes;
-            candidate.loadable = matchMonospacedFile(candidate.family, path) &&
-                                 readFile(path, bytes) && isSingleFaceFontFile(bytes);
+            std::vector<unsigned char> head;
+            candidate.loadable = fileOf(fonts->fonts[i], path) && readFile(path, head, 4) &&
+                                 isSingleFaceFontFile(head);
             found.push_back(std::move(candidate));
         }
     }
@@ -110,10 +145,12 @@ std::vector<FontCandidate> enumerateSystemFonts() {
     return found;
 }
 
-bool readSystemFontFile(const std::string &family, std::vector<unsigned char> &bytes) {
+bool readSystemFontFace(const std::string &family, const FontFace &face,
+                        std::vector<unsigned char> &bytes) {
     std::string path;
     std::vector<unsigned char> data;
-    if (!matchMonospacedFile(family, path) || !readFile(path, data) || !isSingleFaceFontFile(data))
+    if (!matchMonospacedFace(family, face, path) || !readFile(path, data, 0) ||
+        !isSingleFaceFontFile(data))
         return false;
     bytes = std::move(data);
     return true;
