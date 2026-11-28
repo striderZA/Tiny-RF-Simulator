@@ -261,36 +261,44 @@ done
 BACKUP="$DIR/.rf-sim-backup-$(date +%Y%m%d-%H%M%S)-$$"
 mkdir -p "$BACKUP" || die "Could not create the backup folder $BACKUP."
 
-MOVED=""
-for item in $ITEMS; do
-    if [ -e "$DIR/$item" ]; then
-        mv "$DIR/$item" "$BACKUP/$item" || die "Could not back up $item. Nothing was replaced."
-        MOVED="$MOVED $item"
-    fi
-done
-
 rollback() {
-    for item in $MOVED; do
+    for item in $INSTALLED; do
         [ -n "$item" ] || continue
         rm -rf -- "${DIR:?}/${item:?}"
+    done
+    for item in $MOVED; do
+        [ -n "$item" ] || continue
         if [ -e "$BACKUP/$item" ]; then
             mv "$BACKUP/$item" "$DIR/$item"
         fi
     done
 }
 
+INSTALLED=""
+MOVED=""
+for item in $ITEMS; do
+    if [ -e "$DIR/$item" ]; then
+        if ! mv "$DIR/$item" "$BACKUP/$item"; then
+            rollback
+            die "Could not back up $item; the previous files were restored."
+        fi
+        MOVED="$MOVED $item"
+    fi
+done
+
 for item in $ITEMS; do
     if ! mv "$STAGE/$item" "$DIR/$item"; then
         rollback
         die "Could not install $item; the previous files were restored."
     fi
+    INSTALLED="$INSTALLED $item"
 done
 
 note "Updated Tiny RF Simulator to ${TAG:-$ASSET} in $DIR."
 if [ -n "$MOVED" ]; then
     note "Previous files are in $BACKUP"
-    note "To roll back, move them back over the new files:"
-    note "  mv \"$BACKUP\"/* \"$DIR\"/"
+    note "To roll back, remove each new item and move its backup back:"
+    note "  cd \"$DIR\" && for item in$MOVED; do rm -rf -- \"\$item\"; mv -- \"$BACKUP/\$item\" \"\$item\"; done"
 else
     note "This was a fresh install; no previous files needed a backup."
 fi
