@@ -2,8 +2,11 @@
 
 #include "ui_font_model.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 using ui_font::Emphasis;
@@ -28,6 +31,72 @@ FontCandidate face(std::string family, std::string style, int weight, bool itali
     c.weight = weight;
     c.italic = italic;
     return c;
+}
+
+// A face whose file has the given bytes (its content key) and draws the given default weight.
+FontCandidate drawn(std::string family, std::string style, int weight, bool italic,
+                    std::string file, std::string content, int default_weight) {
+    FontCandidate c = face(std::move(family), std::move(style), weight, italic);
+    c.file = std::move(file);
+    c.content_key = std::move(content);
+    c.default_weight = default_weight;
+    return c;
+}
+
+// A minimal SFNT file: a table directory and the given table bodies, in order. Enough for
+// fileIdentity.
+std::vector<unsigned char>
+sfnt(const std::vector<std::pair<std::string, std::vector<unsigned char>>> &tables) {
+    auto put16 = [](std::vector<unsigned char> &b, std::size_t at, unsigned v) {
+        b[at] = static_cast<unsigned char>(v >> 8);
+        b[at + 1] = static_cast<unsigned char>(v);
+    };
+    auto put32 = [](std::vector<unsigned char> &b, std::size_t at, std::uint32_t v) {
+        for (int k = 0; k < 4; ++k)
+            b[at + k] = static_cast<unsigned char>(v >> (24 - 8 * k));
+    };
+    const std::size_t header = 12 + 16 * tables.size();
+    std::size_t total = header;
+    for (const auto &t : tables)
+        total += t.second.size();
+    std::vector<unsigned char> file(total, 0);
+    file[0] = 0x00;
+    file[1] = 0x01;
+    put16(file, 4, static_cast<unsigned>(tables.size()));
+    std::size_t offset = header;
+    for (std::size_t i = 0; i < tables.size(); ++i) {
+        const std::size_t record = 12 + 16 * i;
+        for (int k = 0; k < 4; ++k)
+            file[record + k] = static_cast<unsigned char>(tables[i].first[k]);
+        put32(file, record + 8, static_cast<std::uint32_t>(offset));
+        put32(file, record + 12, static_cast<std::uint32_t>(tables[i].second.size()));
+        std::copy(tables[i].second.begin(), tables[i].second.end(), file.begin() + offset);
+        offset += tables[i].second.size();
+    }
+    return file;
+}
+
+// An OS/2 table body with the given usWeightClass.
+std::vector<unsigned char> os2(unsigned weight) {
+    std::vector<unsigned char> t(8, 0);
+    t[4] = static_cast<unsigned char>(weight >> 8);
+    t[5] = static_cast<unsigned char>(weight);
+    return t;
+}
+
+// An fvar table body with one axis; `tag` is the axis tag and `default_weight` its 16.16 default.
+std::vector<unsigned char> fvar(const char *tag, unsigned default_weight) {
+    std::vector<unsigned char> t(36, 0);
+    t[1] = 1;   // majorVersion
+    t[5] = 16;  // axesArrayOffset
+    t[9] = 1;   // axisCount
+    t[11] = 20; // axisSize
+    for (int k = 0; k < 4; ++k)
+        t[16 + k] = static_cast<unsigned char>(tag[k]);
+    const std::uint32_t value = static_cast<std::uint32_t>(default_weight) << 16;
+    for (int k = 0; k < 4; ++k)
+        t[16 + 8 + k] = static_cast<unsigned char>(value >> (24 - 8 * k));
+    return t;
 }
 
 // A family with every common face, as a Windows install lists it.
@@ -421,6 +490,135 @@ TEST_CASE("Every listed face of every installed family resolves to itself", "[ui
             REQUIRE(plan.body.file == f.file);
             REQUIRE(plan.body.weight == f.weight);
             REQUIRE(plan.body.italic == f.italic);
+        }
+    }
+}
+
+TEST_CASE("A variable file is one row, drawn at its default weight, not its lightest named weight",
+          "[ui_font][style]") {
+    // One file holds the named weights 200, 400, and 700. It draws its default instance, 400.
+    const std::vector<FontCandidate> candidates = {
+        drawn("Mono", "ExtraLight", 200, false, "Var.ttf", "var", 400),
+        drawn("Mono", "Regular", 400, false, "Var.ttf", "var", 400),
+        drawn("Mono", "Bold", 700, false, "Var.ttf", "var", 400),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(faces.size() == 1);
+    REQUIRE(faces[0].style == "Regular");
+    REQUIRE(faces[0].weight == 400);
+    REQUIRE_FALSE(faces[0].italic);
+    REQUIRE(faces[0].file == "Var.ttf");
+    // Bold is not a row: the file draws Regular, so emphasis falls back with a note.
+    const auto plan = ui_font::planFaces("Mono", faces, StyleChoice{}, Emphasis::Bold);
+    REQUIRE(plan.emphasis.weight == 400);
+    REQUIRE_FALSE(plan.notes.empty());
+}
+
+TEST_CASE("Identical bytes at two paths, with an oblique copy, are one upright row",
+          "[ui_font][style]") {
+    // Fira Code installed twice (user and system folders) and listed as Oblique: the oblique entry
+    // reads the same upright bytes, so it is the same face and is not a second row.
+    const std::vector<FontCandidate> candidates = {
+        drawn("Fira", "Regular", 400, false, "user/Fira-Regular.ttf", "fira", 400),
+        drawn("Fira", "Regular", 400, false, "system/Fira-Regular.ttf", "fira", 400),
+        drawn("Fira", "Oblique", 400, true, "system/Fira-Oblique.ttf", "fira", 400),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Fira");
+    REQUIRE(faces.size() == 1);
+    REQUIRE(faces[0].style == "Regular");
+    REQUIRE_FALSE(faces[0].italic);
+}
+
+TEST_CASE("Italic files with their own bytes stay separate rows", "[ui_font][style]") {
+    const std::vector<FontCandidate> candidates = {
+        drawn("Mono", "Regular", 400, false, "r.ttf", "r", 400),
+        drawn("Mono", "Italic", 400, true, "i.ttf", "i", 400),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(faces.size() == 2);
+    REQUIRE(faces[0].style == "Regular");
+    REQUIRE(faces[1].style == "Italic");
+    REQUIRE(faces[1].italic);
+}
+
+TEST_CASE("A variable file whose default weight is not listed is labelled by that weight",
+          "[ui_font][style]") {
+    // The platform lists only the light and bold named weights, but the file draws 400.
+    const std::vector<FontCandidate> candidates = {
+        drawn("Mono", "ExtraLight", 200, false, "v.ttf", "v", 400),
+        drawn("Mono", "Bold", 700, false, "v.ttf", "v", 400),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(faces.size() == 1);
+    REQUIRE(faces[0].style == "Regular");
+    REQUIRE(faces[0].weight == 400);
+}
+
+TEST_CASE("A variable italic file draws its own default instance as its italic row",
+          "[ui_font][style]") {
+    const std::vector<FontCandidate> candidates = {
+        drawn("Mono", "Regular", 400, false, "v.ttf", "v", 400),
+        drawn("Mono", "ExtraLight Italic", 200, true, "vi.ttf", "vi", 200),
+        drawn("Mono", "Bold Italic", 700, true, "vi.ttf", "vi", 200),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(faces.size() == 2);
+    REQUIRE(faces[0].style == "Regular");
+    REQUIRE(faces[1].style == "ExtraLight Italic");
+    REQUIRE(faces[1].weight == 200);
+    REQUIRE(faces[1].italic);
+}
+
+TEST_CASE("A static font declares no default instance, so its platform name stands",
+          "[ui_font][file]") {
+    // OS/2 says 500 here, but the platform names the face Bold; only fvar sets a default instance.
+    const auto bytes = sfnt({{"OS/2", os2(500)}});
+    const ui_font::FileIdentity id = ui_font::fileIdentity(bytes);
+    REQUIRE(id.default_weight == 0);
+    REQUIRE_FALSE(id.content_key.empty());
+}
+
+TEST_CASE("A variable font's default weight is the wght default of fvar, not OS/2",
+          "[ui_font][file]") {
+    // OS/2 says 200 (the lightest named weight); the file's wght default is 400 and wins.
+    const auto bytes = sfnt({{"OS/2", os2(200)}, {"fvar", fvar("wght", 400)}});
+    REQUIRE(ui_font::fileIdentity(bytes).default_weight == 400);
+    // A fvar with no wght axis sets no weight: the file has no default weight instance.
+    const auto no_wght = sfnt({{"OS/2", os2(300)}, {"fvar", fvar("wdth", 100)}});
+    REQUIRE(ui_font::fileIdentity(no_wght).default_weight == 0);
+}
+
+TEST_CASE("A file's content key is equal for identical bytes and differs otherwise",
+          "[ui_font][file]") {
+    const auto a = sfnt({{"OS/2", os2(400)}});
+    const auto same = sfnt({{"OS/2", os2(400)}});
+    const auto other = sfnt({{"OS/2", os2(700)}});
+    REQUIRE(ui_font::fileIdentity(a).content_key == ui_font::fileIdentity(same).content_key);
+    REQUIRE(ui_font::fileIdentity(a).content_key != ui_font::fileIdentity(other).content_key);
+}
+
+TEST_CASE("A file with no readable weight table has no default weight", "[ui_font][file]") {
+    REQUIRE(ui_font::fileIdentity(sfnt({})).default_weight == 0);
+    // A table directory that runs past the end of the file is unreadable, not a crash.
+    std::vector<unsigned char> truncated = {0x00, 0x01, 0x00, 0x00, 0x00, 0x09};
+    REQUIRE(ui_font::fileIdentity(truncated).default_weight == 0);
+}
+
+TEST_CASE("Every listed face is the file it reads, and a variable file draws its default weight",
+          "[ui_font][platform]") {
+    // Checked against the files, not the model's metadata: each row's bytes are read, and the row
+    // is checked against the file's own tables. No two rows may share bytes.
+    const auto candidates = ui_font::enumerateSystemFonts();
+    for (const std::string &family : ui_font::monospacedFamilies(candidates)) {
+        std::set<std::string> keys;
+        for (const ui_font::FontFace &face : ui_font::familyFaces(candidates, family)) {
+            std::vector<unsigned char> bytes;
+            INFO("family: " << family << " face: " << face.style);
+            REQUIRE(ui_font::readSystemFontFace(family, face, bytes));
+            const ui_font::FileIdentity id = ui_font::fileIdentity(bytes);
+            if (id.default_weight > 0)
+                REQUIRE(face.weight == id.default_weight);
+            REQUIRE(keys.insert(id.content_key).second);
         }
     }
 }
