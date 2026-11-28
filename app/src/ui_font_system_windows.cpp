@@ -1,7 +1,9 @@
 #include "ui_font_model.h"
 
+#include <dwrite.h>
 #include <windows.h>
 
+#include <cstdio>
 #include <cstring>
 #include <set>
 #include <string>
@@ -33,6 +35,122 @@ std::string toUtf8(const wchar_t *wide) {
     std::string utf8(static_cast<std::size_t>(length - 1), '\0');
     WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8.data(), length, nullptr, nullptr);
     return utf8;
+}
+
+// Releases a COM interface when it leaves scope. put() gives the address for an out parameter.
+template <typename T> class ComPtr {
+  public:
+    ComPtr() = default;
+    ~ComPtr() { reset(); }
+    ComPtr(const ComPtr &) = delete;
+    ComPtr &operator=(const ComPtr &) = delete;
+
+    void reset() {
+        if (ptr_ != nullptr) {
+            ptr_->Release();
+            ptr_ = nullptr;
+        }
+    }
+    T **put() {
+        reset();
+        return &ptr_;
+    }
+    T *get() const { return ptr_; }
+    T *operator->() const { return ptr_; }
+
+  private:
+    T *ptr_ = nullptr;
+};
+
+std::string toUtf8(const std::wstring &wide) {
+    if (wide.empty())
+        return {};
+    const int length = WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
+                                           nullptr, 0, nullptr, nullptr);
+    if (length <= 0)
+        return {};
+    std::string utf8(static_cast<std::size_t>(length), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), utf8.data(), length,
+                        nullptr, nullptr);
+    return utf8;
+}
+
+// Reads a whole file by its wide path. Returns false when it cannot be opened or read.
+bool readWholeFile(const std::string &path, std::vector<unsigned char> &bytes) {
+    FILE *file = _wfopen(toWide(path).c_str(), L"rb");
+    if (file == nullptr)
+        return false;
+    std::vector<unsigned char> data;
+    unsigned char chunk[65536];
+    std::size_t count = 0;
+    while ((count = std::fread(chunk, 1, sizeof(chunk), file)) > 0)
+        data.insert(data.end(), chunk, chunk + count);
+    const bool ok = std::ferror(file) == 0;
+    std::fclose(file);
+    if (!ok)
+        return false;
+    bytes = std::move(data);
+    return true;
+}
+
+// The style name DirectWrite gives the face, in the first language the font names it in.
+std::string faceStyle(IDWriteFont *font) {
+    ComPtr<IDWriteLocalizedStrings> names;
+    if (FAILED(font->GetFaceNames(names.put())) || names.get() == nullptr)
+        return {};
+    UINT32 length = 0;
+    if (FAILED(names->GetStringLength(0, &length)))
+        return {};
+    std::wstring style(static_cast<std::size_t>(length) + 1, L'\0');
+    if (FAILED(names->GetString(0, &style[0], length + 1)))
+        return {};
+    style.resize(length);
+    return toUtf8(style);
+}
+
+// The file a face is read from. Empty when the face is not in a single file DirectWrite exposes
+// through the local loader (a font collection, for example).
+std::string faceFile(IDWriteFont *font) {
+    ComPtr<IDWriteFontFace> face;
+    if (FAILED(font->CreateFontFace(face.put())) || face.get() == nullptr)
+        return {};
+    UINT32 count = 0;
+    if (FAILED(face->GetFiles(&count, nullptr)) || count != 1)
+        return {};
+    ComPtr<IDWriteFontFile> file;
+    if (FAILED(face->GetFiles(&count, file.put())) || file.get() == nullptr)
+        return {};
+    ComPtr<IDWriteFontFileLoader> loader;
+    if (FAILED(file->GetLoader(loader.put())) || loader.get() == nullptr)
+        return {};
+    ComPtr<IDWriteLocalFontFileLoader> local;
+    if (FAILED(loader->QueryInterface(__uuidof(IDWriteLocalFontFileLoader),
+                                      reinterpret_cast<void **>(local.put()))) ||
+        local.get() == nullptr)
+        return {};
+    const void *key = nullptr;
+    UINT32 key_size = 0;
+    if (FAILED(file->GetReferenceKey(&key, &key_size)))
+        return {};
+    UINT32 path_length = 0;
+    if (FAILED(local->GetFilePathLengthFromKey(key, key_size, &path_length)) || path_length == 0)
+        return {};
+    std::wstring path(static_cast<std::size_t>(path_length) + 1, L'\0');
+    if (FAILED(local->GetFilePathFromKey(key, key_size, &path[0], path_length + 1)))
+        return {};
+    path.resize(path_length);
+    return toUtf8(path);
+}
+
+// Whether the first bytes of `path` begin a single-face font (checked without reading the file).
+bool isSingleFaceFile(const std::string &path) {
+    FILE *file = _wfopen(toWide(path).c_str(), L"rb");
+    if (file == nullptr)
+        return false;
+    unsigned char head[4] = {};
+    const bool ok = std::fread(head, 1, sizeof(head), file) == sizeof(head);
+    std::fclose(file);
+    return ok && isSingleFaceFontFile(std::vector<unsigned char>(head, head + sizeof(head)));
 }
 
 // Reads the face GDI has selected in `dc`: the whole file when `bytes` is set, else only the first
