@@ -175,6 +175,14 @@ static size_t processPrivateKB() {
 #endif
 }
 
+// True when the ImGui debug name of a UI font starts with its family. Face names are "<family>
+// <style>", cut at the 39 characters the atlas keeps, so only the family prefix is compared.
+static bool faceNameStartsWith(const ImFont *font, const std::string &family) {
+    const std::string name = font != nullptr ? font->GetDebugName() : std::string();
+    const std::string prefix = family.substr(0, std::min<std::size_t>(family.size(), 30));
+    return name.compare(0, prefix.size(), prefix) == 0;
+}
+
 static RfSimulatorApp *s_app = nullptr;
 
 namespace {
@@ -778,8 +786,8 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
             IM_CHECK_EQ(s_app->m_ui_font.savedFamily(), family);
             IM_CHECK(s_app->m_ui_font.note().empty());
-            IM_CHECK_EQ(std::string(ImGui::GetIO().FontDefault->GetDebugName()),
-                        family.substr(0, 39));
+            // The body face is named "<family> <style>", cut at the name buffer's length.
+            IM_CHECK(faceNameStartsWith(ImGui::GetIO().FontDefault, family));
 #ifdef _WIN32
             IM_CHECK_EQ(s_app->m_state.load("Settings", "UiFont", ""), family);
 #endif
@@ -788,8 +796,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             ctx->Yield(3);
             IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
             IM_CHECK(s_app->m_ui_font.savedFamily().empty());
-            IM_CHECK(std::string(ImGui::GetIO().FontDefault->GetDebugName()) !=
-                     family.substr(0, 39));
+            IM_CHECK(!faceNameStartsWith(ImGui::GetIO().FontDefault, family));
         }
 
         // Put back the app.ini value the case found, so a developer's saved font survives a run.
@@ -830,9 +837,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             }
             return s;
         };
-        const auto inAtlas = [](const ImFont *font) {
+        // Fonts are compared by FontId, which ImGui never reuses: a freed font's address can be
+        // handed to the next font, so a pointer comparison cannot tell them apart.
+        const auto inAtlas = [](int font_id) {
             for (ImFont *candidate : ImGui::GetIO().Fonts->Fonts)
-                if (candidate == font)
+                if (candidate->FontId == font_id)
                     return true;
             return false;
         };
@@ -859,14 +868,16 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         // No IM_CHECK in here: the macro returns from the enclosing function, and this lambda
         // returns a value. The test body checks each result.
         const auto pick = [&](const std::string &family, const char *label) {
-            ImFont *previous_font = ImGui::GetIO().FontDefault;
+            // The controller owns its font; io.FontDefault can hold a font the harness restored.
+            const int previous_id = s_app->m_ui_font.regularFont()->FontId;
+            ImFont *previous_font = s_app->m_ui_font.regularFont();
             ImTextureData *previous_texture = ImGui::GetIO().Fonts->TexData;
             s_app->m_ui_font.select(family);
             ctx->Yield(4);
             PickResult result;
             result.state = sample();
             result.previous_font_gone =
-                !inAtlas(previous_font) || previous_font == ImGui::GetIO().FontDefault;
+                !inAtlas(previous_id) || previous_font == s_app->m_ui_font.regularFont();
             result.texture_reused = previous_texture == ImGui::GetIO().Fonts->TexData;
             result.texture_released =
                 result.texture_reused || waitTextureReleased(previous_texture);
@@ -897,8 +908,11 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
             const std::string &label = picks[index].second.empty() ? family : picks[index].second;
             const PickResult result = pick(family, label.c_str());
             IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
-            IM_CHECK_EQ(result.state.fonts, 1);
-            IM_CHECK_EQ(result.state.sources, 1);
+            // One font for the body face, plus one for emphasis when the family has its own face.
+            const int slots =
+                s_app->m_ui_font.regularFont() == s_app->m_ui_font.emphasisFont() ? 1 : 2;
+            IM_CHECK_EQ(result.state.fonts, slots);
+            IM_CHECK_EQ(result.state.sources, slots);
             IM_CHECK(result.state.live_textures <= 3);
             IM_CHECK(result.previous_font_gone);
             IM_CHECK(result.texture_released);
@@ -915,8 +929,140 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
                     max_live_bytes, cap);
         IM_CHECK(max_live_bytes <= cap);
 
+        // Repeated size changes go through the same atlas rebuild as a family pick. Each size keeps
+        // the family's font slots, releases the previous fonts and their texture, and keeps the
+        // live bytes bounded across the whole range and back down.
+        s_app->m_ui_font.select(installed.front());
+        ctx->Yield(4);
+        std::vector<int> sizes;
+        for (int px = ui_font::kMinSizePx; px <= ui_font::kMaxSizePx; ++px)
+            sizes.push_back(px);
+        for (int px = ui_font::kMaxSizePx - 1; px >= ui_font::kMinSizePx; px -= 2)
+            sizes.push_back(px);
+        long long size_baseline = 0;
+        long long size_max = 0;
+        for (std::size_t index = 0; index < sizes.size(); ++index) {
+            const int previous_id = s_app->m_ui_font.regularFont()->FontId;
+            ImFont *previous_font = s_app->m_ui_font.regularFont();
+            ImTextureData *previous_texture = ImGui::GetIO().Fonts->TexData;
+            s_app->m_ui_font.setSize(sizes[index], false);
+            ctx->Yield(4);
+            const AtlasSample state = sample();
+            const int slots =
+                s_app->m_ui_font.regularFont() == s_app->m_ui_font.emphasisFont() ? 1 : 2;
+            const bool previous_gone =
+                !inAtlas(previous_id) || previous_font == s_app->m_ui_font.regularFont();
+            const bool texture_reused = previous_texture == ImGui::GetIO().Fonts->TexData;
+            const bool texture_released = texture_reused || waitTextureReleased(previous_texture);
+            std::printf("[font-atlas] size %2d px fonts=%d sources=%d textures=%d live=%d "
+                        "live_bytes=%lld reused=%d private_kb=%zu\n",
+                        sizes[index], state.fonts, state.sources, state.textures,
+                        state.live_textures, state.live_bytes, texture_reused ? 1 : 0,
+                        processPrivateKB());
+            IM_CHECK_EQ(state.fonts, slots);
+            IM_CHECK_EQ(state.sources, slots);
+            IM_CHECK(state.live_textures <= 3);
+            IM_CHECK(previous_gone);
+            IM_CHECK(texture_released);
+            IM_CHECK_EQ(state.textures, 1);
+            IM_CHECK(ImGui::GetStyle().FontSizeBase == static_cast<float>(sizes[index]));
+            if (index == 0)
+                size_baseline = state.live_bytes;
+            size_max = std::max(size_max, state.live_bytes);
+        }
+        const long long size_cap = 2 * size_baseline + 256 * 1024;
+        std::printf("[font-atlas] size baseline=%lld max=%lld cap=%lld\n", size_baseline, size_max,
+                    size_cap);
+        IM_CHECK(size_max <= size_cap);
+
         s_app->m_ui_font.select("");
         ctx->Yield(4);
+    };
+
+    // Settings > UI Font... drives the style, the emphasis, and the size through the window. The
+    // family's italic face becomes the body text, Medium is offered only where the family has it,
+    // the size slider rebuilds the atlas once it settles, and Default restores the built-in font
+    // and size. The case starts from the saved choice the harness cleared, so it leaves Default
+    // behind.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_font_style_and_size");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto candidates = ui_font::enumerateSystemFonts();
+        std::string family;
+        ui_font::FontFace italic;
+        bool found = false;
+        for (const std::string &name : s_app->m_ui_font.installed()) {
+            for (const ui_font::FontFace &face : ui_font::familyFaces(candidates, name)) {
+                if (face.italic && !face.style.empty()) {
+                    family = name;
+                    italic = face;
+                    found = true;
+                    break;
+                }
+            }
+            if (found)
+                break;
+        }
+        if (!found) {
+            std::printf("[font-style] no monospaced family with an italic face; skipped\n");
+            return;
+        }
+        const float builtin = s_app->m_ui_font.builtinSize();
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/UI Font...");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_settings);
+
+        ctx->SetRef("Settings");
+        ctx->Yield(2);
+        ctx->ItemClick(("**/" + family).c_str());
+        ctx->Yield(3);
+        IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), family);
+        // Picking a family starts at Regular; the italic face is chosen in the Style list below.
+        IM_CHECK(!s_app->m_ui_font.appliedBodyFace().italic);
+
+        // Style: the italic face is the body text, drawn in the family's font.
+        ctx->ComboClick(("Style/" + italic.style).c_str());
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.appliedBodyFace().italic);
+        IM_CHECK_EQ(s_app->m_ui_font.savedStyle().name, italic.style);
+        IM_CHECK(faceNameStartsWith(ImGui::GetIO().FontDefault, family));
+        IM_CHECK(std::string(ImGui::GetIO().FontDefault->GetDebugName()).find(italic.style) !=
+                 std::string::npos);
+
+        // Emphasis: Medium is a choice only where the family has a Medium face.
+        const auto faces = ui_font::familyFaces(candidates, family);
+        if (ui_font::offersEmphasis(faces, ui_font::Emphasis::Medium)) {
+            ctx->ItemClick("Medium");
+            ctx->Yield(3);
+            IM_CHECK(s_app->m_ui_font.savedEmphasis() == ui_font::Emphasis::Medium);
+            IM_CHECK(s_app->m_ui_font.appliedEmphasisFace().weight == 500);
+            IM_CHECK(s_app->m_ui_font.emphasisFont() != nullptr);
+            IM_CHECK(s_app->m_ui_font.emphasisFont() != ImGui::GetIO().FontDefault);
+        }
+
+        // Size: typed into the slider, which settles, then applies once. The atlas rebuilds at 18
+        // px.
+        ctx->ItemInputValue("Font size", 18);
+        for (int frame = 0; frame < 60 && s_app->m_ui_font.appliedSize() != 18.0f; ++frame)
+            ctx->Yield(1);
+        IM_CHECK(s_app->m_ui_font.requestedSize() == 18.0f);
+        IM_CHECK(s_app->m_ui_font.appliedSize() == 18.0f);
+        IM_CHECK(ImGui::GetStyle().FontSizeBase == 18.0f);
+        IM_CHECK(s_app->m_ui_font.regularFont()->LegacySize == 18.0f);
+        IM_CHECK(faceNameStartsWith(ImGui::GetIO().FontDefault, family));
+
+        // Default restores the built-in face and size and clears the style.
+        ctx->ItemClick("**/Default (built-in)");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.savedStyle().name.empty());
+        IM_CHECK(s_app->m_ui_font.requestedSize() == builtin);
+        IM_CHECK(ImGui::GetStyle().FontSizeBase == builtin);
+
+        s_app->m_show_settings = false;
+        ctx->SetRef("");
+        ctx->Yield(2);
     };
 
     // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the
