@@ -3,32 +3,107 @@
 #include "imgui.h"
 #include "logging_core.h"
 #include "session_state.h"
-#include "ui_font_model.h"
 
+#include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <system_error>
 #include <utility>
 
 namespace {
 
 std::string quotedName(const std::string &family) { return "\"" + family + "\""; }
 
+bool sameFace(const ui_font::FontFace &a, const ui_font::FontFace &b) {
+    return a.style == b.style && a.weight == b.weight && a.italic == b.italic;
+}
+
+std::string joined(const std::vector<std::string> &parts) {
+    std::string text;
+    for (const std::string &part : parts) {
+        if (!text.empty())
+            text += ' ';
+        text += part;
+    }
+    return text;
+}
+
+// The saved style weight. Anything but a whole number from 1 to 1000 is the Regular weight.
+int parseWeight(const std::string &text) {
+    int value = 0;
+    const char *last = text.data() + text.size();
+    const auto parsed = std::from_chars(text.data(), last, value);
+    if (parsed.ec != std::errc() || parsed.ptr != last || value < 1 || value > 1000)
+        return 400;
+    return value;
+}
+
+// Atlas name of a face. ImFontConfig::Name is truncated to its buffer.
+std::string fontName(const std::string &family, const std::string &style) {
+    return family + " " + style;
+}
+
 } // namespace
 
-UiFontController::UiFontController(SessionState &state)
-    : m_state(state), m_saved(state.load(kSection, kKey, "")), m_request(m_saved) {}
+bool UiFontController::Choice::operator==(const Choice &other) const {
+    return family == other.family && style.name == other.style.name &&
+           style.weight == other.style.weight && style.italic == other.style.italic &&
+           emphasis == other.emphasis && size == other.size;
+}
+
+UiFontController::UiFontController(SessionState &state) : m_state(state) {
+    Choice saved;
+    saved.family = state.load(kSection, kKey, "");
+    saved.style.name = state.load(kSection, kStyleKey, "");
+    saved.style.weight = parseWeight(state.load(kSection, kStyleWeightKey, "400"));
+    saved.style.italic = state.load(kSection, kStyleItalicKey, "0") == "1";
+    // A saved emphasis or size that cannot be used resolves to the nearest valid choice, and the
+    // note says so until the user changes it.
+    const ui_font::EmphasisResolution emphasis =
+        ui_font::resolveSavedEmphasis(state.load(kSection, kEmphasisKey, ""));
+    saved.emphasis = emphasis.emphasis;
+    const ui_font::SizeResolution size =
+        ui_font::resolveSavedSize(state.load(kSection, kSizeKey, ""));
+    saved.size = size.size_px;
+    if (!emphasis.note.empty())
+        m_load_notes.push_back(emphasis.note);
+    if (!size.note.empty())
+        m_load_notes.push_back(size.note);
+    m_saved = saved;
+    m_persisted = saved;
+}
 
 void UiFontController::ensureEnumerated() {
     if (m_enumerated)
         return;
     m_enumerated = true;
-    m_installed = ui_font::monospacedFamilies(ui_font::enumerateSystemFonts());
+    m_candidates = ui_font::enumerateSystemFonts();
+    m_installed = ui_font::monospacedFamilies(m_candidates);
     LOG_INFO("Settings: %zu monospaced UI font families found", m_installed.size());
 }
 
 const std::vector<std::string> &UiFontController::installed() {
     ensureEnumerated();
     return m_installed;
+}
+
+float UiFontController::requestedSize() const {
+    return m_saved.size > 0 ? static_cast<float>(m_saved.size) : m_builtin_size;
+}
+
+void UiFontController::rememberDiscrete() {
+    // Keep the state from before the first pending request, so a refused request can restore it.
+    if (m_user_request)
+        return;
+    m_before_request = Discrete{m_saved.family, m_saved.style, m_saved.emphasis};
+}
+
+void UiFontController::restoreDiscrete() {
+    m_saved.family = m_before_request.family;
+    m_saved.style = m_before_request.style;
+    m_saved.emphasis = m_before_request.emphasis;
 }
 
 void UiFontController::select(const std::string &family) {
