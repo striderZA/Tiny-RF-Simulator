@@ -13,7 +13,7 @@ struct FontCandidate {
     std::string family;
     std::string style;        // the face's style name, e.g. "Bold Italic"; may be empty
     int weight = 400;         // OpenType weight class, 100-900
-    bool italic = false;      // italic or oblique
+    bool italic = false;      // an italic face; on Windows an oblique is reported upright
     bool fixed_pitch = false; // a monospaced (fixed-pitch) face
     bool loadable = false;    // readable as one TrueType or OpenType face
     std::string file; // the file the face is read from, as the system reports it; may be empty
@@ -113,10 +113,11 @@ bool isSingleFaceFontFile(const std::vector<unsigned char> &bytes);
 // enumeration itself requires. Empty where the platform has no enumeration.
 std::vector<FontCandidate> enumerateSystemFonts();
 
-// Reads the file of the single face the operating system uses for `family` at `face`'s weight and
-// slant. Returns false when the family is unknown, when the system resolves a different face (no
-// silent substitution), or when the file is not a single-face font. `bytes` is replaced only on
-// success.
+// Reads the single-face file of `face`. Where the platform reports the face's own file (Windows),
+// that file is read and `family` only names the face for the caller. Where it does not
+// (fontconfig), the family's face at `face`'s weight and slant is resolved, and the read fails when
+// the system substitutes a different face. Returns false when the file is not a single-face font.
+// `bytes` is replaced only on success.
 bool readSystemFontFace(const std::string &family, const FontFace &face,
                         std::vector<unsigned char> &bytes);
 

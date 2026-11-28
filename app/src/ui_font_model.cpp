@@ -133,20 +133,25 @@ std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
         return std::make_tuple(a->italic, a->weight, name_a != "Regular", name_a, a->file) <
                std::make_tuple(b->italic, b->weight, name_b != "Regular", name_b, b->file);
     });
-    // A face is one file at one weight and slant: named weights of a variable font share a file and
-    // differ by weight, and an oblique that reuses the upright file is the same face. Two files can
-    // also carry one face (the same name, weight, and slant), which the list shows once.
-    std::set<std::tuple<std::string, int, bool>> seen_file;
+    // A face is one file. A file that holds several named weights (a variable font) draws its
+    // default face for each, so it is one row. Where the platform reports no file (fontconfig), the
+    // weight and slant decide identity. A second file that carries the same face shows once.
+    std::set<std::string> seen_file;
+    std::set<std::tuple<int, bool>> seen_slot;
     std::set<std::tuple<std::string, int, bool>> seen_face;
     std::vector<FontFace> faces;
     for (const FontCandidate *candidate : matches) {
-        const auto file_key =
-            std::make_tuple(candidate->file, candidate->weight, candidate->italic);
         const auto face_key =
             std::make_tuple(styleNameOf(*candidate), candidate->weight, candidate->italic);
-        if (seen_file.count(file_key) != 0 || seen_face.count(face_key) != 0)
+        const bool duplicate = candidate->file.empty()
+                                   ? seen_slot.count({candidate->weight, candidate->italic}) != 0
+                                   : seen_file.count(candidate->file) != 0;
+        if (duplicate || seen_face.count(face_key) != 0)
             continue;
-        seen_file.insert(file_key);
+        if (candidate->file.empty())
+            seen_slot.insert({candidate->weight, candidate->italic});
+        else
+            seen_file.insert(candidate->file);
         seen_face.insert(face_key);
         FontFace face;
         face.style = styleNameOf(*candidate);

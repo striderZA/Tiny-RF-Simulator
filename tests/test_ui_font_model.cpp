@@ -354,14 +354,19 @@ TEST_CASE("An oblique that reuses the upright file is the same face and is liste
     REQUIRE(styleNames(faces) == std::vector<std::string>{"Regular"});
 }
 
-TEST_CASE("Named weights that share one variable file stay separate faces", "[ui_font][style]") {
+TEST_CASE("Named weights that share one variable file are one row, since they draw the same face",
+          "[ui_font][style]") {
     const auto faces =
         ui_font::familyFaces({fileFace("Mono", "Regular", 400, false, "variable.ttf"),
                               fileFace("Mono", "Bold", 700, false, "variable.ttf")},
                              "Mono");
-    REQUIRE(faces.size() == 2);
+    REQUIRE(styleNames(faces) == std::vector<std::string>{"Regular"});
+    // The file has no separate bold face to draw, so emphasis falls back to the body face and says
+    // so.
     const ui_font::FacePlan plan = ui_font::planFaces("Mono", faces, StyleChoice{}, Emphasis::Bold);
-    REQUIRE(plan.emphasis.weight == 700);
+    REQUIRE(plan.emphasis.file == "variable.ttf");
+    REQUIRE(plan.emphasis.weight == 400);
+    REQUIRE_FALSE(plan.notes.empty());
 }
 
 TEST_CASE("Every installed family labels its faces distinctly", "[ui_font]") {
