@@ -53,7 +53,7 @@ build_linux_archive() {
     mkdir -p "$FIXTURE/component_data/library"
     printf '#!/bin/sh\necho new-app\n' >"$FIXTURE/rf-simulator-linux"
     chmod +x "$FIXTURE/rf-simulator-linux"
-    printf '#!/bin/sh\necho new-mcp\n' >"$FIXTURE/rf-sim-mcp"
+    printf '#!/bin/sh\necho new mcp\n' >"$FIXTURE/rf-sim-mcp"
     chmod +x "$FIXTURE/rf-sim-mcp"
     printf '{"part": "fixture"}\n' >"$FIXTURE/component_data/library/part.json"
     tar -czf "$archive" -C "$FIXTURE" rf-simulator-linux rf-sim-mcp component_data
@@ -123,7 +123,7 @@ sh "$UPDATE" --dir "$INSTALL" --asset-url "$GOOD_URL" --sha256-url "$CHECKSUM_UR
 
 grep -q 'new-app' "$(app_file "$INSTALL")" ||
     grep -q 'new app' "$(app_file "$INSTALL")" || fail "the new app was not installed"
-grep -q 'new mcp' "$INSTALL/rf-sim-mcp$([ "$PLATFORM" = windows ] && echo .exe)" ||
+grep -qE 'new[- ]mcp' "$INSTALL/rf-sim-mcp$([ "$PLATFORM" = windows ] && echo .exe)" ||
     fail "rf-sim-mcp was not replaced"
 grep -q 'fixture' "$INSTALL/component_data/library/part.json" ||
     fail "component_data was not replaced"
