@@ -73,6 +73,7 @@ Link to the owning document instead of restating its rules or commands on anothe
 - A user edit clamps into the limits. An edit that clamping would reverse (a `+` step on a value above the range) is ignored. An edit that clamps back onto the current value reports no change.
 - Callers pass a local copy and write it back only when the helper returns true.
 - Spectrum-analyzer RBW and VBW span 1 kHz to 100 MHz. The range lives at the widget's `utils::inputFrequency()` call, and its trailing `displayUnit_Hz` picks the unit. Engine setters stay unclamped so tests and API callers can drive any value.
+- Spectrum-analyzer level fields: **Ref (dBm)** spans `MIN_POWER..MAX_REF_POWER_DBM` (−174..+60 dBm) and **Min level (dBm)** stays `MIN_POWER..MAX_POWER` (−174..+10 dBm). `MAX_REF_POWER_DBM` bounds only the Ref field and the engine's default `m_max_power`; `MIN_POWER` and `MAX_POWER` keep their shared limits for signal amplitudes and receiver requirements. A field edit that would put Ref at or below Min, or Min at or above Ref, is refused so the Y axis is never inverted or blank.
 - The analyzer reports noise power integrated over its effective RBW. Its sampled noise kernel is normalized per
   output bin, including sweep edges and RBWs below source-bin spacing. The tone kernel remains peak-normalized;
   changing RBW, VBW, or Avg Count clears Max Hold, Min Hold, and Video Average history.

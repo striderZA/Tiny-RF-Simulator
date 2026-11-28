@@ -88,6 +88,14 @@ class SpectrumAnalyzerWidget {
     };
     ConfigLayout lastConfigLayout() const { return m_last_config_layout; }
 
+    // Y limits the last draw() gave the plot. Test seam for the rendered level axis: a
+    // 60 dBm reference must reach the plot, not just the engine.
+    struct YAxisLimits {
+        double lower = 0.0;
+        double upper = 0.0;
+    };
+    YAxisLimits lastYAxisLimits() const { return m_last_y_axis; }
+
   private:
     SpectrumAnalyzerEngine &m_engine;
     const ViewManager &m_view_manager;
@@ -107,6 +115,7 @@ class SpectrumAnalyzerWidget {
     std::vector<double> m_readout_axis; // combined axis of the last draw()
     PlotArea m_last_plot_area;
     ConfigLayout m_last_config_layout;
+    YAxisLimits m_last_y_axis;
 
     MeasurementSelection m_measurement;
     MeasurementSelection::Resolution m_measurement_resolution;

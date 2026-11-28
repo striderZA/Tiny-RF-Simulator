@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- **Spectrum Analyzer reference level reaches +60 dBm** — the **Ref (dBm)** field now accepts up to +60 dBm instead of +10 dBm, and the plot's Y axis follows it, so high-power chains can be viewed without clipping the top of the display. **Min level (dBm)** keeps its −174 to +10 dBm range, and the two fields cannot be driven into an inverted or blank axis: an edit that would put **Ref** at or below **Min level** (or **Min level** at or above **Ref**) is ignored until the other field is moved. The shared +10 dBm limit is unchanged for the signal generator and inspector tone amplitudes and for the receiver requirements input level.
+
 ## [0.32.1] - 2026-11-28
 
 ### Added

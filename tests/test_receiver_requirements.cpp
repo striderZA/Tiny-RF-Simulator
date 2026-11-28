@@ -58,6 +58,10 @@ TEST_CASE("ReceiverRequirements validates the input level range", "[receiver_req
     CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
     c.measurement_conditions.input_level_dBm = MAX_POWER;
     CHECK_FALSE(validateReceiverRequirementsConfig(c).has_value());
+    // The analyzer's +60 dBm reference ceiling must not widen the receiver input level.
+    c.measurement_conditions.input_level_dBm = MAX_REF_POWER_DBM;
+    CHECK(validateReceiverRequirementsConfig(c) ==
+          std::optional<std::string>("Input level must be between -174 and 10 dBm."));
     for (double bad : {MIN_POWER - 1.0, MAX_POWER + 1.0, std::nan("")}) {
         c.measurement_conditions.input_level_dBm = bad;
         CHECK(validateReceiverRequirementsConfig(c) ==

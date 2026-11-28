@@ -745,14 +745,30 @@ void SpectrumAnalyzerWidget::drawLevelFields() {
     double minp = m_engine.minPower();
     double maxp = m_engine.maxPower();
 
-    if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
-        m_engine.setMaxPower(maxp);
-        LOG_INFO("Update ref power: %.0f dBm", m_engine.maxPower());
+    // Only the reference level reaches +60 dBm; MIN_POWER and MAX_POWER keep their shared
+    // meaning for signal amplitudes and receiver input levels.
+    if (utils::inputDouble("Ref (dBm)", maxp, 5, 10, "%.0f", MIN_POWER, MAX_REF_POWER_DBM)) {
+        // Ref must stay strictly above Min so the Y axis is neither inverted nor blank.
+        // Refusing the edit keeps both fields as they were; the user lowers Min first.
+        if (!levelAxisValid(maxp, m_engine.minPower())) {
+            LOG_WARN("Ref (dBm): %.0f is not above Min level %.0f; the edit is ignored. "
+                     "Lower Min level first.",
+                     maxp, m_engine.minPower());
+        } else {
+            m_engine.setMaxPower(maxp);
+            LOG_INFO("Update ref power: %.0f dBm", m_engine.maxPower());
+        }
     }
 
     if (utils::inputDouble("Min level (dBm)", minp, 5, 10, "%.0f", MIN_POWER, MAX_POWER)) {
-        m_engine.setMinPower(minp);
-        LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
+        if (!levelAxisValid(m_engine.maxPower(), minp)) {
+            LOG_WARN("Min level (dBm): %.0f is not below Ref %.0f; the edit is ignored. "
+                     "Raise Ref first.",
+                     minp, m_engine.maxPower());
+        } else {
+            m_engine.setMinPower(minp);
+            LOG_INFO("Update min power: %.0f dBm", m_engine.minPower());
+        }
     }
 }
 
@@ -824,6 +840,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     m_readout_dBm.clear();
     m_last_plot_area = {};
     m_last_config_layout = {};
+    m_last_y_axis = {};
     // First-use size gives the plot a useful working area; the minimum stops at
     // the width the labelled inputs need and a modest height so a docked panel
     // never forces its dock node to grow and squeeze neighbouring panels
@@ -1060,6 +1077,7 @@ void SpectrumAnalyzerWidget::draw(const char *title, bool *p_open) {
     const double plot_start_Hz = m_engine.plotStartFrequency(all_active);
     ImPlot::SetNextAxesLimits(plot_start_Hz, m_engine.stopFrequency(), m_engine.minPower(),
                               m_engine.maxPower(), ImPlotCond_Always);
+    m_last_y_axis = {m_engine.minPower(), m_engine.maxPower()};
 
     // Layout seam for the panel test: the top block's height, first control to plot.
     m_last_config_layout = {two_columns, ImGui::GetCursorScreenPos().y - block_top.y, block_avail,
