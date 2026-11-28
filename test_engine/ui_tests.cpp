@@ -1064,6 +1064,49 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield(2);
     };
+    // Style rows: each face a family lists is a row of the Style combo under its own label, and
+    // choosing that row applies that face (its own file, weight, and slant). A duplicate label or a
+    // missing italic row would apply the wrong face or fail to click, so this checks the combo
+    // itself.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "settings_font_style_rows");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const auto candidates = ui_font::enumerateSystemFonts();
+        const float builtin = s_app->m_ui_font.builtinSize();
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/UI Font...");
+        ctx->Yield(2);
+        IM_CHECK(s_app->m_show_settings);
+        ctx->SetRef("Settings");
+        ctx->Yield(2);
+        for (const char *family : {"JetBrainsMonoNL NFM", "SF Mono"}) {
+            const auto faces = ui_font::familyFaces(candidates, family);
+            if (faces.empty()) {
+                std::printf("[font-style-rows] %s not installed; skipped\n", family);
+                continue;
+            }
+            // The list clips rows the test engine cannot scroll to, so the family is chosen through
+            // the controller. The Style combo rows below are still driven through the UI.
+            s_app->m_ui_font.select(family);
+            ctx->Yield(4);
+            IM_CHECK_EQ(s_app->m_ui_font.appliedFamily(), std::string(family));
+            for (const ui_font::FontFace &face : faces) {
+                ctx->ComboClick(("Style/" + face.style).c_str());
+                ctx->Yield(2);
+                const ui_font::FontFace &applied = s_app->m_ui_font.appliedBodyFace();
+                IM_CHECK_EQ(applied.style, face.style);
+                IM_CHECK_EQ(applied.weight, face.weight);
+                IM_CHECK(applied.italic == face.italic);
+                IM_CHECK_EQ(applied.file, face.file);
+            }
+        }
+        ctx->ItemClick("**/Default (built-in)");
+        ctx->Yield(3);
+        IM_CHECK(s_app->m_ui_font.appliedFamily().empty());
+        IM_CHECK(s_app->m_ui_font.requestedSize() == builtin);
+        s_app->m_show_settings = false;
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
 
     // ES-3 (Review Focus 4): Ctrl+Z while a Properties field is being edited belongs to the
     // field, not the canvas, and the field edit becomes one undo record when it is committed.
