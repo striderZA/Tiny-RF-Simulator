@@ -73,7 +73,9 @@ TEST_CASE("A saved UI font keeps the built-in size at startup", "[ui_font][start
     REQUIRE(fonts.appliedFamily() == families.front());
     REQUIRE(ImGui::GetStyle().FontSizeBase == Catch::Approx(builtin));
     REQUIRE(ImGui::GetFontSize() == Catch::Approx(builtin));
-    REQUIRE(ImGui::GetIO().Fonts->Fonts.Size == 1);
+    // The body font, plus the emphasis font when the family has a separate Bold face.
+    const std::size_t slots = fonts.regularFont() == fonts.emphasisFont() ? 1 : 2;
+    REQUIRE(ImGui::GetIO().Fonts->Fonts.Size == static_cast<int>(slots));
 
     ImGui::DestroyContext();
     std::filesystem::remove_all(dir, ec);

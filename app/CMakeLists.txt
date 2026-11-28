@@ -91,7 +91,7 @@ target_include_directories(ui_font_model PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 if(WIN32)
-    target_link_libraries(ui_font_model PUBLIC gdi32)
+    target_link_libraries(ui_font_model PUBLIC gdi32 dwrite)
 elseif(RFSIM_UI_FONT_SYSTEM_SOURCE STREQUAL "src/ui_font_system_fontconfig.cpp")
     target_include_directories(ui_font_model PRIVATE ${RFSIM_FONTCONFIG_INCLUDE_DIR})
     target_link_libraries(ui_font_model PRIVATE ${RFSIM_FONTCONFIG_LIBRARY})

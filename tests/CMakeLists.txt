@@ -872,3 +872,10 @@ if(WIN32)
         LIBS simulator::app simulator::ui_font_model
     )
 endif()
+
+# The Settings font controller: the size debounce, the DPI scale, Default's reset, and (Windows) the
+# persisted choice, its migration from a family-only preference, and the visible fallbacks.
+add_standalone_test(test_ui_font_controller
+    SOURCES test_ui_font_controller.cpp
+    LIBS simulator::app simulator::ui_font_model
+)

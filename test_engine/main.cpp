@@ -49,8 +49,11 @@ int main() {
     // pointer that the case had already freed. Start on Default, and put the developer's saved
     // choice back before exit.
     SessionState ui_font_state;
-    const std::string saved_ui_font = ui_font_state.load("Settings", "UiFont", "");
-    ui_font_state.save("Settings", "UiFont", "");
+    std::vector<std::pair<std::string, std::string>> saved_ui_font;
+    for (const char *key : UiFontController::persistedKeys()) {
+        saved_ui_font.emplace_back(key, ui_font_state.load(UiFontController::kSection, key, ""));
+        ui_font_state.save(UiFontController::kSection, key, "");
+    }
 
     RfSimulatorApp app;
 
@@ -151,6 +154,7 @@ int main() {
     glfwDestroyWindow(window);
     glfwTerminate();
 
-    ui_font_state.save("Settings", "UiFont", saved_ui_font.c_str());
+    for (const auto &[key, value] : saved_ui_font)
+        ui_font_state.save(UiFontController::kSection, key.c_str(), value.c_str());
     return exit_code;
 }
