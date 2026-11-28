@@ -131,7 +131,7 @@ class SpectrumAnalyzerEngine {
     double m_start_freq = MIN_FREQ;
     double m_stop_freq = MAX_FREQ;
     double m_min_power = MIN_POWER;
-    double m_max_power = MAX_POWER;
+    double m_max_power = MAX_REF_POWER_DBM;
     double m_vbw = DEFAULT_VBW;
     double m_rbw = DEFAULT_RBW;
     SpectrumSides m_sides = SpectrumSides::DoubleSided;

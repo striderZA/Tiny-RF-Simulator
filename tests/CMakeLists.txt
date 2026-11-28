@@ -585,6 +585,16 @@ add_standalone_test(test_spectrum_analyzer_snr
     LIBS simulator::spectrum_analyzer_engine
 )
 
+# Standalone headless-frame coverage for the Spectrum Analyzer level fields: the
+# Ref ceiling at +60 dBm, the unchanged Min level range, the Ref > Min invariant,
+# the rendered Y axis at a 60 dBm reference, and the shared +10 dBm signal
+# amplitude and receiver input-level caps that must not widen with it. Kept
+# outside tests.exe for the MinGW-w64 registration-ceiling reason above.
+add_standalone_test(test_spectrum_analyzer_levels
+    SOURCES test_spectrum_analyzer_levels.cpp
+    LIBS simulator::app
+)
+
 # Standalone coverage for issue #239: the RBW and VBW filters pass invalid widths
 # through and clamp very large width ratios before the int conversion. Kept
 # outside tests.exe for the MinGW-w64 registration-ceiling reason above.

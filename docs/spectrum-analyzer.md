@@ -34,8 +34,10 @@ Four fields frame the plot:
 | Control | Meaning |
 | --- | --- |
 | **Start (MHz)** / **Stop (MHz)** | X-axis span, within −20 GHz to +20 GHz |
-| **Ref (dBm)** | Top of the Y axis |
+| **Ref (dBm)** | Top of the Y axis, within −174 to +60 dBm |
 | **Min level (dBm)** | Bottom of the Y axis, within −174 to +10 dBm |
+
+**Ref** must stay strictly above **Min level**; an edit that would put either field at or past the other is ignored, so the axis is never inverted or blank. Lower **Min level** first to bring **Ref** down, or raise **Ref** first to bring **Min level** up.
 
 **Drag** with the left mouse across the plot to select a frequency band; on release the span fields snap to it. **Reset Zoom** restores the full default span, −20 to +20 GHz.
 
