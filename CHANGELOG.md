@@ -13,7 +13,7 @@
 
 ### Changed
 
-- **Saved-layout management moves to the Settings menu** — **Save As...** and **Manage...** now sit under **Settings**, below **UI Font...** and a separator. **View > Layouts > Load** stays in the View menu for switching between saved presets. The save and manage windows, the named-layout list, and the menu wording are unchanged; only where the items live moved.
+- **Saved layouts move into the Settings menu** — the whole Layouts group now sits under **Settings**, below **UI Font...** and a separator: **Load** lists the saved presets, then **Save As...** and **Manage...**. **View** no longer has a **Layouts** entry, so the menu shows no empty submenu when nothing has been saved; with no saved presets **Load** is left out rather than drawn empty. The save, load, and manage windows, the named-layout list, and the menu wording are unchanged; only where the items live moved.
 
 - **Text-sized widths in the receiver requirement fields, PFB calculator readout, and Spectrum Analyzer marker selector** — the receiver requirement numeric fields, the Filter Calculator's second readout column, and the Spectrum Analyzer **Marker** selector size from the measured text of a sample value instead of fixed pixel offsets.
 

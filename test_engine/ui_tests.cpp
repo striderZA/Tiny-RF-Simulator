@@ -3539,10 +3539,9 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         IM_CHECK(!std::filesystem::exists(path));
     };
 
-    // Saved-layout management moved under Settings; View > Layouts keeps the quick Load list.
-    // A layout saved through Settings must still be listed and loadable from View.
-    t = IM_REGISTER_TEST(e, "rf_simulator",
-                         "layout_management_moves_to_settings_and_load_stays_in_view");
+    // The whole Layouts group lives under Settings: Load lists the saved presets, Save As
+    // saves them, and Manage opens the manager. Nothing layout-related remains under View.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "layout_group_lives_in_settings");
     t->TestFunc = [](ImGuiTestContext *ctx) {
         const auto layout_file = std::filesystem::path(s_app->testLayoutManager().layoutsDir()) /
                                  "SettingsMenuLayout.ini";
@@ -3573,12 +3572,84 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->SetRef("");
         ctx->Yield();
 
-        // Load stays in View > Layouts and finds the layout saved through Settings.
+        // The whole group is reachable from Settings: Load sits beside Save As and Manage.
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Load/SettingsMenuLayout");
+        ctx->MenuClick("Settings");
+        ctx->Yield(2);
+        IM_CHECK(findMenuItem(ctx, "Load").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Save As...").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Manage...").ID != 0);
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        // Load lists the layout saved through Settings and restores it.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings/Load/SettingsMenuLayout");
         ctx->SetRef("");
         ctx->Yield();
         IM_CHECK(std::filesystem::exists(layout_file));
+
+        // The old View > Layouts node is gone entirely.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View");
+        ctx->Yield(2);
+        // Anchor the popup lookup on a known View item so the absence checks below
+        // cannot pass against the wrong focused window.
+        IM_CHECK(findMenuItem(ctx, "Spectrum Analyzer").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Layouts").ID == 0);
+        IM_CHECK(findMenuItem(ctx, "Load").ID == 0);
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->SetRef("");
+        ctx->Yield(2);
+    };
+
+    // With no saved presets the Load submenu must not be drawn at all: a menu
+    // bar submenu with nothing in it is the dead end this group replaces.
+    t = IM_REGISTER_TEST(e, "rf_simulator", "layouts_empty_state_omits_load_submenu");
+    t->TestFunc = [](ImGuiTestContext *ctx) {
+        const std::filesystem::path layouts_dir = s_app->testLayoutManager().layoutsDir();
+        const std::filesystem::path parked_dir = layouts_dir.string() + ".empty-state-test";
+        struct RestoreLayoutsDir {
+            std::filesystem::path from;
+            std::filesystem::path to;
+            ~RestoreLayoutsDir() {
+                std::error_code ec;
+                std::filesystem::remove_all(to, ec);
+                if (std::filesystem::exists(from))
+                    std::filesystem::rename(from, to, ec);
+            }
+        };
+        std::error_code ec;
+        std::filesystem::remove_all(parked_dir, ec);
+        if (std::filesystem::exists(layouts_dir))
+            std::filesystem::rename(layouts_dir, parked_dir, ec);
+        RestoreLayoutsDir restore{parked_dir, layouts_dir};
+        ctx->Yield(2);
+        IM_CHECK(s_app->testLayoutManager().listNamedLayouts().empty());
+
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("Settings");
+        ctx->Yield(2);
+        IM_CHECK(findMenuItem(ctx, "Load").ID == 0);
+        IM_CHECK(findMenuItem(ctx, "Layouts").ID == 0);
+        // Settings still holds its real items.
+        IM_CHECK(findMenuItem(ctx, "UI Font...").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Save As...").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Manage...").ID != 0);
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->SetRef("");
+        ctx->Yield(2);
+
+        // View has no Layouts node in either state.
+        ctx->SetRef("##MainMenuBar");
+        ctx->MenuClick("View");
+        ctx->Yield(2);
+        IM_CHECK(findMenuItem(ctx, "Spectrum Analyzer").ID != 0);
+        IM_CHECK(findMenuItem(ctx, "Layouts").ID == 0);
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->SetRef("");
+        ctx->Yield(2);
     };
 
     // The utility docking group: opening an auxiliary view through its real
@@ -3731,7 +3802,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
 
         // Loading the saved layout restores the utility group membership.
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Load/UtilityRoundTrip");
+        ctx->MenuClick("Settings/Load/UtilityRoundTrip");
         ctx->SetRef("");
         waitForUi(
             ctx, [] { return dockedInUtilityGroup(ImGui::FindWindowByName("Filter Calculator")); });
@@ -3888,7 +3959,7 @@ void RegisterUiTests(ImGuiTestEngine *e, RfSimulatorApp &app) {
         ctx->Yield(3);
 
         ctx->SetRef("##MainMenuBar");
-        ctx->MenuClick("View/Layouts/Load/UtilitySpacePosSize");
+        ctx->MenuClick("Settings/Load/UtilitySpacePosSize");
         ctx->SetRef("");
         waitForUi(ctx, [&] {
             ImGuiWindow *window = ImGui::FindWindowByName("Utility Space");

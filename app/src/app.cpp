@@ -1900,20 +1900,6 @@ void RfSimulatorApp::draw_ui() {
             utility_view_item("Filter Calculator", m_show_calculator);
             utility_view_item("Test Flow", m_show_test_flow);
             utility_view_item("Agent", m_show_agent);
-            ImGui::Separator();
-            // Layouts keeps the frequent switch between saved presets; saving and
-            // managing them live under Settings.
-            if (ImGui::BeginMenu("Layouts")) {
-                auto layout_names = m_layout_manager.listNamedLayouts();
-                if (ImGui::BeginMenu("Load", !layout_names.empty())) {
-                    for (const auto &name : layout_names) {
-                        if (ImGui::MenuItem(name.c_str()))
-                            m_layout_manager.loadNamedLayout(name);
-                    }
-                    ImGui::EndMenu();
-                }
-                ImGui::EndMenu();
-            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Tools")) {
@@ -1945,6 +1931,17 @@ void RfSimulatorApp::draw_ui() {
         if (ImGui::BeginMenu("Settings")) {
             ImGui::MenuItem("UI Font...", nullptr, &m_show_settings);
             ImGui::Separator();
+            // The whole Layouts group lives here: Load lists the saved presets,
+            // Save As and Manage act on them. A Load submenu with no presets is
+            // omitted rather than drawn empty, so Settings always has real items.
+            const auto layout_names = m_layout_manager.listNamedLayouts();
+            if (!layout_names.empty() && ImGui::BeginMenu("Load")) {
+                for (const auto &name : layout_names) {
+                    if (ImGui::MenuItem(name.c_str()))
+                        m_layout_manager.loadNamedLayout(name);
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::MenuItem("Save As...")) {
                 m_layout_name_buf[0] = '\0';
                 m_show_save_layout_dialog = true;
