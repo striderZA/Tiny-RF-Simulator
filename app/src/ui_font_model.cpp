@@ -5,6 +5,7 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdlib>
+#include <map>
 #include <set>
 #include <string_view>
 #include <system_error>
@@ -86,10 +87,6 @@ FontFace nearestStyle(const std::vector<FontFace> &faces, const StyleChoice &sty
     return nearest;
 }
 
-bool sameSlantAndWeight(const FontFace &a, const FontFace &b) {
-    return a.weight == b.weight && a.italic == b.italic;
-}
-
 std::string styleNameOf(const FontCandidate &candidate) {
     return candidate.style.empty() ? styleNameFor(candidate.weight, candidate.italic)
                                    : candidate.style;
@@ -133,18 +130,44 @@ std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
     std::sort(matches.begin(), matches.end(), [](const FontCandidate *a, const FontCandidate *b) {
         const std::string name_a = styleNameOf(*a);
         const std::string name_b = styleNameOf(*b);
-        return std::make_tuple(a->italic, a->weight, name_a != "Regular", name_a) <
-               std::make_tuple(b->italic, b->weight, name_b != "Regular", name_b);
+        return std::make_tuple(a->italic, a->weight, name_a != "Regular", name_a, a->file) <
+               std::make_tuple(b->italic, b->weight, name_b != "Regular", name_b, b->file);
     });
+    // A face is one file at one weight and slant: named weights of a variable font share a file and
+    // differ by weight, and an oblique that reuses the upright file is the same face. Two files can
+    // also carry one face (the same name, weight, and slant), which the list shows once.
+    std::set<std::tuple<std::string, int, bool>> seen_file;
+    std::set<std::tuple<std::string, int, bool>> seen_face;
     std::vector<FontFace> faces;
     for (const FontCandidate *candidate : matches) {
+        const auto file_key =
+            std::make_tuple(candidate->file, candidate->weight, candidate->italic);
+        const auto face_key =
+            std::make_tuple(styleNameOf(*candidate), candidate->weight, candidate->italic);
+        if (seen_file.count(file_key) != 0 || seen_face.count(face_key) != 0)
+            continue;
+        seen_file.insert(file_key);
+        seen_face.insert(face_key);
         FontFace face;
         face.style = styleNameOf(*candidate);
         face.weight = candidate->weight;
         face.italic = candidate->italic;
-        if (!faces.empty() && sameSlantAndWeight(faces.back(), face))
-            continue;
-        faces.push_back(face);
+        face.file = candidate->file;
+        faces.push_back(std::move(face));
+    }
+    // A name repeated within the family is labelled with its weight, so each row names one face. A
+    // label that still repeats gets an ordinal, so every row is distinct.
+    std::map<std::string, int> uses;
+    for (const FontFace &face : faces)
+        ++uses[face.style];
+    for (FontFace &face : faces)
+        if (uses[face.style] > 1)
+            face.style += " (" + std::to_string(face.weight) + ")";
+    std::map<std::string, int> ordinal;
+    for (FontFace &face : faces) {
+        const int count = ++ordinal[face.style];
+        if (count > 1)
+            face.style += " " + std::to_string(count);
     }
     return faces;
 }
@@ -177,15 +200,26 @@ FacePlan planFaces(const std::string &family, const std::vector<FontFace> &faces
         plan.body = regular;
     } else {
         const std::string key = foldCase(style.name);
-        bool named = false;
+        // A name matches the face with the saved weight and slant when the name repeats.
+        const FontFace *named = nullptr;
         for (const FontFace &face : faces) {
-            if (foldCase(face.style) == key) {
-                plan.body = face;
-                named = true;
+            if (foldCase(face.style) == key && face.weight == style.weight &&
+                face.italic == style.italic) {
+                named = &face;
                 break;
             }
         }
-        if (!named) {
+        if (named == nullptr) {
+            for (const FontFace &face : faces) {
+                if (foldCase(face.style) == key) {
+                    named = &face;
+                    break;
+                }
+            }
+        }
+        if (named != nullptr) {
+            plan.body = *named;
+        } else {
             plan.body = nearestStyle(faces, style);
             plan.notes.push_back("Style " + quoted(style.name) + " is not available in " +
                                  quoted(family) + ". Showing " + quoted(plan.body.style) + ".");

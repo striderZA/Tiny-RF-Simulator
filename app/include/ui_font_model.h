@@ -16,6 +16,7 @@ struct FontCandidate {
     bool italic = false;      // italic or oblique
     bool fixed_pitch = false; // a monospaced (fixed-pitch) face
     bool loadable = false;    // readable as one TrueType or OpenType face
+    std::string file; // the file the face is read from, as the system reports it; may be empty
 };
 
 // A face of one family, as the style list offers it.
@@ -23,6 +24,7 @@ struct FontFace {
     std::string style;
     int weight = 400;
     bool italic = false;
+    std::string file; // the file the face is read from; empty where the platform reports none
 };
 
 // The style a choice asks for. An empty name is Regular.
@@ -69,8 +71,9 @@ struct EmphasisResolution {
 // family name (compared case-insensitively), sorted case-insensitively. Default is not included.
 std::vector<std::string> monospacedFamilies(const std::vector<FontCandidate> &candidates);
 
-// The loadable faces of `family` among `candidates`, one per weight and slant (the first style
-// name wins, Regular preferred). Upright faces come first, each group by ascending weight.
+// The loadable faces of `family` among `candidates`, one per file, weight, and slant. Upright faces
+// come first, each group by ascending weight. A style name repeated within the family is labelled
+// with its weight, so every face has a distinct label.
 std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
                                   const std::string &family);
 
@@ -81,9 +84,10 @@ std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
 FontResolution resolveSavedFamily(const std::string &saved,
                                   const std::vector<std::string> &installed);
 
-// The faces for a family given the chosen style and emphasis. A style the family lacks resolves to
-// the nearest face (same slant first, then nearest weight) and says so in notes. A family without a
-// Bold face uses its Regular face for emphasis, and a family without a Medium face uses Bold.
+// The faces for a family given the chosen style and emphasis. A saved style matches a face by name,
+// and by weight and slant when the name repeats. A style the family lacks resolves to the nearest
+// face (same slant first, then nearest weight) and says so in notes. A family without a Bold face
+// uses its Regular face for emphasis, and a family without a Medium face uses Bold.
 FacePlan planFaces(const std::string &family, const std::vector<FontFace> &faces,
                    const StyleChoice &style, Emphasis emphasis);
 
