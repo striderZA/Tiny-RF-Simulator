@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,8 @@ struct FontCandidate {
     bool fixed_pitch = false; // a monospaced (fixed-pitch) face
     bool loadable = false;    // readable as one TrueType or OpenType face
     std::string file; // the file the face is read from, as the system reports it; may be empty
+    std::string content_key; // identifies the file's bytes (fileIdentity()); empty when not read
+    int default_weight = 0;  // a variable file's default instance weight (fileIdentity()); else 0
 };
 
 // A face of one family, as the style list offers it.
@@ -71,9 +75,13 @@ struct EmphasisResolution {
 // family name (compared case-insensitively), sorted case-insensitively. Default is not included.
 std::vector<std::string> monospacedFamilies(const std::vector<FontCandidate> &candidates);
 
-// The loadable faces of `family` among `candidates`, one per file, weight, and slant. Upright faces
-// come first, each group by ascending weight. A style name repeated within the family is labelled
-// with its weight, so every face has a distinct label.
+// The loadable faces of `family` among `candidates`, one row per face the family draws. Candidates
+// that read the same bytes draw one face: a variable file's named weights, and a second installed
+// copy of a file. Such a group is labelled by the weight its file draws by default, so a variable
+// file shows its default instance (Regular 400 for a font that declares it), never its lightest
+// named weight. Where no bytes are known, faces that share a file are one row, then weight and
+// slant decide. Upright faces come first, each group by ascending weight. A style name repeated
+// within the family is labelled with its weight, so every face has a distinct label.
 std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
                                   const std::string &family);
 
@@ -108,6 +116,35 @@ bool offersEmphasis(const std::vector<FontFace> &faces, Emphasis emphasis);
 // True when `bytes` begins with a single-face TrueType (0x00010000, 'true') or OpenType CFF
 // ('OTTO') header. Font collections ('ttcf'), bitmap .fon/.pcf files, and anything else are not.
 bool isSingleFaceFontFile(const std::vector<unsigned char> &bytes);
+
+// The identity of a single-face font file's bytes. `content_key` is equal for identical files
+// (64-bit FNV-1a with the size). `default_weight` is the wght default of a variable font's fvar
+// table, the weight its default instance draws; 0 for a static font, whose platform name stands.
+struct FileIdentity {
+    std::string content_key;
+    int default_weight = 0;
+};
+FileIdentity fileIdentity(const std::vector<unsigned char> &bytes);
+
+// Reads `length` bytes of a font file from `offset`. Returns fewer bytes at the end of the file.
+using ByteReader =
+    std::function<std::vector<unsigned char>(std::size_t offset, std::size_t length)>;
+
+// A font file the platform can read: whether it opened, its size, and a reader over its bytes.
+struct FileSource {
+    bool open = false;
+    std::size_t size = 0;
+    ByteReader read;
+};
+
+// Opens the font file at a path the system reports.
+using FileOpener = std::function<FileSource(const std::string &path)>;
+
+// Sets `loadable`, `default_weight`, and `content_key` on every candidate that names a file. Each
+// file is opened once. Only the small tables are read for the default weight; the whole file is
+// hashed only where another file of the same family has the same size, since identical files
+// have equal sizes. Candidates with no file are left as they are.
+void identifyFiles(std::vector<FontCandidate> &candidates, const FileOpener &open);
 
 // Monospaced faces as the operating system reports them, unfiltered beyond what the platform
 // enumeration itself requires. Empty where the platform has no enumeration.

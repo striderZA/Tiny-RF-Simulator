@@ -4,7 +4,10 @@
 #include <cctype>
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <set>
 #include <string_view>
@@ -33,6 +36,24 @@ std::string foldCase(std::string_view text) {
 }
 
 std::string quoted(const std::string &text) { return "\"" + text + "\""; }
+
+// Big-endian reads from a font file. Each fails, and leaves `out` alone, when it would run past the
+// end.
+bool readU16(const std::vector<unsigned char> &bytes, std::size_t at, std::uint32_t &out) {
+    if (at + 2 > bytes.size())
+        return false;
+    out = (static_cast<std::uint32_t>(bytes[at]) << 8) | bytes[at + 1];
+    return true;
+}
+
+bool readU32(const std::vector<unsigned char> &bytes, std::size_t at, std::uint32_t &out) {
+    if (at + 4 > bytes.size())
+        return false;
+    out = (static_cast<std::uint32_t>(bytes[at]) << 24) |
+          (static_cast<std::uint32_t>(bytes[at + 1]) << 16) |
+          (static_cast<std::uint32_t>(bytes[at + 2]) << 8) | bytes[at + 3];
+    return true;
+}
 
 // The name a face gets when the platform reports none. Weight bands follow the OpenType classes.
 std::string styleNameFor(int weight, bool italic) {
@@ -90,6 +111,121 @@ FontFace nearestStyle(const std::vector<FontFace> &faces, const StyleChoice &sty
 std::string styleNameOf(const FontCandidate &candidate) {
     return candidate.style.empty() ? styleNameFor(candidate.weight, candidate.italic)
                                    : candidate.style;
+}
+
+// The face a group of candidates that read the same bytes draws. The file draws its default
+// instance, so the row is the candidate at the file's default weight (upright first); when the
+// platform does not list that weight, the row takes the default weight and its name from the
+// weight. Where the default weight is unknown, the candidate nearest Regular is the row.
+FontFace drawnFace(const std::vector<const FontCandidate *> &members) {
+    int target = 0;
+    for (const FontCandidate *member : members)
+        if (member->default_weight > 0) {
+            target = member->default_weight;
+            break;
+        }
+    const bool known = target > 0;
+    if (!known)
+        target = kRegularWeight;
+    const FontCandidate *best = members.front();
+    const auto rank = [target](const FontCandidate *c) {
+        return std::make_tuple(c->weight != target, c->italic, std::abs(c->weight - target),
+                               c->weight, styleNameOf(*c) != "Regular", styleNameOf(*c));
+    };
+    for (const FontCandidate *member : members)
+        if (rank(member) < rank(best))
+            best = member;
+    FontFace face;
+    face.file = best->file;
+    face.italic = best->italic;
+    if (known && best->weight != target) {
+        face.weight = target;
+        face.style = styleNameFor(target, best->italic);
+    } else {
+        face.weight = best->weight;
+        face.style = styleNameOf(*best);
+    }
+    return face;
+}
+
+// An SFNT table's place in the file.
+struct TableEntry {
+    std::size_t offset = 0;
+    std::size_t length = 0;
+};
+
+// The directory entry for `tag`, when the table lies inside a file of `size` bytes.
+bool findTable(std::size_t size, const ByteReader &read, const char *tag, TableEntry &entry) {
+    const std::vector<unsigned char> count_bytes = read(4, 2);
+    std::uint32_t count = 0;
+    if (!readU16(count_bytes, 0, count))
+        return false;
+    const std::vector<unsigned char> records = read(12, 16 * static_cast<std::size_t>(count));
+    for (std::size_t i = 0; i + 16 <= records.size(); i += 16) {
+        if (std::memcmp(&records[i], tag, 4) != 0)
+            continue;
+        std::uint32_t offset = 0;
+        std::uint32_t length = 0;
+        if (!readU32(records, i + 8, offset) || !readU32(records, i + 12, length))
+            return false;
+        if (static_cast<std::size_t>(offset) + length > size)
+            return false;
+        entry.offset = offset;
+        entry.length = length;
+        return true;
+    }
+    return false;
+}
+
+// The weight a variable font draws by default: the wght default of its fvar table (the default
+// instance). A static font declares no default instance and returns 0, so its platform name stands.
+int drawnWeightOf(std::size_t size, const ByteReader &read) {
+    constexpr std::size_t kLargestTable = std::size_t{1} << 20;
+    TableEntry fvar;
+    if (findTable(size, read, "fvar", fvar) && fvar.length >= 16 && fvar.length <= kLargestTable) {
+        const std::vector<unsigned char> table = read(fvar.offset, fvar.length);
+        std::uint32_t axes_offset = 0;
+        std::uint32_t axis_count = 0;
+        std::uint32_t axis_size = 0;
+        if (readU16(table, 4, axes_offset) && readU16(table, 8, axis_count) &&
+            readU16(table, 10, axis_size) && axis_size >= 12) {
+            for (std::uint32_t a = 0; a < axis_count; ++a) {
+                const std::size_t axis = axes_offset + static_cast<std::size_t>(a) * axis_size;
+                if (axis + 12 > table.size())
+                    break;
+                if (std::memcmp(&table[axis], "wght", 4) != 0)
+                    continue;
+                std::uint32_t raw = 0; // 16.16 fixed point
+                if (readU32(table, axis + 8, raw)) {
+                    const int weight = static_cast<int>(static_cast<std::int32_t>(raw) >> 16);
+                    if (weight >= 1 && weight <= 1000)
+                        return weight;
+                }
+                break;
+            }
+        }
+    }
+    return 0;
+}
+
+// A 64-bit FNV-1a hash of the whole file, with its size. Empty when a read comes up short.
+std::string contentKeyOf(std::size_t size, const ByteReader &read) {
+    constexpr std::size_t kChunk = std::size_t{1} << 16;
+    std::uint64_t hash = 14695981039346656037ULL;
+    std::size_t offset = 0;
+    while (offset < size) {
+        const std::vector<unsigned char> chunk = read(offset, kChunk);
+        if (chunk.empty())
+            return {};
+        for (unsigned char byte : chunk) {
+            hash ^= byte;
+            hash *= 1099511628211ULL;
+        }
+        offset += chunk.size();
+    }
+    char key[64];
+    std::snprintf(key, sizeof(key), "%016llx:%zu", static_cast<unsigned long long>(hash), size);
+    return key;
 }
 
 } // namespace
