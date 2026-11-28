@@ -248,24 +248,96 @@ bool UiFontController::rebuild(bool user) {
     style.FontSizeBase = size_px;
 
     // The atlas owns a copy, allocated with ImGui's allocator, so ClearFonts() frees it with the
-    // font. A non-owned buffer must outlive the font until RemoveFont() or shutdown
-    // (docs/FONTS.md), and ClearFonts() on the next pick would have freed it too early.
-    void *data = ImGui::MemAlloc(bytes.size());
-    std::memcpy(data, bytes.data(), bytes.size());
-    // The size is the style's base size, which the first frame set from the built-in font, so a
-    // picked family keeps the built-in size and any future scaling of FontSizeBase or the font
-    // scale applies to it too.
-    ImFontConfig config; // FontDataOwnedByAtlas stays true
-    // The debug name lets a test confirm which family the UI is drawn with.
-    std::snprintf(config.Name, sizeof(config.Name), "%s", family.c_str());
-    ImFont *font =
-        io.Fonts->AddFontFromMemoryTTF(data, static_cast<int>(bytes.size()), size_px, &config);
-    if (font == nullptr) {
-        io.FontDefault = io.Fonts->AddFontDefault();
-        m_applied.clear();
-        return InstallResult::FellBackToDefault;
+    // font. A non-owned buffer must outlive the font until RemoveFont() or shutdown.
+    const auto addFace = [&io](const std::vector<unsigned char> &bytes, const std::string &name,
+                               float px) -> ImFont * {
+        void *data = ImGui::MemAlloc(bytes.size());
+        std::memcpy(data, bytes.data(), bytes.size());
+        ImFontConfig config; // FontDataOwnedByAtlas stays true
+        config.SizePixels = px;
+        std::snprintf(config.Name, sizeof(config.Name), "%s", name.c_str());
+        return io.Fonts->AddFontFromMemoryTTF(data, static_cast<int>(bytes.size()), px, &config);
+    };
+    // The built-in font at the built-in size is added exactly as before this feature; any other
+    // size uses ImGui's scalable built-in face, since the bitmap built-in font has one size.
+    const auto addDefault = [&io, size_px, this]() -> ImFont * {
+        if (size_px == m_builtin_size)
+            return io.Fonts->AddFontDefault();
+        ImFontConfig config;
+        config.SizePixels = size_px * ImGui::GetStyle().FontScaleDpi;
+        return io.Fonts->AddFontDefaultVector(&config);
+    };
+
+    ImFont *regular = nullptr;
+    ImFont *emphasis_font = nullptr;
+    if (!family.empty()) {
+        regular = addFace(body_bytes, fontName(family, body.style), raster_px);
+        if (regular == nullptr) {
+            LOG_WARN("Settings: UI font %s could not be added to the atlas",
+                     quotedName(family).c_str());
+            notes.push_back("Saved font " + quotedName(family) +
+                            " could not be loaded. Showing Default; the choice is kept.");
+            family.clear();
+            io.Fonts->ClearFonts();
+            style.FontSizeBase = size_px;
+        } else if (sameFace(body, emphasis)) {
+            emphasis_font = regular;
+        } else if (emphasis_bytes == body_bytes) {
+            // Named weights of one variable font can share a file, and ImGui reads only its default
+            // instance. Such a face would draw as the body face, so bold text uses the body face
+            // and the note says so.
+            emphasis_font = regular;
+            notes.push_back(quotedName(family) + " has no separate bold face. Bold text uses " +
+                            quotedName(body.style) + ".");
+        } else {
+            emphasis_font = addFace(emphasis_bytes, fontName(family, emphasis.style), raster_px);
+            if (emphasis_font == nullptr) {
+                // The emphasis face is optional: bold text falls back to the body face.
+                LOG_WARN("Settings: emphasis face of %s could not be added",
+                         quotedName(family).c_str());
+                notes.push_back(quotedName(family) +
+                                " bold face could not be added. Bold text uses " +
+                                quotedName(body.style) + ".");
+                emphasis_font = regular;
+            }
+        }
     }
-    io.FontDefault = font;
-    m_applied = family;
-    return InstallResult::Installed;
+    if (family.empty()) {
+        regular = addDefault();
+        emphasis_font = regular;
+    }
+    style.FontSizeBase = size_px;
+    io.FontDefault = regular;
+    m_regular = regular;
+    m_emphasis_font = emphasis_font;
+
+    m_applied_family = family;
+    m_applied_faces = family.empty() ? std::vector<ui_font::FontFace>{}
+                                     : ui_font::familyFaces(m_candidates, family);
+    m_applied_body = body;
+    m_applied_emphasis = emphasis;
+    m_applied_size = size_px;
+    m_applied_scale = scale;
+    m_note = joined(notes);
+    ++m_rebuilds;
+    LOG_INFO("Settings: UI font %s, size %.1f px at scale %.2f",
+             family.empty() ? "Default" : family.c_str(), size_px, scale);
+    return true;
+}
+
+void UiFontController::persist() {
+    if (m_saved == m_persisted)
+        return;
+    m_state.save(kSection, kKey, m_saved.family.c_str());
+    m_state.save(kSection, kStyleKey, m_saved.style.name.c_str());
+    m_state.save(kSection, kStyleWeightKey, std::to_string(m_saved.style.weight).c_str());
+    m_state.save(kSection, kStyleItalicKey, m_saved.style.italic ? "1" : "0");
+    m_state.save(kSection, kEmphasisKey, ui_font::emphasisName(m_saved.emphasis).c_str());
+    const std::string size = m_saved.size > 0 ? std::to_string(m_saved.size) : std::string();
+    m_state.save(kSection, kSizeKey, size.c_str());
+    m_persisted = m_saved;
+}
+
+std::vector<const char *> UiFontController::persistedKeys() {
+    return {kKey, kStyleKey, kStyleWeightKey, kStyleItalicKey, kEmphasisKey, kSizeKey};
 }
