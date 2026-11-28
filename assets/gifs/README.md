@@ -13,8 +13,9 @@ README are committed here.
 Episodes are 1080×1080 and the hero is 960×540. All are 20 fps, loop forever, and must stay under
 5 MB (the hard cap for X mobile and GitHub). The screen band is always a **1:1 crop** of the
 1920×1080 client area captured with the series UI font — **IoskeleyMonoTerm Nerd Font Mono,
-Medium, 18 px**; the app is never downscaled to fit. Crops are padded with the frame background
-when the panel is narrower than the canvas.
+Medium, 18 px**. The app is not downscaled for a series capture; if the client area cannot be
+sized exactly to 1920×1080 the harness logs a Lanczos fallback, and that capture is not used for a
+deliverable. Crops are padded with the frame background when the panel is narrower than the canvas.
 
 | GIF | What it shows | App crop (native pixels) | Output | Target | Budget |
 |---|---|---|---|---|---|
@@ -80,12 +81,13 @@ GIF_SERIES=${GIF_SERIES:-E:/Jaco/Projects/rf-sim/gif-series}
 ## Rules
 
 - Font contract: every capture uses IoskeleyMonoTerm Nerd Font Mono, style Medium, size 18 px
-  (`scripts/capture.ps1` writes it into `app.ini`). The 1:1 crop keeps nominal type at 18 px and
-  ImPlot axis ticks at about 0.8x (≈14.4 px), so it clears the 11 px legibility floor at 1:1.
-  At 75% zoom the smallest tick labels fall to ≈10.8 px: still legible in the inspected frame but
-  below 11 px, because the floor is binding at 1:1 only. The 960×540 hero needs no larger capture.
-  A dedicated mobile-only cut downscaled below about 0.61x would need a 24 px capture, as report 28
-  measured.
+  (`scripts/capture.ps1` writes it into `app.ini`). The series owner set this, superseding report
+  28's 20 px default-family baseline. The 1:1 crop keeps nominal type at 18 px and ImPlot axis
+  ticks at about 0.8x (≈14.4 px), so it clears the 11 px legibility floor at 1:1. At 75% zoom the
+  smallest tick labels fall to ≈10.8 px: still legible in the inspected frame but below 11 px,
+  because the floor is binding at 1:1 only. The 960×540 hero needs no larger capture. A dedicated
+  mobile-only cut downscaled below about 0.63x (where the ticks reach the 9 px display floor)
+  would need a 24 px capture, as report 28 measured.
 - No rebuilt app UI, no mocked readouts, no claims beyond the visible interface.
 - Do not commit raw captures, MP4 masters or the HyperFrames projects; they stay in the external
   workspace.
