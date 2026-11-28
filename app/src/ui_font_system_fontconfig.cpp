@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <set>
 #include <string>
 #include <tuple>
@@ -80,6 +81,29 @@ bool fileOf(FcPattern *font, std::string &path) {
     return true;
 }
 
+// Opens a font file for ranged reads. The stream stays open until the last reader is dropped.
+FileSource openFontFile(const std::string &path) {
+    FileSource source;
+    auto in = std::make_shared<std::ifstream>(path, std::ios::binary);
+    if (!*in)
+        return source;
+    in->seekg(0, std::ios::end);
+    const std::streamoff size = in->tellg();
+    if (size <= 0)
+        return source;
+    source.open = true;
+    source.size = static_cast<std::size_t>(size);
+    source.read = [in](std::size_t offset, std::size_t length) {
+        std::vector<unsigned char> bytes(length);
+        in->clear();
+        in->seekg(static_cast<std::streamoff>(offset));
+        in->read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(length));
+        bytes.resize(static_cast<std::size_t>(in->gcount()));
+        return bytes;
+    };
+    return source;
+}
+
 // The face fontconfig selects for `family` at `face`'s weight and slant among monospaced faces.
 // The match must keep the requested family, spacing, weight, and slant, so fontconfig's
 // substitution is never loaded.
@@ -131,9 +155,8 @@ std::vector<FontCandidate> enumerateSystemFonts() {
                      .second)
                 continue;
             std::string path;
-            std::vector<unsigned char> head;
-            candidate.loadable = fileOf(fonts->fonts[i], path) && readFile(path, head, 4) &&
-                                 isSingleFaceFontFile(head);
+            if (fileOf(fonts->fonts[i], path))
+                candidate.file = path;
             found.push_back(std::move(candidate));
         }
     }
@@ -142,6 +165,7 @@ std::vector<FontCandidate> enumerateSystemFonts() {
     if (objects != nullptr)
         FcObjectSetDestroy(objects);
     FcPatternDestroy(pattern);
+    identifyFiles(found, openFontFile);
     return found;
 }
 

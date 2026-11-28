@@ -261,41 +261,34 @@ std::vector<FontFace> familyFaces(const std::vector<FontCandidate> &candidates,
             continue;
         matches.push_back(&candidate);
     }
-    // Upright before italic, lighter before heavier. Regular is preferred among same-weight names,
-    // so it is the one that survives the dedupe below.
-    std::sort(matches.begin(), matches.end(), [](const FontCandidate *a, const FontCandidate *b) {
-        const std::string name_a = styleNameOf(*a);
-        const std::string name_b = styleNameOf(*b);
-        return std::make_tuple(a->italic, a->weight, name_a != "Regular", name_a, a->file) <
-               std::make_tuple(b->italic, b->weight, name_b != "Regular", name_b, b->file);
+    // Candidates that read the same bytes draw the same face: a variable file's named weights share
+    // one file, and a second installed copy of a file repeats it. Each group is one row.
+    std::map<std::string, std::vector<const FontCandidate *>> groups;
+    for (const FontCandidate *candidate : matches) {
+        std::string group;
+        if (!candidate->content_key.empty())
+            group = "content:" + candidate->content_key;
+        else if (!candidate->file.empty())
+            group = "file:" + candidate->file;
+        else
+            group = "face:" + styleNameOf(*candidate) + "|" + std::to_string(candidate->weight) +
+                    "|" + (candidate->italic ? "italic" : "upright");
+        groups[group].push_back(candidate);
+    }
+    std::vector<FontFace> drawn;
+    for (const auto &entry : groups)
+        drawn.push_back(drawnFace(entry.second));
+    // Upright before italic, lighter before heavier. Regular is preferred among same-weight names.
+    std::sort(drawn.begin(), drawn.end(), [](const FontFace &a, const FontFace &b) {
+        return std::make_tuple(a.italic, a.weight, a.style != "Regular", a.style, a.file) <
+               std::make_tuple(b.italic, b.weight, b.style != "Regular", b.style, b.file);
     });
-    // A face is one file. A file that holds several named weights (a variable font) draws its
-    // default face for each, so it is one row. Where the platform reports no file (fontconfig), the
-    // weight and slant decide identity. A second file that carries the same face shows once.
-    std::set<std::string> seen_file;
-    std::set<std::tuple<int, bool>> seen_slot;
+    // Two groups that name the same face (same style, weight, and slant) are one row.
     std::set<std::tuple<std::string, int, bool>> seen_face;
     std::vector<FontFace> faces;
-    for (const FontCandidate *candidate : matches) {
-        const auto face_key =
-            std::make_tuple(styleNameOf(*candidate), candidate->weight, candidate->italic);
-        const bool duplicate = candidate->file.empty()
-                                   ? seen_slot.count({candidate->weight, candidate->italic}) != 0
-                                   : seen_file.count(candidate->file) != 0;
-        if (duplicate || seen_face.count(face_key) != 0)
-            continue;
-        if (candidate->file.empty())
-            seen_slot.insert({candidate->weight, candidate->italic});
-        else
-            seen_file.insert(candidate->file);
-        seen_face.insert(face_key);
-        FontFace face;
-        face.style = styleNameOf(*candidate);
-        face.weight = candidate->weight;
-        face.italic = candidate->italic;
-        face.file = candidate->file;
-        faces.push_back(std::move(face));
-    }
+    for (FontFace &face : drawn)
+        if (seen_face.insert(std::make_tuple(face.style, face.weight, face.italic)).second)
+            faces.push_back(std::move(face));
     // A name repeated within the family is labelled with its weight, so each row names one face. A
     // label that still repeats gets an ordinal, so every row is distinct.
     std::map<std::string, int> uses;
@@ -449,6 +442,74 @@ bool isSingleFaceFontFile(const std::vector<unsigned char> &bytes) {
     };
     const bool truetype = head[0] == 0x00 && head[1] == 0x01 && head[2] == 0x00 && head[3] == 0x00;
     return truetype || tagIs("true") || tagIs("OTTO");
+}
+
+FileIdentity fileIdentity(const std::vector<unsigned char> &bytes) {
+    const ByteReader read = [&bytes](std::size_t offset, std::size_t length) {
+        if (offset >= bytes.size())
+            return std::vector<unsigned char>();
+        const std::size_t count = std::min(length, bytes.size() - offset);
+        return std::vector<unsigned char>(bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+                                          bytes.begin() +
+                                              static_cast<std::ptrdiff_t>(offset + count));
+    };
+    FileIdentity identity;
+    identity.content_key = contentKeyOf(bytes.size(), read);
+    identity.default_weight = drawnWeightOf(bytes.size(), read);
+    return identity;
+}
+
+void identifyFiles(std::vector<FontCandidate> &candidates, const FileOpener &open) {
+    struct Opened {
+        bool loadable = false;
+        int default_weight = 0;
+        std::size_t size = 0;
+        FileSource source;
+    };
+    std::map<std::string, Opened> files;
+    for (const FontCandidate &candidate : candidates) {
+        if (candidate.file.empty() || files.count(candidate.file) != 0)
+            continue;
+        Opened opened;
+        opened.source = open(candidate.file);
+        if (opened.source.open) {
+            opened.size = opened.source.size;
+            const std::vector<unsigned char> head = opened.source.read(0, 4);
+            opened.loadable = isSingleFaceFontFile(head);
+            if (opened.loadable)
+                opened.default_weight = drawnWeightOf(opened.size, opened.source.read);
+        }
+        files.emplace(candidate.file, std::move(opened));
+    }
+
+    // Identical files have equal sizes, so a file is hashed only when another file of the same
+    // family has its size.
+    std::map<std::pair<std::string, std::size_t>, std::set<std::string>> by_size;
+    for (const FontCandidate &candidate : candidates) {
+        const auto found = files.find(candidate.file);
+        if (found != files.end() && found->second.loadable)
+            by_size[{foldCase(candidate.family), found->second.size}].insert(candidate.file);
+    }
+    std::map<std::string, std::string> keys;
+    for (const auto &entry : by_size) {
+        if (entry.second.size() < 2)
+            continue;
+        for (const std::string &path : entry.second)
+            if (keys.count(path) == 0) {
+                Opened &opened = files[path];
+                keys[path] = contentKeyOf(opened.size, opened.source.read);
+            }
+    }
+
+    for (FontCandidate &candidate : candidates) {
+        if (candidate.file.empty())
+            continue;
+        const Opened &opened = files[candidate.file];
+        candidate.loadable = opened.loadable;
+        candidate.default_weight = opened.default_weight;
+        candidate.content_key =
+            keys.count(candidate.file) != 0 ? keys[candidate.file] : std::string();
+    }
 }
 
 } // namespace ui_font
