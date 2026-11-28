@@ -12,8 +12,9 @@ README are committed here.
 
 Episodes are 1080×1080 and the hero is 960×540. All are 20 fps, loop forever, and must stay under
 5 MB (the hard cap for X mobile and GitHub). The screen band is always a **1:1 crop** of the
-1920×1080 client area captured with the UI font at 20 px; the app is never downscaled to fit.
-Crops are padded with the frame background when the panel is narrower than the canvas.
+1920×1080 client area captured with the series UI font — **IoskeleyMonoTerm Nerd Font Mono,
+Medium, 18 px**; the app is never downscaled to fit. Crops are padded with the frame background
+when the panel is narrower than the canvas.
 
 | GIF | What it shows | App crop (native pixels) | Output | Target | Budget |
 |---|---|---|---|---|---|
@@ -36,8 +37,9 @@ GIF_SERIES=${GIF_SERIES:-E:/Jaco/Projects/rf-sim/gif-series}
 ```
 
 1. Capture the raw footage. The harness cleans `app.ini`/`rf_simulator_layout.ini`, launches the
-   app from the repository root, sets the UI font to 20 px, replays the episode's MCP setup, and
-   records the 1920×1080 client area at 60 fps (H.264 CRF 15, yuv420p, SDR, cursor visible):
+   app from the repository root, sets the series UI font (IoskeleyMonoTerm Nerd Font Mono, Medium,
+   18 px), replays the episode's MCP setup, and records the 1920×1080 client area at 60 fps
+   (H.264 CRF 15, yuv420p, SDR, cursor visible):
 
    ```bash
    pwsh "$GIF_SERIES/scripts/capture.ps1" \
@@ -77,7 +79,11 @@ GIF_SERIES=${GIF_SERIES:-E:/Jaco/Projects/rf-sim/gif-series}
 
 ## Rules
 
+- Font contract: every capture uses IoskeleyMonoTerm Nerd Font Mono, style Medium, size 18 px
+  (`scripts/capture.ps1` writes it into `app.ini`). 18 px at a 1:1 crop stays 18 px in the final
+  GIF, above the 11 px legibility floor at 100% and 75% zoom. The 960×540 hero needs no larger
+  capture. A dedicated mobile-only cut that is downscaled below about 0.61× would need a 24 px
+  capture, as report 28 measured.
 - No rebuilt app UI, no mocked readouts, no claims beyond the visible interface.
-- The UI font is 20 px at capture; the smallest label must stay legible at 100% and 75% zoom.
 - Do not commit raw captures, MP4 masters or the HyperFrames projects; they stay in the external
   workspace.
