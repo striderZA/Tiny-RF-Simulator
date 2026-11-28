@@ -44,9 +44,13 @@ void SettingsPanelWidget::draw(bool *p_open, UiFontController &fonts) {
     }
 
     const std::vector<std::string> &installed = fonts.installed();
-    if (installed.empty())
-        ImGui::TextDisabled("No monospaced fonts were found on this system, so only Default is "
-                            "available.");
+    // Wrapped, not a single line: at the largest UI font this note is wider than the window.
+    if (installed.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+        ImGui::TextWrapped("No monospaced fonts were found on this system, so only Default is "
+                           "available.");
+        ImGui::PopStyleColor();
+    }
 
     const float list_height =
         ImGui::GetTextLineHeightWithSpacing() * kListRows + ImGui::GetStyle().FramePadding.y * 2.0f;
