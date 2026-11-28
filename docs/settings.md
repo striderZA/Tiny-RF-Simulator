@@ -6,10 +6,11 @@ The **Settings** menu sits between **Tools** and **Help** in the menu bar. It ho
 
 The lower part of the **Settings** menu holds the saved window-layout actions:
 
+- **Settings > Load** lists the saved layouts; pick a name to restore that arrangement. With no saved layouts, the **Load** item does not appear.
 - **Settings > Save As...** saves the current arrangement — the main window and the Utility Space — under a name.
 - **Settings > Manage...** opens the Manage Layouts window, where saved layouts can be loaded, renamed, or deleted.
 
-**View > Layouts > Load** stays in the View menu for switching between saved layouts; pick a name there to restore it.
+All layout actions live under **Settings**; the **View** menu has no layout submenu.
 
 ## Choose a UI font
 

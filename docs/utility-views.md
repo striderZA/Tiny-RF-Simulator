@@ -19,4 +19,4 @@ The **Utility Space** is a normal dock host: its panels stack as tabs inside it.
 
 ## Persistence
 
-The Utility Space's position and size persist in `rf_simulator_layout.ini` beside the executable, along with the dock memberships and panel positions of both windows. **Settings > Save As...** saves the whole arrangement — both windows — under a name, **View > Layouts > Load** restores it, and **Settings > Manage...** renames or deletes saved layouts. Panel visibility and the group's open state use the same per-panel session settings as the other window toggles; those session settings are persisted on Windows.
+The Utility Space's position and size persist in `rf_simulator_layout.ini` beside the executable, along with the dock memberships and panel positions of both windows. **Settings > Save As...** saves the whole arrangement — both windows — under a name, **Settings > Load** restores it, and **Settings > Manage...** renames or deletes saved layouts. Panel visibility and the group's open state use the same per-panel session settings as the other window toggles; those session settings are persisted on Windows.
