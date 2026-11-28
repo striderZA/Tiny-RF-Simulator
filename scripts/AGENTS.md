@@ -13,6 +13,8 @@
 - `scripts/check-docs-links.py`
 - `scripts/verify-release-archive.py`
 - `scripts/test-verify-release-archive.sh`
+- `scripts/update.sh`
+- `scripts/test-update.sh`
 
 ## Local Contracts
 - `scripts/clang-format-resolve.sh` is the single clang-format discovery and version check, sourced by `scripts/format.sh` and `.githooks/pre-commit`. It accepts only major >= 18 (`CLANG_FORMAT_MIN_MAJOR`), prefers the lowest accepted installed major, and falls back to the pinned `scripts/install-clang-format.sh` 18.1.8 copy only when no PATH binary qualifies.
@@ -36,6 +38,8 @@
 - The verify step strips CR from `cmake -E tar tf` output (Windows text mode) before matching; keep that `tr -d '\r'` when editing the check.
 - `CMakeLists.txt` installs `extensions/` (`install(DIRECTORY extensions …)`), so that directory must exist in the repo, even empty. `extensions/.gitkeep` holds it; `cpack` fails on a missing install source.
 - `scripts/check-docs-links.py` is the single broken-link gate for the `docs/` user pages. It checks relative link targets, GitHub-slug anchors, and that every top-level page is linked from `docs/README.md`. It is stdlib-only Python; run it as `python scripts/check-docs-links.py docs`.
+- `scripts/update.sh` is user-run and POSIX `sh` (runs under Git for Windows `sh` on Windows; `uname -s` values `Windows_NT`, `MINGW*`, `MSYS*`, and `CYGWIN*` select the Windows zip). It installs only release assets: `rf-simulator-linux-x86_64.tar.gz` or `rf-simulator-windows-x86_64.zip`, resolved from the `releases/latest` API unless `--tag`/`--asset-url` is given. It uses curl or wget only, verifies the archive's required members, verifies a published `<asset>.sha256` when one downloads, refuses a running `tiny-rf-simulator.exe` on Windows (skippable with `--no-running-check`), stages inside the install directory, moves previous files into `.rf-sim-backup-<date>-<time>`, then moves the new files in. A failed move rolls the backup back. `--dry-run` downloads and verifies without changing the install. The app never downloads or installs anything itself.
+- `scripts/test-update.sh` is the offline gate for `update.sh`: it builds fixture archives in a temp folder, points the script at them with `file://` URLs, and covers the happy path with checksum and backup, a malformed archive, a checksum mismatch, and `--dry-run`. It never uses the network. Keep both scripts LF-only (`.gitattributes` enforces `scripts/*.sh eol=lf`).
 
 ## Work Guidance
 
@@ -46,7 +50,7 @@
 - The Windows package job fails when `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, or `libwinpthread-1.dll` is missing from `/mingw64/bin`.
 - `release.yml` also runs on `workflow_dispatch`: `version` (X.Y.Z, must match `CMakeLists.txt` and `CHANGELOG.md`) and `matrix` (`patch`: Linux GCC 14 Debug only; `minor`: full matrix). For dispatch, `matrix` alone picks the legs, regardless of the version's patch number. A dispatch run validates and packages the same artifacts and skips only the draft release step, so workflow changes can be tested on a branch without publishing.
 - There is no pull-request CI trigger. `docs.yml` runs `python scripts/check-docs-links.py docs` for pushes to `master` touching the docs pages or the gate script. It is a lint only; nothing is published.
-- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`. Docs link gate: `python scripts/check-docs-links.py docs`. Archive verifier: `bash scripts/test-verify-release-archive.sh`.
+- Formatting check: `bash scripts/format.sh --check --all`. Resolver tests: `bash scripts/test-format-version.sh`. Docs link gate: `python scripts/check-docs-links.py docs`. Archive verifier: `bash scripts/test-verify-release-archive.sh`. Update script: `sh scripts/test-update.sh` (no network; fixture archives).
 
 ## Child DOX Index
 - None.
