@@ -11,7 +11,8 @@ README are committed here.
 ## Deliverables
 
 Episodes are 1080×1080 and the hero is 960×540. All are 20 fps, loop forever, and must stay under
-5 MB (the hard cap for X mobile and GitHub). The screen band is always a **1:1 crop** of the
+5 MB — the X mobile cap, and the series budget. GitHub's attachment/image cap is 10 MB, but the
+series keeps the single 5 MB limit. The screen band is always a **1:1 crop** of the
 1920×1080 client area captured with the series UI font — **IoskeleyMonoTerm Nerd Font Mono,
 Medium, 18 px**. The app is not downscaled for a series capture; if the client area cannot be
 sized exactly to 1920×1080 the harness logs a Lanczos fallback, and that capture is not used for a
