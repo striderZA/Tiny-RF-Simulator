@@ -108,7 +108,7 @@ void SettingsPanelWidget::draw(bool *p_open, UiFontController &fonts) {
         ImGui::TextUnformatted(kDefaultLabel);
     } else {
         const std::string name = applied + " " + fonts.appliedBodyFace().style;
-        ImGui::TextUnformatted(name.c_str());
+        ImGui::TextWrapped("%s", name.c_str());
     }
     ImGui::TextWrapped("%s", kSampleLine);
     ImGui::PushFont(fonts.emphasisFont(), ImGui::GetStyle().FontSizeBase);
