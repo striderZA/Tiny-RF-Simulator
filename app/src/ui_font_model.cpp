@@ -165,6 +165,103 @@ FontResolution resolveSavedFamily(const std::string &saved,
     return resolution;
 }
 
+FacePlan planFaces(const std::string &family, const std::vector<FontFace> &faces,
+                   const StyleChoice &style, Emphasis emphasis) {
+    FacePlan plan;
+    if (faces.empty())
+        return plan;
+    plan.has_face = true;
+
+    const FontFace regular = regularFace(faces);
+    if (style.name.empty()) {
+        plan.body = regular;
+    } else {
+        const std::string key = foldCase(style.name);
+        bool named = false;
+        for (const FontFace &face : faces) {
+            if (foldCase(face.style) == key) {
+                plan.body = face;
+                named = true;
+                break;
+            }
+        }
+        if (!named) {
+            plan.body = nearestStyle(faces, style);
+            plan.notes.push_back("Style " + quoted(style.name) + " is not available in " +
+                                 quoted(family) + ". Showing " + quoted(plan.body.style) + ".");
+        }
+    }
+
+    FontFace bold;
+    const bool has_bold = nearestFace(faces, false, kBoldWeight, kBoldWindow, bold);
+    FontFace medium;
+    const bool has_medium = nearestFace(faces, false, kMediumWeight, kMediumWindow, medium);
+    if (emphasis == Emphasis::Medium && has_medium) {
+        plan.emphasis = medium;
+        return plan;
+    }
+    if (emphasis == Emphasis::Medium)
+        plan.notes.push_back(quoted(family) + " has no Medium face, so bold text uses " +
+                             quoted(has_bold ? bold.style : regular.style) + ".");
+    if (has_bold) {
+        plan.emphasis = bold;
+    } else {
+        plan.emphasis = regular;
+        plan.notes.push_back(quoted(family) + " has no Bold face, so bold text uses its " +
+                             quoted(regular.style) + " face.");
+    }
+    return plan;
+}
+
+SizeResolution resolveSavedSize(const std::string &saved) {
+    SizeResolution resolution;
+    if (saved.empty())
+        return resolution;
+    int value = 0;
+    const char *first = saved.data();
+    const char *last = saved.data() + saved.size();
+    const auto parsed = std::from_chars(first, last, value);
+    if (parsed.ec != std::errc() || parsed.ptr != last) {
+        resolution.note = "Saved font size " + quoted(saved) +
+                          " is not a whole number of pixels. Using the built-in size.";
+        return resolution;
+    }
+    if (value < kMinSizePx || value > kMaxSizePx) {
+        resolution.size_px = std::clamp(value, kMinSizePx, kMaxSizePx);
+        resolution.note = "Saved font size " + std::to_string(value) + " px is outside " +
+                          std::to_string(kMinSizePx) + "-" + std::to_string(kMaxSizePx) +
+                          " px. Using " + std::to_string(resolution.size_px) + " px.";
+        return resolution;
+    }
+    resolution.size_px = value;
+    return resolution;
+}
+
+EmphasisResolution resolveSavedEmphasis(const std::string &saved) {
+    EmphasisResolution resolution;
+    if (saved.empty())
+        return resolution;
+    if (foldCase(saved) == "medium") {
+        resolution.emphasis = Emphasis::Medium;
+        return resolution;
+    }
+    if (foldCase(saved) == "bold")
+        return resolution;
+    resolution.note = "Saved emphasis " + quoted(saved) + " is not Bold or Medium. Using Bold.";
+    return resolution;
+}
+
+std::string emphasisName(Emphasis emphasis) {
+    return emphasis == Emphasis::Medium ? "Medium" : "Bold";
+}
+
+bool offersEmphasis(const std::vector<FontFace> &faces, Emphasis emphasis) {
+    FontFace face;
+    if (emphasis == Emphasis::Medium)
+        return nearestFace(faces, false, kMediumWeight, kMediumWindow, face);
+    return nearestFace(faces, false, kBoldWeight, kBoldWindow, face);
+}
+
 bool isSingleFaceFontFile(const std::vector<unsigned char> &bytes) {
     if (bytes.size() < 4)
         return false;
