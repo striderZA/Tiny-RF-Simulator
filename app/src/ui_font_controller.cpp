@@ -107,56 +107,65 @@ void UiFontController::restoreDiscrete() {
 }
 
 void UiFontController::select(const std::string &family) {
-    m_request = family;
-    m_has_request = true;
+    rememberDiscrete();
+    m_saved.family = family;
+    m_saved.style = ui_font::StyleChoice{};
+    if (family.empty()) {
+        m_saved.emphasis = ui_font::Emphasis::Bold;
+        m_saved.size = 0;
+    }
+    m_load_notes.clear();
     m_user_request = true;
+    m_dirty = true;
+}
+
+void UiFontController::selectStyle(const ui_font::FontFace &face) {
+    rememberDiscrete();
+    m_saved.style.name = face.style;
+    m_saved.style.weight = face.weight;
+    m_saved.style.italic = face.italic;
+    m_load_notes.clear();
+    m_user_request = true;
+    m_dirty = true;
+}
+
+void UiFontController::selectEmphasis(ui_font::Emphasis emphasis) {
+    rememberDiscrete();
+    m_saved.emphasis = emphasis;
+    m_load_notes.clear();
+    m_user_request = true;
+    m_dirty = true;
+}
+
+void UiFontController::setSize(int px, bool active) {
+    px = std::clamp(px, ui_font::kMinSizePx, ui_font::kMaxSizePx);
+    if (static_cast<float>(px) != requestedSize()) {
+        m_saved.size = px;
+        m_size_changed_at = ImGui::GetTime();
+        m_load_notes.clear();
+    }
+    m_size_active = active;
 }
 
 bool UiFontController::applyPending() {
     // The style carries no font size until the first frame's NewFrame derives it from the default
     // font. Installing before that would add the picked font at size 0, and ImGui would then fall
-    // back to its own 20 px default instead of the built-in font's size. Keep the request queued
-    // for one frame.
-    if (ImGui::GetStyle().FontSizeBase <= 0.0f)
+    // back to its own 20 px default for the whole UI. Keep the request queued for one frame.
+    ImGuiStyle &style = ImGui::GetStyle();
+    // The test engine restores ImGuiIO after each case, FontDefault included, and that pointer can
+    // name a font the atlas already freed. The font this controller owns is always live, so it is
+    // re-asserted before any frame draws, ahead of the early returns below.
+    if (m_regular != nullptr)
+        ImGui::GetIO().FontDefault = m_regular;
+    if (style.FontSizeBase <= 0.0f)
         return false;
-    if (!m_has_request)
-        return false;
-    m_has_request = false;
+    if (m_builtin_size <= 0.0f)
+        m_builtin_size = style.FontSizeBase;
     ensureEnumerated();
 
-    if (m_user_request) {
-        m_user_request = false;
-        if (m_request == m_applied) {
-            // Re-picking the font in use: nothing to rebuild, but a choice made over a missing
-            // saved name still replaces it.
-            if (m_request != m_saved)
-                m_state.save(kSection, kKey, m_request.c_str());
-            m_saved = m_request;
-            m_note.clear();
-            return false;
-        }
-        const InstallResult result = installFamily(m_request);
-        if (result == InstallResult::Installed) {
-            m_saved = m_request;
-            m_state.save(kSection, kKey, m_saved.c_str());
-            m_note.clear();
-            return true;
-        }
-        LOG_WARN("Settings: UI font %s could not be loaded", quotedName(m_request).c_str());
-        m_note = quotedName(m_request) + " could not be loaded. " +
-                 (m_applied.empty() ? std::string("Showing Default.")
-                                    : quotedName(m_applied) + " is kept.");
-        return result == InstallResult::FellBackToDefault;
-    }
-
-    // Startup: the saved choice, resolved against what the system has installed now.
-    const ui_font::FontResolution resolution = ui_font::resolveSavedFamily(m_request, m_installed);
-    if (!resolution.missing_family.empty()) {
-        LOG_WARN("Settings: saved UI font %s is not installed; using Default",
-                 quotedName(resolution.missing_family).c_str());
-        m_note = "Saved font " + quotedName(resolution.missing_family) +
-                 " is not installed. Showing Default; the choice is kept and returns when the font "
-                 "is installed.";
+    const bool size_changed =
+        requestedSize() != m_applied_size || style.FontScaleDpi != m_applied_scale;
+    if (!m_dirty && !size_changed)
         return false;
     }
     if (resolution.applied_family.empty())
