@@ -2,6 +2,7 @@
 
 #include "ui_font_model.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -277,4 +278,144 @@ TEST_CASE("The system enumeration yields faces the reader can load", "[ui_font]"
     std::vector<unsigned char> bytes;
     REQUIRE_FALSE(ui_font::readSystemFontFace("No Such Font Family 4f9c2a", regular, bytes));
     REQUIRE(bytes.empty());
+}
+
+namespace {
+
+// A face the platform reports with the file it is read from.
+FontCandidate fileFace(const std::string &family, const std::string &style, int weight, bool italic,
+                       const std::string &file) {
+    FontCandidate c = face(family, style, weight, italic);
+    c.file = file;
+    return c;
+}
+
+} // namespace
+
+TEST_CASE(
+    "A style name repeated across weights is labelled by weight, and each label is its own face",
+    "[ui_font][style]") {
+    // A family whose platform names every weight "Regular": each label must still pick one face.
+    const std::vector<FontCandidate> candidates = {
+        fileFace("Mono", "Regular", 100, false, "thin.ttf"),
+        fileFace("Mono", "Regular", 400, false, "regular.ttf"),
+        fileFace("Mono", "Regular", 800, false, "extrabold.ttf"),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(styleNames(faces) ==
+            std::vector<std::string>{"Regular (100)", "Regular (400)", "Regular (800)"});
+    for (const FontFace &f : faces) {
+        INFO("label: " << f.style);
+        const ui_font::FacePlan plan = ui_font::planFaces(
+            "Mono", faces, StyleChoice{f.style, f.weight, f.italic}, Emphasis::Bold);
+        REQUIRE(plan.body.file == f.file);
+        REQUIRE(plan.body.weight == f.weight);
+        REQUIRE(plan.notes.empty());
+    }
+}
+
+TEST_CASE("A saved style with a repeated name is matched by its weight and slant",
+          "[ui_font][style]") {
+    const auto faces =
+        ui_font::familyFaces({fileFace("Mono", "Regular", 100, false, "thin.ttf"),
+                              fileFace("Mono", "Regular", 400, false, "regular.ttf")},
+                             "Mono");
+    const ui_font::FacePlan plan =
+        ui_font::planFaces("Mono", faces, StyleChoice{"Regular (400)", 400, false}, Emphasis::Bold);
+    REQUIRE(plan.body.weight == 400);
+    REQUIRE(plan.body.file == "regular.ttf");
+}
+
+TEST_CASE("An italic face the platform names separately keeps its italic slant and file",
+          "[ui_font][style]") {
+    // SF Mono style: the italic faces are their own files, and the platform reports them upright in
+    // GDI, so the italic must come from the face's own name and file.
+    const std::vector<FontCandidate> candidates = {
+        fileFace("Mono", "Regular", 400, false, "regular.otf"),
+        fileFace("Mono", "Regular Italic", 400, true, "regularitalic.otf"),
+    };
+    const auto faces = ui_font::familyFaces(candidates, "Mono");
+    REQUIRE(faces.size() == 2);
+    const FontFace &italic = faces[1];
+    REQUIRE(italic.style == "Regular Italic");
+    REQUIRE(italic.italic);
+    REQUIRE(italic.file == "regularitalic.otf");
+    const ui_font::FacePlan plan =
+        ui_font::planFaces("Mono", faces, StyleChoice{"Regular Italic", 400, true}, Emphasis::Bold);
+    REQUIRE(plan.body.file == "regularitalic.otf");
+}
+
+TEST_CASE("An oblique that reuses the upright file is the same face and is listed once",
+          "[ui_font][style]") {
+    const auto faces =
+        ui_font::familyFaces({fileFace("Mono", "Oblique", 400, false, "regular.otf"),
+                              fileFace("Mono", "Regular", 400, false, "regular.otf")},
+                             "Mono");
+    REQUIRE(styleNames(faces) == std::vector<std::string>{"Regular"});
+}
+
+TEST_CASE("Named weights that share one variable file stay separate faces", "[ui_font][style]") {
+    const auto faces =
+        ui_font::familyFaces({fileFace("Mono", "Regular", 400, false, "variable.ttf"),
+                              fileFace("Mono", "Bold", 700, false, "variable.ttf")},
+                             "Mono");
+    REQUIRE(faces.size() == 2);
+    const ui_font::FacePlan plan = ui_font::planFaces("Mono", faces, StyleChoice{}, Emphasis::Bold);
+    REQUIRE(plan.emphasis.weight == 700);
+}
+
+TEST_CASE("Every installed family labels its faces distinctly", "[ui_font]") {
+    const auto candidates = ui_font::enumerateSystemFonts();
+    for (const std::string &family : ui_font::monospacedFamilies(candidates)) {
+        std::set<std::string> labels;
+        for (const FontFace &f : ui_font::familyFaces(candidates, family)) {
+            INFO("family: " << family << " label: " << f.style);
+            REQUIRE(labels.insert(f.style).second);
+        }
+    }
+}
+
+TEST_CASE("SF Mono's italic faces are listed and read from their own files", "[ui_font]") {
+    // Platform fact: this family's italics are separate files that GDI reports as upright.
+    const auto candidates = ui_font::enumerateSystemFonts();
+    const auto faces = ui_font::familyFaces(candidates, "SF Mono");
+    if (faces.empty()) {
+        WARN("SF Mono is not installed; its italic faces were not checked");
+        return;
+    }
+    const FontFace *italic = nullptr;
+    const FontFace *upright = nullptr;
+    for (const FontFace &f : faces) {
+        if (f.style == "Regular Italic")
+            italic = &f;
+        if (f.style == "Regular")
+            upright = &f;
+    }
+    REQUIRE(italic != nullptr);
+    REQUIRE(upright != nullptr);
+    REQUIRE(italic->italic);
+    std::vector<unsigned char> italic_bytes;
+    std::vector<unsigned char> upright_bytes;
+    REQUIRE(ui_font::readSystemFontFace("SF Mono", *italic, italic_bytes));
+    REQUIRE(ui_font::readSystemFontFace("SF Mono", *upright, upright_bytes));
+    REQUIRE(italic_bytes != upright_bytes);
+}
+
+TEST_CASE("Every listed face of every installed family resolves to itself", "[ui_font]") {
+    // The Style list offers each face by its label; choosing a label must select that face, with no
+    // note, so no two rows can apply the same face.
+    const auto candidates = ui_font::enumerateSystemFonts();
+    for (const std::string &family : ui_font::monospacedFamilies(candidates)) {
+        const auto faces = ui_font::familyFaces(candidates, family);
+        for (const FontFace &f : faces) {
+            INFO("family: " << family << " label: " << f.style);
+            const ui_font::FacePlan plan = ui_font::planFaces(
+                family, faces, StyleChoice{f.style, f.weight, f.italic}, Emphasis::Bold);
+            for (const std::string &note : plan.notes)
+                REQUIRE(note.rfind("Style ", 0) != 0);
+            REQUIRE(plan.body.file == f.file);
+            REQUIRE(plan.body.weight == f.weight);
+            REQUIRE(plan.body.italic == f.italic);
+        }
+    }
 }
